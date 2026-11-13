@@ -1,10 +1,14 @@
 //! File → File Info: the document's descriptive metadata (author, description, keywords, rating,
 //! copyright) and its created and modified dates, which the SVG, PDF and PNG writers carry. The
-//! document title is [`crate::Document::title`]. Every field is defaulted, so documents saved
-//! before File Info existed load unchanged.
+//! document title is [`Document::title`], the name it shows in its tab and offers Save As when it
+//! has no file; a title the file it was opened from gave itself is [`DocMetadata::title`], and
+//! [`Document::info_title`] is the title File Info shows and exports write. Every field is
+//! defaulted, so documents saved before File Info existed load unchanged.
 
 use chrono::{Datelike, Timelike};
 use serde::{Deserialize, Serialize};
+
+use crate::Document;
 
 /// File Info → Copyright Status.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +48,13 @@ pub const MAX_RATING: u8 = 5;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DocMetadata {
+    /// The title the file this document was opened from gives itself (an SVG's root `<title>`, a
+    /// PDF's XMP `dc:title` or Info `Title`), which File Info shows and exports write in place of
+    /// [`Document::title`], the document's display name. `None`: the file gave none, so the
+    /// display name is the title. Left out of a saved document when unset, so other documents
+    /// save as they did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     pub author: String,
     /// The author's position or job title.
     pub author_title: String,
@@ -80,6 +91,16 @@ impl DocMetadata {
         push("Copyright URL", self.copyright_url.as_str().into());
         push("Creation Time", self.created.map(iso8601).unwrap_or_default().into());
         out
+    }
+}
+
+impl Document {
+    /// The title File Info shows and the files an export writes carry (PDF `Title` and XMP
+    /// `dc:title`, SVG `<title>`, PNG `Title`): the title the file this document was opened from
+    /// gave itself ([`DocMetadata::title`]), else [`Document::title`]. The display name (the tab, the
+    /// default file name) is always [`Document::title`].
+    pub fn info_title(&self) -> &str {
+        self.metadata.title.as_deref().filter(|t| !t.trim().is_empty()).unwrap_or(&self.title)
     }
 }
 
@@ -189,6 +210,24 @@ mod tests {
             ]
         );
         assert!(DocMetadata::default().png_text("").is_empty());
+    }
+
+    #[test]
+    fn the_info_title_is_the_files_own_title_else_the_display_name() {
+        let mut d = Document::new(10.0, 10.0);
+        d.title = "box.svg".into();
+        assert_eq!(d.info_title(), "box.svg");
+        d.metadata.title = Some("Access paths".into());
+        assert_eq!((d.title.as_str(), d.info_title()), ("box.svg", "Access paths"));
+        d.metadata.title = Some("  ".into());
+        assert_eq!(d.info_title(), "box.svg");
+        // Saved only when set: other documents' metadata is as before, and the field comes back.
+        d.metadata.title = None;
+        assert!(!serde_json::to_string(&d.metadata).unwrap().contains("title"));
+        d.metadata.title = Some("Access paths".into());
+        let json = serde_json::to_string(&d.metadata).unwrap();
+        assert_eq!(serde_json::from_str::<DocMetadata>(&json).unwrap().title.as_deref(), Some("Access paths"));
+        assert_eq!(serde_json::from_str::<DocMetadata>("{}").unwrap().title, None);
     }
 
     /// `SOURCE_DATE_EPOCH` replaces the clock in exported output only when it is a non-negative

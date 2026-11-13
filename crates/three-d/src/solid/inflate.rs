@@ -62,7 +62,18 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
 /// on its own over the grid of `bounds`, and one eye sees them all, as far away as the highest
 /// puff needs with Perspective. One result for each shape, in order.
 pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View) -> Vec<Result<Vec<Facet>, String>> {
-    inflate_faces(shapes, bounds, options, view, false).map(|r| r.map(|(facets, _)| facets)).collect()
+    inflate_each(shapes, bounds, options, view).collect()
+}
+
+/// [`inflate_together`], each solid built only as the iterator reaches it: a caller that stops early
+/// builds none of the solids after.
+pub fn inflate_each(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<Vec<Facet>, String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, false).map(|r| r.map(|(facets, ..)| facets))
 }
 
 /// [`inflate_together`], or with `mesh` each solid's faces before projection instead of its facets.
@@ -81,7 +92,7 @@ pub(crate) fn inflate_faces(
     let reach = puffs.iter().flatten().flatten().map(|p| p.height).fold(0.0, f64::max);
     puffs.into_iter().map(move |p| match p {
         Ok(Some(p)) => inflated(p, bounds, o, view, reach, mesh),
-        Ok(None) => Ok((vec![], vec![])),
+        Ok(None) => Ok((vec![], vec![], None)),
         Err(e) => Err(e),
     })
 }

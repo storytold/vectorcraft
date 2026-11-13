@@ -34,7 +34,12 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     script_run::settle_close(app);
     match result {
-        Ok(_) => app.status(format!("Ran {name}")),
+        // The commands it ran are journaled now: a recording they no longer fit in names its limit.
+        Ok(_) => {
+            if !crate::panels::actions::after_journaled_edit(app) {
+                app.status(format!("Ran {name}"));
+            }
+        }
         Err(e) => failed(app, e.to_string()),
     }
     app.sync_views();

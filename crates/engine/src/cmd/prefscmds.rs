@@ -156,6 +156,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
     p!(
@@ -211,6 +212,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("fontSamplesOnWhite", "Type", "Options", "Show samples on white", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
@@ -452,10 +454,10 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
 /// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
-/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
-/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
-/// `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
+/// (`object.pathfinder.options`), the Snap to Glyph options (`view.snapToGlyph.options`) and the
+/// Pixel Snapping Options (`view.snapToPixel.options`). `prefs.get` and `prefs.set` take them by key
+/// (a partial object updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap", "pixelSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -473,6 +475,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "glyphSnap" => {
             let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pixelSnap" => {
+            let cur: vectorcraft_tools::PixelSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -687,6 +693,10 @@ impl Session {
         for e in self.prefs.keep_folders(&mut p) {
             log::warn!("{e}");
         }
+        // Saved gradient presets get names no built-in preset or other saved one has.
+        for (old, new) in super::gradpresets::rename_clashing_presets(&mut p.gradient_presets) {
+            log::warn!("saved gradient preset {old} is listed as {new}: another preset has its name");
+        }
         // The edit the active tool computes on another thread is applied first (the Preferences
         // dialog applies its settings here, outside a command). A failure to apply it was the
         // edit's own, and the preferences apply all the same.
@@ -765,7 +775,7 @@ impl Session {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}", always, get),
+        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}; under automation read roots a folder preference outside them is null, and an export preset's folder outside them is left out", always, get),
         cmd!(
             query "prefs.set",
             "Set Preference",
@@ -776,13 +786,13 @@ pub fn specs() -> Vec<CommandSpec> {
             set
         ),
         cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
-        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference", always, list),
+        cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference; under automation read roots a folder preference's value outside them is null", always, list),
         cmd!(
             query "prefs.export",
             "Export Preferences",
             [],
             None,
-            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder and glyphSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
+            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder, glyphSnap and pixelSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
             always,
             export
         ),
@@ -882,8 +892,42 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "imported": values.len() }))
 }
 
+/// The preferences that name a folder: the [`FOLDER_PREFS`] and the scratch disks.
+const PATH_PREFS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not folders.
+const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// The preferences as `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show them to the
+/// request being served. Under automation read roots, a folder preference ([`PATH_PREFS`]) outside
+/// them is `null`, as `ui.inspect` leaves it out, and an export preset's `folder` outside them is
+/// left out. An empty value (the default folder) and a scratch
+/// disk choice ([`SCRATCH_CHOICES`]) are shown. Without roots the preferences are shown as they are.
+fn shown_prefs(prefs: &Prefs) -> Value {
+    let mut all = prefs.to_json();
+    if crate::file_access::current().is_none() {
+        return all;
+    }
+    // The app trims a folder before it uses it.
+    let hidden = |path: &str| !path.trim().is_empty() && crate::file_access::check_read(path.trim()).is_err();
+    for key in PATH_PREFS {
+        let Some(path) = all[key].as_str() else { continue };
+        if hidden(path) && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path.trim())) {
+            all[key] = Value::Null;
+        }
+    }
+    if let Some(presets) = all.get_mut("screenExportPresets").and_then(Value::as_array_mut) {
+        for settings in presets.iter_mut().filter_map(|p| p.get_mut("settings").and_then(Value::as_object_mut)) {
+            if settings.get("folder").and_then(Value::as_str).is_some_and(hidden) {
+                settings.remove("folder");
+            }
+        }
+    }
+    all
+}
+
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     match str_param(p, "key") {
         Some(k) if spec(k).is_some() || PREF_GROUPS.contains(&k) => Ok(all[k].clone()),
         Some(k) => Err(bad("prefs.get", format!("unknown preference `{k}`"))),
@@ -911,7 +955,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if document_units && values.contains_key("unitsGeneral") && s.active().is_some() {
         s.set_document_units(s.default_units())?;
     }
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Object(values.keys().map(|k| (k.clone(), all[k.as_str()].clone())).collect()))
 }
 
@@ -925,11 +969,11 @@ fn reset(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next = s.prefs.clone();
     next.reset(cat);
     s.apply_prefs(next);
-    Ok(json!({ "prefs": s.prefs.to_json() }))
+    Ok(json!({ "prefs": shown_prefs(&s.prefs) }))
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
-    let all = s.prefs.to_json();
+    let all = shown_prefs(&s.prefs);
     Ok(Value::Array(
         PREF_SPECS
             .iter()

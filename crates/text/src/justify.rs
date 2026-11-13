@@ -48,14 +48,62 @@ impl Flex {
     }
 }
 
-/// A glyph justification spreads space over as a word space (tabs keep their stops).
+/// A glyph justification spreads space over as a word space (tabs keep their stops). The
+/// zero-width space is a line break opportunity but not a word separator, so it takes none.
 pub(crate) fn is_word_space(g: &SGlyph) -> bool {
-    g.is_space() && g.ch != '\t'
+    g.is_space() && g.ch != '\t' && !is_format_control(g.ch)
 }
 
-/// A glyph letter spacing follows: a visible glyph followed by another one in the same word.
+/// A zero-width format control: an assigned default-ignorable character (Unicode's
+/// Default_Ignorable_Code_Point) that is drawn with no width. That is a soft hyphen, a bidi mark,
+/// embedding, override or isolate (the Arabic letter mark included), a zero-width space,
+/// non-joiner or joiner, a word joiner or invisible operator, a combining grapheme joiner, a
+/// variation selector, a Mongolian free variation selector or vowel separator, a shorthand or
+/// musical format control, a tag, or the byte order mark. Letter spacing and justification add no
+/// space next to one; the space goes between the visible characters on either side. The
+/// zero-width space stays a line break opportunity ([`SGlyph::is_space`]), and it takes the letter
+/// spacing of the letter before it, which a line that breaks there trims. The Hangul fillers,
+/// which fonts draw with a width, are letters.
+pub(crate) fn is_format_control(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{061C}'
+            | '\u{17B4}'..='\u{17B5}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{206F}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0000}'..='\u{E0FFF}'
+    )
+}
+
+/// The zero-width space: a format control that is a line break opportunity.
+const ZERO_WIDTH_SPACE: char = '\u{200B}';
+
+/// A glyph that may take the letter spacing before the next character: a visible glyph that is
+/// not a space, a line break, an inline graphic or a format control.
+fn gap_owner(g: &SGlyph) -> bool {
+    !g.is_space() && g.ch != '\u{2028}' && g.inline.is_none() && !is_format_control(g.ch)
+}
+
+/// Whether `next`, the glyph after `g` (passing over format controls other than the zero-width
+/// space), continues the word: a visible character of another shaped cluster.
+fn continues_word(g: &SGlyph, next: Option<&SGlyph>) -> bool {
+    next.is_some_and(|n| n.byte != g.byte && !n.is_space() && n.ch != '\u{2028}')
+}
+
+/// A glyph letter spacing follows: a visible glyph followed by another character in the same word
+/// (`next` is the next glyph that is not a format control, or a zero-width space). The glyphs of
+/// one shaped cluster (a letter and its combining marks) take none between them, and neither do the
+/// two halves of an inseparable pair that Bunri-Kinshi keeps together.
 fn letter_gap(g: &SGlyph, next: Option<&SGlyph>) -> bool {
-    !g.is_space() && g.ch != '\u{2028}' && g.inline.is_none() && next.is_some_and(|n| !n.is_space() && n.ch != '\u{2028}')
+    gap_owner(g) && !g.keeps_next && continues_word(g, next)
 }
 
 /// The width of a word space in `g`'s font and size: what letter spacing is a share of.
@@ -73,34 +121,65 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
     let [l_min, l_des, l_max] = j.letter_spacing.map(pct);
     let [g_min, g_des, g_max] = if scale_glyphs { j.glyph_scaling.map(pct) } else { [1.0; 3] };
     let mut flex = vec![Flex::default(); sg.len()];
+    // The last glyph before `k` that is not a format control, when that glyph may take a letter gap.
+    let mut owner: Option<usize> = None;
     for k in 0..sg.len() {
-        let gap = letter_gap(&sg[k], sg.get(k + 1));
+        let ch = sg[k].ch;
+        let zero_width_space = ch == ZERO_WIDTH_SPACE;
+        // Only a glyph that is not a format control, or a zero-width space, looks past the
+        // controls after it, up to the next zero-width space, so each run of controls is passed
+        // over once.
+        let scans = zero_width_space || !is_format_control(ch);
+        let next =
+            if scans { sg.get(k + 1..).and_then(|rest| rest.iter().find(|n| !is_format_control(n.ch) || n.ch == ZERO_WIDTH_SPACE)) } else { None };
+        // A letter followed by a zero-width space takes no gap. The zero-width space takes the
+        // letter's gap instead (the letter's space width, after its glyph scaling), so a line
+        // that breaks there ends without letter spacing.
+        let space_gap = if zero_width_space && continues_word(&sg[k], next) { owner.and_then(|o| sg.get(o)).map(space_width) } else { None };
+        let gap = !zero_width_space && scans && letter_gap(&sg[k], next);
+        if !is_format_control(ch) {
+            owner = None;
+        }
         let (Some(g), Some(f)) = (sg.get_mut(k), flex.get_mut(k)) else { continue };
+        if zero_width_space {
+            if let Some(space) = space_gap {
+                g.adv += space * l_des;
+                f.letter = (space * (l_max - l_des).max(0.0), space * (l_des - l_min).max(0.0));
+            }
+            continue;
+        }
+        // Insert Aki keeps its width: only the rest of the advance is spaced or scaled.
+        let aki = if g.aki.is_finite() { g.aki } else { 0.0 };
         if is_word_space(g) {
             // The font's word space (with its tracking), set at Desired.
-            let base = g.adv;
-            g.adv = base * w_des;
+            let base = g.adv - aki;
+            g.adv = base * w_des + aki;
             f.word = (base * (w_max - w_des).max(0.0), base * (w_des - w_min).max(0.0));
             continue;
         }
         if g.is_space() || g.inline.is_some() || g.ch == '\u{2028}' {
             continue;
         }
-        let base = g.adv;
+        let base = g.adv - aki;
         if g_des != 1.0 {
-            g.adv *= g_des;
+            g.adv = base * g_des + aki;
             g.tracking *= g_des;
             g.sx *= g_des;
             g.dx *= g_des;
-            g.kern_shift *= g_des;
+            g.kern_shift = (g.kern_shift - g.aki_shift) * g_des + g.aki_shift;
+            // The space Mojikumi took off before the glyph scales with it.
+            g.lead *= g_des;
         }
-        f.width = g.adv;
+        f.width = g.adv - aki;
         f.scale = g_des;
         f.glyph = (base * (g_max - g_des).max(0.0), base * (g_des - g_min).max(0.0));
         if gap {
             let space = space_width(g);
             g.adv += space * l_des;
             f.letter = (space * (l_max - l_des).max(0.0), space * (l_des - l_min).max(0.0));
+        }
+        if gap_owner(g) {
+            owner = Some(k);
         }
     }
     flex

@@ -309,12 +309,12 @@ fn character_style_color_and_features_reach_text_and_follow_swatch_edits() {
     // The command takes the color of the link at the tint, whatever color is sent.
     tinted["tint"] = json!(0.4);
     let attrs = json!({"fill": brand, "stroke": tinted, "stroke_width": 2.0, "overprint_fill": true, "overprint_stroke": false,
-        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]});
+        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]});
     s.execute("charStyle.new", &json!({"name": "Ink", "attrs": attrs})).unwrap();
     s.execute("charStyle.apply", &json!({"name": "Ink", "id": id})).unwrap();
     let want_stroke = s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap();
     assert_eq!(run_paints(&s, id), (brand, want_stroke.clone(), 2.0, true, false));
-    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]);
+    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]);
     let def = |s: &Session| s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs.clone();
     assert_eq!(def(&s)["stroke"], serde_json::to_value(&want_stroke).unwrap());
     let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
@@ -355,6 +355,8 @@ fn character_style_color_and_features_are_checked() {
         (json!({"stroke_width": 5.0e6}), "`stroke_width` must be from 0 to 4000000"),
         (json!({"features": ["dlig", "zzzz"]}), "unknown OpenType feature `zzzz`"),
         (json!({"features": ["--liga"]}), "unknown OpenType feature `--liga`"),
+        (json!({"features": ["salt=x"]}), "unknown OpenType feature `salt=x`"),
+        (json!({"features": ["-salt=2"]}), "unknown OpenType feature `-salt=2`"),
         (json!({"features": many}), "features lists at most 256 tags"),
         (json!({"fill": {"type": "solid"}}), "missing field"),
     ] {
@@ -393,6 +395,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"baseline_shift": 1296.1}),
         json!({"tcyUpDown": 1296.1}),
         json!({"tcyLeftRight": -1296.1}),
+        json!({"akiLeft": -0.1}),
+        json!({"akiRight": 1000.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -414,7 +418,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "size": 1296.0, "leading": 5000.0,
             "h_scale": 1.0, "v_scale": 10000.0,
             "baseline_shift": -1296.0,
-            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0
+            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
+            "akiLeft": 0.0, "akiRight": 1000.0
         }}),
     )
     .unwrap();
@@ -1336,7 +1341,8 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
 
 /// The same for character styles: Auto kerning and the Roman baseline alignment, which the
 /// run's JSON leaves out, are captured and reach the style's users. A glyph choice belongs to
-/// one character, so it is not a reusable style attribute.
+/// one character, and the space before a line's first character to where it stands (#5111), so
+/// neither is a reusable style attribute.
 #[test]
 fn char_style_redefined_to_the_defaults_updates_its_text() {
     use vectorcraft_doc::CharAlign;
@@ -1356,6 +1362,7 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
     let mut reusable = settable::<CharStyle>();
     reusable.remove("glyphAlternate");
+    reusable.remove("kerningBefore");
     assert_eq!(defined(&s, 0), reusable, "Redefine captures every reusable attribute");
     s.execute("charStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
     assert_eq!(defined(&s, 1), reusable, "New captures every reusable attribute");
@@ -1727,5 +1734,79 @@ fn paragraph_style_attributes_are_checked_before_a_definition_changes() {
     ] {
         let error = s.execute("paraStyle.setAttrs", &json!({"name": "Renamed", "attrs": attrs})).unwrap_err().to_string();
         assert!(error.contains(&format!("`{key}`")), "{attrs}: {error}");
+    }
+}
+
+/// A paragraph style's changed tab stops are checked stop by stop: a stop the style holds is kept
+/// as it is, and a stop at a held position with another alignment is a changed stop. A changed
+/// stop's leader has at most eight characters and its Align On one character, a changed list has
+/// at most 256 stops (or as many as the style holds, here 300), and the stops are stored sorted by position,
+/// keeping the first of stops at one position.
+#[test]
+fn paragraph_style_tab_stops_are_checked_by_stop_and_sorted() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let def = |s: &Session| s.doc().unwrap().doc.para_styles.iter().find(|d| d.name == "Body").unwrap().attrs.clone();
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let held: Vec<Value> =
+        (0..300).map(|i| json!({"position": 200000.0 + f64::from(i), "align": "left", "leader": "123456789", "alignOn": "."})).collect();
+    doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("tabs".into(), Value::from(held.clone()));
+    let before = s.doc().unwrap().doc.clone();
+    let mut moved = held.clone();
+    moved[0]["align"] = json!("right");
+    for (stops, why) in [
+        (Value::from(moved), "`tabs.position`"),
+        (json!([{"position": 36.0, "leader": "123456789"}]), "`tabs.leader` must be at most 8 characters"),
+        (Value::from((0..301).map(|i| json!({"position": f64::from(i)})).collect::<Vec<_>>()), "at most 256 tab stops"),
+        (json!([{"position": 36.0, "alignOn": ",."}]), "expected a character"),
+    ] {
+        for cmd in ["paraStyle.edit", "paraStyle.setAttrs"] {
+            let params = match cmd {
+                "paraStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": {"tabs": stops}}),
+                _ => json!({"name": "Body", "attrs": {"tabs": stops}}),
+            };
+            let error = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(error.contains(why), "{cmd}: {error}");
+        }
+    }
+    let many = Value::from((0..257).map(|i| json!({"position": f64::from(i)})).collect::<Vec<_>>());
+    let error = s.execute("paraStyle.new", &json!({"name": "Other", "attrs": {"tabs": many}})).unwrap_err().to_string();
+    assert!(error.contains("at most 256 tab stops"), "{error}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    // The held stops stay while one is dropped and another attribute changes.
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": &held[1..], "left_indent": 4.0}})).unwrap();
+    assert_eq!(def(&s)["tabs"].as_array().map(Vec::len), Some(299));
+    let stops = json!([{"position": 72.0, "align": "right"}, {"position": 36.0}, {"position": 36.0000001, "align": "center"}, {"position": 0.0, "leader": "12345678"}]);
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
+    assert_eq!(
+        def(&s)["tabs"],
+        json!([{"position": 0.0, "align": "left", "leader": "12345678", "alignOn": "."}, {"position": 36.0, "align": "left", "alignOn": "."},
+            {"position": 72.0, "align": "right", "alignOn": "."}])
+    );
+    s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"tabs": []}})).unwrap();
+    assert_eq!(def(&s)["tabs"], json!([]), "an empty list stays set");
+}
+
+/// Load Paragraph Styles and Load All Styles skip a paragraph style whose indents, spacing,
+/// Hyphenation or Justification options or tab stops are out of the range `paraStyle.new` takes,
+/// and load the others with their stops.
+#[test]
+fn loading_skips_paragraph_styles_out_of_range() {
+    let file = [
+        ("Good", json!({"left_indent": 6.0, "tabs": [{"position": 36.0, "align": "decimal", "alignOn": ","}]})),
+        ("Indent", json!({"left_indent": 2000.0})),
+        ("Space", json!({"space_after": -1300.0})),
+        ("Hyphens", json!({"hyphenation": {"words_longer_than": 40}})),
+        ("Spacing", json!({"justification": {"word_spacing": [120.0, 100.0, 133.0]}})),
+        ("Leader", json!({"tabs": [{"position": 10.0, "leader": "123456789"}]})),
+    ];
+    let data = styles_file(&[], &file);
+    for cmd in ["paraStyle.load", "textStyle.loadAll"] {
+        let (mut s, _) = session_with_text("Title");
+        let r = s.execute(cmd, &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+        let r = if cmd == "textStyle.loadAll" { r["paraStyles"].clone() } else { r };
+        assert_eq!(r, json!({"added": ["Good"], "existing": [], "skipped": ["Indent", "Space", "Hyphens", "Spacing", "Leader"]}), "{cmd}");
+        let good = super::style_attrs(&s.doc().unwrap().doc, true, "Good").unwrap();
+        assert_eq!(good["tabs"], json!([{"position": 36.0, "align": "decimal", "alignOn": ","}]), "{cmd}");
     }
 }

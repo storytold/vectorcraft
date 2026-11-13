@@ -793,8 +793,9 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
             assert_eq!(labels, ["Move", "Shape Builder"]);
         }),
-        // The proof views redraw every document (a new revision); they are left off, as the
-        // other tests of the process-wide proof view expect.
+        // The proof views apply the merge first by command id (`WAIT_FOR_TOOL_EDIT`), also when
+        // the view does not change and no document gets a new revision. They are left off, as
+        // the other tests of the process-wide proof view expect.
         ("Separations Preview", |s, _, _| {
             s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
         }),
@@ -806,6 +807,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
         ("Proof Setup", |s, _, _| {
             s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a proof view that changes", |s, _, _| {
+            let _v = crate::tests_colormgmt::DefaultView::new();
+            s.execute("view.proofColors", &json!({"on": true})).unwrap();
+            let on = s.doc().unwrap().revision;
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+            assert!(s.doc().unwrap().revision > on, "the view changes and the documents get new revisions");
         }),
         ("a preference", |s, _, _| {
             let every = s.prefs.gridline_every;
@@ -832,7 +840,7 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
+    let dir = vectorcraft_testkit::TempDir::new("shape-builder-merge-first");
     for (what, then) in next {
         let mut s = session();
         if what == "Select All Instances" {
@@ -2946,6 +2954,120 @@ fn merged_live_paint_groups_keep_the_bottom_groups_gap_options() {
 }
 
 #[test]
+fn live_paint_bucket_drag_fills_multiple_faces() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let before = s.doc().unwrap().doc.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    // Skip the middle face between pointer events, as can happen in a fast drag.
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+        assert_eq!(f.appearance.fill_paint(), s.paint.fill, "dragged face at {x}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before, "one Undo restores every face");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 125.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty(), "hover still highlights a face");
+    assert_eq!(s.doc().unwrap().doc, before, "hover does not paint");
+}
+
+#[test]
+fn live_paint_bucket_drag_crosses_thin_grid_cells_and_can_cancel() {
+    for (deferred, cancel) in [(false, false), (false, true), (true, false)] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (50.25, 0.0), (50.25, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = !deferred;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            assert!(s.tool_claims_key(ToolKey::Escape, v));
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+            assert!(!s.tool_claims_key(ToolKey::Escape, v));
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 50.125, 125.0] {
+                let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+                assert_eq!(f.appearance.fill_paint(), s.paint.fill, "deferred={deferred}, x={x}");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "deferred={deferred}, cancel={cancel}: original paths and selection art must be restored");
+    }
+}
+
+#[test]
+fn live_paint_bucket_long_drag_keeps_late_turns_and_release_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (100.0, 0.0), (100.0, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|id| id.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = false;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        for i in 1..4096 {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 50.0), v).unwrap();
+        }
+        // Turn around the middle face after the chunk limit, then enter the right face on Up.
+        for (x, y) in [(25.0, 150.0), (125.0, 150.0)] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        }
+        if cancel {
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 125.0] {
+                assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), s.paint.fill);
+            }
+            assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(75.0, 50.0)).unwrap().appearance.fill_paint(), Paint::solid(Color::WHITE));
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "long drag is one cancellable undo step");
+    }
+}
+
+#[test]
+fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live(&mut s);
+    let before = s.doc().unwrap().doc.clone();
+    for points in
+        [json!([]), json!([[26.0, 50.0]]), json!([[25.0, 50.0], [null, 0]]), json!([[25.0, 50.0], [1e30, 0]]), json!(vec![[25.0, 50.0]; 4097])]
+    {
+        assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": points})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[26.0, 50.0], [125.0, 50.0]]]), json!([vec![[25.0, 50.0]; 4097]])] {
+        assert!(
+            s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": [[25.0, 50.0]], "continuation": continuation}))
+                .is_err()
+        );
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
 fn live_paint_bucket_tool_fills_face() {
     let mut s = session();
     let g = live(&mut s);
@@ -3664,6 +3786,103 @@ fn a_trace_run_needs_the_library_colours_it_traced_with() {
     let name = s.doc().unwrap().doc.swatches_iter().find(swatch).map(|w| w.name.clone()).unwrap();
     s.execute("swatch.edit", &json!({"name": name, "color": "#123456"})).unwrap();
     assert!(!run.current(&s), "{name} changed");
+}
+
+/// `image_doc`'s image with its disc 20 px to the left: the same size, other pixels.
+fn moved_disc_png() -> Vec<u8> {
+    vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 30.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    })
+    .encode_png()
+}
+
+/// Puts `bytes` under the image key `key`, or takes the key's image data away (`None`).
+fn set_image_data(s: &mut Session, key: &str, bytes: Option<Vec<u8>>) {
+    s.edit("image data", |d, _| {
+        match bytes {
+            Some(b) => d.images.insert(key.into(), ImageBlob::new("image/png", b)),
+            None => d.images.remove(key),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// The middle of the first traced path of the Image Trace object the reply `r` names, in x.
+fn traced_center_x(s: &Session, r: &Value) -> f64 {
+    outline(&traced_paths(&node(s, NodeId(r["id"].as_u64().unwrap())))[0]).0.bounds().unwrap().center().x
+}
+
+/// A trace made away from its command no longer applies once the pixels under its image's key
+/// change, though the object, its image record and the settings stay as they were; both commands
+/// then trace the pixels there now. The same bytes in another allocation still apply.
+#[test]
+fn a_trace_run_needs_the_pixels_it_traced() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        image_doc(&mut s);
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        // The same bytes, allocated anew: still current.
+        let same = s.doc().unwrap().doc.images["img1"].bytes.to_vec();
+        set_image_data(&mut s, "img1", Some(same));
+        assert!(run.current(&s), "{command}: equal bytes");
+        // Other pixels under the same key: no longer current, and the hand-off is dropped.
+        set_image_data(&mut s, "img1", Some(moved_disc_png()));
+        assert!(!run.current(&s), "{command}: other pixels");
+        traced.hand_in(&mut s);
+        let r = s.execute(command, run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        // The disc is now at image x 30, which the ×2 placement at 50 puts at 110.
+        let x = traced_center_x(&s, &r);
+        assert!((x - 110.0).abs() < 1.5, "{command}: traced the pixels there now, at {x}");
+    }
+}
+
+/// Image data that is missing or empty: a run made before it went no longer applies, the run's
+/// command gives the error it gives without a run, and nothing panics.
+#[test]
+fn a_trace_run_of_missing_or_empty_image_data() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    let traced = run.run(&|_, _| true).unwrap();
+    set_image_data(&mut s, "img1", None);
+    assert!(!run.current(&s), "missing");
+    traced.hand_in(&mut s);
+    let e = s.execute(run.command(), run.params()).unwrap_err().to_string();
+    assert!(e.contains("image data `img1` is missing"), "{e}");
+    set_image_data(&mut s, "img1", Some(vec![]));
+    assert!(!run.current(&s), "empty");
+    let empty = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(empty.current(&s), "two empty blobs are equal");
+    assert!(matches!(empty.run(&|_, _| true), Err(EngineError::Other(_))));
+    assert!(matches!(s.execute(run.command(), run.params()), Err(EngineError::Other(_))));
+}
+
+/// Tracing an Image Trace object again follows the same rule: once the pixels of the image it
+/// holds change, a run made before no longer applies, and the command traces the pixels there now.
+#[test]
+fn a_trace_run_of_an_image_trace_object_needs_its_pixels() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let g = s.execute("imageTrace.make", &p).unwrap()["id"].as_u64().unwrap();
+    let again = json!({"id": g, "params": {"ignoreWhite": true}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &again).unwrap();
+    assert_eq!(run.target(), NodeId(g));
+    let traced = run.run(&|_, _| true).unwrap();
+    assert!(run.current(&s));
+    set_image_data(&mut s, "img1", Some(moved_disc_png()));
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let r = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let x = traced_center_x(&s, &r);
+    assert!((x - 110.0).abs() < 1.5, "traced the pixels there now, at {x}");
 }
 
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same

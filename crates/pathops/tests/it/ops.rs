@@ -317,6 +317,24 @@ fn offset_of_an_open_path_whose_ends_meet_is_the_closed_shape_offset() {
 }
 
 #[test]
+fn a_negative_offset_outlines_an_open_path_as_a_positive_one_does() {
+    // Issue #6427 (A4): an inset of an open path was empty. Open subpaths are outlined with a
+    // stroke of width 2|delta| whichever way the offset goes.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false));
+    for delta in [2.0, -2.0] {
+        let o = offset_path(&line, delta, Join::Miter, 4.0);
+        assert!(close(ar(&o), 400.0, 1e-6), "delta {delta}: {}", ar(&o));
+        assert_eq!(o.subpaths.len(), 1, "delta {delta}");
+    }
+    // With a closed shape beside it, the shape is inset and the line still outlined.
+    let mut both = rect(0.0, 0.0, 20.0, 10.0);
+    both.subpaths.push(SubPath::polyline(&[Point::new(100.0, 0.0), Point::new(150.0, 0.0)], false));
+    let o = offset_path(&both, -2.0, Join::Miter, 4.0);
+    assert!(close(ar(&o), 16.0 * 6.0 + 50.0 * 4.0, 1e-6), "{}", ar(&o));
+    assert_eq!(o.subpaths.len(), 2);
+}
+
+#[test]
 fn outline_stroke_of_line() {
     let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(30.0, 40.0)], false));
     let o = outline_stroke(&l, 4.0, Cap::Butt, Join::Miter, 4.0);
@@ -399,6 +417,77 @@ fn simplify_keeps_square_corners() {
     assert!(!has_curves(&s));
 }
 
+/// The largest turn, in degrees, at an anchor of `sp` that is not an end of an open subpath: the
+/// angle between the direction a segment arrives along and the one the next leaves along.
+fn largest_join_turn(sp: &SubPath) -> f64 {
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    let n = sp.segment_count();
+    let first = usize::from(!sp.closed);
+    (first..n)
+        .map(|i| {
+            let (prev, next) = (sp.segment((i + n - 1) % n), sp.segment(i));
+            let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+            let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+            arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+/// A refitted curve becomes a line only when the line keeps the smooth joins on both sides of it:
+/// with no corners kept, the refit of a jagged line or of an arc running into a line turns by at most
+/// 0.5° at every anchor. Points that all lie on one line still become one line.
+#[test]
+fn simplify_turns_a_curve_into_a_line_only_where_the_joins_stay_smooth() {
+    let mut seed = 7u64;
+    let mut noise = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+    };
+    let jagged: Vec<Point> = (0..=60).map(|i| Point::new(100.0 + f64::from(i) * 5.0, 200.0 + 6.0 * noise())).collect();
+    let mut arc_into_line: Vec<Point> =
+        (0..=40).map(|i| Point::new(50.0 * (f64::from(i) / 80.0 * PI).cos(), 50.0 * (f64::from(i) / 80.0 * PI).sin())).collect();
+    arc_into_line.extend((1..=20).map(|i| Point::new(-f64::from(i) * 2.0, 50.0)));
+    for pts in [&jagged, &arc_into_line] {
+        let path = PathData::single(SubPath::polyline(pts, false));
+        for tolerance in [1.0, 2.5, 5.0] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, ..Default::default() });
+            let turn = largest_join_turn(&s.subpaths[0]);
+            assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+            assert!(max_deviation(&path, &s) <= tolerance + 1e-6, "{tolerance} pt: {}", max_deviation(&path, &s));
+        }
+    }
+    let in_line: Vec<Point> = [0.0, 3.0, 10.0, 11.0, 40.0, 41.5, 90.0, 100.0].map(|x| Point::new(x, 0.5 * x)).to_vec();
+    let s = simplify_with(&PathData::single(SubPath::polyline(&in_line, false)), &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    assert_eq!(s.anchor_count(), 2, "{s:?}");
+    assert!(!has_curves(&s), "{s:?}");
+}
+
+/// A smoothed loop with no corner is fitted across its start, and the join there also turns by at
+/// most 0.5°. Each loop is a flat side that bends by 0.6° at the loop's start, closed by an arc of
+/// `n` lines `height` tall, with `inner` anchors along each half of the side.
+#[test]
+fn simplify_keeps_the_join_at_the_start_of_a_smoothed_loop_smooth() {
+    for (half, height, n, inner, tolerance, smooth) in
+        [(40.0, 20.0, 8, 3, 2.5, 2.0), (80.0, 60.0, 8, 3, 5.0, 0.5), (160.0, 200.0, 24, 3, 10.0, 2.0), (160.0, 20.0, 24, 8, 10.0, 5.0)]
+    {
+        let rise = half * 0.3f64.to_radians().tan();
+        let along = |i: i32| Point::new(half * f64::from(i) / f64::from(inner), -rise * f64::from(i.abs()) / f64::from(inner));
+        let mut pts: Vec<Point> = (0..=inner).map(along).collect();
+        pts.extend((1..n).map(|i| {
+            let a = f64::from(i) / f64::from(n) * PI;
+            Point::new(half * a.cos(), -rise - height * a.sin())
+        }));
+        pts.extend((-inner..0).map(along));
+        let path = PathData::single(SubPath::polyline(&pts, true));
+        let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, smooth, ..Default::default() });
+        let sp = &s.subpaths[0];
+        assert!(sp.closed && sp.anchors.len() < pts.len(), "{tolerance} pt: {s:?}");
+        assert!(sp.segment_is_line(0), "{tolerance} pt: the first segment is a curve: {s:?}");
+        let turn = largest_join_turn(sp);
+        assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+    }
+}
+
 #[test]
 fn simplify_straight_lines_option() {
     let c = dense_circle(50.0, 200);
@@ -477,6 +566,42 @@ fn simplify_keeps_a_closed_subpath_that_refits_to_one_curve() {
     let long = rect(0.0, 0.0, 1e9, 0.5);
     let s = simplify_with(&long, &SimplifyOptions { tolerance: 0.1, straight_lines: true, ..Default::default() });
     assert!(max_deviation(&long, &s) <= 0.1 + 1e-6, "{s:?}");
+}
+
+/// An S curve closed by a straight edge of 20,000 anchors, whose curve shows only when it is split in
+/// four, keeps its outline within the tolerance. With corner anchors on the edge, only the curve is
+/// split. With smooth anchors whose handles lie along the edge, four pieces of every segment pass the
+/// limit on pieces: the loop stays as it is, or with straight lines follows lines between samples.
+#[test]
+fn simplify_keeps_a_flat_loop_with_many_anchors_on_its_edge() {
+    let n = 20_000;
+    let step = 100.0 / f64::from(n);
+    let curve_anchors = vec![
+        Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 3.0)),
+        Anchor::with_handles(Point::new(100.0, 0.0), Point::new(0.0, -3.0), Point::new(100.0, 0.0)),
+    ];
+    let curve = PathData::single(SubPath::new(curve_anchors.clone(), false));
+    for smooth_edge in [false, true] {
+        let mut anchors = curve_anchors.clone();
+        anchors.extend((1..n).map(|i| {
+            let p = Point::new(100.0 - f64::from(i) * step, 0.0);
+            if smooth_edge {
+                Anchor::with_handles(p, Point::new(p.x + step / 3.0, 0.0), Point::new(p.x - step / 3.0, 0.0))
+            } else {
+                Anchor::corner(p)
+            }
+        }));
+        let path = PathData::single(SubPath::new(anchors, true));
+        for straight_lines in [false, true] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance: 4.0, straight_lines, ..Default::default() });
+            let at = format!("smooth edge {smooth_edge}, straight lines {straight_lines}");
+            assert_eq!(s.subpaths.len(), 1, "{at}");
+            let sp = &s.subpaths[0];
+            assert!(sp.closed && sp.area().abs() > 1.0, "{at}: area {}", sp.area());
+            assert!(max_deviation(&curve, &s) <= 4.0 + 1e-6, "{at}: {}", max_deviation(&curve, &s));
+            assert!(!straight_lines || (0..sp.segment_count()).all(|i| sp.segment_is_line(i)), "{at}: a curve is left");
+        }
+    }
 }
 
 /// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every

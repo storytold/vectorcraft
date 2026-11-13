@@ -127,6 +127,45 @@ fn to_source_refuses_what_is_not_plain_data() {
 }
 
 #[test]
+fn to_source_refuses_flags_and_extensibility_a_literal_does_not_make() {
+    let mut r = realm();
+    let property = "TypeError: toSource: a property that is not writable or configurable cannot be written as source";
+    let extensible = "TypeError: toSource: a non-extensible object cannot be written as source";
+    let length = "TypeError: toSource: an array with a read-only length cannot be written as source";
+    for (source, want) in [
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true, configurable: true}); toSource(o)", property),
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true, writable: true}); toSource(o)", property),
+        ("var a = [1, 2]; Object.defineProperty(a, '1', {writable: false}); toSource(a)", property),
+        ("var a = [1, 2]; Object.defineProperty(a, '0', {configurable: false}); a.toSource()", property),
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true}); toSource({x: [{b: o}]})", property),
+        ("toSource(Object.preventExtensions({}))", extensible),
+        ("toSource(Object.preventExtensions([]))", extensible),
+        ("toSource(Object.seal({a: 1}))", extensible),
+        ("toSource(Object.freeze({a: 1}))", extensible),
+        ("toSource(Object.seal([1]))", extensible),
+        ("toSource(Object.freeze([1]))", extensible),
+        ("toSource([1, {b: Object.freeze({})}])", extensible),
+        ("var a = []; Object.defineProperty(a, 'length', {writable: false}); toSource(a)", length),
+        ("var a = [1, , 3]; Object.defineProperty(a, 'length', {writable: false}); toSource({a: a})", length),
+    ] {
+        assert_eq!(thrown(&mut r, source), want, "{source}");
+    }
+    // The refused states are ones the literal would lose: evaluated, it is open again.
+    let lost = "var o = Object.freeze({a: 1}); var w = eval('({\"a\":1})');
+        [Object.isExtensible(o), Object.isExtensible(w), Object.getOwnPropertyDescriptor(w, 'a').writable].join()";
+    assert_eq!(text(&mut r, lost), "false,true,true");
+}
+
+#[test]
+fn to_source_writes_properties_defined_with_every_flag_on() {
+    let mut r = realm();
+    let source = "var o = {}; Object.defineProperty(o, 'a', {value: 1, writable: true, enumerable: true, configurable: true});
+        var a = [0]; Object.defineProperty(a, '0', {value: 2, writable: true, enumerable: true, configurable: true});
+        toSource({o: o, a: a, e: {}, f: [], s: [1, , 3]})";
+    assert_eq!(text(&mut r, source), r#"({"o":({"a":1}), "a":[2], "e":({}), "f":[], "s":[1, , 3]})"#);
+}
+
+#[test]
 fn to_source_of_a_string_with_many_escapes_throws_a_range_error_before_the_heap_limit() {
     let mut r = realm();
     // A run's heap in the web build. 2^23 control characters, each written as six, pass a quarter
@@ -178,6 +217,32 @@ fn script_items_read_the_global_object_the_last_error_the_line_and_the_stack() {
     let lines = text(&mut r, deep);
     assert_eq!(lines, "66,…", "64 frames, the line that some are left out, and the last line's end");
     assert!(thrown(&mut r, "'use strict'; h.line = 1").starts_with("TypeError"), "the items cannot be assigned");
+}
+
+#[test]
+fn the_line_and_the_stack_give_the_place_the_source_locator_maps_each_frame_to() {
+    let mut r = realm();
+    let items = [("line", ScriptItem::Line), ("stack", ScriptItem::Stack)].into_iter().map(|(n, i)| (n.to_string(), HostItem::Script(i))).collect();
+    r.define_host_object("h", items).unwrap();
+    let asked: Rc<RefCell<Vec<(u32, u32)>>> = Rc::default();
+    let seen = asked.clone();
+    r.set_source_locator(Rc::new(move |tag, line| {
+        seen.borrow_mut().push((tag, line));
+        let file = if tag == UNKNOWN_SOURCE { "[eval]".to_string() } else { format!("f{tag}") };
+        (file, line + 100)
+    }));
+    let source = "function inner() {\n  return h.stack;\n}\n\ninner()";
+    let stack = text(&mut r, source);
+    let tag = r.script_tag();
+    assert_eq!(stack, format!("[global]@f{tag}:105\ninner@f{tag}:102\n"));
+    assert_eq!(*asked.borrow(), [(tag, 5), (tag, 2)], "each frame's tag and its line in the compiled source");
+    assert_eq!(r.run("\n\n  h.line").unwrap(), JsValue::Number(103.0));
+    let tag = r.script_tag();
+    let stack = text(&mut r, "\neval('\\n\\nh.stack')");
+    assert_eq!(stack, format!("[global]@f{}:102\n[global]@[eval]:103\n", tag + 1), "code eval compiles has no tag of its own");
+    let deep = "function d(n) { return n ? d(n - 1) : h.stack; } var s = d(100).split('\\n'); s.length + ',' + s[0] + ',' + s[1]";
+    let tag = r.script_tag() + 1;
+    assert_eq!(text(&mut r, deep), format!("66,…,d@f{tag}:101"), "the frames past 64 are still left out");
 }
 
 #[test]

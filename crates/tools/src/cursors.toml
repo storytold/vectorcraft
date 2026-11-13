@@ -28,7 +28,7 @@ shown_when = [
     "The Selection tool over empty canvas or over an unselected object (no Alt).",
     "Dragging with the Selection tool (a move), with Direct Selection (an anchor, a segment or a handle), or with a shape tool (from the selection's centre point).",
     "Any tool with no cursor of its own (Touch Type, Rotate View).",
-    "The resting state of Live Paint Selection, Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
+    "The resting state of Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
 ]
 hotspot = "The arrow's tip."
 look = "The default pointer: a solid arrow. ArrowHollow is its hollow twin."
@@ -90,6 +90,39 @@ hotspot = "The front arrowhead's tip."
 look = "Says \"a copy\": a double arrowhead, one in front of the other."
 
 [[cursor]]
+id = "LivePaintSelectFace"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection over a face of a Live Paint group that a click selects: inside the face, with Select Fills on, and without Alt unless Select Strokes is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small filled square badge (a face). LivePaintSelectEdge and LivePaintSelectOutside share the arrow."
+
+[[cursor]]
+id = "LivePaintSelectEdge"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection within reach of an edge of a Live Paint group that a click selects: Select Strokes is on, and Alt is held or Select Fills is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a short line badge (an edge)."
+
+[[cursor]]
+id = "LivePaintSelectOutside"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection where a click selects no face or edge: away from Live Paint groups, over a group that is locked, hidden or outside the isolated art, inside a face with Alt held and no edge within reach, or with Select Fills and Select Strokes both off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small x badge (nothing to select)."
+
+[[cursor]]
 id = "Move"
 group = "Selection"
 shown_when = [
@@ -102,6 +135,7 @@ shown_when = [
     "The Artboard tool inside an artboard.",
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
+    "Selection and Objects on Path over an Objects on Path group's Move All widget, and while dragging it.",
 ]
 hotspot = "The centre."
 look = "A four-way move cursor."
@@ -231,7 +265,7 @@ id = "Curvature"
 group = "Pen"
 shown_when = [
     "The Curvature tool over empty canvas, or anywhere while drawing a path away from its points.",
-    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end, PenConvert with Alt, PenClose over the first point of the path being drawn.",
+    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end of a selected path (Alt held or not), PenConvert with Alt over any other anchor or a point of the path being drawn, PenClose over the first point of the path being drawn.",
 ]
 hotspot = "The nib's tip."
 look = "The Pen nib with a curve badge."
@@ -438,7 +472,10 @@ designer = false
 [[cursor]]
 id = "Eyedropper"
 group = "Colour and gradient"
-shown_when = ["The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead."]
+shown_when = [
+    "The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead.",
+    "The Live Paint Bucket with Alt held (a click samples paint).",
+]
 hotspot = "The pipette's tip."
 look = "A pipette."
 
@@ -474,8 +511,32 @@ hotspot = "Where the mesh point goes."
 [[cursor]]
 id = "LivePaintBucket"
 group = "Colour and gradient"
-shown_when = ["The Live Paint Bucket: a click fills a face (or an edge) of a Live Paint group."]
-hotspot = "Where the paint pours out."
+shown_when = [
+    "The Live Paint Bucket where a click paints nothing: away from Live Paint groups and the selected paths' regions, or over a part the Paint Fills and Paint Strokes options (and Shift) leave unpainted.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "An empty paint bucket tipped toward the hotspot, a small drop on it. LivePaintBucketFace is the same bucket filled."
+
+[[cursor]]
+id = "LivePaintBucketFace"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over a face of a Live Paint group, or a region of the selected paths, that a click fills.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "LivePaintBucket filled, with a larger drop on the hotspot."
+
+[[cursor]]
+id = "LivePaintBucketEdge"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over an edge of a Live Paint group that a click paints with the stroke.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The brush's tip."
+look = "A brush pointing down-left: bristles at the hotspot, then a white ferrule and a dark handle."
 
 # ── Width, blend, slice and shape builder ─────────────────────────────────────────────────────────
 
@@ -598,14 +659,14 @@ look = "PencilStraight's badge with a small filled square at the line's lower en
 [[cursor]]
 id = "Paintbrush"
 group = "Drawing and editing tools"
-shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it."]
+shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it, except that Alt held at the press with a path selected that the Smooth tool can act on smooths that path (see Smooth)."]
 hotspot = "The bristle tip."
 
 [[cursor]]
 id = "PaintbrushClose"
 group = "Drawing and editing tools"
 shown_when = [
-    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool with Alt held while drawing, or before a press when no path is selected that the Smooth tool can act on (with one selected, Smooth shows): releasing the mouse button with Alt still held closes the path.",
     "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
 ]
 hotspot = "The bristle tip."
@@ -631,6 +692,8 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Smooth tool: a drag along a selected path smooths it.",
     "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+    "The Paintbrush tool with Alt held before a press while a path is selected that the Smooth tool can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), and through a drag that smooths.",
+    "The Blob Brush tool with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
 ]
 hotspot = "The tip."
 

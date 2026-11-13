@@ -2,7 +2,7 @@
 //! artboard, after a central file of the whole document for EPS with two or more when art shows,
 //! or one page each in a PDF); without artboards the export covers the visible art. OK
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
-//! Options, Text Export Options, DXF Options, EPS Options, and Save PDF for artboards as pages),
+//! Options, Text Export Options, DXF Options, EPS Options, and Save PDF),
 //! else the file is written. DWG is listed, greyed out, with what to use instead. The formats of
 //! installed exporter plug-ins come after the built-in ones: they write the whole document, and one
 //! with parameters asks for them before writing (`plugin::open_export`).
@@ -103,7 +103,8 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0)).changed() {
+            let field = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0).hint_text("1-3, 5");
+            if ui.add_enabled(!all, field).changed() {
                 d.fields.insert("range".into(), json!(range));
             }
         });
@@ -168,16 +169,22 @@ fn options_or_write(
             }
             Ok(Value::Null)
         }
-        // Artboards as pages go on in Save PDF; the art's bounds are written straight away.
+        // Save PDF writes the artboards as pages, or one page of the art's bounds.
         "pdf" if use_artboards => save_pdf::open(app, &json!({ "path": path, "range": (!all).then_some(range) })),
+        "pdf" => save_pdf::open(app, &json!({ "path": path, "useArtboards": false })),
         "txt" => {
             text_export::open(app, &path);
             Ok(Value::Null)
         }
         _ => {
-            let mut params = json!({ "format": f.id, "path": path, "useArtboards": use_artboards });
-            if use_artboards {
-                params["range"] = json!(range);
+            let mut params = json!({ "format": f.id, "path": path });
+            // A format that holds the whole document (a template) has no Use Artboards: the
+            // export is not given the option, which its warnings would name as not used.
+            if plugin.is_some() || f.options.iter().any(|o| o.name == "useArtboards") {
+                params["useArtboards"] = json!(use_artboards);
+                if use_artboards {
+                    params["range"] = json!(range);
+                }
             }
             if let Some(plugin) = plugin.filter(|p| !p.manifest().params.is_empty()) {
                 plugin::open_export(app, &plugin, params);

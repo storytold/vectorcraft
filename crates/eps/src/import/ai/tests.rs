@@ -5,6 +5,7 @@ use std::sync::Arc;
 use kurbo::{Affine, Point, Rect};
 use vectorcraft_color::gradient::GradientKind;
 use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::live::WARP_NET;
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Guide, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind, Unit};
 
 use super::*;
@@ -3929,6 +3930,28 @@ fn point_type(attrs: &str, text: &str) -> String {
     format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n{attrs}\n({text}) Tx\nTO\n")
 }
 
+/// Legacy type is set in the installed face of exactly the PostScript name its `Tf` gives, as type
+/// from a text document is: not a face whose name differs only in case and loads first, nor the
+/// copy the family and style resolve to when the name's own is another (it names its version).
+#[test]
+fn legacy_type_takes_the_face_of_its_exact_postscript_name() {
+    use vectorcraft_text::test_fonts::named_copy;
+    let db = vectorcraft_text::FontDb::global();
+    for (inter, names) in [
+        (true, ("TWINLEGACY INK", "Regular", "Version 1.000", "TWINLEGACYINK-Regular")),
+        (false, ("Twinlegacy Ink", "Regular", "Version 2.000", "TwinlegacyInk-Regular")),
+    ] {
+        assert_eq!(db.add_font(named_copy(inter, names).unwrap()), 1, "{names:?}");
+    }
+    let face = |font: &str| {
+        let texts = legacy_texts(&point_type("", "Hi").replace("/_Helvetica 12 Tf", &format!("/_{font} 12 Tf")));
+        let f = db.style_face(&texts[0].runs[0].style).unwrap();
+        (f.postscript_name(), f.version.clone())
+    };
+    assert_eq!(face("TwinlegacyInk-Regular"), ("TwinlegacyInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face("TWINLEGACYINK-Regular"), ("TWINLEGACYINK-Regular".to_string(), "Version 1.000".to_string()));
+}
+
 /// `TC` and `TW` (§15.4.7) set the paragraph's letter and word spacing, `Tq` its hanging
 /// punctuation and `Th` (§22) its hyphenation; each paragraph keeps the values in force at its
 /// first character, and they last into the next text object.
@@ -7091,13 +7114,12 @@ fn with_red_stroke(styles: &str) -> String {
 
 #[test]
 fn twist_and_a_scaling_transform_are_read_only_where_their_outline_is_known() {
-    // GUARDS: Twist was read on curves, strokes and groups, and Transform scaling a stroked object,
-    // where the outline VectorCraft draws hasn't been checked.
+    // GUARDS: Twist was read on strokes, and Transform scaling a stroked object, where the outline
+    // VectorCraft draws hasn't been checked.
     let object = |hidden: &str| {
         format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
     };
     let square = object(&rect_path(20.0, 20.0, 60.0, 50.0));
-    let curved = object("20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n");
     let twist = distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", BLUE_FILL);
     let scale = "0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n";
     let corner = distort_styles("Adobe Transform", &format!("0 /Int (pinPoint) ,\n{scale}"), BLUE_FILL);
@@ -7105,9 +7127,7 @@ fn twist_and_a_scaling_transform_are_read_only_where_their_outline_is_known() {
     let moved = distort_styles("Adobe Transform", "0 /Int (pinPoint) ,\n5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n", BLUE_FILL);
     let read = |styles: &str, art_: &str| read_ok(&format!("{styles}{}", layer(art_)));
     for (what, r) in [
-        ("a twisted curve", read(&twist, &curved)),
         ("a twisted stroke", read(&with_red_stroke(&twist), &square)),
-        ("a twisted group", read(&distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", None), &distort_group())),
         ("a stroke scaled from a corner", read(&with_red_stroke(&corner), &square)),
         ("a stroke scaled from the center", read(&with_red_stroke(&center), &square)),
     ] {
@@ -7130,6 +7150,67 @@ fn twist_and_a_scaling_transform_are_read_only_where_their_outline_is_known() {
     let a = art(&r.doc);
     let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
     assert_eq!((e.id.as_str(), e.params["angle"].as_f64()), ("distort.twist", Some(45.0)));
+}
+
+#[test]
+fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_a_quarter_turn() {
+    // GUARDS: Twist was read only on paths and compound paths with straight segments.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    let square = object(&format!("{}f\n", rect_path(20.0, 20.0, 60.0, 50.0)));
+    let oval = "20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n";
+    let curved = object(&format!("{oval}f\n"));
+    let ring = object(&format!("*u\n{oval}f\n30 35 m\n30 40 50 40 50 35 c\n50 30 30 30 30 35 c\nf\n*U\n"));
+    let twist = |angle: f64, paint| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), paint);
+    let read = |styles: &str, art_: &str| read_ok(&format!("{styles}{}", layer(art_)));
+    // The first member of a group, and a second one.
+    let group = |second: &str| {
+        let member = |s: String| s.replace('\n', "\n%_");
+        format!(
+            "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{}U\n1 (Bent) XW\n",
+            rect_path(-1.0, -1.0, 16.0, 11.0),
+            member(format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0))),
+            member(second.to_string())
+        )
+    };
+    let hidden_member = group(&format!("1 Xw\n{RED}{}f\n0 Xw\n", rect_path(5.0, 0.0, 15.0, 10.0)));
+    // A compound path, its first subpath `first` and a guide.
+    let with_guide = |first: &str| object(&format!("*u\n{first}f\n5 0 m\n15 10 L\n(N) *\n*U\n"));
+    for (what, r, members) in [
+        ("a twisted curve", read(&twist(45.0, BLUE_FILL), &curved), 0),
+        ("a curved compound path", read(&twist(-60.0, BLUE_FILL), &ring), 2),
+        ("a twisted group", read(&twist(90.0, None), &distort_group()), 2),
+        ("a group with a hidden member", read(&twist(45.0, None), &hidden_member), 2),
+        ("a curve twisted a quarter turn back", read(&twist(-90.0, BLUE_FILL), &curved), 0),
+        ("a square twisted three quarters of a turn, as before", read(&twist(270.0, BLUE_FILL), &square), 0),
+        ("a straight compound path with a guide, as before", read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(20.0, 20.0, 60.0, 50.0))), 2),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), members, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, "distort.twist", "{what}");
+    }
+    // A group with a stroked member or a guide, a curved compound path with a guide, and curves and
+    // groups twisted past a quarter turn, keep the drawn look.
+    let stroked_member = group(&format!("0 1 1 0 1 0 0 XA\n2 w\n{}S\n", rect_path(5.0, 0.0, 15.0, 10.0)));
+    let guide_member = group("5 0 m\n15 10 L\n(N) *\n");
+    for (what, r) in [
+        ("a group with a stroked member", read(&twist(45.0, None), &stroked_member)),
+        ("a group with a guide", read(&twist(45.0, None), &guide_member)),
+        ("a curved compound path with a guide", read(&twist(45.0, BLUE_FILL), &with_guide(oval))),
+        ("a curve twisted past a quarter turn", read(&twist(91.0, BLUE_FILL), &curved)),
+        ("a curve twisted half a turn back", read(&twist(-180.0, BLUE_FILL), &curved)),
+        ("a group twisted past a quarter turn", read(&twist(135.0, None), &distort_group())),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
 }
 
 #[test]
@@ -7403,15 +7484,16 @@ fn a_warp_envelope_opens_live() {
     for (style, bend, h, v, rotate, id) in
         [(1, 0.5, 0.0, 0.0, 0, "arc"), (1, 0.5, -0.2, 0.3, 1, "arc"), (8, 0.5, 0.0, 0.0, 0, "flag"), (15, 0.5, 0.0, 0.0, 0, "twist")]
     {
-        let want = EnvelopeKind::Warp { style: id.into(), bend: bend * 100.0, h: h * 100.0, v: v * 100.0, horizontal: rotate == 0 };
+        let want =
+            EnvelopeKind::Warp { style: id.into(), bend: bend * 100.0, h: h * 100.0, v: v * 100.0, horizontal: rotate == 0, version: WARP_NET };
         let body =
             envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(style, bend, h, v, rotate), &envelope_content(), 1, &drawn_content(&want));
         let r = read_ok(&layer(&body));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{a:#?}");
         let (content, kind, fidelity, editing, options) = live_envelope(&a[0]);
-        let EnvelopeKind::Warp { style: s, bend: b, h: dh, v: dv, horizontal } = kind else { panic!("{kind:?}") };
-        assert_eq!((s.as_str(), *horizontal), (id, rotate == 0));
+        let EnvelopeKind::Warp { style: s, bend: b, h: dh, v: dv, horizontal, version } = kind else { panic!("{kind:?}") };
+        assert_eq!((s.as_str(), *horizontal, *version), (id, rotate == 0, WARP_NET));
         assert!([(*b, bend), (*dh, h), (*dv, v)].iter().all(|(got, f)| (got - f * 100.0).abs() < 1e-9), "{kind:?}");
         assert_eq!((fidelity, editing, options), (50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW));
         assert_eq!(content.len(), 1, "{content:#?}");
@@ -7443,7 +7525,7 @@ fn warp_envelopes_read_every_style() {
         "twist",
     ];
     for (n, id) in ids.iter().enumerate() {
-        let want = EnvelopeKind::Warp { style: (*id).into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let want = EnvelopeKind::Warp { style: (*id).into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
         let keys = warp_keys(n as u32 + 1, 0.3, 0.0, 0.0, 0);
         let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &envelope_content(), 1, &drawn_content(&want))));
         let a = art(&r.doc);
@@ -7646,6 +7728,55 @@ fn a_top_object_envelope_opens_live_with_its_outline() {
     assert_eq!(content.len(), 1, "{content:#?}");
     assert_eq!(fill(&content[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// A top object whose saved grid has three patches across, its top edge one curve split into
+/// thirds, maps its contents along that one curve. In this synthetic file the drawn art is drawn by
+/// VectorCraft's own map of the unsplit curve, so the envelope opens live only when the split side
+/// maps the same way, and the contents' first quarter ends a quarter of the way along the curve.
+#[test]
+fn a_top_object_whose_top_is_one_curve_split_in_thirds_opens_live() {
+    use kurbo::{CubicBez, ParamCurve};
+    use vectorcraft_doc::live::EnvelopeKind;
+    // In the document: the top runs from (40, 20) to (160, 20), its parameter fast at the start.
+    let top = CubicBez::new((40.0, 20.0), (112.0, -16.0), (154.0, 2.0), (160.0, 20.0));
+    let thirds = [top.subsegment(0.0..1.0 / 3.0), top.subsegment(1.0 / 3.0..2.0 / 3.0), top.subsegment(2.0 / 3.0..1.0)];
+    // Art space has y up: row 1 is the top. The bottom row and the columns are straight.
+    let up = |p: Point| (p.x, 100.0 - p.y);
+    let at = move |(i, j): (usize, usize)| {
+        if j == 1 { up(if i == 0 { top.p0 } else { thirds[i - 1].p3 }) } else { (40.0 + 40.0 * i as f64, 20.0) }
+    };
+    let handle = move |p: (usize, usize), q: (usize, usize)| match (p, q) {
+        ((i, 1), (k, 1)) if k == i + 1 => up(thirds[i].p1),
+        ((i, 1), (k, 1)) if k + 1 == i => up(thirds[k].p2),
+        _ => {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        }
+    };
+    let shape = mesh_text(3, 1, &at, &handle, None);
+    // The contents: two red bars at the box's left and right ends, drawn by the unsplit curve.
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to(top.p0);
+    bp.curve_to(top.p1, top.p2, top.p3);
+    bp.line_to((160.0, 80.0));
+    bp.line_to((40.0, 80.0));
+    bp.close_path();
+    let one_curve = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: Some([0, 1, 2, 3]) };
+    let src = Rect::new(40.0, 20.0, 160.0, 80.0);
+    let bars = [Rect::new(40.0, 20.0, 70.0, 80.0), Rect::new(130.0, 20.0, 160.0, 80.0)];
+    let content: String = bars.iter().map(|b| format!("{RED}{}f\n", rect_path(b.x0, b.y0, b.x1, b.y1))).collect();
+    let drawn: String = bars.iter().map(|b| drawn_box(&one_curve, src, *b)).collect();
+    let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &content, 3, &drawn)));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (_, kind, ..) = live_envelope(&a[0]);
+    let EnvelopeKind::TopObject { path, .. } = kind else { panic!("{kind:?}") };
+    assert_eq!(path.anchor_count(), 8, "{path:?}");
+    let map = vectorcraft_doc::live::envelope_mapper(kind, src);
+    let (p, want) = (map(Point::new(70.0, 20.0)), top.eval(0.25));
+    assert!((p - want).hypot() < 0.02, "{p:?}, want {want:?}");
 }
 
 /// Envelope Options come from the options word, Fidelity from its own key.
@@ -7974,7 +8105,7 @@ fn an_envelope_that_doesnt_read_keeps_its_drawn_art() {
 #[test]
 fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     use vectorcraft_doc::live::EnvelopeKind;
-    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true };
+    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
     let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &envelope_content(), 1, &drawn_content(&other));
     let r = read_ok(&layer(&body));
     let a = art(&r.doc);
@@ -7989,7 +8120,7 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
 fn a_white_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     use vectorcraft_doc::live::EnvelopeKind;
     const WHITE: &str = "0 0 0 0 1 1 1 Xa\n";
-    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true };
+    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
     let content = envelope_content().replace(RED, WHITE);
     let drawn = drawn_content(&other).replace(RED, WHITE);
     let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &content, 1, &drawn);
@@ -8149,7 +8280,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page, alone: None };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };

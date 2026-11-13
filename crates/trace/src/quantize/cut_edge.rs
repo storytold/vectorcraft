@@ -1,5 +1,5 @@
 use super::palette::{Bin, HistKey, Used, centers, median_cut, nearest_lab};
-use super::{Quantized, Raster, TRANSPARENT, luma, oklab};
+use super::{Mode, Palette, Quantized, Raster, TRANSPARENT, TraceParams, luma, oklab};
 
 /// `q` with its blend pixels settled, and the colours that leaves unused dropped.
 ///
@@ -65,17 +65,240 @@ pub(super) fn settled(mut q: Quantized, img: &Raster, own: &[bool]) -> Quantized
     if changed { compact(q.labels, q.palette) } else { q }
 }
 
+/// The most colors (Color) or grays (Grayscale) a palette may ask for to have its blend pixels
+/// settled by [`settled_wide`] rather than [`settled`]. The limited-color presets ask for 3 to 16
+/// colors.
+const LIMITED_COLORS: u32 = 16;
+
+/// Whether a trace with `params` settles its blend pixels with [`settled_wide`]: Grayscale, and
+/// Color with a Limited palette, of at most [`LIMITED_COLORS`] colors.
+pub(super) fn settles_wide(params: &TraceParams) -> bool {
+    match params.mode {
+        Mode::Grayscale => params.colors <= LIMITED_COLORS,
+        Mode::Color | Mode::Logo => params.palette == Palette::Limited && params.colors <= LIMITED_COLORS,
+        Mode::BlackAndWhite => false,
+    }
+}
+
+/// How far (px, across, along or diagonally) [`settled_wide`] looks for the picture's own pixels
+/// around a blend pixel: blur spreads an edge over several pixels, and its two sides can lie this
+/// far apart.
+const BLEND_REACH: usize = 8;
+
+/// How far (px, across, along or diagonally) an own pixel of its color keeps a blend pixel's color
+/// in [`settled_wide`]: where three colors meet, the blend is of its color too.
+const OWN_NEAR: usize = 4;
+
+/// How many of the colors within reach of a blend pixel, nearest to its color first,
+/// [`settled_wide`] pairs up.
+const NEAR_COLORS: usize = 8;
+
+/// How many columns at a time [`settled_wide`] keeps the colors within reach for, so that its
+/// memory does not grow with the width of the picture.
+const BLEND_STRIP: usize = 7;
+
+/// How far apart (squared levels) the distances of a blend pixel off the lines between two pairs
+/// of colors may be for [`settled_wide`] to count them as equal: rounding leaves a gray that lies
+/// between two grays about 1e-28 off the line between them.
+const SAME_FIT: f64 = 1e-6;
+
+/// How much nearer (squared) to the line between a pair of colors than to its own color a blend
+/// pixel must lie for [`settled_wide`] to settle it: half as far, as [`settled`] asks.
+const BETTER_FIT: f64 = 0.25;
+
+/// How far off the line between a pair of colors (as a share of their distance apart) a blend pixel
+/// that lies between the two may be for [`settled_wide`] to settle it whatever its own color.
+const ON_THE_LINE: f64 = 0.15;
+
+/// [`settled`] for a limited palette (see [`settles_wide`]), which also settles the in-between
+/// tones of an edge blurred over several pixels: without it they trace as a ring of a third color
+/// around the edge.
+///
+/// A blend pixel (see [`own_colours`]) whose color is none of those of the picture's own pixels
+/// within [`OWN_NEAR`] pixels of it takes the side it is nearer to of the pair of the colors of own
+/// pixels within [`BLEND_REACH`] pixels that it is best a blend of (of two pairs that explain it
+/// equally well, the closer one), when that explains it twice as well as its own color does, or
+/// when it lies between the two and off the line between them by less than [`ON_THE_LINE`] of
+/// their distance apart. Only the [`NEAR_COLORS`] colors nearest to its color are paired. It keeps
+/// its own color when that color is one of the pair, or when one color is all there is around it.
+/// With `gray` (Grayscale), a pixel's color is its gray (see [`luma`]).
+pub(super) fn settled_wide(mut q: Quantized, img: &Raster, own: &[bool], gray: bool) -> Quantized {
+    let (w, h) = (img.width as usize, img.height as usize);
+    if q.labels.len() != w * h || own.len() != w * h {
+        return q;
+    }
+    let before = q.labels.clone();
+    let colors: Vec<[f64; 3]> = q.palette.iter().map(|c| c.map(f64::from)).collect();
+    let dist2 = |a: [f64; 3], b: [f64; 3]| (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f64>();
+    // The colors of the own pixels within reach of each pixel, as bits (one word per 64 palette
+    // colors), a strip of columns at a time: along its row for the rows within reach (a window
+    // sliding along each row, kept for the last 2 × reach + 1 rows), then across those rows.
+    let words = q.palette.len().div_ceil(64).max(1);
+    let span = 2 * BLEND_REACH + 1;
+    let strip = BLEND_STRIP.min(w);
+    let mut rows = vec![0u64; span * strip * words];
+    let mut counts = vec![0u32; q.palette.len()];
+    let mut window = vec![0u64; words];
+    let mut bits = vec![0u64; words];
+    // The bits of row `y` for the columns `x0..x1` (at most `strip` of them).
+    let mut row_colors = |y: usize, x0: usize, x1: usize, rows: &mut [u64]| {
+        let Some(out) = rows.get_mut((y % span) * strip * words..(y % span + 1) * strip * words) else { return };
+        counts.fill(0);
+        window.fill(0);
+        // The own pixel at `x` enters the window (`add`) or leaves it.
+        let step = |counts: &mut [u32], window: &mut [u64], x: usize, add: bool| {
+            let i = y * w + x;
+            let l = before[i] as usize;
+            if !own[i] || l >= counts.len() {
+                return;
+            }
+            if add {
+                counts[l] += 1;
+                window[l / 64] |= 1 << (l % 64);
+            } else {
+                counts[l] -= 1;
+                if counts[l] == 0 {
+                    window[l / 64] &= !(1 << (l % 64));
+                }
+            }
+        };
+        let first = x0.saturating_sub(BLEND_REACH);
+        for x in first..(x0 + BLEND_REACH).min(w) {
+            step(&mut counts, &mut window, x, true);
+        }
+        for x in x0..x1 {
+            if x + BLEND_REACH < w {
+                step(&mut counts, &mut window, x + BLEND_REACH, true);
+            }
+            if let Some(gone) = x.checked_sub(BLEND_REACH + 1).filter(|&g| g >= first) {
+                step(&mut counts, &mut window, gone, false);
+            }
+            if let Some(o) = out.get_mut((x - x0) * words..(x - x0 + 1) * words) {
+                o.copy_from_slice(&window);
+            }
+        }
+    };
+    let mut changed = false;
+    let mut near: Vec<u16> = Vec::new();
+    let mut by_distance: Vec<(f64, u16)> = Vec::new();
+    let pixel = |p: &[u8]| if gray { [f64::from(luma([p[0], p[1], p[2], p[3]])); 3] } else { [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])] };
+    for (x0, y) in (0..w).step_by(strip.max(1)).flat_map(|x0| (0..h).map(move |y| (x0, y))) {
+        let x1 = (x0 + strip).min(w);
+        if y == 0 {
+            for yy in 0..BLEND_REACH.min(h) {
+                row_colors(yy, x0, x1, &mut rows);
+            }
+        }
+        if y + BLEND_REACH < h {
+            row_colors(y + BLEND_REACH, x0, x1, &mut rows);
+        }
+        'pixels: for x in x0..x1 {
+            let i = y * w + x;
+            let mine_l = before[i];
+            if own[i] || mine_l == TRANSPARENT {
+                continue;
+            }
+            // Its color is the picture's own here.
+            for yy in y.saturating_sub(OWN_NEAR)..=(y + OWN_NEAR).min(h - 1) {
+                for xx in x.saturating_sub(OWN_NEAR)..=(x + OWN_NEAR).min(w - 1) {
+                    if own[yy * w + xx] && before[yy * w + xx] == mine_l {
+                        continue 'pixels;
+                    }
+                }
+            }
+            bits.fill(0);
+            for yy in y.saturating_sub(BLEND_REACH)..=(y + BLEND_REACH).min(h - 1) {
+                let at = (yy % span) * strip * words + (x - x0) * words;
+                for (b, r) in bits.iter_mut().zip(rows.get(at..at + words).unwrap_or_default()) {
+                    *b |= r;
+                }
+            }
+            near.clear();
+            for (k, &b) in bits.iter().enumerate() {
+                let mut b = b;
+                while b != 0 {
+                    let l = (k * 64 + b.trailing_zeros() as usize) as u16;
+                    b &= b - 1;
+                    near.push(l);
+                }
+            }
+            let (Some(p), Some(&mine)) = (img.rgba.get(i * 4..i * 4 + 4).map(pixel), colors.get(mine_l as usize)) else {
+                continue;
+            };
+            if near.iter().filter(|&&l| l != mine_l).count() < 2 {
+                continue;
+            }
+            // In busy art many colors lie within reach: only the ones nearest to its color are paired.
+            // Each distance is worked out once, and only the nearest few are sorted (nearest first,
+            // then by index).
+            if near.len() > NEAR_COLORS {
+                by_distance.clear();
+                by_distance.extend(near.iter().map(|&l| (colors.get(l as usize).map_or(f64::INFINITY, |&c| dist2(p, c)), l)));
+                let order = |a: &(f64, u16), b: &(f64, u16)| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1));
+                by_distance.select_nth_unstable_by(NEAR_COLORS, order);
+                by_distance.truncate(NEAR_COLORS);
+                by_distance.sort_unstable_by(order);
+                near.clear();
+                near.extend(by_distance.iter().map(|&(_, l)| l));
+            }
+            // The pair it is best a blend of, by the square of how far it lies off the line between them,
+            // and of two pairs it lies equally far off, the closer pair (in grays it lies on the line
+            // between every pair of grays darker and lighter than it).
+            let mut best: Option<(f64, [u16; 2], u16, f64, bool)> = None;
+            for (n, &a) in near.iter().enumerate() {
+                let Some(&ca) = colors.get(a as usize) else { continue };
+                let pa = [p[0] - ca[0], p[1] - ca[1], p[2] - ca[2]];
+                for &b in &near[n + 1..] {
+                    let Some(&cb) = colors.get(b as usize) else { continue };
+                    let d = [cb[0] - ca[0], cb[1] - ca[1], cb[2] - ca[2]];
+                    let len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+                    let along = if len2 > 0.0 { (pa[0] * d[0] + pa[1] * d[1] + pa[2] * d[2]) / len2 } else { 0.0 };
+                    let t = along.clamp(0.0, 1.0);
+                    let off2 = (pa[0] - t * d[0]).powi(2) + (pa[1] - t * d[1]).powi(2) + (pa[2] - t * d[2]).powi(2);
+                    if best.is_none_or(|x| off2 < x.0 - SAME_FIT || (off2 <= x.0 + SAME_FIT && len2 < x.3)) {
+                        best = Some((off2, [a, b], if t < 0.5 { a } else { b }, len2, along > 0.0 && along < 1.0));
+                    }
+                }
+            }
+            // A pixel already of one of the two colors it is best a blend of stays as it is.
+            if let Some((off2, pair, to, apart2, between)) = best
+                && !pair.contains(&mine_l)
+                && (off2 < BETTER_FIT * dist2(p, mine) || (between && off2 < ON_THE_LINE * ON_THE_LINE * apart2))
+            {
+                q.labels[i] = to;
+                changed = true;
+            }
+        }
+    }
+    if changed { compact(q.labels, q.palette) } else { q }
+}
+
 /// Whether `img` is continuous tone (a photo, a gradient) rather than flat art, however noisy
 /// or unevenly lit (a scan): whether eight colours leave much of it unsaid. Flat art is a few
 /// colours and what noise and lighting make of them, and eight colours come within a few levels
 /// of every pixel; a photo's tones spread all through its range, and eight colours stay far from
 /// most of them (more than 6 levels, and more than a tenth of how far a single colour stays).
+/// A gray picture's tones lie along one line instead of through the whole color cube, and eight
+/// colors come nearer to them. A neutral picture (19 in 20 of its opaque pixels with their
+/// channels within 8 levels of each other) is therefore also continuous tone when eight colors
+/// stay more than 0.065 as far as a single color does. So is a sepia, single-hue or duotone
+/// picture whose tones follow one curve through the color cube (19 in 20 of its opaque pixels on
+/// it, see [`on_one_curve`]). Neither is when sixteen colors stay at most a fifth as far as eight
+/// do. That exception holds for flat art of up to sixteen clean levels, gray or tinted, where
+/// sixteen colors come within about a level of every pixel. On gray and tinted photos sixteen
+/// colors stay 0.18 to 0.57 as far as eight do, and on most anti-aliased or noisy gray flat art
+/// 0.24 to 0.5 as far, so the exception holds for neither.
 pub(crate) fn continuous_tone(img: &Raster) -> bool {
     let hk = HistKey::new(img);
     let mut bins = vec![Bin::default(); 1 << 15];
+    let (mut opaque, mut neutral) = (0u64, 0u64);
     for p in img.rgba.as_chunks::<4>().0 {
         if p[3] >= 128 {
             bins[hk.key(p[0], p[1], p[2])].add(p);
+            opaque += 1;
+            if p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2]) <= 8 {
+                neutral += 1;
+            }
         }
     }
     let used: Vec<Used> = bins.iter().enumerate().filter(|(_, b)| b.n > 0).map(|(i, b)| (i, b.mean(), b.n as f64)).collect();
@@ -91,7 +314,122 @@ pub(crate) fn continuous_tone(img: &Raster) -> bool {
         if n > 0.0 { (sum / n).sqrt() } else { 0.0 }
     };
     let eight = unsaid(8);
-    eight > 6.0 && eight > 0.1 * unsaid(1)
+    if eight <= 6.0 {
+        return false;
+    }
+    let one = unsaid(1);
+    if eight > 0.1 * one {
+        return true;
+    }
+    eight > 0.065 * one && unsaid(16) > 0.2 * eight && (20 * neutral >= 19 * opaque || 20 * on_one_curve(img) >= 19 * opaque)
+}
+
+/// How far (levels) a pixel may lie from the tone curve of its picture and still count as on it,
+/// for [`on_one_curve`].
+const CURVE_OFF: f64 = 6.0;
+
+/// How long (levels) each stretch along a picture's main color direction is whose median color is a
+/// point of its tone curve, for [`on_one_curve`].
+const CURVE_STEP: f64 = 8.0;
+
+/// How far (levels) the colors of a picture can lie from their mean along any direction: more than
+/// the length of the color cube's diagonal (255 × √3).
+const CURVE_REACH: f64 = 448.0;
+
+/// How many of the opaque pixels (an alpha of 128 or more) of `img` lie on its tone curve: within
+/// [`CURVE_OFF`] of it, measured across its main color direction, and within [`CURVE_OFF`] of the
+/// plane its colors spread along most. The main color direction is the direction through the color
+/// cube along which the opaque pixels' colors spread the most. The tone curve goes through the
+/// median color (the median of each channel) of the opaque pixels in each stretch of [`CURVE_STEP`]
+/// levels along that direction, which a few pixels of another color in the stretch do not move. The
+/// colors of a sepia, single-hue or duotone photo follow one such curve, as a gray photo's lie along
+/// the line of grays, while a color photo's spread across it. A curve with a bend, as a duotone's,
+/// stays within the plane, while art in several unrelated colors has colors off it. None are on
+/// the curve when there is no main color direction (no opaque pixels, or all of them one color).
+fn on_one_curve(img: &Raster) -> u64 {
+    let opaque = || img.rgba.as_chunks::<4>().0.iter().filter(|p| p[3] >= 128).map(|p| [p[0], p[1], p[2]].map(f64::from));
+    let (mut n, mut sum, mut products) = (0.0, [0.0; 3], [[0.0; 3]; 3]);
+    for c in opaque() {
+        n += 1.0;
+        for i in 0..3 {
+            sum[i] += c[i];
+            for j in 0..3 {
+                products[i][j] += c[i] * c[j];
+            }
+        }
+    }
+    if n == 0.0 {
+        return 0;
+    }
+    let mean = sum.map(|s| s / n);
+    let covariance: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| products[i][j] / n - mean[i] * mean[j]));
+    let Some(axis) = main_direction(&covariance) else { return 0 };
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // The direction across the main one along which the colors spread the most, and the direction
+    // across both: off the plane the colors spread along most. None when they lie on one line.
+    let first = dot(covariance.map(|row| dot(row, axis)), axis);
+    let rest: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| covariance[i][j] - first * axis[i] * axis[j]));
+    let off_plane = main_direction(&rest).and_then(|b| {
+        let n = [axis[1] * b[2] - axis[2] * b[1], axis[2] * b[0] - axis[0] * b[2], axis[0] * b[1] - axis[1] * b[0]];
+        let len = dot(n, n).sqrt();
+        (len > 1e-9).then(|| n.map(|v| v / len))
+    });
+    let stretches = (2.0 * CURVE_REACH / CURVE_STEP) as usize;
+    let stretch = |c: [f64; 3]| {
+        let along = dot([0, 1, 2].map(|k| c[k] - mean[k]), axis);
+        (((along + CURVE_REACH) / CURVE_STEP).floor().max(0.0) as usize).min(stretches - 1)
+    };
+    // How many pixels of each stretch have each level in each channel.
+    let mut levels = vec![[[0u32; 256]; 3]; stretches];
+    for p in img.rgba.as_chunks::<4>().0.iter().filter(|p| p[3] >= 128) {
+        if let Some(l) = levels.get_mut(stretch([p[0], p[1], p[2]].map(f64::from))) {
+            for (counts, &v) in l.iter_mut().zip(p) {
+                counts[usize::from(v)] += 1;
+            }
+        }
+    }
+    let middles: Vec<[f64; 3]> = levels
+        .iter()
+        .map(|l| {
+            l.map(|counts| {
+                let half = counts.iter().map(|&c| u64::from(c)).sum::<u64>().div_ceil(2);
+                let mut seen = 0u64;
+                counts
+                    .iter()
+                    .position(|&c| {
+                        seen += u64::from(c);
+                        seen >= half && seen > 0
+                    })
+                    .map_or(0.0, |v| v as f64)
+            })
+        })
+        .collect();
+    opaque()
+        .filter(|&c| {
+            let Some(mid) = middles.get(stretch(c)) else { return false };
+            let d = [0, 1, 2].map(|k| c[k] - mid[k]);
+            let along = dot(d, axis);
+            let off = off_plane.map_or(0.0, |o| dot([0, 1, 2].map(|k| c[k] - mean[k]), o));
+            dot(d, d) - along * along <= CURVE_OFF * CURVE_OFF && off.abs() <= CURVE_OFF
+        })
+        .count() as u64
+}
+
+/// The unit direction of the largest spread of a covariance matrix `m` (its main eigenvector),
+/// found in a fixed 64 steps of power iteration from its longest row. None when it has no spread.
+fn main_direction(m: &[[f64; 3]; 3]) -> Option<[f64; 3]> {
+    let norm = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let mut v = *m.iter().max_by(|a, b| norm(**a).total_cmp(&norm(**b)))?;
+    for _ in 0..64 {
+        let len = norm(v);
+        if len <= 1e-9 {
+            return None;
+        }
+        let unit = v.map(|x| x / len);
+        v = [0, 1, 2].map(|i| (0..3).map(|j| m[i][j] * unit[j]).sum());
+    }
+    let len = norm(v);
+    (len > 1e-9).then(|| v.map(|x| x / len))
 }
 
 /// Drop unused palette entries and merge duplicates.
@@ -312,4 +650,67 @@ fn edge_blend_of(own: [f64; 3], beside: [u8; 3], alpha: u8) -> bool {
     let t = if len2 > 0.0 { ((0..3).map(|c| (own[c] - from[c]) * d[c]).sum::<f64>() / len2).clamp(0.0, 1.0) } else { 0.0 };
     let off2: f64 = (0..3).map(|c| (own[c] - from[c] - t * d[c]).powi(2)).sum();
     off2 <= EDGE_BLEND * EDGE_BLEND
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_gray_blend_takes_the_closer_of_two_pairs_it_lies_between_despite_rounding() {
+        // Gray 105 in the middle, with own pixels of gray 50 to its left, 200 to its right and black
+        // along the top row, and a palette gray of 120 of its own. It lies between 0 and 200 exactly
+        // and between 50 and 200 to within rounding: it takes 50, the nearer of the closer pair.
+        let gray = |x: u32, y: u32| match (x, y) {
+            (8, 8) => 105,
+            (_, 0) => 0,
+            (0..=8, _) => 50,
+            _ => 200,
+        };
+        let img = Raster::from_fn(17, 17, |x, y| {
+            let v = gray(x, y);
+            [v, v, v, 255]
+        });
+        let palette = vec![[0, 0, 0], [50, 50, 50], [200, 200, 200], [120, 120, 120]];
+        let labels: Vec<u16> = (0..17 * 17)
+            .map(|i| match gray(i % 17, i / 17) {
+                0 => 0,
+                50 => 1,
+                200 => 2,
+                _ => 3,
+            })
+            .collect();
+        let own: Vec<bool> = labels.iter().map(|&l| l != 3).collect();
+        let q = settled_wide(Quantized { labels, palette }, &img, &own, true);
+        let middle = q.labels[8 * 17 + 8];
+        assert_eq!(q.palette[usize::from(middle)], [50, 50, 50]);
+    }
+
+    #[test]
+    fn a_blend_pixel_beyond_the_end_of_a_pair_keeps_its_nearest_color() {
+        // A column of [92, 92, 92] between own pixels of [100, 100, 100] to its left and
+        // [200, 200, 200] to its right, with a palette color of [90, 90, 90]: it lies beyond the
+        // darker end of the pair, not between the two, and its own color is the nearer, so it
+        // keeps it.
+        let value = |x: u32| match x {
+            0..=7 => 100,
+            8 => 92,
+            _ => 200,
+        };
+        let img = Raster::from_fn(17, 17, |x, _| {
+            let v = value(x);
+            [v, v, v, 255]
+        });
+        let palette = vec![[100, 100, 100], [200, 200, 200], [90, 90, 90]];
+        let labels: Vec<u16> = (0..17 * 17u32)
+            .map(|i| match value(i % 17) {
+                100 => 0,
+                200 => 1,
+                _ => 2,
+            })
+            .collect();
+        let own: Vec<bool> = labels.iter().map(|&l| l != 2).collect();
+        let q = settled_wide(Quantized { labels, palette }, &img, &own, false);
+        assert_eq!(q.palette[usize::from(q.labels[8 * 17 + 8])], [90, 90, 90]);
+    }
 }

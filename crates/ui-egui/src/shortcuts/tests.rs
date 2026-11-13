@@ -292,6 +292,287 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
     }
 }
 
+/// Commands whose menu item opens a slider or a dialog before anything changes: the sliders of
+/// Smooth and Simplify, Offset Path, the Object › Transform dialogs, Average, Split Into Grid,
+/// Vector Halftone, Rearrange All Artboards, Pathfinder Options, the Object › Plug-ins dialogs
+/// (Arrange in Grid, Replace with Top Object, the size, opacity and sort dialogs of the Arrange
+/// add-on, Set Corners…, Divide into Dashes, Find Nearest Swatch, the swatch legend, the type
+/// tools, the select add-on and Select by Link Status…), four "…" items whose menu entry gives
+/// params, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
+/// dialogs and Apply SVG Filter….
+const MENU_DIALOG_COMMANDS: [&str; 39] = [
+    "object.path.smooth",
+    "object.path.simplify",
+    "object.path.offsetPath",
+    "object.move",
+    "object.rotate",
+    "object.scale",
+    "object.reflect",
+    "object.shear",
+    "object.transformEach",
+    "path.average",
+    "path.averageJoin",
+    "object.path.splitIntoGrid",
+    "object.vectorHalftone",
+    "artboard.rearrange",
+    "object.pathfinder.options",
+    "addon.arrange.grid",
+    "addon.arrange.replace",
+    "addon.arrange.size",
+    "addon.arrange.randomizeOpacity",
+    "addon.arrange.sort",
+    crate::addons::pathtools::set_corners::COMMAND,
+    crate::addons::pathtools::dashes::COMMAND,
+    crate::addons::color::nearest::COMMAND,
+    crate::addons::color::legend::COMMAND,
+    crate::addons::typetools::COMMAND,
+    crate::addons::select::COMMAND,
+    crate::addons::select::link_status::COMMAND,
+    "object.path.cleanUp",
+    "object.mesh.create",
+    "type.smartPunctuation",
+    "edit.findReplace",
+    crate::dialogs::custom_dictionary::COMMAND,
+    crate::dialogs::composite_fonts::COMMAND,
+    "ui.recolorDialog",
+    "ui.flattenerPresetsDialog",
+    "ui.printPresetsDialog",
+    "ui.pdfPresetsDialog",
+    "ui.perspectivePresetsDialog",
+    "ui.svgFilterDialog",
+];
+
+/// F pressed without a modifier.
+fn press_f() -> Vec<egui::Event> {
+    vec![
+        egui::Event::Key { key: Key::F, physical_key: Some(Key::F), pressed: true, repeat: false, modifiers: Modifiers::NONE },
+        egui::Event::Text("f".into()),
+    ]
+}
+
+/// An app with a selected rectangle where `id` has the shortcut `shortcut` and F runs nothing else.
+fn app_with_shortcut(id: &str, shortcut: &str) -> VectorcraftApp {
+    let mut app = app_with_a_selected_rectangle();
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, shortcut);
+    app.ui.status.clear();
+    app
+}
+
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// View › Perspective Grid › Snap to Grid, whose command has no menu path of its own, turns off and
+/// on again from a shortcut given to it, as its menu item does.
+#[test]
+fn a_shortcut_on_a_perspective_grid_toggle_runs_it() {
+    let snaps = |app: &VectorcraftApp| crate::menus::checked(app, "perspective.grid.snap", &serde_json::Value::Null);
+    let mut app = app_with_shortcut("perspective.grid.snap", "F");
+    assert_eq!(snaps(&app), Some(true), "on by default");
+    frame(&mut app, press_f());
+    assert_eq!(snaps(&app), Some(false), "F turns it off: {}", app.ui.status);
+    frame(&mut app, vec![]);
+    frame(&mut app, press_f());
+    assert_eq!(snaps(&app), Some(true), "and on again: {}", app.ui.status);
+}
+
+/// A shortcut on File › Export Selection… does what a click on the menu item does: it adds the
+/// selection to Export for Screens' assets and opens Export for Screens.
+#[test]
+fn a_shortcut_on_export_selection_opens_export_for_screens() {
+    let mut app = app_with_shortcut("file.exportSelection", "F");
+    frame(&mut app, press_f());
+    assert_eq!(open_dialog(&app).as_deref(), Some("exportForScreens"), "{}", app.ui.status);
+}
+
+/// A command given a key without a modifier runs what its menu item runs, as it does on a chord:
+/// its slider or dialog opens and nothing changes until it is confirmed. The dialog is the one a
+/// click on the command's menu item opens (its item without params, else its first item), also for
+/// commands without a menu path of their own (Set Corners…, Recolor Artwork…).
+#[test]
+fn a_single_key_shortcut_opens_the_dialog_its_menu_item_opens() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    let mut failures = vec![];
+    for id in MENU_DIALOG_COMMANDS {
+        let mut opened = |shortcut: &str, events: Vec<egui::Event>| {
+            let mut app = app_with_shortcut(id, shortcut);
+            let before = undo_len(&app);
+            frame(&mut app, events);
+            crate::shortcut_editor::sync(&crate::state::UiState::default());
+            if undo_len(&app) != before {
+                failures.push(format!("{id} on {shortcut} changed the document: {}", app.ui.status));
+            }
+            app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.get("__command").cloned()))
+        };
+        let by_key = opened("F", press_f());
+        let by_chord = opened("Cmd+Alt+Shift+F9", chord.clone());
+        let mut app = app_with_a_selected_rectangle();
+        // Type › Composite Fonts… shows while East Asian options are shown.
+        app.session.prefs.show_east_asian_options = true;
+        let items: Vec<_> = crate::menus::menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some(id)).collect();
+        let item = items.iter().find(|e| e.params.as_object().is_none_or(|o| o.is_empty())).or(items.first());
+        // Pathfinder Options… is an item of the Pathfinder panel's menu, which runs it without params.
+        let (menu_id, p) = item.map_or_else(|| (id.to_string(), json!({})), |item| crate::menus::click_target(&item.label, id, &item.params));
+        crate::menus::invoke(&mut app, &menu_id, p);
+        let by_menu = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.get("__command").cloned()));
+        if by_key.is_none() || by_key != by_chord || by_chord != by_menu {
+            failures.push(format!("{id}: F opens {by_key:?}, the chord {by_chord:?}, the menu item {by_menu:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Smooth on F opens its slider on a jagged path without smoothing it; confirming the slider keeps
+/// the smoothed path as one undo step.
+#[test]
+fn smooth_on_a_single_key_waits_for_its_slider() {
+    let mut app = app_with_shortcut("object.path.smooth", "F");
+    app.session.execute("edit.clear", &json!({})).unwrap();
+    let anchors: Vec<_> =
+        (0..=60).map(|i| json!({"x": 20 + i * 5, "y": 150.0 + 40.0 * (f64::from(i) / 10.0).sin() + f64::from(i % 2) * 3.0})).collect();
+    app.session.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let before = undo_len(&app);
+    frame(&mut app, press_f());
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!(open_dialog(&app).as_deref(), Some(crate::dialogs::smooth_slider::KIND), "{}", app.ui.status);
+    assert_eq!(undo_len(&app), before, "the path is not smoothed yet");
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(undo_len(&app), before + 1, "the slider's result is one undo step");
+}
+
+/// A command without a dialog still runs at once on a key without a modifier: Group given F, and
+/// Swap Fill and Stroke on its default Shift+X.
+#[test]
+fn a_single_key_shortcut_without_a_dialog_runs_at_once() {
+    let mut app = app_with_shortcut("object.group", "F");
+    let before = undo_len(&app);
+    frame(&mut app, press_f());
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!((open_dialog(&app), undo_len(&app)), (None, before + 1), "F groups: {}", app.ui.status);
+    let mut app = app_with_a_selected_rectangle();
+    let before = undo_len(&app);
+    frame(
+        &mut app,
+        vec![
+            egui::Event::ModifiersChanged(Modifiers::SHIFT),
+            egui::Event::Key { key: Key::X, physical_key: Some(Key::X), pressed: true, repeat: false, modifiers: Modifiers::SHIFT },
+            egui::Event::Text("X".into()),
+        ],
+    );
+    assert_eq!((open_dialog(&app), undo_len(&app)), (None, before + 1), "Shift+X swaps fill and stroke: {}", app.ui.status);
+}
+
+/// A key or a chord of a command whose menu item is dimmed opens no dialog: Remove Background… and
+/// Object Mosaic… with a rectangle selected change nothing and say why they can't run, and so does
+/// Find and Replace… with no document open.
+#[test]
+fn a_shortcut_of_a_dimmed_command_opens_no_dialog_and_says_why() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    for id in ["addon.image.removeBackground", "object.createObjectMosaic", "edit.findReplace"] {
+        assert!(crate::shortcut_editor::menu_target(id).is_some(), "{id} has a dialog");
+        for (shortcut, events) in [("F", press_f()), ("Cmd+Alt+Shift+F9", chord.clone())] {
+            let mut app = if id == "edit.findReplace" {
+                let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+                crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+                crate::keymap::set_override(&mut app.ui.shortcut_overrides, id, shortcut);
+                app.ui.status.clear();
+                app
+            } else {
+                app_with_shortcut(id, shortcut)
+            };
+            assert!(!crate::menus::enabled(&app, id), "{id}");
+            let before = app.session.active().map(|st| st.history.undo.len());
+            frame(&mut app, events);
+            crate::shortcut_editor::sync(&crate::state::UiState::default());
+            let after = app.session.active().map(|st| st.history.undo.len());
+            assert_eq!((open_dialog(&app), after), (None, before), "{id} on {shortcut}: {}", app.ui.status);
+            assert!(app.ui.status.contains("not available"), "{id} on {shortcut}: {}", app.ui.status);
+        }
+    }
+}
+
+/// With no document open, a command's key without a modifier reports what the same command
+/// reports on a chord.
+#[test]
+fn a_single_key_shortcut_reports_what_its_chord_reports() {
+    let status = |shortcut: &str, events: Vec<egui::Event>| {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.screenMode", "");
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "paint.default", shortcut);
+        app.ui.status.clear();
+        frame(&mut app, events);
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        (open_dialog(&app), app.ui.status.clone())
+    };
+    let by_key = status("F", press_f());
+    let by_chord = status(
+        "Cmd+Alt+Shift+F9",
+        vec![
+            egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+            egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+        ],
+    );
+    assert_eq!(by_key, by_chord);
+    assert!(!by_key.1.is_empty(), "the chord reports something: {by_chord:?}");
+}
+
+/// Holding a key without a modifier that opens a dialog types nothing into the dialog: neither the
+/// key's character nor its repeats reach the field that takes the keyboard.
+#[test]
+fn holding_a_single_key_that_opens_a_dialog_types_nothing_into_it() {
+    // Move on F: the dialog and the text of the field with the keyboard after the press, eight
+    // more frames with F held down (repeating) or not, and the release, which comes in the same
+    // frame as a last repeat.
+    let hold = |repeats: bool| {
+        let mut app = app_with_shortcut("object.move", "F");
+        let held = HeldKey::new(Key::F, Modifiers::NONE);
+        held.frame(&mut app, press_f());
+        for _ in 0..8 {
+            held.frame(&mut app, if repeats { press_f() } else { vec![] });
+        }
+        let release = egui::Event::Key { key: Key::F, physical_key: Some(Key::F), pressed: false, repeat: false, modifiers: Modifiers::NONE };
+        held.frame(&mut app, if repeats { [press_f(), vec![release]].concat() } else { vec![release] });
+        let field = held.ctx.memory(|m| m.focused()).and_then(|id| held.ctx.data_mut(|d| d.get_temp::<String>(id)));
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        (open_dialog(&app), field, app.ui.status.clone())
+    };
+    let let_go = hold(false);
+    assert_eq!(let_go.0.as_deref(), Some("move"), "{}", let_go.2);
+    assert!(let_go.1.is_some(), "its first field has the keyboard");
+    assert_eq!(hold(true), let_go, "the held F typed nothing into Move");
+}
+
+/// A key that opens a dialog stops the keys after it in the same frame: G, given Group, does not
+/// group the selection behind Move's dialog. The same holds for chords.
+#[test]
+fn keys_after_one_that_opens_a_dialog_in_the_same_frame_run_nothing() {
+    let mods = cmd() | Modifiers::ALT | Modifiers::SHIFT;
+    let chord = |key: Key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: mods };
+    let single = |key: Key, text: &str| {
+        [egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE }, egui::Event::Text(text.into())]
+    };
+    let runs = [
+        ("F", "G", [single(Key::F, "f"), single(Key::G, "g")].concat()),
+        ("Cmd+Alt+Shift+F9", "Cmd+Alt+Shift+F10", vec![egui::Event::ModifiersChanged(mods), chord(Key::F9), chord(Key::F10)]),
+    ];
+    for (move_key, group_key, events) in runs {
+        let mut app = app_with_shortcut("object.move", move_key);
+        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "object.group", group_key);
+        let before = undo_len(&app);
+        frame(&mut app, events);
+        crate::shortcut_editor::sync(&crate::state::UiState::default());
+        assert_eq!((open_dialog(&app).as_deref(), undo_len(&app)), (Some("move"), before), "{move_key} then {group_key}: {}", app.ui.status);
+    }
+}
+
 /// #2094: Cmd+Shift+O is Type › Create Outlines (not File › Open's Cmd+O, not the Artboard
 /// tool's Shift+O), with the Selection tool or while the Type tool edits the text.
 #[test]
@@ -1420,6 +1701,29 @@ fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
     held.release(&mut app);
     held.press(&mut app);
     assert!(!app.ui.palette_open, "a new press runs the highlighted result");
+}
+
+/// Enter on a command search result whose menu item opens a dialog (Create Gradient Mesh…) opens
+/// that dialog: the press and its repeats do not confirm it, and a new press does.
+#[test]
+fn enter_on_a_command_search_result_opens_its_dialog_and_a_new_press_confirms_it() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    app.select_tool("selection");
+    app.ui.palette_open = true;
+    app.ui.palette_query = "object.mesh.create".into();
+    let before = undo_len(&app);
+    for repeat in 0..4 {
+        held.press(&mut app);
+        let command = app.ui.dialog.as_ref().and_then(|d| d.fields.get("__command").cloned());
+        assert_eq!(command, Some(json!("object.mesh.create")), "repeat {repeat}: its dialog stays open: {}", app.ui.status);
+        assert_eq!(undo_len(&app), before, "repeat {repeat}: nothing changed");
+    }
+    assert!(!app.ui.palette_open);
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "a new press confirms");
+    assert_eq!(undo_len(&app), before + 1, "the mesh is one undo step: {}", app.ui.status);
 }
 
 /// A field that rejects its text on Enter keeps the dialog open, while the key is held too.
@@ -2678,8 +2982,13 @@ fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
 fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
     let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
     crate::i18n::set_current(zh);
-    let entry =
-        |key: &str| crate::shortcut_editor::Entry { key: key.into(), label: "Group".into(), group: "Object › Plug-ins".into(), is_tool: false };
+    let entry = |key: &str| crate::shortcut_editor::Entry {
+        key: key.into(),
+        label: "Group".into(),
+        group: "Object › Plug-ins".into(),
+        is_tool: false,
+        shows_key: false,
+    };
     let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
     let (filter, command) = (crate::shortcut_editor::shown_name(&entry("plugin:a.b")), crate::shortcut_editor::shown_name(&entry("object.group")));
     crate::i18n::set_current(crate::i18n::Lang::EN);
@@ -2726,6 +3035,38 @@ fn a_plain_up_nudges_unless_a_corner_widget_is_pressed() {
     let ((x2, y2), kind2) = state(&app);
     assert_eq!((x2, y2), (x1, y1), "no nudge while the widget is pressed");
     assert_eq!(kind2, CornerKind::InvertedRound, "Up stepped the kind");
+}
+
+/// While a blend widget is pressed, an arrow steps its value by one and Shift with an arrow by ten.
+#[test]
+fn shift_arrows_step_a_pressed_blend_widget_by_ten() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_tools::blendwidget::BlendWidget;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 190, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 90.0), rect(&mut app, 290.0));
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let id = NodeId(app.session.execute("object.blend.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let shift = |app: &VectorcraftApp| {
+        let NodeKind::Blend { spec, .. } = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("not a blend") };
+        spec.color_shift
+    };
+    let view = app.view_info();
+    let st = app.session.active().unwrap();
+    let at = BlendWidget::of(&st.doc, &st.selection, view.zoom, vectorcraft_geom::Vec2::new(0.0, -1.0))[0].at;
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y), view).unwrap();
+    frame(&mut app, press(Key::ArrowUp, Modifiers::SHIFT));
+    assert_eq!(shift(&app), 10.0, "Shift+Up steps by ten");
+    frame(&mut app, press(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(shift(&app), 11.0, "Up steps by one");
+    app.session.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), view).unwrap();
+    assert_eq!(shift(&app), 11.0);
 }
 
 /// #5218: the status bar navigator's four buttons are commands of their own, listed in Edit ›

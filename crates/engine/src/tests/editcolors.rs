@@ -77,10 +77,12 @@ fn saturate_needs_a_number_intensity() {
     let mut s = session();
     let a = rect(&mut s, json!("#cc6666"));
     let undo = s.doc().unwrap().history.undo.len();
-    for p in [json!({}), json!({"intensity": "40"}), json!({"intensity": null})] {
+    for p in [json!({}), json!({"intensity": null})] {
         let e = s.execute("edit.colors.saturate", &p).unwrap_err().to_string();
         assert!(e.contains("missing number `intensity`"), "{p}: {e}");
     }
+    let e = s.execute("edit.colors.saturate", &json!({"intensity": "40"})).unwrap_err().to_string();
+    assert!(e.contains("`intensity` must be a number, not \"40\""), "{e}");
     assert_eq!(fill_of(&s, a).to_hex(), "#cc6666");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
     s.execute("edit.colors.saturate", &json!({"intensity": 100})).unwrap();
@@ -480,6 +482,250 @@ fn adjust_colors_converting_to_gray_stores_an_image_as_grayscale() {
     };
     assert!(source(true).is_some(), "converted to gray");
     assert!(source(false).is_none(), "the colors keep their model");
+}
+
+/// Convert to Indexed Color stores an image as a palette PNG in one undo step; an image with few
+/// enough colors keeps them, and converting it again changes nothing and adds no undo step.
+#[test]
+fn convert_to_indexed_stores_an_image_as_a_palette_png() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.colors.toIndexed", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1, "{r}");
+    let key = image_key(&s, id);
+    assert!(s.doc().unwrap().doc.images[&key].indexed_png(), "an indexed PNG");
+    assert_eq!(pixels(&s, id), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 255]], "half opaque becomes opaque");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let again = s.execute("edit.colors.toIndexed", &json!({})).unwrap();
+    assert_eq!(again["changed"], 0, "{again}");
+    assert_eq!(image_key(&s, id), key);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "no undo step when nothing changes");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pixels(&s, id)[3], [255, 255, 255, 128], "one undo step restores the image");
+}
+
+/// Pixels under half opacity become transparent; an indexed image converted to a palette it
+/// already shows is left as it is, and one converted to a smaller palette changes.
+#[test]
+fn convert_to_indexed_keeps_transparency_and_reduces_an_indexed_image() {
+    let mut s = session();
+    let id = image_of(&mut s, [[200, 30, 90, 255], [20, 40, 220, 255], [0, 0, 0, 100], [250, 250, 250, 255]]);
+    s.execute("edit.colors.toIndexed", &json!({"dither": "none"})).unwrap();
+    assert_eq!(pixels(&s, id)[2][3], 0, "under half opacity: transparent");
+    let r = s.execute("edit.colors.toIndexed", &json!({"reduction": "blackWhite", "dither": "none"})).unwrap();
+    assert_eq!(r["changed"], 1, "{r}");
+    let px = pixels(&s, id);
+    assert_eq!([px[0], px[1], px[3]], [[0, 0, 0, 255], [0, 0, 0, 255], [255, 255, 255, 255]]);
+    assert_eq!(px[2][3], 0);
+}
+
+/// The uniform reduction takes evenly spaced levels of each channel, and the document reduction
+/// the colors of the document's swatches.
+#[test]
+fn convert_to_indexed_uses_a_uniform_or_the_document_palette() {
+    let mut s = session();
+    let id = image_of(&mut s, [[200, 30, 90, 255], [20, 40, 220, 255], [120, 130, 140, 255], [250, 250, 250, 255]]);
+    s.execute("edit.colors.toIndexed", &json!({"reduction": "uniform", "colors": 9, "dither": "none"})).unwrap();
+    assert_eq!(pixels(&s, id), [[255, 0, 0, 255], [0, 0, 255, 255], [0, 255, 255, 255], [255, 255, 255, 255]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.colors.toIndexed", &json!({"reduction": "document"})).unwrap();
+    let swatches: Vec<[u8; 3]> = crate::cmd::swatchlib::library_colors(&s, "document")
+        .unwrap()
+        .iter()
+        .map(|c| {
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            [r, g, b]
+        })
+        .collect();
+    for p in pixels(&s, id) {
+        assert!(swatches.contains(&[p[0], p[1], p[2]]), "{p:?} is a swatch color");
+    }
+}
+
+/// The start of a PNG of `w` × `h` RGBA pixels: its header and a first image data chunk, without
+/// the rest of the pixels.
+fn png_header(w: u32, h: u32) -> Vec<u8> {
+    let crc = |data: &[u8]| {
+        let mut c = !0u32;
+        for &b in data {
+            c ^= u32::from(b);
+            for _ in 0..8 {
+                c = if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            }
+        }
+        !c
+    };
+    let chunk = |ty: &[u8; 4], data: &[u8]| {
+        let body = [ty.as_slice(), data].concat();
+        [(data.len() as u32).to_be_bytes().as_slice(), &body, &crc(&body).to_be_bytes()].concat()
+    };
+    let ihdr = [w.to_be_bytes().as_slice(), &h.to_be_bytes(), &[8, 6, 0, 0, 0]].concat();
+    [b"\x89PNG\r\n\x1a\n".as_slice(), &chunk(b"IHDR", &ihdr), &chunk(b"IDAT", &[0x78, 0x9c, 0x03, 0x00])].concat()
+}
+
+/// An image larger than Convert to Indexed Color converts is refused by its size, read from the
+/// file's header, before any pixel is decoded; nothing changes.
+#[test]
+fn convert_to_indexed_refuses_an_image_too_large_to_convert() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    assert_eq!(vectorcraft_doc::ImageBlob::png(png_header(30_000, 30_000)).pixel_size(), Some((30_000, 30_000)));
+    s.edit("Swap", |d, _| {
+        d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png_header(30_000, 30_000)));
+        Ok(())
+    })
+    .unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let e = s.execute("edit.colors.toIndexed", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("an image of 30000 × 30000 pixels is too large to convert"), "{e}");
+    assert_eq!(image_key(&s, id), "pic");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+/// Convert to Indexed Color refuses parameters it can't use, and leaves the image as it is.
+#[test]
+fn convert_to_indexed_refuses_bad_params() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    for (p, msg) in [
+        (json!({"colors": 1}), "`colors` must be a whole number from 2 to 256"),
+        (json!({"colors": 257}), "`colors` must be a whole number from 2 to 256"),
+        (json!({"colors": "8"}), "`colors` must be a whole number from 2 to 256"),
+        (json!({"colors": 16.5}), "`colors` must be a whole number from 2 to 256"),
+        (json!({"reduction": "uniform", "colors": 8}), "`colors` must be at least 9 for the uniform reduction"),
+        (json!({"reduction": "document", "colors": 16}), "`colors` does not apply to the document reduction"),
+        (json!({"reduction": "blackWhite", "colors": 2}), "`colors` does not apply to the blackWhite reduction"),
+        (json!({"reduction": "posterize"}), "unknown reduction `posterize`"),
+        (json!({"dither": "random"}), "unknown dither `random`"),
+        (json!({"ditherAmount": 101}), "`ditherAmount` must be a number from 0 to 100"),
+        (json!({"ditherAmount": "50"}), "`ditherAmount` must be a number from 0 to 100"),
+    ] {
+        let e = s.execute("edit.colors.toIndexed", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
+    assert_eq!(image_key(&s, id), "pic");
+}
+
+/// An embedded `w` × `h` image of the pixels `f(x, y)`, placed and selected.
+fn placed(s: &mut Session, w: u32, h: u32, f: impl Fn(u32, u32) -> [u8; 4]) -> NodeId {
+    let mut png = Vec::new();
+    image::RgbaImage::from_fn(w, h, |x, y| image::Rgba(f(x, y))).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let r = s.execute("file.place", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    NodeId(r["ids"][0].as_u64().unwrap())
+}
+
+/// `ids` picks the images to convert; a linked image and a colorized image keep their pixels.
+#[test]
+fn convert_to_indexed_takes_ids_and_leaves_linked_and_colorized_images() {
+    let mut s = session();
+    let a = placed(&mut s, 2, 1, |x, _| [200, 30 + x as u8, 90, 255]);
+    let b = placed(&mut s, 2, 1, |x, _| [20, 40, 200 + x as u8, 255]);
+    let (ka, kb) = (image_key(&s, a), image_key(&s, b));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = s.execute("edit.colors.toIndexed", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(r["changed"], 1, "{r}");
+    assert_eq!(image_key(&s, a), ka, "not in `ids`");
+    assert_ne!(image_key(&s, b), kb);
+    s.edit("Link", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(a).unwrap().kind else { panic!("not an image") };
+        im.link = Some(vectorcraft_doc::LinkInfo::new("art.png"));
+        Ok(())
+    })
+    .unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.colors.toIndexed", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(r["changed"], 0, "a linked image: {r}");
+    assert_eq!(image_key(&s, a), ka);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let mut png = Vec::new();
+    image::GrayImage::from_pixel(4, 4, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let r = s.execute("file.place", &json!({"name": "gray.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    let gray = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [gray.0], "color": "#ff0000"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(gray).unwrap().extras().colorize.is_some(), "the fill colorizes the image");
+    let kg = image_key(&s, gray);
+    let r = s.execute("edit.colors.toIndexed", &json!({"ids": [gray.0]})).unwrap();
+    assert_eq!(r["changed"], 0, "a colorized image: {r}");
+    assert_eq!(image_key(&s, gray), kg);
+}
+
+/// With the selection Select All makes, locked and hidden images are left out and counted in
+/// `notChanged`; a left-out image too large to convert is counted without an error.
+#[test]
+fn convert_to_indexed_counts_left_out_images() {
+    let mut s = session();
+    let a = placed(&mut s, 2, 1, |x, _| [200, 30 + x as u8, 90, 255]);
+    let locked = placed(&mut s, 2, 1, |x, _| [20, 40, 200 + x as u8, 255]);
+    let hidden = placed(&mut s, 2, 1, |x, _| [120, 140 + x as u8, 20, 255]);
+    s.edit("Huge", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(locked).unwrap().kind else { panic!("not an image") };
+        im.key = "huge".into();
+        d.images.insert("huge".into(), vectorcraft_doc::ImageBlob::png(png_header(30_000, 30_000)));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("object.lock", &json!({"ids": [locked.0]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [hidden.0]})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let kh = image_key(&s, hidden);
+    let r = s.execute("edit.colors.toIndexed", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1, "{r}");
+    assert_eq!(r["notChanged"], json!({"locked": 1, "hidden": 1}), "{r}");
+    assert!(r["warning"].is_string(), "{r}");
+    assert!(s.doc().unwrap().doc.images[&image_key(&s, a)].indexed_png());
+    assert_eq!((image_key(&s, locked), image_key(&s, hidden)), ("huge".to_string(), kh));
+}
+
+/// The uniform reduction takes the most levels a channel whose cube leaves one entry for
+/// transparency (3 for 64 colors, 6 for 256), and the document reduction takes 1 to 255 swatch
+/// colors.
+#[test]
+fn convert_to_indexed_sizes_the_uniform_and_document_palettes() {
+    let mut s = session();
+    let id = image_of(&mut s, [[200, 30, 90, 255], [20, 40, 220, 255], [120, 130, 140, 255], [250, 250, 250, 255]]);
+    s.execute("edit.colors.toIndexed", &json!({"reduction": "uniform", "colors": 64, "dither": "none"})).unwrap();
+    assert_eq!(pixels(&s, id), [[255, 0, 127, 255], [0, 0, 255, 255], [127, 127, 127, 255], [255, 255, 255, 255]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.colors.toIndexed", &json!({"reduction": "uniform", "dither": "none"})).unwrap();
+    assert_eq!(pixels(&s, id), [[204, 51, 102, 255], [0, 51, 204, 255], [102, 153, 153, 255], [255, 255, 255, 255]]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.edit("No swatches", |d, _| {
+        d.swatches.clear();
+        d.swatch_groups.clear();
+        Ok(())
+    })
+    .unwrap();
+    let e = s.execute("edit.colors.toIndexed", &json!({"reduction": "document"})).unwrap_err().to_string();
+    assert!(e.contains("the document has no color swatches"), "{e}");
+    s.edit("Many swatches", |d, _| {
+        for i in 0..256u32 {
+            let paint = Paint::solid(Color::rgb8(i as u8, 7, 9));
+            d.swatches.push(vectorcraft_color::swatch::Swatch { name: format!("c{i}"), paint, global: false, spot: false });
+        }
+        Ok(())
+    })
+    .unwrap();
+    let e = s.execute("edit.colors.toIndexed", &json!({"reduction": "document"})).unwrap_err().to_string();
+    assert!(e.contains("the document's swatches hold 256 colors; the document reduction takes at most 255"), "{e}");
+    assert_eq!(image_key(&s, id), "pic");
+}
+
+/// `dither` and `ditherAmount` reach the quantizer: a gray ramp reduced to black and white is
+/// dithered by each method, and at an amount of 0 it comes out as with no dither.
+#[test]
+fn convert_to_indexed_dithers_by_the_amount_given() {
+    let ramp = |p: Value| {
+        let mut s = session();
+        let id = placed(&mut s, 16, 4, |x, _| [(x * 17) as u8, (x * 17) as u8, (x * 17) as u8, 255]);
+        s.execute("edit.colors.toIndexed", &p).unwrap();
+        pixels(&s, id)
+    };
+    let none = ramp(json!({"reduction": "blackWhite", "dither": "none"}));
+    for d in ["diffusion", "pattern", "noise"] {
+        assert_eq!(ramp(json!({"reduction": "blackWhite", "dither": d, "ditherAmount": 0})), none, "{d} at 0");
+        assert_ne!(ramp(json!({"reduction": "blackWhite", "dither": d})), none, "{d} at 100");
+    }
 }
 
 /// A PDF of a CMYK document writes an image Convert to Grayscale made with one channel (#5632).

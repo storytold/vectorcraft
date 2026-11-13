@@ -13,6 +13,12 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
     ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
 }
 
+/// Whether the Contextual Task Bar, where it was last drawn, held the font controls: on a canvas
+/// too narrow for them it leaves them out.
+pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
+    task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
+}
+
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
 /// a gradient's stops or a mesh's points, which Recolor Artwork can change.
 pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
@@ -30,21 +36,59 @@ fn picked_artboards_bounds(app: &VectorcraftApp) -> Option<Rect> {
     picked.iter().filter_map(|i| st.doc.artboards.get(*i)).map(|a| a.rect).reduce(|a, b| a.union(b))
 }
 
+/// The Type tools whose Contextual Task Bar shows the text formatting controls. The Touch Type
+/// tool has no bar: its own handles take the place of one.
+const TYPE_TOOLS: [&str; 6] = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
+
+/// Whether every selected object is a type object, with no anchors picked out.
+fn only_type_selected(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| {
+        !st.selection.is_empty()
+            && st.selection.anchors.is_empty()
+            && st.selection.objects.iter().all(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
+    })
+}
+
+/// Whether a selection tool is in use with something selected.
+fn selection_tool_with_selection(app: &VectorcraftApp) -> bool {
+    matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection")
+        && app.session.active().is_some_and(|st| !st.selection.is_empty())
+}
+
+/// Whether a Type tool edits type, or has type selected: its bar then shows only the text
+/// formatting controls.
+fn type_tool_on_type(app: &VectorcraftApp) -> bool {
+    TYPE_TOOLS.contains(&app.session.tool_id()) && (crate::panels::character::text_editing(app).is_some() || only_type_selected(app))
+}
+
+/// Whether the Contextual Task Bar shows the font family, font style and Font Size controls: a
+/// Type tool edits or has selected type, or a selection tool has only type selected.
+pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
+    type_tool_on_type(app) || (selection_tool_with_selection(app) && only_type_selected(app))
+}
+
 /// The Contextual Task Bar: a floating pill under the selection with the most likely next actions.
 /// With the Artboard tool it sits under the selected artboards and offers Resize (Artboard
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
 /// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
+/// Selected type also shows the font family, font style and Font Size controls before its Fill.
+/// While a Type tool edits type, or has type selected, the bar shows only those controls and the
+/// Fill. The font controls take a second row when one row would be wider than the canvas, and
+/// narrow there to fit it.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let t = Tokens::get(ui.ctx());
     let on_artboards = app.session.tool_id() == "artboard";
-    if !on_artboards
-        && (app.session.active().is_none_or(|st| st.selection.is_empty())
-            || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection"))
-    {
+    // Text added with a Type tool shows its formatting controls, as the help page describes
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+    let typing = type_tool_on_type(app);
+    if !(on_artboards || typing || selection_tool_with_selection(app)) {
         return;
     }
+    // Selected type has the font controls too, as the help page describes
+    // (<https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/font-options-overview.html>).
+    let fonts = task_bar_shows_type(app);
     let Some(b) = (if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }) else { return };
     let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
@@ -93,14 +137,18 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Rearrange All"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, none()));
         }
         items.push((tl!("Export"), "share-2", "file.exportForScreens", none()));
-    } else {
+    } else if !typing {
+        // The selection tools' object actions. A Type tool's bar leaves them out, Create Outlines
+        // and the type conversions included.
         // Edit Path: the Direct Selection tool, to edit the path's anchors.
         let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
-        // As in the reference app, an image offers Image Trace and Crop Image, and traced art offers
-        // Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>).
+        // As in the reference app, an image offers Image Trace, Crop Image and Remove Background, and
+        // traced art offers Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>,
+        // <https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
         if n == 1 && is_image {
             items.push((tl!("Image Trace"), "image", TASK_BAR_IMAGE_TRACE, none()));
             items.push((tl!("Crop Image"), "dc-pf-crop", "ui.cropImage", none()));
+            items.push((tl!("Remove Background"), "eraser", crate::addons::image::REMOVE_BACKGROUND, none()));
         }
         // Direct-selected anchors take the place of a path's Offset Path and Simplify. For them the bar
         // offers Remove, Connect, Cut and Convert to corner or smooth, as the reference app does
@@ -151,10 +199,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             match kind {
                 TextKind::Area { .. } => items.push((tl!("Convert To Point Type"), "type", "type.convertToPointType", none())),
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
-                TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
+                TextKind::OnPath { .. } => {
+                    items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none()));
+                    center_on_path_items(app, &mut items);
+                }
             }
-            // Dynamic Text turns on or off for type on a path and area type (Block), as the Type menu's item does;
-            // left out for point type and type in a thread
+            // Dynamic Text turns on or off for type on a path and area type (Block), and turns point type into area
+            // type with Block on, as the Type menu's item does; left out for type in a thread
             // (<https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/adjust-formatting-and-resize-text-with-dynamic-text.html>).
             if crate::menus::enabled(app, "type.dynamicText") {
                 items.push((tl!("Dynamic Text"), "maximize-2", "type.dynamicText", none()));
@@ -180,22 +231,31 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         }
         items.push((tl!("Duplicate"), "copy", "edit.duplicate", none()));
     }
-    // The paints the Fill and Stroke proxies show, "?" when the selected objects' paints differ.
-    let (fill, stroke) = crate::panels::current_paints(app);
-    let (fill_mixed, stroke_mixed) = crate::panels::mixed_paints(app, ui.ctx());
+    let (fill, stroke, fill_mixed, stroke_mixed) = chip_paints(app, ui.ctx());
     let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
     // Under the selection's lowest corner on screen, centered on the selection (the view may be
     // rotated).
     let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
     let anchor = pos2(xf.to_screen(b.center()).x, lowest);
-    let est_w = 150.0 + items.iter().map(|(l, _, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
+    let bounds = xf.rect.shrink(8.0);
+    // On a canvas too narrow for the type controls at their narrowest, the bar leaves them out.
+    let fonts = fonts && bounds.width() - 18.0 >= crate::panels::character::task_bar_min_room();
+    ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("fonts"), fonts));
+    // The width of the bar's frame (margins and stroke), its handle, Fill and Stroke chips,
+    // Recolor Artwork, Lock or Shape Properties, and More Options, each after a 6-point gap.
+    let chips: f32 =
+        [(!on_artboards, 26.0), (!on_artboards && !typing, 26.0), (!on_artboards && !typing && colored, 30.0), (!on_artboards && !typing, 30.0)]
+            .iter()
+            .filter(|(shown, _)| *shown)
+            .map(|(_, w)| w + 6.0)
+            .sum();
+    let (font_row, est) = size_estimate(&items, fonts, 18.0 + 4.0 + chips + 36.0, bounds.width());
     // Its place under the selection, then where the handle moved it, kept on the canvas (with the
     // bar's size last frame, the estimate before it first shows).
-    let under = pos2(anchor.x - est_w / 2.0, anchor.y + 28.0);
+    let under = pos2(anchor.x - est.x / 2.0, anchor.y + 28.0);
     let id = task_bar_id();
-    let size = egui::AreaState::load(ui.ctx(), id).and_then(|s| s.size).unwrap_or(vec2(est_w, 44.0));
-    let bounds = xf.rect.shrink(8.0);
+    let size = egui::AreaState::load(ui.ctx(), id).and_then(|s| s.size).unwrap_or(est);
     let keep_in = |p: Pos2| p.clamp(bounds.min, (bounds.max - size).max(bounds.min));
     let place = &mut app.ui.task_bar_place;
     // Just unpinned: follow the selection from the pinned spot.
@@ -250,23 +310,21 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             run = Some((*cmd, params.clone()));
                         }
                     }
+                    // Type's font family, font style and Font Size, which act as the Character
+                    // panel's do: on the characters a Type tool selects, else on the selected type.
+                    if fonts && !font_row {
+                        crate::panels::character::task_bar(app, ui, f32::INFINITY);
+                    }
                     // The selected objects' Fill, Stroke, Recolor Artwork and Lock (a basic shape's
-                    // properties instead), left out with the Artboard tool.
-                    if !on_artboards {
-                        let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
-                        let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
-                        widgets::proxy_chip(ui, chip, &fill, fill_mixed, None);
-                        ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.button_border), StrokeKind::Outside);
-                        if resp.on_hover_text(tl!("Fill")).clicked() {
-                            app.session.fill_active = true;
-                            show_swatches = true;
-                        }
+                    // properties instead), left out with the Artboard tool. A Type tool's bar has
+                    // the Fill alone.
+                    if !on_artboards && paint_chip(ui, &t, &fill, fill_mixed, None, tl!("Fill")) {
+                        app.session.fill_active = true;
+                        show_swatches = true;
+                    }
+                    if !on_artboards && !typing {
                         // The Stroke chip, drawn as a ring as the Control bar's is.
-                        let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
-                        let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
-                        widgets::proxy_chip(ui, chip, &stroke, stroke_mixed, Some(4.0));
-                        ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.button_border), StrokeKind::Outside);
-                        if resp.on_hover_text(tl!("Stroke")).clicked() {
+                        if paint_chip(ui, &t, &stroke, stroke_mixed, Some(4.0), tl!("Stroke")) {
                             app.session.fill_active = false;
                             show_swatches = true;
                         }
@@ -311,6 +369,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         }
                     });
                 });
+                if font_row {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        // The canvas's width less the frame's margins and stroke.
+                        crate::panels::character::task_bar(app, ui, bounds.width() - 18.0);
+                    });
+                }
             });
     });
     if moved != Vec2::ZERO {
@@ -345,6 +410,54 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
+    }
+}
+
+/// Whether the type controls go on a second row, and the bar's estimated size before it first
+/// shows: `items` and, when `fonts`, the font family, font style and Font Size controls, which take
+/// a second row when one row, with the bar's other controls `fixed` points wide, would be wider than
+/// `room` (and narrow to fit it there).
+fn size_estimate(items: &[(&str, &str, &str, serde_json::Value)], fonts: bool, fixed: f32, room: f32) -> (bool, Vec2) {
+    let font_w: f32 = crate::panels::character::TASK_BAR_WIDTHS.iter().filter(|_| fonts).map(|w| w + 6.0).sum();
+    let items_w = if fonts { fixed } else { 150.0 } + items.iter().map(|(l, _, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
+    if fonts && items_w + font_w > room { (true, vec2(items_w.max((font_w + 16.0).min(room)), 80.0)) } else { (false, vec2(items_w + font_w, 44.0)) }
+}
+
+/// The paints the Fill and Stroke chips show, and whether each is mixed ("?"): the proxies', or
+/// while a Type tool edits type, the edited characters' fill, which a swatch picked then paints.
+pub(crate) fn chip_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, bool, bool) {
+    let (fill, stroke) = crate::panels::current_paints(app);
+    let (fill_mixed, stroke_mixed) = crate::panels::mixed_paints(app, ctx);
+    if crate::panels::character::text_editing(app).is_some()
+        && let Some((chars, _)) = crate::panels::character::text_style(app)
+    {
+        let mixed = crate::panels::character::shared(app, |s| s.fill.clone()).is_none();
+        return (chars.fill, stroke, mixed, stroke_mixed);
+    }
+    (fill, stroke, fill_mixed, stroke_mixed)
+}
+
+/// One of the Contextual Task Bar's Fill and Stroke chips, showing `paint` ("?" when `mixed`, a
+/// ring of `ring` points for the stroke), named `tip` for screen readers. Returns whether it was
+/// clicked.
+fn paint_chip(ui: &mut Ui, t: &Tokens, paint: &vectorcraft_color::Paint, mixed: bool, ring: Option<f32>, tip: &str) -> bool {
+    let (r, resp) = ui.allocate_exact_size(vec2(26.0, 30.0), Sense::click());
+    let chip = egui::Rect::from_center_size(r.center(), vec2(16.0, 16.0));
+    widgets::proxy_chip(ui, chip, paint, mixed, ring);
+    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.button_border), StrokeKind::Outside);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
+    resp.on_hover_text(tip).clicked()
+}
+
+/// The Contextual Task Bar's Center on Top and Center on Bottom, as in the Type menu, for type on a
+/// closed path.
+fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>) {
+    for (label, icon, id) in
+        [(tl!("Center on Top"), "dc-al-top", "type.pathCenter.top"), (tl!("Center on Bottom"), "dc-al-bottom", "type.pathCenter.bottom")]
+    {
+        if crate::menus::enabled(app, id) {
+            items.push((label, icon, id, json!({})));
+        }
     }
 }
 
