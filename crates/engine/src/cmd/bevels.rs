@@ -145,14 +145,25 @@ fn points_of(n: &Node) -> std::result::Result<Vec<(f64, f64)>, &'static str> {
         return Err("its path has too many anchors for a bevel");
     }
     let mut line: Vec<Point> = vec![];
-    let mut too_many = false;
     let tolerance = path.bounds().map_or(1.0, |b| b.width().hypot(b.height()) / 2000.0).max(1e-9);
-    vectorcraft_geom::flatten(path.to_bezpath().elements().iter().copied(), tolerance, |el| match el {
-        PathEl::MoveTo(p) | PathEl::LineTo(p) if line.len() < MAX_LINE_POINTS => line.push(p),
-        PathEl::MoveTo(_) | PathEl::LineTo(_) => too_many = true,
-        _ => {}
-    });
-    if too_many {
+    // One segment at a time, so a path past the limit stops being cut at the segment that passes it.
+    let mut at: Option<Point> = None;
+    for &el in path.to_bezpath().elements() {
+        if line.len() > MAX_LINE_POINTS {
+            return Err("its path is too detailed for a bevel");
+        }
+        match (el, at) {
+            (PathEl::MoveTo(p), _) => line.push(p),
+            (_, Some(start)) => vectorcraft_geom::flatten([PathEl::MoveTo(start), el], tolerance, |e| {
+                if let PathEl::LineTo(p) = e {
+                    line.push(p);
+                }
+            }),
+            (_, None) => {}
+        }
+        at = el.end_point().or(at);
+    }
+    if line.len() > MAX_LINE_POINTS {
         return Err("its path is too detailed for a bevel");
     }
     let (Some(&first), Some(&last)) = (line.first(), line.last()) else { return Err("its path has no length") };

@@ -102,6 +102,28 @@ fn curves_and_long_paths_fit_in_the_points_a_bevel_holds() {
     assert!(arc.points.iter().all(|&(x, y)| (((x - 0.0).powi(2) + (y - 1.0).powi(2)).sqrt() - 1.0).abs() < 0.01), "{:?}", arc.points);
 }
 
+/// A path of many tall curves, cut into more straight lines than a bevel's path may take, is
+/// skipped as too detailed.
+#[test]
+fn a_path_cut_into_too_many_lines_is_skipped() {
+    let mut d = Document::new(100.0, 100.0);
+    let anchors: Vec<Anchor> = (0..4000)
+        .map(|i| {
+            let p = Point::new(f64::from(i), f64::from(i) / 4.0);
+            let swing = if i % 2 == 0 { 1000.0 } else { -1000.0 };
+            let mut a = Anchor::corner(p);
+            a.h_in = Point::new(p.x - 0.5, p.y - swing);
+            a.h_out = Point::new(p.x + 0.5, p.y + swing);
+            a
+        })
+        .collect();
+    let wild = Node::path(NodeId(0), PathData::single(SubPath::new(anchors, false)), Appearance::default());
+    add_symbol(&mut d, "Wild", wild);
+    let read = bevels_of(&d);
+    assert!(read.bevels.is_empty());
+    assert_eq!(read.skipped, [("Wild".to_string(), "its path is too detailed for a bevel".to_string())]);
+}
+
 fn rect(s: &mut Session, x: u32) -> NodeId {
     NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap())
 }
