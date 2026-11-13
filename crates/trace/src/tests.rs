@@ -557,7 +557,8 @@ fn overlapping_lines_and_outlines_leave_out_areas_without_their_color() {
 
 /// Overlapping: a level's components found with the areas that higher levels fill left out give the same trace as
 /// those found whole, and as those found again in the second pass (as past the memory kept for them), on a framed
-/// image of rings and scattered blobs of eight colors, whatever the Noise.
+/// image of rings and scattered blobs of eight colors, whatever the Noise. Traced with several levels at a time, in
+/// whatever order the threads take them, it gives the same trace each time.
 #[test]
 fn overlapping_gives_the_same_trace_with_covered_areas_left_out() {
     let colors: [[u8; 4]; 8] = [
@@ -588,6 +589,9 @@ fn overlapping_gives_the_same_trace_with_covered_areas_left_out() {
         assert!(left_out.palette.len() >= 6 && left_out.paths.len() > 20, "{} colors, {} paths", left_out.palette.len(), left_out.paths.len());
         assert_eq!(left_out, whole, "noise {noise}");
         assert_eq!(left_out, again, "noise {noise}: found again");
+        for run in 0..8 {
+            assert_eq!(left_out, trace(&img, &p), "noise {noise}: run {run} with several levels at a time");
+        }
         assert_draws(&img, &left_out, &[]);
     }
 }

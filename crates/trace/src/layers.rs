@@ -722,7 +722,8 @@ impl Layers<'_> {
     ///
     /// The marks take two bytes a pixel of the image. In an image with a transparent pixel or a color left out, the
     /// runs of such pixels take up to four bytes a pixel more during the first round (eight bytes a run). Both count
-    /// against the half gigabyte that sets how many levels are traced at a time.
+    /// against the half gigabyte that sets how many levels are traced at a time. The components kept for the second pass
+    /// take up to [`KEPT_BYTES`] more, outside that half gigabyte.
     pub(crate) fn stacked(
         &self,
         layers: &[(usize, usize)],
