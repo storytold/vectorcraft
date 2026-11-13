@@ -10728,9 +10728,9 @@ it ends up in front), baked with `effect.expandAppearance`, then `object.pathfin
 
 ## Cutting Tools add-on
 
-Cutting Tools is a built-in add-on that prepares art for cutting. Its commands are `addon.cutting.bridges` and
-`addon.cutting.weed`; in the desktop app they are Object › Plug-ins › Cutting Tools › Stencil Bridges… and Weed Box and
-Lines….
+Cutting Tools is a built-in add-on that prepares art for cutting. Its commands are `addon.cutting.bridges`,
+`addon.cutting.weed` and `addon.cutting.banner`; in the desktop app they are Object › Plug-ins › Cutting Tools › Stencil
+Bridges…, Weed Box and Lines… and Banner Hems and Grommets….
 
 ### Stencil Bridges
 
@@ -10818,6 +10818,37 @@ dialog with Preview; a Spacing above 0 is used instead of the Count.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.cutting.weed","params":{"margin":"0.25 in","direction":"both","spacing":"2 in","gap":1}}}
+```
+
+### Banner Hems and Grommets
+
+`addon.cutting.banner {hem?, grommets?, spacing?, grommetInset?, diameter?, top?, right?, bottom?, left?, weight?,
+swatch?, allArtboards?}` marks where a printed banner is hemmed, its edge folded back and sewn
+([hem](https://en.wikipedia.org/wiki/Hem)), and where grommets, rings set into the material to hang it, are punched
+([grommet](https://en.wikipedia.org/wiki/Grommet)). The ranges, defaults and rules below are VectorCraft's own. The banner
+is the bounds of the selected art, or each artboard when `allArtboards` is true (the default when nothing is selected).
+`top`, `right`, `bottom` and `left` (each true by default) choose the sides that get marks. On each chosen side a hem
+line runs the whole length of the edge, `hem` points inside it (0 to 100000, default 72; 0 leaves the hem lines out).
+With `grommets` on (the default), each chosen side gets grommet marks `grommetInset` points inside the edge (0 to
+100000, default 36): one at each end of the side, `grommetInset` from the edges across it, and the rest spread evenly
+between them, as few as keep them at most `spacing` points apart (more than 0 and at most 100000, default 1728, 24 in). A corner that two
+chosen sides share has one grommet. Each grommet mark is a circle `diameter` points wide (0.01 to 1000, default 27) with
+a cross through its center. The marks are stroked `weight` points wide (0.01 to 1000, default 0.3) in the color swatch
+`swatch` (default `"[Registration]"`), with no fill.
+
+Each banner gets one group named "Banner Marks", holding its hem lines (named "Hem") and its grommets (groups named
+"Grommet"), added on top of the current layer and selected, as one undo step. While a clip group, or a group inside one,
+is edited in isolation, the groups go on top of the container that holds the outermost clip group around it. The command
+fails with every side off, with no hem and no grommets, with nothing selected while `allArtboards` is false, when a
+banner has no width or height, when a `hem` above 0 reaches the far edge of the banner (the full height with only one
+of the top and bottom chosen, or the full width with only one of the left and right) or meets the hem on the opposite
+side (half the height or width with both chosen), when a `grommetInset` does the same for the grommets or is more than half
+the length of a chosen side, and when the grommets would be more than 100000. Result:
+`{id, ids, hems, grommets}`: the first group's id, every group's id, and the number of hem lines and grommet marks.
+Banner Hems and Grommets… opens the command dialog with Preview.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.cutting.banner","params":{"hem":"1 in","grommetInset":"0.5 in","spacing":"2 ft"}}}
 ```
 
 ## Color Effects add-on
