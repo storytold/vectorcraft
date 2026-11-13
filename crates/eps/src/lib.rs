@@ -28,7 +28,14 @@
 //! - `import`: the PostScript interpreter.
 //! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
 //! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
+//! - `ai_editing`: the editing copy of the art a PDF-compatible `.ai` file carries
+//!   ([`export_ai_editing`], [`ai_private_data`]).
+//! - `ai_ops`: the path and line style operators those two write.
+//! - [`dcs`]: DCS files, an EPS file with one program per printing plate, read for placing.
 
+mod ai_editing;
+mod ai_ops;
+pub mod dcs;
 mod import;
 mod latin;
 mod legacy_ai;
@@ -37,8 +44,12 @@ mod ps;
 mod scene;
 mod tiff;
 
-pub use import::{Imported, POSTSCRIPT_ERRORS, ai_alone, family_style, import, import_trusting, import_with, is_loss, layered_ai, page};
-pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
+pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
+pub use import::{
+    AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard,
+    family_style, import, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
+};
+pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
@@ -186,6 +197,8 @@ pub struct EpsOutput {
     pub bytes: Vec<u8>,
     /// What was approximated or left out.
     pub warnings: Vec<String>,
+    /// Notes on the options: the preview or thumbnail asked for that was left out.
+    pub setting_notes: Vec<String>,
 }
 
 /// The `%%BoundingBox` of `region` with PostScript's origin at document point `origin`: whole
@@ -215,14 +228,16 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     if ![r.x0, r.y0, r.x1, r.y1, opts.origin.x, opts.origin.y].iter().all(|v| v.is_finite()) {
         return Err("the export region is not finite".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
     let page = scene::Scene::new(doc, opts).run();
-    let mut warnings = page.warnings;
+    let mut setting_notes = vec![];
     let thumb = thumbnail.and_then(|t| match tiff::png(t) {
         Ok(png) => Some(png),
         Err(e) => {
-            warnings.push(format!("the thumbnail was left out: {e}"));
+            setting_notes.push(format!("the thumbnail was left out: {e}"));
             None
         }
     });
@@ -230,7 +245,7 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     let bytes = match (opts.preview, preview) {
         (Preview::None, _) => ps.into_bytes(),
         (_, None) => {
-            warnings.push("the preview was left out: nothing was rendered for it".into());
+            setting_notes.push("the preview was left out: nothing was rendered for it".into());
             ps.into_bytes()
         }
         (kind, Some(img)) => {
@@ -238,7 +253,7 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
             dos_eps(ps.as_bytes(), &tiff)?
         }
     };
-    Ok(EpsOutput { bytes, warnings })
+    Ok(EpsOutput { bytes, warnings: page.warnings, setting_notes })
 }
 
 /// Comment lines that start a data section the file carries (`%VectorCraft_BeginData: <name>`)
@@ -263,10 +278,13 @@ pub(crate) fn comments(s: &mut String, title: &str, created: Option<i64>, level:
     }
     let _ = writeln!(s, "%%LanguageLevel: {}", level.id());
     s.push_str("%%DocumentData: Clean7Bit\n");
-    for (i, (name, cmyk)) in custom.iter().enumerate() {
+    // Each `%%+` line continues the comment right above it.
+    for (i, (name, _)) in custom.iter().enumerate() {
         let _ = writeln!(s, "{}{}", if i == 0 { "%%DocumentCustomColors: " } else { "%%+ " }, ps::string(name));
+    }
+    for (i, (name, cmyk)) in custom.iter().enumerate() {
         let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
-        let _ = writeln!(s, "%%CMYKCustomColor: {c} {m} {y} {k} {}", ps::string(name));
+        let _ = writeln!(s, "{}{c} {m} {y} {k} {}", if i == 0 { "%%CMYKCustomColor: " } else { "%%+ " }, ps::string(name));
     }
 }
 

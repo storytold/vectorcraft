@@ -136,6 +136,38 @@ fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
     }
 }
 
+/// #4506: a 3D effect on a group draws its members' solids on the canvas as the export does, and
+/// the group's drawn bounds (what a change redraws) hold all of them.
+#[test]
+fn solid_effects_on_a_group_draw_as_exported_within_their_drawn_bounds() {
+    for (effect, params) in [
+        ("threeD.extrude", json!({"depth": 30, "rotationX": -30, "rotationY": 40})),
+        ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
+    ] {
+        let square = |id: u64, x: f64, c: Color| {
+            Arc::new(Node::path(
+                NodeId(id),
+                shapes::rectangle(vectorcraft_geom::Rect::new(x, 35.0, x + 25.0, 60.0)),
+                Appearance::basic(Paint::solid(c), Paint::None, 0.0),
+            ))
+        };
+        let mut g = Node::group(NodeId(0), vec![square(10, 15.0, Color::rgb(0.9, 0.2, 0.1)), square(11, 60.0, Color::rgb(0.1, 0.3, 0.9))]);
+        g.appearance.effects.push(fx(effect, params));
+        let d = doc_with(Document::new(100.0, 100.0), g);
+        let live = render(&d);
+        let exported = render(&vectorcraft_effects::bake_document(&d).unwrap());
+        assert_eq!(live.pixels, exported.pixels, "{effect}: canvas and baked/exported faces agree");
+        let g = &d.layers[0].children().unwrap()[0];
+        let art = vectorcraft_effects::solid_art(g).unwrap().visual_bounds().unwrap();
+        let drawn = drawn_bounds(&d, g).unwrap();
+        assert_eq!(drawn.union(art), drawn, "{effect}: the drawn bounds hold the art");
+        let blues = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[2] as u16 > p[0] as u16 * 2).count();
+        let reds = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[2] as u16 * 2).count();
+        assert!(blues > 100 && reds > 100, "{effect}: both members drawn ({reds} red, {blues} blue px)");
+    }
+}
+
 #[test]
 fn smooth_revolve_reduces_banding_without_changing_radial_resolution() {
     let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 20 L70 80").unwrap());
@@ -300,7 +332,7 @@ fn symbol_doc(effects: Vec<Effect>) -> Document {
         shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
-    d.symbols.push(Symbol { name: "Square".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art) });
     let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((50.0, 50.0)) });
     n.appearance.effects = effects;
     doc_with(d, n)
@@ -407,7 +439,7 @@ fn transforms_of(t: &Node) -> [(Value, Affine); 3] {
 /// A 100×100 document holding `content` in an envelope that leaves it as it is (an arc with no
 /// bend), with Distort Appearance on or off.
 fn envelope_doc(content: Node, distort_appearance: bool) -> Document {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance, ..Default::default() };
     let envelope = NodeKind::Envelope {
         content: vec![Arc::new(content)],
@@ -469,7 +501,7 @@ fn a_transform_effect_on_a_group_symbol_or_envelope_moves_and_scales_the_gradien
     t.id = NodeId(500);
     // The type in a group, as the art of a symbol, and in an envelope that leaves it as it is.
     let mut symbols = Document::new(100.0, 100.0);
-    symbols.symbols.push(Symbol { name: "Type".into(), art: Arc::new(t.clone()) });
+    symbols.symbols.push(Symbol { dynamic: false, name: "Type".into(), art: Arc::new(t.clone()) });
     let holders = [
         doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t.clone())])),
         doc_with(symbols, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Type".into(), xf: Affine::IDENTITY })),
@@ -740,6 +772,85 @@ fn rasterize_on_an_image_takes_in_its_strokes_shape() {
 }
 
 #[test]
+fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
+    // The opaque image's stroke runs along its frame, from 18 to 22.
+    let mut d = stroked_image_doc(vec![fx("path.outlineObject", json!({}))], false);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), img.pixel(26, 35)), (0, [255, 0, 0, 255]));
+    // New pixels under the same key, as Update Link stores them, with the node unchanged: an
+    // opaque disc of radius 8 pixels in the middle. The stroke follows its edge at 26.5.
+    let disc = image::RgbaImage::from_fn(30, 30, |x, y| {
+        let r = (f64::from(x) + 0.5 - 15.0).hypot(f64::from(y) + 0.5 - 15.0);
+        image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
+    });
+    let mut png = vec![];
+    disc.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
+}
+
+/// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
+fn glowing_square(fill: Color, id: &str, params: Value) -> Document {
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));
+    n.appearance.effects.push(fx(id, params));
+    doc_with(Document::new(100.0, 100.0), n)
+}
+
+/// A glow on the bare page is drawn before the background goes under the art: the pixel is the
+/// transparent render's over that color, also for a background other than white (#6125).
+#[test]
+fn a_screen_outer_glow_on_the_bare_page_shows_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let clear = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(27, 50);
+    assert!(clear[0] > 20 && clear[0] == clear[1] && clear[2] == 0, "the glow is yellow: {clear:?}");
+    for (bg, name) in [([255, 255, 255, 255], "white"), ([0, 0, 255, 255], "blue")] {
+        let p = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some(bg), ..Default::default() }).pixel(27, 50);
+        let a = u32::from(clear[3]);
+        let want: Vec<u32> = (0..3).map(|c| (u32::from(clear[c]) * a + u32::from(bg[c]) * (255 - a)) / 255).collect();
+        assert!(a > 0 && (0..3).all(|c| u32::from(p[c]).abs_diff(want[c]) <= 2), "{name}: {p:?}, want {want:?}");
+        assert_eq!(p[3], 255, "{name}: opaque");
+    }
+}
+
+/// A thumbnail with a background shows a Screen glow on the bare page, opaque (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_a_thumbnail_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let img = Renderer::new().render_node_thumbnail(&d, &n, 100, Some([255; 4])).unwrap();
+    let pixels = img.pixels.as_chunks::<4>().0;
+    assert!(pixels.iter().all(|p| p[3] == 255), "every pixel is opaque");
+    assert!(pixels.iter().any(|p| p[0] > 235 && p[1] > 235 && p[2] < 235), "the glow shows as yellow on white");
+}
+
+/// The ink planes put the background under the art too: on a white background a Screen glow on
+/// the bare page prints yellow ink, and the bare page around it prints none (#6125).
+#[test]
+fn a_screen_outer_glow_prints_ink_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let opts = RenderOptions { background: Some([255; 4]), ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, &opts);
+    let at = |x: usize, y: usize| &inks[(y * 100 + x) * 4..][..4];
+    assert!(at(27, 50)[2] > 10, "yellow ink in the glow: {:?}", at(27, 50));
+    assert_eq!(at(5, 50), [0; 4], "no ink on the bare page");
+}
+
+/// An Inner Glow blends with the object's own fill whatever is under the page: white Screen
+/// lightens a black square, red Screen leaves a white one white, and red Normal shows on it.
+#[test]
+fn an_inner_glow_blends_with_its_own_fill_on_a_background() {
+    let red = |mode: &str| json!({"color": "#ff0000", "mode": mode, "opacity": 100});
+    let dark = render(&glowing_square(Color::BLACK, "stylize.innerGlow", json!({"color": "#ffffff", "opacity": 100}))).pixel(32, 50);
+    assert!(dark[0] > 20 && dark[0] == dark[1], "the white glow lightens the black edge: {dark:?}");
+    assert_eq!(render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("screen"))).pixel(32, 50), [255, 255, 255, 255]);
+    let normal = render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("normal"))).pixel(32, 50);
+    assert!(normal[0] == 255 && normal[1] < 245, "red on the white edge: {normal:?}");
+}
+
+#[test]
 fn a_strokes_own_glow_paints_around_that_stroke_only() {
     let mut d = Document::new(100.0, 100.0);
     let mut n = Node::path(
@@ -776,6 +887,175 @@ fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
             assert!(at(left).0 > 200 && at(left).1 < 60, "{:?} at {left}", at(left));
             assert!(at(right).1 > 200 && at(right).0 < 60, "{:?} at {right}", at(right));
         }
+    }
+}
+
+#[test]
+fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    // Placed across the square from its left edge (red) to its right edge (blue).
+    let geom = GradientGeom { start: Point::new(10.0, 50.0), end: Point::new(40.0, 50.0), aspect: 1.0, focal: None };
+    let draw = |paint: &GradientPaint, e: Option<Effect>| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = e.into_iter().collect();
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let placed = GradientPaint { geom: Some(geom), ..ramp.clone() };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    // Moved 40 pt right by Transform, and 30 pt (one width) right by a Free Distort that moves
+    // every corner.
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    for e in [fx("distort.transform", json!({"moveH": 40})), fx("distort.freeDistort", corners)] {
+        let img = draw(&placed, Some(e.clone()));
+        let moved = if e.id == "distort.transform" { 40 } else { 30 };
+        let (left, right) = (11 + moved, 38 + moved);
+        assert!(red(rb(&img, left, 50)) && blue(rb(&img, right, 50)), "{}: {:?} {:?}", e.id, rb(&img, left, 50), rb(&img, right, 50));
+    }
+    // Turned a quarter: the gradient runs from top to bottom (or bottom to top).
+    let turn = fx("distort.transform", json!({"rotate": 90}));
+    let img = draw(&placed, Some(turn));
+    let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+    assert!((red(top) && blue(bottom)) || (blue(top) && red(bottom)), "{top:?} {bottom:?}");
+    assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "the same color across");
+    // Scaled to half its width about its center: the gradient spans the narrower square.
+    let img = draw(&placed, Some(fx("distort.transform", json!({"scaleH": 50}))));
+    assert!(red(rb(&img, 18, 50)) && blue(rb(&img, 31, 50)), "{:?} {:?}", rb(&img, 18, 50), rb(&img, 31, 50));
+    // The fill's own Transform moves its gradient too.
+    let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+    let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(placed.clone())), Paint::None, 0.0));
+    n.appearance.items[0].effects_mut().push(fx("distort.transform", json!({"moveH": 40})));
+    let img = render(&doc_with(Document::new(100.0, 100.0), n));
+    assert!(red(rb(&img, 51, 50)) && blue(rb(&img, 78, 50)), "{:?} {:?}", rb(&img, 51, 50), rb(&img, 78, 50));
+}
+
+/// The canvas turns and reflects a gradient fitted to the square with its Transform effect, on the
+/// object and as the fill's own effect.
+#[test]
+fn a_fitted_gradient_turns_and_reflects_with_its_transform_on_the_canvas() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let draw = |e: Effect, own: bool| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(fitted.clone(), Paint::None, 0.0));
+        if own {
+            n.appearance.items[0].effects_mut().push(e);
+        } else {
+            n.appearance.effects.push(e);
+        }
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    for own in [false, true] {
+        // A quarter turn: the left (red) to right (blue) ramp runs from the bottom up.
+        let img = draw(fx("distort.transform", json!({"rotate": 90})), own);
+        let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+        assert!(blue(top) && red(bottom), "own {own}: {top:?} {bottom:?}");
+        assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "own {own}: the same color across");
+        // Reflected left to right: blue on the left, red on the right.
+        let img = draw(fx("distort.transform", json!({"reflectX": true})), own);
+        let (left, right) = (rb(&img, 11, 50), rb(&img, 38, 50));
+        assert!(blue(left) && red(right), "own {own}: {left:?} {right:?}");
+    }
+}
+
+#[test]
+fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let draw = |paint: &GradientPaint, e: Effect| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = vec![e];
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    // Placed from the square's left edge to its right edge, the gradient is drawn as one fitted to
+    // the square is: after a warp both run from the warped outline's left edge to its right edge.
+    let placed = GradientPaint {
+        geom: Some(GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(60.0, 50.0), aspect: 1.0, focal: None }),
+        ..ramp.clone()
+    };
+    let styles = [
+        ("arc", json!({"bend": 50})),
+        ("bulge", json!({"bend": 60, "orientation": "vertical"})),
+        ("rise", json!({"bend": 40, "vertical": 50, "orientation": "vertical"})),
+    ];
+    for (style, params) in styles.clone() {
+        let e = fx(&format!("warp.{style}"), params.clone());
+        let (got, want) = (draw(&placed, e.clone()), draw(&ramp, e));
+        // The warp moves the outline's left or right edge, so a gradient left in place would not
+        // run from edge to edge.
+        let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+        let path = shapes::rectangle(square);
+        let b = vectorcraft_effects::apply_geometry(&[fx(&format!("warp.{style}"), params.clone())], &path, square).bounds().unwrap();
+        assert!((b.x0 - 30.0).abs() > 0.5 || (b.x1 - 60.0).abs() > 0.5, "warp.{style}: the outline spans {b:?}");
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (got.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style}: worst channel difference {worst}");
+    }
+    // A stroke's own Warp: the canvas draws its gradient moved and scaled from the stroke-inflated
+    // bounds before the warp to those after it, as on the warped path with that gradient.
+    let geom = GradientGeom { start: Point::new(35.0, 50.0), end: Point::new(55.0, 50.0), aspect: 1.0, focal: None };
+    let stroked = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp.clone() }));
+    let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+    let follow = |p: Point, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    for (style, params) in styles {
+        let mut n = Node::path(NodeId(0), shapes::rectangle(square), Appearance::basic(Paint::None, stroked.clone(), 6.0));
+        let Some(AppearanceItem::Stroke(layer)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).cloned() else {
+            panic!("a stroke")
+        };
+        let Some(item) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        item.effects_mut().push(fx(&format!("warp.{style}"), params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let baked = vectorcraft_effects::bake_document(&d).unwrap();
+        let mut warped = None;
+        for l in &baked.layers {
+            l.walk(&mut |c: &Node| {
+                if let (Some(path), true) = (c.path_data(), c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_)))) {
+                    warped.get_or_insert_with(|| path.clone());
+                }
+            });
+        }
+        let path = warped.unwrap();
+        let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        assert_ne!(b, square, "warp.{style}: the warp changes the bounds");
+        let (from, to) = (layer.paint_bounds(square), layer.paint_bounds(b));
+        let moved = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+        let want_node = Node::path(
+            NodeId(0),
+            path,
+            Appearance::basic(Paint::None, Paint::Gradient(Box::new(GradientPaint { geom: Some(moved), ..ramp.clone() })), 6.0),
+        );
+        let want = render(&doc_with(Document::new(100.0, 100.0), want_node));
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (live.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style} on the stroke: worst channel difference {worst}");
     }
 }
 
@@ -882,5 +1162,60 @@ fn darkness_adjusts_gradient_stop_colors_before_interpolation() {
                 );
             }
         }
+    }
+}
+
+/// A symbol instance with object effects is charged to the frame's symbol budget like one
+/// without: past the budget it isn't expanded.
+#[test]
+fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
+    let d = symbol_doc(vec![fx("distort.roughen", json!({}))]);
+    let inst = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
+    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+}
+
+/// A closed path of 30,000 curves along the x axis, 2 pt apart: drawn with about 420,000 lines,
+/// and with more than the effect budget's 8 million once scaled 1000 times.
+fn wavy() -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A Transform effect left out past the effect budget leaves the art where it is, and the drop
+/// shadow before it (the object's, or the fill's before the fill's own Transform effect) reaches
+/// as far as it is drawn: by its own offset, not by a thousand times it.
+#[test]
+fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 5, "blur": 0}));
+    let big = fx("distort.transform", json!({"scaleH": 100000, "scaleV": 100000}));
+    let path = wavy();
+    let art = path.bounds().unwrap();
+    let mut object = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let mut fill = object.clone();
+    object.appearance.effects = vec![shadow.clone(), big.clone()];
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow, big];
+    }
+    let d = Document::new(100.0, 100.0);
+    let symbols = d.symbol_boxes();
+    // Within the shadow's 10 pt on every side (the visual bounds grow each side by the most any
+    // side reaches).
+    let within = |b: Rect| b.x0 >= art.x0 - 11.0 && b.y0 >= art.y0 - 11.0 && b.x1 <= art.x1 + 11.0 && b.y1 <= art.y1 + 11.0;
+    for (what, n) in [("object", &object), ("fill", &fill)] {
+        let b = crate::fx::visual_bounds(&symbols, n).unwrap();
+        assert!(within(b), "{what}: visual {b:?} for art {art:?}");
+        let b = crate::fx::painted_reach(&symbols, n).unwrap();
+        assert!(within(b), "{what}: painted {b:?} for art {art:?}");
     }
 }

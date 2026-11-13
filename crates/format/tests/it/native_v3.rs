@@ -129,7 +129,7 @@ fn unused_images_are_pruned() {
     n.extras_mut().mask = Some(Box::new(OpacityMask::new(image_node(&mut d, "in mask"), false)));
     d.insert(Some(layer), 0, n).unwrap();
     let art = image_node(&mut d, "in symbol");
-    d.symbols.push(Symbol { name: "S".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     // Image objects inside foreign data (a brush library kept as JSON) keep theirs too.
     d.unknown.insert("brushes".into(), json!([{"art": {"type": "image", "key": "in brush"}}]));
     let back = load(&save(&d, true)).unwrap();
@@ -155,6 +155,24 @@ fn keys_from_newer_versions_round_trip() {
         assert_eq!(again["document"]["futureFlag"], json!(true));
     }
     check_native_roundtrip(&d).unwrap();
+}
+
+/// An opacity-mask editing state in a file drops the editing layer it names only when that is a
+/// top-level layer, as files saved mid-edit have it: a sublayer it names loads and stays.
+#[test]
+fn saved_mask_editing_drops_only_a_top_level_layer() {
+    let mut d = Document::new(612.0, 792.0);
+    let host = d.layers[0].id;
+    let sub = d.add_layer(Some("Sub"));
+    d.move_node(sub, Some(host), 0).unwrap();
+    let top = d.add_layer(Some("Mask"));
+    for (layer, kept) in [(sub, true), (top, false)] {
+        let mut v = json_of(&save(&d, false));
+        v["document"]["mask_edit"] = json!({"object": host, "layer": layer});
+        let back = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(back.node(layer).is_some(), kept, "layer {layer:?}");
+        assert!(back.mask_edit.is_none() && back.node(host).is_some());
+    }
 }
 
 /// The paragraph composer is saved only when it isn't the default (Every-line) and reads back.
@@ -275,13 +293,21 @@ fn artboard_guides_round_trip_and_canvas_guides_save_as_before() {
     use vectorcraft_doc::Guide;
     let mut d = Document::new(100.0, 100.0);
     let id = d.artboards[0].id;
-    d.guides = vec![Guide::new(true, 10.0), Guide { artboard: Some(id), ..Guide::new(false, 20.0) }];
+    d.add_ruler_guide(&Guide::new(true, 10.0));
+    d.add_ruler_guide(&Guide { artboard: Some(id), ..Guide::new(false, 20.0) });
     let mut v = json_of(&save(&d, false));
-    assert_eq!(v["document"]["guides"], json!([{"vertical": true, "pos": 10.0}, {"vertical": false, "pos": 20.0, "artboard": id}]));
-    assert_eq!(load(&save(&d, false)).unwrap().guides, d.guides);
+    let lines: Vec<_> = v["document"]["guides"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| json!({"vertical": g["vertical"], "pos": g["pos"], "artboard": g.get("artboard")}))
+        .collect();
+    assert_eq!(lines, [json!({"vertical": true, "pos": 10.0, "artboard": null}), json!({"vertical": false, "pos": 20.0, "artboard": id})]);
+    assert_eq!(load(&save(&d, false)).unwrap().ruler_guides(), d.ruler_guides());
     v["document"]["guides"] = json!([{"vertical": false, "pos": 20.0}]);
     let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(old.guides, [Guide::new(false, 20.0)]);
+    let old_lines: Vec<_> = old.ruler_guides().into_iter().map(|g| (g.vertical, g.pos, g.artboard)).collect();
+    assert_eq!(old_lines, [(false, 20.0, None)]);
 }
 
 #[test]

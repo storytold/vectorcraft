@@ -69,6 +69,113 @@ fn picking_up_without_weight_keeps_the_target_weight() {
 }
 
 #[test]
+fn bucket_attribute_sample_changes_only_defaults_and_respects_options() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    let art = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo = undo_len(&s);
+    s.execute("eyedropper.setOptions", &json!({"pickUp": {"appearance": {"stroke": {"weight": false}}}})).unwrap();
+    let width = s.paint.stroke_width;
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(s.paint.stroke.color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.paint.stroke_width, width);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(undo_len(&s), undo);
+    assert_eq!(node(&s, dst).appearance.fill_paint().color().unwrap().to_hex(), "#ffffff");
+    for extra in [json!({"ids": []}), json!({"reverse": true}), json!({"append": true})] {
+        let mut p = json!({"source": src.0, "defaultsOnly": true});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        assert!(s.execute("appearance.copyFrom", &p).is_err());
+    }
+    assert!(s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": "yes"})).is_err());
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_replace_last_eyedropper_sample() {
+    let mut s = session();
+    let (src, dst) = source_and_target(&mut s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).is_err());
+}
+
+#[test]
+fn bucket_attribute_sample_does_not_commit_highlighted_type() {
+    let mut s = session();
+    s.prefs.placeholder_text = false;
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let view = ViewInfo::default();
+    s.select_tool("type", view).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 20.0, 300.0), view).unwrap();
+    }
+    let dst = s.doc().unwrap().selection.objects[0];
+    s.tool_text("ABCD", view).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let before = node(&s, dst);
+    let undo = undo_len(&s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), before);
+    assert_eq!(undo_len(&s), undo, "sampling does not commit pending typing");
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn bucket_color_sample_changes_only_defaults_and_supplies_next_fill() {
+    let mut s = session();
+    let src = rect(&mut s, 300.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [dst.0]})).unwrap();
+    let dst_before = node(&s, dst);
+    let art = s.doc().unwrap().doc.clone();
+    let undo = undo_len(&s);
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "ids": []})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(s.doc().unwrap().doc, art);
+    assert_eq!(undo_len(&s), undo);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "defaultsOnly": true})).unwrap();
+    assert_eq!(node(&s, dst), dst_before);
+    assert_eq!(undo_len(&s), undo);
+    let r = s.execute("livePaint.fill", &json!({"ids": [dst.0], "point": [35, 35]})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    assert_eq!(node(&s, face).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+}
+
+#[test]
+fn image_color_sample_sets_only_fill_default_and_clears_stroke() {
+    let mut s = session();
+    let dst = rect(&mut s, 10.0);
+    s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    let before = (node(&s, dst), s.doc().unwrap().selection.clone());
+    s.execute("paint.sampleColor", &json!({"color": "#00ff00", "stroke": false, "ids": [], "clearStroke": true})).unwrap();
+    assert_eq!(s.paint.fill.color(), Some(Color::rgb8(0, 255, 0)));
+    assert!(s.paint.stroke.is_none());
+    assert_eq!((node(&s, dst), s.doc().unwrap().selection.clone()), before);
+    let state = (s.paint.clone(), node(&s, dst));
+    for p in [
+        json!({"color": "#ffffff", "stroke": true, "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "ids": [], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [dst.0], "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "stop": 0, "clearStroke": true}),
+        json!({"color": "#ffffff", "stroke": false, "ids": [], "clearStroke": "yes"}),
+        json!({"color": "#ffffff", "stroke": "no", "ids": [], "clearStroke": true}),
+        json!({"color": {"bad": true}, "stroke": false, "ids": [], "clearStroke": true}),
+    ] {
+        assert!(s.execute("paint.sampleColor", &p).is_err(), "{p}");
+        assert_eq!((s.paint.clone(), node(&s, dst)), state, "{p}");
+    }
+}
+
+#[test]
 fn every_appearance_attribute_copies_the_whole_stack() {
     let mut s = session();
     let (src, dst) = source_and_target(&mut s);
@@ -106,6 +213,291 @@ fn type_picks_up_font_and_size() {
     s.execute("appearance.copyFrom", &json!({"source": src.0, "pickUp": {"character": false, "paragraph": false}})).unwrap();
     let (st, justify) = style(&s, dst2);
     assert_eq!((st.size, justify, st.fill.color().unwrap().to_hex()), (12.0, preserved_alignment, "#00ff00".into()));
+}
+
+/// Sample document-space typography between text objects with different local transforms.
+#[test]
+fn scaled_type_pick_matches_effective_character_dimensions() {
+    for source_area in [false, true] {
+        for target_area in [false, true] {
+            let mut s = session();
+            let create = |s: &mut Session, area: bool, x: f64| {
+                let mut p = json!({"x": x, "y": 100, "text": "Sample", "size": 12});
+                if area {
+                    p["area"] = json!({"width": 160, "height": 80});
+                }
+                id_of(s.execute("text.create", &p).unwrap())
+            };
+            let src = create(&mut s, source_area, 100.0);
+            s.execute("object.transform", &json!({"matrix": [3, 0, 0, 2, 0, 0]})).unwrap();
+            let dst = create(&mut s, target_area, 300.0);
+            s.execute("object.transform", &json!({"matrix": [0.5, 0, 0, 1.5, 0, 0]})).unwrap();
+            let before = node(&s, dst);
+            let source = node(&s, src);
+            let history = undo_len(&s);
+            s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+            let after = node(&s, dst);
+            let NodeKind::Text(t) = &after.kind else { panic!("not text") };
+            let NodeKind::Text(old) = &before.kind else { panic!("not text") };
+            let effective = t.effective_char_style(&t.first_style()).unwrap();
+            assert!((effective.size - 24.0).abs() < 1e-8, "sampled font size: {}", effective.size);
+            assert!((effective.h_scale - 150.0).abs() < 1e-8, "sampled horizontal scale: {}", effective.h_scale);
+            assert_eq!(t.xf, old.xf, "sampling keeps the target's transform");
+            assert_eq!(node(&s, src), source);
+            assert_eq!(undo_len(&s), history + 1);
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(node(&s, dst), before);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(node(&s, dst), after);
+        }
+    }
+}
+
+/// A text object snapshot, including the local attributes and retained affine transform.
+fn sampled_type(s: &Session, id: NodeId) -> vectorcraft_doc::TextObject {
+    let NodeKind::Text(t) = node(s, id).kind else { panic!("not text") };
+    *t
+}
+
+/// Compare the dimensional character attributes that text controls display in document units.
+fn assert_sampled_dimensions(actual: &vectorcraft_doc::CharStyle, expected: &vectorcraft_doc::CharStyle) {
+    assert_eq!(actual.leading.is_some(), expected.leading.is_some());
+    for (a, e) in [
+        (actual.size, expected.size),
+        (actual.h_scale, expected.h_scale),
+        (actual.v_scale, expected.v_scale),
+        (actual.leading.unwrap_or(0.0), expected.leading.unwrap_or(0.0)),
+        (actual.baseline_shift, expected.baseline_shift),
+        (actual.tcy_up_down, expected.tcy_up_down),
+        (actual.tcy_left_right, expected.tcy_left_right),
+    ] {
+        assert!((a - e).abs() < 1e-8, "sampled dimension: {a} != {e}");
+    }
+}
+
+/// Rotation, shear, reflection and grouping stay on the objects while typography is copied.
+#[test]
+fn scaled_type_pick_preserves_affines_and_document_dimensions() {
+    for grouped in [false, true] {
+        let mut s = session();
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+        s.execute("text.setStyle", &json!({"leading": 18})).unwrap();
+        s.execute("text.setFormat", &json!({"hScale": 80, "vScale": 125, "baselineShift": 3, "tcyUpDown": 2, "tcyLeftRight": -1})).unwrap();
+        if grouped {
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        s.execute("object.transform", &json!({"matrix": [0, -3, -2, 1, 0, 0]})).unwrap();
+        let src_text = sampled_type(&s, src);
+        let expected = src_text.effective_char_style(&src_text.first_style()).unwrap();
+        let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Target", "size": 20})).unwrap());
+        if grouped {
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        s.execute("object.transform", &json!({"matrix": [-1, 0.5, 1, 2, 0, 0]})).unwrap();
+        let before = sampled_type(&s, dst);
+        s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+        let after = sampled_type(&s, dst);
+        assert_sampled_dimensions(&after.effective_char_style(&after.first_style()).unwrap(), &expected);
+        assert_eq!(after.xf, before.xf);
+        assert_eq!(sampled_type(&s, src), src_text);
+        let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+        let reopened = vectorcraft_format::load(&bytes).unwrap();
+        let NodeKind::Text(t) = &reopened.node(dst).unwrap().kind else { panic!("not text") };
+        assert_sampled_dimensions(&t.effective_char_style(&t.first_style()).unwrap(), &expected);
+    }
+}
+
+/// A transformed target compensates only the highlighted characters, retaining the others.
+#[test]
+fn scaled_type_pick_changes_only_the_highlighted_range() {
+    let mut s = session();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [3, 0, 0, 2, 0, 0]})).unwrap();
+    let source = sampled_type(&s, src);
+    let expected = source.effective_char_style(&source.first_style()).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Sample", "size": 10})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [0.5, 0, 0, 3, 0, 0]})).unwrap();
+    let before = sampled_type(&s, dst);
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 1, "end": 4}));
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    let history = undo_len(&s);
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let after = sampled_type(&s, dst);
+    assert_eq!(after.runs.len(), 3);
+    assert_eq!((&*after.runs[0].text, &*after.runs[1].text, &*after.runs[2].text), ("S", "amp", "le"));
+    assert_eq!(after.runs[0].style, before.first_style());
+    assert_eq!(after.runs[2].style, before.first_style());
+    assert_sampled_dimensions(&after.effective_char_style(&after.runs[1].style).unwrap(), &expected);
+    assert_eq!(after.xf, before.xf);
+    assert_eq!(undo_len(&s), history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(sampled_type(&s, dst), before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(sampled_type(&s, dst), after);
+}
+
+/// Reject unusable source or target transforms before any part of a multi-object pick changes.
+#[test]
+fn scaled_type_pick_rejects_unrepresentable_dimensions_atomically() {
+    for (bad_source, factor) in [(true, 0.0), (false, 0.0), (false, 1e-306), (true, f64::from_bits(1))] {
+        let mut s = session();
+        let size = if bad_source && factor > 0.0 { 0.1 } else { 24.0 };
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": size, "color": "#00ff00"})).unwrap());
+        if bad_source {
+            s.execute("object.transform", &json!({"matrix": [factor, 0, 0, factor, 0, 0]})).unwrap();
+        }
+        let good = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Good", "size": 10})).unwrap());
+        let other = id_of(s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Other", "size": 12})).unwrap());
+        if !bad_source {
+            s.execute("object.transform", &json!({"matrix": [factor, 0, 0, factor, 0, 0]})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [good.0, other.0]})).unwrap();
+        let doc = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let paint = s.paint.clone();
+        let sample = s.eyedropper_sample.clone();
+        let history = undo_len(&s);
+        let error = s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap_err();
+        assert!(error.to_string().contains("transform"), "{error}");
+        assert_eq!(s.doc().unwrap().doc, doc);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(s.paint, paint);
+        assert_eq!(s.eyedropper_sample, sample);
+        assert_eq!(undo_len(&s), history);
+        // A paint-only pick does not need a usable text transform.
+        s.execute("appearance.copyFrom", &json!({"source": src.0, "apply": {"character": false, "paragraph": false}})).unwrap();
+    }
+}
+
+/// A failed dimensional pick retains highlighted characters and the previously remembered sample.
+#[test]
+fn scaled_type_pick_rejection_preserves_the_highlighted_range_and_sample() {
+    let mut s = session();
+    let saved = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Saved", "size": 18})).unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": saved.0})).unwrap();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Source", "size": 24, "color": "#00ff00"})).unwrap());
+    s.execute("object.transform", &json!({"matrix": [0, 0, 0, 0, 0, 0]})).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Sample", "size": 10})).unwrap());
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 1, "end": 4}));
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let range = s.tool_options();
+    let paint = s.paint.clone();
+    let sample = s.eyedropper_sample.clone();
+    let history = undo_len(&s);
+    assert!(s.execute("appearance.copyFrom", &json!({"source": src.0})).is_err());
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.tool_options(), range);
+    assert_eq!(s.paint, paint);
+    assert_eq!(s.eyedropper_sample, sample);
+    assert_eq!(undo_len(&s), history);
+    // Alt-click can still apply the last successful sample after the rejected pick.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    assert_eq!(sampled_type(&s, dst).first_style().size, 18.0);
+}
+
+/// A pick that would extend text beyond the canvas keeps the previous sample and defaults.
+#[test]
+fn scaled_type_pick_canvas_rejection_preserves_sample_and_defaults() {
+    for mode in ["selection", "ids", "reverse", "range"] {
+        let mut s = session();
+        let saved = id_of(s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Saved", "size": 18, "color": "#0000ff"})).unwrap());
+        let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 96, "color": "#ff0000"})).unwrap());
+        let dst = id_of(s.execute("text.create", &json!({"x": MAX_COORD - 100.0, "y": 200, "text": "WWWW", "size": 10})).unwrap());
+        s.execute("appearance.copyFrom", &json!({"source": saved.0, "ids": []})).unwrap();
+        let pick = match mode {
+            "ids" | "reverse" => {
+                s.execute("select.none", &json!({})).unwrap();
+                if mode == "ids" { json!({"source": src.0, "ids": [dst.0]}) } else { json!({"source": dst.0, "ids": [src.0], "reverse": true}) }
+            }
+            "range" => {
+                s.select_tool("type", ViewInfo::default()).unwrap();
+                s.set_tool_option("textSelection", &json!({"id": dst.0, "start": 0, "end": 3}));
+                s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+                json!({"source": src.0})
+            }
+            _ => json!({"source": src.0}),
+        };
+        let doc = s.doc().unwrap().doc.clone();
+        let selection = s.doc().unwrap().selection.clone();
+        let range = s.tool_options();
+        let paint = s.paint.clone();
+        let sample = s.eyedropper_sample.clone();
+        let history = undo_len(&s);
+
+        let error = s.execute("appearance.copyFrom", &pick).unwrap_err();
+        assert!(error.to_string().contains("coordinates out of range"), "{mode}: {error}");
+        assert_eq!(s.doc().unwrap().doc, doc, "{mode}");
+        assert_eq!(s.doc().unwrap().selection, selection, "{mode}");
+        assert_eq!(s.tool_options(), range, "{mode}");
+        assert_eq!(s.paint, paint, "{mode}");
+        assert_eq!(s.eyedropper_sample, sample, "{mode}");
+        assert_eq!(undo_len(&s), history, "{mode}");
+    }
+}
+
+/// Changing justification can move explicitly targeted point text outside the canvas even
+/// when character copying is disabled.
+#[test]
+fn paragraph_only_pick_rejects_out_of_bounds_explicit_target() {
+    let mut s = session();
+    let saved = id_of(s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Saved", "color": "#0000ff"})).unwrap());
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "color": "#ff0000"})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 100, "y": 200, "text": "WWWW", "size": 16})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "right"})).unwrap();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, MAX_COORD - 101.0, 0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": saved.0, "ids": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let paint = s.paint.clone();
+    let sample = s.eyedropper_sample.clone();
+    let history = undo_len(&s);
+
+    let pick = json!({"source": src.0, "ids": [dst.0], "apply": {"character": false}});
+    let error = s.execute("appearance.copyFrom", &pick).unwrap_err();
+    assert!(error.to_string().contains("coordinates out of range"), "{error}");
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.paint, paint);
+    assert_eq!(s.eyedropper_sample, sample);
+    assert_eq!(undo_len(&s), history);
+}
+
+/// Disabled character copying and append preserve typography; reverse and cached picks convert it.
+#[test]
+fn scaled_type_pick_respects_options_and_reverse_sampling() {
+    let mut s = session();
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "size": 12})).unwrap());
+    s.execute("object.scale", &json!({"sx": 300, "sy": 200})).unwrap();
+    let source = sampled_type(&s, src);
+    let expected = source.effective_char_style(&source.first_style()).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Target", "size": 20})).unwrap());
+    s.execute("object.scale", &json!({"sx": 50, "sy": 150})).unwrap();
+    let before = sampled_type(&s, dst);
+    for options in [json!({"pickUp": {"character": false}}), json!({"apply": {"character": false}}), json!({"append": true})] {
+        let mut p = json!({"source": src.0, "ids": [dst.0]});
+        p.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        s.execute("appearance.copyFrom", &p).unwrap();
+        assert_sampled_dimensions(&sampled_type(&s, dst).first_style(), &before.first_style());
+    }
+    s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    let after = sampled_type(&s, dst);
+    assert_sampled_dimensions(&after.effective_char_style(&after.first_style()).unwrap(), &expected);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": dst.0, "reverse": true})).unwrap();
+    let cached = sampled_type(&s, dst);
+    assert_sampled_dimensions(&cached.effective_char_style(&cached.first_style()).unwrap(), &expected);
 }
 
 #[test]
@@ -226,8 +618,8 @@ fn an_rgb_image_sampled_in_a_cmyk_document_separates_through_the_color_settings(
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();
     assert_eq!(got, managed_cmyk(Color::rgb8(83, 170, 223)));
     let Color::Cmyk { c, m, y, k } = got else { panic!("{got:?}") };
-    // Generic CMYK: about C59 M12 Y3 K0, with no black, where the formula gave K13.
-    assert!((0.5..0.75).contains(&c) && (0.05..0.2).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
+    // Generic CMYK: about C62 M19 Y0 K0, with no black, where the formula gave K13.
+    assert!((0.5..0.75).contains(&c) && (0.1..0.25).contains(&m) && y < 0.05 && k < 0.02, "{c} {m} {y} {k}");
     // A light blue shows close to the color it was picked from; the formula's C12 M7 showed duller.
     click(&mut s, 450.0, 50.0, Mods::default());
     let got = node(&s, dst).appearance.fill_paint().color().unwrap();

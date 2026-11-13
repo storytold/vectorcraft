@@ -1,4 +1,4 @@
-use super::entries::{Row, entry, pretty_shortcut};
+use super::entries::{Row, entry, shown_shortcut};
 use super::invoke::{field_event, focused_text_field, invoke, to_field, with_held_keys};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Tokens, Value, VectorcraftApp, widgets};
@@ -23,6 +23,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
     }
     let mut clicked: Option<(String, Value)> = None;
+    let mut file_open = false;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
     // No application menu in the window (as in Illustrator): the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
@@ -37,11 +38,25 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
                 let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 let resp = ui.add(egui::Button::new(text));
                 egui::Popup::menu(&resp).show(|ui| menu_body(app, ui, items, &mut clicked));
+                if *title == "File" {
+                    file_open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
+                }
                 titles.push(resp);
             }
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    // The File menu opening reads the Scripts folder again, for File › Scripts.
+    let file_key = egui::Id::unique("menu-bar-file-open");
+    let file_was_open = ctx.data(|d| d.get_temp::<bool>(file_key)).unwrap_or(false);
+    ctx.data_mut(|d| d.insert_temp(file_key, file_open));
+    if file_open && !file_was_open {
+        crate::scripts_menu::refresh(app, Some(&ctx));
+    }
+    // Whether a top-level menu is open: the docking renderer lowers the floating panels' OS windows
+    // while one is, or the menu would open under them.
+    ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));
+
     let field = ctx.data(|d| d.get_temp::<Field>(field_key));
     if !open && focused_text_field(&ctx).is_none() {
         ctx.data_mut(|d| d.remove::<Field>(field_key));
@@ -56,6 +71,17 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         }
     }
     end
+}
+
+/// Where the menu bar keeps whether one of its top-level menus is open.
+fn menu_open_id() -> egui::Id {
+    egui::Id::unique("menu-bar-open")
+}
+
+/// Whether a menu of the in-window menu bar is open (`false` when no menu bar was drawn yet).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn menu_open(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(menu_open_id())).unwrap_or(false)
 }
 
 /// Whether the pointer at `p` is really over the menu title `title`: inside it, and with no
@@ -112,7 +138,7 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
                 ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         ui.set_min_width(200.0);
-                        render_items(app, ui, children, checks, clicked);
+                        render_items(app, ui, children, checks || only_toggles(app, children), clicked);
                     });
                 });
             }
@@ -121,10 +147,17 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
     }
 }
 
+/// Whether every item of a submenu can be on or off: a menu drawn without check marks (the canvas
+/// context menu) still shows them there, since its label alone can't say whether it is on.
+fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
+    let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
+    rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
+}
+
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
 /// and Type › Font's samples.
 fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, clicked: &mut Option<(String, Value)>) {
-    let sc = row.shortcut.map(pretty_shortcut).unwrap_or_default();
+    let sc = row.shortcut.map(shown_shortcut).unwrap_or_default();
     let Some((id, p)) = row.command else {
         ui.add_enabled_ui(false, |ui| {
             ui.add(egui::Button::new(row.label.as_ref()).shortcut_text(sc));
@@ -146,7 +179,7 @@ fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, 
             let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
             let out = ui.add_enabled_ui(row.enabled, |ui| button.atom_ui(ui)).inner;
             if let Some(rect) = out.rect(slot) {
-                crate::font_menu::menu_item_sample(ui, rect, family);
+                crate::font_menu::menu_item_sample(ui, rect, family, app.session.prefs.font_samples_on_white);
             }
             out.response
         }

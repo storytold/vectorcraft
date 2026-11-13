@@ -14,6 +14,10 @@ use super::{ARCLEN_ACCURACY, kink, push_seg, segments, subpaths, tangent};
 
 /// More dashes than this (a tiny pattern on a long path) draws the line solid instead.
 const MAX_DASHES: f64 = 200_000.0;
+/// Pattern entries walked in all (every subpath and every corner restart starts the pattern over, and
+/// zero-length entries cost no path length, so a long pattern is walked in full even on a short
+/// run); past this the line is drawn solid. About 100x what real art needs.
+const MAX_STEPS: f64 = 20_000_000.0;
 /// A pattern whose longest entry is shorter than this can't advance along the path (each entry
 /// ends within the generator's tolerance of where it starts), so it draws the line solid.
 const MIN_ENTRY: f64 = 1e-6;
@@ -45,6 +49,14 @@ pub struct Dashed {
 /// entry, as in SVG and PDF) or has no positive length (the line is solid), or is too fine to draw
 /// (then the line is drawn solid too).
 pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
+    dash_kept(bp, d, &|_| true)
+}
+
+/// [`dash`] with only the dashes and dots on the segments of `bp` that `keep` accepts. The pattern
+/// runs along every segment as in [`dash`], so a kept dash lies where [`dash`] puts it: a dash
+/// running onto a segment left out ends where that segment starts and goes on from where the next
+/// kept segment starts. Segments left out still count toward the limit on the number of dashes.
+pub fn dash_kept(bp: &BezPath, d: &Dash, keep: &dyn Fn(&PathSeg) -> bool) -> Option<Dashed> {
     if d.pattern.iter().any(|v| !v.is_finite() || *v < 0.0) || !d.offset.is_finite() {
         return None;
     }
@@ -57,6 +69,10 @@ pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
         pat.extend_from_within(..);
     }
     let period: f64 = pat.iter().sum();
+    // Finite entries can still sum to infinity, which would never leave the phase loop below.
+    if !period.is_finite() {
+        return None;
+    }
     let plans: Vec<Plan> = subpaths(bp)
         .into_iter()
         .map(|(r, closed)| {
@@ -68,6 +84,10 @@ pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
     if plans.iter().map(|p| p.periods).sum::<f64>() * pat.len() as f64 > MAX_DASHES {
         return None;
     }
+    let restarts = |p: &Plan| p.restart.iter().filter(|r| **r).count() as f64;
+    if plans.iter().map(|p| (p.periods.ceil().max(1.0) + restarts(p)) * pat.len() as f64).sum::<f64>() > MAX_STEPS {
+        return None;
+    }
     // Where an exact pattern starts: `offset` into it.
     let mut off = d.offset.rem_euclid(period);
     let mut ix0 = 0;
@@ -77,8 +97,13 @@ pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
     }
     let phase = Phase { ix: ix0, rem: pat[ix0] - off, on: ix0 % 2 == 0 };
     let mut out = Dashed::default();
+    // The estimates above trust the fitted scales; this counts the pattern entries actually walked,
+    // so entries that fit down to nothing can't keep a subpath looping.
+    let mut budget = MAX_STEPS as usize;
     for plan in &plans {
-        dash_subpath(&mut out, plan, &pat, phase);
+        if !dash_subpath(&mut out, plan, &pat, phase, keep, &mut budget) {
+            return None;
+        }
     }
     Some(out)
 }
@@ -109,6 +134,10 @@ impl Plan {
 
     fn fitted(mut segs: Vec<PathSeg>, mut lens: Vec<f64>, closed: bool, period: f64) -> Self {
         let n = segs.len();
+        // A subpath with no segments (a lone moveto) has no runs to fit.
+        if n == 0 {
+            return Self::exact(segs, lens, closed, period);
+        }
         // Corners: where segments with length meet at a kink (zero-length ones have no direction).
         let live: Vec<usize> = (0..n).filter(|&i| lens[i] > EPS).collect();
         let mut corners: Vec<usize> = live.windows(2).filter(|w| kink(&segs[w[0]], &segs[w[1]])).map(|w| w[1]).collect();
@@ -171,7 +200,8 @@ impl Piece {
     }
 }
 
-fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
+/// Dash one subpath; `false` when `budget` (pattern entries left to walk, shared by all subpaths) runs out.
+fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase, keep: &dyn Fn(&PathSeg) -> bool, budget: &mut usize) -> bool {
     let first_dot = out.dots.len();
     let total: f64 = plan.lens.iter().sum();
     // Fraction of the subpath's length at `x` along the plan.
@@ -184,7 +214,7 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
     };
     let mut dashes: Vec<Piece> = vec![];
     let mut cur = Piece::default();
-    let (mut cuts, mut acc, mut starts_on) = (0, 0.0, false);
+    let (mut cuts, mut acc, mut starts_on, mut left_out) = (0, 0.0, false, false);
     for (i, (seg, &len)) in plan.segs.iter().zip(&plan.lens).enumerate() {
         let k = plan.scale[i];
         if plan.restart[i] {
@@ -195,21 +225,30 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
             }
             ph = Phase { ix: 0, rem: pat[0] * k / 2.0, on: true };
         }
+        // A segment left out ends the dash running onto it; the pattern still advances along it.
+        let kept = keep(seg);
+        if !kept {
+            left_out = true;
+            if !cur.segs.is_empty() {
+                cur.end = acc;
+                dashes.push(std::mem::take(&mut cur));
+            }
+        }
         if i == 0 {
-            starts_on = ph.on && ph.rem > 0.0;
+            starts_on = kept && ph.on && ph.rem > 0.0;
         }
         let mut s = 0.0;
         loop {
             let left = len - s;
             if ph.rem > left + EPS {
-                if ph.on && left > EPS {
+                if kept && ph.on && left > EPS {
                     cur.push(sub(seg, len, s, len), acc + s);
                 }
                 ph.rem -= left;
                 break;
             }
             let end = (s + ph.rem).min(len);
-            if ph.on {
+            if kept && ph.on {
                 if pat[ph.ix] > 0.0 {
                     if end > s {
                         cur.push(sub(seg, len, s, end), acc + s);
@@ -223,6 +262,8 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
                     push_dot(out, first_dot, Dot { at: seg.eval(t), dir: tangent(seg, t), t: frac(acc + end) });
                 }
             }
+            let Some(rest) = budget.checked_sub(1) else { return false };
+            *budget = rest;
             cuts += 1;
             s = end;
             ph.ix = (ph.ix + 1) % pat.len();
@@ -236,6 +277,7 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
         && plan.restart[0]
         && pat[0] <= 0.0
         && let Some(seg) = plan.segs.last()
+        && keep(seg)
     {
         push_dot(out, first_dot, Dot { at: seg.end(), dir: tangent(seg, 1.0), t: 1.0 });
     }
@@ -245,13 +287,13 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
         dashes.push(cur);
     }
     if plan.closed {
-        if cuts == 0 && ends_on {
+        if cuts == 0 && ends_on && !left_out {
             // One dash all the way round: keep it closed so the start gets a join, not caps.
             let d = dashes.pop().unwrap_or_default();
             write(&mut out.path, &d.segs);
             out.path.close_path();
             out.spans.push((frac(0.0), frac(0.0) + 1.0));
-            return;
+            return true;
         }
         if starts_on && ends_on && dashes.len() > 1 {
             // The dash running through the start point is one dash.
@@ -269,6 +311,7 @@ fn dash_subpath(out: &mut Dashed, plan: &Plan, pat: &[f64], mut ph: Phase) {
         let t0 = frac(d.start);
         out.spans.push((t0, if total > 0.0 { t0 + (d.end - d.start) / total } else { t0 }));
     }
+    true
 }
 
 /// Add `dot` unless the subpath's last dot (from index `first`) is already there: a run ending on

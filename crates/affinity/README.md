@@ -1,5 +1,7 @@
 # vectorcraft-affinity
 
+The reader is [`craft-affinity`](https://github.com/storytold/craft-libs/tree/main/crates/affinity) in craft-libs; this crate re-exports it under its old name for the corpus tests and fuzz targets. The engine maps its document onto VectorCraft art (`crates/engine/src/cmd/fileio/affinity`), as described below.
+
 An independent, bounded Rust reader for native Affinity documents: `.af` from Affinity 3 and
 `.afdesign`, `.afphoto` and `.afpub` from Affinity 1 and 2 (container versions 8 to 12). It reads
 the archive, the tagged object stream in `doc.dat` and the part of the document model listed below,
@@ -17,12 +19,13 @@ Affinity files.
 | Curves (`PCrv`): cubic subpaths, closed flags, live corners (`CnrD`) | paths (multi-subpath curves fill even-odd) |
 | Rectangles with corner radii (relative or absolute, locked or per corner) and round or straight corners, ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids | paths |
 | Compound shapes (`Comp`, add and subtract) | one even-odd path |
-| A shape or curve with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
+| A shape, curve or text with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
 | Vector masks (`AdCh` curves and shapes) | clip group |
 | Pixel masks (`MRst`, attached or as a layer in a group) | opacity mask |
 | Solid fills: RGBA, HSLA, CMYK, grey, Lab (D50) | fill appearance (alpha as fill opacity) |
 | Linear, elliptical and radial gradients with Affinity's midpoint bias | gradients (the bias as the midpoint where the blend is half way) |
 | Strokes: weight, scale with object, dash pattern and phase, alignment, miter limit, behind the fill; a stroke whose style is None (every shape stores one, black and 1 px) is left out | stroke appearance |
+| A stroke's pressure curve (`LDeP`: position along the path against width) | the stroke's width profile, the curve sampled at 2 to 8 points per segment (256 segments at most), widths up to the full weight |
 | Fill layers (`FRst`) | filled rectangles |
 | Artistic and frame text: Unicode scalar-indexed runs, stored fallback font, family/weight/style, boolean OpenType features, all caps, underline, strikethrough, size, tracking, horizontal scale, fixed leading, colour, outlined characters, first baseline; each paragraph's alignment, indents, space before and after, fixed and automatic leading; frame text sized by its text scale (`FTxS`), not its frame's transform | point type and area type, one paragraph style per paragraph; artistic text whose paragraphs align differently keeps them aligned within its longest line (by indents), as Affinity draws it; a frame's first line hangs from its capitals' tops, and a frame whose last lines' descenders hang out of it is made just tall enough to show them; line breaks inside a paragraph become paragraphs without spacing between them; table cells place their text as Affinity does (centred from the capitals' tops to the last baseline, reaching out of a cell too short for it) |
 | Tables (`TxtT`): grid, cell text, merged cells, cell insets and vertical alignment, the line on every cell edge | a group of area type per cell and a stroked line per edge (VectorCraft has no tables) |
@@ -33,8 +36,8 @@ Affinity files.
 | Opacity, visibility, lock, names, the blend modes VectorCraft has | the same |
 
 Everything else is reported in the import warnings, one line per kind with a count, never
-dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush and pressure strokes,
-transparency gradients, fill opacity, bitmap fills, master pages based on other master pages, conical gradients (as radial),
+dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush strokes, pressure curves that can't be read or that go past the million points one document may hold,
+transparency gradients, fill opacity, bitmap fills, master pages based on other master pages,
 special shapes (cloud, heart, cog, callouts, arrows…, imported as their bounding ellipse), corner
 types other than round or straight, stars with rounded points, several fills or strokes on one object (the
 active one is used), skewed or flipped text, characters of different transparency in one text, text fields such as page numbers, text threading, frames with

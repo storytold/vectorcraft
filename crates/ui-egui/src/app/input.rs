@@ -1,4 +1,4 @@
-use super::{Arc, Ordering, VectorcraftApp, graphics, native_menu, shortcuts, take_frame_once};
+use super::{Arc, Ordering, VectorcraftApp, graphics, native_menu, shortcuts, take_frame_once, tools_float};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{fileio, place};
 
@@ -15,6 +15,8 @@ impl VectorcraftApp {
         self.write_formats_before_text_input(ctx);
         native_menu::run(self, ctx);
         if self.fonts_ready {
+            tools_float::cancel_move_on_escape(self, ctx);
+            crate::custom_toolbars::cancel_move_on_escape(self, ctx);
             shortcuts::handle(self, ctx);
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in
@@ -122,6 +124,9 @@ impl VectorcraftApp {
         self.synthetic_modifiers = false;
         self.synthetic_injected = false;
         self.synthetic_frame = false;
+        // The `ui.pointer` requests made after this input, waiting or still on the channel, would
+        // run without it: `drain_control` answers the ones made before now with an error.
+        self.synthetic_dropped_before = crate::control::ControlRequest::next_seq();
     }
 
     /// Release the pointer buttons egui still holds down when the system reports that no mouse
@@ -174,6 +179,12 @@ impl VectorcraftApp {
     /// injected until the batch was actually applied, so a burst of hidden ticks cannot queue
     /// several steps of a drag or replay them together later.
     pub fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        self.fill_raw_input(ctx, raw);
+        crate::font_menu::sync_wheel_target(self, ctx, raw.viewport_id);
+        crate::font_menu::take_raw_wheel(ctx, raw);
+    }
+
+    fn fill_raw_input(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         // Both hosts call this hook once per host iteration, before deciding whether a UI pass
         // follows; it is the iteration boundary, not a UI-phase marker.
         self.begin_host_iteration();

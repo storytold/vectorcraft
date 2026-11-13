@@ -232,12 +232,30 @@ fn a_document_reopens_at_its_saved_view() {
     // Moving around afterwards isn't an edit.
     app.view_mut().unwrap().zoom = 0.5;
     assert!(!app.session.active().unwrap().is_dirty());
+    // Reopened: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
     io::open_path(&mut app, &path).unwrap();
     let v = *app.view().unwrap();
     assert_eq!((v.zoom, v.center, v.rotation, v.fitted), (3.0, Point::new(70.0, 40.0), 30.0, true));
     // A document without a saved view is fitted on first display.
     app.run("file.new", json!({})).unwrap();
     assert!(!app.view().unwrap().fitted);
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn a_saved_ai_file_reopens_on_the_artboard_active_when_saved() {
+    let d = dir("ai-artboard");
+    let path = d.join("a.ai").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    app.sync_views();
+    app.view_mut().unwrap().artboard = 1;
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.close", json!({})).unwrap();
+    let r = io::open_path(&mut app, &path).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(app.view().map(|v| v.artboard), Some(1), "{r}");
     let _ = std::fs::remove_dir_all(d);
 }
 
@@ -265,6 +283,33 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     assert_eq!(app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap()["pending"], dialogs::confirm::KIND);
     app.ui.dialog = None;
     assert_eq!(std::fs::read(&path).unwrap(), saved);
+    // So does a PDF written by Save PDF's OK, and the question stays open when Save PDF closes.
+    assert_eq!(app.run("file.export.pdf", json!({"path": path})).unwrap()["pending"], dialogs::confirm::KIND);
+    app.ui.dialog = None;
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"path": path, "useArtboards": artboards})).unwrap();
+        dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "useArtboards {artboards}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
+    // Also when File › Save as PDF… leaves the file to the save panel and the panel picks the PDF
+    // the document was opened from.
+    let pdf = d.join("a.pdf").to_string_lossy().to_string();
+    std::fs::write(&pdf, b"%PDF-1.7 as opened").unwrap();
+    app.session.doc_mut().unwrap().imported_from = Some(pdf.clone());
+    let picked = pdf.clone();
+    app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"useArtboards": artboards})).unwrap();
+        dialogs::confirm(&mut app).unwrap();
+        let asked = app.ui.dialog.as_ref().filter(|d| d.kind == dialogs::confirm::KIND);
+        assert!(asked.is_some_and(|d| d.str("detail").contains("“hidden type”")), "picked, useArtboards {artboards}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(std::fs::read(&pdf).unwrap(), b"%PDF-1.7 as opened");
+    app.services.pick_save = None;
+    app.session.doc_mut().unwrap().imported_from = Some(path.clone());
     // Another name doesn't ask.
     let copy = d.join("b.svg").to_string_lossy().to_string();
     assert!(app.run("file.exportAs", json!({"path": copy, "format": "svg"})).unwrap().get("pending").is_none());
@@ -276,6 +321,101 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     crate::background::wait_all(&mut app);
     assert!(app.ui.dialog.is_none());
     assert_ne!(std::fs::read(&path).unwrap(), saved);
+    assert!(!app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_path() {
+    let d = dir("lossy-beside");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    let siblings = artboard_files(&d);
+    assert_eq!(siblings.len(), 2, "{siblings:?}");
+    let sibling = siblings[0].clone();
+    let saved = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    // The document's last save wrote the files beside the path, so the save does not ask whether
+    // to replace them: it is refused.
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert_eq!(std::fs::read(&sibling).unwrap(), saved);
+    assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// The app checks for files that are there, as the desktop app does.
+fn checks_files_there(app: &mut VectorcraftApp) {
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists()));
+}
+
+/// The files in `d` that an EPS save of `Art.eps` with Use Artboards wrote beside it, sorted.
+fn artboard_files(d: &std::path::Path) -> Vec<String> {
+    let mut files: Vec<String> = std::fs::read_dir(d)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("Art_")))
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is_there() {
+    let d = dir("eps-artboards-there");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let save_as = |app: &mut VectorcraftApp| {
+        let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+        crate::background::wait_all(app);
+    };
+    // Another document's save leaves files with the names of the artboard files.
+    let mut other = app();
+    other.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    save_as(&mut other);
+    let there = artboard_files(&d);
+    assert_eq!(there.len(), 2, "{there:?}");
+    std::fs::remove_file(&path).unwrap();
+    for f in &there {
+        std::fs::write(f, b"other").unwrap();
+    }
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    save_as(&mut app);
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, dialogs::confirm::REPLACE_FILES);
+    assert_eq!(dialog.fields["files"], json!(there));
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written while it asks");
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
+    // Cancel writes nothing.
+    dialogs::cancel(&mut app);
+    assert!(!std::path::Path::new(&path).exists());
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
+    // OK writes every file.
+    save_as(&mut app);
+    dialogs::confirm(&mut app).unwrap();
+    crate::background::wait_all(&mut app);
+    assert!(std::path::Path::new(&path).exists());
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap().starts_with(b"%!PS")));
+    // The document's next save writes them again without asking.
+    rect(&mut app);
+    let _ = app.run("file.save", json!({}));
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none());
     assert!(!app.session.active().unwrap().is_dirty());
     let _ = std::fs::remove_dir_all(d);
 }

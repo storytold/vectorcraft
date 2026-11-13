@@ -3,7 +3,7 @@ name = "vectorcraft-cad"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12 to 2018)"
+description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12 to 2018) and an HP-GL/2 plot file reader and writer"
 
 [lints]
 workspace = true
@@ -21,5 +21,6 @@ image = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-# The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine).
-vectorcraft-text = { workspace = true, features = ["bundled-fonts"] }
+# The tests lay type out in the bundled fonts (the workspace leaves turning them on to the engine)
+# and in fonts built in code (`vectorcraft_text::test_fonts`).
+vectorcraft-text = { workspace = true, features = ["bundled-fonts", "test-fonts"] }

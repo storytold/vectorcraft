@@ -21,6 +21,7 @@ pub(crate) fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, 
         luts: (lut.as_ref().map_or(0, |l| l.1), 0),
         plates: 0,
         mip: 0,
+        tile: None,
     };
     (key, lut.map(|l| l.0), id.size)
 }
@@ -38,8 +39,17 @@ pub(crate) fn blob_pixmap(blob: &vectorcraft_doc::ImageBlob, touch: bool) -> Opt
                 paint::add_decode_failures(1);
                 return None;
             }
-            // Decoded outside the lock: other renderers carry on meanwhile.
-            let pm = match lut.and_then(|lut| ink::cmyk_pixmap(blob, &lut)) {
+            // Decoded outside the lock: other renderers carry on meanwhile. The inks and the pixels
+            // shown from them are admitted together, as other images are, before either is made:
+            // without room the image is read as other images are (which reduces it).
+            let room = || {
+                image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+                    .with_guessed_format()
+                    .ok()
+                    .and_then(|r| r.into_dimensions().ok())
+                    .is_some_and(|(w, h)| paint::within_allowance(w, h.saturating_mul(2)))
+            };
+            let pm = match lut.filter(|_| room()).and_then(|lut| ink::cmyk_pixmap(blob, &lut)) {
                 Some(pm) => pm,
                 None => match paint::decode_pixmap_or_why(&blob.bytes) {
                     Ok(pm) => pm,
@@ -68,18 +78,18 @@ pub(crate) fn mip_level(m: Affine, w: u16, h: u16) -> u8 {
 }
 
 /// Image pixels `pm` (stored as `key`) to draw through `m` (unit square → device pixels), shrunk
-/// by halves while still at least as fine as the device pixels ([`images::mip_level`]); the
-/// pixels drawn are marked used in the store.
-pub(crate) fn image_mip(key: &images::ImageKey, pm: Arc<Pixmap>, m: Affine) -> Arc<Pixmap> {
+/// by halves while still at least as fine as the device pixels ([`images::mip_level`]), and their
+/// key; the pixels drawn are marked used in the store.
+pub(crate) fn image_mip(key: images::ImageKey, pm: Arc<Pixmap>, m: Affine) -> (images::ImageKey, Arc<Pixmap>) {
     let level = mip_level(m, pm.width(), pm.height());
     let mut s = images::store();
     if level == 0 {
-        let _ = s.get(key); // Marks the full pixels used (they were only looked at).
-        return pm;
+        let _ = s.get(&key); // Marks the full pixels used (they were only looked at).
+        return (key, pm);
     }
     let at = |l: u8| images::ImageKey { mip: l, ..key.clone() };
     if let Some(p) = s.get(&at(level)) {
-        return p;
+        return (at(level), p);
     }
     // From the finest level kept below it.
     let (mut l, mut cur) = (1..level).rev().find_map(|l| s.peek(&at(l)).map(|p| (l, p))).unwrap_or((0, pm));
@@ -89,7 +99,7 @@ pub(crate) fn image_mip(key: &images::ImageKey, pm: Arc<Pixmap>, m: Affine) -> A
         let half = Arc::new(images::half(&cur));
         cur = images::store().insert(at(l), half);
     }
-    cur
+    (at(level), cur)
 }
 
 /// Can image node `n` (`im`) clipped by `region` be painted straight into the region: visible,

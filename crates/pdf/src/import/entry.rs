@@ -171,14 +171,22 @@ pub const INVISIBLE_TEXT_NOTE: &str = "invisible text (such as a scanned page's 
 /// Warning: glyphs that differ from the installed font of their name were kept as outlines.
 pub const UNMATCHED_GLYPHS_NOTE: &str = "text whose glyphs differ from the installed font of the same name was kept as outlines";
 
+/// Warning: type in a script whose letters reorder and join (Indic scripts) that, set again from
+/// its characters, wouldn't draw the glyphs where the file drew them was kept as outlines (#5235).
+pub const RESHAPED_TEXT_NOTE: &str =
+    "text that would not look as it does in the file if set as type (a script whose letters join) was kept as outlines";
+
 /// The end of the warning that glyphs whose characters the file doesn't name were kept as
 /// outlines, after "text in" and the font's name.
 pub const UNNAMED_CHARACTERS_NOTE: &str = "whose characters the file doesn't name (U+FFFD) was kept as outlines";
 
 /// Is `note` one of the warnings that glyphs were kept as outlines ([`OUTLINED_TEXT_NOTE`],
-/// [`UNMATCHED_GLYPHS_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
+/// [`UNMATCHED_GLYPHS_NOTE`], [`RESHAPED_TEXT_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
 pub fn is_outlines_note(note: &str) -> bool {
-    note == OUTLINED_TEXT_NOTE || note == UNMATCHED_GLYPHS_NOTE || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
+    note == OUTLINED_TEXT_NOTE
+        || note == UNMATCHED_GLYPHS_NOTE
+        || note == RESHAPED_TEXT_NOTE
+        || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
 }
 
 /// Is `n` glyphs kept as outlines (a path the import names `<Text Outlines>`)?
@@ -200,6 +208,12 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     vectorcraft_doc::depth::with_deep_stack(|| read(bytes, opts))
 }
 
+/// [`import_with_report`] of `opened`, the PDF `bytes` already read and checked
+/// ([`crate::open_pdf`] with `opts`' password), so the file isn't read again.
+pub fn import_opened(bytes: &[u8], opened: &crate::Opened, opts: &ImportOptions) -> Result<ImportReport, PdfError> {
+    vectorcraft_doc::depth::with_deep_stack(|| read_opened(bytes, opts, &crate::pages::open_options(), &opened.pdf))
+}
+
 /// [`import_with_report`] on the thread that asks.
 pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
     read_with_reader_options(bytes, opts, &crate::pages::open_options())
@@ -212,10 +226,36 @@ pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, rea
 
 fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
+    read_opened(bytes, opts, reader, &original)
+}
+
+/// How many times each buffer's pages have been imported, by its address (tests).
+#[cfg(any(test, feature = "read-count"))]
+static IMPORTS: std::sync::Mutex<std::collections::BTreeMap<usize, usize>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// How many times the pages of `bytes`, at its address, have been imported on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn imports_of(bytes: &[u8]) -> usize {
+    IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
+}
+
+/// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
+fn read_opened(
+    bytes: &[u8],
+    opts: &ImportOptions,
+    reader: &craft_pdf::OpenOptions,
+    original: &craft_pdf::syntax::Pdf,
+) -> Result<ImportReport, PdfError> {
+    #[cfg(any(test, feature = "read-count"))]
+    if let Ok(mut imports) = IMPORTS.lock() {
+        let n = imports.entry(bytes.as_ptr() as usize).or_default();
+        *n = n.saturating_add(1);
+    }
     let picked = crate::pages::picked(opts, original.pages().len())?;
-    let mut ocgs = Ocgs::read(&original);
+    let mut ocgs = Ocgs::read(original);
     let route = opts.layers && !ocgs.list.is_empty();
-    let (pdf, all_on, notes) = reopen_with_groups_on(bytes, opts, reader, original, &picked, &mut ocgs, route)?;
+    let (turned_on, all_on, notes) = reopen_with_groups_on(bytes, opts, reader, original, &picked, &mut ocgs, route)?;
+    let pdf = turned_on.as_ref().unwrap_or(original);
     let pages = pdf.pages();
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
@@ -227,7 +267,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as, route);
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route);
     // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
     // show or print on its page's layer.
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
@@ -343,6 +383,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
             let name = if shown { format!("Page {}", number + 1) } else { format!("Page {} (unsorted)", number + 1) };
@@ -440,7 +481,7 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     }
     warnings.extend(depth_notes);
     let user_unit = picked.first().and_then(|&n| pages.get(n)).map_or(1.0, |page| f64::from(page.user_unit()));
-    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf), only_text, user_unit })
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(pdf), only_text, user_unit })
 }
 
 /// The page a PDF-compatible `.ai` paints under its layers is the editor's page, not art: an opaque
@@ -487,17 +528,17 @@ fn is_only_text(nodes: &[Arc<Node>]) -> bool {
 }
 
 /// Opens the file again with every layer group turned on when the pages hide art in groups that are
-/// off, and tells whether it did. Gives the file to read, whether it is the turned-on copy, and the
-/// notes for the import's report.
+/// off, and tells whether it did. Gives the turned-on copy (`None`: read `original`), whether there
+/// is one, and the notes for the import's report.
 fn reopen_with_groups_on(
     bytes: &[u8],
     opts: &ImportOptions,
     reader: &craft_pdf::OpenOptions,
-    original: craft_pdf::syntax::Pdf,
+    original: &craft_pdf::syntax::Pdf,
     picked: &[usize],
     ocgs: &mut Ocgs,
     route: bool,
-) -> Result<(craft_pdf::syntax::Pdf, bool, Vec<String>), PdfError> {
+) -> Result<(Option<craft_pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
     // Content that is off imports as hidden layers: an update of the file turns every group on
     // (unless a form is hidden by its own group: its art couldn't be told apart).
     let hide = route && ocgs.skips_any();
@@ -511,7 +552,7 @@ fn reopen_with_groups_on(
         }
     }
     let turned_on = (hide && !hidden_form)
-        .then(|| all_on(bytes, &original))
+        .then(|| all_on(bytes, original))
         .flatten()
         .and_then(|b| crate::pages::open_with_options(&b, opts.password.as_deref(), reader).ok())
         .filter(|p| Ocgs::read(p).list.is_empty());
@@ -520,7 +561,7 @@ fn reopen_with_groups_on(
         notes.push("the art of hidden layers couldn't be read and was left out".to_string());
     }
     let all_on = turned_on.is_some();
-    Ok((turned_on.unwrap_or(original), all_on, notes))
+    Ok((turned_on, all_on, notes))
 }
 
 /// The interpreter's settings, its warnings noted once each in `sink` (truncated content in `incomplete`).

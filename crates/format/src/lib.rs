@@ -29,6 +29,13 @@
 //! `data`. Every version loads, and [`save_with`] writes any of them for older apps (under the
 //! format name `drawcraft`, which every version reads). Readers reject files whose `version` is
 //! newer than they support.
+//!
+//! The document has a version of its own (`document.version`, [`vectorcraft_doc::FORMAT_VERSION`]),
+//! which readers do not check. A version 2 document's Twist effects turn clockwise for a positive
+//! angle. A version 1 document's Twist angles are negated when it opens, unless the file is of
+//! [`VERSION`] and its `generator` is VectorCraft 0.21.0 or later, which turned them clockwise
+//! already; [`save_with`] writes a version 1 document with them negated back for an older file
+//! version ([`vectorcraft_doc::twist`]).
 #![forbid(unsafe_code)]
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -37,33 +44,25 @@ mod legacy;
 mod stream;
 mod unpack;
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
-use std::io::{Read as _, Write};
+use std::fmt;
+use std::io::Write;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
+use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::{Deserializer, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
+pub use craft_vectorcraft_format::{
+    BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
+    sniff,
+};
 use stream::{Gz, Indent, KeyScan, Out};
 
-/// v4: large data after the JSON (v1 to v3 files still load).
-pub const VERSION: u32 = 4;
-/// Data this large or larger goes after the JSON (v4), not into it as base64.
-pub const INLINE_MAX: usize = 8 << 10;
-/// What separates the JSON from the data after it (v4).
-pub const BLOB_MAGIC: &[u8] = b"\n\0VCBLOBS\0";
-/// The oldest version [`save_with`] writes.
-pub const MIN_VERSION: u32 = 1;
-/// The first version whose readers open compressed files.
-pub const COMPRESSED_SINCE: u32 = 3;
-/// Most pixels on the longer side of an embedded preview.
-pub const PREVIEW_MAX: u32 = 256;
-pub const EXTENSION: &str = "vectorcraft";
-/// Extension and format name from before the project was renamed (DrawCraft): still opened.
-pub const LEGACY_EXTENSION: &str = "drawcraft";
 /// Most bytes the JSON of a compressed file may unpack to (a guard against decompression bombs,
 /// as are [`MAX_BLOB`] and [`MAX_BLOBS`]). A compressed save refuses a document past any of them,
 /// so every file VectorCraft writes reads back. On wasm32 the cap is a quarter of the native
@@ -72,7 +71,7 @@ pub const LEGACY_EXTENSION: &str = "drawcraft";
 pub const MAX_JSON: u64 = if cfg!(target_arch = "wasm32") { 256 << 20 } else { 1 << 30 };
 /// Most bytes one entry of the data after the JSON (an image, a placed document, the PDF, a
 /// profile) may have in a compressed file.
-pub const MAX_BLOB: u64 = 1 << 30;
+pub const MAX_BLOB: u64 = craft_vectorcraft_format::MAX_ENTRY;
 /// Most bytes the entries after the JSON may have together in a compressed file: 1 GiB in the web
 /// build, whose 4 GiB address space also holds the JSON, the document and the app, so 4 GiB of
 /// entries failed to allocate rather than being refused.
@@ -111,50 +110,14 @@ pub enum FormatError {
     Encode(String),
 }
 
-#[derive(Serialize, Deserialize)]
-struct Image {
-    mime: String,
-    /// The bytes as base64, unless they come after the JSON (`blob`).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    data: String,
-    /// Where the bytes are in the data after the JSON (v4): `[offset, length]`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    blob: Option<[u64; 2]>,
-    /// `data` is a linked image's preview ([`ImageBlob::proxy`]), not the file's bytes.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    proxy: bool,
-}
-
-impl Image {
-    /// Its bytes when they are in the JSON (base64 `data`); `None` when they come after it
-    /// ([`Image::blob`]) or don't decode.
-    fn inline(&self) -> Option<Vec<u8>> {
-        match self.blob {
-            Some(_) => None,
-            None => base64_decode(&self.data),
+impl From<craft_vectorcraft_format::Error> for FormatError {
+    fn from(e: craft_vectorcraft_format::Error) -> Self {
+        match e {
+            craft_vectorcraft_format::Error::Format(format) => FormatError::NotVectorcraft(format!("format is `{format}`")),
+            craft_vectorcraft_format::Error::TooNew(version) => FormatError::TooNew(version),
+            // The crate's other errors (`TooBig`: entries past the data after the JSON) keep their message.
+            e => FormatError::NotVectorcraft(e.to_string()),
         }
-    }
-}
-
-/// Entries written for one file: large bytes go to the data after the JSON when the version keeps
-/// them there (in the order they are added, each at the offset it is given).
-struct Blobs<'a> {
-    /// The bytes, and whether they are compressed already ([`is_packed`]).
-    tail: Vec<(&'a [u8], bool)>,
-    at: u64,
-    outside: bool,
-}
-
-impl<'a> Blobs<'a> {
-    fn image(&mut self, mime: &str, bytes: &'a [u8], proxy: bool) -> Image {
-        if self.outside && bytes.len() >= INLINE_MAX {
-            let len = bytes.len() as u64;
-            let at = self.at;
-            self.at += len;
-            self.tail.push((bytes, is_packed(mime)));
-            return Image { mime: mime.into(), data: String::new(), blob: Some([at, len]), proxy };
-        }
-        Image { mime: mime.into(), data: base64_encode(bytes), blob: None, proxy }
     }
 }
 
@@ -166,52 +129,6 @@ fn is_packed(mime: &str) -> bool {
 /// The MIME type of a preview's bytes (JPEG or PNG).
 fn preview_mime(bytes: &[u8]) -> &'static str {
     if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { vectorcraft_doc::links::PROXY_MIME }
-}
-
-/// The JSON of a native file without the data after it (version 4 keeps images there): a
-/// complete JSON value whose `images` give each image's MIME type and where its data was, without
-/// the data.
-pub fn json_part(file: &[u8]) -> &[u8] {
-    split_tail(file).0
-}
-
-/// The JSON of a file and the data after it (v4), split at [`BLOB_MAGIC`] after the first JSON
-/// value.
-fn split_tail(text: &[u8]) -> (&[u8], &[u8]) {
-    // JSON holds no raw NUL, so the marker (which has one) starts at the first NUL, if the file
-    // has one. The writer puts it right after the JSON's last byte; found there, it is where the
-    // first JSON value ends, without parsing the JSON twice. Anything else takes the parse.
-    let Some(nul) = text.iter().position(|&b| b == 0) else {
-        // No NUL, so no marker: the parse below would find none either.
-        return (text, &[]);
-    };
-    if let Some(at) = nul.checked_sub(1)
-        && text.get(at..).is_some_and(|r| r.starts_with(BLOB_MAGIC))
-        && at.checked_sub(1).and_then(|k| text.get(k)).is_some_and(|b| matches!(b, b'}' | b']' | b'"'))
-    {
-        return (text.get(..at).unwrap_or(text), text.get(at + BLOB_MAGIC.len()..).unwrap_or_default());
-    }
-    let mut values = serde_json::Deserializer::from_slice(text).into_iter::<serde::de::IgnoredAny>();
-    if values.next().is_some_and(|v| v.is_ok()) {
-        let end = values.byte_offset();
-        if let Some(rest) = text.get(end..)
-            && rest.starts_with(BLOB_MAGIC)
-        {
-            return (text.get(..end).unwrap_or(text), rest.get(BLOB_MAGIC.len()..).unwrap_or_default());
-        }
-    }
-    (text, &[])
-}
-
-#[derive(Deserialize)]
-struct File {
-    format: String,
-    version: u32,
-    document: Document,
-    #[serde(default)]
-    images: BTreeMap<String, Image>,
-    #[serde(default)]
-    profiles: BTreeMap<String, Image>,
 }
 
 /// How [`save_with`] writes a document.
@@ -231,16 +148,32 @@ pub struct SaveOptions {
     pub profiles: BTreeMap<String, Vec<u8>>,
     /// Create PDF-Compatible File: a PDF of the document to carry.
     pub pdf: Option<Vec<u8>>,
+    /// The application's PDF save preference, retained even when there are no artboards to draw.
+    /// `None` omits this metadata, preserving the lower-level writer's existing output.
+    pub pdf_compatible: Option<bool>,
+    /// Decimal places to round path anchors and handles to ([`Document::round_geometry`]), at
+    /// most [`MAX_PRECISION`] (a larger value rounds to that many); `None` writes them exactly.
+    pub precision: Option<u8>,
 }
+
+/// The most decimal places [`SaveOptions::precision`] rounds path geometry to.
+pub const MAX_PRECISION: u8 = 9;
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        Self { pretty: false, compress: false, version: VERSION, preview: None, include_linked: false, profiles: BTreeMap::new(), pdf: None }
+        Self {
+            pretty: false,
+            compress: false,
+            version: VERSION,
+            preview: None,
+            include_linked: false,
+            profiles: BTreeMap::new(),
+            pdf: None,
+            pdf_compatible: None,
+            precision: None,
+        }
     }
 }
-
-/// The MIME type of embedded ICC profiles.
-pub const ICC_MIME: &str = "application/vnd.iccprofile";
 
 impl SaveOptions {
     /// Can a file be written this way (a version [`save_with`] writes, compressed only for readers
@@ -301,10 +234,14 @@ struct Body {
 }
 
 /// `doc` as [`save_to`] writes it with `o`: without editing-mode working copies, with placed
-/// documents as their art for older versions, and its images taken out.
+/// documents as their art for older versions, path geometry rounded to `o.precision`, and its
+/// images taken out.
 fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     let version = o.version;
     let mut d = doc.without_edit_modes().into_owned();
+    // Ruler guides are saved in the document's `guides` list, as before they were nodes, so every
+    // version reads them.
+    d.guides_to_saved();
     // Older apps don't know placed documents: they get the art the objects show, with its
     // resources. Otherwise resources only exporting adds are never saved.
     if version < VERSION && d.has_placed() {
@@ -313,11 +250,22 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     } else {
         d.drop_placed_resources();
     }
+    // The art placed documents became for older versions is rounded too.
+    if let Some(decimals) = o.precision {
+        d.round_geometry(decimals.min(MAX_PRECISION));
+    }
     let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).
     let blobs = std::mem::take(&mut d.images);
     if version < 3 {
         d.store_legacy_color_profiles();
+    }
+    // Apps before this one's version take Color Halftone's Max Radius in points (#3260), and
+    // predate 0.21.0, turning Twist the other way. The radii first: their conversion runs only on
+    // a document of version 3 or later, and the Twist one then marks it version 1.
+    if version < VERSION {
+        d.halftone_radii_to_points();
+        d.store_legacy_twist_angles();
     }
     let v1 = if version == 1 {
         let mut v = serde_json::to_value(&d).map_err(encode_err)?;
@@ -369,7 +317,7 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     let pretty = o.pretty && !o.compress;
     let Body { d, v1, blobs, linked } = body(doc, o)?;
     let entries = Entries { blobs: &blobs, linked: &linked, include_linked: o.include_linked };
-    let mut out_blobs = Blobs { tail: vec![], at: 0, outside: o.version >= 4 };
+    let mut out_blobs = Tail::new(o.version);
     // Images are only referenced by image objects' `key` (wherever the objects are: layers,
     // symbols, patterns, masks, or foreign data). The data after the JSON has the images first,
     // then the profiles and the PDF, which the file lists before the document: with those, the
@@ -382,15 +330,17 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     }
     let profiles: BTreeMap<&str, Image> = o.profiles.iter().map(|(name, icc)| (name.as_str(), out_blobs.image(ICC_MIME, icc, false))).collect();
     let pdf = o.pdf.as_deref().map(|p| out_blobs.image("application/pdf", p, false));
-    let blob = |mime: &str, bytes: &[u8]| Image { mime: mime.into(), data: base64_encode(bytes), blob: None, proxy: false };
     let mut out = if o.compress { Out::Gz(Box::new(Gz::new(w).map_err(encode_err)?)) } else { Out::Plain(w) };
     let mut env = Envelope { pretty, first: true };
     // Older apps only know the name from before the rename.
     env.field(&mut out, "format", &if o.version < 3 { LEGACY_EXTENSION } else { EXTENSION })?;
     env.field(&mut out, "version", &o.version)?;
     env.field(&mut out, "generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
+    if let Some(compatible) = o.pdf_compatible {
+        env.field(&mut out, "pdfCompatible", &compatible)?;
+    }
     if let Some(png) = &o.preview {
-        env.field(&mut out, "preview", &blob("image/png", png))?;
+        env.field(&mut out, "preview", &Image::inline("image/png", png))?;
     }
     if !profiles.is_empty() {
         env.field(&mut out, "profiles", &profiles)?;
@@ -412,22 +362,22 @@ pub fn save_to(doc: &Document, o: &SaveOptions, w: impl Write) -> Result<(), For
     env.finish(&mut out)?;
     if o.compress {
         let json = out.written().unwrap_or(0);
-        let tail: Vec<u64> = out_blobs.tail.iter().map(|(b, _)| b.len() as u64).collect();
+        let tail: Vec<u64> = out_blobs.parts().iter().map(|p| p.bytes.len() as u64).collect();
         if json > MAX_JSON {
             return Err(FormatError::TooBigToCompress(format!("{} MB of document, at most {} MB", json >> 20, MAX_JSON >> 20)));
         }
         if let Some(big) = tail.iter().find(|&&n| n > MAX_BLOB) {
             return Err(FormatError::TooBigToCompress(format!("an image of {} MB, at most {} MB", big >> 20, MAX_BLOB >> 20)));
         }
-        if out_blobs.at > MAX_BLOBS {
-            return Err(FormatError::TooBigToCompress(format!("{} MB of images, at most {} MB", out_blobs.at >> 20, MAX_BLOBS >> 20)));
+        if out_blobs.len() > MAX_BLOBS {
+            return Err(FormatError::TooBigToCompress(format!("{} MB of images, at most {} MB", out_blobs.len() >> 20, MAX_BLOBS >> 20)));
         }
     }
-    if !out_blobs.tail.is_empty() {
+    if !out_blobs.is_empty() {
         out.write_all(BLOB_MAGIC).map_err(encode_err)?;
-        for &(bytes, packed) in &out_blobs.tail {
-            out.packed(packed).map_err(encode_err)?;
-            out.write_all(bytes).map_err(encode_err)?;
+        for part in out_blobs.parts() {
+            out.packed(is_packed(&part.mime)).map_err(encode_err)?;
+            out.write_all(part.bytes).map_err(encode_err)?;
         }
     }
     out.finish().map_err(encode_err)
@@ -443,7 +393,7 @@ struct Entries<'a> {
 
 impl<'a> Entries<'a> {
     /// The entries of the images named in `used`, in the order of their names.
-    fn images(&self, used: &HashSet<String>, out: &mut Blobs<'a>) -> BTreeMap<&'a str, Image> {
+    fn images(&self, used: &HashSet<String>, out: &mut Tail<'a>) -> BTreeMap<&'a str, Image> {
         self.blobs
             .iter()
             .filter(|(k, _)| used.contains(k.as_str()))
@@ -508,11 +458,6 @@ impl Envelope {
     }
 }
 
-/// Is this gzip data (a compressed file)?
-pub fn is_compressed(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0x1f, 0x8b])
-}
-
 pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     load_info(bytes).map(|(doc, _)| doc)
 }
@@ -537,6 +482,9 @@ pub struct FileInfo {
     pub version: u32,
     /// Written under the project's former name (`"format": "drawcraft"`).
     pub legacy: bool,
+    /// The saved `pdfCompatible` preference, or the presence of a non-null `pdf` member in
+    /// files without a boolean preference. The PDF payload is not read or validated.
+    pub pdf_compatible: bool,
 }
 
 impl FileInfo {
@@ -556,29 +504,63 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
 }
 
+/// [`load_file`] with a compressed file refused when its JSON, or the data after it (images,
+/// profiles, the preview), unpacks to more than `max` bytes (at most [`MAX_JSON`] and
+/// [`MAX_BLOBS`]), or, when it lacks the marker after its JSON, when all of it does.
+pub fn load_file_capped(bytes: &[u8], max: u64) -> Result<NativeFile, FormatError> {
+    let file = unpack::Unpacked::within_capped(bytes, max.min(MAX_JSON), max.min(MAX_UNPACKED), max.min(MAX_BLOBS))?;
+    load_unpacked(file, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+}
+
 /// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
 /// before objects' types, so a test can exercise the budgets without documents that large
 /// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
 fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
-    let file = unpack::Unpacked::new(bytes)?;
+    load_unpacked(unpack::Unpacked::new(bytes)?, max_nodes, max_values)
+}
+
+/// The document of `file`, within the budgets of [`load_file_within`].
+fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
     // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
-    // fields read before an object's type at `MAX_BUFFERED_VALUES` values.
-    let read = || {
-        vectorcraft_doc::node::with_node_budget(max_nodes, || {
-            vectorcraft_doc::node::with_buffered_value_budget(max_values, || serde_json::from_slice::<File>(file.json()))
+    // fields read before an object's type at `MAX_BUFFERED_VALUES` values. The preview and the
+    // PDF are skipped without being kept.
+    fn within_budgets<T>(max_nodes: usize, max_values: usize, read: impl FnOnce() -> T) -> T {
+        #[cfg(test)]
+        DOCUMENT_READS.with(|n| n.set(n.get() + 1));
+        vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, || {
+            vectorcraft_doc::node::with_node_budget(max_nodes, || vectorcraft_doc::node::with_buffered_value_budget(max_values, read))
         })
+    }
+    let read_error = |e| match e {
+        ReadError::Json(e) => {
+            let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
+            FormatError::NotVectorcraft(why)
+        }
+        ReadError::Envelope(e) => e.into(),
+        e => FormatError::NotVectorcraft(e.to_string()),
     };
-    let f: File = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| {
-        let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
-        FormatError::NotVectorcraft(why)
-    })?;
-    if f.format != EXTENSION && f.format != LEGACY_EXTENSION {
-        return Err(FormatError::NotVectorcraft(format!("format is `{}`", f.format)));
-    }
-    if f.version > VERSION {
-        return Err(FormatError::TooNew(f.version));
-    }
+    // The document and the saved PDF preference come from one pass over the JSON.
+    let (mut f, pdf_compatible) = match within_budgets(max_nodes, max_values, || Contents::<Document>::read_with_pdf_preference(file.json())) {
+        Ok(read) => read,
+        // That pass refuses a `pdfCompatible` that is not a boolean, and any other data error.
+        // When it stopped at the preference, the file is read again without it, and only then is
+        // its JSON scanned for the preference a second time, so such a file opens as before. Any
+        // other error, such as a document past a budget, is returned without a second read.
+        Err(ReadError::Json(e)) if e.is_data() && refused_preference_at(file.json(), &e) => {
+            let f = within_budgets(max_nodes, max_values, || Contents::<Document>::read(file.json())).map_err(read_error)?;
+            let pdf_compatible = pdf_member(file.json()).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
+            (f, pdf_compatible)
+        }
+        Err(e) => return Err(read_error(e)),
+    };
+    let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION, pdf_compatible };
+    // A version 1 document saved before VectorCraft 0.21.0, or for an app before it (an older file
+    // version): its Twist angles turned the other way. The app that wrote it is read from the JSON
+    // before the data after it is taken; the walk's depth is bounded by the JSON reader's nesting
+    // limit.
+    let current_file = f.version >= VERSION;
+    f.document.migrate_twist_angles(|| current_file && vectorcraft_doc::twist::written_clockwise(generator(file.json()).as_deref()));
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
     let tail = file.entries(&entries)?;
@@ -589,7 +571,7 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     let mut tail = tail.into_iter();
     let mut bytes_of = |img: &Image| match img.blob {
         Some(_) => tail.next().flatten(),
-        None => img.inline().map(Arc::new),
+        None => base64_decode(&img.data).map(Arc::new),
     };
     let mut doc = f.document;
     for (k, img) in f.images {
@@ -601,12 +583,18 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         }
         doc.images.insert(k, blob);
     }
-    // Saved mid-edit by an older version: drop the opacity-mask editing layer.
+    // Saved mid-edit by an older version: drop the opacity-mask editing layer. Those versions
+    // removed it only as a top-level layer, so an id naming anything else is ignored.
+    if doc.mask_edit.is_some_and(|me| !doc.layers.iter().any(|l| l.id == me.layer)) {
+        doc.mask_edit = None;
+    }
     doc.drop_edit_modes();
     // Saved before per-fill/stroke overprint: the Overprint Black list becomes overprint flags.
     doc.migrate_overprint_black();
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
+    // A document before version 3: Color Halftone's Max Radius in points becomes pixels (#3260).
+    doc.migrate_halftone_radii();
     doc.fix_next_id();
     // Untrusted: the bleed and type proportions, within the ranges Document Setup takes.
     doc.setup.keep_in_range();
@@ -618,6 +606,10 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     doc.raster_effects.add_around = doc.raster_effects.add_around.clamp(0.0, vectorcraft_doc::rastersettings::MAX_ADD_AROUND);
     let mut depth_notes = vec![];
     doc.limit_depth_noting(&mut depth_notes);
+    // Untrusted: ruler guide nodes only directly in layers, above their art (after the depth limit:
+    // the walk recurses; before the canvas check, which takes a layer's first member as its
+    // clipping path).
+    doc.tidy_ruler_guides();
     // Untrusted: nothing beyond the canvas, where no edit may leave anything (after the depth
     // limit: the walk recurses). A file whose artboards all lie there has no page to show (#3575).
     let had_artboards = !doc.artboards.is_empty();
@@ -629,6 +621,9 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         )));
     }
     depth_notes.extend(beyond.note());
+    // The saved ruler guides become nodes on their layers (after the guides beyond the canvas are
+    // dropped, and after `fix_next_id`: new ids start above the file's).
+    doc.guides_into_nodes();
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
@@ -640,6 +635,8 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     // labels and the character styles, within the ranges `document.setup` takes (after the depth
     // limit: the walk recurses).
     doc.keep_scripts_in_range();
+    // The conversions above bring an older document to today's version.
+    doc.version = doc.version.max(vectorcraft_doc::FORMAT_VERSION);
     let profiles = f
         .profiles
         .into_iter()
@@ -652,14 +649,177 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
             }
         })
         .collect::<Result<_, FormatError>>()?;
-    Ok(NativeFile { doc, depth_notes, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
+    Ok(NativeFile { doc, depth_notes, info, profiles })
 }
 
-/// The members of a native file besides its document (which is skipped, not decoded).
-#[derive(Deserialize)]
-struct Head {
-    preview: Option<Image>,
-    pdf: Option<Image>,
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times a file's JSON was scanned again for its PDF preference on this thread.
+    static PDF_MEMBER_SCANS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times a file's document was read on this thread.
+    static DOCUMENT_READS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether reading `json`'s `pdfCompatible` as a boolean or null fails with a data error at the
+/// line and column of `e`, that is, whether the read that gave `e` stopped at the preference. Only
+/// the bytes up to that position, and the one there, are read, and they are skipped without being
+/// kept.
+fn refused_preference_at(json: &[u8], e: &serde_json::Error) -> bool {
+    // serde_json gives a 1-based line and the bytes before the position on that line.
+    let Some(line_start) = (match e.line() {
+        0 => None,
+        1 => Some(0),
+        n => json.iter().enumerate().filter(|(_, b)| **b == b'\n').nth(n - 2).map(|(i, _)| i + 1),
+    }) else {
+        return false;
+    };
+    let end = line_start.saturating_add(e.column()).saturating_add(1).min(json.len());
+    struct StrictPreference;
+    impl<'de> Visitor<'de> for StrictPreference {
+        type Value = ();
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a native file envelope")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+            while let Some(key) = map.next_key::<String>()? {
+                if key == "pdfCompatible" {
+                    map.next_value::<Option<bool>>()?;
+                } else {
+                    map.next_value::<IgnoredAny>()?;
+                }
+            }
+            Ok(())
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(())
+        }
+    }
+    serde_json::Deserializer::from_slice(&json[..end])
+        .deserialize_any(StrictPreference)
+        .is_err_and(|s| s.is_data() && s.line() == e.line() && s.column() == e.column())
+}
+
+/// The saved PDF preference, falling back to the presence of its payload without retaining or
+/// decoding it. The array form has neither member. Repeated members use their last value.
+fn pdf_member(json: &[u8]) -> Result<bool, serde_json::Error> {
+    #[cfg(test)]
+    PDF_MEMBER_SCANS.with(|n| n.set(n.get() + 1));
+    struct PdfMember;
+    impl<'de> Visitor<'de> for PdfMember {
+        type Value = bool;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a native file envelope")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<bool, A::Error> {
+            let mut present = false;
+            let mut preference = None;
+            while let Some(key) = map.next_key::<String>()? {
+                match key.as_str() {
+                    "pdfCompatible" => preference = map.next_value_seed(Preference)?,
+                    "pdf" => present = map.next_value::<Option<IgnoredAny>>()?.is_some(),
+                    _ => {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+            }
+            Ok(preference.unwrap_or(present))
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<bool, A::Error> {
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(false)
+        }
+    }
+    serde_json::Deserializer::from_slice(json).deserialize_any(PdfMember)
+}
+
+/// A `pdfCompatible` value: `Some` for a boolean, `None` for null or any other value, which is
+/// skipped without being kept, as an unknown member is.
+struct Preference;
+
+impl<'de> DeserializeSeed<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Option<bool>, D::Error> {
+        d.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("any value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Option<bool>, E> {
+        Ok(Some(v))
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_unit<E>(self) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_seq(seq).map(|_| None)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_map(map).map(|_| None)
+    }
+}
+
+/// The file's first `generator` member, the app that wrote it (`None`: it has none, it is not a
+/// string, or the file is not an object of members). The other members, and any further
+/// `generator`, are skipped without being kept, as reading the file skips them.
+fn generator(json: &[u8]) -> Option<String> {
+    struct Generator(Option<String>);
+    struct Members;
+    impl<'de> serde::de::Visitor<'de> for Members {
+        type Value = Generator;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a file's members")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Generator, A::Error> {
+            let mut first: Option<serde_json::Value> = None;
+            while let Some(key) = m.next_key::<std::borrow::Cow<'de, str>>()? {
+                if key == "generator" && first.is_none() {
+                    first = Some(m.next_value()?);
+                } else {
+                    m.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+            Ok(Generator(first.and_then(|v| v.as_str().map(str::to_owned))))
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for Generator {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_map(Members)
+        }
+    }
+    serde_json::from_slice::<Generator>(json).ok()?.0
 }
 
 /// The bytes of the member of the file's head `pick` picks (only that entry of the data after
@@ -670,7 +830,7 @@ fn head_member(bytes: &[u8], pick: impl FnOnce(Head) -> Option<Image>) -> Option
     let img = pick(head)?;
     match img.blob {
         Some(at) => file.entries(&[at]).ok()?.pop().flatten().map(Arc::unwrap_or_clone),
-        None => img.inline(),
+        None => base64_decode(&img.data),
     }
 }
 
@@ -683,71 +843,6 @@ pub fn preview(bytes: &[u8]) -> Option<Vec<u8>> {
 /// isn't a native file).
 pub fn pdf_content(bytes: &[u8]) -> Option<Vec<u8>> {
     head_member(bytes, |h| h.pdf)
-}
-
-/// Does this look like a `.vectorcraft` file (compressed or not)?
-pub fn sniff(bytes: &[u8]) -> bool {
-    const HEAD: usize = 256;
-    let head: Cow<'_, [u8]> = if is_compressed(bytes) {
-        let mut head = Vec::with_capacity(HEAD);
-        // A damaged stream may still unpack its start: judge what came out.
-        let _ = flate2::read::GzDecoder::new(bytes).take(HEAD as u64).read_to_end(&mut head);
-        Cow::Owned(head)
-    } else {
-        Cow::Borrowed(bytes.get(..HEAD).unwrap_or(bytes))
-    };
-    // The cut may split a character.
-    let s = String::from_utf8_lossy(&head);
-    s.trim_start().starts_with('{') && (s.contains("\"vectorcraft\"") || s.contains("\"drawcraft\""))
-}
-
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-pub fn base64_encode(data: &[u8]) -> String {
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
-        out.push(B64[(n >> 18) as usize & 63] as char);
-        out.push(B64[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { B64[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { B64[n as usize & 63] as char } else { '=' });
-    }
-    out
-}
-
-pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
-    let val = |c: u8| B64.iter().position(|&b| b == c).map(|p| p as u32);
-    let clean: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    if !clean.len().is_multiple_of(4) {
-        return None;
-    }
-    let mut out = Vec::with_capacity(clean.len() / 4 * 3);
-    let groups = clean.len() / 4;
-    for (i, c) in clean.chunks(4).enumerate() {
-        let mut n = 0u32;
-        let mut pad = 0;
-        for &b in c {
-            n <<= 6;
-            if b == b'=' {
-                pad += 1;
-            } else if pad > 0 {
-                return None;
-            } else {
-                n |= val(b)?;
-            }
-        }
-        if pad > 2 || (pad > 0 && i + 1 != groups) {
-            return None;
-        }
-        out.push((n >> 16) as u8);
-        if pad < 2 {
-            out.push((n >> 8) as u8);
-        }
-        if pad < 1 {
-            out.push(n as u8);
-        }
-    }
-    Some(out)
 }
 
 #[cfg(test)]
@@ -766,20 +861,323 @@ mod tests {
     }
 
     #[test]
+    fn file_info_keeps_pdf_presence_without_reading_its_payload() {
+        let d = Document::new(10.0, 10.0);
+        for version in [3, 4] {
+            for compress in [false, true] {
+                for present in [false, true] {
+                    let options = SaveOptions { version, compress, pdf: present.then(|| vec![7; 128 * 1024]), ..SaveOptions::default() };
+                    let bytes = save_with(&d, &options).unwrap();
+                    assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, present);
+                }
+            }
+        }
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let array = serde_json::json!([EXTENSION, VERSION, value["document"], value["images"], {}]);
+        assert!(!load_info(&serde_json::to_vec(&array).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::json!({"mime":"application/pdf", "data":"not base64"});
+        assert!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        value["pdf"] = serde_json::Value::Null;
+        value["unrecognized"] = serde_json::json!({"pdf":{"data":"nested"}});
+        assert!(!load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        // A preference that is not a boolean is skipped like an unknown member: the file opens,
+        // and the presence of the PDF decides.
+        for odd in [serde_json::json!(1), serde_json::json!("yes"), serde_json::json!([true]), serde_json::json!({"on": true})] {
+            for (pdf, present) in [(serde_json::Value::Null, false), (serde_json::json!({"mime":"application/pdf"}), true)] {
+                value["pdf"] = pdf;
+                value["pdfCompatible"] = odd.clone();
+                assert_eq!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible, present, "{odd}");
+            }
+        }
+    }
+
+    #[test]
+    fn only_a_preference_that_is_not_a_boolean_scans_the_json_again() {
+        let scans_for = |bytes: &[u8]| {
+            PDF_MEMBER_SCANS.with(|n| n.set(0));
+            let compatible = load_info(bytes).unwrap().1.pdf_compatible;
+            (compatible, PDF_MEMBER_SCANS.with(|n| n.get()))
+        };
+        let d = Document::new(10.0, 10.0);
+        assert_eq!(scans_for(&save(&d, false)), (false, 0));
+        assert_eq!(scans_for(&save(&d, true)), (false, 0));
+        for compatible in [false, true] {
+            let bytes = save_with(&d, &SaveOptions { pdf_compatible: Some(compatible), ..SaveOptions::default() }).unwrap();
+            assert_eq!(scans_for(&bytes), (compatible, 0));
+        }
+        let with_pdf = save_with(&d, &SaveOptions { pdf: Some(vec![7; 1024]), ..SaveOptions::default() }).unwrap();
+        assert_eq!(scans_for(&with_pdf), (true, 0));
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        for odd in [serde_json::json!("yes"), serde_json::json!(1), serde_json::json!([true])] {
+            value["pdfCompatible"] = odd.clone();
+            assert_eq!(scans_for(&serde_json::to_vec(&value).unwrap()), (false, 1), "{odd}");
+        }
+        // A document that can't be read still fails. Read before the preference, it is not read
+        // a second time.
+        value["document"] = serde_json::json!("not a document");
+        DOCUMENT_READS.with(|n| n.set(0));
+        assert!(load_info(&serde_json::to_vec(&value).unwrap()).is_err());
+        assert_eq!(DOCUMENT_READS.with(|n| n.get()), 1);
+        // Read after a preference that is not a boolean, it fails on the second read, which is
+        // the first to reach it.
+        let mut first = serde_json::to_vec(&value).unwrap();
+        assert!(first.starts_with(br#"{"document""#));
+        first.splice(1..1, br#""pdfCompatible":"yes","#.iter().copied());
+        DOCUMENT_READS.with(|n| n.set(0));
+        assert!(load_info(&first).is_err());
+        assert_eq!(DOCUMENT_READS.with(|n| n.get()), 2);
+    }
+
+    /// A document past a read budget is refused after one read, also in a file whose preference
+    /// is not a boolean.
+    #[test]
+    fn a_document_past_a_budget_is_read_once() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        for i in 0..20 {
+            let id = d.alloc_id();
+            d.insert(Some(l), i, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        }
+        let n = d.node_count();
+        let mut value: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        for preference in [serde_json::Value::Null, serde_json::json!(true), serde_json::json!("yes")] {
+            value["pdfCompatible"] = preference.clone();
+            let bytes = serde_json::to_vec(&value).unwrap();
+            DOCUMENT_READS.with(|r| r.set(0));
+            let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+                panic!("one object past the budget must be refused")
+            };
+            assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+            assert_eq!(DOCUMENT_READS.with(|r| r.get()), 1, "{preference}");
+        }
+    }
+
+    #[test]
+    fn file_info_keeps_the_pdf_preference_without_artboards() {
+        let mut d = Document::new(10.0, 10.0);
+        d.artboards.clear();
+        for compatible in [false, true] {
+            let bytes = save_with(&d, &SaveOptions { pdf_compatible: Some(compatible), ..SaveOptions::default() }).unwrap();
+            assert_eq!(load_info(&bytes).unwrap().1.pdf_compatible, compatible);
+            assert!(pdf_content(&bytes).is_none());
+        }
+    }
+
+    #[test]
     fn file_info_tells_old_files() {
         let d = Document::new(10.0, 10.0);
         let current = save(&d, false);
-        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false });
+        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false, pdf_compatible: false });
         assert!(!load_info(&current).unwrap().1.is_old());
         let text = String::from_utf8(current).unwrap();
         let legacy = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1);
         assert!(load_info(legacy.as_bytes()).unwrap().1.is_old());
         let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
-        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
+        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false, pdf_compatible: false });
         assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
+    }
+
+    /// A file is native when its top-level `format` member names VectorCraft, read as JSON reads
+    /// it; the word elsewhere in the head does not count.
+    #[test]
+    fn sniff_reads_the_format_member() {
+        // `vectorcraft` with its second `c` written as a JSON escape.
+        let escaped = [br#"{"format":"vector\"#.as_slice(), br#"u0063raft","version":4,"document":{}}"#].concat();
+        assert!(sniff(&escaped));
+        assert!(!sniff(br#"{"format":"other","generator":"vectorcraft"}"#));
+        assert!(!sniff(br#"{"names":["vectorcraft"],"format":"svg"}"#));
+    }
+
+    /// Every layout VectorCraft has written puts `format` first: the version 1 and 2 files from
+    /// before the rename (a struct of `format`, `version`, `generator`, `document` and `images`,
+    /// compact or pretty), and each version `save_with` writes, compact, pretty and compressed.
+    #[test]
+    fn sniff_takes_every_layout_written() {
+        let before_rename = [
+            r#"{"format":"drawcraft","version":1,"generator":"DrawCraft 0.1.0","document":{},"images":{}}"#,
+            "{\n  \"format\": \"drawcraft\",\n  \"version\": 2,\n  \"generator\": \"DrawCraft 0.1.0\",\n  \"document\": {},\n  \"images\": {}\n}",
+        ];
+        for text in before_rename {
+            assert!(sniff(text.as_bytes()), "{text}");
+        }
+        let d = Document::new(10.0, 10.0);
+        for version in MIN_VERSION..=VERSION {
+            for (pretty, compress) in [(false, false), (true, false), (false, true)] {
+                let o = SaveOptions { pretty, compress, version, ..SaveOptions::default() };
+                if o.check().is_err() {
+                    continue;
+                }
+                let bytes = save_with(&d, &o).unwrap();
+                assert!(sniff(&bytes), "version {version}, pretty {pretty}, compress {compress}");
+            }
+        }
+    }
+
+    /// An envelope error other than the format and version keeps the crate's message.
+    #[test]
+    fn envelope_errors_keep_their_message() {
+        let e = FormatError::from(craft_vectorcraft_format::Error::TooBig);
+        assert!(matches!(e, FormatError::NotVectorcraft(_)), "{e}");
+        assert!(e.to_string().contains(&craft_vectorcraft_format::Error::TooBig.to_string()), "{e}");
+        let e = FormatError::from(craft_vectorcraft_format::Error::Format("x".into()));
+        assert_eq!(e.to_string(), "not a VectorCraft file: format is `x`");
+        assert!(matches!(FormatError::from(craft_vectorcraft_format::Error::TooNew(9)), FormatError::TooNew(9)));
+    }
+
+    /// `save_to` writes the file member by member and streams the document in. For every version
+    /// it writes, compact, pretty and compressed, its bytes are those of the crate's `File`
+    /// holding the same members, serialized with `serde_json::to_vec` or `to_vec_pretty` and
+    /// followed by the crate's `Tail`.
+    #[test]
+    fn save_to_writes_the_bytes_of_the_crates_file() {
+        use std::io::Read;
+
+        /// The document as `save_to` writes it: its version 1 form, or the document.
+        struct Written<'a>(&'a Body);
+        impl Serialize for Written<'_> {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                match &self.0.v1 {
+                    Some(v) => v.serialize(s),
+                    None => self.0.d.serialize(s),
+                }
+            }
+        }
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        // An image large enough to go after the JSON from version 4, a small one, and one that
+        // nothing uses.
+        let big: Vec<u8> = (0..INLINE_MAX as u32 + 5).map(|i| (i % 251) as u8).collect();
+        for (key, bytes) in [("big", big), ("small", vec![1, 2, 3, 250]), ("unused", vec![9])] {
+            d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
+        }
+        for (i, key) in ["big", "small"].into_iter().enumerate() {
+            let img = d.alloc_id();
+            let im =
+                ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+            d.insert(Some(l), i + 1, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
+        }
+        let png = vec![0x89, b'P', b'N', b'G'];
+        let icc = vec![7u8; INLINE_MAX];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        pdf.resize(INLINE_MAX + 1, b' ');
+        let full = SaveOptions {
+            preview: Some(png.clone()),
+            profiles: [("Gray".to_string(), icc.clone())].into(),
+            pdf: Some(pdf.clone()),
+            ..SaveOptions::default()
+        };
+        let mut checked = 0;
+        for version in MIN_VERSION..=VERSION {
+            for members in [&full, &SaveOptions::default()] {
+                for pretty in [false, true] {
+                    let o = SaveOptions { version, pretty, ..members.clone() };
+                    let b = body(&d, &o).unwrap();
+                    let mut file = craft_vectorcraft_format::File::new(Written(&b));
+                    file.format = if version < 3 { LEGACY_EXTENSION } else { EXTENSION }.into();
+                    file.version = version;
+                    file.generator = Some(format!("VectorCraft {}", env!("CARGO_PKG_VERSION")));
+                    file.preview = o.preview.as_deref().map(|p| Image::inline("image/png", p));
+                    // The images come first in the data after the JSON, then the profiles and the PDF.
+                    let mut tail = file.tail();
+                    for key in ["big", "small"] {
+                        file.images.insert(key.into(), tail.image("image/png", b.blobs[key].bytes.as_slice(), false));
+                    }
+                    for (name, icc) in &o.profiles {
+                        file.profiles.insert(name.clone(), tail.image(ICC_MIME, icc, false));
+                    }
+                    file.pdf = o.pdf.as_deref().map(|p| tail.image("application/pdf", p, false));
+                    let mut expected = if pretty { serde_json::to_vec_pretty(&file) } else { serde_json::to_vec(&file) }.unwrap();
+                    tail.write_to(&mut expected).unwrap();
+                    assert_eq!(tail.is_empty(), version < 4, "version {version}");
+                    assert!(save_with(&d, &o).unwrap() == expected, "version {version}, pretty {pretty}, {} profiles", o.profiles.len());
+                    checked += 1;
+                    if version >= COMPRESSED_SINCE && !pretty {
+                        let gz = save_with(&d, &SaveOptions { compress: true, ..o.clone() }).unwrap();
+                        let mut unpacked = Vec::new();
+                        flate2::read::GzDecoder::new(gz.as_slice()).read_to_end(&mut unpacked).unwrap();
+                        assert!(unpacked == expected, "version {version}, compressed, {} profiles", o.profiles.len());
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 20);
+    }
+
+    /// Files are read through the crate's `Contents` with the messages VectorCraft gave before,
+    /// and a top-level array holds the format, version, document, images and profiles in that
+    /// order.
+    #[test]
+    fn files_read_through_the_crates_contents_as_before() {
+        let message = |json: &str| load(json.as_bytes()).err().map(|e| e.to_string());
+        assert_eq!(
+            message(r#""x""#).as_deref(),
+            Some(r#"not a VectorCraft file: invalid type: string "x", expected struct File at line 1 column 3"#)
+        );
+        assert!(
+            message(r#"{"format":"vectorcraft","version":4}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: missing field `document`"))
+        );
+        let v: serde_json::Value = serde_json::from_slice(&save(&Document::new(10.0, 10.0), false)).unwrap();
+        let doc = v["document"].to_string();
+        let file = |format: &str, version: u32| format!(r#"{{"format":"{format}","version":{version},"document":{doc}}}"#);
+        assert_eq!(message(&file("svg", 4)).as_deref(), Some("not a VectorCraft file: format is `svg`"));
+        assert_eq!(message(&file("vectorcraft", 9)).as_deref(), Some("file version 9 is newer than this VectorCraft supports (4)"));
+        // A document that does not read is reported first, as before.
+        assert!(
+            message(r#"{"format":"vectorcraft","version":9,"document":7}"#).is_some_and(|m| m.starts_with("not a VectorCraft file: invalid type"))
+        );
+        for json in [format!(r#"["vectorcraft",3,{doc},{{}},{{}}]"#), format!(r#"["vectorcraft",3,{doc}]"#)] {
+            assert_eq!(load(json.as_bytes()).map(|d| d.artboards.len()).ok(), Some(1), "{json}");
+        }
+        assert!(load(format!(r#"["vectorcraft",3,{{}},{doc},{{}}]"#).as_bytes()).is_err());
     }
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};
+
+    /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+    /// version 3 (#3260): a file from before (version 1, or version 2 from 0.21.0 on) opens with
+    /// its radius in points converted, one saved since opens as it was. At 72 ppi a point is a
+    /// pixel, so the number stays.
+    #[test]
+    fn halftone_radii_of_older_documents_open_in_pixels() {
+        for ppi in [72.0, 300.0] {
+            let mut d = Document::new(100.0, 100.0);
+            d.raster_effects_ppi = ppi;
+            let (l, id) = (d.layers[0].id, d.alloc_id());
+            let mut look = Appearance::default_art();
+            look.effects.push(vectorcraft_doc::Effect {
+                id: "pixelate.colorHalftone".into(),
+                params: serde_json::json!({"maxRadius": 8.0}),
+                visible: true,
+            });
+            d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), look)).unwrap();
+            let radius = |d: &Document| d.node(id).unwrap().appearance.effects[0].params["maxRadius"].as_f64().unwrap();
+            assert_eq!(radius(&load(&save(&d, false)).unwrap()), 8.0, "{ppi} ppi: saved in pixels, opened in pixels");
+            // Version 2 (0.21.0's Twist) still held the radius in points.
+            d.version = 2;
+            let v2 = load(&save(&d, false)).unwrap();
+            assert!((radius(&v2) - 8.0 * ppi / 72.0).abs() < 1e-9, "version 2, 8 pt at {ppi} ppi: {}", radius(&v2));
+            d.version = 1;
+            let old = load(&save(&d, false)).unwrap();
+            assert_eq!(old.version, vectorcraft_doc::FORMAT_VERSION);
+            assert!((radius(&old) - 8.0 * ppi / 72.0).abs() < 1e-9, "8 pt at {ppi} ppi: {}", radius(&old));
+            // Saved for an older app, in every older version: the radius in points, which opens
+            // here in pixels again.
+            let px = radius(&old);
+            for version in MIN_VERSION..VERSION {
+                let bytes = save_with(&old, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+                let json = String::from_utf8(unpack::Unpacked::new(&bytes).unwrap().json().to_vec()).unwrap();
+                let at = json.find("\"maxRadius\":").unwrap() + "\"maxRadius\":".len();
+                let saved: f64 = json[at..].split([',', '}']).next().unwrap().trim().parse().unwrap();
+                assert!((saved - 8.0).abs() < 1e-9, "{ppi} ppi, version {version} holds 8 pt: {saved}");
+                let back = load(&bytes).unwrap();
+                assert!((radius(&back) - px).abs() < 1e-9, "{ppi} ppi, version {version}: {}", radius(&back));
+            }
+            assert_eq!(radius(&old), px, "{ppi} ppi: saving leaves the open document as it is");
+        }
+    }
 
     #[test]
     fn roundtrip() {
@@ -798,6 +1196,30 @@ mod tests {
         assert_eq!(back.node_count(), d.node_count());
         assert_eq!(back.images["k"].bytes.as_slice(), &[1, 2, 3, 250]);
         assert_eq!(back.node(id).unwrap().path_data(), d.node(id).unwrap().path_data());
+    }
+
+    /// A capped read refuses a compressed file whose images unpack past the cap, before reading
+    /// them, and reads the same file under a cap it fits.
+    #[test]
+    fn a_capped_load_caps_the_data_after_the_json() {
+        use std::io::Write as _;
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        d.images.insert("k".into(), ImageBlob::new("image/png", vec![7; 1 << 16]));
+        let img = d.alloc_id();
+        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
+        // The file gzipped whole, image and all, so the image unpacks from a few bytes.
+        let raw = save_with(&d, &SaveOptions::default()).unwrap();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        gz.write_all(&raw).unwrap();
+        let bytes = gz.finish().unwrap();
+        assert!(is_compressed(&bytes) && bytes.len() < 1 << 12, "{}", bytes.len());
+        let json = unpack::Unpacked::new(&bytes).unwrap().json().len();
+        assert!(json < 1 << 15, "{json}");
+        assert!(matches!(load_file_capped(&bytes, (1 << 16) - 1), Err(FormatError::TooBig)));
+        assert_eq!(load_file_capped(&bytes, 3 << 15).unwrap().doc.images["k"].bytes.len(), 1 << 16);
+        assert_eq!(load_file(&bytes).unwrap().doc.images["k"].bytes.len(), 1 << 16);
     }
 
     /// #3587: objects are read within a budget. A compressed file of many small objects stays
@@ -827,6 +1249,66 @@ mod tests {
         assert_eq!(load(&bytes).unwrap().node_count(), n, "the real budget opens ordinary documents");
     }
 
+    /// The saved ruler guides become objects when read, so each counts against the same budget.
+    #[test]
+    fn saved_ruler_guides_count_against_the_object_budget() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let id = d.alloc_id();
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
+        for i in 0..50 {
+            d.add_ruler_guide(&vectorcraft_doc::Guide::new(i % 2 == 0, f64::from(i)));
+        }
+        let n = d.node_count() + d.ruler_guides().len();
+        let bytes = save_with(&d, &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
+        let opened = load_file_within(&bytes, n, vectorcraft_doc::node::MAX_BUFFERED_VALUES).unwrap().doc;
+        assert_eq!(opened.ruler_guides().len(), 50, "a document of exactly the budget opens with its guides");
+        let Err(FormatError::NotVectorcraft(why)) = load_file_within(&bytes, n - 1, vectorcraft_doc::node::MAX_BUFFERED_VALUES) else {
+            panic!("one guide past the budget must be refused")
+        };
+        assert!(why.contains(&format!("more than {} objects", n - 1)), "{why}");
+    }
+
+    /// Ruler guide nodes a file holds out of place are put right as it is read: one below a layer's
+    /// art moves up to the layer's guides, and one in a group, beside the layers or in a symbol is
+    /// removed. Saving again writes no ruler guide node, which builds from before ruler guides
+    /// were nodes could not read.
+    #[test]
+    fn ruler_guide_nodes_out_of_place_in_a_file_are_put_right() {
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.add_layer(None);
+        let (a, b, group) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let path = |id| Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        d.insert(Some(l), 0, path(a)).unwrap();
+        d.insert(Some(l), usize::MAX, Node::group(group, vec![Arc::new(path(b))])).unwrap();
+        let li = d.layers.iter().position(|x| x.id == l).unwrap();
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        let guide = |id: u64| serde_json::json!({"id": id, "kind": {"type": "rulerguide", "vertical": true, "pos": 5.0}});
+        let kids = &mut v["document"]["layers"][li]["kind"]["children"];
+        kids.as_array_mut().unwrap().insert(0, guide(50));
+        kids[2]["kind"]["children"].as_array_mut().unwrap().push(guide(51));
+        v["document"]["layers"].as_array_mut().unwrap().push(guide(52));
+        let opened = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        let listed: Vec<u64> = opened.ruler_guides().iter().filter_map(|g| g.id).map(|id| id.0).collect();
+        assert_eq!(listed, [50]);
+        let layer = opened.layers.iter().find(|x| x.id == l).unwrap();
+        assert_eq!(layer.children().unwrap().iter().map(|c| c.id.0).collect::<Vec<_>>(), [a.0, group.0, 50], "art first, then the guide");
+        assert_eq!(opened.node(group).unwrap().children().unwrap().len(), 1, "the group keeps only its path");
+        assert!(opened.layers.iter().all(|x| !x.is_ruler_guide()));
+        assert!(!String::from_utf8(save(&opened, false)).unwrap().contains("rulerguide"));
+
+        // A ruler guide in a symbol's art is removed too.
+        let mut d = Document::new(100.0, 100.0);
+        let sym = d.alloc_id();
+        let art = Node::group(sym, vec![Arc::new(path(d.alloc_id()))]);
+        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art), dynamic: false });
+        let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+        v["document"]["symbols"][0]["art"]["kind"]["children"].as_array_mut().unwrap().push(guide(60));
+        let opened = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(opened.symbols[0].art.children().unwrap().len(), 1);
+        assert!(!opened.symbols[0].art.children().unwrap().iter().any(|c| c.is_ruler_guide()));
+    }
+
     /// #3587: a reordered file (its objects' fields before their `type`, as a JSON tool that
     /// sorts keys writes them) still opens; one whose fields before a `type` hold more values than
     /// the budget, such as a long array of numbers, is refused as they are read.
@@ -847,6 +1329,71 @@ mod tests {
             panic!("past the budget must be refused")
         };
         assert!(why.contains("more than 100 values before its type"), "{why}");
+    }
+
+    /// A version 1 document written before VectorCraft 0.21.0 (or by an app the file does not
+    /// name) has its Twist angles negated when it opens; one written by 0.21.0 or later, and a
+    /// later document, keep them. Each opens as the current version. A save for an older file
+    /// version negates them back.
+    #[test]
+    fn twist_angles_follow_the_document_version_and_generator() {
+        use vectorcraft_doc::Effect;
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut a = Appearance::default_art();
+        a.effects.push(Effect { id: "distort.twist".into(), params: serde_json::json!({"angle": 30.0}), visible: true });
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), a)).unwrap();
+        let angle = |d: &Document| d.node(id).and_then(|n| n.appearance.effects[0].params["angle"].as_f64());
+        let now = vectorcraft_doc::FORMAT_VERSION;
+        let current = save(&d, false);
+        let back = load(&current).unwrap();
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a current document is read as saved");
+        let mut v2: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v2["document"]["version"] = 2.into();
+        let back = load(&serde_json::to_vec(&v2).unwrap()).unwrap();
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a version 2 document keeps its angles");
+        let opened = |generator: Option<&str>| {
+            let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+            v["document"]["version"] = 1.into();
+            match generator {
+                Some(g) => v["generator"] = g.into(),
+                None => {
+                    v.as_object_mut().unwrap().remove("generator");
+                }
+            }
+            let d = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+            (d.version, angle(&d))
+        };
+        for g in [Some("VectorCraft 0.20.0"), Some("VectorCraft 0.9.12"), Some("DrawCraft 0.1.0"), Some("VectorCraft"), None] {
+            assert_eq!(opened(g), (now, Some(-30.0)), "{g:?}");
+        }
+        for g in ["VectorCraft 0.21.0", "VectorCraft 0.21.3", "VectorCraft 1.0.0"] {
+            assert_eq!(opened(Some(g)), (now, Some(30.0)), "{g}");
+        }
+        // A file may repeat `generator`: the first one names the app.
+        let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v["document"]["version"] = 1.into();
+        v["generator"] = "VectorCraft 0.21.0".into();
+        let text = serde_json::to_string(&v).unwrap();
+        let first = r#""generator":"VectorCraft 0.21.0""#;
+        let twice = text.replacen(first, &format!(r#"{first},"generator":"DrawCraft 0.1.0""#), 1);
+        assert_ne!(twice, text);
+        assert_eq!(angle(&load(twice.as_bytes()).unwrap()), Some(30.0));
+        v["generator"] = "VectorCraft 0.20.0".into();
+        let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        let again = load(&save(&old, false)).unwrap();
+        assert_eq!((again.version, angle(&again)), (now, Some(-30.0)), "saved again, it is the current version");
+        // Saved for an older file version (apps before 0.21.0): version 1 with the angle negated
+        // back, whatever the generator, and it reopens as it was.
+        for version in MIN_VERSION..VERSION {
+            let bytes = save_with(&d, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(v["document"]["version"], 1, "file version {version}");
+            assert!(String::from_utf8_lossy(&bytes).contains(r#""angle":-30.0"#), "file version {version}");
+            let back = load(&bytes).unwrap();
+            assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "file version {version}");
+        }
     }
 
     #[test]
@@ -874,5 +1421,36 @@ mod tests {
         assert_eq!(base64_decode("QQ=="), Some(vec![0x41]));
         assert_eq!(base64_decode("QUI="), Some(vec![0x41, 0x42]));
         assert_eq!(base64_decode("QUJD"), Some(vec![0x41, 0x42, 0x43]));
+    }
+
+    /// A layer clipping by a path beyond the canvas is emptied on open and stops clipping, also
+    /// when the file puts a ruler guide before the clipping path: no other object becomes it.
+    #[test]
+    fn a_guide_before_a_clipping_path_beyond_the_canvas_does_not_change_the_clipping_path() {
+        let opened = |guide_first: bool| {
+            let mut d = Document::new(100.0, 100.0);
+            let rect = |d: &mut Document, y: f64| {
+                Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, y, 10.0, y + 10.0)), Appearance::default_art()))
+            };
+            let (far, near) = (rect(&mut d, 1e17), rect(&mut d, 0.0));
+            if let NodeKind::Layer { children, clip, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+                *children = vec![far, near];
+                *clip = true;
+            }
+            // Saving writes ruler guides to the saved list: the guide node is put in the file.
+            let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+            let guide = serde_json::json!({"id": 50, "kind": {"type": "rulerguide", "vertical": true, "pos": 5.0}});
+            let kids = v["document"]["layers"][0]["kind"]["children"].as_array_mut().unwrap();
+            if guide_first {
+                kids.insert(0, guide)
+            } else {
+                kids.push(guide)
+            }
+            let d = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+            let NodeKind::Layer { children, clip, .. } = &d.layers[0].kind else { panic!("a layer") };
+            (*clip, children.iter().map(|c| c.is_ruler_guide()).collect::<Vec<_>>())
+        };
+        assert_eq!(opened(false), (false, vec![true]), "the clipping path and what it clipped go; the guide stays");
+        assert_eq!(opened(true), opened(false));
     }
 }

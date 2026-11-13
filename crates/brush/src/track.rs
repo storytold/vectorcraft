@@ -236,7 +236,8 @@ pub fn tracks(bp: &BezPath, tol: f64) -> Vec<Track> {
         return out;
     }
     let mut els = vec![];
-    kurbo::flatten(bp.iter(), tol.max(1e-4), |el| {
+    // Guarded: kurbo works out every subdivision of a curve even when the callback drops them.
+    vectorcraft_geom::flatten(bp.iter(), tol.max(1e-4), |el| {
         if els.len() < MAX_FLATTENED {
             els.push(el);
         }

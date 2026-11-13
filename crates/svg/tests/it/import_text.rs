@@ -52,6 +52,46 @@ fn close(a: f64, b: f64, tol: f64) -> bool {
 }
 
 #[test]
+fn metadata_ids_preserve_the_original_text_cascade() {
+    for (rules, text, color) in [
+        ("text:not(.x){fill:red!important} text{fill:blue!important}", r#"<text y="20">Hi</text>"#, (255, 0, 0)),
+        ("#t{fill:blue} [id]{fill:red}", r#"<text id="t" y="20">Hi</text>"#, (0, 0, 255)),
+        ("#holder{fill:blue} g[id]{fill:red}", r#"<g id="holder"><text y="20"><tspan>Hi</tspan></text></g>"#, (0, 0, 255)),
+    ] {
+        for metadata in [false, true] {
+            let attribute = if metadata { r#" data-note="kept""# } else { "" };
+            let doc = open(&format!(r#"<style>{rules} rect[id]{{fill:black}}</style>{text}<rect width="5" height="5"{attribute}/>"#));
+            let expected = Paint::solid(vectorcraft_color::Color::rgb8(color.0, color.1, color.2));
+            assert_eq!(only_text(&doc).runs[0].style.fill, expected, "{rules}, metadata {metadata}");
+        }
+    }
+}
+
+#[test]
+fn metadata_ids_preserve_text_preprocessing_and_relative_styles() {
+    for body in [
+        r#"<style>g{font-size:10px} text{font-size:2em} tspan{font-size:1.5em}</style><g transform="translate(4 5)"><text y="20">A<tspan>B</tspan></text></g>"#,
+        r#"<style>text{display:none;fill:red}</style><text y="20">Hidden</text>"#,
+        r#"<style>text{transform:translate(10px,20px)}</style><text y="20">Moved</text>"#,
+        r##"<defs><path id="p" d="M0 20L150 20"/></defs><text font-size="12"><textPath href="#p">Path</textPath></text>"##,
+    ] {
+        let load = |attribute: &str| {
+            let doc = open(&format!(r#"<style>rect[id]{{fill:black}}</style>{body}<rect width="5" height="5"{attribute}/>"#));
+            art(&doc)
+                .into_iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Text(t) => Some((n.visible, serde_json::to_value(t).unwrap())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let expected = load("");
+        assert!(!expected.is_empty(), "{body}");
+        assert_eq!(load(r#" data-note="kept""#), expected, "{body}");
+    }
+}
+
+#[test]
 fn text_keeps_its_z_order_between_shapes() {
     let d = open(r#"<rect width="10" height="10"/><text x="5" y="20">Hi</text><rect y="30" width="10" height="10"/>"#);
     let kinds: Vec<&str> = art(&d)
@@ -66,6 +106,19 @@ fn text_keeps_its_z_order_between_shapes() {
     let t = only_text(&d);
     assert_eq!(t.plain_text(), "Hi");
     assert!(t.xf.translation().to_point().distance(Point::new(5.0, 20.0)) < 1e-9);
+}
+
+#[test]
+fn a_css_transform_places_text() {
+    // A `transform` declaration in a rule or `style` beats the attribute, as on shapes.
+    for body in [
+        r#"<style>text { transform: translate(10px, 20px) }</style><text transform="translate(300 0)" y="20">Moved</text>"#,
+        r#"<text style="transform: translate(10px, 20px)" transform="translate(300 0)" y="20">Moved</text>"#,
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        assert!(t.xf.translation().to_point().distance(Point::new(10.0, 40.0)) < 1e-9, "{body}: {:?}", t.xf);
+    }
 }
 
 #[test]
@@ -138,6 +191,89 @@ fn hidden_text_is_skipped_and_use_instances_are_kept() {
     assert!(t[1].xf.translation().to_point().distance(Point::new(50.0, 30.0)) < 1e-9);
 }
 
+/// SVG 2 §5.6 (https://www.w3.org/TR/SVG2/struct.html#UseElement): the element a `<use>` shows
+/// inherits from the `<use>`, not from where it is defined.
+#[test]
+fn a_use_of_a_text_passes_its_properties_on_to_the_text() {
+    let d = open(
+        r##"<defs font-size="30"><text id="t" y="50">HI</text></defs>
+        <use href="#t" font-size="100" fill="red"/><g font-weight="bold"><use href="#t" x="200"/></g>
+        <use href="#t" y="200" opacity="0.5" style="font-size:20px"/>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 3, "{t:?}");
+    let s: Vec<CharStyle> = t.iter().map(|t| t.first_style()).collect();
+    assert!(close(s[0].size, 100.0, 1e-9), "{}", s[0].size);
+    assert_eq!(s[0].fill, Paint::solid(vectorcraft_color::Color::rgb8(255, 0, 0)));
+    assert!(close(s[1].size, 12.0, 1e-9), "the defaults, not the <defs>'s 30: {}", s[1].size);
+    assert_eq!(s[1].font_style, "Bold");
+    assert_eq!(s[1].fill, Paint::solid(vectorcraft_color::Color::BLACK));
+    assert!(close(s[2].size, 20.0, 1e-9), "{}", s[2].size);
+    assert!(t[0].xf.translation().to_point().distance(Point::new(0.0, 50.0)) < 1e-9, "{:?}", t[0].xf);
+    assert!(t[1].xf.translation().to_point().distance(Point::new(200.0, 50.0)) < 1e-9, "{:?}", t[1].xf);
+    assert!(t[2].xf.translation().to_point().distance(Point::new(0.0, 250.0)) < 1e-9, "{:?}", t[2].xf);
+    // The `<use>`'s opacity stays on the object it becomes.
+    let faded: Vec<&Node> = art(&d).into_iter().filter(|n| (n.opacity - 0.5).abs() < 1e-6).collect();
+    assert_eq!(faded.len(), 1, "{faded:?}");
+    // The text's own properties win over the `<use>`'s.
+    let d = open(r##"<defs><text id="t" y="50" font-size="20" fill="blue">HI</text></defs><use href="#t" font-size="100" fill="red"/>"##);
+    let s = only_text(&d).first_style();
+    assert!(close(s.size, 20.0, 1e-9), "{}", s.size);
+    assert_eq!(s.fill, Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 255)));
+}
+
+/// A `<use>` inside the text it shows does not make the text inherit from itself.
+#[test]
+fn a_use_inside_the_text_it_shows_opens() {
+    let d = open(r##"<text id="t" y="50" font-size="20">HI<use href="#t" font-size="100"/><tspan><use href="#t"/></tspan></text>"##);
+    assert!(texts(&d).iter().all(|t| close(t.first_style().size, 20.0, 1e-9)), "{:?}", texts(&d));
+}
+
+/// Past 1 MiB of text built for `<use>` elements, the rest show their text with its own properties.
+#[test]
+fn uses_of_a_long_text_stop_taking_their_properties_past_the_limit() {
+    let long = "a".repeat(350_000);
+    let uses: String = (1..=4).map(|i| format!(r##"<use href="#t" font-size="{}"/>"##, i * 10)).collect();
+    let (d, w) = import_with_report(&svg(&format!(r##"<defs><text id="t" y="50">{long}</text></defs>{uses}"##))).unwrap();
+    let sizes: Vec<f64> = texts(&d).iter().map(|t| t.first_style().size).collect();
+    assert_eq!(sizes.len(), 4, "{sizes:?}");
+    assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
+    assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+}
+
+/// The path a text follows counts toward that limit: each `<use>` of the text lays it out along
+/// the whole path again.
+#[test]
+fn uses_of_a_text_on_a_long_path_stop_taking_their_properties_past_the_limit() {
+    let d = format!("M0 0{}", "h1".repeat(350_000));
+    let uses: String = (1..=4).map(|i| format!(r##"<use href="#t" font-size="{}"/>"##, i * 10)).collect();
+    let body = format!(r##"<defs><path id="p" d="{d}"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    let sizes: Vec<f64> = texts(&d).iter().map(|t| t.first_style().size).collect();
+    assert_eq!(sizes.len(), 4, "{sizes:?}");
+    assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
+    assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+    // The same text on a short path is within the limit however many `<use>` elements show it.
+    let uses: String = (1..=300).map(|i| format!(r##"<use href="#t" font-size="{i}"/>"##)).collect();
+    let body = format!(r##"<defs><path id="p" d="M0 20L150 20"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    assert!(texts(&d).iter().enumerate().all(|(i, t)| close(t.first_style().size, (i + 1) as f64, 1e-9)), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("shown through <use> elements")), "{w:?}");
+}
+
+/// Many `<use>` elements of one text that inherit the same properties each get it.
+#[test]
+fn many_uses_of_a_text_in_one_group_all_take_its_properties() {
+    let uses: String = (0..200).map(|i| format!(r##"<use href="#t" x="{i}"/>"##)).collect();
+    let d = open(&format!(r##"<defs><text id="t" y="50">HI</text></defs><g font-size="40">{uses}</g>"##));
+    let t = texts(&d);
+    assert_eq!(t.len(), 200);
+    assert!(t.iter().all(|t| close(t.first_style().size, 40.0, 1e-9)));
+    assert!(t[199].xf.translation().to_point().distance(Point::new(199.0, 50.0)) < 1e-9, "{:?}", t[199].xf);
+}
+
 #[test]
 fn text_path_becomes_type_on_a_path() {
     let d = open(
@@ -190,6 +326,248 @@ fn per_character_positions_with_middle_anchor() {
     let mid = |i: usize| (t.xf * lay.glyphs[i].origin).x + natural(i) / 2.0;
     assert_eq!(t.runs.len(), 2);
     assert!(close(mid(0), 50.0, 0.05) && close(mid(1), 100.0, 0.05), "{} {}", mid(0), mid(1));
+}
+
+/// `text-anchor` aligns a line's advance, which ends after its last character's letter spacing,
+/// and VectorCraft aligns a line without that tracking: the imported lines move back by their
+/// share of it and stay where a reader draws them, and a centred or right-aligned tracked line
+/// exported and read back stays where it was (export anchors lines the same way).
+#[test]
+fn anchored_letter_spaced_lines_stay_where_a_reader_draws_them() {
+    let starts = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        lay.lines.iter().map(|l| (t.xf * lay.glyphs[l.glyph_start].origin).x).collect::<Vec<_>>()
+    };
+    let advances = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        lay.lines.iter().map(|l| lay.glyphs[l.glyph_start..l.glyph_end].iter().map(|g| g.advance).sum::<f64>()).collect::<Vec<_>>()
+    };
+    for (anchor, share) in [("middle", 0.5), ("end", 1.0)] {
+        let d = open(&format!(r#"<text x="200" y="100" text-anchor="{anchor}" letter-spacing="8" font-size="40">WAVE</text>"#));
+        let t = only_text(&d);
+        let (start, advance) = (starts(t)[0], advances(t)[0]);
+        assert!(close(start, 200.0 - share * advance, 1e-6), "{anchor}: the line starts at {start}, not {}", 200.0 - share * advance);
+        let back = import(&vectorcraft_svg::export(&d, &vectorcraft_svg::ExportOptions::default())).unwrap();
+        let again = starts(only_text(&back))[0];
+        assert!(close(again, start, 1e-6), "{anchor}: read back, the line starts at {again}, not {start}");
+    }
+    // Lines anchored differently: each moves by its own share.
+    let d = open(
+        r#"<text y="100" font-size="20" letter-spacing="4"><tspan x="200" text-anchor="middle">Wave</tspan><tspan x="200" dy="30" text-anchor="end">Line</tspan></text>"#,
+    );
+    let t = only_text(&d);
+    let (s, a) = (starts(t), advances(t));
+    assert!(close(s[0], 200.0 - a[0] / 2.0, 1e-6) && close(s[1], 200.0 - a[1], 1e-6), "{s:?} {a:?}");
+}
+
+/// Document-space left and right edges of the advance of each laid-out line.
+fn line_edges(t: &TextObject) -> Vec<(f64, f64)> {
+    let lay = layout(FontDb::global(), t);
+    lay.lines
+        .iter()
+        .map(|l| {
+            let g = &lay.glyphs[l.glyph_start..l.glyph_end];
+            let left = g.iter().map(|g| (t.xf * g.origin).x).fold(f64::INFINITY, f64::min);
+            let right = g.iter().map(|g| (t.xf * g.origin).x + g.advance).fold(f64::NEG_INFINITY, f64::max);
+            (left, right)
+        })
+        .collect()
+}
+
+/// SVG 2 §11.10.1.1 (https://www.w3.org/TR/SVG2/text.html#TextAnchoringProperties): with
+/// `direction: rtl`, `start` puts the right side of the text at its position and `end` puts the
+/// left side there; `middle` centers it either way. The direction is the effective one of the element that
+/// holds the chunk's first character.
+#[test]
+fn rtl_point_text_start_and_end_use_directional_edges() {
+    // (markup, share of the advance left of x = 200)
+    for (body, share) in [
+        (r#"<text x="200" y="60" direction="rtl" font-size="20">Wave</text>"#, 1.0),
+        (r#"<text x="200" y="60" direction="rtl" text-anchor="start" font-size="20">Wave</text>"#, 1.0),
+        (r#"<text x="200" y="60" direction="rtl" text-anchor="middle" font-size="20">Wave</text>"#, 0.5),
+        (r#"<text x="200" y="60" direction="rtl" text-anchor="end" font-size="20">Wave</text>"#, 0.0),
+        (r#"<g direction="rtl"><text x="200" y="60" font-size="20">Wave</text></g>"#, 1.0),
+        (r#"<g direction="rtl" text-anchor="end"><text x="200" y="60" font-size="20">Wave</text></g>"#, 0.0),
+        (r#"<text x="200" y="60" direction="rtl" font-size="20"><tspan direction="ltr">Wave</tspan></text>"#, 0.0),
+        (r#"<text x="200" y="60" text-anchor="start" font-size="20">Wave</text>"#, 0.0),
+        (r#"<text x="200" y="60" direction="ltr" text-anchor="end" font-size="20">Wave</text>"#, 1.0),
+    ] {
+        let d = open(body);
+        let (left, right) = line_edges(only_text(&d))[0];
+        let want = 200.0 - share * (right - left);
+        assert!(close(left, want, 1e-6), "{body}: the advance spans {left}..{right}, so it does not start at {want}");
+    }
+}
+
+/// On a path, right-to-left text anchored by `start` ends at `startOffset` and one anchored by
+/// `end` begins there (its glyphs run from the path's start in visual order); `middle` centers it.
+#[test]
+fn rtl_type_on_a_path_starts_at_its_directional_edge() {
+    // (anchor, direction, share of the advance before the offset)
+    for (anchor, direction, share) in [("start", "rtl", 1.0), ("middle", "rtl", 0.5), ("end", "rtl", 0.0), ("start", "ltr", 0.0), ("end", "ltr", 1.0)]
+    {
+        let d = open(&format!(
+            r##"<path id="p" d="M0 100 L400 100" fill="none"/>
+            <text font-size="20" text-anchor="{anchor}" direction="{direction}"><textPath href="#p" startOffset="200">Wave</textPath></text>"##
+        ));
+        let t = only_text(&d);
+        assert!(matches!(t.kind, TextKind::OnPath { .. }), "{:?}", t.kind);
+        let lay = layout(FontDb::global(), t);
+        let left = lay.glyphs.iter().map(|g| (t.xf * g.origin).x).fold(f64::INFINITY, f64::min);
+        let width: f64 = lay.glyphs.iter().map(|g| g.advance).sum();
+        let want = 200.0 - share * width;
+        assert!(close(left, want, 0.05), "{anchor} {direction}: the text starts at {left}, not {want}");
+    }
+}
+
+/// Letter-spaced right-to-left lines: a line keeps the tracking after each of its characters, and
+/// its whole advance sits on its anchor as `start`, `middle` and `end` place it.
+#[test]
+fn rtl_letter_spaced_lines_stay_on_their_anchor() {
+    for (anchor, share) in [("start", 1.0), ("middle", 0.5), ("end", 0.0)] {
+        let d = open(&format!(r#"<text x="200" y="100" direction="rtl" text-anchor="{anchor}" letter-spacing="8" font-size="40">WAVE</text>"#));
+        let t = only_text(&d);
+        let (left, right) = line_edges(t)[0];
+        let want = 200.0 - share * (right - left);
+        assert!(close(left, want, 1e-6), "{anchor}: the advance spans {left}..{right}, so it does not start at {want}");
+        let natural = {
+            let d = open(&format!(r#"<text x="200" y="100" direction="rtl" text-anchor="{anchor}" font-size="40">WAVE</text>"#));
+            let (l, r) = line_edges(only_text(&d))[0];
+            r - l
+        };
+        assert!(close(right - left, natural + 4.0 * 8.0, 1e-6), "{anchor}: the advance {} holds the tracking of all 4 letters", right - left);
+    }
+    // A right-to-left line anchored by `start` beside a left-to-right `middle` line: each keeps its own anchor.
+    let d = open(
+        r#"<text y="100" font-size="20" letter-spacing="4"><tspan x="200" direction="rtl">Wave</tspan><tspan x="200" dy="30" text-anchor="middle">Line</tspan></text>"#,
+    );
+    let t = only_text(&d);
+    let e = line_edges(t);
+    assert_eq!(e.len(), 2, "{e:?}");
+    assert!(close(e[0].1, 200.0, 1e-6), "the right-to-left line ends at 200: {e:?}");
+    let lay = layout(FontDb::global(), t);
+    let a: f64 = lay.glyphs[lay.lines[1].glyph_start..lay.lines[1].glyph_end].iter().map(|g| g.advance).sum();
+    assert!(close(e[1].0, 200.0 - a / 2.0, 1e-6), "the middle line is centered on 200 with its tracking: {e:?}");
+}
+
+/// Each line is a chunk anchored by the `text-anchor` and `direction` of its first character.
+#[test]
+fn rtl_lines_use_each_chunk_first_character_direction_and_anchor() {
+    let d = open(
+        r#"<text y="60" font-size="20"><tspan x="200" direction="rtl">Wave</tspan><tspan x="200" dy="30">Line</tspan><tspan x="200" dy="30" direction="rtl" text-anchor="end">Last</tspan><tspan x="200" dy="30" direction="rtl" text-anchor="middle">Mid</tspan></text>"#,
+    );
+    let e = line_edges(only_text(&d));
+    assert_eq!(e.len(), 4, "{e:?}");
+    assert!(close(e[0].1, 200.0, 1e-6), "a right-to-left start line ends at 200: {e:?}");
+    assert!(close(e[1].0, 200.0, 1e-6), "a left-to-right start line starts at 200: {e:?}");
+    assert!(close(e[2].0, 200.0, 1e-6), "a right-to-left end line starts at 200: {e:?}");
+    assert!(close((e[3].0 + e[3].1) / 2.0, 200.0, 1e-6), "a middle line is centered on 200: {e:?}");
+}
+
+/// A line starts at its own x, also when it is anchored as the line before it is and when another
+/// line holds absolutely placed characters.
+#[test]
+fn each_line_starts_at_its_own_x() {
+    let d = open(r#"<text y="40" font-size="20"><tspan x="50">Wave</tspan><tspan x="120" dy="30">Line</tspan></text>"#);
+    let e = line_edges(only_text(&d));
+    assert!(close(e[0].0, 50.0, 1e-6) && close(e[1].0, 120.0, 1e-6), "{e:?}");
+    let d = open(r#"<text y="40" font-size="20" text-anchor="end"><tspan x="150">Wave</tspan><tspan x="100" dy="30">Line</tspan></text>"#);
+    let e = line_edges(only_text(&d));
+    assert!(close(e[0].1, 150.0, 1e-6) && close(e[1].1, 100.0, 1e-6), "{e:?}");
+    let d = open(r#"<text y="40" font-size="20"><tspan x="50 100">ab</tspan><tspan x="200" dy="30" direction="rtl">Line</tspan></text>"#);
+    let t = only_text(&d);
+    let e = line_edges(t);
+    assert_eq!(e.len(), 2, "{e:?}");
+    assert!(close(e[0].0, 50.0, 0.05) && close(e[1].1, 200.0, 0.05), "{e:?}");
+    let b = (t.xf * layout(FontDb::global(), t).glyphs[1].origin).x;
+    assert!(close(b, 100.0, 0.05), "b starts at {b}");
+}
+
+/// Absolutely placed chunks are anchored on their own, each by the `text-anchor` and `direction`
+/// of its first character, whatever the first chunk's anchor.
+#[test]
+fn absolutely_placed_chunks_use_their_own_rtl_anchor() {
+    // (markup, share of each chunk's advance left of its x)
+    for (body, shares) in [
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl">b</tspan></text>"#, [0.0, 1.0]),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl" text-anchor="end">b</tspan></text>"#, [0.0, 0.0]),
+        (r#"<text y="40" font-size="20"><tspan x="80">a</tspan><tspan x="200" direction="rtl">b</tspan></text>"#, [0.0, 1.0]),
+        (r#"<text x="80 200" y="40" text-anchor="middle" font-size="20">a<tspan direction="rtl" text-anchor="end">b</tspan></text>"#, [0.5, 0.0]),
+        (r#"<text x="80 200" y="40" text-anchor="middle" font-size="20">a<tspan direction="rtl" text-anchor="start">b</tspan></text>"#, [0.5, 1.0]),
+        (r#"<text x="80 200" y="40" text-anchor="middle" font-size="20">a<tspan direction="rtl">b</tspan></text>"#, [0.5, 0.5]),
+        (r#"<text x="80 200" y="40" direction="rtl" font-size="20">ab</text>"#, [1.0, 1.0]),
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        let lay = layout(FontDb::global(), t);
+        assert_eq!(lay.glyphs.len(), 2, "{body}");
+        // Natural advance: the kerning that moves `b` onto its x is added after `a`.
+        let style = |i: usize| t.runs.iter().flat_map(|r| r.text.chars().map(move |_| &r.style)).nth(i).unwrap();
+        let natural = |i: usize| lay.glyphs[i].advance - style(i).kerning.unwrap_or(0.0) / 1000.0 * style(i).size;
+        for (i, (x, share)) in [80.0, 200.0].into_iter().zip(shares).enumerate() {
+            let left = (t.xf * lay.glyphs[i].origin).x;
+            let want = x - share * natural(i);
+            assert!(close(left, want, 0.05), "{body}: chunk {i} starts at {left}, not {want}");
+        }
+    }
+}
+
+/// A right-to-left chunk of several characters is anchored by its visual edges: its first
+/// character is drawn at its right, so the chunk runs left from that character's right edge.
+#[test]
+fn absolutely_placed_rtl_chunks_of_several_characters_anchor_by_their_visual_edges() {
+    // (markup, share of the right-to-left chunk's advance left of x = 200)
+    for (body, share) in [
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl">אב</tspan></text>"#, 1.0),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl" text-anchor="middle">אב</tspan></text>"#, 0.5),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl" text-anchor="end">אב</tspan></text>"#, 0.0),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan text-anchor="end">אב</tspan></text>"#, 1.0),
+        // A digit is not a strong character: the text still runs left to right.
+        (r#"<text x="80 200" y="40" font-size="20">1<tspan direction="rtl" text-anchor="end">אב</tspan></text>"#, 0.0),
+        // The chunk starts a line, and another line holds absolutely placed characters.
+        (r#"<text y="40" font-size="20"><tspan x="200" direction="rtl">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#, 1.0),
+        (
+            r#"<text y="40" font-size="20"><tspan x="200" direction="rtl" text-anchor="middle">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#,
+            0.5,
+        ),
+        (
+            r#"<text y="40" font-size="20"><tspan x="200" direction="rtl" text-anchor="end">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#,
+            0.0,
+        ),
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        let lay = layout(FontDb::global(), t);
+        let chunk: Vec<_> = lay.glyphs.iter().filter(|g| g.rtl).collect();
+        assert_eq!(chunk.len(), 2, "{body}");
+        assert!(chunk.iter().all(|g| g.advance > 1.0), "{body}: both letters have an advance");
+        let left = chunk.iter().map(|g| (t.xf * g.origin).x).fold(f64::INFINITY, f64::min);
+        let right = chunk.iter().map(|g| (t.xf * g.origin).x + g.advance).fold(f64::NEG_INFINITY, f64::max);
+        let want = 200.0 - share * (right - left);
+        assert!(close(left, want, 0.05), "{body}: the chunk spans {left}..{right}, so it does not start at {want}");
+        // The first character is the right one of the two.
+        let first = lay.glyphs.iter().filter(|g| g.rtl).min_by_key(|g| g.byte).map(|g| (t.xf * g.origin).x);
+        assert!(first.is_some_and(|x| x > left + 1.0), "{body}: the first character starts at {first:?}, the chunk at {left}");
+    }
+}
+
+#[test]
+fn a_small_line_gap_in_tiny_type_keeps_its_leading() {
+    // 0.0085 against an auto leading of 0.006 differs by less than 0.01 but is not a whole multiple of it.
+    let d = open(r#"<text x="1" y="1" font-size="0.005">One<tspan x="1" dy="0.0085">Two</tspan></text>"#);
+    let t = only_text(&d);
+    let two = t.runs.iter().find(|r| r.text.contains("Two")).unwrap().style.leading;
+    assert!(two.is_some_and(|l| close(l, 0.0085, 1e-9)), "{two:?}");
+}
+
+#[test]
+fn blank_lines_in_tiny_type_keep_their_own_spacing() {
+    // B sits 0.0085 below A (kept as its leading); C is three 0.006 lines below B, so the two blank
+    // lines between them must be 0.006 apart, not carry B's 0.0085.
+    let d = open(r#"<text x="1" y="1" font-size="0.005">A<tspan x="1" dy="0.0085">B</tspan><tspan x="1" dy="0.018">C</tspan></text>"#);
+    let t = only_text(&d);
+    let blank = t.runs.iter().find(|r| r.text == "\n\n").expect("a run of the two blank lines");
+    assert!(blank.style.leading.is_some_and(|l| close(l, 0.006, 1e-9)), "{:?}", blank.style.leading);
 }
 
 #[test]
@@ -652,4 +1030,41 @@ fn flowed_text_that_cannot_be_read_is_reported() {
     for id in ["none", "huge", "far"] {
         assert!(w.iter().any(|w| w.contains(id) && w.contains("flowRoot")), "{id}: {w:?}");
     }
+}
+
+/// Total advance of a single-line text.
+fn advance(t: &TextObject) -> f64 {
+    layout(FontDb::global(), t).glyphs.iter().map(|g| g.advance).sum()
+}
+
+/// SVG 1.1 §10.9.1: `textLength` fits the characters to that advance, by spacing them out
+/// (`lengthAdjust="spacing"`, the default) or by stretching them (`spacingAndGlyphs`).
+/// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute
+#[test]
+fn text_length_fits_the_advance() {
+    let natural = advance(only_text(&open(r#"<text x="20" y="100" font-size="20">Hello World</text>"#)));
+    for adjust in ["spacingAndGlyphs", "spacing"] {
+        for want in [50.0, 150.0, 300.0] {
+            let (d, w) = import_with_report(&svg(&format!(
+                r#"<text x="20" y="100" font-size="20" textLength="{want}" lengthAdjust="{adjust}">Hello World</text>"#
+            )))
+            .unwrap();
+            assert!(w.is_empty(), "{w:?}");
+            let t = only_text(&d);
+            assert_eq!(t.plain_text(), "Hello World");
+            let got = advance(t);
+            assert!(close(got, want, 0.05), "{adjust} {want}: {got} (natural {natural})");
+            let scaled = t.runs.iter().all(|r| close(r.style.h_scale, 100.0 * want / natural, 0.5));
+            assert_eq!(scaled, adjust == "spacingAndGlyphs", "{adjust} {want}: {:?}", t.runs);
+        }
+    }
+    // On a tspan, only its characters are fitted; units and percentages of the viewport resolve.
+    let t = open(r#"<text x="20" y="100" font-size="20">Hi <tspan textLength="25%">there</tspan>!</text>"#);
+    let t = only_text(&t);
+    let lay = layout(FontDb::global(), t);
+    let span: f64 = lay.glyphs.iter().filter(|g| (3..8).contains(&g.byte)).map(|g| g.advance).sum();
+    assert!(close(span, 100.0, 0.05), "{span}");
+    // A negative length is ignored.
+    let t = open(r#"<text x="20" y="100" font-size="20" textLength="-5">Hello World</text>"#);
+    assert!(close(advance(only_text(&t)), natural, 1e-6));
 }

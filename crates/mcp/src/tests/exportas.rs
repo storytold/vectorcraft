@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use super::TempFolder;
 use crate::{Backend, Headless, call_tool};
 
 fn text(r: &crate::ToolResult) -> Value {
@@ -16,11 +17,97 @@ fn three_boards() -> Headless {
     h
 }
 
+/// The tool, `app.export` and `file.export` refuse a key no format takes, at the top level of
+/// `options` and inside a PDF object.
+#[test]
+fn an_option_no_format_takes_is_an_error() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 30}})).unwrap();
+    for (options, named) in [
+        (json!({"standard": "pdfX4", "noSuchOption": true}), "noSuchOption"),
+        (json!({"marks": {"useDocumentBleed": true}}), "marks.useDocumentBleed"),
+    ] {
+        let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": options}));
+        assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains(named), "{r:?}");
+        let mut params = options.clone();
+        params["format"] = json!("pdf");
+        for method in ["app.export", "file.export"] {
+            let e = if method == "app.export" {
+                h.call(method, params.clone()).unwrap_err()
+            } else {
+                h.call("engine.execute", json!({"command": method, "params": params})).unwrap_err()
+            };
+            assert!(e.contains(named), "{method}: {e}");
+        }
+    }
+    // One object can still carry several formats' options; the warnings name those the file
+    // doesn't read.
+    let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": {"quality": 80, "styling": "style"}}));
+    assert!(!r.is_error, "{r:?}");
+    let warnings = text(&r)["warnings"].clone();
+    for key in ["quality", "styling"] {
+        assert!(warnings.as_array().unwrap().contains(&json!(format!("`{key}` was not used: PDF files don't read it"))), "{warnings}");
+    }
+    // `app.export` and `file.export` give the same warning.
+    let params = json!({"format": "pdf", "quality": 80});
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let r = h.call("app.export", params.clone()).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "app.export: {r}");
+    let r = h.call("engine.execute", json!({"command": "file.export", "params": params})).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "file.export: {r}");
+}
+
+/// `app.save`, `file.save` and `file.exportForScreens` refuse a key no format takes before they
+/// write anything.
+#[test]
+fn a_save_or_screens_option_no_format_takes_is_an_error() {
+    let dir = TempFolder::new("save-options");
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 30}})).unwrap();
+    let pdf = dir.join("a.pdf").to_string_lossy().into_owned();
+    for (params, named) in [
+        (json!({"path": pdf, "noSuchOption": true}), "noSuchOption"),
+        (json!({"path": pdf, "options": {"marks": {"useDocumentBleed": true}}}), "options.marks.useDocumentBleed"),
+    ] {
+        let e = h.call("app.save", params.clone()).unwrap_err();
+        assert!(e.contains(named), "app.save: {e}");
+        let e = h.call("engine.execute", json!({"command": "file.save", "params": params})).unwrap_err();
+        assert!(e.contains(named), "file.save: {e}");
+    }
+    let folder = dir.join("screens").to_string_lossy().into_owned();
+    for (params, named) in [
+        (json!({"folder": folder, "noSuchOption": true}), "noSuchOption"),
+        (json!({"folder": folder, "formats": [{"format": "pdf", "marks": {"useDocumentBleed": true}}]}), "formats[0].marks.useDocumentBleed"),
+    ] {
+        let e = h.call("engine.execute", json!({"command": "file.exportForScreens", "params": params})).unwrap_err();
+        assert!(e.contains(named), "file.exportForScreens: {e}");
+    }
+    assert_eq!(std::fs::read_dir(&*dir).unwrap().count(), 0, "nothing was written");
+    h.call("app.save", json!({"path": pdf})).unwrap();
+}
+
+#[test]
+fn raster_export_uses_document_resolution_unless_overridden() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 72, "height": 36, "rasterEffectsPpi": 300}})).unwrap();
+    for (args, size) in [
+        (json!({}), (300, 150)),
+        (json!({"scale": 1}), (72, 36)),
+        (json!({"options": {"scale": 2}}), (144, 72)),
+        (json!({"scale": 2, "options": {"ppi": 150}}), (150, 75)),
+    ] {
+        let mut params = args.clone();
+        params["format"] = json!("png");
+        let r = text(&call_tool(&mut h, "export", &params));
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(image::load_from_memory(&bytes).unwrap().to_rgba8().dimensions(), size, "{args}");
+    }
+}
+
 #[test]
 fn export_with_a_range_writes_one_file_per_artboard() {
     let mut h = three_boards();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-exportas-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempFolder::new("exportas");
     let path = dir.join("icon.png").to_string_lossy().to_string();
     let args = json!({"path": path, "range": "1, 3", "options": {"useArtboards": true, "ppi": 144, "background": "white"}});
     let r = text(&call_tool(&mut h, "export", &args));
@@ -42,5 +129,4 @@ fn export_with_a_range_writes_one_file_per_artboard() {
         let r = text(&call_tool(&mut h, "export", &json!({"format": format, "range": "1, 3"})));
         assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{format}: {r}");
     }
-    let _ = std::fs::remove_dir_all(dir);
 }

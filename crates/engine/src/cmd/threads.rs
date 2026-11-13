@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create",
             ["Type", "Threaded Text"],
             None,
-            "{} thread the selected area type and type on a path (and closed paths, which become area frames) in stacking order → {ids}",
+            "{} thread the selected area type and type on a path (and closed paths, which become area frames) in stacking order; a frame with Dynamic Text has it turned off and keeps the sizes it was drawn at → {ids, dynamicTextOff?: [id…] (the frames it was turned off on; left out when none)}",
             has_multi,
             create
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Thread Text",
             [],
             None,
-            "{from, to?, rect?: [x, y, width, height], at?: [x, y], before?} thread area type or type on a path `from` (a click on its out port) into one more frame, put after it in its thread, or before it with `before: true` (a click on its in port: the story starts there and flows on into `from`): closed path, area type or type on a path `to`, a new rectangle `rect`, or a new frame of `from`'s kind, shape and size with its top-left at `at` (give one of the three) → {id}; the two frames are selected",
+            "{from, to?, rect?: [x, y, width, height], at?: [x, y], before?} thread area type or type on a path `from` (a click on its out port) into one more frame, put after it in its thread, or before it with `before: true` (a click on its in port: the story starts there and flows on into `from`): closed path, area type or type on a path `to`, a new rectangle `rect`, or a new frame of `from`'s kind, shape and size with its top-left at `at` (give one of the three); a frame with Dynamic Text has it turned off and keeps the sizes it was drawn at → {id, dynamicTextOff?: [id…] (the frames it was turned off on; left out when none)}; the two frames are selected",
             has_doc,
             add
         ),
@@ -93,14 +93,29 @@ thread_local! {
 /// makes "changed" a pointer comparison). Deleted frames' text flows into the remaining ones; a
 /// frame that is now point type leaves its thread with the text it holds.
 pub(crate) fn reflow(before: &Document, doc: &mut Document) {
-    let threads = std::mem::take(&mut doc.text_threads);
+    // A frame is in one thread, once: a file that lists it again (in its thread or another) would
+    // copy its text into the story each time, and write the grown story back for the next thread
+    // to copy again. Only its first place counts.
+    let mut seen = std::collections::HashSet::new();
+    // A thread that lost a frame that way is flowed again: its frames' layout was made for the
+    // thread as listed (a frame left alone must lose its threaded continuation).
+    let threads: Vec<(Vec<NodeId>, bool)> = std::mem::take(&mut doc.text_threads)
+        .into_iter()
+        .map(|t| {
+            let listed = t.len();
+            let t: Vec<NodeId> = t.into_iter().filter(|id| seen.insert(*id)).collect();
+            let lost = t.len() != listed;
+            (t, lost)
+        })
+        .collect();
     let mut kept = vec![];
-    for thread in threads {
-        let changed = thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
-            (Some(a), Some(b)) => !std::ptr::eq(a, b),
-            (None, None) => false,
-            _ => true,
-        });
+    for (thread, lost) in threads {
+        let changed = lost
+            || thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
+                (Some(a), Some(b)) => !std::ptr::eq(a, b),
+                (None, None) => false,
+                _ => true,
+            });
         // When no frame changed, the thread keeps its area-type frames and their text is not copied.
         if !changed {
             let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
@@ -111,10 +126,16 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
         }
         #[cfg(test)]
         COPIED.with(|c| c.set(c.get() + 1));
+        // Type on a path in a thread is not Dynamic Text: its frames keep the sizes it draws them
+        // at, before the story is taken from them.
+        if thread.iter().filter(|id| text_of(doc, **id).is_some()).count() >= 2 {
+            dynamic_text_off(doc, &thread);
+        }
         // The story: live frames' runs, plus the text of frames deleted by this edit.
         let mut story: Vec<TextRun> = vec![];
         let mut sources: Vec<TextObject> = vec![];
         let mut later_wins = vec![];
+        let mut earlier_wins = vec![];
         let mut live = vec![];
         for id in &thread {
             match (text_of(doc, *id), text_of(before, *id)) {
@@ -123,6 +144,9 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     // A frame whose first paragraph was just restyled gives the paragraph it
                     // shares with the frame before it that style.
                     later_wins.push(old.is_some_and(|o| o.para_at(0) != t.para_at(0)));
+                    // A frame whose last paragraph was just restyled keeps that style in the
+                    // paragraph it shares with the frame after it, even when it is empty.
+                    earlier_wins.push(old.is_some_and(|o| o.para_at(o.paragraph_count() - 1) != t.para_at(t.paragraph_count() - 1)));
                     sources.push(t.clone());
                     live.push(*id);
                 }
@@ -131,6 +155,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 (None, Some(old)) => {
                     story.extend(old.runs.iter().cloned());
                     later_wins.push(false);
+                    earlier_wins.push(false);
                     sources.push(old.clone());
                 }
                 (None, None) => {}
@@ -140,7 +165,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             continue;
         }
         let source_refs: Vec<&TextObject> = sources.iter().collect();
-        let paras = vectorcraft_text::thread::story_paras(&source_refs, &later_wins);
+        let paras = vectorcraft_text::thread::story_paras_restyled(&source_refs, &later_wins, &earlier_wins);
         vectorcraft_text::edit::normalize(&mut story);
         if live.len() >= 2 {
             // Threaded frames keep their size: Auto Size is off for them (as in Illustrator).
@@ -153,7 +178,17 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             }
         }
         let optical = if live.len() >= 2 { optical_margin(before, doc, &live) } else { None };
-        let frames: Vec<TextObject> = live.iter().filter_map(|id| text_of(doc, *id).cloned()).collect();
+        let vertical = if live.len() >= 2 { thread_setting(before, doc, &live, |t| t.vertical) } else { None };
+        // The story is measured in each frame with the settings the frame takes.
+        let frames: Vec<TextObject> = live
+            .iter()
+            .filter_map(|id| text_of(doc, *id).cloned())
+            .map(|mut t| {
+                t.optical_margin = optical.unwrap_or(t.optical_margin);
+                t.vertical = vertical.unwrap_or(t.vertical);
+                t
+            })
+            .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
         for (id, part) in live.iter().zip(parts) {
@@ -162,19 +197,24 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 next.runs = part.runs;
                 next.set_paragraph_styles(part.paras);
                 let optical = optical.unwrap_or(t.optical_margin);
+                let vertical = vertical.unwrap_or(t.vertical);
                 let continues = part.continues;
                 if next.runs != t.runs
                     || next.para != t.para
                     || next.paras != t.paras
                     || optical != t.optical_margin
+                    || vertical != t.vertical
                     || part.list_count != t.list_count
+                    || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
                 {
                     t.runs = next.runs;
                     t.para = next.para;
                     t.paras = next.paras;
                     t.optical_margin = optical;
+                    t.vertical = vertical;
                     t.list_count = part.list_count;
+                    t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
                     refresh_bounds(t);
                 }
@@ -188,14 +228,15 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
 }
 
 /// Type that is not a frame of a thread is a story of its own: its numbered list paragraphs count
-/// from 1. Each such type object with another [`TextObject::list_count`] (a copy of a frame, a
-/// frame taken out of its thread, a frame converted to point type, which [`reflow`] takes out of
-/// its thread) gets 0 and is laid out again.
+/// from 1. Each such type object with another [`TextObject::list_count`] or
+/// [`TextObject::list_level_counts`] (a copy of a frame, a frame taken out of its thread, a frame
+/// converted to point type, which [`reflow`] takes out of its thread) gets 0 at every level and is
+/// laid out again.
 pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     let mut stale = vec![];
     doc.walk(|n| {
         if let NodeKind::Text(t) = &n.kind
-            && t.list_count != 0
+            && (t.list_count != 0 || !t.list_level_counts.is_empty())
         {
             stale.push(n.id);
         }
@@ -212,6 +253,7 @@ pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
     for id in stale {
         if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
             t.list_count = 0;
+            t.list_level_counts.clear();
             refresh_bounds(t);
         }
     }
@@ -220,9 +262,48 @@ pub(crate) fn restart_unthreaded_counts(doc: &mut std::sync::Arc<Document>) {
 /// The Optical Margin Alignment setting that every frame of a thread with the frames `live` takes:
 /// that of the first frame whose setting changed between `before` and `doc`, else the first frame's.
 fn optical_margin(before: &Document, doc: &Document, live: &[NodeId]) -> Option<bool> {
-    let now = |id: &NodeId| text_of(doc, *id).map(|t| t.optical_margin);
-    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(t.optical_margin) != now(id)));
+    thread_setting(before, doc, live, |t| t.optical_margin)
+}
+
+/// The value of the frame setting `get` that every frame of a thread with the frames `live` takes:
+/// that of the first frame whose value changed between `before` and `doc`, or the first frame's value
+/// when none changed.
+fn thread_setting<T: PartialEq>(before: &Document, doc: &Document, live: &[NodeId], get: impl Fn(&TextObject) -> T) -> Option<T> {
+    let now = |id: &NodeId| text_of(doc, *id).map(&get);
+    let changed = live.iter().find(|id| text_of(before, **id).is_some_and(|t| Some(get(t)) != now(id)));
     changed.or(live.first()).and_then(now)
+}
+
+/// Turn Dynamic Text off on the frames among `ids` that have it on, each keeping the sizes it is
+/// drawn at ([`super::typemenu::bake_dynamic_text`]); the frames it turned off.
+pub(crate) fn dynamic_text_off(doc: &mut Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let on: Vec<NodeId> = ids.iter().copied().filter(|id| text_of(doc, *id).is_some_and(|t| t.dynamic_text)).collect();
+    for id in &on {
+        if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) {
+            super::typemenu::bake_dynamic_text(t);
+        }
+    }
+    on
+}
+
+/// Turn Auto Size and Dynamic Text off for the frames of each thread of two or more frames, as
+/// [`reflow`] does, without re-flowing the story: for a document restored from a file as it was
+/// saved, so a later change to a frame's settings keeps the frame's size.
+pub(crate) fn keep_frame_sizes(doc: &mut Document) {
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        if live.len() < 2 {
+            continue;
+        }
+        dynamic_text_off(doc, &live);
+        for id in live {
+            if text_of(doc, id).is_some_and(|t| t.area.fit == vectorcraft_doc::AreaFit::AutoHeight)
+                && let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind)
+            {
+                t.area.fit = vectorcraft_doc::AreaFit::None;
+            }
+        }
+    }
 }
 
 /// Give every frame of each thread the first frame's Optical Margin Alignment setting, without
@@ -242,6 +323,25 @@ pub(crate) fn share_optical_margin(doc: &mut Document) {
     }
 }
 
+/// Give every frame of each thread the first frame's writing direction, and re-flow each thread in
+/// which that changes a frame: for a document restored from a file as it was saved.
+pub(crate) fn share_orientation(doc: &mut Document) {
+    let before = doc.clone();
+    for thread in doc.text_threads.clone() {
+        let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
+        let Some(vertical) = thread_setting(doc, doc, &live, |t| t.vertical) else { continue };
+        // Only the frames whose direction changes are copied, so only their threads re-flow.
+        let turn: Vec<NodeId> = live.into_iter().filter(|id| text_of(doc, *id).is_some_and(|t| t.vertical != vertical)).collect();
+        for id in turn {
+            if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+                t.vertical = vertical;
+                refresh_bounds(t);
+            }
+        }
+    }
+    reflow(&before, doc);
+}
+
 /// Mark the frames of each thread whose first paragraph continues from the frame before
 /// ([`TextObject::first_para_continues`]), without re-flowing the story: for a document restored
 /// from a file as it was saved.
@@ -259,6 +359,14 @@ pub(crate) fn mark_continued(doc: &mut Document) {
             }
         }
     }
+}
+
+/// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
+/// path; empty when `id` is in no thread or the thread has fewer than two such frames.
+pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
+    if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
 }
 
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.
@@ -363,13 +471,13 @@ fn cut_to_shown(n: &mut Node, ids: &[NodeId]) {
     {
         // Split as `take_overflow` splits it: the first part is what the frame shows.
         let from: &TextObject = t;
-        let parts = vectorcraft_text::thread::distribute_continuing(
+        let parts = vectorcraft_text::thread::distribute_continuing_levels(
             vectorcraft_text::FontDb::global(),
             &[from, from],
             &from.runs,
             &from.paragraph_styles(),
             from.first_para_continues,
-            from.list_count,
+            from.list_counts(),
         );
         if let (Some(head), Some(_)) = (parts.first(), parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty()))) {
             t.runs = head.runs.clone();
@@ -404,13 +512,13 @@ fn take_overflow(d: &mut Document, to: NodeId, from: &TextObject) {
     // `from`'s text split as if it flowed on into a second frame: the second part is what `from`
     // has no room for. Its share is measured as it is laid out, continuing a paragraph or not and
     // with its numbered list paragraphs counted on from the frames before it.
-    let parts = vectorcraft_text::thread::distribute_continuing(
+    let parts = vectorcraft_text::thread::distribute_continuing_levels(
         db,
         &[from, from],
         &from.runs,
         &from.paragraph_styles(),
         from.first_para_continues,
-        from.list_count,
+        from.list_counts(),
     );
     let Some(rest) = parts.get(1).filter(|p| p.runs.iter().any(|r| !r.text.is_empty())) else { return };
     let mut tail = from.clone();
@@ -449,6 +557,8 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(bad(C, "select area type and closed paths (at least one area type object)"));
     }
     let out = ids.clone();
+    // The frames that lose Dynamic Text: those of the new thread and the threads it takes in.
+    let off: Vec<u64> = with_threads(d, &ids).into_iter().filter(|i| text_of(d, *i).is_some_and(|t| t.dynamic_text)).map(|i| i.0).collect();
     s.edit("Thread Text", |d, _| {
         for id in &ids {
             if text_of(d, *id).is_none() {
@@ -477,7 +587,11 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
         touch(d, ids[0]);
         Ok(())
     })?;
-    Ok(json!({ "ids": out.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    let mut reply = json!({ "ids": out.iter().map(|i| i.0).collect::<Vec<_>>() });
+    if !off.is_empty() {
+        reply["dynamicTextOff"] = json!(off);
+    }
+    Ok(reply)
 }
 
 /// `text.thread.add`: the loaded text of a port, placed.
@@ -488,7 +602,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let before = switch_or(p, "before", false, C)?;
     let d = &s.doc()?.doc;
     let src = text_of(d, from).ok_or_else(|| bad(C, "`from` must be area type or type on a path"))?;
-    let style = src.first_style();
+    // A new frame takes the style `from` is drawn in: threading turns its Dynamic Text off.
+    let style = vectorcraft_text::drawn(src).first_style();
     // The frame to thread into: an existing object (`to`), or a new one beside `from`.
     let (to, new) = match (given("to"), given("rect"), given("at")) {
         (Some(v), None, None) => {
@@ -525,6 +640,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "give one of `to`, `rect` or `at`")),
     };
     let appearance = d.node(from).map(|n| n.appearance.clone());
+    // The frames that lose Dynamic Text: those of `from`'s thread and `to`.
+    let off: Vec<u64> = with_threads(d, &[from, to]).into_iter().filter(|i| text_of(d, *i).is_some_and(|t| t.dynamic_text)).map(|i| i.0).collect();
     let id = s.edit("Thread Text", |d, sel| {
         let to = match new {
             Some(t) => {
@@ -560,7 +677,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([from, to]);
         Ok(to)
     })?;
-    Ok(json!({ "id": id.0 }))
+    let mut reply = json!({ "id": id.0 });
+    if !off.is_empty() {
+        reply["dynamicTextOff"] = json!(off);
+    }
+    Ok(reply)
 }
 
 /// An empty frame of `kind` (area type or type on a path) placed by `xf`, with the type options of
@@ -569,6 +690,7 @@ fn empty_frame(src: &TextObject, style: vectorcraft_doc::CharStyle, kind: TextKi
     let mut t = src.clone();
     t.runs = vec![TextRun { text: String::new(), style, inline: None }];
     t.set_all_paras(src.para_at(0).clone());
+    t.dynamic_text = false;
     t.kind = kind;
     t.xf = xf;
     refresh_bounds(&mut t);

@@ -109,6 +109,93 @@ fn rich_text_writes_spacing_shift_and_scale() {
     assert_eq!(attr(tags[1], "y"), attr(tags[0], "y"));
 }
 
+/// The space before a line's first character (`kerningBefore`, #5111) moves the line's first
+/// `<tspan>` to where the character is drawn, left aligned or anchored at a centred line's centre.
+#[test]
+fn the_space_before_a_lines_first_character_moves_its_tspan() {
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    // 250/1000 em of 12 pt: 3 pt. The second paragraph's first character takes it too; the "O" after
+    // the first "H" is inside its line, so its value does nothing.
+    let runs = vec![run("HO", before.clone()), run("H\n", style(12.0)), run("H", before.clone()), run("O", style(12.0))];
+    let svg = export(&area_doc(runs, 200.0, Justify::Left), &ExportOptions::default());
+    // The first <tspan> on each baseline.
+    let mut starts: Vec<(f64, f64)> = vec![];
+    for t in tspans(&svg) {
+        let (x, y) = (attr(t, "x").unwrap(), attr(t, "y").unwrap());
+        if starts.last().is_none_or(|&(_, last)| last != y) {
+            starts.push((x, y));
+        }
+    }
+    assert_eq!(starts.iter().map(|s| s.0).collect::<Vec<_>>(), vec![3.0, 3.0], "{svg}");
+    // Centred, the line is 3 pt longer and the anchor sits at the middle of what a reader draws.
+    let svg = export(&area_doc(vec![run("H", before.clone()), run("OH", style(12.0))], 200.0, Justify::Center), &ExportOptions::default());
+    let x = tspans(&svg).iter().find_map(|t| attr(t, "x")).unwrap();
+    assert!((x - 101.5).abs() < 0.01, "{svg}");
+    // A justified line, which a reader's own advances place word by word, starts there too.
+    let words = vec![run("H", before.clone()), run("OH OH OH OH OH OH OH OH OH OH", style(12.0))];
+    let svg = export(&area_doc(words, 90.0, Justify::JustifyLeft), &ExportOptions::default());
+    assert_eq!(attr(tspans(&svg)[0], "x"), Some(3.0), "{svg}");
+}
+
+/// On a path, the space before the first character is its `dx` along the path. One before a
+/// character after a line break, which the `<textPath>` can't write, is kept as outlines.
+#[test]
+fn the_space_before_the_first_character_on_a_path_is_its_dx() {
+    let doc = |runs: Vec<TextRun>| {
+        let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+        t.runs = runs;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    let out = doc(vec![run("HO", before.clone()), run("H", style(12.0))]);
+    let tags = tspans(&out.svg);
+    assert!(out.svg.contains("<textPath"), "{}", out.svg);
+    assert_eq!((attr(tags[0], "dx"), attr(tags[1], "dx")), (Some(3.0), None), "{}", out.svg);
+    let out = doc(vec![run("HO\n", style(12.0)), run("H", before)]);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("line break")), "{:?}", out.warnings);
+}
+
+/// Insert Aki: each character the layout moves by its Aki starts a `<tspan>` where the character is
+/// drawn, so a reader draws the text where the canvas does, on left-aligned, centered and
+/// right-aligned lines and with fewer `<tspan>`s asked for too. On a path the type is outlined.
+#[test]
+fn insert_aki_places_each_moved_character() {
+    // 250/1000 em of 12 pt before the O (3 pt) and 500/1000 after it (6 pt), then a run with Aki
+    // after every character, and a second line.
+    let spaced = CharStyle { aki_left: 250.0, aki_right: 500.0, ..style(12.0) };
+    let runs = vec![run("H", style(12.0)), run("O", spaced), run("H ", style(12.0)), run("OHO\nHO", CharStyle { aki_right: 500.0, ..style(12.0) })];
+    // A centered or right-aligned line whose characters the Aki moves is placed segment by
+    // segment, not anchored.
+    for justify in [Justify::Center, Justify::Right] {
+        assert_drawn_in_place(&area_doc(runs.clone(), 200.0, justify));
+    }
+    let d = area_doc(runs, 200.0, Justify::Left);
+    assert_drawn_in_place(&d);
+    let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();
+    let fewer = tspans(&export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() })).len();
+    assert!(fewer > plain, "each moved character is placed with fewer tspans too: {plain} {fewer}");
+    let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+    t.runs = vec![run("HO", CharStyle { aki_left: 250.0, ..style(12.0) })];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Insert Aki")), "{:?}", out.warnings);
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {
@@ -121,6 +208,19 @@ fn proportional_metrics_write_palt() {
     assert!(!tags[0].contains("palt"), "{}", tags[0]);
     assert!(tags[1].contains("font-feature-settings:&quot;palt&quot; 1"), "{}", tags[1]);
     assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
+}
+
+/// A feature with a value (`salt=2`) is written as that value, `-tag` as 0, a plain tag as 1; a
+/// tag whose value is not a number is left out.
+#[test]
+fn feature_values_write_their_number() {
+    let valued = CharStyle { features: vec!["salt=2".into(), "-liga".into(), "ss01".into(), "swsh=12".into(), "salt=x".into()], ..style(12.0) };
+    let d = area_doc(vec![run("ab ", style(12.0)), run("cd", valued)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 2, "{svg}");
+    assert!(tags[1].contains("font-feature-settings:&quot;salt&quot; 2, &quot;liga&quot; 0, &quot;ss01&quot; 1, &quot;swsh&quot; 12"), "{}", tags[1]);
+    assert!(!tags[1].contains("salt=x") && !tags[0].contains("salt"), "{svg}");
 }
 
 /// Character Direction: live text writes each run set Left to Right as a bidi embedding
@@ -174,6 +274,41 @@ fn digits_are_written_as_drawn() {
     assert!(text.contains("page ٤,"), "Hindi draws 4 as ٤: {svg}");
     assert!(text.contains("page ۵"), "Farsi draws ٥ as ۵: {svg}");
     assert!(!text.contains("page 4") && !text.contains("page ٥"), "{svg}");
+}
+
+/// A character drawn with a chosen glyph is written as outlines: a reader's `<text>` would draw the
+/// default glyph.
+#[test]
+fn a_chosen_glyph_is_written_as_outlines() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).unwrap());
+    let [u1, ..] = unencoded_glyphs().unwrap();
+    let face = db.face(alternates_family(true), "Regular").unwrap();
+    let plain = CharStyle { font_family: alternates_family(true).into(), ..style(12.0) };
+    let chosen = CharStyle { glyph_alternate: Some(face.choice('a', u1)), ..plain.clone() };
+    let svg = export(&area_doc(vec![run("xay", plain.clone())], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a choice the text stays live: {svg}");
+    let d = area_doc(vec![run("x", plain.clone()), run("a", chosen), run("y", plain)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+}
+
+/// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
+/// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
+/// which takes the `<text>` element's 12.
+#[test]
+fn font_height_reference_writes_the_size_drawn() {
+    use vectorcraft_doc::FontHeightReference;
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let em_box = CharStyle { font_family: HEIGHT_FAMILY.into(), ..style(12.0) };
+    let cap = CharStyle { size: 14.0, font_height_reference: FontHeightReference::CapHeight, ..em_box.clone() };
+    let d = area_doc(vec![run("Hx ", em_box), run("Hx", cap)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains("font-size=\"12\" fill"), "{svg}");
+    let sizes: Vec<_> = tspans(&svg).iter().map(|t| attr(t, "font-size")).collect();
+    assert_eq!(sizes, [None, Some(20.0)], "{svg}");
 }
 
 #[test]
@@ -400,6 +535,17 @@ fn numbers_are_written_as_their_characters_where_they_are_drawn() {
     assert!(at(">I.\t<") < at("alpha") && at("alpha") < at(">II.\t<") && at(">II.\t<") < at("zeta") && at("zeta") < at(">III.\t<"), "{svg}");
     assert!(!svg.contains(">-<"), "{svg}");
     assert_drawn_in_place(&d);
+    // Aligned right: the gap comes before each number, which a viewer draws where the canvas does,
+    // against the text.
+    let mut t = TextObject::point(Point::new(20.0, 20.0), "alpha beta gamma delta epsilon\nzeta\neta", style(12.0));
+    t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 160.0)) };
+    t.para.list = Some(ParaList::numbered(NumberStyle::UpperRoman).aligned(vectorcraft_doc::text::ListAlign::Right));
+    t.para.left_indent = 18.0;
+    t.para.first_line_indent = -18.0;
+    let d = doc(t);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(">III.<") && !svg.contains(">III.\t<") && !svg.contains(">-<"), "{svg}");
+    assert_drawn_in_place(&d);
     let mut line = BezPath::new();
     line.move_to((0.0, 50.0));
     line.line_to((250.0, 50.0));
@@ -505,6 +651,18 @@ fn ragged_lines_keep_their_character_spacing() {
         }
         runs.push(run("end", style(12.0)));
         assert_drawn_in_place(&area_doc(runs, 280.0, justify));
+    }
+}
+
+/// Tracking and manual kerning in type scaled uniformly, which no `textLength` stretches, take the
+/// scale in a viewer as they do on the canvas.
+#[test]
+fn spacing_in_uniformly_scaled_type_takes_the_scale() {
+    for st in [
+        CharStyle { h_scale: 200.0, v_scale: 200.0, tracking: 100.0, ..style(12.0) },
+        CharStyle { h_scale: 150.0, v_scale: 150.0, kerning: Some(80.0), ..style(12.0) },
+    ] {
+        assert_drawn_in_place(&area_doc(vec![run("tracked wide", st)], 280.0, Justify::Left));
     }
 }
 

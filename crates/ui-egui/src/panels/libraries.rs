@@ -4,8 +4,10 @@
 //! patterns), are added to it; the + button adds the selection's graphic, fill or stroke color,
 //! pattern or gradient, or text styles. A click on a color, gradient or pattern paints the
 //! selection through the active Fill/Stroke proxy, a style click applies it to the selected type,
-//! and a graphic is dragged onto the canvas (or double-clicked) to place a copy. Libraries are
-//! kept on this machine.
+//! and a graphic is dragged onto the canvas (or double-clicked) to place a copy. A character
+//! style's context menu also applies it, adds it to the document's character styles without
+//! applying it (`library.addToCharacterStyles`) and renames it (`library.renameItem`). Libraries
+//! are kept on this machine.
 //!
 //! The search field filters the items by name; items can be moved into user-named groups, shown as
 //! collapsible sections after the ungrouped items; and the panel menu exports the library to a
@@ -49,8 +51,6 @@ const LIST_VIEW: &str = "library-list-view";
 const BAR: f32 = 42.0;
 /// The least height the list takes.
 const MIN_LIST: f32 = 140.0;
-/// How near the list's top or bottom edge a drag scrolls it.
-const EDGE: f32 = 28.0;
 
 /// The current library: its id and a copy of it (the panel menu acts on it after reading).
 fn current(app: &VectorcraftApp) -> Option<(String, Library)> {
@@ -94,12 +94,22 @@ fn ask_group_name(app: &mut VectorcraftApp, library: &str, rename: Option<&str>,
     app.ui.dialog = Some(crate::state::Dialog::new("command", d));
 }
 
+/// The name dialog for renaming item `item` (its key) of `kind` in `library`, filled with its name.
+fn ask_item_name(app: &mut VectorcraftApp, library: &str, kind: ItemKind, item: &str) {
+    let name = app.session.libraries.get(library).and_then(|l| l.items().find(|(k, key, _)| *k == kind && *key == item)).map(|(.., n)| n.to_string());
+    let fixed = json!({ "library": library, "kind": kind_param(kind), "item": item });
+    let d = json!({ "__command": "library.renameItem", "__label": "Rename Library Item", "name": name.unwrap_or_else(|| item.to_string()), "__params": fixed });
+    app.ui.dialog = Some(crate::state::Dialog::new("command", d));
+}
+
 /// What a click in the panel asks for, done once the list is drawn.
 enum Act {
     Run(&'static str, Value),
     /// The New Group dialog; the items (`[{kind, item}]`) go into the new group.
     NewGroup(Value),
     RenameGroup(String),
+    /// The Rename dialog for an item (its kind and key).
+    RenameItem(ItemKind, String),
 }
 
 /// What a drag in the panel holds for the library shown: one of its items, one of its groups (by
@@ -130,13 +140,22 @@ fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
 }
 
 /// The kind and `library.add` params of what `drag` holds, to add to library `library`: a color
-/// (not one of that library's own), or a gradient or pattern swatch, by its name.
+/// (not one of that library's own; a spot colour with its swatch's name), or a gradient or pattern
+/// swatch, by its name.
 fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
     let PanelDrag::Paint { paint, params, library: from, .. } = drag else { return None };
     let swatch = || params.get("swatch").and_then(Value::as_str);
     match paint {
         Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => {
-            Some((ItemKind::Color, json!({ "kind": "fillColor", "color": color })))
+            // A spot swatch's name (and tint) come along, so the library keeps the ink.
+            let mut add = json!({ "kind": "fillColor", "color": color });
+            if let Some(s) = swatch() {
+                add["swatch"] = json!(s);
+                if let Some(t) = params.get("tint") {
+                    add["tint"] = t.clone();
+                }
+            }
+            Some((ItemKind::Color, add))
         }
         Paint::Gradient(_) => swatch().map(|s| (ItemKind::Gradient, json!({ "kind": "fillGradient", "swatch": s }))),
         Paint::Pattern { .. } => swatch().map(|s| (ItemKind::Pattern, json!({ "kind": "fillPattern", "swatch": s }))),
@@ -155,6 +174,9 @@ struct Items<'a> {
     grab: Option<Grab>,
     /// Whether the items show in a list (else colours and graphics as icons).
     list: bool,
+    /// Whether a document is open, and whether type is selected there for a style to apply to.
+    has_doc: bool,
+    can_apply: bool,
 }
 
 impl Items<'_> {
@@ -205,7 +227,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let searching = !query.is_empty();
     let shown = |name: &str| !searching || name.to_lowercase().contains(&query);
     let grab = egui::DragAndDrop::payload::<PanelDrag>(ui.ctx()).and_then(|d| grabbed(&d, &lib_id));
-    let items = Items { library: &lib_id, lib, groups: lib.group_index(), fill_active, grab, list };
+    // Whether a character style's Apply Character Style is enabled (looked up only when the library has one).
+    let can_apply =
+        has_doc && !lib.char_styles.is_empty() && vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &json!({}), false).is_some();
+    let items = Items { library: &lib_id, lib, groups: lib.group_index(), fill_active, grab, list, has_doc, can_apply };
     // The items shown in each section: the ungrouped ones first, then each group's.
     let mut counts = vec![0usize; lib.groups.len() + 1];
     for (kind, key, _) in lib.items().filter(|(_, _, name)| shown(name)) {
@@ -302,7 +327,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
             if items.grab.is_some() {
-                scroll_at_edges(ui);
+                super::scroll_at_edges(ui);
             }
         });
         out.inner_rect
@@ -365,6 +390,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         Some(Act::NewGroup(items)) => ask_group_name(app, &lib_id, None, items),
         Some(Act::RenameGroup(g)) => ask_group_name(app, &lib_id, Some(&g), Value::Null),
+        Some(Act::RenameItem(kind, item)) => ask_item_name(app, &lib_id, kind, &item),
         None => {}
     }
 }
@@ -457,7 +483,13 @@ impl Items<'_> {
                 if resp.clicked() {
                     *act = Some(Act::Run("library.use", json!({ "kind": kind_param(kind), "item": st.name })));
                 }
-                resp.context_menu(|ui| self.item_menu(ui, act, kind, &st.name));
+                resp.context_menu(|ui| {
+                    if kind == ItemKind::CharStyle {
+                        self.char_style_menu(ui, act, &st.name);
+                    } else {
+                        self.item_menu(ui, act, kind, &st.name);
+                    }
+                });
             }
             ui.add_space(6.0);
         }
@@ -588,35 +620,67 @@ impl Items<'_> {
     /// An item's context menu entries: Move to Group (No Group, the library's groups, New
     /// Group…) and Delete.
     fn item_menu(&self, ui: &mut Ui, act: &mut Option<Act>, kind: ItemKind, key: &str) {
-        let at = self.group_of(kind, key);
-        let item = json!({ "kind": kind_param(kind), "item": key });
-        ui.menu_button(format!("   {}", tl!("Move to Group")), |ui| {
-            if menu_item(ui, "No Group", true, at.is_none()) {
-                if at.is_some() {
-                    *act = Some(Act::Run("library.moveItem", item.clone()));
-                }
-                ui.close();
-            }
-            for (i, g) in self.lib.groups.iter().enumerate() {
-                if menu_item_name(ui, &g.name, true, at == Some(i)) {
-                    if at != Some(i) {
-                        let mut p = item.clone();
-                        p["group"] = json!(g.name);
-                        *act = Some(Act::Run("library.moveItem", p));
-                    }
-                    ui.close();
-                }
-            }
-            ui.separator();
-            if menu_item(ui, "New Group…", true, false) {
-                *act = Some(Act::NewGroup(json!([item])));
-                ui.close();
-            }
-        });
+        self.group_menu(ui, act, kind, key);
+        if menu_item(ui, "Delete", true, false) {
+            *act = Some(Act::Run("library.removeItem", json!({ "kind": kind_param(kind), "item": key })));
+            ui.close();
+        }
+    }
+
+    /// A character style's context menu: Apply Character Style (with type selected), Add to
+    /// Character Styles (the document's, not applied), Move to Group, Rename… and Delete.
+    fn char_style_menu(&self, ui: &mut Ui, act: &mut Option<Act>, key: &str) {
+        let item = json!({ "kind": "charStyle", "item": key });
+        if menu_item(ui, "Apply Character Style", self.can_apply, false) {
+            *act = Some(Act::Run("library.use", item.clone()));
+            ui.close();
+        }
+        if menu_item(ui, "Add to Character Styles", self.has_doc, false) {
+            *act = Some(Act::Run("library.addToCharacterStyles", json!({ "item": key })));
+            ui.close();
+        }
+        ui.separator();
+        self.group_menu(ui, act, ItemKind::CharStyle, key);
+        if menu_item(ui, "Rename…", true, false) {
+            *act = Some(Act::RenameItem(ItemKind::CharStyle, key.to_string()));
+            ui.close();
+        }
         if menu_item(ui, "Delete", true, false) {
             *act = Some(Act::Run("library.removeItem", item));
             ui.close();
         }
+    }
+
+    /// The Move to Group submenu of an item's context menu: No Group, the library's groups and
+    /// New Group….
+    fn group_menu(&self, ui: &mut Ui, act: &mut Option<Act>, kind: ItemKind, key: &str) {
+        let at = self.group_of(kind, key);
+        let item = json!({ "kind": kind_param(kind), "item": key });
+        ui.menu_button(format!("   {}", tl!("Move to Group")), |ui| {
+            widgets::menu_scroll(ui, |ui| {
+                if menu_item(ui, "No Group", true, at.is_none()) {
+                    if at.is_some() {
+                        *act = Some(Act::Run("library.moveItem", item.clone()));
+                    }
+                    ui.close();
+                }
+                for (i, g) in self.lib.groups.iter().enumerate() {
+                    if menu_item_name(ui, &g.name, true, at == Some(i)) {
+                        if at != Some(i) {
+                            let mut p = item.clone();
+                            p["group"] = json!(g.name);
+                            *act = Some(Act::Run("library.moveItem", p));
+                        }
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                if menu_item(ui, "New Group…", true, false) {
+                    *act = Some(Act::NewGroup(json!([item])));
+                    ui.close();
+                }
+            });
+        });
     }
 }
 
@@ -645,22 +709,6 @@ fn no_group_strip(ui: &mut Ui) {
         t.text_dim,
     );
     ui.add_space(6.0);
-}
-
-/// While something is dragged near the top or bottom edge of the scrolled list (`ui`: its
-/// contents), scroll that way, faster nearer the edge.
-fn scroll_at_edges(ui: &mut Ui) {
-    let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
-    let view = ui.clip_rect();
-    if !view.x_range().contains(pos.x) {
-        return;
-    }
-    let speed = |depth: f32| if (0.0..EDGE).contains(&depth) { 2.0 + 10.0 * (1.0 - depth / EDGE) } else { 0.0 };
-    let delta = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
-    if delta != 0.0 {
-        ui.scroll_with_delta(vec2(0.0, delta));
-        ui.ctx().request_repaint();
-    }
 }
 
 /// The drag in progress held over a section of the list (`sections`, seen through `clip`), away
@@ -816,8 +864,7 @@ pub(crate) fn import(app: &mut VectorcraftApp, p: Value) -> Result<Value, String
 /// Import Library…: a picked `.vclibrary` file becomes a new library (on the web the picked file
 /// arrives later through [`crate::io::open_bytes`]).
 fn import_picked(app: &mut VectorcraftApp) {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return;
     }
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Libraries", LIBRARY_EXTS)], ..Default::default() };

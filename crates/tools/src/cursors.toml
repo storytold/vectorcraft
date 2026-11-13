@@ -26,9 +26,9 @@ id = "Arrow"
 group = "Selection"
 shown_when = [
     "The Selection tool over empty canvas or over an unselected object (no Alt).",
-    "Dragging with the Selection tool (a move), or with Direct Selection (an anchor, a segment or a handle).",
+    "Dragging with the Selection tool (a move), with Direct Selection (an anchor, a segment or a handle), or with a shape tool (from the selection's centre point).",
     "Any tool with no cursor of its own (Touch Type, Rotate View).",
-    "The resting state of Live Paint Selection, Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
+    "The resting state of Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
 ]
 hotspot = "The arrow's tip."
 look = "The default pointer: a solid arrow. ArrowHollow is its hollow twin."
@@ -90,10 +90,44 @@ hotspot = "The front arrowhead's tip."
 look = "Says \"a copy\": a double arrowhead, one in front of the other."
 
 [[cursor]]
+id = "LivePaintSelectFace"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection over a face of a Live Paint group that a click selects: inside the face, with Select Fills on, and without Alt unless Select Strokes is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small filled square badge (a face). LivePaintSelectEdge and LivePaintSelectOutside share the arrow."
+
+[[cursor]]
+id = "LivePaintSelectEdge"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection within reach of an edge of a Live Paint group that a click selects: Select Strokes is on, and Alt is held or Select Fills is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a short line badge (an edge)."
+
+[[cursor]]
+id = "LivePaintSelectOutside"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection where a click selects no face or edge: away from Live Paint groups, over a group that is locked, hidden or outside the isolated art, inside a face with Alt held and no edge within reach, or with Select Fills and Select Strokes both off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small x badge (nothing to select)."
+
+[[cursor]]
 id = "Move"
 group = "Selection"
 shown_when = [
     "The Selection tool over a selected object, or over any object with Alt held (once an Alt-drag starts, SelectionCopy shows).",
+    "The shape tools over a selected object's centre point (Attributes › Show Center), before a press there moves it (while the drag runs the arrow is plain, SelectionCopy with Alt, ArrowHollow while it snaps).",
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",
@@ -101,6 +135,7 @@ shown_when = [
     "The Artboard tool inside an artboard.",
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
+    "Selection and Objects on Path over an Objects on Path group's Move All widget, and while dragging it.",
 ]
 hotspot = "The centre."
 look = "A four-way move cursor."
@@ -230,7 +265,7 @@ id = "Curvature"
 group = "Pen"
 shown_when = [
     "The Curvature tool over empty canvas, or anywhere while drawing a path away from its points.",
-    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end, PenConvert with Alt, PenClose over the first point of the path being drawn.",
+    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end of a selected path (Alt held or not), PenConvert with Alt over any other anchor or a point of the path being drawn, PenClose over the first point of the path being drawn.",
 ]
 hotspot = "The nib's tip."
 look = "The Pen nib with a curve badge."
@@ -241,7 +276,7 @@ look = "The Pen nib with a curve badge."
 id = "Text"
 group = "Type"
 shown_when = [
-    "Every horizontal type tool: Type, Area Type and Type on a Path (the Area and Path ones show the crosshair over a suitable path).",
+    "Every horizontal type tool: Type, Area Type and Type on a Path, away from a path a click would set type in or along (TypeArea, TypeOnPath).",
     "Stands in for TypeVertical until it's drawn.",
 ]
 hotspot = "The I-beam's centre."
@@ -250,9 +285,37 @@ look = "An I-beam with a short crossbar marking the baseline."
 [[cursor]]
 id = "TypeVertical"
 group = "Type"
-shown_when = ["The vertical type tools: Vertical Type, Vertical Area Type and Vertical Type on a Path (the Area and Path ones show the crosshair over a suitable path)."]
+shown_when = ["The vertical type tools: Vertical Type, Vertical Area Type and Vertical Type on a Path, away from a path a click would set type in or along (TypeAreaVertical, TypeOnPathVertical)."]
 hotspot = "The I-beam's centre."
 look = "The Text I-beam turned a quarter turn."
+
+[[cursor]]
+id = "TypeArea"
+group = "Type"
+shown_when = ["Type over a closed path's outline, and Area Type over one with Alt up: a click sets area type inside the path."]
+hotspot = "The I-beam's centre."
+look = "The Text I-beam with a small badge below right: a square frame with three short lines of type in it."
+
+[[cursor]]
+id = "TypeAreaVertical"
+group = "Type"
+shown_when = ["Vertical Type over a closed path's outline, and Vertical Area Type over one with Alt up: a click sets vertical area type inside the path."]
+hotspot = "The I-beam's centre."
+look = "TypeArea turned a quarter turn."
+
+[[cursor]]
+id = "TypeOnPath"
+group = "Type"
+shown_when = ["Type over an open path's outline; Type on a Path over any path's outline (Alt up); Area Type over an open path with Alt held: a click sets type along the path."]
+hotspot = "The I-beam's centre."
+look = "The Text I-beam with a small badge below right: a short smooth curve with a dot on it."
+
+[[cursor]]
+id = "TypeOnPathVertical"
+group = "Type"
+shown_when = ["The vertical type tools where TypeOnPath shows: a click sets vertical type along the path."]
+hotspot = "The I-beam's centre."
+look = "TypeOnPath turned a quarter turn."
 
 # ── Transform and resize ──────────────────────────────────────────────────────────────────────────
 
@@ -262,7 +325,6 @@ group = "Transform and resize"
 shown_when = [
     "The generic drawing cursor: all shape, line, grid, flare, cut, graph and liquify tools, and Place.",
     "The Rotate, Reflect, Scale and Shear tools with a selection (Reflect, Scale and Shear even mid-drag).",
-    "The Area Type and Type on a Path tools over a suitable path.",
     "The Artboard tool outside every artboard; the Gradient tool away from the annotator; Free Transform corners in Distort or Perspective mode.",
     "With Use Precise Cursors on, it replaces the Pen, Eyedropper, Slice, Blend and Shape Builder cursors.",
     "Stands in for every drawing tool cursor not drawn yet.",
@@ -341,6 +403,7 @@ shown_when = [
     "The Gradient tool over its rotate zone, or rotating.",
     "Puppet Warp with Alt near a selected pin.",
     "The bounding-box rotate cursor when the pointer is exactly on the box's centre.",
+    "Selection and Objects on Path over an Objects on Path group's Rotate All widget, and while dragging it.",
 ]
 hotspot = "Below the arc, in its empty middle."
 look = "An arc with an arrowhead at each end. RotateToward is the same arc, turned."
@@ -348,7 +411,9 @@ look = "An arc with an arrowhead at each end. RotateToward is the same arc, turn
 [[cursor]]
 id = "RotateToward"
 group = "Transform and resize"
-shown_when = ["Selection and Free Transform in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn."]
+shown_when = [
+    "Selection, Free Transform and the shape tools (Rectangle, Rounded Rectangle, Ellipse, Polygon, Star) in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn.",
+]
 hotspot = "Below the arc, in its empty middle, as for Rotate."
 look = "The Rotate arc drawn for the top-right corner (direction 1). VectorCraft turns it in 45° steps so it wraps whichever corner the pointer is at."
 
@@ -407,7 +472,10 @@ designer = false
 [[cursor]]
 id = "Eyedropper"
 group = "Colour and gradient"
-shown_when = ["The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead."]
+shown_when = [
+    "The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead.",
+    "The Live Paint Bucket with Alt held (a click samples paint).",
+]
 hotspot = "The pipette's tip."
 look = "A pipette."
 
@@ -443,8 +511,32 @@ hotspot = "Where the mesh point goes."
 [[cursor]]
 id = "LivePaintBucket"
 group = "Colour and gradient"
-shown_when = ["The Live Paint Bucket: a click fills a face (or an edge) of a Live Paint group."]
-hotspot = "Where the paint pours out."
+shown_when = [
+    "The Live Paint Bucket where a click paints nothing: away from Live Paint groups and the selected paths' regions, or over a part the Paint Fills and Paint Strokes options (and Shift) leave unpainted.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "An empty paint bucket tipped toward the hotspot, a small drop on it. LivePaintBucketFace is the same bucket filled."
+
+[[cursor]]
+id = "LivePaintBucketFace"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over a face of a Live Paint group, or a region of the selected paths, that a click fills.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "LivePaintBucket filled, with a larger drop on the hotspot."
+
+[[cursor]]
+id = "LivePaintBucketEdge"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over an edge of a Live Paint group that a click paints with the stroke.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The brush's tip."
+look = "A brush pointing down-left: bristles at the hotspot, then a white ferrule and a dark handle."
 
 # ── Width, blend, slice and shape builder ─────────────────────────────────────────────────────────
 
@@ -567,14 +659,14 @@ look = "PencilStraight's badge with a small filled square at the line's lower en
 [[cursor]]
 id = "Paintbrush"
 group = "Drawing and editing tools"
-shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it."]
+shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it, except that Alt held at the press with a path selected that the Smooth tool can act on smooths that path (see Smooth)."]
 hotspot = "The bristle tip."
 
 [[cursor]]
 id = "PaintbrushClose"
 group = "Drawing and editing tools"
 shown_when = [
-    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool with Alt held while drawing, or before a press when no path is selected that the Smooth tool can act on (with one selected, Smooth shows): releasing the mouse button with Alt still held closes the path.",
     "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
 ]
 hotspot = "The bristle tip."
@@ -583,14 +675,16 @@ look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClos
 [[cursor]]
 id = "BlobBrush"
 group = "Drawing and editing tools"
-shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. No brush-size outline shows while hovering."]
+shown_when = ["The Blob Brush tool: paints filled shapes that merge with touching ones of the same colour. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while painting; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The brush centre."
+look = "Only a small dot at the centre: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Eraser"
 group = "Drawing and editing tools"
-shown_when = ["The Eraser tool: a drag erases the area it covers. No size outline shows while hovering."]
+shown_when = ["The Eraser tool: a drag erases the area it covers. The tool draws the tip's outline (its size, angle and roundness, at the zoom) round the pointer on the canvas, before and while erasing; with precise cursors (Caps Lock) the crosshair shows instead."]
 hotspot = "The eraser's centre."
+look = "Only a small dot at the centre, as the Blob Brush's: the tip outline drawn on the canvas is the rest of the pointer."
 
 [[cursor]]
 id = "Smooth"
@@ -598,6 +692,8 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Smooth tool: a drag along a selected path smooths it.",
     "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+    "The Paintbrush tool with Alt held before a press while a path is selected that the Smooth tool can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), and through a drag that smooths.",
+    "The Blob Brush tool with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
 ]
 hotspot = "The tip."
 
@@ -642,7 +738,7 @@ hotspot = "The tip."
 [[cursor]]
 id = "Lasso"
 group = "Drawing and editing tools"
-shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it."]
+shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it.", "The Enclosing Lasso tool: draw a loop to select fully enclosed objects; Shift adds, Alt subtracts."]
 hotspot = "Where the loop is drawn from."
 
 [[cursor]]
@@ -701,6 +797,24 @@ id = "ParametricShape"
 group = "Drawing and editing tools"
 shown_when = ["The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a re-editable shape out from its centre; a click selects one and shows its handles."]
 hotspot = "Exact: the centre of the shape being drawn."
+
+[[cursor]]
+id = "CornerTool"
+group = "Drawing and editing tools"
+shown_when = ["The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor where two sides meet cuts a corner there; a drag on a corner's marker resizes it; an Alt-drag cuts corners on every anchor inside the marquee."]
+hotspot = "Exact: the anchor or marker being picked."
+
+[[cursor]]
+id = "SlideAnchor"
+group = "Drawing and editing tools"
+shown_when = ["The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag moves an anchor along the curve it sits on."]
+hotspot = "Exact: the anchor being dragged follows it along the path."
+
+[[cursor]]
+id = "SharedEdge"
+group = "Drawing and editing tools"
+shown_when = ["The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the touching edges of two paths under the round brush, or brings their anchors together there."]
+hotspot = "Exact: the centre of the brush, drawn by the app as a circle around the cursor."
 
 # ── Symbolism tools ───────────────────────────────────────────────────────────────────────────────
 # The brush size is drawn by the app as a circle around the cursor.

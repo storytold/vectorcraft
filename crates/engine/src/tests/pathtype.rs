@@ -184,6 +184,184 @@ fn a_flip_round_a_closed_path_keeps_the_type_in_place() {
     assert!(origins(&s, id)[0].distance(first) < 8.0);
 }
 
+/// A circle of radius 100 round (200, 200), starting at 9 o'clock and running clockwise, with
+/// type on it from its start.
+fn on_circle(s: &mut Session, text: &str) -> NodeId {
+    path_type(s, "M100 200 A100 100 0 1 1 300 200 A100 100 0 1 1 100 200 Z", [90.0, 200.0], text)
+}
+
+#[test]
+fn center_on_top_and_bottom_of_a_circle() {
+    let mut s = session();
+    let id = on_circle(&mut s, "OOOO");
+    assert!(near(brackets(&s, id).0, 0.0), "{:?}", brackets(&s, id));
+    let steps = undo_len(&s);
+    let r = s.execute("type.pathCenter.top", &json!({})).unwrap();
+    // Once round, its middle at 12 o'clock, a quarter of the way round: the type sits on the top, centered.
+    let (start, end) = brackets(&s, id);
+    assert!(near(start, 0.75) && end.is_none(), "{start} {end:?}");
+    assert_eq!((r["ids"].clone(), r["end"].clone()), (json!([id.0]), Value::Null));
+    assert_eq!(text(&s, id).para_at(0).justify, vectorcraft_doc::Justify::Center);
+    let top = ink(&s, id);
+    assert!((top.center().x - 200.0).abs() < 0.5 && top.y1 < 101.0, "{top:?}");
+    assert_eq!((undo_len(&s), last_step(&s)), (steps + 1, "Center on Top".to_string()));
+    // Again: nothing moves, and no undo step is recorded.
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    assert_eq!(undo_len(&s), steps + 1);
+    // The bottom: 6 o'clock, outside the circle (the type is not flipped).
+    s.execute("type.pathCenter.bottom", &json!({})).unwrap();
+    let (start, end) = brackets(&s, id);
+    assert!(near(start, 0.25) && end.is_none(), "{start} {end:?}");
+    let bottom = ink(&s, id);
+    assert!((bottom.center().x - 200.0).abs() < 0.5 && bottom.y0 > 299.0, "{bottom:?}");
+    assert_eq!((undo_len(&s), last_step(&s)), (steps + 2, "Center on Bottom".to_string()));
+    // Justify Center stays as it is.
+    s.execute("text.setStyle", &json!({"justify": "justifyCenter"})).unwrap();
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    assert_eq!(text(&s, id).para_at(0).justify, vectorcraft_doc::Justify::JustifyCenter);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(brackets(&s, id).0, 0.25));
+    // Brackets already in place with another alignment: only the alignment changes, in one step.
+    s.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+    let (steps, before) = (undo_len(&s), brackets(&s, id));
+    s.execute("type.pathCenter.bottom", &json!({})).unwrap();
+    assert_eq!((undo_len(&s), brackets(&s, id)), (steps + 1, before));
+    assert_eq!(text(&s, id).para_at(0).justify, vectorcraft_doc::Justify::Center);
+}
+
+#[test]
+fn center_on_top_twice_records_one_step_for_any_span() {
+    let mut s = session();
+    let id = on_circle(&mut s, "OOOO");
+    for (start, end) in [(0.0, 0.2), (0.13, 0.41), (0.37, 0.52), (0.61, 0.97), (0.89, 0.07), (0.3, 0.3001)] {
+        s.execute("type.pathOptions", &json!({"start": start, "end": end})).unwrap();
+        for c in ["type.pathCenter.top", "type.pathCenter.bottom"] {
+            s.execute(c, &json!({})).unwrap();
+            let (steps, placed) = (undo_len(&s), brackets(&s, id));
+            // Again: the brackets stay exactly where they are, and no undo step is recorded.
+            s.execute(c, &json!({})).unwrap();
+            assert_eq!((undo_len(&s), brackets(&s, id)), (steps, placed), "{c} {start} {end}");
+        }
+    }
+}
+
+#[test]
+fn center_on_top_keeps_the_span_and_measures_the_path_as_drawn() {
+    let mut s = session();
+    let id = on_circle(&mut s, "OOOO");
+    // A span of a fifth of the path keeps its length.
+    s.execute("type.pathOptions", &json!({"end": 0.2})).unwrap();
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    let (start, end) = brackets(&s, id);
+    assert!(near(start, 0.15) && end.is_some_and(|e| near(e, 0.35)), "{start} {end:?}");
+    // Turned a quarter turn counter-clockwise, its 3 o'clock point, halfway round, is at the top.
+    s.execute("type.pathOptions", &json!({"start": 0, "end": null})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    let (start, _) = brackets(&s, id);
+    assert!(near(start.rem_euclid(1.0), 0.0) || near(start, 1.0), "{start}");
+    let bounds = text(&s, id).bounds().unwrap();
+    let top = ink(&s, id);
+    assert!((top.center().x - bounds.center().x).abs() < 0.5 && top.y1 < bounds.y0 + 1.0, "{top:?} {bounds:?}");
+    // A rectangle: the middle of its top edge.
+    let id = path_type(&mut s, "M100 100 L300 100 L300 300 L100 300 Z", [90.0, 100.0], "OOOO");
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    let (start, end) = brackets(&s, id);
+    assert!(near(start, 0.625) && end.is_none(), "{start} {end:?}");
+    assert!((ink(&s, id).center().x - 200.0).abs() < 0.5);
+}
+
+#[test]
+fn center_on_top_moves_every_selected_type_on_a_path_in_one_step() {
+    let mut s = session();
+    let a = on_circle(&mut s, "OOOO");
+    let b = path_type(&mut s, "M100 100 L300 100 L300 300 L100 300 Z", [90.0, 100.0], "OOOO");
+    let p = s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0, p]})).unwrap();
+    let steps = undo_len(&s);
+    let r = s.execute("type.pathCenter.top", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0, b.0]));
+    assert!(near(brackets(&s, a).0, 0.75) && near(brackets(&s, b).0, 0.625));
+    assert_eq!(undo_len(&s), steps + 1);
+    // Dynamic Text stays on, and the layout fits the text to the span where it now runs: a fifth of
+    // the circle, at its bottom.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("type.pathOptions", &json!({"start": 0, "end": 0.2})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    s.execute("type.pathCenter.bottom", &json!({})).unwrap();
+    assert!(text(&s, a).dynamic_text && near(brackets(&s, a).0, 0.65), "{:?}", brackets(&s, a));
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, a));
+    assert!(lay.fit_scale > 1.5 && !lay.overflow, "{}", lay.fit_scale);
+    let bottom = ink(&s, a);
+    assert!((bottom.center().x - 200.0).abs() < 1.0 && bottom.y1 > 300.0, "{bottom:?}");
+    // Vertical type on a path moves the same way.
+    s.execute("type.pathOptions", &json!({"start": 0, "end": null})).unwrap();
+    s.execute("type.orientation.vertical", &json!({})).unwrap();
+    s.execute("type.pathCenter.top", &json!({})).unwrap();
+    assert!(near(brackets(&s, a).0, 0.75));
+}
+
+#[test]
+fn center_on_top_refuses_open_compound_and_threaded_type() {
+    let mut s = session();
+    let circle = on_circle(&mut s, "OOOO");
+    let line = on_line(&mut s);
+    s.execute("select.set", &json!({"ids": [circle.0, line.0]})).unwrap();
+    let steps = undo_len(&s);
+    let before = brackets(&s, circle);
+    let e = s.execute("type.pathCenter.top", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("type on an open or compound path cannot be centered on its top or bottom") && e.ends_with(&line.0.to_string()), "{e}");
+    // Nothing changes, the type on the circle included, and the same holds for an explicit list.
+    assert_eq!((undo_len(&s), brackets(&s, circle)), (steps, before));
+    let e = s.execute("type.pathCenter.bottom", &json!({"ids": [circle.0, line.0]})).unwrap_err().to_string();
+    assert!(e.contains("open or compound path") && e.ends_with(&line.0.to_string()), "{e}");
+    s.execute("select.set", &json!({"ids": [circle.0]})).unwrap();
+    for bad in [json!({"ids": "all"}), json!({"ids": [999_999]})] {
+        assert!(s.execute("type.pathCenter.top", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(undo_len(&s), steps);
+    // Two circles side by side in one path: a compound path.
+    let pair = path_type(
+        &mut s,
+        "M100 450 A40 40 0 1 1 180 450 A40 40 0 1 1 100 450 Z M300 450 A40 40 0 1 1 380 450 A40 40 0 1 1 300 450 Z",
+        [90.0, 450.0],
+        "OOOO",
+    );
+    let e = s.execute("type.pathCenter.top", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("open or compound path") && e.ends_with(&pair.0.to_string()), "{e}");
+    // A closed path that is level all round has no height.
+    let flat = path_type(&mut s, "M100 400 L300 400 Z", [90.0, 400.0], "OOOO");
+    let e = s.execute("type.pathCenter.top", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("type on a path with no length or no height cannot be centered") && e.ends_with(&flat.0.to_string()), "{e}");
+    // A frame of a thread is refused, alone or with other type on a closed path.
+    let threaded = on_circle(&mut s, "Threaded story");
+    let frame = s.execute("shape.rectangle", &json!({"x": 400, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [threaded.0, frame]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [threaded.0]})).unwrap();
+    let before = brackets(&s, threaded);
+    for ids in [json!([threaded.0]), json!([circle.0, threaded.0])] {
+        let steps = undo_len(&s);
+        let e = s.execute("type.pathCenter.top", &json!({ "ids": ids })).unwrap_err().to_string();
+        assert!(e.contains("type on a path in a thread cannot be centered on its top or bottom") && e.ends_with(&threaded.0.to_string()), "{e}");
+        assert_eq!((undo_len(&s), brackets(&s, threaded)), (steps, before));
+    }
+    // Without type on one closed path selected, the commands are not available.
+    let p = s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    for (ids, why) in [
+        (json!([p]), "select type on a closed path"),
+        (json!([line.0]), "open or compound path"),
+        (json!([circle.0, line.0]), "open or compound path"),
+        (json!([threaded.0]), "in a thread"),
+    ] {
+        s.execute("select.set", &json!({ "ids": ids })).unwrap();
+        for c in ["type.pathCenter.top", "type.pathCenter.bottom"] {
+            let e = s.execute(c, &json!({})).unwrap_err().to_string();
+            assert!(e.contains(why), "{c} {ids}: {e}");
+        }
+    }
+}
+
 #[test]
 fn align_to_path_and_spacing() {
     let mut s = session();
@@ -276,4 +454,42 @@ fn direct_selection_drags_an_anchor_of_the_path_and_the_type_reflows() {
     assert_eq!((undo_len(&s), last_step(&s).as_str()), (n + 1, "Reshape Type Path"));
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s).subpaths[0].anchors[1].p, middle);
+}
+
+/// Type on a path made by clicking a path with the plain Type tool (an open path) or Type on a
+/// Path (a closed one) shows its brackets as soon as the Selection or Direct Selection tool is
+/// chosen, and its centre bracket, dragged across the path, flips it.
+#[test]
+fn type_on_a_path_made_with_the_type_tool_has_brackets_at_once() {
+    let v = ViewInfo::default();
+    for (tool, d, mods) in [
+        ("selection", "M100 300 L500 300", Mods::default()),
+        ("directSelection", "M100 300 L500 300", Mods::default()),
+        ("selection", "M100 300 L500 300 L500 500 L100 500 Z", Mods::default()),
+    ] {
+        let mut s = session();
+        s.execute("path.create", &json!({ "d": d })).unwrap();
+        s.select_tool(if d.ends_with('Z') { "typeOnPath" } else { "type" }, v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 300.0, 300.0).with_mods(mods), v).unwrap();
+        }
+        let id = *s.doc().unwrap().selection.whole().first().expect("the new type is selected");
+        assert!(matches!(text(&s, id).kind, TextKind::OnPath { .. }), "{tool} {d}");
+        s.execute("text.setText", &json!({"ids": [id.0], "text": "Slide"})).unwrap();
+        s.select_tool(tool, v).unwrap();
+        let lines = s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Line { .. })).count();
+        assert!(lines >= 5, "{tool} {d}: the brackets are drawn at once ({lines} lines)");
+        if d.ends_with('Z') {
+            continue;
+        }
+        // The centre bracket stands midway between the start (300) and the end of the path (500).
+        let (start, end) = brackets(&s, id);
+        assert!(near(start, 0.5) && end.is_none(), "{start} {end:?}");
+        let centre = Point::new(400.0, 295.0);
+        assert_eq!(s.cursor(centre, Mods::default(), v), vectorcraft_tools::Cursor::PathBracket, "{tool}");
+        drag(&mut s, tool, centre, Point::new(400.0, 330.0), Mods::default());
+        let (start, end) = brackets(&s, id);
+        assert!(near(start, 0.0) && end.is_some_and(|e| near(e, 0.5)), "{tool}: flipped, {start} {end:?}");
+        assert!(ink(&s, id).y0 > 299.0, "{tool}: below the path");
+    }
 }

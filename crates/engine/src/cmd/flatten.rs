@@ -1,11 +1,14 @@
 //! Object → Flatten Transparency: transparent art becomes opaque art that looks the same.
 //!
-//! The targets (`ids` or the selection) split into groups of overlapping objects. Groups without
-//! transparency stay as they are (their type and strokes are outlined on request). The others are
+//! The targets (`ids` or the selection) split into groups: each object with transparency with the
+//! objects it overlaps, and the objects without transparency whose stacking order with a member
+//! would change when the group takes its topmost object's place. Objects without transparency
+//! that overlap only others without it stay as they are (their type and strokes are outlined on
+//! request), as do groups without transparency. The others are
 //! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
 //! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
 //! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by
-//! [`composite`]), over white (or over nothing with Preserve Alpha); in CMYK documents their inks
+//! [`composite`]), with white under the finished art (or nothing with Preserve Alpha); in CMYK documents their inks
 //! composite, plane by plane ([`cmyk_planes`]), and the colour is CMYK. Each region becomes a path
 //! filled with that flat colour. Where gradients, patterns, images, opacity masks or raster
 //! effects reach there is no single colour: those regions are rendered into one image per group,
@@ -49,7 +52,9 @@ mod presets;
 mod report;
 
 pub(crate) use analysis::{outlined_text, see_through_images};
-pub(crate) use apply::flatten_document;
+pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
+#[cfg(test)]
+pub(crate) use apply::{with_clips_ignored, with_every_region};
 pub use commands::specs;
 pub use options::FlattenOptions;
 pub use presets::{FlattenerPreset, PRESET_EXTS, PRESET_FORMAT};

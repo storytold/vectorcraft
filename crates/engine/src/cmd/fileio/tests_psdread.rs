@@ -141,6 +141,31 @@ fn packbits_zip_and_psb_files_read() {
     zip.extend(z.finish().unwrap());
     let px = pixels(&psd(1, 1, (3, 1), 16, 1, &[], &[], &[], &zip));
     assert_eq!(px.iter().map(|p| p[0]).collect::<Vec<_>>(), [16, 32, 48]);
+    // Zipped with prediction, 32 bits: the row's first bytes, then its second bytes and so on,
+    // each byte stored as the difference from the byte before it.
+    let samples = [0.0f32, 1.0, 0.0].map(f32::to_be_bytes);
+    let planes: Vec<u8> = (0..4).flat_map(|k| samples.iter().map(move |s| s[k])).collect();
+    let deltas: Vec<u8> = planes.iter().scan(0u8, |prev, &b| Some(b.wrapping_sub(std::mem::replace(prev, b)))).collect();
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    std::io::Write::write_all(&mut z, &deltas).unwrap();
+    let mut zip = vec![0, 3];
+    zip.extend(z.finish().unwrap());
+    let px = pixels(&psd(1, 1, (3, 1), 32, 1, &[], &[], &[], &zip));
+    assert_eq!(px.iter().map(|p| p[0]).collect::<Vec<_>>(), [0, 255, 0]);
+    // The same layout as another implementation writes it: psd-tools 1.26.1 (MIT,
+    // <https://github.com/psd-tools/psd-tools>), `compression.compress(data,
+    // Compression.ZIP_WITH_PREDICTION, 3, 2, 32)` of the samples 0, 1, 0.25 and 0.5, 0.125, 1,
+    // reads as the same samples stored raw.
+    let theirs = [
+        0x78, 0x9c, 0x63, 0xb0, 0xff, 0x7f, 0xa8, 0x81, 0xa1, 0x81, 0x01, 0x04, 0xec, 0xff, 0x33, 0x1e, 0x64, 0x68, 0x80, 0xb0, 0x01, 0x59, 0xd1,
+        0x06, 0x01,
+    ];
+    let mut zip = vec![0, 3];
+    zip.extend(theirs);
+    let samples: Vec<u8> = [0.0f32, 1.0, 0.25, 0.5, 0.125, 1.0].iter().flat_map(|v| v.to_be_bytes()).collect();
+    let stored = pixels(&psd(1, 1, (3, 2), 32, 1, &[], &[], &[], &raw(&[&samples])));
+    assert_eq!(pixels(&psd(1, 1, (3, 2), 32, 1, &[], &[], &[], &zip)), stored);
+    assert_eq!(stored.iter().map(|p| p[0]).collect::<Vec<_>>()[..2], [0, 255]);
 }
 
 #[test]
@@ -211,6 +236,28 @@ fn psd_exports_open_and_place_again() {
     let r = s.execute("document.formats", &json!({})).unwrap();
     assert!(r["readable"].as_array().unwrap().iter().any(|v| v == "psd"));
     assert!(PLACE_EXTS.contains(&"psd") && PLACE_EXTS.contains(&"psb") && OPEN_EXTS.contains(&"psb"));
+}
+
+/// Photoshop files named `.pdd` open and place as PSD, in any case; the dialogs and a drop on the
+/// window take them by their extension, and the desktop packaging doesn't associate them.
+#[test]
+fn pdd_files_open_and_place() {
+    let mut s = art();
+    let f = exported(&mut s, json!({"format": "psd"}));
+    for name in ["art.pdd", "ART.PDD"] {
+        assert_eq!(readable_format_for_name(name).map(|f| f.id), Some("psd"), "{name}");
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&f)})).unwrap();
+        assert_eq!((&r["format"], &r["warnings"]), (&json!("psd"), &json!([])), "{name}: {r}");
+        assert!((s.doc().unwrap().doc.artboards[0].rect.width() - 60.0).abs() < 1e-6, "{name}");
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&f)})).unwrap();
+        assert_eq!((&r["format"], r["ids"].as_array().map(Vec::len)), (&json!("psd"), Some(1)), "{name}: {r}");
+    }
+    assert!(OPEN_EXTS.contains(&"pdd") && PLACE_EXTS.contains(&"pdd") && UNASSOCIATED_EXTS.contains(&"pdd"));
+    let photoshop = ("PSD", &["psd", "pdd"][..]);
+    assert!(open_filters().any(|f| f == photoshop) && place_filters().any(|f| f == photoshop));
+    assert!(!export_extensions().contains(&"pdd"), "exports still name their files .psd");
+    assert!(format_for_name("x.pdd").is_none() && writable_format(None, Some("x.pdd")).is_err(), "an export to .pdd is refused as before");
 }
 
 #[test]

@@ -95,6 +95,28 @@ fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
     assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
 }
 
+/// A batch the app runs (as the Actions panel plays an action) with a Fit to Artwork Bounds step
+/// fits artboards 1 and 3, selected with the Artboard tool, and leaves artboard 2, the active one,
+/// as it was.
+#[test]
+fn a_batchs_fit_to_artwork_bounds_step_fits_each_selected_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+    for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+    }
+    app.session.execute("select.all", &json!({})).unwrap();
+    app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let was = boards(&app);
+    app.select_tool("artboard");
+    select(&mut app, 1);
+    app.session.set_tool_option("selected", &json!([0, 2]));
+    app.run("command.batch", json!({"commands": [{"command": "artboard.fitToArt", "params": {}}]})).unwrap();
+    let rect = vectorcraft_geom::Rect::new;
+    assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
+}
+
 /// With the Artboard tool, Shift-click on a row selects the artboards from the last row clicked
 /// without Shift to it and makes it the active one, Ctrl/Cmd-click adds its artboard to the
 /// tool's selection or takes it out (#1139), a plain click selects it alone, and every selected
@@ -156,10 +178,20 @@ fn shift_clicking_rows_selects_several_artboards() {
     frame(&mut app, 9.0, click(4, egui::Modifiers::NONE));
     assert_eq!(picked(&app, 4), [3]);
     assert_eq!(highlighted(frame(&mut app, 10.0, vec![])), 1);
-    // With another tool, a Shift-click makes the row's artboard active, as a plain click does.
+    // With another tool, a plain click makes the row's artboard active and keeps the tool.
     app.select_tool("selection");
-    frame(&mut app, 11.0, click(2, egui::Modifiers::SHIFT));
-    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![1], 1));
+    frame(&mut app, 11.0, click(2, egui::Modifiers::NONE));
+    assert_eq!((app.session.tool_id(), selected(&app, 4)), ("selection", 1));
+    // A Shift-click switches to the Artboard tool and selects the range (#5698).
+    frame(&mut app, 12.0, click(4, egui::Modifiers::SHIFT));
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![1, 2, 3], 3));
+    // So does a Ctrl/Cmd-click, adding one artboard to the one active.
+    app.select_tool("selection");
+    frame(&mut app, 13.0, click(1, egui::Modifiers::NONE));
+    frame(&mut app, 14.0, click(3, egui::Modifiers::COMMAND));
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![0, 2], 2));
 }
 
 /// Double-clicking a row's number goes to its artboard and its name renames it; a click on
@@ -370,6 +402,32 @@ fn paste_and_cut_with_the_artboard_tool_make_its_artboard_active() {
     select(&mut app, 2);
     app.run("edit.cut", json!({})).unwrap();
     assert_eq!(active(&app), (1, json!(1)), "Cut Artboard 3: Artboard 2");
+}
+
+/// With the Artboard tool selecting several artboards, Paste in Place, in Front and in Back put a
+/// copy of the copied object on each, where it was on the artboard it was copied from; with one
+/// selected, on the active one.
+#[test]
+fn in_place_pastes_put_a_copy_on_each_artboard_the_artboard_tool_selects() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
+    let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.origin()).collect();
+    let r = app.run("shape.rectangle", json!({"x": boards[0].x + 10.0, "y": boards[0].y + 20.0, "width": 5, "height": 5})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    app.run("edit.copy", json!({})).unwrap();
+    app.select_tool("artboard");
+    let offset = vectorcraft_geom::Vec2::new(10.0, 20.0);
+    let pasted = |app: &mut VectorcraftApp, id: &str| -> Vec<vectorcraft_geom::Point> {
+        let r = app.run(id, json!({})).unwrap();
+        let doc = &app.session.active().unwrap().doc;
+        r["ids"].as_array().unwrap().iter().map(|i| doc.bounds_of(&[vectorcraft_doc::NodeId(i.as_u64().unwrap())], false).unwrap().origin()).collect()
+    };
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        app.run("tool.setOption", json!({"key": "selected", "value": [2, 0]})).unwrap();
+        assert_eq!(pasted(&mut app, id), [boards[0] + offset, boards[2] + offset], "{id}");
+        app.run("tool.setOption", json!({"key": "selected", "value": [1]})).unwrap();
+        assert_eq!(pasted(&mut app, id), [boards[1] + offset], "{id}: the active artboard");
+    }
 }
 
 /// `tool.setOption` with the Artboard tool's `selected` or `active` makes the artboard the tool
@@ -622,6 +680,50 @@ fn the_panel_menus_duplicate_artboards_copies_every_selected_artboard() {
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (3, 2), "one undo step");
 }
 
+/// The panel menu's New Artboard adds one artboard in one undo step and makes it the active one, as
+/// the panel's button does, with any tool. With the Artboard tool, the new artboard is then the only
+/// one selected.
+#[test]
+fn the_panel_menus_new_artboard_makes_the_new_artboard_active() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
+    app.view_mut().unwrap().artboard = 0;
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let click = |app: &mut VectorcraftApp| {
+        let item = frame(app, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == "New Artboard" => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+    };
+    click(&mut app);
+    assert_eq!(boards(&app).2.len(), 3);
+    assert_eq!(selected(&app, 3), 2, "the new artboard is active with the Selection tool");
+    let undo_steps = app.session.active().unwrap().history.undo.len();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(boards(&app).2.len(), 2, "one undo step removes the new artboard");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_steps - 1);
+
+    app.select_tool("artboard");
+    select(&mut app, 1);
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    click(&mut app);
+    assert_eq!(boards(&app).2.len(), 3);
+    assert_eq!(app.view().unwrap().artboard, 2, "the new artboard is active with the Artboard tool");
+    assert_eq!(app.session.tool_options()["active"], json!(2));
+    assert_eq!(app.session.tool_options()["selected"], json!([2]), "and is the only one selected");
+}
+
 /// The panel menu's Convert to Artboards turns the geometric bounds of each selected rectangle
 /// into a new artboard and removes the rectangles, in one undo step, as Object › Artboards ›
 /// Convert to Artboards does; with nothing selected it is off.
@@ -795,11 +897,15 @@ fn the_control_bar_shows_the_artboard_tools_controls() {
     assert!(!has(&texts, "Snapping"), "{texts:?}");
     let link = text_rect(&texts, "Transform");
     assert!(link.right() < 790.0 && text_rect(&texts, "Artboard 1").right() < link.left(), "{texts:?}");
-    // Move and Scale Artwork with Artboard show as their boxes alone, inside the window, and the
-    // second one turns Scale Artwork with Artboard on.
+    // Move and Scale Artwork with Artboard show as their boxes alone, inside the window and left of
+    // the panel menu button at the bar's right end, and the second one turns Scale Artwork with
+    // Artboard on.
     assert!(!has(&texts, "Move Artwork with Artboard"), "{texts:?}");
-    let boxes = bar_buttons(&ctx, link.right(), 790.0);
+    let mut boxes = bar_buttons(&ctx, link.right(), 790.0);
+    let menu = boxes.pop().filter(|r| (r.width() - 16.0).abs() < 0.5 && r.right() > 785.0);
+    let menu = menu.unwrap_or_else(|| panic!("the panel menu button ends the bar: {boxes:?}"));
     assert_eq!(boxes.len(), 2, "{boxes:?}");
+    assert!(boxes[1].right() <= menu.left(), "{boxes:?} and the panel menu button at {menu:?}");
     let scale = |app: &VectorcraftApp| app.session.tool_options()["scaleArt"].as_bool();
     assert_eq!(scale(&app), Some(false));
     let press =
@@ -992,6 +1098,176 @@ fn dragging_a_row_onto_new_artboard_duplicates_it() {
     let d = &app.session.active().unwrap().doc;
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (2, 2), "the artboard and its art");
     assert_eq!(app.view().unwrap().artboard, 1);
+}
+
+/// #4687: a row dragged above or below another row reorders the artboards there (a line shows
+/// where it lands), in one undo step, and the moved artboard becomes the active one.
+#[test]
+fn dragging_a_row_onto_another_row_reorders_the_artboards() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let shapes = frame(&mut app, vec![]);
+    let name_at = |label: &str| {
+        shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos + vec2(4.0, 4.0)),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let (first, last) = (name_at("Artboard 1"), name_at("Artboard 3"));
+    let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // Artboard 1 dragged onto the lower half of Artboard 3's row lands below it.
+    let below = last + vec2(0.0, 8.0);
+    frame(&mut app, vec![egui::Event::PointerMoved(first), button(first, true)]);
+    frame(&mut app, vec![egui::Event::PointerMoved(first + vec2(0.0, 12.0))]);
+    let held = frame(&mut app, vec![egui::Event::PointerMoved(below)]);
+    let accent = Tokens::get(&ctx).accent;
+    assert!(
+        held.iter().any(|c| matches!(&c.shape, egui::Shape::LineSegment { stroke, .. } if stroke.color == accent)),
+        "a line shows where it lands"
+    );
+    frame(&mut app, vec![button(below, false)]);
+    assert_eq!(names(&app), ["Artboard 2", "Artboard 3", "Artboard 1"]);
+    assert_eq!(app.view().unwrap().artboard, 2, "the moved artboard is active");
+    // One undo step puts it back.
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
+}
+
+/// The panel drawn in a 240 × 400 pt window, for the row menu's tests.
+struct RowMenuWindow {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl RowMenuWindow {
+    fn new() -> Self {
+        RowMenuWindow { ctx: egui::Context::default(), time: 0.0 }
+    }
+
+    /// One frame of the panel with `events`; the texts drawn and where.
+    fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        self.time += 0.5;
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let raw = egui::RawInput { events, time: Some(self.time), screen_rect: screen, ..Default::default() };
+        let mut out = self.ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().trim_start().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where the text `label` is drawn now, if it is.
+    fn find(&mut self, app: &mut VectorcraftApp, label: &str) -> Option<egui::Pos2> {
+        self.frame(app, vec![]).into_iter().find(|(t, _)| t == label).map(|(_, r)| r.center())
+    }
+
+    /// A click with `button` at `at`.
+    fn click(&mut self, app: &mut VectorcraftApp, at: egui::Pos2, button: egui::PointerButton) {
+        let b = |pressed| egui::Event::PointerButton { pos: at, button, pressed, modifiers: Default::default() };
+        self.frame(app, vec![egui::Event::PointerMoved(at), b(true), b(false)]);
+        self.frame(app, vec![]);
+    }
+
+    /// A right-click on the row named `row`, then a click on its menu's Rename.
+    fn rename_from_row_menu(&mut self, app: &mut VectorcraftApp, row: &str) {
+        let at = self.find(app, row).expect("the row");
+        self.click(app, at, egui::PointerButton::Secondary);
+        let item = self.find(app, "Rename").expect("the row menu's Rename");
+        self.click(app, item, egui::PointerButton::Primary);
+    }
+}
+
+/// A right-click on an Artboards panel row opens a menu with Rename, which opens the Rename dialog
+/// and renames nothing until OK: on a row of the selection, the dialog takes every selected
+/// artboard and OK numbers the name in one undo step; on a row that isn't selected, that row's
+/// artboard becomes the only selected one and the dialog takes it alone, and Cancel keeps its name.
+#[test]
+fn the_row_menus_rename_opens_the_rename_dialog_for_the_selected_artboards() {
+    let mut app = menu_app(4);
+    select(&mut app, 2);
+    app.session.set_tool_option("selected", &json!([2, 1]));
+    let mut window = RowMenuWindow::new();
+    let steps = undo_steps(&app);
+    window.rename_from_row_menu(&mut app, "Artboard 2");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!(d.kind, crate::dialogs::rename_artboards::KIND);
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("", &json!([1, 2])), "the dialog takes both selected artboards");
+    assert_eq!(picked(&app, 4), [1, 2], "the selection stays");
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Artboard 3", "Artboard 4"], "nothing is renamed before OK");
+    assert_eq!(undo_steps(&app), steps);
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Page"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(board_names(&app), ["Artboard 1", "Page-1", "Page-2", "Artboard 4"]);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+
+    window.rename_from_row_menu(&mut app, "Artboard 4");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("Artboard 4", &json!([3])), "the dialog takes the row's artboard alone");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![3], 3), "the row's artboard is the only one selected");
+    crate::dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(board_names(&app), ["Artboard 1", "Page-1", "Page-2", "Artboard 4"]);
+    assert_eq!(undo_steps(&app), steps + 1, "Cancel records no undo step");
+}
+
+/// Without the Artboard tool the row menu's Rename takes the right-clicked row's artboard, which
+/// becomes the active one; a locked artboard can be renamed too. A menu closed without a choice
+/// opens no dialog.
+#[test]
+fn the_row_menu_renames_the_right_clicked_artboard_with_any_tool() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": 3})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    select(&mut app, 0);
+    let mut window = RowMenuWindow::new();
+    let at = window.find(&mut app, "Artboard 2").expect("the row");
+    window.click(&mut app, at, egui::PointerButton::Secondary);
+    assert!(window.find(&mut app, "Rename").is_some(), "the row menu is open");
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    window.frame(&mut app, vec![escape]);
+    window.frame(&mut app, vec![]);
+    assert!(window.find(&mut app, "Rename").is_none(), "Escape closes the menu");
+    assert!(app.ui.dialog.is_none(), "and opens no dialog");
+    assert_eq!(selected(&app, 3), 1, "the right-clicked artboard is active");
+
+    window.rename_from_row_menu(&mut app, "Artboard 3");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("Artboard 3", &json!([2])));
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Back"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Back"], "the locked artboard is renamed");
+}
+
+/// A row dragged with the right button reorders nothing; the primary button still drags rows.
+#[test]
+fn a_right_button_drag_does_not_move_a_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let mut window = RowMenuWindow::new();
+    let (first, last) = (window.find(&mut app, "Artboard 1").unwrap(), window.find(&mut app, "Artboard 3").unwrap());
+    let below = last + vec2(0.0, 8.0);
+    let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    window.frame(&mut app, vec![egui::Event::PointerMoved(first), button(first, true)]);
+    window.frame(&mut app, vec![egui::Event::PointerMoved(first + vec2(0.0, 12.0))]);
+    window.frame(&mut app, vec![egui::Event::PointerMoved(below)]);
+    window.frame(&mut app, vec![button(below, false)]);
+    window.frame(&mut app, vec![]);
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
 }
 
 /// A click in a row's lock column locks its artboard and shows the lock next to the name, a
@@ -1221,4 +1497,370 @@ fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
     assert_eq!(locked(&app), [true, false, true]);
     run(&mut app, "Unlock Artboards", "Unlock All");
     assert_eq!(locked(&app), [false, false, false]);
+}
+
+/// A document of `boards` artboards of 100 × 50 pt with the Artboard tool chosen.
+fn menu_app(boards: usize) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": boards})).unwrap();
+    app.select_tool("artboard");
+    app
+}
+
+/// The labels of `items`, submenus by their own label, separators left out.
+fn menu_labels(items: &[crate::menus::Item]) -> Vec<&'static str> {
+    use crate::menus::Item;
+    items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Cmd(l, ..) | Item::Sub(l, _) => Some(*l),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The entry of the Artboard tool's canvas menu named `label`, chosen as a click on it chooses it.
+fn choose(app: &mut VectorcraftApp, label: &str) {
+    use crate::menus::Item;
+    let items = crate::menus::context_items(app);
+    let Some(Item::Cmd(l, id, p)) = items.iter().find(|i| matches!(i, Item::Cmd(l, ..) if *l == label)) else { panic!("no {label}") };
+    let (id, p) = crate::menus::click_target(l, id, p);
+    crate::menus::invoke(app, &id, p);
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+fn board_names(app: &VectorcraftApp) -> Vec<String> {
+    app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect()
+}
+
+/// The Artboard tool's canvas menu lists the public page's entries in the page's order, with
+/// nothing for objects or the view; another tool's menu lists none of them.
+#[test]
+fn the_artboard_tools_menu_lists_the_pages_entries_in_order() {
+    let mut app = menu_app(3);
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.session.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(
+        menu_labels(&crate::menus::context_items(&app)),
+        [
+            "Cut",
+            "Copy",
+            "Paste",
+            "Undo",
+            "Redo",
+            "New Artboard",
+            "Duplicate Artboards",
+            "Rename",
+            "Delete Artboards",
+            "Delete Empty Artboards",
+            "Select All Artboards",
+            "Lock Artboards",
+            "Rearrange",
+            "Fit to Artwork Bounds",
+            "Switch Orientation",
+            "Artboard Options",
+            "Export",
+        ]
+    );
+    app.select_tool("selection");
+    let other = menu_labels(&crate::menus::context_items(&app));
+    for label in
+        ["New Artboard", "Duplicate Artboards", "Delete Artboards", "Select All Artboards", "Lock Artboards", "Rearrange", "Switch Orientation"]
+    {
+        assert!(!other.contains(&label), "{label} in {other:?}");
+    }
+}
+
+/// An entry whose command can't run is left out: Cut with every artboard selected, or a locked one;
+/// Delete Artboards in a document of one; Select All Artboards with all selected; Rearrange with one;
+/// Fit to Artwork Bounds without art; Switch Orientation on a square artboard.
+#[test]
+fn the_artboard_tools_menu_leaves_out_what_cannot_run() {
+    let shown = |app: &VectorcraftApp, label: &str| menu_labels(&crate::menus::context_items(app)).contains(&label);
+    let mut app = menu_app(1);
+    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Rearrange", "Fit to Artwork Bounds"] {
+        assert!(!shown(&app, label), "{label} with one empty artboard");
+    }
+    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation"));
+    app.session.execute("artboard.setProps", &json!({"index": 0, "width": 50})).unwrap();
+    assert!(!shown(&app, "Switch Orientation"), "a square artboard");
+
+    let mut app = menu_app(2);
+    app.session.set_tool_option("selected", &json!([0, 1]));
+    assert!(!shown(&app, "Cut"), "every artboard selected");
+    assert!(!shown(&app, "Select All Artboards"));
+    app.session.set_tool_option("selected", &json!([1]));
+    app.session.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    for label in ["Cut", "Delete Artboards", "Switch Orientation"] {
+        assert!(!shown(&app, label), "{label} on a locked artboard");
+    }
+    assert!(shown(&app, "Rename"), "a locked artboard can be renamed");
+}
+
+/// With no selection of its own the tool has its active artboard selected, and the menu acts on it.
+#[test]
+fn the_artboard_tools_menu_acts_on_the_active_artboard_without_a_selection() {
+    let mut app = menu_app(3);
+    select(&mut app, 1);
+    choose(&mut app, "Switch Orientation");
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!((doc.artboards[1].rect.width(), doc.artboards[1].rect.height()), (50.0, 100.0));
+    assert_eq!(doc.artboards[0].rect.width(), 100.0);
+}
+
+/// Each entry runs its command on the selected artboards, in one undo step, and the view follows.
+#[test]
+fn the_artboard_tools_menu_entries_run_on_the_selected_artboards() {
+    let mut app = menu_app(4);
+    app.session.set_tool_option("selected", &json!([2, 1]));
+    app.view_mut().unwrap().artboard = 2;
+
+    let steps = undo_steps(&app);
+    choose(&mut app, "Switch Orientation");
+    let sizes = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect::<Vec<_>>();
+    assert_eq!(sizes(&app), [100.0, 50.0, 50.0, 100.0]);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+
+    choose(&mut app, "Duplicate Artboards");
+    assert_eq!(board_names(&app).len(), 6);
+    assert_eq!(undo_steps(&app), steps + 2, "one undo step");
+    assert_eq!(app.session.tool_options()["selected"], json!([5, 4]), "the copies are selected, artboard 3's copy active");
+    assert_eq!(app.view().unwrap().artboard, 5);
+
+    choose(&mut app, "Delete Artboards");
+    assert_eq!(board_names(&app).len(), 4);
+    assert_eq!(undo_steps(&app), steps + 3, "one undo step");
+    assert_eq!(selected(&app, 4), 3, "the artboard before the first one deleted is active");
+    assert_eq!(app.session.tool_options()["selected"], json!([3]), "and the only one selected");
+
+    choose(&mut app, "New Artboard");
+    assert_eq!(board_names(&app).len(), 5);
+    assert_eq!(selected(&app, 5), 4, "the new artboard is active");
+    assert_eq!(app.session.tool_options()["selected"], json!([4]), "and the only one selected");
+
+    choose(&mut app, "Select All Artboards");
+    assert_eq!(app.session.tool_options()["selected"], json!([4, 0, 1, 2, 3]));
+    assert_eq!(undo_steps(&app), steps + 4, "selecting records no undo step");
+    assert_eq!(selected(&app, 5), 4, "the active artboard stays active");
+}
+
+/// Cut and Copy from the menu take the selected artboards, in one undo step for the cut.
+#[test]
+fn the_artboard_tools_menu_cuts_and_copies_the_selected_artboards() {
+    let mut app = menu_app(4);
+    app.session.set_tool_option("selected", &json!([1, 2]));
+    app.view_mut().unwrap().artboard = 1;
+    choose(&mut app, "Copy");
+    assert_eq!(board_names(&app).len(), 4);
+    assert_eq!(app.session.clipboard.artboards.len(), 2);
+    let steps = undo_steps(&app);
+    choose(&mut app, "Cut");
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 4"]);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+}
+
+/// The menu's Cut and Copy record which artboards they took, so a replay in a new session, where
+/// the Artboard tool isn't chosen, acts on the same artboards.
+#[test]
+fn the_artboard_tools_menu_replays_its_cut_and_copy_in_a_new_session() {
+    let mut app = menu_app(4);
+    app.session.set_tool_option("selected", &json!([1, 2]));
+    app.view_mut().unwrap().artboard = 1;
+    choose(&mut app, "Copy");
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!((cmd.as_str(), &p["selectedArtboards"]), ("artboard.copy", &json!([1, 2])));
+    choose(&mut app, "Cut");
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!((cmd.as_str(), &p["selectedArtboards"]), ("artboard.cut", &json!([1, 2])));
+    let mut replay = Session::new();
+    for (id, p) in &app.session.journal {
+        replay.execute(id, p).unwrap();
+    }
+    let names: Vec<String> = replay.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+    assert_eq!(names, ["Artboard 1", "Artboard 4"]);
+    assert_eq!(replay.clipboard.artboards.len(), 2);
+}
+
+/// The menu's Cut and Copy publish the copied art to the system clipboard, as Edit › Cut and Copy do.
+#[test]
+fn the_artboard_tools_menu_publishes_its_cut_and_copy() {
+    let mut app = menu_app(2);
+    let on = app.session.active().unwrap().doc.artboards[1].rect;
+    app.session.execute("shape.rectangle", &json!({"x": on.x0 + 10.0, "y": on.y0 + 10.0, "width": 20, "height": 20})).unwrap();
+    app.session.set_tool_option("selected", &json!([1]));
+    app.view_mut().unwrap().artboard = 1;
+    for label in ["Copy", "Cut"] {
+        app.clipboard_out = None;
+        choose(&mut app, label);
+        assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{label}");
+    }
+}
+
+/// The menu's Cut and Copy show the keys that run them with the tool chosen.
+#[test]
+fn the_artboard_tools_menu_shows_the_cut_and_copy_shortcuts() {
+    use crate::menus::Item;
+    let app = menu_app(2);
+    let items = crate::menus::context_items(&app);
+    for (label, keys) in [("Cut", "edit.cut"), ("Copy", "edit.copy")] {
+        let Some(Item::Cmd(_, id, p)) = items.iter().find(|i| matches!(i, Item::Cmd(l, ..) if *l == label)) else { panic!("no {label}") };
+        let want = crate::menus::shortcut_of(keys);
+        assert!(want.is_some(), "{keys}");
+        assert_eq!(crate::menus::item_shortcut(id, p), want, "{label}");
+    }
+}
+
+/// Fit to Artwork Bounds fits the selected artboards only, in one undo step, and Undo from the menu
+/// takes the step back.
+#[test]
+fn the_artboard_tools_menu_fits_the_selected_artboards_and_undoes() {
+    let mut app = menu_app(2);
+    let rects = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let before = rects(&app);
+    let on = |r: vectorcraft_geom::Rect| json!({"x": r.x0 + 10.0, "y": r.y0 + 10.0, "width": 20, "height": 20});
+    app.session.execute("shape.rectangle", &on(before[0])).unwrap();
+    app.session.execute("shape.rectangle", &on(before[1])).unwrap();
+    app.session.set_tool_option("selected", &json!([1]));
+    app.view_mut().unwrap().artboard = 1;
+    let steps = undo_steps(&app);
+    choose(&mut app, "Fit to Artwork Bounds");
+    let fitted = rects(&app);
+    assert_eq!(fitted[0], before[0], "the artboard that isn't selected stays");
+    assert_eq!((fitted[1].width(), fitted[1].height()), (21.0, 21.0), "the rectangle with its 1 pt stroke");
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    choose(&mut app, "Undo");
+    assert_eq!(rects(&app), before);
+}
+
+/// Delete Empty Artboards leaves a remaining artboard active, and the dialog entries open their
+/// dialogs: Rename, Rearrange, Artboard Options and Export.
+#[test]
+fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
+    let mut app = menu_app(3);
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    for (label, kind) in [
+        ("Rename", crate::dialogs::rename_artboards::KIND),
+        ("Rearrange", crate::dialogs::rearrange_artboards::KIND),
+        ("Artboard Options", "artboardOptions"),
+        ("Export", crate::dialogs::EXPORT_FOR_SCREENS),
+    ] {
+        choose(&mut app, label);
+        assert_eq!(app.ui.dialog.take().map(|d| d.kind).as_deref(), Some(kind), "{label}");
+    }
+    select(&mut app, 2);
+    choose(&mut app, "Delete Empty Artboards");
+    assert_eq!(board_names(&app), ["Artboard 1"]);
+    assert_eq!(selected(&app, 1), 0);
+}
+
+/// A lock entry lists only the artboards it changes and is left out when it has none, so it never
+/// records an undo step that changes nothing.
+#[test]
+fn the_artboard_tools_lock_entries_have_something_to_change() {
+    use crate::menus::Item;
+    let mut app = menu_app(2);
+    app.session.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let items = crate::menus::context_items(&app);
+    let subs = |menu: &str| match items.iter().find(|i| matches!(i, Item::Sub(t, _) if *t == menu)) {
+        Some(Item::Sub(_, subs)) => menu_labels(subs),
+        _ => vec![],
+    };
+    assert_eq!(subs("Lock Artboards"), ["Lock All Except Selected", "Lock All"], "the selected artboard is locked already");
+    assert_eq!(subs("Unlock Artboards"), ["Unlock Selected", "Unlock All"]);
+}
+
+/// A right-click on an artboard that isn't selected selects it alone; on a selected one the selection
+/// stays; off every artboard it stays too.
+#[test]
+fn a_right_click_with_the_artboard_tool_selects_the_artboard_under_the_pointer() {
+    use vectorcraft_geom::Point;
+    let mut app = menu_app(3);
+    let doc = &app.session.active().unwrap().doc;
+    let (a, c) = (doc.artboards[0].rect.center(), doc.artboards[2].rect.center());
+    app.session.set_tool_option("selected", &json!([0, 1]));
+    right_click(&mut app, a);
+    assert_eq!(app.session.tool_options()["selected"], json!([0, 1]), "a selected artboard keeps the selection");
+    right_click(&mut app, Point::new(-500.0, -500.0));
+    assert_eq!(app.session.tool_options()["selected"], json!([0, 1]), "off every artboard");
+    right_click(&mut app, c);
+    assert_eq!(app.session.tool_options()["selected"], json!([2]));
+    assert_eq!(app.view().unwrap().artboard, 2);
+}
+
+/// Paste from the Artboard tool's menu centers the copied artboards on the right-click's point. With
+/// no point it puts them right of the last artboard.
+#[test]
+fn the_artboard_tools_paste_goes_to_the_right_click() {
+    use vectorcraft_geom::Point;
+    let mut app = menu_app(2);
+    app.run("edit.copy", json!({})).unwrap();
+    right_click(&mut app, Point::new(-300.0, 700.0));
+    choose(&mut app, "Paste");
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.artboards.len(), 3);
+    let at = doc.artboards[2].rect.center();
+    assert_eq!((at.x, at.y), (-300.0, 700.0));
+    app.ui.context_artboards = None;
+    choose(&mut app, "Paste");
+    let doc = &app.session.active().unwrap().doc;
+    let right = doc.artboards.iter().take(3).map(|a| a.rect.x1).fold(f64::MIN, f64::max);
+    assert_eq!(doc.artboards[3].rect.x0, right + 20.0);
+}
+
+/// While the menu is open it reads what the right-click measured and does not walk the art again:
+/// what it measured stands until the document or the selection changes.
+#[test]
+fn the_open_menu_reads_what_the_right_click_measured() {
+    use vectorcraft_geom::Point;
+    let mut app = menu_app(2);
+    right_click(&mut app, Point::new(10.0, 10.0));
+    let facts = app.ui.context_artboards.as_mut().unwrap();
+    assert!(facts.any_empty && !facts.any_art);
+    // Facts that differ from the document show which one the menu reads.
+    facts.any_empty = false;
+    facts.any_art = true;
+    let labels = menu_labels(&crate::menus::context_items(&app));
+    assert!(!labels.contains(&"Delete Empty Artboards") && labels.contains(&"Fit to Artwork Bounds"), "{labels:?}");
+    // An edit makes them out of date, and the menu measures again.
+    app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Other"})).unwrap();
+    let labels = menu_labels(&crate::menus::context_items(&app));
+    assert!(labels.contains(&"Delete Empty Artboards") && !labels.contains(&"Fit to Artwork Bounds"), "{labels:?}");
+}
+
+/// Whether Fit to Artwork Bounds has art to fit is kept for a version of the document, not its
+/// revision: a document replaced with no revision moved (composite fonts synced as its tab comes
+/// to the front) is measured again.
+#[test]
+fn fit_to_art_is_measured_for_each_version_of_the_document() {
+    let mut app = menu_app(2);
+    assert!(!super::fit_has_art(&app, &[0, 1]));
+    // Art on the first artboard, the revision left as it was.
+    let st = app.session.active_mut().unwrap();
+    let mut doc = (*st.doc).clone();
+    let l = doc.layers[0].id;
+    let id = doc.alloc_id();
+    let art = vectorcraft_doc::Node::path(
+        id,
+        vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 10.0, 20.0, 20.0)),
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+    );
+    doc.insert(Some(l), 0, art).unwrap();
+    st.doc = std::sync::Arc::new(doc);
+    assert!(super::fit_has_art(&app, &[0, 1]), "measured again");
+    assert!(!super::fit_has_art(&app, &[1]), "measured for the artboards asked about");
+}
+
+/// `artboard.selectAll` chooses the Artboard tool first when another tool is in use, and fails
+/// without a document.
+#[test]
+fn select_all_artboards_chooses_the_tool_and_needs_a_document() {
+    let mut app = menu_app(2);
+    app.select_tool("selection");
+    assert_eq!(app.run("artboard.selectAll", json!({})).unwrap()["selected"], json!([0, 1]));
+    assert_eq!(app.session.tool_id(), "artboard");
+    let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+    assert_eq!(empty.run("artboard.selectAll", json!({})).unwrap_err(), "no document");
 }

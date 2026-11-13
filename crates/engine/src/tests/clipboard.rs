@@ -278,6 +278,54 @@ fn gradient_swatches_come_along_with_their_stop_links() {
     assert_eq!(sw.gradient, g.gradient, "the added gradient swatch links its stop to the added Sky too");
 }
 
+/// A gradient swatch made from another one (by name, from a fill linked to it, or from a gradient
+/// that names it, placed or not) holds the gradient alone, so copying art that uses it brings only
+/// that swatch. A placed gradient keeps its aspect, and the swatch still fits each object it is
+/// applied to.
+#[test]
+fn a_gradient_swatch_made_from_another_holds_no_link_to_it() {
+    let mut s = session();
+    let glow = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#3080ff"}, {"offset": 1, "color": "#ffffff"}]});
+    s.execute("swatch.new", &json!({"name": "Glow", "gradient": glow})).unwrap();
+    let r = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Glow"})).unwrap();
+    let Paint::Gradient(applied) = fill(&s, r) else { panic!("a gradient fill") };
+    assert_eq!(applied.swatch.as_deref(), Some("Glow"));
+    let mut by_gradient = vectorcraft_tools::params::gradient_params(&applied);
+    by_gradient["swatch"] = json!("Glow");
+    let mut placed = by_gradient.clone();
+    placed["start"] = json!([25, 25]);
+    placed["end"] = json!([50, 25]);
+    placed["aspect"] = json!(50);
+    let made = [
+        ("By Name", json!({"name": "By Name", "swatch": "Glow"})),
+        ("From Fill", json!({"name": "From Fill"})),
+        ("From Gradient", json!({"name": "From Gradient", "gradient": by_gradient})),
+        ("Placed", json!({"name": "Placed", "gradient": placed})),
+    ];
+    let mut links = vec![];
+    for (name, p) in &made {
+        s.execute("swatch.new", p).unwrap();
+        let Paint::Gradient(sw) = doc(&s).swatch(name).unwrap().paint.clone() else { panic!("{name}: a gradient swatch") };
+        assert_eq!(sw.gradient, applied.gradient, "{name}: Glow's gradient");
+        links.push(sw.swatch.clone());
+    }
+    assert_eq!(links, [None, None, None, None], "no swatch links to Glow");
+    let Paint::Gradient(sw) = doc(&s).swatch("Placed").unwrap().paint.clone() else { panic!("a gradient swatch") };
+    assert!(sw.geom.is_some_and(|g| (g.aspect - 0.5).abs() < 1e-9), "the placed gradient keeps its aspect: {:?}", sw.geom);
+    for (name, _) in &made {
+        let t = rect(&mut s, 100.0, 0.0, 100.0, 60.0);
+        s.execute("paint.setFill", &json!({"ids": [t.0], "swatch": name})).unwrap();
+        if *name == "Placed" {
+            let Paint::Gradient(g) = fill(&s, t) else { panic!("a gradient fill") };
+            let geom = g.geom.unwrap();
+            assert!(geom.start.distance(Point::new(150.0, 30.0)) < 1e-9 && (geom.aspect - 0.5).abs() < 1e-9, "{geom:?}");
+        }
+        copy(&mut s, &[t]);
+        assert_eq!(s.clipboard.swatches.iter().map(|w| w.name.as_str()).collect::<Vec<_>>(), [*name], "Glow stays behind");
+    }
+}
+
 #[test]
 fn lab_spot_colours_show_as_the_target_documents_spot_option_says() {
     let mut s = session();
@@ -444,6 +492,222 @@ fn pasting_again_reuses_what_an_earlier_paste_added() {
     assert!(doc(&s).swatch("Brand 3").is_none() && doc(&s).char_styles.len() == 1);
 }
 
+/// The active document, to edit its definitions directly.
+fn doc_mut(s: &mut Session) -> &mut Document {
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+}
+
+/// The pattern a paint paints with.
+fn pattern_of(p: &Paint) -> Option<&str> {
+    match p {
+        Paint::Pattern { pattern, .. } => Some(pattern),
+        _ => None,
+    }
+}
+
+/// The pattern the fill of the active document's character style `name` paints with.
+fn style_pattern(s: &Session, name: &str) -> Option<String> {
+    let attrs = &doc(s).char_styles.iter().find(|x| x.name == name)?.attrs;
+    pattern_of(&serde_json::from_value::<Paint>(attrs.get("fill")?.clone()).ok()?).map(str::to_string)
+}
+
+/// A pattern "Dots" made from a `size` square of `color` in the active document.
+fn dots(s: &mut Session, size: f64, color: &str) {
+    let square = rect(s, 300.0, 200.0, size, size);
+    s.execute("paint.setFill", &json!({"ids": [square.0], "color": color})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square.0]})).unwrap();
+}
+
+/// Type "Hi" filled with the pattern "Dots" (a small red square), set in a character style
+/// "Patterned" whose fill is that pattern.
+fn patterned_type(s: &mut Session) -> NodeId {
+    dots(s, 10.0, "#ff0000");
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [t.0], "swatch": "Dots"})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Patterned", "id": t.0})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Patterned", "id": t.0})).unwrap();
+    t
+}
+
+/// The character style name of a type object's first run, and the pattern that run paints with.
+fn type_links(s: &Session, id: NodeId) -> (Option<String>, Option<String>) {
+    let NodeKind::Text(tx) = node(s, id).kind else { panic!("not type") };
+    (tx.runs[0].style.style_name.clone(), pattern_of(&tx.runs[0].style.fill).map(str::to_string))
+}
+
+/// Type set in a style that paints with a pattern, pasted into a document with another pattern of
+/// that name: the pattern comes in as "Dots 2", and the style paints with "Dots 2" too, so applying
+/// it later paints with the pasted pattern. Pasting again adds nothing.
+#[test]
+fn pasted_styles_paint_with_the_renamed_pattern_they_use() {
+    let mut s = session();
+    let t = patterned_type(&mut s);
+    copy(&mut s, &[t]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(doc(&s).pattern("Dots 2").is_some(), "{v}");
+    assert_eq!(style_pattern(&s, "Patterned").as_deref(), Some("Dots 2"), "{v}");
+    let named = |n: &str| Some(n.to_string());
+    assert_eq!(type_links(&s, ids_of(&v)[0]), (named("Patterned"), named("Dots 2")));
+    let other = id_of(&s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Yo"})).unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Patterned", "id": other.0})).unwrap();
+    assert_eq!(type_links(&s, other).1.as_deref(), Some("Dots 2"), "the applied style paints with the pasted pattern");
+    let counts = |s: &Session| (doc(s).patterns.len(), doc(s).char_styles.len());
+    let before = counts(&s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert_eq!(counts(&s), before);
+    assert_eq!(type_links(&s, ids_of(&v)[0]), (named("Patterned"), named("Dots 2")));
+}
+
+/// A document whose "Patterned" style has the pasted style's attributes but whose "Dots" is
+/// another pattern: that style paints with the document's "Dots", so the pasted one comes in as
+/// "Patterned 2", painting with "Dots 2", and the document's own is left as it was. Pasting again
+/// uses the numbered copies.
+#[test]
+fn pasted_styles_are_not_matched_to_styles_that_paint_with_another_pattern() {
+    let mut s = session();
+    let t = patterned_type(&mut s);
+    let style = doc(&s).char_styles.iter().find(|x| x.name == "Patterned").unwrap().clone();
+    copy(&mut s, &[t]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    doc_mut(&mut s).char_styles.push(style);
+    let own = (doc(&s).char_styles.clone(), doc(&s).pattern("Dots").cloned());
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(style_pattern(&s, "Patterned 2").as_deref(), Some("Dots 2"), "{v}");
+    let d = doc(&s);
+    assert_eq!((&d.char_styles[..own.0.len()], d.pattern("Dots")), (&own.0[..], own.1.as_ref()), "the document's own are unchanged");
+    let named = |n: &str| Some(n.to_string());
+    let links = (named("Patterned 2"), named("Dots 2"));
+    assert_eq!(type_links(&s, ids_of(&v)[0]), links);
+    let counts = |s: &Session| (doc(s).patterns.len(), doc(s).char_styles.len());
+    let before = counts(&s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert_eq!(counts(&s), before);
+    assert_eq!(type_links(&s, ids_of(&v)[0]), links);
+}
+
+/// A style that paints with a pattern whose tile sets type in that same style is pasted with the
+/// pattern: when the pattern comes in as "Dots 2", the style paints with "Dots 2", and the tile's
+/// type is set in the style. Pasting again adds nothing. The commands do not make that loop, so the
+/// source is a document edited directly.
+#[test]
+fn a_pasted_style_and_the_pattern_whose_tile_uses_it_come_in_together() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Tile"})).unwrap());
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": t.0})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [t.0]})).unwrap();
+    let other = id_of(&s.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": other.0})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [other.0]})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Painted", "id": other.0})).unwrap();
+    let d = doc_mut(&mut s);
+    let painted = d.char_styles.iter().find(|x| x.name == "Painted").unwrap().attrs.clone();
+    d.char_styles.retain(|x| x.name != "Painted");
+    d.char_styles.iter_mut().find(|x| x.name == "Accent").unwrap().attrs = painted;
+    assert_eq!(style_pattern(&s, "Accent").as_deref(), Some("Dots"));
+    copy(&mut s, &[other]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(doc(&s).pattern("Dots 2").is_some(), "{v}");
+    assert_eq!(style_pattern(&s, "Accent").as_deref(), Some("Dots 2"), "{v}");
+    let NodeKind::Text(tile) = &doc(&s).pattern("Dots 2").unwrap().art[0].kind else { panic!("the tile is type") };
+    assert_eq!(tile.runs[0].style.style_name.as_deref(), Some("Accent"));
+    let after = doc(&s).clone();
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert!(doc(&s).patterns == after.patterns && doc(&s).char_styles == after.char_styles, "nothing is added");
+    // Back in the source document, the loop is the document's own.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!((v["added"].as_u64(), v["renamed"].as_array().map(Vec::len)), (Some(0), Some(0)), "{v}");
+}
+
+/// A symbol whose art paints with a pattern is not matched to the document's symbol of that name
+/// and art when the document's pattern of that name is another one: it comes in as "Mark 2",
+/// painting with "Dots 2".
+#[test]
+fn pasted_symbols_are_not_matched_to_symbols_that_paint_with_another_pattern() {
+    let mut s = session();
+    dots(&mut s, 10.0, "#ff0000");
+    let r = rect(&mut s, 20.0, 20.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[r]);
+    let mark = id_of(&s.execute("symbol.new", &json!({"name": "Mark"})).unwrap());
+    copy(&mut s, &[mark]);
+    // The document gets "Mark" and "Dots" from a first paste; then its "Dots" gets another tile.
+    new_doc(&mut s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["renamed"], json!([]), "{v}");
+    let tile = &mut doc_mut(&mut s).patterns.iter_mut().find(|p| p.name == "Dots").unwrap().tile;
+    *tile = Rect::new(tile.x0, tile.y0, tile.x1 + 30.0, tile.y1 + 30.0);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".to_string(), "Mark".to_string(), "Mark 2".to_string())), "{v}");
+    let art = |s: &Session, name: &str| fill_of(&doc(s).symbols.iter().find(|x| x.name == name).unwrap().art);
+    assert_eq!((art(&s, "Mark").as_deref(), art(&s, "Mark 2").as_deref()), (Some("Dots"), Some("Dots 2")));
+    assert!(matches!(node(&s, ids_of(&v)[0]).kind, NodeKind::SymbolInstance { ref symbol, .. } if symbol == "Mark 2"));
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
+/// The pattern the first filled object in `n` paints with.
+fn fill_of(n: &Node) -> Option<String> {
+    let mut found = None;
+    n.walk(&mut |m| {
+        if found.is_none() {
+            found = pattern_of(&m.appearance.fill_paint()).map(str::to_string);
+        }
+    });
+    found
+}
+
+/// A brush whose art sets type in a character style is not matched to the document's brush of
+/// that name and art when the document's style of that name is another one: the style comes in as
+/// "Accent 2", and the brush as a copy whose type is set in "Accent 2".
+#[test]
+fn pasted_brushes_are_not_matched_to_brushes_that_use_another_style() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ink"})).unwrap());
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": t.0})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "art", "name": "Lettering", "ids": [t.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let path = rect(&mut s, 200.0, 200.0, 40.0, 10.0);
+    s.execute("brush.apply", &json!({"name": name, "ids": [path.0]})).unwrap();
+    let brush = vectorcraft_brush::find(doc(&s), &name).unwrap();
+    copy(&mut s, &[path]);
+    new_doc(&mut s);
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 10}})).unwrap();
+    let d = doc_mut(&mut s);
+    let mut lib = vectorcraft_brush::library(d);
+    lib.push(brush);
+    vectorcraft_brush::store(d, &lib);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    let names = renamed(&v);
+    let copied = names.iter().find(|(k, from, _)| k == "brush" && *from == name).map(|(_, _, to)| to.clone());
+    assert!(names.contains(&("charStyle".to_string(), "Accent".to_string(), "Accent 2".to_string())), "{v}");
+    let copied = copied.unwrap_or_else(|| panic!("the brush is added under a free name: {v}"));
+    let style_of = |s: &Session, b: &str| {
+        let b = vectorcraft_brush::find(doc(s), b).unwrap();
+        let mut found = None;
+        for a in b.art() {
+            a.walk(&mut |m| {
+                if let NodeKind::Text(tx) = &m.kind {
+                    found = found.take().or_else(|| tx.runs[0].style.style_name.clone());
+                }
+            });
+        }
+        found
+    };
+    assert_eq!((style_of(&s, &name).as_deref(), style_of(&s, &copied).as_deref()), (Some("Accent"), Some("Accent 2")));
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
 #[test]
 fn brushes_travel_with_their_strokes() {
     let mut s = session();
@@ -564,6 +828,75 @@ fn front_and_back_without_a_selection_use_the_current_layers_ends() {
 }
 
 #[test]
+fn front_and_back_beside_a_compound_paths_member_go_beside_the_compound_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let members = |s: &Session| doc(s).node(c).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let before = members(&s);
+    let layer = |s: &Session| doc(s).layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    // A compound path and a group, each pasted with one of the compound path's members selected.
+    let other = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[other]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    for copied in [c, group] {
+        copy(&mut s, &[copied]);
+        sel(&mut s, &[before[0]]);
+        let above = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+        let l = layer(&s);
+        let i = l.iter().position(|id| *id == c).unwrap();
+        assert_eq!(&l[i + 1..i + 2], &above[..], "right above the compound path");
+        sel(&mut s, &[before[1]]);
+        let below = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+        let l = layer(&s);
+        let i = l.iter().position(|id| *id == c).unwrap();
+        assert_eq!(&l[i - 1..i], &below[..], "right below the compound path");
+        assert_eq!(members(&s), before, "the compound path keeps its own members");
+    }
+    // A path still goes in front of the member, inside the compound path.
+    let loose = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[loose]);
+    sel(&mut s, &[before[0]]);
+    let path = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+    assert_eq!(members(&s), [before[0], path[0], before[1]]);
+}
+
+#[test]
+fn paste_in_back_of_a_clipping_path_keeps_it_the_clipping_path() {
+    let mut s = session();
+    let children = |s: &Session, g: NodeId| doc(s).node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let loose = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    let other = rect(&mut s, 220.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[other]);
+    let group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    // A path as the clipping path, and a compound path as the clipping path (a group pasted in back
+    // of a member goes beside the compound path).
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let mask = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    sel(&mut s, &[art, mask]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let art2 = rect(&mut s, 0.0, 120.0, 100.0, 100.0);
+    let (a, b) = (rect(&mut s, 10.0, 130.0, 20.0, 20.0), rect(&mut s, 40.0, 130.0, 20.0, 20.0));
+    sel(&mut s, &[a, b]);
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    sel(&mut s, &[art2, c]);
+    let g2 = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    for (g, clipping, target, copies) in [(g, mask, mask, vec![loose, group]), (g2, c, a, vec![group])] {
+        assert_eq!(children(&s, g)[0], clipping);
+        for copied in copies {
+            copy(&mut s, &[copied]);
+            sel(&mut s, &[target]);
+            let pasted = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+            let ch = children(&s, g);
+            assert_eq!(ch[0], clipping, "the clipping path stays the bottom child");
+            assert_eq!(&ch[1..2], &pasted[..], "right above the clipping path");
+        }
+    }
+}
+
+#[test]
 fn paste_on_all_artboards_keeps_the_offset_to_the_source_artboard() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
@@ -593,10 +926,131 @@ fn in_place_pastes_go_onto_the_artboard_named() {
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 15.0), "{cmd}");
         let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 + 10.0, boards[0].y0 + 15.0), "{cmd} without one");
-        // An artboard that isn't there: where they were.
-        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 9})).unwrap());
-        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[0].x0 + 10.0, boards[0].y0 + 15.0), "{cmd} on no artboard");
+        // An artboard that isn't there, or a value that isn't an index: an error, and nothing pasted.
+        let before = doc(&s).clone();
+        for bad in [json!(9), json!(-1), json!(1.5), json!("1")] {
+            assert!(s.execute(cmd, &json!({"artboard": bad})).is_err(), "{cmd} with artboard {bad}");
+        }
+        assert_eq!(doc(&s), &before, "{cmd}");
     }
+}
+
+/// Paste in Place, in Front and in Back onto several artboards (the Artboard tool's selection, which
+/// the app passes as `artboards`): a copy on each, where the objects were on the artboard they were
+/// copied from, the copies in artboard order and in their own paint order, all selected, in one undo
+/// step.
+#[test]
+fn in_place_pastes_put_a_copy_on_each_artboard_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 4})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let a = rect(&mut s, boards[1].x0 + 10.0, boards[1].y0 + 15.0, 20.0, 20.0);
+    let b = rect(&mut s, boards[1].x0 + 50.0, boards[1].y0 + 5.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let before = doc(&s).clone();
+        let ids = ids_of(&s.execute(cmd, &json!({"artboards": [3, 0]})).unwrap());
+        assert_eq!(ids.len(), 4, "{cmd}: two objects on each of two artboards");
+        for (pair, board) in ids.chunks(2).zip([boards[0], boards[3]]) {
+            assert_eq!(doc(&s).bounds_of(&pair[..1], false).unwrap().origin(), Point::new(board.x0 + 10.0, board.y0 + 15.0), "{cmd}");
+            assert_eq!(doc(&s).bounds_of(&pair[1..], false).unwrap().origin(), Point::new(board.x0 + 50.0, board.y0 + 5.0), "{cmd}");
+        }
+        let layer: Vec<NodeId> = doc(&s).layers[0].children().into_iter().flatten().map(|n| n.id).collect();
+        let at: Vec<usize> = ids.iter().map(|id| layer.iter().position(|n| n == id).unwrap()).collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{cmd}: in paint order, artboard by artboard: {at:?}");
+        assert_eq!(s.doc().unwrap().selection.in_paint_order(doc(&s)), ids, "{cmd}: the copies are selected");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{cmd}: one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(doc(&s), &before, "{cmd}: undo takes every copy away");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(doc(&s).layers[0].children().into_iter().flatten().count(), layer.len(), "{cmd}: redo");
+        // `artboard` wins over `artboards`.
+        let ids = ids_of(&s.execute(cmd, &json!({"artboard": 2, "artboards": [0, 3]})).unwrap());
+        assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 5.0), "{cmd}");
+        // A list that is empty, names an artboard the document lacks or names one twice, or isn't a
+        // list: an error, and nothing pasted.
+        let before = doc(&s).clone();
+        for bad in [json!([]), json!([0, 4]), json!([1, 1]), json!([0, -1]), json!(2), json!("0,1")] {
+            assert!(s.execute(cmd, &json!({"artboards": bad})).is_err(), "{cmd} with artboards {bad}");
+        }
+        assert!(s.execute(cmd, &json!({"artboard": 1, "artboards": [7]})).is_err(), "{cmd}: a bad list with `artboard`");
+        assert_eq!(doc(&s), &before, "{cmd}");
+    }
+}
+
+/// With the Artboard tool chosen and several artboards selected, Paste in Place, in Front and in
+/// Back put a copy on each without naming them; the journal notes them, so a replay pastes on the
+/// same artboards, and a recorded action leaves them out. With one selected, or another tool, the
+/// objects go where they were.
+#[test]
+fn in_place_pastes_follow_the_artboard_tool_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 + 10.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    let origins = |s: &Session, ids: &[NodeId]| ids.iter().map(|id| doc(s).bounds_of(&[*id], false).unwrap().origin()).collect::<Vec<_>>();
+    let on = |b: &[usize]| b.iter().map(|i| Point::new(boards[*i].x0 + 10.0, boards[*i].y0 + 15.0)).collect::<Vec<_>>();
+    s.select_tool("artboard", ViewInfo::default()).unwrap();
+    for cmd in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        s.set_tool_option("selected", &json!([2, 1]));
+        let start = s.journal.len();
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[1, 2]), "{cmd}");
+        assert_eq!(s.journal.since(start).last().map(|(_, p)| p["artboards"].clone()), Some(json!([1, 2])), "{cmd}: journaled");
+        assert!(s.journal_for_action(start).iter().all(|(_, p)| p.get("artboards").is_none()), "{cmd}: not in an action");
+        // A stale index in the tool's selection is passed over.
+        s.set_tool_option("selected", &json!([0, 9]));
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[0]), "{cmd}: one left");
+        s.set_tool_option("selected", &json!([1]));
+        let ids = ids_of(&s.execute(cmd, &json!({})).unwrap());
+        assert_eq!(origins(&s, &ids), on(&[0]), "{cmd}: one selected, where it was");
+    }
+    s.set_tool_option("selected", &json!([1, 2]));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let ids = ids_of(&s.execute("edit.pasteInPlace", &json!({})).unwrap());
+    assert_eq!(origins(&s, &ids), on(&[0]), "another tool: where it was");
+}
+
+/// Art copied from no artboard onto several: it keeps its place on the first and its offset to the
+/// first on the others. Guides alone go on each artboard named.
+#[test]
+fn in_place_pastes_onto_several_artboards_of_art_off_them_and_guides() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    let r = rect(&mut s, boards[0].x0 - 100.0, boards[0].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    assert_eq!(s.clipboard.source_artboard, None);
+    let ids = ids_of(&s.execute("edit.pasteInPlace", &json!({"artboards": [1, 2]})).unwrap());
+    let at: Vec<Point> = ids.iter().map(|id| doc(&s).bounds_of(&[*id], false).unwrap().origin()).collect();
+    let first = Point::new(boards[0].x0 - 100.0, boards[0].y0 + 15.0);
+    assert_eq!(at, [first, first + (boards[2].origin() - boards[1].origin())]);
+    // Guides alone, copied from artboard 1: one on each artboard named, 30 pt into it.
+    s.execute("guide.add", &json!({"vertical": true, "pos": boards[0].x0 + 30.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let r = s.execute("edit.pasteInFront", &json!({"artboards": [1, 2]})).unwrap();
+    assert_eq!(r["guides"], 2);
+    let mut guides: Vec<f64> = doc(&s).ruler_guides().iter().map(|g| g.pos).collect();
+    guides.sort_by(f64::total_cmp);
+    assert_eq!(guides, [boards[0].x0 + 30.0, boards[1].x0 + 30.0, boards[2].x0 + 30.0]);
+}
+
+/// Artboards on the clipboard come back once, where they were, whichever artboards are named.
+#[test]
+fn in_place_pastes_of_copied_artboards_ignore_the_artboards_named() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("artboard.copy", &json!({"index": 0, "art": true})).unwrap();
+    let r = s.execute("edit.pasteInPlace", &json!({"artboards": [1, 2]})).unwrap();
+    assert_eq!(r["artboards"], json!([3]));
+    assert_eq!(ids_of(&r).len(), 1);
+    assert_eq!(doc(&s).artboards[3].rect, doc(&s).artboards[0].rect);
 }
 
 /// Art copied from beside the artboards goes back where it was, whichever artboard is active (#1924).
@@ -640,7 +1094,8 @@ fn paste_remembers_layers_restores_the_source_layers() {
     let art = id_of(&s.execute("layer.new", &json!({"name": "Art"})).unwrap());
     let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
     copy(&mut s, &[a, b]);
-    assert_eq!(s.clipboard.source_layers, [Some("Layer 1".to_string()), Some("Art".to_string())]);
+    let names: Vec<_> = s.clipboard.source_layers.iter().map(|l| l.as_ref().map(|l| l.names.clone())).collect();
+    assert_eq!(names, [Some(vec!["Layer 1".to_string()]), Some(vec!["Art".to_string()])]);
     let other = id_of(&s.execute("layer.new", &json!({"name": "Other"})).unwrap());
     assert_eq!(s.execute("layer.pasteRemembersLayers", &json!({})).unwrap()["on"], true);
     assert!(doc(&s).paste_remembers_layers);
@@ -665,6 +1120,157 @@ fn paste_remembers_layers_restores_the_source_layers() {
     s.execute("layer.setCurrent", &json!({"id": other.0})).unwrap();
     let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
     assert!(ids.iter().all(|id| doc(&s).parent_of(*id) == Some(other)));
+}
+
+/// A sublayer `name` made inside `parent`; it becomes the current layer.
+fn sublayer(s: &mut Session, parent: NodeId, name: &str) -> NodeId {
+    id_of(&s.execute("layer.newSublayer", &json!({"parent": parent.0, "name": name})).unwrap())
+}
+
+/// The names of the layers around `id`, the top-level layer first.
+fn layer_path(s: &Session, id: NodeId) -> Vec<String> {
+    let d = doc(s);
+    d.ancestry(id).unwrap().iter().filter_map(|a| d.node(*a).filter(|n| n.is_layer())).map(|l| l.name.clone().unwrap()).collect()
+}
+
+/// Art from two sublayers of the same name in different layers pastes back into each one; in
+/// another document a missing sublayer is made inside its layer, and a missing layer on top with
+/// the sublayer inside, in the paste's one undo step.
+#[test]
+fn paste_remembers_layers_keeps_same_named_sublayers_apart() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub1 = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    let sub2 = sublayer(&mut s, second, "Sub");
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    s.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let parents: Vec<_> = ids.iter().map(|id| doc(&s).parent_of(*id)).collect();
+    assert_eq!(parents, [Some(sub1), Some(sub2)]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let before = doc(&s).clone();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let paths: Vec<_> = ids.iter().map(|id| layer_path(&s, *id)).collect();
+    assert_eq!(paths, [["Layer 1", "Sub"], ["Layer 2", "Sub"]]);
+    assert_eq!(doc(&s).layers.len(), 2, "Layer 1 is kept; Layer 2 is new");
+    assert_eq!(doc(&s).layers[0].children().unwrap().len(), 1, "Sub is made inside Layer 1");
+    let after = doc(&s).clone();
+    // Pasting again finds the layers made.
+    let again = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let parents: Vec<_> = again.iter().map(|id| doc(&s).parent_of(*id)).collect();
+    assert_eq!(parents, ids.iter().map(|id| doc(&s).parent_of(*id)).collect::<Vec<_>>());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*doc(&s), after);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*doc(&s), before, "one undo step takes the art and the layers made for it");
+}
+
+/// Art whose sublayer was deleted after the copy pastes into a new sublayer of that name inside
+/// the same layer, not into a sublayer of that name in another layer.
+#[test]
+fn paste_remembers_layers_makes_a_deleted_sublayer_again_inside_its_layer() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    let elsewhere = sublayer(&mut s, second, "Sub");
+    copy(&mut s, &[a]);
+    s.execute("layer.delete", &json!({"id": sub.0})).unwrap();
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let made = doc(&s).parent_of(ids[0]).unwrap();
+    assert_ne!(made, elsewhere);
+    assert_eq!(doc(&s).parent_of(made), Some(first));
+    assert_eq!(layer_path(&s, ids[0]), ["Layer 1", "Sub"]);
+}
+
+/// Art whose sublayer was moved into another layer after the copy pastes into that sublayer where
+/// it is now; no sublayer is made where it was.
+#[test]
+fn paste_remembers_layers_follows_a_moved_sublayer() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    copy(&mut s, &[a]);
+    s.execute("layer.move", &json!({"id": sub.0, "target": second.0})).unwrap();
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(sub));
+    assert_eq!(layer_path(&s, ids[0]), ["Layer 2", "Sub"]);
+    assert!(node(&s, first).children().unwrap().is_empty(), "no Sub is made in Layer 1");
+}
+
+/// In another document with layers of the same names, art goes into the topmost chain of layers
+/// that matches the most names, a shown and unlocked one before a hidden or locked one.
+#[test]
+fn paste_remembers_layers_takes_the_topmost_open_match_of_repeated_names() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let lower = doc(&s).layers[0].id;
+    let lower_sub = sublayer(&mut s, lower, "Sub");
+    s.execute("layer.new", &json!({"name": "Sub", "top": true})).unwrap();
+    let upper = id_of(&s.execute("layer.new", &json!({"name": "Layer 1", "top": true})).unwrap());
+    // The upper Layer 1 has no Sub, and a top-level Sub is not inside a Layer 1: the lower chain
+    // matches both names.
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(lower_sub));
+    let upper_sub = sublayer(&mut s, upper, "Sub");
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(upper_sub), "the topmost of two full matches");
+    s.execute("layer.setProps", &json!({"id": upper_sub.0, "locked": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(lower_sub), "an unlocked match before a locked one");
+}
+
+/// A remembered layer or sublayer that is hidden or locked, or inside a layer that is, refuses the
+/// whole paste: the document, the selection and the undo history stay as they were.
+#[test]
+fn paste_remembers_layers_refuses_a_hidden_or_locked_layer() {
+    let (locked, hidden) = (json!({"locked": true}), json!({"visible": false}));
+    for (on_sub, props) in [(true, &locked), (true, &hidden), (false, &locked), (false, &hidden)] {
+        let mut s = session();
+        let first = doc(&s).layers[0].id;
+        let sub = sublayer(&mut s, first, "Sub");
+        let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        let other = id_of(&s.execute("layer.new", &json!({"name": "Other", "top": true})).unwrap());
+        let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+        copy(&mut s, &[b, a]);
+        s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+        let mut p = props.clone();
+        p["id"] = json!(if on_sub { sub.0 } else { first.0 });
+        s.execute("layer.setProps", &p).unwrap();
+        s.execute("layer.setCurrent", &json!({"id": other.0})).unwrap();
+        let before = s.doc().unwrap().clone();
+        assert!(s.execute("edit.paste", &json!({})).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().doc, before.doc, "{p}");
+        assert_eq!(s.doc().unwrap().selection, before.selection, "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before.history.undo.len(), "{p}");
+    }
+    // In another document, a locked layer of the copied layer's name is refused too.
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let locked = doc(&s).layers[0].id;
+    id_of(&s.execute("layer.new", &json!({"name": "Flyer"})).unwrap());
+    s.execute("layer.setProps", &json!({"id": locked.0, "locked": true})).unwrap();
+    let before = doc(&s).clone();
+    assert!(s.execute("edit.paste", &json!({})).is_err());
+    assert_eq!(*doc(&s), before, "no second Layer 1 is made");
 }
 
 #[test]
@@ -780,4 +1386,95 @@ fn artwork_drop_uses_the_current_layer_even_when_paste_remembers_hidden_or_locke
         assert_eq!(doc(&s).layers.len(), 2);
         assert!(doc(&s).paste_remembers_layers, "the preference still applies to ordinary Paste");
     }
+}
+
+/// Two touching rectangles made into 9-slice symbol `Audit`, its instance scaled 150% × 75% and
+/// copied (#5902).
+fn copied_nine_slice_instance(s: &mut Session) -> Document {
+    let red = rect(s, 30.0, 30.0, 80.0, 60.0);
+    s.execute("paint.setFill", &json!({"ids": [red.0], "color": "#ff0000"})).unwrap();
+    let blue = rect(s, 110.0, 90.0, 40.0, 30.0);
+    s.execute("paint.setFill", &json!({"ids": [blue.0], "color": "#0000ff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Audit", "nineSlice": true, "registration": 0, "exportType": "graphic"})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 75})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    doc(s).clone()
+}
+
+/// The symbol options pasted symbol `to` should have: those of `from` in `src`.
+fn assert_same_symbol_options(src: &Document, from: &str, d: &Document, to: &str) {
+    assert!(src.symbol_nine_slice(from).is_some());
+    assert_eq!(d.symbol_nine_slice(to), src.symbol_nine_slice(from));
+    assert_eq!(d.symbol_registration(to), src.symbol_registration(from));
+    assert_eq!(d.symbol_export_type(to), src.symbol_export_type(from));
+    assert_eq!(d.symbol_natural_xf(to), src.symbol_natural_xf(from));
+}
+
+#[test]
+fn a_nine_slice_symbol_pasted_into_another_document_keeps_its_options_and_look() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
+    // Pasting again uses the symbol the first paste added.
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
+#[test]
+fn a_renamed_nine_slice_symbol_keeps_its_options_under_the_new_name() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    let other = ellipse(&mut s);
+    sel(&mut s, &[other]);
+    s.execute("symbol.new", &json!({"name": "Audit"})).unwrap();
+    let own = doc(&s).clone();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    // The document's own symbol keeps its options.
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None);
+    assert_eq!(doc(&s).symbol_natural_xf("Audit"), own.symbol_natural_xf("Audit"));
+}
+
+#[test]
+fn a_same_named_symbol_with_other_options_is_not_reused() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    // The document's `Audit` has the same art but 9-slice scaling off now.
+    s.execute("symbol.options", &json!({"name": "Audit", "nineSlice": false})).unwrap();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None, "the document's own symbol keeps its options");
+}
+
+#[test]
+fn a_symbol_without_a_recorded_natural_size_is_pasted_without_one() {
+    let mut s = session();
+    let r = rect(&mut s, 30.0, 30.0, 80.0, 60.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Plain"})).unwrap();
+    s.edit("Forget size", |d, _| {
+        if let Some(m) = d.unknown.get_mut(vectorcraft_doc::SYMBOL_SIZES).and_then(Value::as_object_mut) {
+            m.remove("Plain");
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None);
+    s.execute("edit.copy", &json!({})).unwrap();
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(doc(&s).symbols.iter().any(|x| x.name == "Plain"));
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None, "no size is made up for it");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
 }

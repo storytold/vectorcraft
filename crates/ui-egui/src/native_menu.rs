@@ -260,16 +260,20 @@ pub fn is_function_key(key: Key) -> bool {
 
 /// The input egui's window integration would have made of a press of `sc` (key and modifiers
 /// held): the key press and its release, but for ⌘X, ⌘C and ⌘V the Cut, Copy and Paste events
-/// (Paste with the clipboard's text, from `paste_text`). A paste's release is left to the window's
-/// own key-up: one without a press or a Paste event is how a paste of a picture or a PDF is told
-/// apart ([`crate::shortcuts`]).
+/// (Paste with the clipboard's text, from `paste_text`), each followed by the key's release. The
+/// window never reports that release itself: AppKit gave the key-down to the menu, and egui's
+/// window integration only releases a key whose press it saw. A paste's release without a press or
+/// a Paste event is how a paste of a picture or a PDF is told apart ([`crate::shortcuts`], #5159).
 pub fn key_events(sc: KeyboardShortcut, paste_text: impl FnOnce() -> Option<String>) -> Vec<egui::Event> {
     let key = |pressed| egui::Event::Key { key: sc.logical_key, physical_key: None, pressed, repeat: false, modifiers: sc.modifiers };
     if sc.modifiers.command {
         match sc.logical_key {
             Key::X => return vec![egui::Event::Cut, key(false)],
             Key::C => return vec![egui::Event::Copy, key(false)],
-            Key::V => return paste_text().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty()).map(egui::Event::Paste).into_iter().collect(),
+            Key::V => {
+                let text = paste_text().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty());
+                return text.map(egui::Event::Paste).into_iter().chain([key(false)]).collect();
+            }
             _ => {}
         }
     }
@@ -495,6 +499,9 @@ pub enum Event {
     /// A key equivalent pressed: the item's key with the modifiers held, to be handled as the key
     /// press it was.
     Key(KeyboardShortcut),
+    /// A menu of the bar opened. The Scripts folder is read again, as when the in-window File menu
+    /// opens; the new listing shows the next time the menu opens.
+    Opened,
 }
 
 /// A platform's native menu bar (the desktop app implements it for macOS with muda).
@@ -513,6 +520,8 @@ pub struct NativeMenu {
     /// Hash of the state the menus were last read in ([`state_hash`]).
     state: Option<u64>,
     clicks: Vec<Item>,
+    /// A menu opened since the last [`run`].
+    opened: bool,
     /// Something was chosen (AppKit may have toggled a check mark itself): read the menus again.
     dirty: bool,
     logged: bool,
@@ -520,17 +529,21 @@ pub struct NativeMenu {
 
 impl NativeMenu {
     pub fn new(backend: Box<dyn Backend>) -> NativeMenu {
-        NativeMenu { backend, state: None, clicks: Vec::new(), dirty: true, logged: false }
+        NativeMenu { backend, state: None, clicks: Vec::new(), opened: false, dirty: true, logged: false }
     }
 
-    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks wait for
-    /// [`run`].
+    /// The key equivalents pressed since the last frame, for [`key_events`]; clicks and menus
+    /// opened wait for [`run`].
     pub fn take_keys(&mut self) -> Vec<KeyboardShortcut> {
         let mut keys = Vec::new();
         for e in self.backend.drain() {
             match e {
                 Event::Key(k) => keys.push(k),
                 Event::Click(it) => self.clicks.push(it),
+                Event::Opened => {
+                    self.opened = true;
+                    continue;
+                }
             }
             self.dirty = true;
         }
@@ -538,9 +551,14 @@ impl NativeMenu {
     }
 }
 
-/// Run the items clicked in the native menu since the last frame, like in-window menu clicks.
+/// Run the items clicked in the native menu since the last frame, like in-window menu clicks, and
+/// read the Scripts folder again when a menu opened.
 pub fn run(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let picking = app.file_dialog_open();
+    let Some(menu) = app.services.native_menu.as_mut() else { return };
+    if std::mem::take(&mut menu.opened) {
+        crate::scripts_menu::refresh(app, Some(ctx));
+    }
     let Some(menu) = app.services.native_menu.as_mut() else { return };
     for it in std::mem::take(&mut menu.clicks) {
         // A click that raced the menu going inert under a file dialog.
@@ -586,7 +604,8 @@ pub fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
 /// its revision (edits, selection and view changes), history and clipboard, the language,
-/// shortcuts, plug-ins and an open file dialog. `input` forces a change on frames with a click or
+/// shortcuts, plug-ins, the Scripts folder's listing, an open file dialog and the fonts (Type › Font lists the loaded fonts
+/// until the installed ones are scanned, then all of them, #5483). `input` forces a change on frames with a click or
 /// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
 /// interaction is open (for example a move, scale or shape drag, a dialog's or the font menu's
 /// preview, or a typing session), the revision, which each of its previews changes, is left out:
@@ -603,7 +622,9 @@ fn state_hash(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
     app.file_dialog_open().hash(&mut h);
-    (crate::i18n::current().code(), menus::plugin_revision()).hash(&mut h);
+    (crate::i18n::current().code(), menus::plugin_revision(), crate::scripts_menu::revision()).hash(&mut h);
     crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed).hash(&mut h);
+    let fonts = vectorcraft_text::FontDb::global();
+    (fonts.generation(), fonts.installed_fonts_ready()).hash(&mut h);
     h.finish()
 }

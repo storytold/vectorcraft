@@ -1,8 +1,9 @@
 //! Pathfinder panel › compound shapes (`object.compoundShape.*`): Make Compound Shape in each
-//! shape mode, a member's mode, Release, Expand, Undo, saving and exporting.
+//! shape mode, a member's mode, Release, Expand, Undo, saving and exporting; blends, envelopes and
+//! warped objects as members.
 
 use serde_json::{Value, json};
-use vectorcraft_color::Color;
+use vectorcraft_color::{BlendMode, Color};
 use vectorcraft_doc::{Node, ShapeMode};
 use vectorcraft_render::effects;
 
@@ -67,7 +68,7 @@ fn make_and_expand_each_shape_mode() {
         assert_eq!(members, vec![back, front], "the members, in their stacking order");
         assert!(shape.children().unwrap().iter().all(|m| m.extras().shape_mode.name() == mode));
         assert_eq!(shape.appearance.fill_paint().color(), Some(fill), "{mode}");
-        let drawn = effects::compound_shape_area(&shape, None).unwrap();
+        let drawn = effects::compound_shape_area(None, &shape, None).unwrap();
         assert!((area(&drawn) - want).abs() < 0.5, "{mode}: {}", area(&drawn));
         // Expand: the path, or compound path, of the area, painted as the compound shape.
         let made = run(&mut s, "object.compoundShape.expand", json!({}));
@@ -117,7 +118,7 @@ fn a_selected_member_takes_a_shape_mode() {
     assert_eq!(cmd::selected_member_modes(&s), vec![ShapeMode::Add]);
     run(&mut s, "object.compoundShape.setMode", json!({"mode": "intersect"}));
     assert_eq!(cmd::selected_member_modes(&s), vec![ShapeMode::Intersect]);
-    assert!((area(&effects::compound_shape_area(&node(&s, id), None).unwrap()) - 5_000.0).abs() < 0.5);
+    assert!((area(&effects::compound_shape_area(None, &node(&s, id), None).unwrap()) - 5_000.0).abs() < 0.5);
     // The same mode again is no edit.
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "object.compoundShape.setMode", json!({"mode": "intersect"}));
@@ -193,4 +194,505 @@ fn pathfinder_operations_take_the_area() {
     let out = run(&mut s, "object.pathfinder.unite", json!({}));
     let n = node(&s, NodeId(out["ids"][0].as_u64().unwrap()));
     assert!((node_area(&n) - 10_000.0).abs() < 0.5, "the 50 × 100 area and the 50 × 100 rectangle: {}", node_area(&n));
+}
+
+fn rect(s: &mut Session, x: f64, y: f64, width: f64, height: f64) -> NodeId {
+    NodeId(run(s, "shape.rectangle", json!({"x": x, "y": y, "width": width, "height": height}))["id"].as_u64().unwrap())
+}
+
+fn make(s: &mut Session, mode: &str) -> NodeId {
+    NodeId(run(s, "object.compoundShape.make", json!({"mode": mode}))["id"].as_u64().unwrap())
+}
+
+/// The area compound shape `id` draws, symbol instances among its members as their symbols' art.
+fn drawn(s: &Session, id: NodeId) -> f64 {
+    let d = &s.doc().unwrap().doc;
+    let hook = |c: &Node| effects::outline_object(Some(d), c);
+    area(&effects::compound_shape_area(None, &node(s, id), Some(&hook)).unwrap())
+}
+
+/// A bar (0–100 across, 10–30 down) behind a blend of two 20 pt squares at 0 and 80 (0–20 down)
+/// with one step between them, both selected → (session, bar, blend).
+fn bar_and_blend() -> (Session, NodeId, NodeId) {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 80.0, 0.0, 20.0, 20.0);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let blend = NodeId(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [bar.0, blend.0]}));
+    (s, bar, blend)
+}
+
+/// A blend is a member as its steps: the area takes each step in its shape mode, follows a change
+/// of the blend's steps, survives a save, and Expand turns it into that area; Release gives the
+/// blend back as a blend.
+#[test]
+fn a_blend_is_a_member_as_its_steps() {
+    // Each square covers 20 × 10 of the bar; five squares 20 apart cover all 100 of it.
+    for (mode, want, more) in [("add", 2_600.0, 3_000.0), ("subtract", 1_400.0, 1_000.0)] {
+        let (mut s, bar, blend) = bar_and_blend();
+        let id = make(&mut s, mode);
+        let members: Vec<NodeId> = node(&s, id).children().unwrap().iter().map(|m| m.id).collect();
+        assert_eq!(members, vec![bar, blend]);
+        assert!((drawn(&s, id) - want).abs() < 0.5, "{mode}: {}", drawn(&s, id));
+        run(&mut s, "select.set", json!({"ids": [blend.0]}));
+        run(&mut s, "object.blend.options", json!({"spacing": "steps", "value": 3}));
+        assert!((drawn(&s, id) - more).abs() < 0.5, "{mode}, three steps: {}", drawn(&s, id));
+        let doc = s.doc().unwrap().doc.clone();
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+        assert_eq!(back.node(id), doc.node(id));
+        assert!((area(&effects::compound_shape_area(None, back.node(id).unwrap(), None).unwrap()) - more).abs() < 0.5);
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        let made = run(&mut s, "object.compoundShape.expand", json!({}));
+        assert!((node_area(&node(&s, NodeId(made["ids"][0].as_u64().unwrap()))) - more).abs() < 0.5, "{mode}");
+        run(&mut s, "edit.undo", json!({}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.compoundShape.release", json!({}));
+        assert_eq!(selected(&s), vec![bar, blend]);
+        assert!(matches!(node(&s, blend).kind, NodeKind::Blend { .. }), "{mode}: still a blend");
+    }
+}
+
+/// An envelope is a member as its distorted art: moving a point of its mesh reshapes the area, and
+/// Release gives the envelope back.
+#[test]
+fn an_envelope_is_a_member_as_its_distorted_art() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let content = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    run(&mut s, "select.set", json!({"ids": [content.0]}));
+    let env = NodeId(run(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [env.0, dot.0]}));
+    let id = make(&mut s, "add");
+    assert!((drawn(&s, id) - 10_100.0).abs() < 1.0, "{}", drawn(&s, id));
+    // The corner at (100, 100) moved 100 to the right: a trapezoid of (100 + 200) / 2 × 100.
+    let NodeKind::Envelope { kind, .. } = node(&s, env).kind else { panic!("an envelope") };
+    let vectorcraft_doc::live::EnvelopeKind::Mesh { points, .. } = *kind else { panic!("a mesh envelope") };
+    let index = points.iter().position(|p| (p.x - 100.0).abs() < 1e-6 && (p.y - 100.0).abs() < 1e-6).unwrap();
+    run(&mut s, "object.envelope.setMeshPoint", json!({"id": env.0, "index": index, "x": 200, "y": 100}));
+    assert!((drawn(&s, id) - 15_100.0).abs() < 1.0, "{}", drawn(&s, id));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.compoundShape.release", json!({}));
+    assert_eq!(selected(&s), vec![env, dot]);
+    assert!(matches!(node(&s, env).kind, NodeKind::Envelope { .. }), "still an envelope");
+}
+
+/// An object with a warp is a member as it draws: the area follows the warp's bend, and Release
+/// gives the object back with its warp.
+#[test]
+fn a_warped_object_is_a_member_as_it_draws() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    run(&mut s, "effect.apply", json!({"effect": "warp.bulge", "params": {"bend": 50}}));
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [r.0, dot.0]}));
+    let id = make(&mut s, "add");
+    // The rectangle as the canvas draws it.
+    let warped = |s: &Session| {
+        let n = node(s, r);
+        let (path, _) = crate::cmd::pathops::node_path(&n).unwrap();
+        let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        area(&effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &effects::GeomContext::of(&n)))
+    };
+    let bulged = warped(&s);
+    assert!((bulged - 5_000.0).abs() > 100.0, "the warp changes the area: {bulged}");
+    assert!((drawn(&s, id) - (bulged + 100.0)).abs() < 1.0, "{} vs {}", drawn(&s, id), bulged + 100.0);
+    run(&mut s, "effect.setParams", json!({"ids": [r.0], "index": 0, "item": null, "params": {"bend": -50}}));
+    let pinched = warped(&s);
+    assert!((pinched - bulged).abs() > 100.0, "{pinched} vs {bulged}");
+    assert!((drawn(&s, id) - (pinched + 100.0)).abs() < 1.0, "{} vs {}", drawn(&s, id), pinched + 100.0);
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.compoundShape.release", json!({}));
+    assert_eq!(selected(&s), vec![r, dot]);
+    assert_eq!(node(&s, r).appearance.effects.first().map(|e| e.id.as_str()), Some("warp.bulge"), "it keeps its warp");
+}
+
+/// A session with a green 20 pt square (0–20 across and down) made into the symbol "Dot", its
+/// instance selected → (session, instance).
+fn dot_symbol() -> (Session, NodeId) {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    let a = NodeId(run(&mut s, "symbol.new", json!({"name": "Dot"}))["id"].as_u64().unwrap());
+    (s, a)
+}
+
+/// Symbol instances count as their symbols' art: a blend of two instances is a member as its
+/// steps and gives the compound shape their paint, an envelope around an instance is a member as
+/// its distorted art, and an instance inside a group as its art; Expand makes the same area.
+#[test]
+fn symbol_instances_in_members_count_as_their_art() {
+    for (mode, want) in [("add", 2_600.0), ("subtract", 1_400.0)] {
+        let (mut s, a) = dot_symbol();
+        let b = NodeId(run(&mut s, "symbol.place", json!({"name": "Dot", "x": 90, "y": 10}))["id"].as_u64().unwrap());
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        let blend = NodeId(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+        let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+        run(&mut s, "select.set", json!({"ids": [bar.0]}));
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+        run(&mut s, "object.arrange.sendToBack", json!({}));
+        run(&mut s, "select.set", json!({"ids": [bar.0, blend.0]}));
+        let id = make(&mut s, mode);
+        assert!((drawn(&s, id) - want).abs() < 0.5, "blend, {mode}: {}", drawn(&s, id));
+        if mode == "add" {
+            assert_eq!(node(&s, id).appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "the blend's paint");
+        }
+        assert!((expanded(&mut s, id) - want).abs() < 0.5, "expanded, {mode}");
+    }
+    let (mut s, _) = dot_symbol();
+    let env = NodeId(run(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [env.0, dot.0]}));
+    let id = make(&mut s, "add");
+    assert!((drawn(&s, id) - 500.0).abs() < 1.0, "envelope: {}", drawn(&s, id));
+    // The corner at (20, 20) moved 20 to the right: a trapezoid of (20 + 40) / 2 × 20.
+    let NodeKind::Envelope { kind, .. } = node(&s, env).kind else { panic!("an envelope") };
+    let vectorcraft_doc::live::EnvelopeKind::Mesh { points, .. } = *kind else { panic!("a mesh envelope") };
+    let index = points.iter().position(|p| (p.x - 20.0).abs() < 1e-6 && (p.y - 20.0).abs() < 1e-6).unwrap();
+    run(&mut s, "object.envelope.setMeshPoint", json!({"id": env.0, "index": index, "x": 40, "y": 20}));
+    assert!((drawn(&s, id) - 700.0).abs() < 1.0, "envelope, distorted: {}", drawn(&s, id));
+    assert!((expanded(&mut s, id) - 700.0).abs() < 1.0, "envelope, expanded");
+    let (mut s, _) = dot_symbol();
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    assert!((drawn(&s, id) - 500.0).abs() < 1.0, "group: {}", drawn(&s, id));
+    assert!((expanded(&mut s, id) - 500.0).abs() < 1.0, "group, expanded");
+}
+
+/// The 20 pt square symbol "Dot", a symbol "Ring" whose art is an instance of "Dot" and a symbol
+/// "Halo" whose art is an instance of "Ring", with an instance of "Halo" in the square's place →
+/// (session, the instance of "Halo").
+fn halo_symbol() -> (Session, NodeId) {
+    let (mut s, dot) = dot_symbol();
+    let ring = NodeId(run(&mut s, "symbol.new", json!({"name": "Ring", "ids": [dot.0]}))["id"].as_u64().unwrap());
+    let halo = NodeId(run(&mut s, "symbol.new", json!({"name": "Halo", "ids": [ring.0]}))["id"].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    for (outer, inner) in [("Halo", "Ring"), ("Ring", "Dot")] {
+        let Some(sym) = d.symbols.iter().find(|x| x.name == outer) else { panic!("the symbol {outer}") };
+        let mut holds = false;
+        sym.art.walk(&mut |c| holds |= matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == inner));
+        assert!(holds, "{outer} holds an instance of {inner}");
+    }
+    (s, halo)
+}
+
+/// Instances of a symbol whose art holds instances of other symbols, nested three deep, count as
+/// the innermost symbol's art: in a blend and inside a group.
+#[test]
+fn nested_symbol_instances_in_members_count_as_their_art() {
+    for (mode, want) in [("add", 2_600.0), ("subtract", 1_400.0)] {
+        let (mut s, a) = halo_symbol();
+        let b = NodeId(run(&mut s, "symbol.place", json!({"name": "Halo", "x": 90, "y": 10}))["id"].as_u64().unwrap());
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        let blend = NodeId(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+        let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+        run(&mut s, "select.set", json!({"ids": [bar.0]}));
+        run(&mut s, "object.arrange.sendToBack", json!({}));
+        run(&mut s, "select.set", json!({"ids": [bar.0, blend.0]}));
+        let id = make(&mut s, mode);
+        assert!((drawn(&s, id) - want).abs() < 0.5, "blend, {mode}: {}", drawn(&s, id));
+        assert!((expanded(&mut s, id) - want).abs() < 0.5, "blend, expanded, {mode}");
+    }
+    let (mut s, halo) = halo_symbol();
+    run(&mut s, "select.set", json!({"ids": [halo.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    assert!((drawn(&s, id) - 500.0).abs() < 1.0, "group: {}", drawn(&s, id));
+    assert!((expanded(&mut s, id) - 500.0).abs() < 1.0, "group, expanded");
+}
+
+/// A symbol whose art holds two instances of itself counts as its art once, in a blend and inside
+/// a group, without evaluating forever.
+#[test]
+fn a_symbol_holding_itself_counts_once() {
+    let holding_itself = |s: &mut Session| {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let Some(sym) = d.symbols.iter_mut().find(|x| x.name == "Dot") else { panic!("the symbol Dot") };
+        let me = |id| std::sync::Arc::new(Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Default::default() }));
+        sym.art = std::sync::Arc::new(Node::group(NodeId(9_997), vec![sym.art.clone(), me(9_998), me(9_999)]));
+    };
+    let (mut s, a) = dot_symbol();
+    let b = NodeId(run(&mut s, "symbol.place", json!({"name": "Dot", "x": 90, "y": 10}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let blend = NodeId(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+    let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+    run(&mut s, "select.set", json!({"ids": [bar.0, blend.0]}));
+    let id = make(&mut s, "add");
+    holding_itself(&mut s);
+    assert!((drawn(&s, id) - 2_600.0).abs() < 0.5, "blend: {}", drawn(&s, id));
+    let (mut s, a) = dot_symbol();
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    holding_itself(&mut s);
+    assert!((drawn(&s, id) - 500.0).abs() < 1.0, "group: {}", drawn(&s, id));
+}
+
+/// Symbols whose art holds two instances of the next symbol, 32 deep (2³¹ squares in all), stop at
+/// the symbol art budget: the area of a compound shape with an instance of the first in a member
+/// is left as past its budget, and the member's shapes stop there.
+#[test]
+fn branching_symbol_art_stops_at_its_budget() {
+    let (mut s, a) = dot_symbol();
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let Some(first) = d.symbols.iter().position(|x| x.name == "Dot") else { panic!("the symbol Dot") };
+        let square = d.symbols[first].art.clone();
+        let two = |level: u64| {
+            let one = |k: u64| {
+                let symbol = format!("Level {level}");
+                std::sync::Arc::new(Node::new(NodeId(20_000 + 2 * level + k), NodeKind::SymbolInstance { symbol, xf: Default::default() }))
+            };
+            std::sync::Arc::new(Node::group(NodeId(10_000 + level), vec![one(0), one(1)]))
+        };
+        d.symbols[first].art = two(1);
+        for level in 1..32 {
+            let mut sym = d.symbols[first].clone();
+            sym.name = format!("Level {level}");
+            sym.art = if level == 31 { square.clone() } else { two(level + 1) };
+            d.symbols.push(sym);
+        }
+    }
+    let d = &s.doc().unwrap().doc;
+    let hook = |c: &Node| effects::outline_object(Some(d), c);
+    assert!(effects::compound_shape_area(None, &node(&s, id), Some(&hook)).is_none(), "past the budget");
+    let leaves = effects::member_leaves(None, &node(&s, group), Some(&hook));
+    assert!(!leaves.is_empty() && leaves.len() as u64 <= effects::SYMBOL_ART_MAX_NODES, "{} shapes", leaves.len());
+}
+
+/// A group whose frontmost member is a blend or a symbol instance gives the compound shape the
+/// paint of that member's art, not that of a member below it.
+#[test]
+fn a_group_of_a_blend_or_an_instance_gives_its_paint() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 80.0, 0.0, 20.0, 20.0);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    run(&mut s, "object.blend.make", json!({"steps": 1}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [bar.0, group.0]}));
+    let id = make(&mut s, "add");
+    assert_eq!(node(&s, id).appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "the blend's paint");
+    let (mut s, a) = dot_symbol();
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    run(&mut s, "select.set", json!({"ids": [bar.0, group.0]}));
+    let id = make(&mut s, "add");
+    assert_eq!(node(&s, id).appearance.fill_paint().color(), Some(Color::rgb(0.0, 1.0, 0.0)), "the instance's paint");
+}
+
+/// A topmost blend, envelope or group with its own opacity and blend mode gives them to the
+/// compound shape, multiplied by the opacity of the shape inside it.
+#[test]
+fn a_topmost_blend_envelope_or_group_gives_its_transparency() {
+    for member in ["blend", "envelope", "group"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+        let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+        let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+        let ids = if member == "blend" {
+            let b = rect(&mut s, 80.0, 0.0, 20.0, 20.0);
+            json!([a.0, b.0])
+        } else {
+            json!([a.0])
+        };
+        run(&mut s, "select.set", json!({"ids": ids}));
+        let top = match member {
+            "blend" => run(&mut s, "object.blend.make", json!({"steps": 1})),
+            "envelope" => run(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1})),
+            _ => {
+                run(&mut s, "transparency.set", json!({"item": null, "opacity": 80}));
+                run(&mut s, "object.group", json!({}))
+            }
+        };
+        let top = NodeId(top["id"].as_u64().unwrap());
+        run(&mut s, "select.set", json!({"ids": [top.0]}));
+        run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply"}));
+        run(&mut s, "select.set", json!({"ids": [bar.0, top.0]}));
+        let id = make(&mut s, "add");
+        let n = node(&s, id);
+        let want = if member == "group" { 0.4 } else { 0.5 };
+        assert!((n.opacity - want).abs() < 1e-6, "{member}: {}", n.opacity);
+        assert_eq!(n.blend, BlendMode::Multiply, "{member}");
+    }
+}
+
+/// A symbol instance with a warp is a member as it draws: its symbol's art reshaped by the warp,
+/// inside a group and as the shapes the instance gives alone.
+#[test]
+fn a_warped_symbol_instance_is_a_member_as_it_draws() {
+    let (mut s, a) = dot_symbol();
+    run(&mut s, "effect.apply", json!({"effect": "warp.bulge", "params": {"bend": 50}}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    let d = &s.doc().unwrap().doc;
+    let Some(sym) = d.symbols.iter().find(|x| x.name == "Dot") else { panic!("the symbol Dot") };
+    let Some(art) = effects::reshape(Some(d), &node(&s, a), Some(&sym.art)) else { panic!("the warped art") };
+    let mut warped = 0.0;
+    art.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Path { .. }) {
+            warped += node_area(c);
+        }
+    });
+    assert!((warped - 400.0).abs() > 10.0, "the warp changes the area: {warped}");
+    assert!((drawn(&s, id) - (warped + 100.0)).abs() < 1.0, "{} vs {}", drawn(&s, id), warped + 100.0);
+    let hook = |c: &Node| effects::outline_object(Some(d), c);
+    let alone: f64 = effects::member_leaves(None, &node(&s, a), Some(&hook)).iter().map(node_area).sum();
+    assert!((alone - warped).abs() < 1.0, "the instance alone: {alone} vs {warped}");
+}
+
+/// A symbol instance gives the compound shape the transparency its art is drawn with: that of an
+/// instance of another symbol inside the art, within the instance's own.
+#[test]
+fn an_instance_gives_the_transparency_of_its_art() {
+    let (mut s, a) = dot_symbol();
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply"}));
+    let outer = NodeId(run(&mut s, "symbol.new", json!({"name": "Outer", "ids": [a.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [outer.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let bar = rect(&mut s, 0.0, 10.0, 100.0, 20.0);
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    run(&mut s, "select.set", json!({"ids": [bar.0, group.0]}));
+    let NodeKind::SymbolInstance { .. } = node(&s, outer).kind else { panic!("an instance of Outer") };
+    let id = make(&mut s, "add");
+    let n = node(&s, id);
+    assert!((n.opacity - 0.5).abs() < 1e-6, "{}", n.opacity);
+    assert_eq!(n.blend, BlendMode::Multiply);
+}
+
+/// The area the paths and compound paths in `art` fill, at every depth of its groups.
+fn art_area(art: &Node) -> f64 {
+    match &art.kind {
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => node_area(art),
+        _ => art.children().map_or(0.0, |ch| ch.iter().map(|c| art_area(c)).sum()),
+    }
+}
+
+/// A session with the type "Hello bo" made into the symbol "Word", its instance selected →
+/// (session, instance).
+fn word_symbol() -> (Session, NodeId) {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Hello bo", "size": 36}));
+    let a = NodeId(run(&mut s, "symbol.new", json!({"name": "Word"}))["id"].as_u64().unwrap());
+    let Some(sym) = s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Word").cloned() else { panic!("the symbol Word") };
+    let mut holds = false;
+    sym.art.walk(&mut |c| holds |= matches!(c.kind, NodeKind::Text(_)));
+    assert!(holds, "Word holds type");
+    (s, a)
+}
+
+/// Type inside a symbol's art counts as its outlines: an instance in a group gives the area of the
+/// glyphs, and a warped instance the area of the glyphs reshaped by the warp.
+#[test]
+fn type_in_symbol_art_counts_as_its_outlines() {
+    let (mut s, a) = word_symbol();
+    let unwarped = {
+        let d = &s.doc().unwrap().doc;
+        let hook = |c: &Node| effects::outline_object(Some(d), c);
+        effects::member_leaves(None, &node(&s, a), Some(&hook)).iter().map(node_area).sum::<f64>()
+    };
+    assert!(unwarped > 200.0, "the glyphs: {unwarped}");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    assert!((drawn(&s, id) - (unwarped + 100.0)).abs() < 1.0, "group: {} vs {}", drawn(&s, id), unwarped + 100.0);
+
+    let (mut s, a) = word_symbol();
+    run(&mut s, "effect.apply", json!({"effect": "warp.bulge", "params": {"bend": 50}}));
+    let group = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let dot = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    run(&mut s, "select.set", json!({"ids": [group.0, dot.0]}));
+    let id = make(&mut s, "add");
+    let d = &s.doc().unwrap().doc;
+    let Some(sym) = d.symbols.iter().find(|x| x.name == "Word") else { panic!("the symbol Word") };
+    let Some(art) = effects::reshape(Some(d), &node(&s, a), Some(&sym.art)) else { panic!("the warped art") };
+    let warped = art_area(&art);
+    assert!((warped - unwarped).abs() > 10.0, "the warp changes the area: {warped} vs {unwarped}");
+    assert!((drawn(&s, id) - (warped + 100.0)).abs() < 1.0, "warped: {} vs {}", drawn(&s, id), warped + 100.0);
+}
+
+/// The Pathfinder panel counts a compound shape of two blends by its members, so the operations
+/// that take one shape (Outline, Divide) are available for it.
+#[test]
+fn a_compound_shape_of_blends_counts_its_members() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let mut blends = vec![];
+    for y in [0.0, 50.0] {
+        let a = rect(&mut s, 0.0, y, 20.0, 20.0);
+        let b = rect(&mut s, 80.0, y, 20.0, 20.0);
+        run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+        blends.push(run(&mut s, "object.blend.make", json!({"steps": 1}))["id"].as_u64().unwrap());
+    }
+    run(&mut s, "select.set", json!({"ids": blends}));
+    let id = make(&mut s, "add");
+    assert_eq!(crate::cmd::pathops::shape_count(&node(&s, id)), 2);
+}
+
+/// Expand compound shape `id` → the area of the path it makes.
+fn expanded(s: &mut Session, id: NodeId) -> f64 {
+    run(s, "select.set", json!({"ids": [id.0]}));
+    let made = run(s, "object.compoundShape.expand", json!({}));
+    node_area(&node(s, NodeId(made["ids"][0].as_u64().unwrap())))
+}
+
+/// Locking (or hiding) the layer of an isolated compound shape locks its members too: a click or
+/// a marquee with the Selection tool selects none of them, as outside isolation mode (#5309).
+#[test]
+fn a_locked_or_hidden_layer_keeps_the_isolated_compound_shape_from_clicks() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    for (prop, value) in [("locked", true), ("visible", false)] {
+        let (mut s, back, _front) = two_squares();
+        let id = NodeId(run(&mut s, "object.compoundShape.make", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "object.isolate", json!({"id": id.0}));
+        let layer = s.doc().unwrap().doc.parent_of(id).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        let click = |s: &mut Session, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        click(&mut s, 25.0, 50.0);
+        assert_eq!(selected(&s), vec![back], "isolated, a click selects a member");
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "layer.setProps", json!({"id": layer.0, prop: value}));
+        click(&mut s, 25.0, 50.0);
+        assert!(selected(&s).is_empty(), "{prop}: the layer's art isn't selected by a click");
+        for (k, x, y) in
+            [(PointerKind::Down, -10.0, -10.0), (PointerKind::Drag, 60.0, 60.0), (PointerKind::Drag, 120.0, 120.0), (PointerKind::Up, 120.0, 120.0)]
+        {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert!(selected(&s).is_empty(), "{prop}: nor by a marquee");
+    }
 }

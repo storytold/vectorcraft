@@ -429,6 +429,29 @@ fn a_cut_out_edge_leaves_the_color_of_the_art_inside_it_alone() {
 }
 
 #[test]
+fn a_library_of_many_repeated_swatches_is_read_once_per_color() {
+    let img = Raster::from_fn(2, 1, |x, _| if x == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    // 200,000 swatches of 50,000 distinct colours: compared against those kept so far, billions of steps.
+    let swatches: Vec<[u8; 3]> = (0..200_000u32)
+        .map(|i| {
+            let c = i % 50_000;
+            [(c >> 16) as u8, (c >> 8) as u8, c as u8]
+        })
+        .collect();
+    let params = TraceParams { mode: Mode::Color, palette: Palette::DocumentLibrary, swatches, colors: 2, ..TraceParams::default() };
+    let start = std::time::Instant::now();
+    let q = quantize(&img, &params);
+    assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", start.elapsed());
+    assert_eq!(q.labels.len(), 2);
+}
+
+#[test]
+fn a_raster_whose_bytes_are_not_its_size_quantizes_to_nothing() {
+    let short = Raster { width: 60_000, height: 60_000, rgba: vec![0; 4] };
+    assert_eq!(quantize(&short, &TraceParams::default()), Quantized { labels: vec![], palette: vec![] });
+}
+
+#[test]
 fn a_semi_transparent_stripe_beside_a_cut_out_edge_keeps_its_own_color() {
     // Columns: transparent, a half-opaque gray edge (white blended with the background), a
     // semi-transparent yellow stripe, then opaque white. The gray chooses no color; the yellow,
@@ -583,6 +606,32 @@ fn a_trace_past_its_anchor_budget_is_refused() {
     let anchors = full.anchor_count();
     assert!(anchors > 100, "{anchors} anchors");
     assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
+}
+
+/// Components of a layer are fitted in parallel, a chunk at a time, and added in the order they were found (top to
+/// bottom, left to right), also across the chunks. The anchor budget still refuses a trace with many components.
+#[test]
+fn many_components_come_out_in_scan_order_and_still_meet_the_budget() {
+    // 20 x 20 black dots, more than one chunk of components.
+    let img = Raster::from_fn(120, 120, |x, y| if x % 6 < 3 && y % 6 < 3 { BLACK } else { WHITE });
+    let p = TraceParams { noise: 1, ..bw() };
+    let full = trace(&img, &p);
+    assert_eq!(full.paths.len(), 400);
+    let tops: Vec<(i64, i64)> = full
+        .paths
+        .iter()
+        .map(|t| {
+            let b = t.path.bounds().unwrap();
+            (b.y0.round() as i64, b.x0.round() as i64)
+        })
+        .collect();
+    assert!(tops.windows(2).all(|w| w[0] < w[1]), "not in scan order: {tops:?}");
+    assert_eq!(trace(&img, &p), full, "tracing twice differs");
+    let anchors = full.anchor_count();
+    assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    // The last component alone is over the budget: a refusal in a later chunk.
+    assert!(matches!(trace_within(&img, &p, anchors - 1), Err(TraceError::TooComplex { .. })));
     assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
 }
 
@@ -881,6 +930,66 @@ fn wide_areas_stay_filled_and_lines_cross_at_junctions() {
     let res = trace(&img, &strokes(false));
     assert!(res.paths.iter().all(|p| p.stroke.is_some()));
     assert!(res.paths.iter().any(|p| p.stroke == Some(1.0) && p.path.subpaths[0].closed), "the disc's outline");
+}
+
+#[test]
+fn thin_features_of_a_wide_shape_are_strokes_and_its_body_a_fill() {
+    // A disc (r = 20) with a 3 px wide arm from it out to x = 140 and a 5 px wide one up to y = 5.
+    let img = Raster::from_fn(160, 100, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let disc = (px - 50.0).hypot(py - 60.0) <= 20.0;
+        let across = (py - 60.0).abs() <= 1.5 && (50.0..=140.0).contains(&px);
+        let up = (px - 50.0).abs() <= 2.5 && (5.0..=60.0).contains(&py);
+        if disc || across || up { BLACK } else { WHITE }
+    });
+    let res = trace(&img, &strokes(true));
+    let fills: Vec<_> = res.paths.iter().filter(|p| p.stroke.is_none()).collect();
+    assert_eq!(fills.len(), 1, "the disc");
+    let a = net_area(&fills[0].path);
+    assert!((a - std::f64::consts::PI * 400.0).abs() < 90.0, "disc area {a}");
+    let b = fills[0].path.bounds().unwrap();
+    assert!(b.x1 < 76.0 && b.y0 > 34.0, "the fill stays the disc: {b:?}");
+    let lines = stroked(&res);
+    assert_eq!(lines.len(), 2, "{:?}", lines.iter().map(|(p, s)| (p.stroke, s.anchors.len())).collect::<Vec<_>>());
+    let ends = |s: &vectorcraft_geom::SubPath| (s.anchors[0].p, s.anchors[s.anchors.len() - 1].p);
+    let (across, up) = if ends(lines[0].1).0.y.min(ends(lines[0].1).1.y) > 50.0 { (lines[0], lines[1]) } else { (lines[1], lines[0]) };
+    // The arm across: its free end where the bar ends (less its cap), its other end at the disc, the
+    // cap closing the join.
+    let w = across.0.stroke.unwrap();
+    assert!((2.0..=4.0).contains(&w), "width {w}");
+    let (p, q) = ends(across.1);
+    let (near, far) = if p.x < q.x { (p, q) } else { (q, p) };
+    assert!(far.distance(Point::new(140.0, 60.0)) < 4.0, "free end {far:?}");
+    assert!((60.0..=72.5).contains(&near.x) && (near.y - 60.0).abs() < 1.5 && near.x - w / 2.0 <= 70.5, "joined end {near:?}");
+    // The arm up, 5 px wide.
+    let w = up.0.stroke.unwrap();
+    assert!((4.0..=6.0).contains(&w), "width {w}");
+    let (p, q) = ends(up.1);
+    let (top, low) = if p.y < q.y { (p, q) } else { (q, p) };
+    assert!(top.distance(Point::new(50.0, 5.0)) < 4.0, "free end {top:?}");
+    assert!((38.0..=48.0).contains(&low.y) && (low.x - 50.0).abs() < 1.5 && low.y + w / 2.0 >= 40.0 - 0.5, "joined end {low:?}");
+    // Strokes only: the disc is outlined and both arms stay strokes.
+    let res = trace(&img, &strokes(false));
+    assert!(res.paths.iter().all(|p| p.stroke.is_some()));
+    assert_eq!(res.paths.iter().filter(|p| p.stroke == Some(1.0) && p.path.subpaths[0].closed).count(), 1, "the disc's outline");
+    assert_eq!(stroked(&res).iter().filter(|(p, _)| p.stroke.is_some_and(|w| w > 1.5)).count(), 2, "the two arms");
+}
+
+#[test]
+fn wide_shapes_without_thin_features_stay_one_fill() {
+    // A square, a diamond and a disc: their corners and edges are not thin features.
+    let img = Raster::from_fn(240, 90, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let square = (10.0..=70.0).contains(&px) && (15.0..=75.0).contains(&py);
+        let diamond = (px - 120.0).abs() + (py - 45.0).abs() <= 35.0;
+        let disc = (px - 200.0).hypot(py - 45.0) <= 30.0;
+        if square || diamond || disc { BLACK } else { WHITE }
+    });
+    for width in [3.0, 6.0, 12.0] {
+        let res = trace(&img, &TraceParams { stroke_width: width, ..strokes(true) });
+        assert_eq!(res.paths.len(), 3, "width {width}: {:?}", res.paths.iter().map(|p| p.stroke).collect::<Vec<_>>());
+        assert!(res.paths.iter().all(|p| p.stroke.is_none()), "width {width}");
+    }
 }
 
 #[test]
@@ -1221,6 +1330,115 @@ fn a_blend_of_two_colours_is_no_sliver_of_a_third() {
     assert!(b.y0 > 89.0 && b.y1 < 110.0, "{b:?}");
 }
 
+/// A light disc of radius 32 at (55, 60) on a dark ground, its edge blurred into a ramp 10 px
+/// wide, and elsewhere a patch of the tone halfway between the two, so that the palette holds
+/// that tone. Returns the picture and whether a color is that tone.
+fn blurred_disc_and_halfway_patch() -> (Raster, impl Fn([u8; 3]) -> bool) {
+    const DARK: [f64; 3] = [20.0, 25.0, 35.0];
+    const LIGHT: [f64; 3] = [225.0, 195.0, 160.0];
+    let mid = [0, 1, 2].map(|k| (DARK[k] + LIGHT[k]) / 2.0);
+    let img = Raster::from_fn(160, 120, |x, y| {
+        let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let c = if (112.0..152.0).contains(&px) && (40.0..80.0).contains(&py) {
+            mid
+        } else {
+            let t = ((32.0 - Point::new(px, py).distance(Point::new(55.0, 60.0))) / 10.0 + 0.5).clamp(0.0, 1.0);
+            [0, 1, 2].map(|k| DARK[k] + t * (LIGHT[k] - DARK[k]))
+        };
+        let c = |k: usize| c[k].round() as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    (img, move |c: [u8; 3]| (0..3).all(|k| (f64::from(c[k]) - mid[k]).abs() <= 12.0))
+}
+
+#[test]
+fn a_blurred_edge_is_no_ring_of_a_tone_between_its_sides() {
+    let (img, is_mid) = blurred_disc_and_halfway_patch();
+    let res = trace(&img, &sixteen_colors());
+    let mids: Vec<&TracedPath> = res.paths.iter().filter(|p| is_mid(p.color)).collect();
+    assert_eq!(mids.len(), 1, "the patch, and no ring around the disc: {:?}", res.paths.iter().map(|p| p.color).collect::<Vec<_>>());
+    let b = mids[0].path.bounds().unwrap();
+    assert!(b.x0 > 110.0 && b.y0 > 38.0 && b.y1 < 82.0, "{b:?}");
+    // The disc's edge lies halfway along the ramp.
+    let light = res.paths.iter().find(|p| p.color[0] > 180).unwrap();
+    let off = along(&light.path).iter().map(|p| (p.distance(Point::new(55.0, 60.0)) - 32.0).abs()).fold(0.0, f64::max);
+    assert!(off < 1.0, "{off} px off the middle of the ramp");
+}
+
+#[test]
+fn grayscale_settles_a_tinted_blurred_edge_by_its_lightness() {
+    // The same blurred disc and halfway patch in grays, and tinted green at the same lightness
+    // (every pixel moved by the same color, which keeps its luma): Grayscale reads lightness
+    // alone, so both make the same grays in the same places.
+    let lightness = |x: u32, y: u32| {
+        let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        if (112.0..152.0).contains(&px) && (40.0..80.0).contains(&py) {
+            130
+        } else {
+            let t = ((32.0 - Point::new(px, py).distance(Point::new(55.0, 60.0))) / 10.0 + 0.5).clamp(0.0, 1.0);
+            (40.0 + 180.0 * t).round() as u8
+        }
+    };
+    let gray = Raster::from_fn(160, 120, |x, y| {
+        let v = lightness(x, y);
+        [v, v, v, 255]
+    });
+    let tinted = Raster::from_fn(160, 120, |x, y| {
+        let v = lightness(x, y);
+        [v - 40, v + 28, v - 40, 255]
+    });
+    let lumas = |img: &Raster| img.rgba.as_chunks::<4>().0.iter().map(|&p| crate::quantize::luma(p)).collect::<Vec<_>>();
+    assert_eq!(lumas(&tinted), lumas(&gray));
+    let params = TraceParams { mode: Mode::Grayscale, colors: 8, ..TraceParams::default() };
+    assert_eq!(quantize(&tinted, &params), quantize(&gray, &params));
+}
+
+#[test]
+fn grayscale_settles_a_blurred_edge_between_its_own_two_grays() {
+    // A dark gray and a light gray meet in a ramp 12 px wide, and a black band runs across the top.
+    // In grays every blend lies between black and the light gray as well as between the two grays
+    // (to within rounding): the ramp's pixels just below the band take the nearer of the two grays,
+    // the grays on either side of them.
+    for (dark, light) in [(40u8, 200u8), (50, 200), (30, 170), (60, 230), (45, 215)] {
+        let img = Raster::from_fn(160, 60, |x, y| {
+            let v = if y < 8 {
+                0
+            } else {
+                let t = ((f64::from(x) + 0.5 - 74.0) / 12.0).clamp(0.0, 1.0);
+                (f64::from(dark) + f64::from(light - dark) * t).round() as u8
+            };
+            [v, v, v, 255]
+        });
+        let params = TraceParams { mode: Mode::Grayscale, colors: 8, ..TraceParams::default() };
+        let q = quantize(&img, &params);
+        let middle = u16::from(dark) + u16::from(light);
+        for y in 10..16 {
+            for x in 74..86 {
+                let v = img.rgba[(y * 160 + x) * 4];
+                let g = q.palette[usize::from(q.labels[y * 160 + x])][0];
+                assert_eq!(2 * u16::from(g) < middle, 2 * u16::from(v) < middle, "{dark} to {light}, ({x}, {y}): {v} took gray {g}");
+                assert!(g >= dark, "{dark} to {light}, ({x}, {y}): {v} took gray {g}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_photo_presets_keep_the_tones_of_a_blurred_edge() {
+    // The photo presets ask for more colors than the limited-color presets and keep the middle of
+    // the ramp in the halfway tone: only a blend pixel with the colors on both sides within 2 px of
+    // it takes a side.
+    let (img, is_mid) = blurred_disc_and_halfway_patch();
+    for name in ["High Fidelity Photo", "Low Fidelity Photo"] {
+        let q = quantize(&img, &preset(name).unwrap());
+        let middle = (0..160 * 120)
+            .filter(|&i| (Point::new((i % 160) as f64 + 0.5, (i / 160) as f64 + 0.5).distance(Point::new(55.0, 60.0)) - 32.0).abs() < 1.0)
+            .filter(|&i| q.palette.get(usize::from(q.labels[i])).is_some_and(|&c| is_mid(c)))
+            .count();
+        assert!(middle > 100, "{name}: {middle} pixels of the halfway tone in the middle of the ramp");
+    }
+}
+
 #[test]
 fn hairlines_keep_their_colour_in_color_mode() {
     // Black lines one pixel wide on white: every black pixel is on an edge, none is a blend.
@@ -1230,6 +1448,92 @@ fn hairlines_keep_their_colour_in_color_mode() {
     assert_eq!(q.palette.len(), 2);
     assert!(q.palette.contains(&[255, 255, 255]));
     assert_eq!(q.labels.iter().filter(|&&l| l == black).count(), 8 * 80 * 2 - 64);
+}
+
+/// Where a point lies across [`wavy_bands`]' gradient: the same all along each of its contours.
+fn wavy_u(x: f64, y: f64) -> f64 {
+    x + 8.0 * (y / 23.0).sin()
+}
+
+/// The dark square of [`wavy_bands`]: its left, top, right and bottom sides.
+const WAVY_SQUARE: [f64; 4] = [100.3, 40.2, 132.6, 80.7];
+
+/// A 256 × 128 gradient from blue to orange whose contours wave from top to bottom, with 6 levels
+/// of noise per channel, and a dark square with crisp sides on it, drawn anti-aliased.
+fn wavy_bands() -> Raster {
+    const LOW: [f64; 3] = [30.0, 60.0, 120.0];
+    const HIGH: [f64; 3] = [230.0, 170.0, 60.0];
+    Raster::from_fn(256, 128, |x, y| {
+        let mut sum = [0.0; 3];
+        for i in 0..16 {
+            let (sx, sy) = (f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            let [l, t, r, b] = WAVY_SQUARE;
+            let c = if (l..r).contains(&sx) && (t..b).contains(&sy) {
+                [20.0; 3]
+            } else {
+                let along = ((wavy_u(sx, sy) + 8.0) / 272.0).clamp(0.0, 1.0);
+                [0, 1, 2].map(|k| LOW[k] + (HIGH[k] - LOW[k]) * along)
+            };
+            for k in 0..3 {
+                sum[k] += c[k] / 16.0;
+            }
+        }
+        let c = |k: usize| (sum[k] + 6.0 * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    })
+}
+
+/// How far the borders between the bands of a [`wavy_bands`] trace stray from contours of the
+/// gradient: the RMS, over points along every curve more than 6 px from the image's border and from
+/// the square, of the point's [`wavy_u`] less the mean of its stretch (the points in a row along
+/// one curve), over stretches that run at least 30 px down the image. Also returns their number.
+fn contour_spread(res: &TraceResult) -> (f64, usize) {
+    use vectorcraft_geom::ParamCurve;
+    let [l, t, r, b] = WAVY_SQUARE;
+    let away = |p: Point| p.x > 6.0 && p.x < 250.0 && p.y > 6.0 && p.y < 122.0 && !(p.x > l - 6.0 && p.x < r + 6.0 && p.y > t - 6.0 && p.y < b + 6.0);
+    let mut stretches: Vec<Vec<Point>> = vec![];
+    for sp in res.paths.iter().flat_map(|p| &p.path.subpaths) {
+        let mut stretch = vec![];
+        for p in (0..sp.segment_count()).flat_map(|i| (0..64).map(move |k| sp.segment(i).eval(f64::from(k) / 64.0))) {
+            if away(p) {
+                stretch.push(p);
+            } else if !stretch.is_empty() {
+                stretches.push(std::mem::take(&mut stretch));
+            }
+        }
+        stretches.push(stretch);
+    }
+    stretches.retain(|s| s.iter().map(|p| p.y).fold(f64::MIN, f64::max) - s.iter().map(|p| p.y).fold(f64::MAX, f64::min) >= 30.0);
+    let mut sum = 0.0;
+    let mut n = 0;
+    for s in &stretches {
+        let mean = s.iter().map(|p| wavy_u(p.x, p.y)).sum::<f64>() / s.len() as f64;
+        sum += s.iter().map(|p| (wavy_u(p.x, p.y) - mean).powi(2)).sum::<f64>();
+        n += s.len();
+    }
+    ((sum / n.max(1) as f64).sqrt(), stretches.len())
+}
+
+#[test]
+fn the_borders_of_a_gradients_bands_follow_its_contours() {
+    let res = trace(&wavy_bands(), &sixteen_colors());
+    // The square's sides are edges: it keeps its four corners.
+    let [l, t, r, b] = WAVY_SQUARE;
+    let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");
+    let nearest = [Point::new(l, t), Point::new(r, t), Point::new(r, b), Point::new(l, b)].map(|corner| {
+        square.path.subpaths[0]
+            .anchors
+            .iter()
+            .filter(|a| a.kind == vectorcraft_geom::AnchorKind::Corner)
+            .map(|a| a.p.distance(corner))
+            .fold(f64::MAX, f64::min)
+    });
+    assert!(nearest.iter().all(|&d| d < 0.3), "the nearest corner anchors to the square's corners: {nearest:?} px");
+    let (spread, stretches) = contour_spread(&res);
+    // Each of the borders between the 15 or so bands, once for the band on either side of it.
+    assert!(stretches >= 20, "{stretches} stretches");
+    // (Smoothed as edges are, 1.13 px.)
+    assert!(spread < 0.9, "the borders stray {spread} px from the gradient's contours");
 }
 
 #[test]
@@ -1259,6 +1563,238 @@ fn a_noisy_gradient_keeps_its_tones_without_specks() {
     let unsmoothed = quantize(&img, &params).palette.len();
     assert!(res.palette.len() > unsmoothed && res.palette.len() >= 24, "{} colours, {unsmoothed} unsmoothed", res.palette.len());
     assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
+}
+
+/// A shaded ball and a lit wall on a dark mottled ground, with `noise` levels of noise per channel:
+/// a photo's tones, in color or (`gray`) as their grays.
+fn photo_scene(noise: f64, gray: bool) -> Raster {
+    Raster::from_fn(160, 128, |x, y| {
+        let ground = f64::from(20 + 10 * ((x / 16 + y / 16) % 3));
+        let (dx, dy) = (f64::from(x) - 60.0, f64::from(y) - 64.0);
+        let c = if dx * dx + dy * dy < 1600.0 {
+            let shade = 0.25 + 0.75 * (1.0 - (dx + dy + 40.0) / 110.0).max(0.0);
+            [210.0 * shade + 20.0, 150.0 * shade + 20.0, 100.0 * shade + 20.0]
+        } else if x >= 110 {
+            let t = f64::from(y) / 127.0;
+            [200.0 - 90.0 * t, 180.0 - 40.0 * t, 70.0 + 50.0 * t]
+        } else {
+            [ground; 3]
+        };
+        let p = [0, 1, 2].map(|k| (c[k] + noise * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8);
+        if gray {
+            let g = quantize::luma([p[0], p[1], p[2], 255]);
+            [g, g, g, 255]
+        } else {
+            [p[0], p[1], p[2], 255]
+        }
+    })
+}
+
+#[test]
+fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [4.0, 6.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+    // Three-color gray flat art stays flat art with up to 16 levels of uniform noise. (Heavier
+    // noise or JPEG artifacts can make gray flat art continuous tone.)
+    let clean = three_colour_art(0.0);
+    for noise in [0.0, 8.0, 16.0] {
+        let mut gray = three_colour_art(noise);
+        for p in gray.rgba.as_chunks_mut::<4>().0 {
+            let g = quantize::luma(*p);
+            p[..3].fill(g);
+        }
+        assert!(!quantize::continuous_tone(&gray), "gray flat art, noise {noise}");
+        // The same noise on every channel, as a gray scan has it.
+        let scan = Raster::from_fn(clean.width, clean.height, |x, y| {
+            let i = ((y * clean.width + x) * 4) as usize;
+            let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+            let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&scan), "gray scan of flat art, noise {noise}");
+    }
+    // Nine clean equal gray bands, more levels than eight colors can hold, stay flat art.
+    for step in [15, 30] {
+        let bands = Raster::from_fn(180, 60, |x, _| {
+            let v = (x / 20 * step) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&bands), "nine gray bands {step} levels apart");
+    }
+}
+
+/// Sepia: dark brown to cream.
+const SEPIA: [[f64; 3]; 2] = [[45.0, 28.0, 15.0], [250.0, 235.0, 205.0]];
+/// A single blue hue: navy to pale blue.
+const BLUE: [[f64; 3]; 2] = [[12.0, 22.0, 55.0], [205.0, 225.0, 255.0]];
+/// A duotone: near black to orange to cream, two lines meeting at the orange.
+const DUOTONE: [[f64; 3]; 3] = [[22.0, 18.0, 30.0], [205.0, 105.0, 35.0], [252.0, 238.0, 215.0]];
+/// The gray ramp.
+const GRAY_RAMP: [[f64; 3]; 2] = [[0.0; 3], [255.0; 3]];
+
+/// `img`'s grays (its red channel) as the colors of the ramp through `stops`, black going to the
+/// first stop and white to the last, with `chroma` levels of noise per channel. Alpha is kept.
+fn tinted(img: &Raster, stops: &[[f64; 3]], chroma: f64) -> Raster {
+    Raster::from_fn(img.width, img.height, |x, y| {
+        let i = ((y * img.width + x) * 4) as usize;
+        let g = f64::from(img.rgba[i]) / 255.0 * (stops.len() - 1) as f64;
+        let s = (g.floor() as usize).min(stops.len() - 2);
+        let t = g - s as f64;
+        let c = [0, 1, 2]
+            .map(|k| (stops[s][k] + t * (stops[s + 1][k] - stops[s][k]) + chroma * jitter(x, y, 7 + k as u32)).round().clamp(0.0, 255.0) as u8);
+        [c[0], c[1], c[2], img.rgba[i + 3]]
+    })
+}
+
+/// [`three_colour_art`] as a gray scan: its grays with `noise` levels of the same noise on every
+/// channel.
+fn gray_scan_of_flat_art(noise: f64) -> Raster {
+    let clean = three_colour_art(0.0);
+    Raster::from_fn(clean.width, clean.height, |x, y| {
+        let i = ((y * clean.width + x) * 4) as usize;
+        let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+        let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+        [v, v, v, 255]
+    })
+}
+
+/// `levels` clean gray bands, evenly spaced from black to white.
+fn gray_bands(levels: u32) -> Raster {
+    Raster::from_fn(16 * 20, 60, |x, _| {
+        let v = ((x / 20).min(levels - 1) * 255 / (levels - 1)) as u8;
+        [v, v, v, 255]
+    })
+}
+
+/// `img` on the left of a picture three times as wide whose other pixels are transparent and of
+/// every color.
+fn beside_transparent_colors(img: &Raster) -> Raster {
+    Raster::from_fn(img.width * 3, img.height, |x, y| {
+        if x < img.width {
+            let i = ((y * img.width + x) * 4) as usize;
+            [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2], img.rgba[i + 3]]
+        } else {
+            let c = |k: u32| (127.5 + 127.5 * jitter(x, y, 20 + k)) as u8;
+            [c(0), c(1), c(2), 0]
+        }
+    })
+}
+
+#[test]
+fn a_tinted_photo_is_continuous_tone_as_a_gray_photo_is() {
+    // With 0 to 4 levels of noise per channel (to 2 for the duotone).
+    let tints = [("sepia", &SEPIA[..], 4.0), ("blue", &BLUE[..], 4.0), ("duotone", &DUOTONE[..], 2.0)];
+    for noise in [4.0, 6.0] {
+        let gray = photo_scene(noise, true);
+        assert!(quantize::continuous_tone(&gray), "gray, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        for (name, stops, most) in tints {
+            for chroma in [0.0, 2.0, 4.0].into_iter().filter(|&c| c <= most) {
+                let photo = tinted(&gray, stops, chroma);
+                assert!(quantize::continuous_tone(&photo), "{name}, noise {noise}, chroma noise {chroma}");
+                // Transparent pixels, whatever their colors, leave it as it is.
+                assert!(quantize::continuous_tone(&beside_transparent_colors(&photo)), "{name} beside transparent colors, noise {noise}");
+            }
+        }
+    }
+}
+
+#[test]
+fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
+    // A sepia photo with a red and a green patch, each 2 in 100 of its pixels.
+    for noise in [4.0, 6.0] {
+        let photo = tinted(&photo_scene(noise, true), &SEPIA, 2.0);
+        let accented = Raster::from_fn(photo.width, photo.height, |x, y| match (x, y) {
+            (0..20, 0..20) => [220, 30, 40, 255],
+            (140..160, 108..128) => [40, 200, 60, 255],
+            _ => {
+                let i = ((y * photo.width + x) * 4) as usize;
+                [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 255]
+            }
+        });
+        assert!(quantize::continuous_tone(&accented), "noise {noise}");
+        // One patch, 4 in 100 of its pixels, in a color beside the middle of the ramp.
+        let beside = Raster::from_fn(photo.width, photo.height, |x, y| match (x, y) {
+            (0..32, 0..26) => [176, 104, 110, 255],
+            _ => {
+                let i = ((y * photo.width + x) * 4) as usize;
+                [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 255]
+            }
+        });
+        assert!(quantize::continuous_tone(&beside), "noise {noise}, one patch");
+    }
+}
+
+#[test]
+fn tinted_flat_art_stays_flat_art() {
+    let tints: [(&str, &[[f64; 3]]); 4] = [("gray", &GRAY_RAMP), ("sepia", &SEPIA), ("blue", &BLUE), ("duotone", &DUOTONE)];
+    for (name, stops) in tints {
+        // Clean bands, nine of them included: more than eight colors can hold.
+        for levels in [2, 3, 9] {
+            let bands = tinted(&gray_bands(levels), stops, 0.0);
+            assert!(!quantize::continuous_tone(&bands), "{levels} {name} bands");
+            assert!(!quantize::continuous_tone(&beside_transparent_colors(&bands)), "{levels} {name} bands beside transparent colors");
+        }
+        // Scans of flat art, with noise on the tone and on each channel.
+        for noise in [0.0, 8.0] {
+            for chroma in [0.0, 4.0] {
+                assert!(
+                    !quantize::continuous_tone(&tinted(&gray_scan_of_flat_art(noise), stops, chroma)),
+                    "{name} scan, noise {noise}, chroma noise {chroma}"
+                );
+            }
+        }
+    }
+    // As with gray (see `a_gray_photo_is_continuous_tone_as_its_color_original_is`), a single-hue
+    // scan stays flat art with up to 16 levels of noise on its tone.
+    for stops in [&GRAY_RAMP, &SEPIA, &BLUE] {
+        assert!(!quantize::continuous_tone(&tinted(&gray_scan_of_flat_art(16.0), stops, 0.0)), "{stops:?} scan, noise 16");
+    }
+}
+
+#[test]
+fn pictures_without_tones_are_not_continuous_tone() {
+    let photo = tinted(&photo_scene(6.0, true), &SEPIA, 2.0);
+    let none = Raster::from_fn(0, 0, |_, _| [0, 0, 0, 0]);
+    let transparent = Raster::from_fn(photo.width, photo.height, |x, y| {
+        let i = ((y * photo.width + x) * 4) as usize;
+        [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 0]
+    });
+    let one_pixel = Raster::from_fn(1, 1, |_, _| [200, 150, 100, 255]);
+    let one_color = Raster::from_fn(64, 64, |_, _| [200, 150, 100, 255]);
+    for (name, img) in [("empty", none), ("transparent", transparent), ("one pixel", one_pixel), ("one color", one_color)] {
+        assert!(!quantize::continuous_tone(&img), "{name}");
+    }
+}
+
+#[test]
+fn a_gray_photo_is_smoothed_before_it_is_traced() {
+    // As a color photo is. Traced with its noise, the noise mixes neighboring tones into one,
+    // leaving fewer colors than asked for, and steps the edges between them (more anchors).
+    for noise in [4.0, 6.0] {
+        let res = trace(&photo_scene(noise, true), &sixteen_colors());
+        assert!(res.palette.len() >= 14, "noise {noise}: {} colors", res.palette.len());
+        assert!(res.anchor_count() <= 1100, "noise {noise}: {} anchors", res.anchor_count());
+    }
+}
+
+#[test]
+fn a_tinted_photo_is_smoothed_before_it_is_traced() {
+    // As a gray photo is, in Color and in Grayscale. Traced with its noise, the noise mixes
+    // neighboring tones into one, leaving 6 to 13 of the sixteen colors, and steps the edges
+    // between them (up to 1,402 anchors).
+    for noise in [4.0, 6.0] {
+        for (name, stops) in [("sepia", &SEPIA[..]), ("blue", &BLUE[..]), ("duotone", &DUOTONE[..])] {
+            let photo = tinted(&photo_scene(noise, true), stops, 2.0);
+            for mode in [Mode::Color, Mode::Grayscale] {
+                let res = trace(&photo, &TraceParams { mode, ..sixteen_colors() });
+                assert!(res.palette.len() >= 12, "{name}, noise {noise}, {mode:?}: {} colors", res.palette.len());
+                assert!(res.anchor_count() <= 1000, "{name}, noise {noise}, {mode:?}: {} anchors", res.anchor_count());
+            }
+        }
+    }
 }
 
 #[test]
@@ -1395,6 +1931,231 @@ fn ignore_color_leaves_out_the_colour_picked() {
     assert_eq!(serde_json::to_value(&params).unwrap()["ignoreColor"], serde_json::Value::Null);
 }
 
+/// A navy field with a yellow disc, a green bar and a red square on it, hard-edged.
+fn four_color_art() -> Raster {
+    Raster::from_fn(160, 120, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        if Point::new(fx, fy).distance(Point::new(50.0, 45.0)) <= 30.0 {
+            [250, 200, 40, 255]
+        } else if (20.0..140.0).contains(&fx) && (90.0..108.0).contains(&fy) {
+            [40, 160, 90, 255]
+        } else if (100.0..140.0).contains(&fx) && (20.0..60.0).contains(&fy) {
+            [200, 40, 50, 255]
+        } else {
+            [20, 40, 90, 255]
+        }
+    })
+}
+
+/// A 600 × 400 field of `edge` with a light panel (40..560 × 40..360) and, on the panel, a ring of
+/// `line` 8 px wide and 100 px in radius around (300, 200), filled with `inside`.
+fn panel_with_ring(edge: [u8; 4], line: [u8; 4], inside: [u8; 4]) -> Raster {
+    Raster::from_fn(600, 400, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let r = Point::new(fx, fy).distance(Point::new(300.0, 200.0));
+        if !((40.0..560.0).contains(&fx) && (40.0..360.0).contains(&fy)) {
+            edge
+        } else if (96.0..=104.0).contains(&r) {
+            line
+        } else if r < 96.0 {
+            inside
+        } else {
+            [240, 240, 220, 255]
+        }
+    })
+}
+
+#[test]
+fn keep_colors_traces_only_the_colors_listed() {
+    let near = |c: [u8; 3], want: [u8; 3]| (0..3).all(|k| c[k].abs_diff(want[k]) <= 3);
+    let (yellow, red, navy) = ([250, 200, 40], [200, 40, 50], [20, 40, 90]);
+    let img = four_color_art();
+    let pixels = |res: &TraceResult, c: [u8; 3]| res.paths.iter().filter(|p| near(p.color, c)).map(|p| p.pixels).sum::<usize>();
+    let abutting = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 4, ..TraceParams::default() };
+    let abutting_all = trace(&img, &abutting);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams { method, ..abutting.clone() };
+        let all = trace(&img, &params);
+        assert_eq!(all.palette.len(), 4, "{method:?}: {:?}", all.palette);
+        // The yellow and the red, each picked a little off.
+        let res = trace(&img, &TraceParams { keep_colors: vec!["#f0c832".into(), "#c8283c".into()], ..params.clone() });
+        assert_eq!(res.palette.len(), 2, "{method:?}: {:?}", res.palette);
+        if method == Method::Abutting {
+            // Their paths as the whole trace has them.
+            let want: Vec<TracedPath> = all.paths.iter().filter(|p| near(p.color, yellow) || near(p.color, red)).cloned().collect();
+            assert!(want.iter().any(|p| near(p.color, yellow)) && want.iter().any(|p| near(p.color, red)));
+            assert_eq!(res.paths, want);
+        } else {
+            // Stacked, each kept color covers what it covers in the trace of every color: the red
+            // square touches neither the yellow disc nor the green left out, so it covers only itself.
+            assert!(res.paths.iter().all(|p| near(p.color, yellow) || near(p.color, red)));
+            assert_eq!(pixels(&res, red), pixels(&all, red));
+            assert_eq!(pixels(&res, red), pixels(&abutting_all, red));
+            assert_eq!(pixels(&res, yellow), pixels(&abutting_all, yellow));
+            // The navy field alone, at the bottom of the stack: no part of the colors left out.
+            let field = trace(&img, &TraceParams { keep_colors: vec!["#14285a".into()], ..params.clone() });
+            assert!(!field.paths.is_empty());
+            assert_eq!(pixels(&field, navy), pixels(&abutting_all, navy));
+            assert!(pixels(&all, navy) > pixels(&abutting_all, navy));
+        }
+        // Every color listed: the trace of every color, as with none listed.
+        let every = vec!["#fac828".into(), "#28a05a".into(), "#c82832".into(), "#14285a".into()];
+        assert_eq!(trace(&img, &TraceParams { keep_colors: every, ..params.clone() }), all, "{method:?}");
+        // A color the image does not have: nothing is traced.
+        assert!(trace(&img, &TraceParams { keep_colors: vec!["#ff00ff".into()], ..params.clone() }).paths.is_empty(), "{method:?}");
+        // With Ignore Color as well, a kept color it matches is left out.
+        let both = TraceParams {
+            keep_colors: vec!["#fac828".into(), "#14285a".into()],
+            ignore_white: true,
+            ignore_color: Some("#14285a".into()),
+            ..params.clone()
+        };
+        let res = trace(&img, &both);
+        assert!(!res.paths.is_empty() && res.paths.iter().all(|p| near(p.color, yellow)), "{method:?}");
+    }
+    // A color that is none is refused, in Flat Logo mode too.
+    for mode in [Mode::Color, Mode::Logo] {
+        let bad = trace_within(&img, &TraceParams { mode, keep_colors: vec!["#c8283c".into(), "red".into()], ..TraceParams::default() }, usize::MAX);
+        assert!(matches!(&bad, Err(TraceError::BadPalette(name)) if name == "red"), "{mode:?}");
+    }
+    // Old documents have no such setting: every color.
+    let old: TraceParams = serde_json::from_str(r#"{"mode":"color"}"#).unwrap();
+    assert!(old.keep_colors.is_empty());
+    let on: TraceParams = serde_json::from_str(r##"{"keepColors":["#c8283c"]}"##).unwrap();
+    assert_eq!(on.keep_colors, ["#c8283c"]);
+}
+
+#[test]
+fn keep_colors_names_the_colors_nothing_matches() {
+    let img = four_color_art();
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 4, ..TraceParams::default() };
+    let unmatched = |keep: &[&str], params: &TraceParams| {
+        let res = trace(&img, &TraceParams { keep_colors: keep.iter().map(|k| k.to_string()).collect(), ..params.clone() });
+        (res.keep_unmatched, res.paths.len())
+    };
+    // Every color listed matches one the trace found.
+    assert_eq!(unmatched(&["#f0c832", "#c8283c"], &params).0, Vec::<String>::new());
+    // A color the image does not have is named, as written, beside the ones traced.
+    let (names, paths) = unmatched(&["#f0c832", "#FF00FF", "#c8283c"], &params);
+    assert_eq!(names, ["#FF00FF"]);
+    assert!(paths > 0);
+    // None matches: every one is named, and nothing is traced.
+    assert_eq!(unmatched(&["#ff00ff", "#00ffff"], &params), (vec!["#ff00ff".to_string(), "#00ffff".to_string()], 0));
+    // A color Ignore Color leaves out still matches one the trace found.
+    let ignoring = TraceParams { ignore_white: true, ignore_color: Some("#14285a".into()), ..params.clone() };
+    assert_eq!(unmatched(&["#14285a"], &ignoring), (Vec::new(), 0));
+    // The result says that Ignore Color left out every color that matches, and only then.
+    let keep = |keep: &[&str], params: &TraceParams| {
+        trace(&img, &TraceParams { keep_colors: keep.iter().map(|k| k.to_string()).collect(), ..params.clone() })
+    };
+    assert!(keep(&["#14285a"], &ignoring).keep_ignored);
+    assert!(!keep(&["#14285a", "#f0c832"], &ignoring).keep_ignored);
+    assert!(!keep(&["#14285a"], &params).keep_ignored);
+    assert!(!keep(&["#ff00ff"], &ignoring).keep_ignored);
+    // With none listed, none is named.
+    assert!(trace(&img, &params).keep_unmatched.is_empty());
+    // Flat Logo mode does not use the list.
+    assert!(trace(&img, &TraceParams { mode: Mode::Logo, keep_colors: vec!["#ff00ff".into()], ..params }).keep_unmatched.is_empty());
+}
+
+#[test]
+fn ignore_background_leaves_out_only_the_areas_of_the_color_that_reach_the_edge() {
+    use kurbo::Shape;
+    let covers = |res: &TraceResult, color: [u8; 3], x: f64, y: f64| {
+        res.paths.iter().any(|t| t.color == color && t.path.to_bezpath().winding(kurbo::Point::new(x, y)) != 0)
+    };
+    let covered = |res: &TraceResult, x: f64, y: f64| res.paths.iter().any(|t| t.path.to_bezpath().winding(kurbo::Point::new(x, y)) != 0);
+    // A black field, a light panel and a black ring on it.
+    let light = [240, 240, 220, 255];
+    let img = panel_with_ring(BLACK, BLACK, light);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams {
+            mode: Mode::Color,
+            palette: Palette::Limited,
+            colors: 2,
+            method,
+            ignore_white: true,
+            ignore_color: Some("#000000".into()),
+            ..TraceParams::default()
+        };
+        // The whole color: the ring goes with the field.
+        let all = trace(&img, &params);
+        assert!(all.paths.iter().all(|p| p.color != [0, 0, 0]), "{method:?}");
+        assert!(!covered(&all, 300.0, 100.0) && !covered(&all, 10.0, 10.0), "{method:?}");
+        // The background only: the field goes, the ring stays.
+        let res = trace(&img, &TraceParams { ignore_background: true, ..params.clone() });
+        assert!(covers(&res, [0, 0, 0], 300.0, 100.0) && covers(&res, [0, 0, 0], 300.0, 300.0), "{method:?}");
+        assert!(covers(&res, [240, 240, 220], 100.0, 200.0) && covers(&res, [240, 240, 220], 300.0, 200.0), "{method:?}");
+        assert!(!covered(&res, 10.0, 10.0) && !covered(&res, 590.0, 390.0) && !covered(&res, 300.0, 20.0), "{method:?}");
+        // Without Ignore Color, the setting has no effect.
+        let kept = |p: &TraceParams| trace(&img, &TraceParams { ignore_white: false, ..p.clone() });
+        assert_eq!(kept(&TraceParams { ignore_background: true, ..params.clone() }), kept(&params), "{method:?}");
+    }
+    // White, the default: a white field goes, the white inside a ring stays.
+    let img = panel_with_ring(WHITE, BLACK, WHITE);
+    let params = TraceParams { mode: Mode::Color, colors: 3, ignore_white: true, ignore_background: true, ..TraceParams::default() };
+    let res = trace(&img, &params);
+    assert!(covers(&res, [255, 255, 255], 300.0, 200.0) && !covered(&res, 10.0, 10.0));
+    assert!(!covered(&trace(&img, &TraceParams { ignore_background: false, ..params }), 300.0, 200.0));
+    // With no area of the color enclosed, the trace is the one that leaves out the whole color,
+    // its anti-aliased edges placed the same.
+    let img = three_colour_art(0.0);
+    for method in [Method::Abutting, Method::Overlapping] {
+        let params = TraceParams { colors: 3, method, ignore_white: true, ignore_color: Some("#14285a".into()), ..sixteen_colors() };
+        assert_eq!(trace(&img, &TraceParams { ignore_background: true, ..params.clone() }), trace(&img, &params), "{method:?}");
+    }
+    // Old documents have no such setting: the whole color.
+    let old: TraceParams = serde_json::from_str(r#"{"mode":"color","ignoreWhite":true}"#).unwrap();
+    assert!(!old.ignore_background);
+    let on: TraceParams = serde_json::from_str(r#"{"ignoreWhite":true,"ignoreBackground":true}"#).unwrap();
+    assert!(on.ignore_background);
+}
+
+#[test]
+fn ignore_background_traces_a_color_within_the_box_of_its_remaining_areas() {
+    // A 40 × 30 field of color 0 with a ring of color 1 around a 2 × 2 area of color 0.
+    let (w, h) = (40, 30);
+    let mut labels = vec![0u16; w * h];
+    for y in 10..16 {
+        for x in 20..26 {
+            labels[y * w + x] = 1;
+        }
+    }
+    for y in 12..14 {
+        for x in 22..24 {
+            labels[y * w + x] = 0;
+        }
+    }
+    let mut cleared = labels.clone();
+    clear_background(&mut cleared, w, h, &[true, false]);
+    let (counts, boxes) = label_extents(&labels, &cleared, w, 2);
+    // The counts stay those of the whole image (they order the layers); the boxes are those of
+    // what is traced.
+    assert_eq!(counts, vec![w * h - 32, 32]);
+    assert_eq!(boxes, vec![Some((22, 12, 24, 14)), Some((20, 10, 26, 16))]);
+    // Without Ignore Color, the boxes are those of every pixel.
+    assert_eq!(label_extents(&labels, &labels, w, 2).1, vec![Some((0, 0, w, h)), Some((20, 10, 26, 16))]);
+}
+
+#[test]
+fn ignore_background_clears_a_tall_narrow_image_from_its_edges() {
+    // A 1 × 200,000 column of color 0 with color 1 at rows 1,000 to 1,009: every pixel is on the
+    // edge, so all of color 0 is background.
+    let (w, h) = (1, 200_000);
+    let mut labels = vec![0u16; w * h];
+    for l in &mut labels[1_000..1_010] {
+        *l = 1;
+    }
+    clear_background(&mut labels, w, h, &[true, false]);
+    assert_eq!(labels.iter().filter(|&&l| l == TRANSPARENT).count(), h - 10);
+    assert!(labels[1_000..1_010].iter().all(|&l| l == 1));
+    // In a 2 × 100,000 column of color 0, every pixel is on the edge too.
+    let (w, h) = (2, 100_000);
+    let mut labels = vec![0u16; w * h];
+    clear_background(&mut labels, w, h, &[true, false]);
+    assert!(labels.iter().all(|&l| l == TRANSPARENT));
+}
+
 #[test]
 fn snap_curves_to_lines_levels_a_rectangle_a_degree_askew() {
     // 120 × 60, turned 1.5° about its centre.
@@ -1508,7 +2269,7 @@ fn a_traced_pixel_that_straightens_to_no_area_is_left_out_of_fills_and_kept_as_a
         mode: Mode::Color,
         palette: Palette::Limited,
         colors: 6,
-        paths: 90.0,
+        paths: 80.0,
         corners: 60.0,
         noise: 1,
         method: Method::Abutting,
@@ -2633,4 +3394,16 @@ fn noise_keeps_a_kept_rare_colours_regions_but_not_its_specks() {
     quantize::denoise_keeping(&mut b, w, h, 16, &[]);
     assert_eq!(a, b);
     assert!(a.iter().all(|&v| v == 0));
+}
+
+/// A GIF whose logical screen is one pixel but whose frame declares 65535 × 65535 is refused before
+/// the decoder allocates for the frame.
+#[test]
+fn a_gif_frame_larger_than_its_screen_is_refused_before_decoding() {
+    let mut gif = b"GIF89a".to_vec();
+    gif.extend([1, 0, 1, 0, 0, 0, 0]); // screen 1 × 1, no color table
+    gif.extend([0x2C, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0]); // frame at 0,0 of 65535 × 65535
+    gif.extend([2, 1, 0, 0, 0x3B]);
+    assert!(matches!(Raster::decode(&gif), Err(TraceError::TooLarge { .. })), "{:?}", Raster::decode(&gif).err());
+    assert!(matches!(Raster::decode_to_fit(&gif), Err(TraceError::TooLarge { .. })));
 }

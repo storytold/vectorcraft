@@ -33,7 +33,10 @@
 //! - Type (§15): point type, area type and type on a path as text objects, `type To`, `a b c d tx
 //!   ty startPt Tp` (the text matrix; the frame or path in art space between it and `TP`), each
 //!   run's paint style, `Tr` (fill, stroke, both or neither), `/_font size ascent descent Tf`,
-//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Only the
+//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Standard
+//!   Vertical Roman Alignment is written as `1 Tv` and `0 Tv`, and Tate-chu-yoko in horizontal
+//!   type as a Kumi block recorded for later use, `1 TY` … `0 TY` (§15.3.4); neither operator is
+//!   written for type that has neither mark. Only the
 //!   revisable form is written: readers lay the type out again (§15.1). Fonts are named by their
 //!   PostScript names in `%%DocumentFonts` and `%%IncludeFont` (§3.1) and re-encoded to
 //!   Windows-1252 (`TE`, then `%AI3_BeginEncoding: _name name`, `TZ`, §3.3), the 8-bit encoding
@@ -50,7 +53,8 @@
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
 //! layer they stay where they are). Type that 8-bit text can't hold (characters outside
 //! Windows-1252, vertical type, ruby, inline graphics, gradient or pattern fills) is written as its
-//! outlines, and all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
+//! outlines, and so is type with rotated characters (a text object has no character rotation), and
+//! all type with [`LegacyAiOptions::outline_text`]. Layer, spot color and gradient
 //! names and the title are written in Windows-1252 too, and a character outside it is written as
 //! `?`. Two spot colors or two gradients whose names become the same that way are numbered (`? 2`).
 //!
@@ -64,21 +68,21 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node,
-    NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, CompositeFont, Document, FillLayer, ImageBlob, Justify, Node, NodeKind, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
 
-use crate::{latin, ps};
+use crate::{ai_ops, latin, ps};
 
 mod encoding;
 mod prolog;
 mod writer;
 
-#[cfg(test)]
-use encoding::writable;
 use encoding::{gradient_def, latin_string};
+#[cfg(test)]
+use encoding::{rotated, writable};
 pub(crate) use prolog::PROCSET;
 use prolog::{PROLOG, PS_HEADER, fonts};
 use writer::Writer;
@@ -94,7 +98,9 @@ const HEX_LINE: usize = 60;
 
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, character rotation, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at (legacy .ai files don't have it)";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
@@ -105,6 +111,13 @@ pub const TITLE_AND_COLOR_NAMES: &str =
 pub const NAMES: &str = "object names are left out (legacy .ai files name only layers)";
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
 const FREEFORM: &str = "freeform gradients are written as their average colour";
+const CONIC: &str = "conic gradients are written as solid wedges clipped to the shape (legacy .ai files have no conic gradient)";
+const DIAMOND: &str = "diamond gradients are written as four linear gradients clipped to the shape (legacy .ai files have no diamond gradient)";
+const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (legacy .ai gradients only pad)";
+const SPREAD_CAPPED: &str = "gradients that repeat or reflect are written with at most 256 stops; they pad past those";
+const HUE_STOPS: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256; legacy .ai gradients mix their stops' colors directly)";
+/// Wedges a conic gradient is written as: one a degree.
+const CONIC_WEDGES: usize = 360;
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
@@ -146,6 +159,29 @@ pub enum HiddenObjects {
 pub struct LegacyAiOutput {
     pub bytes: Vec<u8>,
     pub warnings: Vec<String>,
+    /// Notes on what the options asked for: hidden objects left out or written visible.
+    pub setting_notes: Vec<String>,
+}
+
+/// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
+/// (ImageMask 1, §8.1) that draws as the document does: it is colorized with a solid color, its
+/// pixels take the color and are all black or white (or clear), it has no opacity mask turned on,
+/// and it has no more pixels than the writer writes. Such an image keeps its clear pixels in the file.
+pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    // The size from the file's header, before any pixels are decoded.
+    let fits = |bytes: &[u8]| {
+        image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
+    };
+    matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+        && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+        && doc
+            .image_blob(&doc.shown_image(n, im))
+            .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
 }
 
 /// Write `doc`'s first artboard and every layer (all its art, on the artboard or not) as a
@@ -157,6 +193,8 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     // The document is y down; art space y up from the artboard's left edge, its top on a whole point.
     let (width, height) = (board.width(), board.height());
     let top = if (height - height.round()).abs() < 1e-6 { height.round() } else { height.ceil() };
@@ -234,7 +272,7 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     // The page trailer as the specification's script has it (§3); the document trailer takes the
     // prolog's dictionary off the dictionary stack (its procedure set termination, §3).
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nend\n%%EOF\n");
-    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings })
+    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings, setting_notes: w.setting_notes })
 }
 
 #[cfg(test)]

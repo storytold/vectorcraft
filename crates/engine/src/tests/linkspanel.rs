@@ -213,7 +213,7 @@ fn go_to_selects_the_image() {
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     assert_ne!(s.doc().unwrap().selection.objects, vec![id]);
     let r = run(&mut s, "links.goTo", json!({"id": id.0}));
-    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0]}));
+    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0], "onCanvas": true}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
     let rect = s.doc().unwrap().doc.layers[0].children().unwrap()[1].id;
     assert!(s.execute("links.goTo", &json!({"id": rect.0})).is_err(), "not an image");
@@ -276,6 +276,77 @@ fn link_info_has_the_file_and_placement_details() {
     let embedded = place_embedded(&mut s, &pic);
     let i = run(&mut s, "links.info", json!({"id": embedded.0}));
     assert_eq!((i["status"].as_str(), i["linked"].as_bool(), i["fileName"].as_str()), (Some("embedded"), Some(false), None));
+}
+
+/// Link Info reads within the opener's roots for an unconfined caller, and never past a confined
+/// caller's own roots.
+#[test]
+fn link_info_stays_within_the_asking_callers_roots() {
+    let dir = Folder::new("info-roots");
+    let other = Folder::new("info-other");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = |p: &std::path::Path| crate::file_access::AutomationRoots::new(&[p], &[]).unwrap().unwrap();
+    s.active_mut().unwrap().opened_by = Some(roots(&dir.0));
+    assert_eq!(run(&mut s, "links.info", json!({"id": id.0}))["status"], "ok");
+    let narrow = roots(&other.0);
+    let i = crate::file_access::confine(Some(&narrow), || run(&mut s, "links.info", json!({"id": id.0})));
+    assert_ne!(i["status"], "ok", "{i}");
+}
+
+/// A confined caller's `links.list`, `links.check` and `links.info` replies, and its
+/// `document.open` reply, leave out the path and folder of a linked file outside its read roots
+/// and keep the row with the file's name. A file found by name inside the roots shows its path.
+#[test]
+fn link_paths_outside_the_read_roots_are_left_out() {
+    let away = Folder::new("lrr-away");
+    let home = Folder::new("lrr-home");
+    let pic = away.file("photo.png");
+    let bytes = png(60, 30, RED);
+    write(&pic, &bytes);
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let ask = |s: &mut Session, cmd: &str, p: Value| crate::file_access::confine(Some(&roots), || run(s, cmd, p));
+    let hidden = |r: &Value| assert!(!r.to_string().contains("lrr-away"), "{r}");
+    let list = ask(&mut s, "links.list", json!({}));
+    hidden(&list);
+    let row = &list["links"][0];
+    assert_eq!((row["id"].as_u64(), row["name"].as_str(), row["status"].as_str()), (Some(id.0), Some("photo.png"), Some("missing")), "{list}");
+    let check = ask(&mut s, "links.check", json!({}));
+    hidden(&check);
+    assert_eq!((check["links"][0]["name"].as_str(), check["missing"].as_u64()), (Some("photo.png"), Some(1)), "{check}");
+    let info = ask(&mut s, "links.info", json!({"id": id.0}));
+    hidden(&info);
+    assert_eq!(
+        (info["fileName"].as_str(), info["status"].as_str(), info["linked"].as_bool()),
+        (Some("photo.png"), Some("missing"), Some(true)),
+        "{info}"
+    );
+    for k in ["path", "link", "location", "fileSize", "modified", "created"] {
+        assert!(info.get(k).is_none(), "{k}: {info}");
+    }
+    // Unconfined, the same replies carry the paths.
+    assert_eq!(run(&mut s, "links.list", json!({}))["links"][0]["path"], json!(pic));
+    let i = run(&mut s, "links.info", json!({"id": id.0}));
+    assert_eq!((&i["path"], &i["link"], i["fileSize"].as_u64()), (&json!(pic), &json!(pic), Some(bytes.len() as u64)), "{i}");
+    // Saved inside the roots next to a copy of the file: the copy is found by name and shown.
+    save(&mut s, &home.file("poster.vectorcraft"));
+    let copy = home.file("photo.png");
+    write(&copy, &bytes);
+    let check = ask(&mut s, "links.check", json!({}));
+    hidden(&check);
+    assert_eq!((check["links"][0]["status"].as_str(), &check["links"][0]["found"]), (Some("ok"), &json!(copy)), "{check}");
+    let list = ask(&mut s, "links.list", json!({}));
+    hidden(&list);
+    assert_eq!(list["links"][0]["found"], json!(copy), "{list}");
+    // Opened again without the copy: the missing link's row has no path.
+    std::fs::remove_file(&copy).unwrap();
+    let opened = ask(&mut Session::new(), "document.open", json!({"path": home.file("poster.vectorcraft")}));
+    hidden(&opened);
+    assert_eq!(opened["missingLinks"][0]["name"], "photo.png", "{opened}");
 }
 
 /// A 600×300 pt image at the centre of the artboard, its placement options set to `options`,

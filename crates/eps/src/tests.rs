@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
@@ -82,6 +82,17 @@ fn checked_page(ps: &str) -> String {
                 }
             }
             '{' | '[' => stack.push(c),
+            // An ASCII85 string: its digits are data.
+            '<' if chars.peek() == Some(&'~') => {
+                let mut last = ' ';
+                loop {
+                    let c = chars.next().expect("ASCII85 string closes");
+                    if last == '~' && c == '>' {
+                        break;
+                    }
+                    last = c;
+                }
+            }
             '<' if chars.peek() == Some(&'<') => {
                 chars.next();
                 stack.push('<');
@@ -189,6 +200,137 @@ fn gradients_are_smooth_shadings_at_level_3_and_stepped_fills_at_level_2() {
     assert_eq!(dsc(&ps, "LanguageLevel").as_deref(), Some("2"));
 }
 
+/// PostScript has no conic shading: a conic is solid wedges about its center at both levels, each
+/// running on to the seam, and read back from the PostScript it looks as the canvas paints it.
+#[test]
+fn conic_gradients_are_solid_wedges_at_both_levels() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    for aspect in [1.0, -0.5] {
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops.clone()));
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(150.0, 70.0), aspect, focal: None });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+        for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+            let out = export(&d, &o, None, None).unwrap();
+            assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as solid wedges")), "{:?}", out.warnings);
+            let page = page_of(&d, &o);
+            assert!(!page.contains("shfill"), "no shading stands in");
+            assert_eq!(page.matches("closepath fill").count(), 360, "a wedge a degree");
+        }
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let back = import_with(&out.bytes, false).unwrap().document;
+        vectorcraft_testkit::raster::assert_similar(
+            &vectorcraft_testkit::raster::render_artboard(&d),
+            &vectorcraft_testkit::raster::render_artboard(&back),
+            8.0,
+            0.01,
+        );
+    }
+}
+
+/// PostScript has no diamond shading: a diamond is four axial shadings at Level 3 (stepped fills at
+/// Level 2), each clipped to a quadrant of its frame, and read back from the PostScript it looks
+/// as the canvas paints it, with no hairline between the quadrants.
+#[test]
+fn diamond_gradients_are_four_linear_gradients_clipped_to_quadrants() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(140.0, 40.0), aspect: 0.6, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    for (o, shadings) in [(opts(&d), 4), (EpsOptions { level: Level::Two, ..opts(&d) }, 0)] {
+        let out = export(&d, &o, None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("diamond gradients are written as four linear gradients")), "{:?}", out.warnings);
+        let page = page_of(&d, &o);
+        assert_eq!(page.matches("shfill").count(), shadings);
+        assert_eq!(page.matches("closepath clip newpath").count(), 4, "a clip a quadrant");
+    }
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let back = import_with(&out.bytes, false).unwrap().document;
+    vectorcraft_testkit::raster::assert_similar(
+        &vectorcraft_testkit::raster::render_artboard(&d),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        6.0,
+        0.01,
+    );
+}
+
+/// PostScript's shadings pad past their ends: a linear, radial or diamond gradient that repeats or
+/// reflects is written with its stops repeated over the shape, a conic one as wedges that repeat
+/// with the stops; read back from the PostScript, each looks as the canvas paints it, at Level 3
+/// and Level 2.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let c = Point::new(100.0, 100.0);
+    let around = GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(60.0, -25.0), aspect: 0.7, focal: None };
+    let cases = [
+        (GradientKind::Linear, GradientGeom { start: Point::new(70.0, 80.0), end: Point::new(150.0, 110.0), aspect: 1.0, focal: None }),
+        (GradientKind::Radial, around),
+        (GradientKind::Radial, GradientGeom { focal: Some(c + vectorcraft_geom::Vec2::new(-15.0, 12.0)), ..around }),
+        (GradientKind::Conic, around),
+        (GradientKind::Diamond, around),
+    ];
+    for (kind, geom) in cases {
+        for spread in [GradientSpread::Repeat, GradientSpread::Reflect] {
+            let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+            let mut g = GradientPaint::new(Gradient { spread, repeats: 3, ..Gradient::new(kind, stops) });
+            g.geom = Some(geom);
+            let paint = Paint::Gradient(Box::new(g));
+            let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+            for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+                let out = export(&d, &o, None, None).unwrap();
+                let back = import_with(&out.bytes, false).unwrap().document;
+                let (a, b) = (vectorcraft_testkit::raster::render_artboard(&d), vectorcraft_testkit::raster::render_artboard(&back));
+                let st = vectorcraft_testkit::raster::perceptual_diff(&a, &b, 12.0);
+                assert!(
+                    (st.bad_pixels as f64) < 0.03 * st.pixels as f64,
+                    "{kind:?} {spread:?} level {:?}: {} of {} pixels differ",
+                    o.level,
+                    st.bad_pixels,
+                    st.pixels
+                );
+            }
+        }
+    }
+}
+
+/// A gradient that repeats with no stops (a file can hold one) is written as one that pads, to
+/// EPS, legacy `.ai` and the `.ai` editing data.
+#[test]
+fn a_spread_gradient_without_stops_is_written() {
+    use vectorcraft_color::GradientSpread;
+    for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond] {
+        let g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(kind, vec![]) });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint.clone(), paint, 4.0)]);
+        export(&d, &opts(&d), None, None).unwrap();
+        export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        crate::export_ai_editing(&d, &crate::AiEditingOptions::default()).unwrap();
+    }
+}
+
+/// A gradient repeated 256 times across the shape keeps each run's place: the smooth shading's
+/// stitching bounds lie where the runs meet, to well under a run's thousandth.
+#[test]
+fn many_repeats_keep_their_places_in_a_smooth_shading() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    // A run of 0.4 pt across a shape 160 pt wide: capped at 256 runs.
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    g.geom = Some(GradientGeom { start: Point::new(20.0, 100.0), end: Point::new(60.0, 100.0), aspect: 1.0, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+    let page = page_of(&d, &opts(&d));
+    let bounds: Vec<f64> =
+        page.split("/Bounds [").nth(1).and_then(|s| s.split(']').next()).unwrap().split_whitespace().map(|v| v.parse().unwrap()).collect();
+    let runs = (bounds.len() + 1) as f64;
+    assert_eq!(runs, 256.0, "{bounds:?}");
+    for b in bounds {
+        assert!((b * runs - (b * runs).round()).abs() < 1e-3, "bound {b} is {} runs along", b * runs);
+    }
+}
+
 #[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
@@ -240,6 +382,344 @@ fn spot_colours_are_separations_and_overprints_are_kept_or_dropped() {
     assert!(!page_of(&d, &EpsOptions { overprint: Overprint::Discard, ..opts(&d) }).contains("true op"));
 }
 
+const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
+const LEAF: Color = Color::Cmyk { c: 1.0, m: 0.0, y: 1.0, k: 0.0 };
+
+/// A stop linked to spot swatch `name` (of color `color`) at `tint`.
+fn spot_stop(offset: f32, name: &str, color: Color, tint: f32) -> GradientStop {
+    GradientStop { swatch: Some(name.into()), tint, ..GradientStop::new(offset, color.tinted(tint)) }
+}
+
+/// A document with the spot swatches Gold Ink and Leaf Ink and a rectangle filled with a linear
+/// gradient of `stops`.
+fn spot_gradient_doc(stops: Vec<GradientStop>) -> Document {
+    spot_gradient_doc_of(Gradient::new(GradientKind::Linear, stops))
+}
+
+/// [`spot_gradient_doc`] with the rectangle filled with `gradient`.
+fn spot_gradient_doc_of(gradient: Gradient) -> Document {
+    let mut d = doc_with(|_| vec![]);
+    d.swatches.push(Swatch { name: "Gold Ink".into(), paint: Paint::solid(GOLD), global: true, spot: true });
+    d.swatches.push(Swatch { name: "Leaf Ink".into(), paint: Paint::solid(LEAF), global: true, spot: true });
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(gradient)));
+    let n = path(&mut d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    d
+}
+
+/// The solid fill colors of the objects of `d`, down through groups.
+fn fill_colors(d: &Document) -> Vec<Color> {
+    fn walk(n: &Node, out: &mut Vec<Color>) {
+        for i in &n.appearance.items {
+            if let AppearanceItem::Fill(f) = i
+                && let Some(c) = f.paint.color()
+            {
+                out.push(c);
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, out);
+        }
+    }
+    let mut out = vec![];
+    for l in &d.layers {
+        walk(l, &mut out);
+    }
+    out
+}
+
+/// Whether one of `colors` is CMYK `want`, to within rounding.
+fn has_cmyk(colors: &[Color], want: [f32; 4]) -> bool {
+    colors.iter().any(|c| matches!(*c, Color::Cmyk { c, m, y, k } if [c, m, y, k].iter().zip(want).all(|(a, b)| (a - b).abs() < 2e-3)))
+}
+
+#[test]
+fn a_gradient_of_one_spot_ink_is_a_separation_shading() {
+    let d = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        spot_stop(0.5, "Gold Ink", GOLD, 0.2),
+        GradientStop::new(1.0, Color::rgb(1.0, 1.0, 1.0)),
+    ]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Gold Ink)"));
+    assert!(ps.contains("/VCsp0 [/Separation (Gold Ink) cvn /DeviceCMYK"), "{ps}");
+    let page = checked_page(&ps);
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCsp0 /Coords"), "{page}");
+    assert!(page.contains("/C0 [1] /C1 [0.2]") && page.contains("/C0 [0.2] /C1 [0]"), "tints of Gold Ink to paper: {page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    // Level 2: bands of the ink's tints.
+    let out = export(&d, &EpsOptions { level: Level::Two, ..opts(&d) }, None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(!page.contains("shfill") && !page.contains(" k\n"), "{page}");
+    assert!(page.contains("VCsp0 setcolorspace 1 setcolor\n") && page.contains("VCsp0 setcolorspace 0 setcolor\n"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn gradients_mixing_spot_inks_with_other_inks_are_device_n_shadings() {
+    // Gold Ink, with its midpoint at 30%, to Leaf Ink at 50%.
+    let mut gold = spot_stop(0.0, "Gold Ink", GOLD, 1.0);
+    gold.midpoint = 0.3;
+    let two = spot_gradient_doc(vec![gold, spot_stop(1.0, "Leaf Ink", LEAF, 0.5)]);
+    let out = export(&two, &opts(&two), None, None).unwrap();
+    let ps = text(&out);
+    assert!(
+        ps.contains("%%DocumentCustomColors: (Gold Ink)\n%%+ (Leaf Ink)\n%%CMYKCustomColor: 0 0.2 0.8 0.1 (Gold Ink)\n%%+ 1 0 1 0 (Leaf Ink)\n"),
+        "both inks, each list continued right below its comment: {ps}"
+    );
+    assert!(
+        ps.contains(
+            "/VCdn0 [/DeviceN [(Gold Ink) cvn (Leaf Ink) cvn ] /DeviceCMYK {2 array astore 0 1 index 1 get 1 mul add \
+             0 2 index 0 get 0.2 mul add 0 3 index 0 get 0.8 mul add 3 index 1 get 1 mul add 0 4 index 0 get 0.1 mul add 5 -1 roll pop}] def"
+        ),
+        "{ps}"
+    );
+    let page = checked_page(&ps);
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCdn0 /Coords") && page.contains("/Bounds [0.3 ]"), "{page}");
+    assert!(page.contains("/C0 [1 0] /C1 [0.5 0.25]") && page.contains("/C0 [0.5 0.25] /C1 [0 0.5]"), "the inks through the midpoint: {page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+
+    // Gold Ink to 60% process yellow to 40% gray: Yellow, Black and Gold Ink.
+    let mixed = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        GradientStop::new(0.5, Color::cmyk(0.0, 0.0, 0.6, 0.0)),
+        GradientStop::new(1.0, Color::Gray { k: 0.4 }),
+    ]);
+    let out = export(&mixed, &opts(&mixed), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Yellow /Black (Gold Ink) cvn ] /DeviceCMYK {3 array astore"), "{ps}");
+    let page = checked_page(&ps);
+    assert!(page.contains("/C0 [0 0 1] /C1 [0.6 0 0]") && page.contains("/C0 [0.6 0 0] /C1 [0 0.4 0]"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+
+    // Gold Ink 0% to 100% over a constant 30% cyan plate (a DeviceN gradient read from a PDF,
+    // #3235): Cyan and Gold Ink.
+    let mut over = spot_stop(1.0, "Gold Ink", GOLD, 1.0);
+    over.plates = Some([0.3, 0.0, 0.0, 0.0]);
+    let plated = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), over]);
+    let out = export(&plated, &opts(&plated), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK {2 array astore"), "{ps}");
+    assert!(checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 1]"), "{ps}");
+
+    // Read back as bands, the tint transforms give each ink's CMYK equivalent.
+    for (d, end) in [(&two, [0.5, 0.0, 0.5, 0.0]), (&mixed, [0.0, 0.0, 0.0, 0.4])] {
+        let out = export(d, &EpsOptions { compatible_gradients: true, ..opts(d) }, None, None).unwrap();
+        let page = checked_page(&text(&out));
+        assert!(page.contains("VCdn0 setcolorspace ") && !page.contains("shfill"), "{page}");
+        let colors = fill_colors(&import(&out.bytes).unwrap().document);
+        assert!(has_cmyk(&colors, [0.0, 0.2, 0.8, 0.1]) && has_cmyk(&colors, end), "{colors:?}");
+    }
+
+    // Level 2 has no DeviceN: process colors, with a warning.
+    let out = export(&two, &EpsOptions { level: Level::Two, ..opts(&two) }, None, None).unwrap();
+    assert!(!text(&out).contains("DeviceN"));
+    assert!(out.warnings.iter().any(|w| w.contains("process colors at PostScript Level 2")), "{:?}", out.warnings);
+}
+
+#[test]
+fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::rgb(0.0, 1.0, 0.0))]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert!(!ps.contains("/Separation") && !ps.contains("/DeviceN"), "{ps}");
+    assert!(out.warnings.iter().any(|w| w.contains("RGB or Lab colors are written without the spot ink")), "{:?}", out.warnings);
+    // Written as CMYK, the green stop mixes with the ink.
+    let out = export(&d, &EpsOptions { cmyk: true, ..opts(&d) }, None, None).unwrap();
+    assert!(text(&out).contains("/ColorSpace VCdn0"));
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
+    let rect = |d: &mut Document, fill: &str, stroke: &str| {
+        let solid = |name: &str| Paint::Solid { color: GOLD, swatch: Some(name.into()), tint: 1.0 };
+        path(d, shapes::rectangle(Rect::new(50.0, 60.0, 150.0, 100.0)), solid(fill), solid(stroke), 2.0)
+    };
+    for (name, colorant) in [("All", "All Spot"), ("None", "None Spot")] {
+        // A fill of the spot ink and a Registration stroke.
+        let mut d = doc_with(|_| vec![]);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(GOLD), global: true, spot: true });
+        let n = rect(&mut d, name, vectorcraft_color::swatch::REGISTRATION);
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), Some(format!("({colorant})")), "{ps}");
+        assert_eq!(dsc(&ps, "CMYKCustomColor"), Some(format!("0 0.2 0.8 0.1 ({colorant})")), "{ps}");
+        assert!(ps.contains(&format!("[/Separation ({colorant}) cvn /DeviceCMYK {{dup 0 mul")), "{name}: {ps}");
+        assert!(ps.contains("[/Separation /All /DeviceCMYK {dup dup dup}]"), "Registration prints on every plate: {ps}");
+        assert!(!ps.contains(&format!("({name}) cvn")), "{name}: {ps}");
+        checked_page(&ps);
+
+        // In a gradient with another spot ink, the DeviceN space has the same colorant.
+        let mut d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, name, LEAF, 1.0)]);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(LEAF), global: true, spot: true });
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains(&format!("/VCdn0 [/DeviceN [(Gold Ink) cvn ({colorant}) cvn ] /DeviceCMYK")), "{name}: {ps}");
+        assert!(ps.contains(&format!("%%DocumentCustomColors: (Gold Ink)\n%%+ ({colorant})\n")), "{name}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    }
+
+    // A spot swatch already named All Spot keeps its name, and All is numbered past it.
+    let mut d = doc_with(|_| vec![]);
+    for name in ["All", "All Spot"] {
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(GOLD), global: true, spot: true });
+    }
+    let n = rect(&mut d, "All", "All Spot");
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert!(ps.contains("[/Separation (All Spot 2) cvn ") && ps.contains("[/Separation (All Spot) cvn "), "{ps}");
+    assert!(ps.contains("%%DocumentCustomColors: (All Spot 2)\n%%+ (All Spot)\n"), "{ps}");
+}
+
+#[test]
+fn spot_inks_named_like_process_inks_are_not_device_n_colorants() {
+    for name in ["Cyan", "Black"] {
+        // Gold Ink to the spot ink, with no process ink in the stops.
+        let mut d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, name, LEAF, 1.0)]);
+        d.swatches.retain(|s| s.name != name);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(LEAF), global: true, spot: true });
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert!(!ps.contains("/DeviceN") && !ps.contains("/Separation"), "{name}: {ps}");
+        assert!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), "{name}: {:?}", out.warnings);
+    }
+}
+
+#[test]
+fn a_device_n_space_has_at_most_32_colorants() {
+    for (inks, device_n) in [(32, true), (33, false)] {
+        let names: Vec<String> = (0..inks).map(|i| format!("Ink {i}")).collect();
+        let stops = names.iter().enumerate().map(|(i, n)| spot_stop(i as f32 / (inks - 1) as f32, n, LEAF, 1.0)).collect();
+        let mut d = spot_gradient_doc(stops);
+        d.swatches.extend(names.iter().map(|n| Swatch { name: n.clone(), paint: Paint::solid(LEAF), global: true, spot: true }));
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert_eq!(ps.contains("/DeviceN [(Ink 0) cvn "), device_n, "{inks} inks: {ps}");
+        assert_eq!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), !device_n, "{:?}", out.warnings);
+    }
+}
+
+#[test]
+fn gradients_of_more_than_32_spot_inks_are_written_in_process_colors_at_every_level() {
+    // 400 stops over 40 inks.
+    let names: Vec<String> = (0..40).map(|i| format!("Ink {i}")).collect();
+    let stops = (0..400).map(|i| spot_stop(i as f32 / 399.0, &names[i % names.len()], LEAF, 1.0)).collect();
+    let mut d = spot_gradient_doc(stops);
+    d.swatches.extend(names.iter().map(|n| Swatch { name: n.clone(), paint: Paint::solid(LEAF), global: true, spot: true }));
+    for level in [Level::Three, Level::Two] {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert!(!ps.contains("/DeviceN") && !ps.contains("VCsp"), "{level:?}: {ps}");
+        assert!(out.warnings.iter().any(|w| w.contains("can't share a DeviceN color space")), "{level:?}: {:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w.contains("PostScript Level 2")), "{level:?}: {:?}", out.warnings);
+    }
+}
+
+#[test]
+fn near_white_stops_next_to_a_spot_ink_keep_their_ink() {
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::Gray { k: 0.001 })]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Black (Gold Ink) cvn ]"), "{ps}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    // A near-white RGB stop is RGB, not paper.
+    let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), GradientStop::new(1.0, Color::rgb(1.0, 1.0, 0.999))]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("RGB or Lab colors are written without the spot ink")), "{:?}", out.warnings);
+}
+
+#[test]
+fn a_white_stop_linked_to_a_process_swatch_is_paper_next_to_a_spot_ink() {
+    let white = Color::rgb(1.0, 1.0, 1.0);
+    let mut d = spot_gradient_doc(vec![
+        spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+        GradientStop { swatch: Some("Paper".into()), ..GradientStop::new(1.0, white) },
+    ]);
+    d.swatches.push(Swatch { name: "Paper".into(), paint: Paint::solid(white), global: true, spot: false });
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(page.contains("/ShadingType 2 /ColorSpace VCsp0 /Coords"), "{page}");
+    assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+}
+
+#[test]
+fn perceptual_gradients_of_spot_inks_are_written_in_process_colors() {
+    let stops = vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, "Leaf Ink", LEAF, 1.0)];
+    let mut perceptual = Gradient::new(GradientKind::Linear, stops.clone());
+    perceptual.method = GradientMethod::Perceptual;
+    let d = spot_gradient_doc_of(perceptual);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = checked_page(&text(&out));
+    assert!(!page.contains("VCdn") && !page.contains("VCsp"), "{page}");
+    assert!(page.contains("/ColorSpace /DeviceCMYK"), "{page}");
+    assert!(out.warnings.iter().any(|w| w.contains("Perceptual gradients of spot colors are written in process colors")), "{:?}", out.warnings);
+    // The in-between stops follow the Perceptual mix, as for a gradient without spot inks.
+    let process = |c: Color| GradientStop::new(0.0, c);
+    let mut plain = Gradient::new(GradientKind::Linear, vec![process(GOLD), GradientStop { offset: 1.0, ..process(LEAF) }]);
+    plain.method = GradientMethod::Perceptual;
+    let p = spot_gradient_doc_of(plain);
+    let plain_page = checked_page(&text(&export(&p, &opts(&p), None, None).unwrap()));
+    let shading = |s: &str| -> Option<String> {
+        let i = s.find("/ShadingType")?;
+        Some(s[i..i + s[i..].find("shfill")?].to_string())
+    };
+    assert!(shading(&page).is_some_and(|s| s.contains("/Bounds")), "{page}");
+    assert_eq!(shading(&page), shading(&plain_page));
+    // Classic keeps the inks.
+    let d = spot_gradient_doc(stops);
+    assert!(text(&export(&d, &opts(&d), None, None).unwrap()).contains("/ColorSpace VCdn0"));
+}
+
+/// The colors between two stops mixed around the hue wheel are not mixes of the stops' inks: a
+/// gradient of spot inks mixed that way is written in process colors, with its own warning, as
+/// the same gradient without spot inks is.
+#[test]
+fn hue_wheel_gradients_of_spot_inks_are_written_in_process_colors() {
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        let stops = vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, "Leaf Ink", LEAF, 1.0)];
+        let mut hue = Gradient::new(GradientKind::Linear, stops.clone());
+        hue.method = method;
+        // Reflecting, it is written from the stops on its curve, and warns all the same.
+        let reflected = Gradient { spread: vectorcraft_color::GradientSpread::Reflect, repeats: 2, ..hue.clone() };
+        let r = spot_gradient_doc_of(reflected);
+        let reflected_out = export(&r, &opts(&r), None, None).unwrap();
+        let reflected_page = checked_page(&text(&reflected_out));
+        assert!(!reflected_page.contains("VCdn") && !reflected_page.contains("VCsp"), "{method:?} reflected: {reflected_page}");
+        assert!(
+            reflected_out.warnings.iter().any(|w| w.contains("mixed around the hue wheel are written in process colors")),
+            "{method:?} reflected: {:?}",
+            reflected_out.warnings
+        );
+        let d = spot_gradient_doc_of(hue);
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let page = checked_page(&text(&out));
+        assert!(!page.contains("VCdn") && !page.contains("VCsp"), "{method:?}: {page}");
+        assert!(page.contains("/ColorSpace /DeviceCMYK"), "{method:?}: {page}");
+        assert!(
+            out.warnings.iter().any(|w| w.contains("gradients of spot colors mixed around the hue wheel are written in process colors")),
+            "{method:?}: {:?}",
+            out.warnings
+        );
+        assert!(!out.warnings.iter().any(|w| w.contains("Perceptual")), "{method:?}: {:?}", out.warnings);
+        let process = |c: Color| GradientStop::new(0.0, c);
+        let mut plain = Gradient::new(GradientKind::Linear, vec![process(GOLD), GradientStop { offset: 1.0, ..process(LEAF) }]);
+        plain.method = method;
+        let p = spot_gradient_doc_of(plain);
+        let plain_out = export(&p, &opts(&p), None, None).unwrap();
+        assert!(!plain_out.warnings.iter().any(|w| w.contains("hue wheel")), "{method:?}: {:?}", plain_out.warnings);
+        let plain_page = checked_page(&text(&plain_out));
+        let shading = |s: &str| -> Option<String> {
+            let i = s.find("/ShadingType")?;
+            Some(s[i..i + s[i..].find("shfill")?].to_string())
+        };
+        assert!(shading(&page).is_some_and(|s| s.contains("/Bounds")), "{method:?}: {page}");
+        assert_eq!(shading(&page), shading(&plain_page), "{method:?}");
+    }
+}
+
 #[test]
 fn rgb_is_written_as_cmyk_when_asked_and_in_cmyk_documents() {
     let d = doc_with(|d| vec![red_rect(d)]);
@@ -257,15 +737,20 @@ fn png_doc() -> Document {
     for (x, _, p) in img.enumerate_pixels_mut() {
         *p = if x < 2 { image::Rgba([0, 200, 0, 255]) } else { image::Rgba([0, 0, 0, 0]) };
     }
+    image_doc(&img, 10.0)
+}
+
+/// A 200 × 200 pt document holding `img` as a PNG, its pixels `scale` points wide, at (10, 10).
+fn image_doc(img: &image::RgbaImage, scale: f64) -> Document {
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     let mut d = Document::new(200.0, 200.0);
     d.images.insert("pic".into(), ImageBlob::new("image/png", png));
     let im = ImageObject {
         key: "pic".into(),
-        width: 4,
-        height: 2,
-        xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
+        width: img.width(),
+        height: img.height(),
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(scale),
         link: None,
         placement: Default::default(),
         pixels: None,
@@ -281,6 +766,60 @@ fn image_data(page: &str) -> Vec<u8> {
     let at = page.find("} exec\n").unwrap() + 7;
     let end = page[at..].find("~>").unwrap() + at + 2;
     ps::ascii85_decode(&page[at..end]).unwrap()
+}
+
+/// A square filled with a freeform gradient of `a` on the left and `b` on the right, with those
+/// points at `opacity`, exported: (the page, the middle pixel's samples, the warnings).
+fn freeform_mid(a: Color, b: Color, opacity: f32, n: usize) -> (String, Vec<u8>, Vec<String>) {
+    let p = |x, c| FreeformPoint { opacity, ..FreeformPoint::new(Point::new(x, 100.0), c) };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, a), p(160.0, b)], ..Default::default() });
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = text(&out);
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * n;
+    (page, pixels[at..at + n].to_vec(), out.warnings)
+}
+
+#[test]
+fn freeform_gradients_keep_the_inks_of_cmyk_points_and_mix_in_the_points_model() {
+    let (cyan, black) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let (page, mid, _) = freeform_mid(cyan, black, 1.0, 4);
+    assert!(page.contains("/DeviceCMYK setcolorspace"), "{page}");
+    assert!(mid.iter().zip([128, 0, 0, 128]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    // A partly transparent point lays down that share of each ink.
+    let (_, mid, warnings) = freeform_mid(cyan, black, 0.5, 4);
+    assert!(mid.iter().zip([64, 0, 0, 64]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    assert!(warnings.iter().any(|w| w.contains("partly transparent")), "{warnings:?}");
+    // Lab points go out as RGB, mixed first in Lab.
+    let (page, mid, _) = freeform_mid(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0), 1.0, 3);
+    assert!(page.contains("/DeviceRGB setcolorspace"), "{page}");
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(mid.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 6), "{mid:?} vs {want:?}");
+}
+
+#[test]
+fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
+    let p = |x, c| FreeformPoint::new(Point::new(x, 100.0), c);
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, Color::gray(0.2)), p(160.0, Color::gray(0.8))], ..Default::default() });
+    let mut d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let page = text(&export(&d, &opts(&d), None, None).unwrap());
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * 4;
+    assert!(pixels[at..at + 3] == [0, 0, 0] && pixels[at + 3].abs_diff(128) <= 6, "{:?}", &pixels[at..at + 4]);
 }
 
 #[test]
@@ -329,6 +868,400 @@ fn unpack(data: &[u8]) -> Vec<u8> {
         }
     }
     out
+}
+
+fn colorized_doc(gray: Vec<u8>, paint: Option<Paint>) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    d.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    let mut png = Vec::new();
+    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(gray.len() as u32, 1, gray).unwrap())
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("gray".into(), ImageBlob::png(png));
+    let im = ImageObject {
+        key: "gray".into(),
+        width: 3,
+        height: 1,
+        xf: Affine::translate((10.0, 10.0)) * Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.extras_mut().colorize = paint.map(Box::new);
+    d.insert(d.default_layer(), 0, n).unwrap();
+    d
+}
+
+fn one_bit_blob() -> ImageBlob {
+    // Uncompressed two-pixel TIFF, BlackIsZero; black then white.
+    let entries: [(u16, u16, u32); 9] =
+        [(256, 3, 2), (257, 3, 1), (258, 3, 1), (259, 3, 1), (262, 3, 1), (273, 4, 122), (277, 3, 1), (278, 3, 1), (279, 4, 1)];
+    let mut bytes = b"II*\0".to_vec();
+    bytes.extend_from_slice(&8u32.to_le_bytes());
+    bytes.extend_from_slice(&9u16.to_le_bytes());
+    for (tag, kind, value) in entries {
+        bytes.extend_from_slice(&tag.to_le_bytes());
+        bytes.extend_from_slice(&kind.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.push(0b0100_0000);
+    ImageBlob::new("image/tiff", bytes)
+}
+
+fn colorized_samples(d: &Document, level: Level) -> (String, Vec<u8>, Vec<String>) {
+    let out = export(d, &EpsOptions { level, ..opts(d) }, None, None).unwrap();
+    let ps = text(&out);
+    checked_page(&ps);
+    let encoded = image_data(&ps);
+    let samples = if level == Level::Three { ps::inflate(&encoded, 1 << 20).unwrap() } else { unpack(&encoded) };
+    (ps, samples, out.warnings)
+}
+
+#[test]
+fn binary_colorized_images_are_ink_stencils_at_both_levels() {
+    for (paint, setup) in [
+        (Paint::solid(Color::rgb8(255, 0, 0)), "1 0 0 rg"),
+        (Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 0.5 }, "VCsp0 setcolorspace 0.5 setcolor"),
+        (Paint::registration(), "VCsp0 setcolorspace 1 setcolor"),
+    ] {
+        let d = colorized_doc(vec![0, 255, 0], Some(paint.clone()));
+        for level in [Level::Two, Level::Three] {
+            let (ps, samples, warnings) = colorized_samples(&d, level);
+            assert!(ps.contains("imagemask") && ps.contains("/BitsPerComponent 1 /Decode [1 0]"), "{ps}");
+            assert!(ps.contains(setup), "{ps}");
+            assert_eq!(samples, vec![0b1010_0000]);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            assert!(ps.contains(if level == Level::Two { "/RunLengthDecode" } else { "/FlateDecode" }));
+            if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+                assert!(ps.contains("/Separation"));
+            }
+            if paint.is_registration() {
+                assert!(ps.contains("/All /DeviceCMYK"));
+                assert!(dsc(&ps, "DocumentCustomColors").is_none());
+            } else if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+                assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Ink)"));
+            }
+        }
+    }
+}
+
+#[test]
+fn one_bit_source_uses_the_same_stencil_coverage() {
+    let mut d = colorized_doc(vec![0, 255, 255], Some(Paint::solid(Color::rgb8(0, 0, 255))));
+    d.images.insert("gray".into(), one_bit_blob());
+    let id = d.layers[0].children().unwrap()[0].id;
+    if let NodeKind::Image(im) = &mut d.node_mut(id).unwrap().kind {
+        im.width = 2;
+    }
+    assert!(d.images["gray"].gray_source().unwrap().one_bit);
+    let (_, samples, warnings) = colorized_samples(&d, Level::Three);
+    assert_eq!(samples, vec![0b1000_0000]);
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn one_source_with_two_spot_tints_writes_two_inks() {
+    let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = colorized_doc(vec![0, 255, 0], Some(first));
+    let mut n = (*d.layers[0].children().unwrap()[0]).clone();
+    n.id = d.alloc_id();
+    n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+    d.insert(d.default_layer(), 1, n).unwrap();
+    let ps = page_of(&d, &opts(&d));
+    assert!(ps.contains("VCsp0 setcolorspace 1 setcolor") && ps.contains("VCsp0 setcolorspace 0.5 setcolor"), "{ps}");
+    assert_eq!(ps.matches("imagemask").count(), 2);
+}
+
+#[test]
+fn gray_colorized_ramp_scales_process_and_spot_inks_over_paper() {
+    for level in [Level::Two, Level::Three] {
+        let process = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::rgb8(255, 0, 0))));
+        let (ps, pixels, warnings) = colorized_samples(&process, level);
+        assert!(ps.contains("/DeviceRGB setcolorspace") && !ps.contains("imagemask"));
+        if level == Level::Three {
+            assert!(ps.contains("/ImageType 4") && ps.contains("/MaskColor [255 255 0 0 255 255]"));
+            assert_eq!(pixels, vec![255, 0, 0, 255, 128, 128, 255, 0, 255]);
+            assert_eq!(warnings, vec!["partly transparent image pixels are written over white"]);
+        } else {
+            assert!(ps.contains("/ImageType 1") && !ps.contains("/MaskColor"));
+            assert_eq!(pixels, vec![255, 0, 0, 255, 128, 128, 255, 255, 255]);
+            assert_eq!(
+                warnings,
+                vec![
+                    "partly transparent image pixels are written over white",
+                    "transparent image pixels are written white at PostScript Level 2 (Level 3 masks them out)"
+                ]
+            );
+        }
+
+        let gray = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::gray(0.5))));
+        let (ps, pixels, warnings) = colorized_samples(&gray, level);
+        assert!(ps.contains("/DeviceGray setcolorspace"));
+        assert_eq!(pixels, if level == Level::Three { vec![128, 192, 0] } else { vec![128, 192, 255] });
+        assert_eq!(ps.contains("/MaskColor [0 0]"), level == Level::Three);
+        assert_eq!(warnings.len(), if level == Level::Three { 1 } else { 2 });
+
+        let spot = colorized_doc(vec![0, 128, 255], Some(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+        let (ps, pixels, warnings) = colorized_samples(&spot, level);
+        assert!(ps.contains("/Separation (Ink) cvn") && ps.contains("VCsp0 setcolorspace"));
+        assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Ink)"));
+        assert_eq!(pixels, vec![128, 64, 0]);
+        assert_eq!(ps.contains("/MaskColor [0 0]"), level == Level::Three);
+        assert_eq!(warnings.len(), if level == Level::Three { 1 } else { 2 });
+
+        let mut cmyk = process.clone();
+        cmyk.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+        let (ps, pixels, _) = colorized_samples(&cmyk, level);
+        assert!(ps.contains("/DeviceCMYK setcolorspace"));
+        assert_eq!(pixels.len(), 12);
+        assert_eq!(&pixels[8..], if level == Level::Three { &[255, 0, 255, 0][..] } else { &[0, 0, 0, 0][..] });
+    }
+}
+
+#[test]
+fn continuous_colorized_coverage_without_clear_pixels_only_warns_for_midtones() {
+    let d = colorized_doc(vec![0, 128, 254], Some(Paint::solid(Color::rgb8(255, 0, 255))));
+    for level in [Level::Two, Level::Three] {
+        let (ps, pixels, warnings) = colorized_samples(&d, level);
+        assert!(ps.contains("/ImageType 1") && !ps.contains("/MaskColor"));
+        assert_eq!(&pixels[..3], &[255, 0, 255]);
+        assert_eq!(warnings, vec!["partly transparent image pixels are written over white"]);
+    }
+    let d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::rgb8(255, 0, 255))));
+    let (ps, pixels, _) = colorized_samples(&d, Level::Three);
+    assert!(ps.contains("/MaskColor [255 255 0 0 255 255]"));
+    assert_eq!(&pixels[..3], &[255, 1, 255]);
+    assert_eq!(&pixels[6..], &[255, 0, 255]);
+}
+
+#[test]
+fn uncolorized_image_stays_on_original_eps_path() {
+    let d = colorized_doc(vec![0, 128, 255], None);
+    let ps = page_of(&d, &opts(&d));
+    assert!(!ps.contains("imagemask") && ps.contains("/ImageType 1"));
+    let patterned = colorized_doc(vec![0, 128, 255], Some(Paint::Pattern { pattern: "missing".into(), xf: Affine::IDENTITY }));
+    assert_eq!(page_of(&patterned, &opts(&patterned)), ps);
+    let mut color = png_doc();
+    let original = page_of(&color, &opts(&color));
+    let id = color.layers[0].children().unwrap()[0].id;
+    color.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+    assert_eq!(page_of(&color, &opts(&color)), original);
+}
+
+/// A copy of the first layer's object `i`, moved by `xf`, added on top.
+fn place_again(d: &mut Document, i: usize, xf: Affine) {
+    let mut n = (*d.layers[0].children().unwrap()[i]).clone();
+    n.id = d.alloc_id();
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = xf * im.xf;
+    }
+    d.insert(d.default_layer(), usize::MAX, n).unwrap();
+}
+
+/// Pixels of noise, opaque.
+fn noise(w: u32, h: u32) -> image::RgbaImage {
+    let mut seed = 1u32;
+    image::RgbaImage::from_fn(w, h, |_, _| {
+        let mut px = [255u8; 4];
+        for v in &mut px[..3] {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            *v = (seed >> 16) as u8;
+        }
+        image::Rgba(px)
+    })
+}
+
+/// The pixels of each image an EPS file's page draws, read back from the page.
+fn imported_images(bytes: &[u8]) -> Vec<Vec<u8>> {
+    fn walk(n: &Node, d: &Document, out: &mut Vec<Vec<u8>>) {
+        if let NodeKind::Image(im) = &n.kind {
+            out.push(image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8().into_raw());
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(c, d, out);
+        }
+    }
+    let r = import_with(bytes, false).unwrap();
+    assert!(!r.preview, "{:?}", r.warnings);
+    let mut out = vec![];
+    for l in &r.document.layers {
+        walk(l, &r.document, &mut out);
+    }
+    out
+}
+
+/// The samples of an image placed more than once, from the setup that defines them: inflated at
+/// Level 3, each string run-length decoded in turn at Level 2.
+fn reused_samples(ps: &str, level: Level) -> Vec<u8> {
+    let setup = &ps[ps.find("%%BeginSetup").unwrap()..ps.find("%%EndSetup").unwrap()];
+    match level {
+        Level::Three => ps::inflate(&image_data(setup), 1 << 28).unwrap(),
+        Level::Two => {
+            let mut data = vec![];
+            for s in setup.split("<~").skip(1) {
+                let chunk = ps::ascii85_decode(&s[..s.find("~>").unwrap() + 2]).unwrap();
+                assert!(chunk.len() <= 65_535, "a string holds at most 65,535 bytes: {}", chunk.len());
+                data.extend(chunk);
+            }
+            unpack(&data)
+        }
+    }
+}
+
+/// The samples of a single image written where it is drawn.
+fn inline_samples(ps: &str, level: Level) -> Vec<u8> {
+    match level {
+        Level::Three => ps::inflate(&image_data(ps), 1 << 28).unwrap(),
+        Level::Two => unpack(&image_data(ps)),
+    }
+}
+
+/// How many placements draw the image the setup defines as `VCim<i>`.
+fn reuses(ps: &str, i: usize, level: Level) -> usize {
+    match level {
+        Level::Three => ps.matches(&format!("VCim{i} resetfile\n")).count(),
+        Level::Two => ps.matches(&format!("{{VCi VCim{i} length lt")).count(),
+    }
+}
+
+#[test]
+fn an_image_placed_twice_writes_its_samples_once_at_both_levels() {
+    let single = png_doc();
+    let mut d = single.clone();
+    place_again(&mut d, 0, Affine::translate((60.0, 80.0)) * Affine::rotate(0.5));
+    for level in Level::ALL {
+        let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+        let one_ps = text(&one);
+        assert!(!one_ps.contains("VCim"), "an image placed once is written where it is drawn: {one_ps}");
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        assert_eq!(reuses(&ps, 0, level), 2, "{ps}");
+        assert!(!ps.contains("VCim1"), "{ps}");
+        let body = &ps[ps.find("%%EndSetup").unwrap()..];
+        assert!(!body.contains("currentfile") && !body.contains("~>"), "no samples in the page: {ps}");
+        match level {
+            Level::Three => {
+                assert_eq!(ps.matches("/ReusableStreamDecode filter def").count(), 1, "{ps}");
+                assert!(ps.contains("/Intent 0 /AsyncRead false /CloseSource false"), "{ps}");
+                assert!(body.contains("/DataSource VCim0 /FlateDecode filter >> image\n"), "{ps}");
+            }
+            Level::Two => {
+                assert!(ps.contains("/VCim0 [\n<~") && !ps.contains("ReusableStreamDecode"), "{ps}");
+                assert!(body.contains("/VCi 0 def\n") && body.contains("/RunLengthDecode filter >> image\n"), "{ps}");
+            }
+        }
+        assert_eq!(reused_samples(&ps, level), inline_samples(&one_ps, level));
+        assert_eq!(out.warnings, one.warnings);
+        // Read back, each placement draws the image the single placement draws.
+        let once = imported_images(&one.bytes);
+        assert_eq!(once.len(), 1);
+        assert_eq!(imported_images(&out.bytes), vec![once[0].clone(); 2], "{level:?}");
+    }
+}
+
+/// An image in an envelope is drawn as clipped pieces, all from one copy of its samples, which the
+/// image placed beside the envelope also draws.
+#[test]
+fn an_envelopes_image_pieces_draw_one_copy_of_its_samples() {
+    let mut d = png_doc();
+    let mut content = (*d.layers[0].children().unwrap()[0]).clone();
+    content.id = d.alloc_id();
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let envelope = Node::new(
+        d.alloc_id(),
+        NodeKind::Envelope {
+            content: vec![Arc::new(content)],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        },
+    );
+    d.insert(d.default_layer(), usize::MAX, envelope).unwrap();
+    for level in Level::ALL {
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        // The plain image and 200 pieces: 10 × 10 cells of two triangles.
+        assert_eq!(reuses(&ps, 0, level), 201, "{ps}");
+        assert!(!ps.contains("VCim1"), "{ps}");
+        assert_eq!(ps.matches(if level == Level::Three { "/ReusableStreamDecode" } else { "<~" }).count(), 1, "{ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("too large")), "{:?}", out.warnings);
+    }
+}
+
+#[test]
+fn each_ink_of_a_colorized_image_placed_twice_is_written_once() {
+    let first = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = colorized_doc(vec![0, 255, 0], Some(first));
+    let mut n = (*d.layers[0].children().unwrap()[0]).clone();
+    n.id = d.alloc_id();
+    n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::rgb8(255, 128, 128), swatch: Some("Ink".into()), tint: 0.5 }));
+    d.insert(d.default_layer(), usize::MAX, n).unwrap();
+    place_again(&mut d, 0, Affine::translate((0.0, 50.0)));
+    place_again(&mut d, 1, Affine::translate((0.0, 100.0)));
+    for level in Level::ALL {
+        let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+        assert_eq!((reuses(&ps, 0, level), reuses(&ps, 1, level)), (2, 2), "{ps}");
+        assert_eq!(ps.matches("VCsp0 setcolorspace 1 setcolor\n").count(), 2, "{ps}");
+        assert_eq!(ps.matches("VCsp0 setcolorspace 0.5 setcolor\n").count(), 2, "{ps}");
+        assert_eq!(ps.matches("imagemask").count(), 4, "{ps}");
+        if level == Level::Three {
+            assert_eq!(ps.matches("/Intent 1 ").count(), 2, "image masks: {ps}");
+        }
+    }
+}
+
+/// Samples longer than PostScript's longest string: one stream at Level 3, several strings at
+/// Level 2, each placement reading all of them.
+#[test]
+fn samples_longer_than_a_string_are_reused_at_both_levels() {
+    let single = image_doc(&noise(160, 160), 1.0);
+    let mut d = single.clone();
+    place_again(&mut d, 0, Affine::translate((20.0, 0.0)));
+    for level in Level::ALL {
+        let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        checked_page(&ps);
+        assert_eq!(reuses(&ps, 0, level), 2);
+        if level == Level::Two {
+            assert_eq!(ps.matches("<~").count(), 2, "160 × 160 × 3 run-length bytes take two strings");
+        }
+        let samples = reused_samples(&ps, level);
+        assert_eq!(samples.len(), 160 * 160 * 3);
+        assert_eq!(samples, inline_samples(&text(&one), level));
+        let once = imported_images(&one.bytes);
+        assert_eq!(imported_images(&out.bytes), vec![once[0].clone(); 2], "{level:?}");
+    }
+}
+
+/// The limit on the page body counts the samples of an image placed many times once. Art taken
+/// back for passing the limit takes its image placements with it.
+#[test]
+fn the_page_limit_counts_a_repeated_images_samples_once() {
+    let single = image_doc(&noise(40, 40), 1.0);
+    let o = opts(&single);
+    let inline = crate::scene::Scene::new(&single, &o).run().body.len();
+    let mut d = single.clone();
+    for k in 1..20 {
+        place_again(&mut d, 0, Affine::translate((f64::from(k), 0.0)));
+    }
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(inline * 3).run();
+    assert!(page.warnings.is_empty(), "{:?}", page.warnings);
+    assert_eq!(reuses(&page.body, 0, Level::Three), 20);
+    assert!(page.setup.contains("/VCim0 VCsrc"));
+    // Past the limit, the placements that don't fit are left out with a warning.
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(inline + 1000).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    let placed = reuses(&page.body, 0, Level::Three);
+    assert!((2..20).contains(&placed), "{placed}");
+    assert!(page.body.len() + page.setup.len() <= inline + 1000 + 400, "{}", page.body.len());
 }
 
 #[test]
@@ -395,7 +1328,7 @@ fn a_tiff_preview_sits_behind_the_binary_header() {
     }
     // Asked for but not rendered: the file has no preview, and says so.
     let out = export(&d, &EpsOptions { preview: Preview::TiffColor, ..opts(&d) }, None, None).unwrap();
-    assert!(out.bytes.starts_with(b"%!PS") && out.warnings.iter().any(|w| w.contains("preview")));
+    assert!(out.bytes.starts_with(b"%!PS") && out.setting_notes.iter().any(|w| w.contains("preview")));
 }
 
 #[test]
@@ -452,7 +1385,7 @@ fn an_instance_whose_art_reaches_the_region_is_written() {
     // while the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) })]);
     let art = path(&mut d, shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
 }
@@ -471,7 +1404,7 @@ fn an_instance_whose_brush_art_reaches_the_region_is_written() {
     vectorcraft_brush::store(&mut d, &lib);
     let mut art = path(&mut d, shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0);
     art.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
 }

@@ -1,5 +1,5 @@
 //! Picking and dragging mesh points and their handles on the canvas, shared by the Mesh tool and
-//! Direct Selection: gradient meshes and mesh envelopes alike. A click on a point picks it alone
+//! Direct Selection: gradient meshes, mesh envelopes and warp envelopes alike. A click on a point picks it alone
 //! and focuses it: its handles show and can be dragged too. Shift-clicks add points to the picked
 //! ones or take them away, and Direct Selection's marquee and its clicks on a gradient mesh's line
 //! or patch pick points too ([`part_points`]). The picked points show filled; a drag of one of
@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::live::{GradientMesh, envelope_grid};
+use vectorcraft_doc::live::{GradientMesh, envelope_grid, warp_grid};
 use vectorcraft_doc::{EnvelopeKind, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -19,16 +19,27 @@ use crate::{Action, Mods, Overlay, ToolContext, ToolKey};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
 
-/// The editable grid of `n`: a gradient mesh, or a mesh envelope's grid (not while its contents
-/// are being edited).
+/// The editable grid of `n`: a gradient mesh, a mesh envelope's grid or a warp envelope's
+/// ([`warp_grid`], which its first edit makes a mesh envelope of); not while an envelope's contents
+/// are being edited.
 pub fn grid_of(n: &Node) -> Option<Cow<'_, GradientMesh>> {
     match &n.kind {
         NodeKind::Mesh(m) => Some(Cow::Borrowed(m)),
         NodeKind::Envelope { kind, editing: false, .. } => match &**kind {
             EnvelopeKind::Mesh { rows, cols, points, handles } => envelope_grid(*rows, *cols, points, handles).map(Cow::Owned),
-            _ => None,
+            EnvelopeKind::Warp { .. } => warp_grid(n).map(Cow::Owned),
+            EnvelopeKind::TopObject { .. } => None,
         },
         _ => None,
+    }
+}
+
+/// Can `n` have an editable grid ([`grid_of`])? Its kind alone answers, without building the grid.
+pub fn may_have_grid(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Mesh(_) => true,
+        NodeKind::Envelope { kind, editing: false, .. } => matches!(**kind, EnvelopeKind::Mesh { .. } | EnvelopeKind::Warp { .. }),
+        _ => false,
     }
 }
 
@@ -257,6 +268,27 @@ impl MeshEdit {
         meshes.into_iter().map(|id| (id, self.picked.range((id, 0)..=(id, usize::MAX)).next().is_some())).collect()
     }
 
+    /// A Lasso's picks: the points `inside` it are picked alone, or added to the picked points
+    /// (`add`), or taken away from them (`sub`). Returns each mesh with points inside and whether
+    /// any of its points are picked now.
+    pub fn lasso(&mut self, inside: &[(NodeId, usize)], add: bool, sub: bool) -> Vec<(NodeId, bool)> {
+        if !add && !sub {
+            return self.marquee(inside, false);
+        }
+        for k in inside {
+            if sub {
+                self.picked.remove(k);
+            } else {
+                self.picked.insert(*k);
+            }
+        }
+        self.click = None;
+        self.focus = self.focus.filter(|f| self.picked.contains(f));
+        let mut meshes: Vec<NodeId> = inside.iter().map(|(id, _)| *id).collect();
+        meshes.dedup();
+        meshes.into_iter().map(|id| (id, self.picked.range((id, 0)..=(id, usize::MAX)).next().is_some())).collect()
+    }
+
     /// An arrow key's nudge of the picked points of the meshes `shown` accepts
     /// (`object.mesh.movePoints`); `None` during a drag, for other keys or without picked points.
     pub fn nudge(&self, cx: &ToolContext, key: ToolKey, mods: Mods, shown: &dyn Fn(NodeId) -> bool) -> Option<Vec<Action>> {
@@ -360,7 +392,7 @@ mod tests {
         // Inside the envelope: a new row and column.
         assert_eq!(
             t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 160.0)),
-            vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0}))]
+            vec![Action::Exec("object.mesh.addLine".into(), json!({"id": e.0, "x": 150.0, "y": 160.0, "tolerance": c.hit_options().tol}))]
         );
     }
 
@@ -410,6 +442,55 @@ mod tests {
             vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": e.0, "index": 2, "x": 90.0, "y": 210.0}))]
         );
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 90.0, 210.0)), vec![Action::Commit]);
+    }
+
+    /// The rectangle of [`doc_with_rect`] in an arc warp envelope.
+    fn doc_with_warp() -> (Document, NodeId) {
+        let (mut d, e) = doc_with_envelope();
+        if let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
+            **kind =
+                EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: vectorcraft_doc::live::WARP_NET };
+        }
+        (d, e)
+    }
+
+    /// The Mesh tool and Direct Selection drag a warp envelope's points (on its grid) and the
+    /// clicked point's handles, as they do a mesh envelope's; while its contents are edited, its
+    /// points take no press.
+    #[test]
+    fn the_mesh_tool_and_direct_selection_drag_warp_envelope_points() {
+        let (mut d, e) = doc_with_warp();
+        let grid = grid_of(d.node(e).unwrap()).unwrap().into_owned();
+        assert_eq!(Some(&grid), warp_grid(d.node(e).unwrap()).as_ref());
+        let mut s = Selection::default();
+        s.set([e]);
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let tools: [(&str, Box<dyn Tool>); 2] =
+            [("mesh", crate::meshblend::create("mesh").unwrap()), ("directSelection", Box::new(crate::direct::DirectSelectionTool::new(false)))];
+        let (i, q) = (6, grid.points[6].clone());
+        for (what, mut t) in tools {
+            assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, q.p.x, q.p.y)), vec![Action::Begin("Move Mesh Point".into())], "{what}");
+            assert_eq!(
+                t.pointer(&c, &PointerEvent::new(PointerKind::Drag, q.p.x + 10.0, q.p.y - 10.0)),
+                vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": e.0, "index": i, "x": q.p.x + 10.0, "y": q.p.y - 10.0}))],
+                "{what}"
+            );
+            assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, q.p.x + 10.0, q.p.y - 10.0)), vec![Action::Commit], "{what}");
+            // The clicked point's handle.
+            let end = q.p + q.handles[0];
+            assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, end.x, end.y)), vec![Action::Begin("Move Mesh Point".into())], "{what}");
+            let drag = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, end.x + 5.0, end.y));
+            assert!(matches!(&drag[..], [Action::Preview(id, p)] if id == "object.mesh.movePoint" && p["handle"] == json!(0)), "{what}: {drag:?}");
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, end.x + 5.0, end.y));
+        }
+        if let Some(NodeKind::Envelope { editing, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
+            *editing = true;
+        }
+        assert!(grid_of(d.node(e).unwrap()).is_none(), "Edit Contents: no envelope points");
+        let c = cx(&d, &s, &p);
+        let mut t = crate::meshblend::create("mesh").unwrap();
+        assert_ne!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, q.p.x, q.p.y)), vec![Action::Begin("Move Mesh Point".into())]);
     }
 
     #[test]

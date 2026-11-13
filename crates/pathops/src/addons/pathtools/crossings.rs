@@ -22,7 +22,7 @@ const END: f64 = 1e-6;
 /// A place on a path: (subpath, segment, t).
 pub type Place = (usize, usize, f64);
 
-fn control_box(c: &CubicBez) -> Rect {
+pub(super) fn control_box(c: &CubicBez) -> Rect {
     Rect::from_points(c.p0, c.p1).union_pt(c.p2).union_pt(c.p3)
 }
 
@@ -182,7 +182,19 @@ pub fn insert_at(sp: &SubPath, places: &[(usize, f64)]) -> (SubPath, BTreeSet<us
         out.anchors.push(a);
         out.anchors.extend(added.remove(&i).unwrap_or_default());
     }
-    let added_before = |j: usize| inner.range(..j).map(|(_, v)| v.len()).sum::<usize>();
+    // How many anchors were added before each anchor, counted in one pass for all of them.
+    let mut before = vec![0usize; n + 1];
+    for (&seg, ts) in &inner {
+        if let Some(b) = before.get_mut(seg + 1) {
+            *b += ts.len();
+        }
+    }
+    let mut sum = 0;
+    for b in &mut before {
+        sum += *b;
+        *b = sum;
+    }
+    let added_before = |j: usize| before.get(j).copied().unwrap_or(0);
     let mut marks: BTreeSet<usize> = at_anchor.into_iter().map(|j| j + added_before(j)).collect();
     for (&seg, ts) in &inner {
         let base = seg + added_before(seg);

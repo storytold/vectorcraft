@@ -292,6 +292,12 @@ fn methods_and_bad_params() {
     select_all(&mut s);
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "#00ff00"}, "method": "nope"})).is_err());
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "nonsense"}})).is_err());
+    // A current or new color with an alpha part (`#rrggbbaa` or `#rgba`) is refused.
+    let undo = s.doc().unwrap().history.undo.len();
+    for (from, to) in [("#ff000080", "#00ff00"), ("ff000080", "#00ff00"), ("#ff0000", "#00ff0080"), ("#ff0000", "#0f08")] {
+        assert!(s.execute("recolor.apply", &json!({"map": {from: to}})).is_err(), "{from} {to}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
     assert!(s.execute("recolor.apply", &json!({})).is_err());
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("recolor.apply", &json!({"map": {}})).is_err(), "needs art or a group");
@@ -537,6 +543,58 @@ fn recolor_to_a_library_spot_colour_links_it_and_adds_the_swatch() {
     assert_eq!(r["swatches"], json!(["Leaf"]));
 }
 
+/// A row's `tint` gives the art linked to the row's spot color that share of its tint;
+/// randomize without a change keeps it on the row, and a tint that is not a number is refused.
+#[test]
+fn a_rows_tint_tints_the_spot_color_the_art_links_to() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink 101", "color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}, "spot": true}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink 101"], "name": "Inks"}))["data"].as_str().unwrap().to_string();
+    let lib = run(&mut s, "swatch.library.load", json!({"data": data, "name": "inks.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Ink 101"]}));
+    let red = rect(&mut s, json!("#e02010"));
+    select_all(&mut s);
+    let map = json!([{"from": ["rgb 224 32 16"], "to": "cmyk 0 100 0 0", "tint": 40}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "limitTo": lib}));
+    match s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => {
+            assert_eq!(swatch.as_deref(), Some("Ink 101"), "linked to the spot color");
+            assert!((tint - 0.4).abs() < 1e-4, "at the row's tint: {tint}");
+            assert!(close(color, Color::cmyk(0.0, 1.0, 0.0, 0.0).tinted(0.4)), "{color:?}");
+        }
+        p => panic!("{p:?}"),
+    }
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": false}));
+    assert_eq!(r["map"][0]["tint"], json!(40.0), "{r}");
+    let e = s.execute("recolor.apply", &json!({"map": [{"from": ["rgb 224 32 16"], "to": "#ff0000", "tint": "40"}]})).unwrap_err();
+    assert!(e.to_string().contains("`tint` must be a number"), "{e}");
+}
+
+/// Randomize order moves a row's tint with its new color; changing saturation and brightness
+/// drops the tint of every color it changes.
+#[test]
+fn randomize_moves_a_tint_with_its_color_and_drops_it_when_the_color_changes() {
+    let mut s = session();
+    let map = json!([
+        {"from": ["rgb 255 0 0"], "to": "cmyk 0 100 0 0", "tint": 40},
+        {"from": ["rgb 0 255 0"], "to": "rgb 0 255 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    let mut moved = false;
+    for seed in 0..20 {
+        let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": seed}));
+        for row in r["map"].as_array().unwrap() {
+            let spot = row["to"] == json!("cmyk 0 100 0 0");
+            assert_eq!(row.get("tint").cloned(), spot.then(|| json!(40.0)), "seed {seed}: the tint goes with its color: {r}");
+        }
+        moved |= r["map"][0]["to"] != map[0]["to"];
+    }
+    assert!(moved, "some seed moves the tinted color to another row");
+    let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true}));
+    assert_ne!(sb["map"][0]["to"], map[0]["to"], "{sb}");
+    assert!(sb["map"][0].get("tint").is_none(), "a changed color has no tint: {sb}");
+}
+
 #[test]
 fn model_param_chooses_the_model_of_the_new_colour() {
     // RGB art in a CMYK document: by default a CMYK replacement comes out RGB (#2170).
@@ -570,6 +628,249 @@ fn model_param_must_be_a_string_when_given() {
         assert!(s.execute("recolor.apply", &json!({"map": {"#1a1a1a": "#ff0000"}, "model": bad})).is_err(), "{bad}");
     }
     assert_eq!(fill(&s, art).to_hex(), "#1a1a1a", "nothing changed");
+}
+
+/// Sets the Layers panel's lock and visibility of `ids` (objects or layers).
+fn set_props(s: &mut Session, ids: &[NodeId], props: Value) {
+    let mut p = props;
+    p["ids"] = json!(ids.iter().map(|i| i.0).collect::<Vec<_>>());
+    run(s, "layer.setProps", p);
+}
+
+#[test]
+fn recolor_of_everything_counts_the_locked_and_hidden_objects_it_left_out() {
+    let mut s = session();
+    let open = rect(&mut s, json!("#ff0000"));
+    let locked = rect(&mut s, json!("#ff0000"));
+    let hidden = rect(&mut s, json!("#ff0000"));
+    let both = rect(&mut s, json!("#ff0000"));
+    // A locked object the map leaves as it is was not left out of anything.
+    let other = rect(&mut s, json!("#00ff00"));
+    set_props(&mut s, &[locked, other], json!({"locked": true}));
+    set_props(&mut s, &[hidden], json!({"visible": false}));
+    set_props(&mut s, &[both], json!({"visible": false, "locked": true}));
+    // The objects of a locked layer count as locked; a template layer's art is not counted.
+    let layer = NodeId(run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
+    let on_locked_layer = rect(&mut s, json!("#ff0000"));
+    set_props(&mut s, &[layer], json!({"locked": true}));
+    let template = NodeId(run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
+    rect(&mut s, json!("#ff0000"));
+    set_props(&mut s, &[template], json!({"template": true}));
+    select_all(&mut s);
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#0000ff"}}));
+    assert_eq!(r["notChanged"], json!({"locked": 2, "hidden": 2}), "{r}");
+    assert_eq!(r["warning"], "Recolor completed; 2 locked objects and 2 hidden objects were left unchanged");
+    assert_eq!(fill(&s, open).to_hex(), "#0000ff");
+    for id in [locked, hidden, both, on_locked_layer] {
+        assert_eq!(fill(&s, id).to_hex(), "#ff0000", "locked and hidden art keeps its colors");
+    }
+}
+
+#[test]
+fn recolor_of_everything_counts_locked_art_that_only_loses_its_group_swatch_link() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let names: Vec<String> =
+        s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.iter().map(|w| w.name.clone()).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    let open = rect(&mut s, json!("#000000"));
+    let locked = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [open.0, locked.0], "swatch": names[1]}));
+    set_props(&mut s, &[locked], json!({"locked": true}));
+    select_all(&mut s);
+    // The group is rewritten with one color, so its second swatch goes and the locked art only
+    // loses its link to it.
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#00ff00"}, "group": "Brand", "groupColors": ["#123456"]}));
+    assert_eq!(fill(&s, open).to_hex(), "#00ff00");
+    assert_eq!(fill(&s, locked).to_hex(), "#ff0000", "the locked art keeps its color");
+    assert_eq!(r["notChanged"], json!({"locked": 1, "hidden": 0}), "{r}");
+}
+
+#[test]
+fn recolor_of_everything_does_not_count_locked_art_whose_pattern_the_group_rewrite_recolors() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let names: Vec<String> =
+        s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.iter().map(|w| w.name.clone()).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    // "Dots": a tile linked to the group's second swatch.
+    let tile = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [tile.0], "swatch": names[1]}));
+    run(&mut s, "select.set", json!({"ids": [tile.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let tile_hex = |s: &Session| s.doc().unwrap().doc.pattern("Dots").unwrap().art[0].appearance.fill_paint().color().unwrap().to_hex();
+    assert_eq!(tile_hex(&s), "#ff0000");
+    let locked = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [locked.0], "swatch": "Dots"}));
+    set_props(&mut s, &[locked], json!({"locked": true}));
+    let open = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [open.0], "swatch": names[1]}));
+    select_all(&mut s);
+    // The group's second swatch is rewritten with the row's new color, and the tile follows it.
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#00ff00"}, "group": "Brand", "groupColors": ["#2878f0", "#00ff00"]}));
+    assert_eq!(tile_hex(&s), "#00ff00", "{r}");
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+}
+
+#[test]
+fn recolor_of_everything_does_not_count_locked_art_whose_nested_pattern_the_group_rewrite_recolors() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let names: Vec<String> =
+        s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.iter().map(|w| w.name.clone()).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    // "Dots": a tile linked to the group's second swatch; "Rings": a tile filled with "Dots".
+    let tile = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [tile.0], "swatch": names[1]}));
+    run(&mut s, "select.set", json!({"ids": [tile.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let outer = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [outer.0], "swatch": "Dots"}));
+    run(&mut s, "select.set", json!({"ids": [outer.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Rings", "width": 40, "height": 40}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let tile_hex = |s: &Session| s.doc().unwrap().doc.pattern("Dots").unwrap().art[0].appearance.fill_paint().color().unwrap().to_hex();
+    let locked = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [locked.0], "swatch": "Rings"}));
+    set_props(&mut s, &[locked], json!({"locked": true}));
+    let open = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [open.0], "swatch": names[1]}));
+    select_all(&mut s);
+    // The rewrite recolors the inner tile, which the locked art shows through "Rings".
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#00ff00"}, "group": "Brand", "groupColors": ["#2878f0", "#00ff00"]}));
+    assert_eq!(tile_hex(&s), "#00ff00", "{r}");
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+}
+
+#[test]
+fn recolor_of_everything_does_not_count_locked_art_that_would_only_take_a_swatch_link() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Red", "color": "#ff0000", "global": true}));
+    // "Dots": an unlinked red tile.
+    let tile = rect(&mut s, json!("#ff0000"));
+    run(&mut s, "select.set", json!({"ids": [tile.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let open = rect(&mut s, json!("#ff0000"));
+    let locked = rect(&mut s, json!("#ff0000"));
+    let dots = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [dots.0], "swatch": "Dots"}));
+    set_props(&mut s, &[locked, dots], json!({"locked": true}));
+    select_all(&mut s);
+    // The row keeps the color and snaps it to the document's global swatch of the same color, so
+    // the open art only takes the link.
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#ff0000"}, "limitTo": "document"}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { swatch, .. } => swatch,
+        p => panic!("{p:?}"),
+    };
+    assert!(link(&s, open).is_some(), "{r}");
+    assert_eq!(fill(&s, locked).to_hex(), "#ff0000");
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+}
+
+#[test]
+fn recolor_of_everything_does_not_count_locked_art_whose_nested_pattern_would_only_take_a_swatch_link() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Red", "color": "#ff0000", "global": true}));
+    // "Dots": an unlinked red tile; "Rings": a tile filled with "Dots".
+    let tile = rect(&mut s, json!("#ff0000"));
+    run(&mut s, "select.set", json!({"ids": [tile.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let outer = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [outer.0], "swatch": "Dots"}));
+    run(&mut s, "select.set", json!({"ids": [outer.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Rings", "width": 40, "height": 40}));
+    run(&mut s, "object.pattern.done", json!({}));
+    rect(&mut s, json!("#ff0000"));
+    let rings = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [rings.0], "swatch": "Rings"}));
+    set_props(&mut s, &[rings], json!({"locked": true}));
+    select_all(&mut s);
+    // The inner tile would only take the link to the document's red swatch.
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#ff0000"}, "limitTo": "document"}));
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+}
+
+#[test]
+fn locked_and_hidden_members_of_a_selected_group_are_recolored_and_not_counted() {
+    let mut s = session();
+    let ids = [rect(&mut s, json!("#ff0000")), rect(&mut s, json!("#ff0000")), rect(&mut s, json!("#ff0000"))];
+    select_all(&mut s);
+    run(&mut s, "object.group", json!({}));
+    set_props(&mut s, &ids[1..2], json!({"locked": true}));
+    set_props(&mut s, &ids[2..3], json!({"visible": false}));
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(node(&s, ids[1]).locked && !node(&s, ids[2]).visible);
+    select_all(&mut s);
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#0000ff"}}));
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+    assert!(ids.iter().all(|id| fill(&s, *id).to_hex() == "#0000ff"));
+}
+
+#[test]
+fn recolor_of_part_of_the_art_counts_nothing_left_out() {
+    let mut s = session();
+    let picked = rect(&mut s, json!("#ff0000"));
+    let locked = rect(&mut s, json!("#ff0000"));
+    rect(&mut s, json!("#ff0000"));
+    set_props(&mut s, &[locked], json!({"locked": true}));
+    run(&mut s, "select.set", json!({"ids": [picked.0]}));
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#0000ff"}}));
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+    // Everything selected, with nothing locked or hidden.
+    run(&mut s, "object.unlockAll", json!({}));
+    select_all(&mut s);
+    let r = run(&mut s, "recolor.apply", json!({"map": {"#ff0000": "#00ff00"}}));
+    assert_eq!(r["notChanged"], json!({"locked": 0, "hidden": 0}), "{r}");
+    assert!(r.get("warning").is_none(), "{r}");
+}
+
+/// A row's own `model` takes the place of the command's for that row's colors; a bad one fails
+/// before editing; `recolor.randomize` moves it with its new color.
+#[test]
+fn a_rows_model_applies_to_its_own_colors() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, json!("#ff00ff")), rect(&mut s, json!("#00ffff")));
+    select_all(&mut s);
+    let row = |from: &str, to: Value| json!({"from": [from], "to": to});
+    let mut first = row("#ff00ff", json!({"c": 0, "m": 1, "y": 0, "k": 0}));
+    first["model"] = json!("new");
+    let map = json!([first, row("#00ffff", json!({"c": 1, "m": 0, "y": 0, "k": 0}))]);
+    run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!(fill(&s, a), Color::cmyk(0.0, 1.0, 0.0, 0.0), "the row with `new` takes the CMYK color");
+    assert_eq!(fill(&s, b).model(), vectorcraft_color::cms::Model::Rgb, "the other row keeps RGB");
+    run(&mut s, "edit.undo", json!({}));
+    let mut keep = map.clone();
+    keep[0]["model"] = json!("keep");
+    run(&mut s, "recolor.apply", json!({"map": keep, "model": "new"}));
+    assert_eq!(fill(&s, a).model(), vectorcraft_color::cms::Model::Rgb, "the row's `keep` wins over the command's `new`");
+    assert_eq!(fill(&s, b), Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    run(&mut s, "edit.undo", json!({}));
+    for bad in [json!("nope"), json!(42)] {
+        let mut m = map.clone();
+        m[0]["model"] = bad.clone();
+        assert!(s.execute("recolor.apply", &json!({"map": m})).is_err(), "{bad}");
+    }
+    assert_eq!(fill(&s, a).to_hex(), "#ff00ff", "nothing changed");
+    let r = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    let out = r["map"].as_array().unwrap();
+    let moved = out.iter().find(|r| r.get("model").is_some()).expect("the model stays on a row");
+    assert_eq!((&moved["to"], &moved["model"]), (&json!("cmyk 0 100 0 0"), &json!("new")), "{r}");
+    assert_eq!(out.iter().filter(|r| r.get("model").is_some()).count(), 1, "{r}");
 }
 
 /// Recolor Artwork's commands refuse a parameter of the wrong form, such as `limitTo: 5` or
@@ -634,4 +935,572 @@ fn document_model_converts_the_colours_of_a_group_too() {
     assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
     run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#00ff00"], "model": "document"}));
     assert!(group(&s).iter().all(|c| c.model() == vectorcraft_color::cms::Model::Cmyk), "{:?}", group(&s));
+}
+
+fn stroke(s: &Session, id: NodeId) -> Color {
+    s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().color().unwrap()
+}
+
+/// Global Adjust changes every colour the rows recolour, each one separately (the colours of a
+/// row of several, fills and strokes alike), in its own model, as one undo step; an excluded
+/// row's colours and preserved colours stay.
+#[test]
+fn global_adjust_changes_every_recolored_color() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    let pink = rect(&mut s, json!("#ff8080"));
+    let cmyk = rect(&mut s, json!({"c": 100, "m": 0, "y": 0, "k": 0}));
+    let kept = rect(&mut s, json!("#00ff00"));
+    run(&mut s, "paint.setStroke", json!({"ids": [red.0], "color": "#0000ff", "width": 2}));
+    select_all(&mut s);
+    let map = json!([
+        {"from": ["rgb 255 0 0", "rgb 255 128 128"], "to": "rgb 255 0 0"},
+        {"from": ["cmyk 100 0 0 0"], "to": "cmyk 100 0 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+        {"from": ["rgb 0 255 0"], "to": "rgb 0 255 0", "exclude": true},
+    ]);
+    let undo = s.doc().unwrap().history.undo.len();
+    let sat = |c: Color| c.to_hsb()[1];
+    let saturations = [fill(&s, red), fill(&s, pink), fill(&s, cmyk), stroke(&s, red)].map(sat);
+    let r = run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints", "globalAdjust": {"saturation": -50}}));
+    assert_eq!(r["changed"], 4, "three fills and a stroke: {r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let after = [fill(&s, red), fill(&s, pink), fill(&s, cmyk), stroke(&s, red)].map(sat);
+    for (n, what) in ["red", "pink", "cyan", "the stroke"].iter().enumerate() {
+        // CMYK reads back through the profile-free conversion, so its saturation is near half, not exact.
+        assert!((after[n] - saturations[n] * 0.5).abs() < 0.05, "{what} has about half its saturation: {} → {}", saturations[n], after[n]);
+    }
+    assert!(close(fill(&s, red), Color::rgb(1.0, 0.5, 0.5)), "{:?}", fill(&s, red));
+    assert!(close(fill(&s, pink), Color::rgb(1.0, 0.75, 0.75)), "each colour of a row changes on its own: {:?}", fill(&s, pink));
+    assert!(matches!(fill(&s, cmyk), Color::Cmyk { .. }), "a CMYK colour stays CMYK: {:?}", fill(&s, cmyk));
+    assert_eq!(fill(&s, kept).to_hex(), "#00ff00", "an excluded row keeps its colours");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(fill(&s, red).to_hex(), "#ff0000");
+    assert_eq!(fill(&s, pink).to_hex(), "#ff8080");
+    assert_eq!(stroke(&s, red).to_hex(), "#0000ff");
+    // Brightness -100 makes every recolored color black; the rows' new colors are taken first.
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#ff0000"], "to": "#00ff00"}], "globalAdjust": {"brightness": -100}}));
+    assert_eq!(fill(&s, red).to_hex(), "#000000");
+    assert_eq!(fill(&s, pink).to_hex(), "#ff8080", "a colour no row holds stays");
+}
+
+/// Global Adjust at 0 changes nothing, a global swatch's link included, and a non-zero adjustment
+/// gives the art the adjusted colour without the link.
+#[test]
+fn global_adjust_at_zero_keeps_colors_and_links() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2878f0", "global": true}));
+    let art = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [art.0], "swatch": "Brand"}));
+    select_all(&mut s);
+    let link = |s: &Session| match s.doc().unwrap().doc.node(art).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { swatch, .. } => swatch,
+        p => panic!("a solid fill: {p:?}"),
+    };
+    let before = fill(&s, art);
+    let zero = json!({"saturation": 0, "brightness": 0, "temperature": 0, "luminosity": 0});
+    run(&mut s, "recolor.apply", json!({"map": {"rgb 40 120 240": "rgb 40 120 240"}, "globalAdjust": zero}));
+    assert_eq!(fill(&s, art), before);
+    assert_eq!(link(&s).as_deref(), Some("Brand"), "the link stays");
+    run(&mut s, "recolor.apply", json!({"map": {"rgb 40 120 240": "rgb 40 120 240"}, "globalAdjust": {"temperature": 50}}));
+    let [r, _, b] = fill(&s, art).to_rgb();
+    let [r0, _, b0] = before.to_rgb();
+    assert!(r > r0 && b < b0, "warmer: {:?}", fill(&s, art));
+    assert_eq!(link(&s), None, "the adjusted colour is no longer the swatch's");
+}
+
+/// With Limit to Library each row's new colour takes the Global Adjust and then snaps to the
+/// library; a colour group rewritten with the rows' new colours takes the adjustment too.
+#[test]
+fn global_adjust_with_a_library_and_a_group() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#f01020"));
+    select_all(&mut s);
+    run(&mut s, "recolor.apply", json!({"map": {"#f01020": "#f01020"}, "limitTo": "Web Safe 216", "globalAdjust": {"brightness": -100}}));
+    assert_eq!(fill(&s, art).to_hex(), "#000000", "black, a colour of the library");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#f01020"]}));
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#f01020"], "to": "#f01020"}], "group": "Theme", "globalAdjust": {"saturation": -100}}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    let c = g.swatches[0].paint.color().unwrap();
+    assert!(c.to_hsb()[1] < 1e-3, "the group's colour is adjusted: {c:?}");
+    assert_eq!(c, fill(&s, art), "as the art is");
+}
+
+/// Art linked to a global swatch of the rewritten group takes the same Global Adjust as unlinked
+/// art of its color: at 100% it keeps the link, and a tint whose adjusted color is not the
+/// swatch's new color at that tint takes the adjusted color and loses the link.
+#[test]
+fn global_adjust_gives_linked_tints_of_a_group_the_adjusted_color() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#ff0000"]}));
+    let name = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().swatches[0].name.clone();
+    run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    let full = rect(&mut s, json!("#000000"));
+    let tint = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": name}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": name, "tint": 50}));
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => (color, swatch, tint),
+        p => panic!("{p:?}"),
+    };
+    select_all(&mut s);
+    let tint_key = vectorcraft_color::recolor::ColorKey::of(&fill(&s, tint)).to_string();
+    let rows = json!([{"from": ["rgb 255 0 0", tint_key], "to": "#ff0000"}]);
+    run(&mut s, "recolor.apply", json!({"map": rows, "method": "scaleTints", "group": "Theme", "globalAdjust": {"brightness": -50}}));
+    let (c, w, t) = link(&s, full);
+    assert!(close(c, Color::rgb(0.5, 0.0, 0.0)) && w.as_deref() == Some(name.as_str()) && t == 1.0, "{c:?} {w:?} {t}");
+    let (c, w, _) = link(&s, tint);
+    assert!(close(c, Color::rgb(0.5, 0.25, 0.25)), "the tint's own color, adjusted: {c:?}");
+    assert_eq!(w, None, "the adjusted tint is not a tint of the swatch's new color");
+}
+
+/// `globalAdjust` must be an object of numbers from -100 to 100; a refusal changes nothing and
+/// records no undo step. A null counts as left out.
+#[test]
+fn global_adjust_refuses_params_of_the_wrong_form() {
+    let mut s = session();
+    let art = rect(&mut s, json!("#ff0000"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let map = json!({"#ff0000": "#ff0000"});
+    for (adjust, msg) in [
+        (json!(5), "`globalAdjust` must be an object"),
+        (json!({"saturation": "50"}), "`saturation` must be a number"),
+        (json!({"brightness": 101}), "`brightness` must be between -100 and 100 (got 101)"),
+        (json!({"luminosity": -100.5}), "`luminosity` must be between -100 and 100 (got -100.5)"),
+    ] {
+        let e = s.execute("recolor.apply", &json!({"map": map, "globalAdjust": adjust})).unwrap_err().to_string();
+        assert!(e.contains(msg), "{adjust}: {e}");
+    }
+    assert_eq!(fill(&s, art).to_hex(), "#ff0000", "nothing changed");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    run(&mut s, "recolor.apply", json!({"map": map, "globalAdjust": null}));
+    run(&mut s, "recolor.apply", json!({"map": map, "globalAdjust": {"saturation": null, "temperature": -100}}));
+    assert_ne!(fill(&s, art).to_hex(), "#ff0000", "an amount at the end of the range applies");
+}
+
+/// A placed `w` × `h` px image whose left half is `left` and right half `right` (RGBA), and its
+/// bounds on the page.
+fn halves_image(s: &mut Session, w: u32, h: u32, left: [u8; 4], right: [u8; 4]) -> (NodeId, vectorcraft_geom::Rect) {
+    let img = image::RgbaImage::from_fn(w, h, |x, _| image::Rgba(if x < w / 2 { left } else { right }));
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let r = run(s, "file.place", json!({"name": "halves.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
+    (id, b)
+}
+
+fn pick_theme(s: &mut Session, p: Value) -> Vec<String> {
+    keys(&run(s, "recolor.pickTheme", p)["colors"])
+}
+
+/// A click takes the palette of the object a Selection tool click takes (a whole group), the most
+/// used color first, each in its own model; a click on empty canvas or on a hidden object takes
+/// nothing. Locked objects are read. Picking changes nothing.
+#[test]
+fn theme_picker_click_takes_the_palette_of_the_whole_object() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#ff0000"));
+    let b = rect(&mut s, json!({"c": 0, "m": 0, "y": 100, "k": 0}));
+    let c = rect(&mut s, json!("#ff0000"));
+    run(&mut s, "paint.setStroke", json!({"ids": [c.0], "color": "#0000ff"}));
+    // x 70 to 85 and 90 to 105.
+    let hidden = rect(&mut s, json!("#00ff00"));
+    let locked = rect(&mut s, json!("#ff00ff"));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "object.hide", json!({"ids": [hidden.0]}));
+    run(&mut s, "object.lock", json!({"ids": [locked.0]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    let doc = s.doc().unwrap().doc.clone();
+    // A click on `b` (x 30 to 45): the group's three rectangles, red the most used.
+    let r = run(&mut s, "recolor.pickTheme", json!({"picks": [{"at": [37, 17]}]}));
+    assert_eq!(keys(&r["colors"]), ["rgb 255 0 0", "cmyk 0 0 100 0", "rgb 0 0 255"], "{r}");
+    assert_eq!(r["objects"], 3);
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"at": [37, 17]}], "colors": 2})).len(), 2, "at most `colors`");
+    assert!(pick_theme(&mut s, json!({"picks": [{"at": [300, 150]}]})).is_empty(), "empty canvas");
+    assert!(pick_theme(&mut s, json!({"picks": [{"at": [77, 17]}]})).is_empty(), "a hidden object");
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"at": [97, 17]}]})), ["rgb 255 0 255"], "a locked object");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert!(std::sync::Arc::ptr_eq(&s.doc().unwrap().doc, &doc), "the document stays as it was");
+}
+
+/// A marquee takes the part of an image inside it and every painted object it touches; several
+/// picks (Shift) add up. A click on an image takes all its pixels.
+#[test]
+fn theme_picker_marquee_takes_the_area_and_picks_add_up() {
+    let mut s = session();
+    let (_, b) = halves_image(&mut s, 64, 32, [255, 0, 0, 255], [0, 0, 255, 255]);
+    let (mid, y) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    let left = json!({"rect": [b.x0 + 1.0, b.y0 + 1.0, mid - 1.0, b.y1 - 1.0]});
+    assert_eq!(pick_theme(&mut s, json!({"picks": [left]})), ["rgb 255 0 0"], "the left half alone");
+    let right_backwards = json!({"rect": [b.x1 - 1.0, b.y1 - 1.0, mid + 1.0, b.y0 + 1.0]});
+    assert_eq!(pick_theme(&mut s, json!({"picks": [right_backwards]})), ["rgb 0 0 255"], "a marquee drawn backwards");
+    let both = pick_theme(&mut s, json!({"picks": [left, right_backwards]}));
+    assert_eq!(both.len(), 2, "Shift adds a second area: {both:?}");
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"at": [mid, y]}]})).len(), 2, "a click takes the whole image");
+    // Two rectangles away from the image: a marquee touching both takes both.
+    let r1 = rect(&mut s, json!("#00ff00"));
+    let r2 = rect(&mut s, json!("#ffff00"));
+    let (b1, b2) = {
+        let d = &s.doc().unwrap().doc;
+        (d.node(r1).unwrap().visual_bounds().unwrap(), d.node(r2).unwrap().visual_bounds().unwrap())
+    };
+    let over = json!({"rect": [b1.x1 - 2.0, b1.y0 + 2.0, b2.x0 + 2.0, b1.y0 + 4.0]});
+    let mut got = pick_theme(&mut s, json!({"picks": [over]}));
+    got.sort();
+    assert_eq!(got, ["rgb 0 255 0", "rgb 255 255 0"]);
+}
+
+/// Pixels less than half opaque are left out, and so is an image whose pixels can't be read.
+#[test]
+fn theme_picker_leaves_out_clear_pixels_and_unreadable_images() {
+    let mut s = session();
+    let (_, b) = halves_image(&mut s, 8, 8, [255, 0, 0, 255], [0, 0, 255, 100]);
+    let all = json!({"rect": [b.x0, b.y0, b.x1, b.y1]});
+    assert_eq!(pick_theme(&mut s, json!({"picks": [all]})), ["rgb 255 0 0"]);
+    let cut = super::menucmds::place_undecodable_png(&mut s);
+    let cb = s.doc().unwrap().doc.node(cut).unwrap().visual_bounds().unwrap();
+    let r = run(&mut s, "recolor.pickTheme", json!({"picks": [{"rect": [cb.x0, cb.y0, cb.x1, cb.y1]}]}));
+    assert!(r["colors"].as_array().unwrap().iter().all(|k| k == "rgb 255 0 0"), "the undecodable image adds nothing: {r}");
+}
+
+/// A large image is read through about 65,536 pixels: its palette still holds both halves.
+#[test]
+fn theme_picker_reads_a_large_image_within_its_pixel_budget() {
+    let mut s = session();
+    let (_, b) = halves_image(&mut s, 2000, 1000, [10, 200, 30, 255], [250, 240, 10, 255]);
+    let (mid, y) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    let mut got = pick_theme(&mut s, json!({"picks": [{"at": [mid, y]}]}));
+    got.sort();
+    assert_eq!(got, ["rgb 10 200 30", "rgb 250 240 10"]);
+}
+
+/// A symbol instance gives the colors of the art it shows, by a click or a marquee; a pattern fill
+/// gives the colors of its tile and of the patterns the tile uses.
+#[test]
+fn theme_picker_reads_symbol_art_and_nested_patterns() {
+    let mut s = session();
+    let r = rect(&mut s, json!("#00ff00"));
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    let inst = NodeId(run(&mut s, "symbol.new", json!({"name": "Dot"}))["id"].as_u64().unwrap());
+    let b = s.doc().unwrap().doc.node(inst).unwrap().visual_bounds().unwrap();
+    let (cx, cy) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"at": [cx, cy]}]})), ["rgb 0 255 0"], "a click on the instance");
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [cx, cy, cx + 1.0, cy + 1.0]}]})), ["rgb 0 255 0"], "a marquee");
+    select_all(&mut s);
+    run(&mut s, "edit.clear", json!({}));
+    // Pattern "inner" of a red square fills a square, which becomes pattern "outer".
+    let red = rect(&mut s, json!("#ff0000"));
+    let inner = run(&mut s, "object.pattern.make", json!({"ids": [red.0], "edit": false}))["name"].as_str().unwrap().to_string();
+    let tile = rect(&mut s, json!("#0000ff"));
+    run(&mut s, "paint.setFill", json!({"ids": [tile.0], "swatch": inner}));
+    let outer = run(&mut s, "object.pattern.make", json!({"ids": [tile.0], "edit": false}))["name"].as_str().unwrap().to_string();
+    let art = rect(&mut s, json!("#0000ff"));
+    run(&mut s, "paint.setFill", json!({"ids": [art.0], "swatch": outer}));
+    let b = s.doc().unwrap().doc.node(art).unwrap().visual_bounds().unwrap();
+    let got = pick_theme(&mut s, json!({"picks": [{"at": [(b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0]}]}));
+    assert!(got.contains(&"rgb 255 0 0".to_string()), "the inner pattern's red: {got:?}");
+}
+
+/// A grayscale image that a fill color colorizes gives that color, not its grays.
+#[test]
+fn theme_picker_reads_the_color_of_a_colorized_image() {
+    let mut s = session();
+    let mut png = Vec::new();
+    image::GrayImage::from_pixel(8, 8, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let r = run(&mut s, "file.place", json!({"name": "gray.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
+    let at = json!({"picks": [{"at": [(b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0]}]});
+    assert_eq!(pick_theme(&mut s, at.clone()), ["rgb 90 90 90"], "uncolorized: its grays");
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "color": "#ff0000"}));
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().colorize.is_some(), "the fill colorizes the image");
+    assert_eq!(pick_theme(&mut s, at), ["rgb 255 0 0"]);
+}
+
+/// A hidden fill gives no color, and a marquee in a clip group reads only what the clipping path
+/// lets through.
+#[test]
+fn theme_picker_leaves_out_hidden_fills_and_clipped_art() {
+    let mut s = session();
+    let shape = |s: &mut Session, x: f64, w: f64, fill: &str| {
+        let id = NodeId(run(s, "shape.rectangle", json!({"x": x, "y": 10, "width": w, "height": 15}))["id"].as_u64().unwrap());
+        run(s, "paint.setFill", json!({"ids": [id.0], "color": fill}));
+        run(s, "paint.setStroke", json!({"ids": [id.0], "none": true}));
+        id
+    };
+    let hidden = shape(&mut s, 200.0, 15.0, "#ff00ff");
+    run(&mut s, "select.set", json!({"ids": [hidden.0]}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "visible": false}));
+    assert!(pick_theme(&mut s, json!({"picks": [{"rect": [205, 12, 210, 20]}]})).is_empty(), "a hidden fill");
+    // A marquee inside an outlined square without a fill misses it; inside a filled one it takes it.
+    let outline = shape(&mut s, 250.0, 40.0, "#00ffff");
+    run(&mut s, "paint.setFill", json!({"ids": [outline.0], "none": true}));
+    run(&mut s, "paint.setStroke", json!({"ids": [outline.0], "color": "#ffff00"}));
+    assert!(pick_theme(&mut s, json!({"picks": [{"rect": [260, 13, 270, 20]}]})).is_empty(), "inside the outline");
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [245, 13, 260, 20]}]})), ["rgb 255 255 0"], "across the outline");
+    run(&mut s, "paint.setFill", json!({"ids": [outline.0], "color": "#00ffff"}));
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [260, 13, 270, 20]}]})).len(), 2, "inside the fill");
+    // Red runs from x 10 to 110 and green from 50 to 60; the clipping path lets x 10 to 40 through.
+    let red = shape(&mut s, 10.0, 100.0, "#ff0000");
+    let green = shape(&mut s, 50.0, 10.0, "#00ff00");
+    let clip = shape(&mut s, 10.0, 30.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [red.0, green.0, clip.0]}));
+    run(&mut s, "object.clippingMask.make", json!({}));
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"rect": [30, 12, 55, 20]}]})), ["rgb 255 0 0"]);
+}
+
+/// An image in a clip group gives only the pixels inside its clipping path, by a click or a
+/// marquee.
+#[test]
+fn theme_picker_reads_an_image_inside_its_clipping_path() {
+    let mut s = session();
+    // Red, with blue 6 × 3 px blocks in the corners, which an ellipse inscribed in the image leaves out.
+    let (w, h) = (64, 32);
+    let img = image::RgbaImage::from_fn(w, h, |x, y| {
+        let corner = (x < 6 || x >= w - 6) && (y < 3 || y >= h - 3);
+        image::Rgba(if corner { [0, 0, 255, 255] } else { [255, 0, 0, 255] })
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let r = run(&mut s, "file.place", json!({"name": "corners.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let b = s.doc().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
+    let all = json!({"picks": [{"rect": [b.x0, b.y0, b.x1, b.y1]}]});
+    assert_eq!(pick_theme(&mut s, all.clone()).len(), 2, "unclipped: red and blue");
+    let e = NodeId(run(&mut s, "shape.ellipse", json!({"x": b.x0, "y": b.y0, "width": b.width(), "height": b.height()}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [id.0, e.0]}));
+    run(&mut s, "object.clippingMask.make", json!({}));
+    assert_eq!(pick_theme(&mut s, all), ["rgb 255 0 0"], "a marquee");
+    let center = json!({"picks": [{"at": [(b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0]}]});
+    assert_eq!(pick_theme(&mut s, center), ["rgb 255 0 0"], "a click");
+}
+
+/// An object in a clip group that its clipping path hides gives no color, even inside the
+/// clipping path's box.
+#[test]
+fn theme_picker_leaves_out_art_a_curved_clipping_path_hides() {
+    let mut s = session();
+    let shape = |s: &mut Session, x: f64, y: f64, w: f64, h: f64, fill: &str| {
+        let id = NodeId(run(s, "shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h}))["id"].as_u64().unwrap());
+        run(s, "paint.setFill", json!({"ids": [id.0], "color": fill}));
+        run(s, "paint.setStroke", json!({"ids": [id.0], "none": true}));
+        id
+    };
+    // A red square in the middle of a 100 × 100 ellipse, and a green one in its top left corner.
+    let red = shape(&mut s, 40.0, 40.0, 20.0, 20.0, "#ff0000");
+    let green = shape(&mut s, 0.0, 0.0, 8.0, 8.0, "#00ff00");
+    let e = NodeId(run(&mut s, "shape.ellipse", json!({"x": 0, "y": 0, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+    let all = json!({"picks": [{"rect": [-5, -5, 105, 105]}]});
+    let mut both = pick_theme(&mut s, all.clone());
+    both.retain(|k| k == "rgb 255 0 0" || k == "rgb 0 255 0");
+    assert_eq!(both.len(), 2, "unclipped: both squares");
+    run(&mut s, "select.set", json!({"ids": [red.0, green.0, e.0]}));
+    run(&mut s, "object.clippingMask.make", json!({}));
+    assert_eq!(pick_theme(&mut s, all), ["rgb 255 0 0"], "the corner square is hidden");
+}
+
+/// In isolation mode a click and a marquee read only the isolated art.
+#[test]
+fn theme_picker_reads_only_the_isolated_art() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#ff0000"));
+    let b = rect(&mut s, json!("#0000ff"));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    // Green on top of the blue square (x 30 to 45).
+    let green = NodeId(run(&mut s, "shape.rectangle", json!({"x": 30, "y": 10, "width": 15, "height": 15}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"ids": [green.0], "color": "#00ff00"}));
+    run(&mut s, "paint.setStroke", json!({"ids": [green.0], "none": true}));
+    assert_eq!(pick_theme(&mut s, json!({"picks": [{"at": [37, 17]}]})), ["rgb 0 255 0"], "outside isolation: the top object");
+    run(&mut s, "object.isolate", json!({"id": g.0}));
+    let got = pick_theme(&mut s, json!({"picks": [{"at": [37, 17]}]}));
+    assert_eq!(got, ["rgb 0 0 255"], "a click reaches the isolated blue square under the green one");
+    let mut got = pick_theme(&mut s, json!({"picks": [{"rect": [5, 5, 60, 30]}]}));
+    got.sort();
+    assert_eq!(got, ["rgb 0 0 255", "rgb 255 0 0"], "a marquee leaves out the green square");
+}
+
+/// Bad parameters are refused with an error naming them.
+#[test]
+fn theme_picker_refuses_bad_params() {
+    let mut s = session();
+    rect(&mut s, json!("#ff0000"));
+    let many: Vec<Value> = (0..257).map(|_| json!({"at": [0, 0]})).collect();
+    for (p, msg) in [
+        (json!({}), "missing `picks`"),
+        (json!({"picks": {"at": [0, 0]}}), "`picks` must be an array"),
+        (json!({"picks": []}), "`picks` must hold 1 to 256 picks (got 0)"),
+        (json!({"picks": many}), "`picks` must hold 1 to 256 picks (got 257)"),
+        (json!({"picks": [{"at": [0]}]}), "`at` must be [x, y]"),
+        (json!({"picks": [{"at": ["1", 2]}]}), "`at` must be [x, y]"),
+        (json!({"picks": [{"rect": [0, 0, 10]}]}), "`rect` must be [x0, y0, x1, y1]"),
+        (json!({"picks": [{"at": [0, 0], "rect": [0, 0, 1, 1]}]}), "each pick is"),
+        (json!({"picks": [{"point": [0, 0]}]}), "each pick is"),
+        (json!({"picks": [{"at": [0, 0]}], "colors": 0}), "`colors` must be between 1 and 64 (got 0)"),
+        (json!({"picks": [{"at": [0, 0]}], "colors": 65}), "`colors` must be between 1 and 64 (got 65)"),
+        (json!({"picks": [{"at": [0, 0]}], "colors": 2.5}), "`colors` must be a whole number"),
+    ] {
+        let e = s.execute("recolor.pickTheme", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
+}
+
+const RED: &str = "rgb 255 0 0";
+const PURPLE: &str = "rgb 128 0 204";
+const BLUE: &str = "rgb 0 0 255";
+
+/// Two red rectangles, a purple one and a blue one, selected.
+fn prominent_art(s: &mut Session) -> [NodeId; 4] {
+    let ids = [rect(s, json!("#ff0000")), rect(s, json!("#ff0000")), rect(s, json!("#8000cc")), rect(s, json!("#0000ff"))];
+    select_all(s);
+    ids
+}
+
+#[test]
+fn weigh_gives_each_rows_share_of_the_uses() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": BLUE, "to": null, "tint": 50}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map}));
+    assert_eq!(r["shares"], json!([75.0, 25.0]));
+    assert_eq!(
+        r["map"],
+        json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": null, "tint": 50}]),
+        "rows as given, from as a list"
+    );
+    // An excluded row has no share, and the others share the uses.
+    let excl = json!([{"from": [RED, PURPLE], "to": null}, {"from": [BLUE], "to": null, "exclude": true}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": excl}))["shares"], json!([100.0, 0.0]));
+    // An excluded row before another that lists the same colour doesn't take its uses.
+    let first = json!([{"from": [RED], "exclude": true}, {"from": [RED]}, {"from": [BLUE, PURPLE]}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": first}))["shares"], json!([0.0, 50.0, 50.0]));
+    // A current colour that no art uses counts nothing, and a use counts for the first row only.
+    let twice = json!({"map": [{"from": [RED, "#123456"]}, {"from": [RED, PURPLE, BLUE]}]});
+    assert_eq!(run(&mut s, "recolor.weigh", twice)["shares"], json!([50.0, 50.0]));
+    // As recolor.apply matches them: an exact colour before a hex one, a row with a new colour first.
+    let exact = json!({"map": [{"from": ["#ff0000", PURPLE], "to": "#00ff00"}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", exact)["shares"], json!([25.0, 75.0]));
+    let recolored = json!({"map": [{"from": [RED, PURPLE]}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", recolored)["shares"], json!([25.0, 75.0]));
+}
+
+#[test]
+fn weigh_moves_colors_to_the_rows_weights_and_changes_nothing() {
+    let mut s = session();
+    let [_, _, purple, blue] = prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"], json!([{"from": [RED], "to": "#00ff00"}, {"from": [BLUE, PURPLE], "to": "#ffff00"}]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    assert_eq!(fill(&s, purple).to_hex(), "#8000cc", "a query leaves the art alone");
+    // Recoloring with the weighed rows gives the moved colour its new row's colour.
+    select_all(&mut s);
+    run(&mut s, "recolor.apply", json!({"map": r["map"]}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00");
+    assert_eq!(fill(&s, blue).to_hex(), "#ffff00");
+    // A row's first colour stays, however small its weight.
+    let mut s = session();
+    prominent_art(&mut s);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [0, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    // Excluded rows keep their colours and take none; their weights are ignored.
+    let three =
+        json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE], "to": "#000000", "exclude": true}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": three, "weights": [1, 50, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+    // A row without a new colour recolors nothing, so it neither gives nor takes colours.
+    let keep = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE]}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": keep, "weights": [0, 1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+}
+
+/// A colour that two rows list moves only where recolor.apply recolors it with the row it moved
+/// to, so the shares describe the recolor.
+#[test]
+fn weigh_keeps_a_moved_color_from_rows_that_also_list_it() {
+    const GREEN: &str = "rgb 0 255 0";
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    // The purple moves from the first row to the third; the second row's entry for it goes.
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE, PURPLE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!([GREEN, PURPLE]));
+    assert_eq!(r["shares"], json!([40.0, 20.0, 40.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00", "the purple takes the row it moved to");
+    // A colour that another row lists first stays: that row would take it back.
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [PURPLE, BLUE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED, PURPLE]));
+    assert_eq!(r["map"][1]["from"], json!([PURPLE, BLUE]));
+    assert_eq!(r["shares"], json!([60.0, 20.0, 20.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#000000", "the purple keeps the first row's colour");
+}
+
+#[test]
+fn weigh_moves_the_tints_of_a_global_swatch_together() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": {"c": 0, "m": 80, "y": 90, "k": 0}, "global": true}));
+    rect(&mut s, json!("#ff0000"));
+    let full = rect(&mut s, json!("#00ff00"));
+    let tint = rect(&mut s, json!("#00ff00"));
+    rect(&mut s, json!("#0000ff"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": "Brand"}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": "Brand", "tint": 50}));
+    select_all(&mut s);
+    let brand: Vec<Value> = run(&mut s, "recolor.colors", json!({}))["colors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["swatch"] == "Brand")
+        .map(|c| c["key"].clone())
+        .collect();
+    assert_eq!(brand.len(), 2);
+    let map = json!([{"from": [RED, brand[0], brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    // Even weights would take one tint alone, which would split the swatch: nothing moves.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    // The swatch's two colours move to the blue row as one.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 3]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE, brand[0], brand[1]]));
+    assert_eq!(r["shares"], json!([25.0, 75.0]));
+    // Colours that stay keep their order, a swatch's colours with another between them included.
+    let split = json!([{"from": [brand[0], RED, brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": split, "weights": [3, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([brand[0], RED, brand[1]]));
+}
+
+#[test]
+fn weigh_refuses_bad_weights() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED]}, {"from": [BLUE], "exclude": true}]);
+    for (p, msg) in [
+        (json!({"map": map, "weights": [1]}), "`weights` must be a list of 2 numbers, one per row"),
+        (json!({"map": map, "weights": "1, 1"}), "`weights` must be a list of 2 numbers"),
+        (json!({"map": map, "weights": [1, -1]}), "each weight must be a number of 0 or more (got -1)"),
+        (json!({"map": map, "weights": [1, "2"]}), "each weight must be a number of 0 or more"),
+        (json!({"map": map, "weights": [0, 5]}), "at least one row that isn't excluded needs a weight above 0"),
+        (json!({"weights": [1, 1]}), "missing `map`"),
+        (json!({"map": [{"to": "#ff0000"}]}), "each row needs `from`"),
+    ] {
+        let e = s.execute("recolor.weigh", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
 }

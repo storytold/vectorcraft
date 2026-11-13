@@ -1,9 +1,9 @@
+use super::super::object::choice;
 use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wrap};
-use super::mesh::{handle_param, index_param, whole};
+use super::mesh::{envelope_edit_grid, handle_param, index_param, mesh_envelope, warp_point_stays, whole};
 use super::{
     Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
-    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, check_switches, f64_or, f64_req, id_param, json, live, ok, str_param,
-    switch_or,
+    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, json, live, object_param, ok, switch_or, text_param,
 };
 
 // ---------- Envelope ----------
@@ -13,11 +13,16 @@ const WARP_NUMBERS: &[&str] = &["bend", "h", "v", "horizontalDistortion", "verti
 
 fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<EnvelopeKind> {
     check_numbers(p, WARP_NUMBERS, cmd)?;
-    let (mut style, mut bend, mut h, mut v, mut horizontal) = ("arc".to_string(), 50.0, 0.0, 0.0, true);
-    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0 }) = cur {
-        (style, bend, h, v, horizontal) = (s0.clone(), *b0, *h0, *v0, *z0);
+    // A new warp takes its style's Bézier net; an edited one keeps the map it has unless `version`
+    // names one.
+    let (mut style, mut bend, mut h, mut v, mut horizontal, mut version) = ("arc".to_string(), 50.0, 0.0, 0.0, true, live::WARP_NET);
+    if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0, version: n0 }) = cur {
+        (style, bend, h, v, horizontal, version) = (s0.clone(), *b0, *h0, *v0, *z0, *n0);
     }
-    if let Some(s) = str_param(p, "style") {
+    if let Some(n) = p.get("version") {
+        version = live::warp_version(n).ok_or_else(|| bad(cmd, format!("`version` must be 0 or {}", live::WARP_NET)))?;
+    }
+    if let Some(s) = text_param(p, "style", cmd)? {
         let s = s.strip_prefix("warp.").unwrap_or(s);
         if live::WarpStyle::from_id(s).is_none() {
             return Err(bad(cmd, format!("unknown warp style `{s}`")));
@@ -28,12 +33,11 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
     h = f64_or(p, "h", f64_or(p, "horizontalDistortion", h)).clamp(-100.0, 100.0);
     v = f64_or(p, "v", f64_or(p, "verticalDistortion", v)).clamp(-100.0, 100.0);
     let given = switch_or(p, "horizontal", horizontal, cmd)?;
-    horizontal = match str_param(p, "orientation") {
-        Some("vertical") => false,
-        Some("horizontal") => true,
-        _ => given,
+    horizontal = match choice(p, cmd, "orientation", &["horizontal", "vertical"])? {
+        Some(o) => o == "horizontal",
+        None => given,
     };
-    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal })
+    Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal, version })
 }
 
 /// The options and fidelity new envelopes get (Envelope Options with no envelope selected).
@@ -75,8 +79,7 @@ fn mesh_kind(map: &EnvelopeMap, maintain: bool, rows: u32, cols: u32) -> Envelop
         return EnvelopeKind::Mesh { rows, cols, points: map.grid(rows, cols), handles: vec![] };
     }
     // The surface's points with handles along it: the grid lines keep the current shape.
-    let m = map.surface_mesh(rows, cols, Color::BLACK);
-    EnvelopeKind::Mesh { rows, cols, points: m.points.iter().map(|q| q.p).collect(), handles: m.points.iter().map(|q| q.handles).collect() }
+    mesh_envelope(&map.surface_mesh(rows, cols, Color::BLACK))
 }
 
 pub(super) fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
@@ -85,7 +88,7 @@ pub(super) fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = roots_param(s, p)?;
     let st = s.doc()?;
     let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).map(Arc::new).collect();
-    let src = live::nodes_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
+    let src = live::envelope_content_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
     let kind = EnvelopeKind::Mesh { rows, cols, points: live::grid_points(src, rows, cols), handles: vec![] };
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;
@@ -114,7 +117,7 @@ pub(super) fn env_make_top(s: &mut Session, p: &Value) -> Result<Value> {
     let path = s.doc()?.doc.node(top).and_then(outline_of).filter(|p| p.bounds().is_some()).ok_or_else(|| bad(C, "the top object must be a path"))?;
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| {
-        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path }, defaults))?;
+        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path, corners: None }, defaults))?;
         d.remove(top)?;
         Ok(id)
     })?;
@@ -177,12 +180,15 @@ fn envelope_options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Va
     v["distortAppearance"] = json!(o.distort_appearance);
     v["distortLinearGradients"] = json!(o.distort_linear_gradients);
     v["distortPatternFills"] = json!(o.distort_pattern_fills);
+    if o.bounds_margin != [0.0; 4] {
+        v["boundsMargin"] = json!(o.bounds_margin);
+    }
     v
 }
 
 /// `cur` with the options `p` sets.
 fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeOptions> {
-    let preserve_shape = match str_param(p, "preserveShape") {
+    let preserve_shape = match text_param(p, "preserveShape", cmd)? {
         Some(v) => PreserveShape::parse(v).ok_or_else(|| bad(cmd, "preserveShape must be clippingMask|transparency"))?,
         None => cur.preserve_shape,
     };
@@ -192,6 +198,7 @@ fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeO
         distort_appearance: switch_or(p, "distortAppearance", cur.distort_appearance, cmd)?,
         distort_linear_gradients: switch_or(p, "distortLinearGradients", cur.distort_linear_gradients, cmd)?,
         distort_pattern_fills: switch_or(p, "distortPatternFills", cur.distort_pattern_fills, cmd)?,
+        bounds_margin: cur.bounds_margin,
     })
 }
 
@@ -203,8 +210,8 @@ pub(super) fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
         return Ok(envelope_options_json(json!({ "id": null }), &options, fidelity));
     };
     let v = match &**kind {
-        EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
-            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal})
+        EnvelopeKind::Warp { style, bend, h, v, horizontal, version } => {
+            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal, "version": version})
         }
         EnvelopeKind::Mesh { rows, cols, .. } => json!({"type": "mesh", "rows": rows, "cols": cols}),
         EnvelopeKind::TopObject { .. } => json!({"type": "topObject"}),
@@ -220,7 +227,7 @@ pub(super) fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
 fn envelope_shape(env: &Node, kind: &EnvelopeKind) -> Option<Node> {
     let grey = Color::gray(0.25);
     let (rows, cols) = match kind {
-        EnvelopeKind::TopObject { path } => {
+        EnvelopeKind::TopObject { path, .. } => {
             return Some(Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(grey), Paint::None, 0.0)));
         }
         // The mesh itself, handles and all.
@@ -285,8 +292,8 @@ pub(super) fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
 pub(super) fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.options";
     check_numbers(p, &["fidelity"], C)?;
-    check_numbers(p, WARP_NUMBERS, C)?;
-    check_switches(p, &["horizontal"], C)?;
+    // The warp keys are checked whatever is selected: with nothing or only mesh envelopes, too.
+    warp_kind(p, C, None)?;
     let fid = p.get("fidelity").and_then(Value::as_f64);
     if fid.is_some_and(|f| !(0.0..=100.0).contains(&f)) {
         return Err(bad(C, "fidelity must be 0..100"));
@@ -369,6 +376,12 @@ pub(super) fn env_expand(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// The margins the strokes of `content` give in the axes of `frame` (none for content without
+/// width or height).
+fn stroke_margin(content: &[Arc<Node>], frame: Affine) -> [f32; 4] {
+    live::envelope_content_boxes(content, frame).and_then(|(stroked, plain)| live::envelope_stroke_margin(stroked, plain)).unwrap_or_default()
+}
+
 pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.editContents";
     let envs = selected_of(s, is_envelope);
@@ -377,11 +390,25 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit(if want { "Edit Contents" } else { "Edit Envelope" }, |d, sel| {
         let mut content_ids = vec![];
         for e in &envs {
-            if let Some(n) = d.node_mut(*e)
-                && let NodeKind::Envelope { editing, content, .. } = &mut n.kind
-            {
+            let Some(n) = d.node_mut(*e) else { continue };
+            let start = n.extras().envelope_edit_margin;
+            let mut began = None;
+            if let NodeKind::Envelope { editing, content, options, frame, .. } = &mut n.kind {
+                // Margins stay when the strokes reach as far as when Edit Contents began, whatever
+                // transforms the envelope took before that.
+                if options.bounds_margin != [0.0; 4] {
+                    let now = stroke_margin(content, **frame);
+                    if want {
+                        began = start.filter(|_| *editing).or(Some(now));
+                    } else if *editing && start != Some(now) {
+                        options.bounds_margin = now;
+                    }
+                }
                 *editing = want;
                 content_ids.extend(content.iter().map(|c| c.id));
+            }
+            if began != start {
+                n.extras_mut().envelope_edit_margin = began;
             }
         }
         if want {
@@ -396,11 +423,24 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.setMeshPoint";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
+    // A warp whose point or handle stays where it is stays a warp.
+    if warp_point_stays(&s.doc()?.doc, id, index, handle, q, C)? {
+        return ok();
+    }
     s.edit("Move Envelope Point", |d, _| {
+        // A warp's first edited point makes it a mesh envelope on its grid, in the same step.
+        if let Some(n) = d.node(id)
+            && matches!(&n.kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Warp { .. }))
+        {
+            let grid = envelope_edit_grid(n, C).ok_or_else(|| bad(C, "not a mesh envelope point"))??;
+            if let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                **kind = mesh_envelope(&grid);
+            }
+        }
         let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(id).map(|n| &mut n.kind) else {
             return Err(bad(C, "not a mesh envelope point"));
         };

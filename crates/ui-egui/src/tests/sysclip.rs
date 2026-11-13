@@ -22,6 +22,26 @@ pub(super) struct Board {
     ours: bool,
     /// How many times the app wrote it.
     writes: usize,
+    /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
+    /// find nothing.
+    locked: bool,
+    /// Raised by every write and every copy elsewhere.
+    changes: u64,
+    /// The platform has no change count.
+    uncounted: bool,
+    /// The app's writes empty the clipboard and then fail.
+    partial: bool,
+    /// With `partial`, the formats other than text are written before the failure.
+    partial_keeps_others: bool,
+    /// Another app copies this while the app's write tries to open the clipboard, and the write
+    /// fails.
+    race: Option<Flavour>,
+    /// With `race`, the other app's copy also carries the app's formats other than text.
+    race_with_our_formats: bool,
+    /// The app's writes fail and change nothing; reads still work.
+    refuse: bool,
+    /// `has` finds text only, as the Linux clipboard's does.
+    text_only_has: bool,
 }
 
 struct Fake(Rc<RefCell<Board>>);
@@ -29,6 +49,9 @@ struct Fake(Rc<RefCell<Board>>);
 impl Fake {
     fn find(&self, mimes: &[&'static str]) -> Option<Flavour> {
         let b = self.0.borrow();
+        if b.locked {
+            return None;
+        }
         let matches = |m: &str, f: &Flavour| f.mime == m || (m == BITMAP && f.mime.starts_with("image/") && f.mime != SVG);
         mimes.iter().find_map(|m| b.flavours.iter().find(|f| matches(m, f)).cloned())
     }
@@ -37,8 +60,29 @@ impl Fake {
 impl SystemClipboard for Fake {
     fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
         let mut b = self.0.borrow_mut();
-        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1 };
+        if b.locked || b.refuse {
+            return Err("another app has the clipboard open".into());
+        }
+        if let Some(copied) = b.race.take() {
+            b.flavours = vec![copied];
+            if b.race_with_our_formats {
+                b.flavours.extend(flavours.iter().filter(|f| f.mime != TEXT).cloned());
+            }
+            b.ours = false;
+            b.changes += 1;
+            return Err("another app has the clipboard open".into());
+        }
+        if b.partial {
+            b.flavours = if b.partial_keeps_others { flavours.iter().filter(|f| f.mime != TEXT).cloned().collect() } else { vec![] };
+            b.changes += 1;
+            return Err("a format could not be written".into());
+        }
+        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1, changes: b.changes + 1, ..std::mem::take(&mut *b) };
         Ok(())
+    }
+    fn change_count(&mut self) -> Option<u64> {
+        let b = self.0.borrow();
+        (!b.uncounted).then_some(b.changes)
     }
     fn holds_ours(&mut self) -> bool {
         self.0.borrow().ours
@@ -47,6 +91,9 @@ impl SystemClipboard for Fake {
         self.find(mimes)
     }
     fn has(&mut self, mimes: &[&'static str]) -> bool {
+        if self.0.borrow().text_only_has {
+            return mimes.contains(&TEXT) && self.find(&[TEXT]).is_some();
+        }
         self.find(mimes).is_some()
     }
 }
@@ -66,7 +113,44 @@ pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.borrow_mut();
-    *b = Board { flavours, ours: false, writes: b.writes };
+    *b = Board { flavours, ours: false, changes: b.changes + 1, ..std::mem::take(&mut *b) };
+}
+
+/// Another app opens the clipboard (`true`) or closes it.
+pub(super) fn lock(board: &Rc<RefCell<Board>>, locked: bool) {
+    board.borrow_mut().locked = locked;
+}
+
+/// The fake clipboard reports no change count, as on platforms that have none.
+pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().uncounted = true;
+}
+
+/// The fake clipboard's `has` finds text only, as the Linux clipboard's does.
+pub(super) fn has_text_only(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().text_only_has = true;
+}
+
+/// The app's writes fail (`true`) and change nothing, while reads still work.
+pub(super) fn refuse_writes(board: &Rc<RefCell<Board>>, refuse: bool) {
+    board.borrow_mut().refuse = refuse;
+}
+
+/// The app's writes empty the clipboard and then fail, as when one format can't be written; with
+/// `keep_others`, the formats other than text are written.
+pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>, keep_others: bool) {
+    let mut b = board.borrow_mut();
+    b.partial = true;
+    b.partial_keeps_others = keep_others;
+}
+
+/// Another app copies `data` of type `mime` while the app's next write tries to open the
+/// clipboard, and that write fails. With `our_formats`, its copy also carries the app's formats
+/// other than text.
+pub(super) fn copy_during_next_write(board: &Rc<RefCell<Board>>, mime: &'static str, data: Vec<u8>, our_formats: bool) {
+    let mut b = board.borrow_mut();
+    b.race = Some(Flavour { mime, data });
+    b.race_with_our_formats = our_formats;
 }
 
 pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
@@ -80,7 +164,7 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
-fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
+pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }
 
@@ -90,8 +174,9 @@ pub(super) fn pasted(app: &VectorcraftApp) -> Vec<Node> {
     st.selection.objects.iter().map(|id| st.doc.node(*id).unwrap().clone()).collect()
 }
 
-fn count(app: &VectorcraftApp) -> usize {
-    app.session.active().unwrap().doc.layers[0].children().unwrap().len()
+/// The objects on the first layer (its ruler guides left out).
+pub(super) fn count(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().doc.layers[0].children().unwrap().iter().filter(|c| !c.is_ruler_guide()).count()
 }
 
 /// An egui `PasteImage` from the host is the signal to read the rich system clipboard: it must
@@ -152,7 +237,7 @@ pub(crate) fn blue_png() -> Vec<u8> {
 
 /// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`,
 /// in the test's one context (in a new one the app starts its fonts over).
-fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     thread_local! {
         static CTX: egui::Context = egui::Context::default();
     }
@@ -175,7 +260,7 @@ fn app_with_worker() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
 /// until the sender is dropped, or for 10 s.
-fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
+pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)

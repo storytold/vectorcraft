@@ -63,6 +63,77 @@ pub(crate) fn ask_replace(app: &mut VectorcraftApp, path: &str, typed: &str) {
     app.ui.dialog = Some(Dialog::new(REPLACE, fields));
 }
 
+/// The dialog kind of the question whether a save or export may replace the files it writes beside
+/// the one picked in the save panel ([`ask_replace_files`]). Fields: `message`, `detail`, `files`
+/// (their paths), `allowed` (files an earlier OK allowed), `doc` (the document's uid), `__command`
+/// and `__params`.
+pub const REPLACE_FILES: &str = "replaceFiles";
+
+pub(super) const REPLACE_FILES_SPEC: DialogSpec = DialogSpec { confirm: replace_files, ..SPEC };
+
+/// Ask whether to replace `files`, files that are there beside the one a save or export of the
+/// document `doc` (its uid) writes, which the save panel did not ask about (a file per artboard, a
+/// linked image). OK runs `command` with `params` again on that document, now replacing those
+/// files and `allowed` (those an earlier OK allowed); Cancel writes nothing.
+pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[String], allowed: &[String], command: &str, params: Value) {
+    let name = files.first().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).unwrap_or_default();
+    let message = crate::i18n::fmt(tl!("“{name}” already exists. Replace it?"), &[("name", &name)]);
+    // Several: every one of them, by name.
+    let detail = match files {
+        [_, _, ..] => files.iter().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    };
+    let fields =
+        json!({"message": message, "detail": detail, "files": files, "allowed": allowed, "doc": doc, "__command": command, "__params": params});
+    let d = Dialog::new(REPLACE_FILES, fields);
+    // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
+    // (however many messages wait: the save or export needs the answer).
+    match app.ui.dialog {
+        None => app.ui.dialog = Some(d),
+        Some(_) => app.ui.told.push(d),
+    }
+}
+
+/// OK on [`ask_replace_files`]: what asked runs again on its document, and the files the question
+/// named are replaced; one it writes now that was not named is asked about again. The save or export
+/// reads the allowance when it starts, before a background one hands its work to the worker.
+fn replace_files(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    app.ui.dialog = None;
+    if !crate::picks::on_document(app, d.fields.get("doc").and_then(Value::as_u64)) {
+        return Ok(Value::Null);
+    }
+    let paths = |k: &str| d.fields.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string);
+    app.picks.replace_files_ok = paths("allowed").chain(paths("files")).collect();
+    let r = confirm(app, d);
+    app.picks.replace_files_ok.clear();
+    r
+}
+
+/// The dialog kind of the question Reset Preferences asks over the Preferences dialog
+/// ([`ask_reset_prefs`]). Fields: `message`, `detail`.
+pub const RESET_PREFS: &str = "resetPreferences";
+
+pub(super) const RESET_PREFS_SPEC: DialogSpec = DialogSpec { confirm: reset_prefs, ..SPEC };
+
+/// Ask whether to reset the preferences, over the Preferences dialog open now. Cancel and Escape
+/// show Preferences again as it was; OK shows it again with every preference at its default value
+/// ([`crate::prefs_dialog::reset_fields`]). Nothing is applied until OK in Preferences.
+pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
+    let under = app.ui.dialog.take().and_then(|d| serde_json::to_value(d).ok());
+    let message = tl!("Reset all preferences to their defaults?");
+    let detail = tl!("The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.");
+    let fields = json!({"message": message, "detail": detail, super::PARENT: under});
+    app.ui.dialog = Some(Dialog::new(RESET_PREFS, fields));
+}
+
+/// OK on [`ask_reset_prefs`]: Preferences again, its fields at their defaults.
+fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
+    crate::prefs_dialog::reset_fields(&mut prefs);
+    app.ui.dialog = Some(prefs);
+    Ok(Value::Null)
+}
+
 /// Most messages kept for later while a dialog is open ([`tell`]).
 const MAX_WAITING: usize = 16;
 

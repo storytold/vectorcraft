@@ -5,7 +5,7 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   freeform and Perceptual gradients, gradients mixed around the hue wheel and dithered gradient fills as images at the raster
 //!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
@@ -17,7 +17,8 @@
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
-//!   Editing the native document rides along as an embedded file ([`editing()`]). Each page can
+//!   Editing the native document rides along as an embedded file ([`editing()`]), and the first
+//!   page can carry a `.ai` file's editing copy of the art ([`PrivateData`]). Each page can
 //!   carry a thumbnail ([`Thumbnail`], drawn by the caller), and Fast Web View writes a linearised
 //!   file (still linearised when encrypted). A PDF 1.3 file ([`PdfSettings::pdf13`]) must be flat:
 //!   the app flattens the document first, and the writer refuses transparency that is left.
@@ -63,22 +64,32 @@ mod output;
 mod pages;
 mod patch;
 mod pdfx;
+mod piece_info;
 mod post;
 mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
+#[cfg(any(test, feature = "read-count"))]
+pub use import::imports_of;
 pub use import::{
-    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_with_report, is_glyph_outlines, is_outlines_note,
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
+    holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
-pub use pages::{PageInfo, PdfInfo, has_illustrator_data, illustrator_data, info, is_postscript};
+#[cfg(any(test, feature = "read-count"))]
+pub use pages::reads_of;
+pub use pages::{
+    IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
+    is_postscript, open_pdf,
+};
+pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;
 pub use print::*;
@@ -102,6 +113,8 @@ pub struct PdfOptions {
     pub modified: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
+    /// The editing copy of the art for every page's `PieceInfo`, as a `.ai` file carries it.
+    pub private_data: Option<PrivateData>,
     /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer
     /// doesn't draw; [`page_areas`] says what each page shows).
     pub thumbnails: Vec<Thumbnail>,
@@ -200,7 +213,10 @@ pub struct ImportReport {
 #[derive(Clone, Debug)]
 pub struct ExportReport {
     pub bytes: Vec<u8>,
+    /// What the file leaves out of the document or writes differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]

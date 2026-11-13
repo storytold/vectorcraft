@@ -11,7 +11,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
-use vectorcraft_brush::{self as brush, ArtBrush, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation};
+use vectorcraft_brush::{
+    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, SubPath, shapes};
@@ -21,7 +23,7 @@ use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::patterncmds::add_pattern;
 use super::swatch::str_list;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, stem};
+use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 /// The extension of saved brush libraries: native documents.
@@ -107,10 +109,14 @@ impl BrushLibrary {
     /// `name`: the brushes and every resource their art uses.
     pub fn from_document(src: &Document, names: &[String], name: String) -> std::result::Result<Self, String> {
         let all = brush::library(src);
-        if let Some(n) = names.iter().find(|n| !all.iter().any(|b| b.name == **n)) {
+        // Names looked up in sets: scanning the lists for each brush made a library of N brushes
+        // cost N² comparisons.
+        let have: HashSet<&str> = all.iter().map(|b| b.name.as_str()).collect();
+        if let Some(n) = names.iter().find(|n| !have.contains(n.as_str())) {
             return Err(format!("no brush `{n}`"));
         }
-        let picked = all.iter().filter(|b| names.is_empty() || names.contains(&b.name));
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
+        let picked = all.iter().filter(|b| names.is_empty() || wanted.contains(b.name.as_str()));
         let clip = Clipboard::gather(src, picked.map(|b| stroke(&b.name)).collect());
         let mut doc = clip.to_document();
         for l in &mut doc.layers {
@@ -120,7 +126,8 @@ impl BrushLibrary {
         }
         // The brushes picked and those their art paints with, in the panel order of the document
         // they came from.
-        let brushes: Vec<Brush> = all.into_iter().filter(|b| clip.brushes.iter().any(|c| c.name == b.name)).collect();
+        let kept: HashSet<&str> = clip.brushes.iter().map(|c| c.name.as_str()).collect();
+        let brushes: Vec<Brush> = all.iter().filter(|b| kept.contains(b.name.as_str())).cloned().collect();
         brush::store(&mut doc, &brushes);
         doc.title = name.clone();
         Ok(Self { name, brushes, doc })
@@ -160,13 +167,17 @@ pub struct BuiltinBrushLibrary {
     make: fn() -> BrushLibrary,
 }
 
-/// The built-in brush libraries, in menu order: original brushes generated in code, one library
-/// per kind of brush.
+/// The built-in brush libraries, in menu order: original brushes generated in code.
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
+    BuiltinBrushLibrary { id: "ink-and-wash", name: "Ink and Wash", make: ink_and_wash },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
+    BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
+    BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
+    BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
 ];
 
 /// Built-in library `id`, made once.
@@ -258,6 +269,78 @@ fn art_ribbons() -> BrushLibrary {
     built("Art Ribbons", doc, brushes)
 }
 
+/// A band between the edges y = `top(x)` and y = `bottom(x)` for x in `from`..`to`, in `n` steps.
+fn between(from: f64, to: f64, n: usize, top: impl Fn(f64) -> f64, bottom: impl Fn(f64) -> f64) -> PathData {
+    let xs: Vec<f64> = (0..=n).map(|i| from + (to - from) * i as f64 / n as f64).collect();
+    let mut pts: Vec<Point> = xs.iter().map(|&x| Point::new(x, top(x))).collect();
+    pts.extend(xs.iter().rev().map(|&x| Point::new(x, bottom(x))));
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Path `p` filled with gray `hex` at `opacity`: one layer of a wash.
+fn wash(p: PathData, hex: &str, opacity: f32) -> Node {
+    let mut n = filled(p, Paint::solid(Color::from_hex(hex).unwrap_or(Color::BLACK)));
+    n.opacity = opacity;
+    n
+}
+
+/// How much of a wash's width is left at x: rounded ends, full width from 8 pt in.
+fn wash_ends(x: f64) -> f64 {
+    let ends = ((x / 8.0).min(1.0) * ((100.0 - x) / 8.0).min(1.0)).max(0.0);
+    0.4 + 0.6 * ends.sqrt()
+}
+
+/// Ink and Wash: Tapered Ink, broad near its start and thinning to a fine tip; Brush Pen, a
+/// rounded nib whose size follows the pen pressure; and two washes of translucent grays, Soft Wash
+/// with faint edges and Pooling Wash with a darker rim and two light breaks. Black and grays take
+/// the stroke color as tints of it.
+fn ink_and_wash() -> BrushLibrary {
+    let tapered = {
+        let half = |x: f64| 3.0 * (x / 22.0).min(1.0).powf(0.6) * ((100.0 - x) / 78.0).min(1.0).powf(1.4);
+        black(between(0.0, 100.0, 48, |x| -0.85 * half(x), |x| 1.15 * half(x)))
+    };
+    let pen = Brush {
+        name: "Brush Pen".into(),
+        kind: BrushKind::Calligraphic(Calligraphic {
+            angle: 40.0,
+            roundness: 75.0,
+            size: 5.0,
+            variation: [0.0, 0.0, 2.5],
+            modes: Some([Variation::Fixed, Variation::Fixed, Variation::Pressure]),
+        }),
+    };
+    let soft = {
+        let top = |x: f64| -(4.5 + 0.5 * (x * 0.21).sin() + 0.3 * (x * 0.57 + 1.3).sin()) * wash_ends(x);
+        let bottom = |x: f64| (4.5 + 0.45 * (x * 0.26 + 2.1).sin() + 0.3 * (x * 0.69 + 0.4).sin()) * wash_ends(x);
+        group(vec![
+            wash(between(0.0, 100.0, 40, top, bottom), "#404040", 0.4),
+            wash(between(2.0, 98.0, 32, |x| top(x) - 0.7 - 0.3 * (x * 0.43).sin().abs(), |x| top(x) + 0.5), "#404040", 0.2),
+            wash(between(3.0, 97.0, 32, |x| bottom(x) - 0.5, |x| bottom(x) + 0.6 + 0.35 * (x * 0.37 + 1.0).sin().abs()), "#404040", 0.18),
+            wash(shapes::ellipse(Rect::new(21.0, -2.4, 39.0, 0.8)), "#e6e6e6", 0.22),
+            wash(shapes::ellipse(Rect::new(61.0, -0.3, 75.0, 2.3)), "#e6e6e6", 0.18),
+        ])
+    };
+    let pooling = {
+        let top = |x: f64| -(4.0 + 0.4 * (x * 0.18 + 0.7).sin() + 0.2 * (x * 0.53).sin()) * wash_ends(x);
+        let bottom = |x: f64| (4.0 + 0.35 * (x * 0.23 + 1.9).sin() + 0.25 * (x * 0.61 + 0.2).sin()) * wash_ends(x);
+        let rim = |x: f64, k: f64, phase: f64| 0.35 + k * (0.5 + 0.5 * (x * 0.29 + phase).sin());
+        group(vec![
+            wash(between(0.0, 100.0, 40, top, bottom), "#4d4d4d", 0.35),
+            wash(between(1.0, 99.0, 40, top, |x| top(x) + rim(x, 0.45, 0.0)), "#262626", 0.55),
+            wash(between(1.0, 99.0, 40, |x| bottom(x) - rim(x, 0.5, 1.1), bottom), "#262626", 0.55),
+            wash(polygon(&[(34.0, -2.6), (39.0, -2.8), (36.0, 2.7), (31.0, 2.5)]), "#e6e6e6", 0.2),
+            wash(polygon(&[(70.0, -2.4), (74.0, -2.5), (72.0, 2.6), (68.0, 2.4)]), "#e6e6e6", 0.18),
+        ])
+    };
+    let brushes = vec![
+        art("Tapered Ink", tapered, Colorization::Tints),
+        pen,
+        art("Soft Wash", soft, Colorization::Tints),
+        art("Pooling Wash", pooling, Colorization::Tints),
+    ];
+    built("Ink and Wash", Document::new(100.0, 100.0), brushes)
+}
+
 fn nib(name: &str, angle: f64, roundness: f64, size: f64) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, ..Default::default() }) }
 }
@@ -282,6 +365,31 @@ fn calligraphic_nibs() -> BrushLibrary {
         pressure,
     ];
     built("Calligraphic Nibs", Document::new(100.0, 100.0), brushes)
+}
+
+/// A bristle brush: `shape`, then size (pt), bristle length, density, thickness, paint opacity
+/// and stiffness (%).
+fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, opacity, stiffness]: [f64; 6]) -> Brush {
+    Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
+}
+
+/// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
+/// blending and texture.
+fn bristle_brushes() -> BrushLibrary {
+    use BristleShape::*;
+    let brushes = vec![
+        bristle("Fine Liner", RoundPoint, [2.0, 140.0, 30.0, 30.0, 90.0, 75.0]),
+        bristle("Pointed Flat", FlatPoint, [5.0, 120.0, 55.0, 35.0, 80.0, 60.0]),
+        bristle("Stubby Round", RoundBlunt, [8.0, 60.0, 70.0, 50.0, 85.0, 80.0]),
+        bristle("Dry Scrub", FlatBlunt, [10.0, 40.0, 25.0, 60.0, 60.0, 95.0]),
+        bristle("Soft Dome", RoundCurve, [12.0, 160.0, 85.0, 20.0, 45.0, 25.0]),
+        bristle("Filbert", FlatCurve, [9.0, 110.0, 65.0, 40.0, 70.0, 45.0]),
+        bristle("Angled Round", RoundAngle, [7.0, 130.0, 50.0, 35.0, 75.0, 55.0]),
+        bristle("Angled Flat", FlatAngle, [11.0, 100.0, 60.0, 45.0, 80.0, 65.0]),
+        bristle("Fan Blender", RoundFan, [16.0, 220.0, 40.0, 15.0, 35.0, 20.0]),
+        bristle("Grass Fan", FlatFan, [20.0, 260.0, 15.0, 25.0, 65.0, 35.0]),
+    ];
+    built("Bristle Brushes", Document::new(100.0, 100.0), brushes)
 }
 
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
@@ -335,7 +443,7 @@ fn scatter_shapes() -> BrushLibrary {
         a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(gold))));
         a
     });
-    doc.symbols.push(Symbol { name: "Sparkle".into(), art: Arc::new(sparkle) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Sparkle".into(), art: Arc::new(sparkle) });
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Sparkle".into(), xf: Affine::scale(0.3) });
     let random = |a: f64, b: f64| (a, b);
     let base = Scatter { colorization: Colorization::Tints, ..Default::default() };
@@ -373,6 +481,237 @@ fn scatter_shapes() -> BrushLibrary {
     built("Scatter Shapes", doc, brushes)
 }
 
+/// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).
+fn game_trails() -> BrushLibrary {
+    let speed = {
+        let n = 32;
+        let half = |x: f64| 2.2 * (1.0 - x / 100.0).powf(1.2).max(0.08);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let dash = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.0, 14.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(22.0, -1.0, 36.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(44.0, -1.0, 58.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(66.0, -1.0, 80.0, 1.0), 1.0)),
+        black(shapes::rounded_rectangle(Rect::new(88.0, -1.0, 100.0, 1.0), 1.0)),
+    ]);
+    let burst = {
+        // A wedge that flares from a tip at x=0 to a wide end at x=100.
+        let tip = Point::new(0.0, 0.0);
+        let top = Point::new(100.0, -6.0);
+        let bot = Point::new(100.0, 6.0);
+        PathData::single(SubPath::polyline(&[tip, top, bot], true))
+    };
+    let zigzag = band(100.0, 1.8, 40, |x| {
+        let t = (x / 12.5).floor();
+        let local = (x / 12.5) - t;
+        if (t as i32) % 2 == 0 { -3.0 + 6.0 * local } else { 3.0 - 6.0 * local }
+    });
+    let brushes = vec![
+        art("Speed Line", black(speed), Colorization::Tints),
+        art("Dash Trail", dash, Colorization::Tints),
+        art("Burst Ray", black(burst), Colorization::Tints),
+        art("Zigzag", black(zigzag), Colorization::Tints),
+    ];
+    built("Game Trails", Document::new(100.0, 100.0), brushes)
+}
+
+/// Energy Beams: art brushes for laser, plasma and charge strokes (original game VFX art).
+fn energy_beams() -> BrushLibrary {
+    let laser = {
+        let n = 32;
+        let half = |x: f64| 1.6 * (1.0 - (x / 100.0 - 0.5).abs() * 1.6).max(0.12);
+        let xs = |i: usize| 100.0 * i as f64 / n as f64;
+        let mut pts: Vec<Point> = (0..=n).map(xs).map(|x| Point::new(x, -half(x))).collect();
+        pts.extend((0..n).rev().map(xs).map(|x| Point::new(x, half(x))));
+        PathData::single(SubPath::polyline(&pts, true))
+    };
+    let plasma = band(100.0, 2.2, 48, |x| 4.0 * (x / 100.0 * std::f64::consts::PI).sin());
+    let charge = band(100.0, 1.6, 56, |x| 3.5 * (x / 100.0 * std::f64::consts::TAU).sin());
+    let spark = group(vec![
+        black(shapes::rounded_rectangle(Rect::new(0.0, -1.2, 10.0, 1.2), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(18.0, -0.9, 28.0, 0.9), 0.7)),
+        black(shapes::rounded_rectangle(Rect::new(36.0, -1.4, 48.0, 1.4), 0.9)),
+        black(shapes::rounded_rectangle(Rect::new(56.0, -0.8, 66.0, 0.8), 0.6)),
+        black(shapes::rounded_rectangle(Rect::new(74.0, -1.1, 86.0, 1.1), 0.8)),
+        black(shapes::rounded_rectangle(Rect::new(92.0, -0.7, 100.0, 0.7), 0.5)),
+    ]);
+    let brushes = vec![
+        art("Laser Bolt", black(laser), Colorization::Tints),
+        art("Plasma Arc", black(plasma), Colorization::Tints),
+        art("Charge Wave", black(charge), Colorization::Tints),
+        art("Spark Trail", spark, Colorization::Tints),
+    ];
+    built("Energy Beams", Document::new(100.0, 100.0), brushes)
+}
+
+/// The fixed-seed number source of the Dry Media grain: integer steps and plain arithmetic, so the
+/// art is the same on every run and every platform.
+struct Grain(u64);
+
+impl Grain {
+    /// The next number in 0..1.
+    fn next(&mut self) -> f64 {
+        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+    /// The next number in `a`..`b`.
+    fn range(&mut self, a: f64, b: f64) -> f64 {
+        a + (b - a) * self.next()
+    }
+}
+
+/// `floor` at x = `x0` and `x1`, rising smoothly to 1 within `ramp` pt of each.
+fn ends(x: f64, x0: f64, x1: f64, ramp: f64, floor: f64) -> f64 {
+    let t = ((x - x0).min(x1 - x) / ramp).clamp(0.0, 1.0);
+    floor + (1.0 - floor) * t * t * (3.0 - 2.0 * t)
+}
+
+/// A closed band from x = `x0` to `x1` in `n` steps, at most `half` pt either side of y = 0 times
+/// `taper(x)`; each edge point is pulled in by up to `rough` of that.
+fn rough_band(g: &mut Grain, (x0, x1): (f64, f64), n: usize, half: f64, rough: f64, taper: impl Fn(f64) -> f64) -> PathData {
+    let xs: Vec<f64> = (0..=n).map(|i| x0 + (x1 - x0) * i as f64 / n as f64).collect();
+    let mut pts: Vec<Point> = xs.iter().map(|&x| Point::new(x, -half * taper(x) * (1.0 - rough * g.next()))).collect();
+    let bottom: Vec<Point> = xs.iter().rev().map(|&x| Point::new(x, half * taper(x) * (1.0 - rough * g.next()))).collect();
+    pts.extend(bottom);
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// A small four-cornered fleck around (`cx`, `cy`), at most `w` × `h` pt either side; one corner
+/// in each direction, so its outline never crosses itself.
+fn fleck(g: &mut Grain, cx: f64, cy: f64, w: f64, h: f64) -> PathData {
+    let mut side = |a: f64, b: f64| g.range(a, b);
+    let pts = [
+        (cx - w * side(0.6, 1.0), cy + h * side(-0.3, 0.3)),
+        (cx + w * side(-0.3, 0.3), cy - h * side(0.6, 1.0)),
+        (cx + w * side(0.6, 1.0), cy + h * side(-0.3, 0.3)),
+        (cx + w * side(-0.3, 0.3), cy + h * side(0.6, 1.0)),
+    ];
+    polygon(&pts)
+}
+
+/// `body` with `holes` (inside it, apart from each other) cut out, even-odd, in gray `k`: what
+/// lies under the stroke shows through the holes.
+fn holed(body: PathData, holes: Vec<PathData>, k: f32) -> Node {
+    let children = std::iter::once(body).chain(holes).map(|p| Arc::new(Node::path(NodeId(0), p, Appearance::default()))).collect();
+    let mut n = Node::new(NodeId(0), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+    n.appearance = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::gray(k))))], ..Default::default() }.into();
+    n
+}
+
+/// Path `p` filled with gray `k` (1 is black).
+fn ink(p: PathData, k: f32) -> Node {
+    filled(p, Paint::solid(Color::gray(k)))
+}
+
+/// Slivers `w` × `h` pt (ranges) in `count` slots along x = 6..94 inside a band `half` pt wide
+/// times `taper`. Each stays within `reach` of the band's half width from y = 0, taken where the
+/// band is narrowest over the sliver and the 3 pt either side of it, so with `reach` below the
+/// band's roughness margin no sliver touches the band's edge or another sliver.
+fn slivers(g: &mut Grain, count: usize, half: f64, reach: f64, (w, h): ((f64, f64), (f64, f64)), taper: impl Fn(f64) -> f64) -> Vec<PathData> {
+    let slot = 88.0 / count as f64;
+    (0..count)
+        .map(|i| {
+            let cx = 6.0 + slot * (i as f64 + 0.5);
+            let (w, h) = (g.range(w.0, w.1), g.range(h.0, h.1));
+            let room = reach * half * taper(cx - w - 3.0).min(taper(cx + w + 3.0));
+            let cy = g.range(-1.0, 1.0) * (room - h).max(0.0);
+            fleck(g, cx, cy, w, h)
+        })
+        .collect()
+}
+
+/// Dry Media: art brushes of grainy dry drawing marks, chalk, pencil, crayon and charcoal (original
+/// vector grain from fixed seeds; every brush 100 pt long, black and grays that take the stroke
+/// color as tints, gaps cut out so the paper shows).
+pub(crate) fn dry_media() -> BrushLibrary {
+    // Chalk Grain, 100 × 8 pt: a soft band with narrow scratches and chips along its edges.
+    let chalk = {
+        let mut g = Grain(0x0c4a_1c0a);
+        let taper = |x: f64| ends(x, 0.0, 100.0, 10.0, 0.35);
+        let body = rough_band(&mut g, (0.0, 100.0), 36, 4.0, 0.25, taper);
+        let scratches = slivers(&mut g, 14, 4.0, 0.7, ((1.2, 2.4), (0.15, 0.3)), taper);
+        let mut parts = vec![holed(body, scratches, 0.8)];
+        for i in 0..18 {
+            let cx = 3.0 + 94.0 * (i as f64 + g.range(0.2, 0.8)) / 18.0;
+            let side = if i % 2 == 0 { -1.0 } else { 1.0 };
+            let cy = side * 4.0 * taper(cx) * g.range(0.7, 0.95);
+            let (w, h) = (g.range(0.3, 0.7), g.range(0.25, 0.5));
+            let f = fleck(&mut g, cx, cy, w, h);
+            parts.push(ink(f, 1.0));
+        }
+        group(parts)
+    };
+    // Graphite Pencil, 100 × 2.5 pt: a solid tapered core with fine slanted hatching at its edges.
+    let pencil = {
+        let mut g = Grain(0x009e_4c11);
+        let core = rough_band(&mut g, (0.0, 100.0), 40, 0.8, 0.12, |x| ends(x, 0.0, 100.0, 18.0, 0.25));
+        let mut parts = vec![ink(core, 1.0)];
+        for i in 0..24 {
+            let x0 = 2.0 + 92.0 * (i as f64 + g.range(0.0, 0.4)) / 24.0;
+            let len = g.range(1.5, 3.0);
+            let t = g.range(0.12, 0.2);
+            let slant = g.range(0.1, 0.3);
+            let y0 = if i % 2 == 0 { -g.range(0.85, 1.05) } else { g.range(0.85, 1.25) - t - slant };
+            parts.push(ink(polygon(&[(x0, y0 + slant), (x0 + len, y0), (x0 + len, y0 + t), (x0, y0 + slant + t)]), 0.6));
+        }
+        group(parts)
+    };
+    // Wax Crayon, 100 × 6 pt: a dense band with small gaps in its middle and short overlapping
+    // marks along both edges.
+    let crayon = {
+        let mut g = Grain(0x00c0_a7e5);
+        let taper = |x: f64| ends(x, 0.0, 100.0, 6.0, 0.5);
+        let body = rough_band(&mut g, (0.0, 100.0), 30, 2.6, 0.2, taper);
+        let gaps = slivers(&mut g, 16, 2.6, 0.34, ((0.6, 1.6), (0.15, 0.3)), taper);
+        let mut parts = vec![holed(body, gaps, 0.9)];
+        for i in 0..36 {
+            let w = g.range(1.0, 2.2);
+            let cx = (1.0 + w).max(98.0 * (i as f64 + g.range(0.0, 1.0)) / 36.0).min(99.0 - w);
+            let side = if i % 2 == 0 { -1.0 } else { 1.0 };
+            let h = g.range(0.4, 0.6);
+            // Clear of the gaps, which stay within 0.9 pt of the middle.
+            let inner = 0.9 + h;
+            let cy = side * g.range(inner, (2.4 * taper(cx)).max(inner));
+            let f = fleck(&mut g, cx, cy, w, h);
+            parts.push(ink(f, 1.0));
+        }
+        group(parts)
+    };
+    // Charcoal Dust, 100 × 7 pt: a dark band broken into pieces, with flecks of dust either side.
+    let dust = {
+        let mut g = Grain(0xc4a2_c0a1);
+        let mut parts = vec![];
+        let mut x0 = 0.0;
+        while x0 < 100.0 {
+            let x1 = (x0 + g.range(14.0, 24.0)).min(100.0);
+            let x1 = if 100.0 - x1 < 8.0 { 100.0 } else { x1 };
+            let piece = rough_band(&mut g, (x0, x1), 10, 2.0, 0.3, |x| ends(x, 0.0, 100.0, 8.0, 0.4) * ends(x, x0, x1, 2.0, 0.3));
+            parts.push(ink(piece, 1.0));
+            x0 = x1 + g.range(1.5, 3.0);
+        }
+        for i in 0..30 {
+            let cx = 2.0 + 96.0 * (i as f64 + g.range(0.2, 0.8)) / 30.0;
+            let side = if g.next() < 0.5 { -1.0 } else { 1.0 };
+            let s = g.range(0.15, 0.3);
+            let cy = side * g.range(2.3, 3.5 - s);
+            let f = fleck(&mut g, cx, cy, s, s);
+            parts.push(ink(f, if i % 3 == 0 { 0.7 } else { 1.0 }));
+        }
+        group(parts)
+    };
+    let brushes = vec![
+        art("Chalk Grain", chalk, Colorization::Tints),
+        art("Graphite Pencil", pencil, Colorization::Tints),
+        art("Wax Crayon", crayon, Colorization::Tints),
+        art("Charcoal Dust", dust, Colorization::Tints),
+    ];
+    built("Dry Media", Document::new(100.0, 100.0), brushes)
+}
+
 // ---------- commands ----------
 
 fn builtin_info(b: &BuiltinBrushLibrary) -> LibraryInfo {
@@ -389,6 +728,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
     if let Some(found) = s.brush_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.brush_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
     }
@@ -403,20 +745,22 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.brush_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.brush_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.brush_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.brush_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let (info, lib) = library_param(s, p, "brush.library")?;
     let brushes: Vec<Value> = lib.brushes.iter().map(|b| json!({"name": b.name, "type": b.kind.type_id()})).collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "brushes": brushes}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "brushes": brushes}))
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -453,7 +797,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // nothing to apply is no edit, and a click that only applies brushes the document has is
     // named for that.
     let mut probe = (*st.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let doc_names: Vec<String> = picked.iter().map(|n| target(&imported.renamed, n)).collect();
     let paths = if apply { brush_targets(&st.doc, &roots(s, p)?) } else { vec![] };
     let paint = stroke_paint(s);
@@ -472,7 +816,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (added, existing): (Vec<&String>, Vec<&String>) = doc_names.iter().partition(|n| !before.contains(*n));
     let applied: Vec<u64> = paths.iter().map(|id| id.0).collect();
-    Ok(json!({"library": info.id, "names": doc_names, "added": added, "existing": existing, "applied": applied}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "names": doc_names, "added": added, "existing": existing, "applied": applied}))
 }
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
@@ -498,5 +842,5 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
         }
         BrushLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }

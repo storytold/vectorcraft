@@ -21,7 +21,7 @@ use vectorcraft_render::encode::quantize::{self, Dither, Indexed, PaletteOptions
 use vectorcraft_render::encode::web::{self, ColorSort};
 use vectorcraft_render::encode::{gif, jpeg, png};
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, unique_name_from};
 
 const C: &str = "document.exportForWeb";
 
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity} (colours as the preview's colors[].source), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -329,6 +329,7 @@ impl ColorTable {
         list.iter()
             .map(|h| {
                 vectorcraft_color::Color::from_hex(h)
+                    .filter(|_| !super::hex_with_alpha(h))
                     .map(|c| {
                         let [r, g, b, _] = c.to_rgba8(1.0);
                         [r, g, b]
@@ -644,7 +645,7 @@ fn flatten(rgba: &[u8], matte: [u8; 3]) -> impl Iterator<Item = [u8; 3]> + '_ {
 
 /// The File Info text `s.metadata` lets into the files: `(keyword, text)`.
 fn metadata(doc: &Document, s: &WebSettings) -> Vec<(&'static str, String)> {
-    doc.metadata.png_text(&doc.title).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
+    doc.metadata.png_text(doc.info_title()).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
 }
 
 /// Encode straight RGBA pixels (`w`×`h`) as `s` says; `doc` gives the metadata.
@@ -866,6 +867,8 @@ pub fn export_files(doc: &Document, selected: &[NodeId], s: &WebSettings, stem: 
         placed.push((None, Some(name)));
     } else {
         let mut taken = HashSet::new();
+        // Per base, where the suffix search resumes, so many slices of one name don't each count up from 2.
+        let mut next = std::collections::HashMap::new();
         for c in &cells {
             let kind = c.area.id.and_then(|id| doc.slice_options(id)).map(|o| o.kind).unwrap_or_default();
             if kind != SliceKind::Image {
@@ -875,7 +878,7 @@ pub fn export_files(doc: &Document, selected: &[NodeId], s: &WebSettings, stem: 
             let base: String = doc.slice_name(c.area).chars().map(|ch| if ch.is_alphanumeric() || "-_.".contains(ch) { ch } else { '-' }).collect();
             // A slice named after a Windows device (`aux`, `NUL`…) gets a `-` after the device name.
             let file = |base: &str| super::fileio::safe_file_name(&format!("{base}.{ext}"));
-            let base = unique_name(&base, |n| taken.contains(&file(n).to_lowercase()));
+            let base = unique_name_from(&base, &mut next, |n| taken.contains(&file(n).to_lowercase()));
             taken.insert(file(&base).to_lowercase());
             let name = format!("{IMAGES}/{}", file(&base));
             let [x0, y0, x1, y1] = c.px;

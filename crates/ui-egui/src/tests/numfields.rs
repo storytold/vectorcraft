@@ -159,6 +159,106 @@ fn typing_into_a_hex_field_commits_it() {
     }
 }
 
+/// Keyboard focus selects a hex field's digits. A pasted code replaces them wherever the caret is,
+/// hex digits that fit edit them in place, and a paste that is not a color leaves them as they were.
+/// Typing digit by digit is not affected.
+#[test]
+fn a_paste_into_a_hex_field_replaces_or_edits_its_digits() {
+    let hex = Cell::new(None);
+    let hex_id = Cell::new(egui::Id::NULL);
+    let draw = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex_id.set(ui.scope_id().with("hex"));
+        hex.set(widgets::hex_field(ui, "hex", "FF8000"));
+        red
+    };
+    let (tab, end) = (|| key(Key::Tab, Modifiers::NONE), || key(Key::End, Modifiers::NONE));
+    let paste = |text: &str| vec![Event::Paste(text.into())];
+    let digit = |text: &str| vec![Event::Text(text.into())];
+    // Its name, the events after the field has the focus, the text they leave and what Tab commits.
+    type Case<'a> = (&'a str, Vec<Vec<Event>>, &'a str, Option<&'a str>);
+    let select_left = |n: usize| std::iter::once(end()).chain(std::iter::repeat_n(key(Key::ArrowLeft, Modifiers::SHIFT), n)).collect::<Vec<_>>();
+    let cases: [Case; 25] = [
+        ("three selected, three digits", vec![select_left(3), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("three characters, caret, three digits", vec![digit("FF8"), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("five characters, two selected, three digits", vec![digit("12345"), select_left(2), paste("ABC")], "123ABC", Some("123ABC")),
+        ("two characters, caret, three digits", vec![digit("12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("four selected, three digits", vec![select_left(4), paste("0f0")], "0f0", Some("00ff00")),
+        ("selected digits", vec![paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code", vec![vec![end()], paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code with #", vec![vec![end()], paste("#00ff00")], "00ff00", Some("00ff00")),
+        ("caret, three digits", vec![vec![end()], paste("0f0")], "0f0", Some("00ff00")),
+        ("caret, a line break after the code", vec![vec![end()], paste("#00FF00\n")], "00FF00", Some("00FF00")),
+        ("caret, a word", vec![vec![end()], paste("hello")], "FF8000", None),
+        ("caret, too few digits", vec![vec![end()], paste("12")], "FF8000", None),
+        ("selected digits, too many digits", vec![paste("12345678")], "FF8000", None),
+        ("part selected, digits that fit", vec![select_left(2), paste("AB")], "FF80AB", Some("FF80AB")),
+        ("typed # and two digits, four digits", vec![digit("#12"), paste("3456")], "#123456", Some("123456")),
+        ("typed # and three digits, three digits", vec![digit("#FFF"), paste("ABC")], "#FFFABC", Some("FFFABC")),
+        ("typed # and two digits, three digits", vec![digit("#12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("typed #, two digits", vec![digit("#"), paste("12")], "#12", Some("12")),
+        ("empty field, two digits", vec![vec![key(Key::Backspace, Modifiers::NONE)], paste("12")], "12", Some("12")),
+        ("the same color in other letters", vec![paste("ff8000")], "ff8000", None),
+        ("typed digit by digit", ["0", "0", "F", "F", "0", "0"].map(digit).to_vec(), "00FF00", Some("00FF00")),
+        ("typed with #", vec![digit("#00FF00")], "#00FF00", Some("00FF00")),
+        ("typed in part", vec![digit("00")], "00", Some("00")),
+        ("typed three digits with #", vec![digit("#0f0")], "#0f0", Some("00ff00")),
+        ("typed three letters that are not digits", vec![digit("xyz")], "xyz", Some("xyz")),
+    ];
+    for (name, events, shows, commits) in cases {
+        let mut f = Field::new();
+        f.frame(vec![], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![], &draw);
+        let selected = egui::TextEdit::load_state(&f.ctx, hex_id.get()).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+        assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 6)), "{name}: keyboard focus selects the digits");
+        for events in events {
+            f.frame(events, &draw);
+            assert_eq!(hex.take(), None, "{name}: nothing is committed before Tab");
+        }
+        assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some(shows), "{name}: the text");
+        f.frame(vec![tab()], &draw);
+        assert_eq!(hex.take().as_deref(), commits, "{name}: what Tab commits");
+    }
+    // Escape drops a pasted code.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![key(Key::Escape, Modifiers::NONE)], &draw);
+    assert_eq!(hex.take(), None, "Escape commits nothing");
+    f.frame(vec![], &draw);
+    assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some("FF8000"), "the field shows its color again");
+    // A press outside the field commits in the frame of the press, before the press acts.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    let away = Pos2::new(390.0, 190.0);
+    f.frame(vec![Event::PointerMoved(away)], &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![Event::PointerButton { pos: away, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }], &draw);
+    assert_eq!(hex.take().as_deref(), Some("00FF00"), "the press commits");
+    // Three digits that spell the color the field holds commit nothing.
+    let same = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex.set(widgets::hex_field(ui, "hex", "AABBCC"));
+        red
+    };
+    let mut f = Field::new();
+    f.frame(vec![], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(paste("abc"), &same);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![tab()], &same);
+    assert_eq!(hex.take(), None, "abc over AABBCC commits nothing");
+}
+
 /// #1692: the Stroke panel's dash and gap fields ([`widgets::opt_field`]) are blank while the
 /// selected objects' dashes differ. Tab out of the dash after typing into it gives the gap the
 /// focus; the gap then shows the dash's length, which the committed dash repeats as its gap. Tab
@@ -316,6 +416,181 @@ fn enter() -> Event {
 
 fn key(key: Key, modifiers: Modifiers) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+}
+
+/// What [`preset_row`]'s fields committed or picked in a frame: the two numbers, the text and the
+/// pick of the field with an Auto entry.
+type PresetPicks = (Option<f64>, Option<f64>, Option<String>, Option<widgets::SpinPick>);
+
+const NO_PICK: PresetPicks = (None, None, None, None);
+
+thread_local! {
+    /// Whether the last [`preset_row`] frame left an Enter press for a dialog drawn after it.
+    static ENTER_LEFT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// One frame in `ctx` with `events` of a row of two numeric fields with a spinner and presets
+/// (Stroke Weight, and a font size that is none of its presets), a text field with presets (Export
+/// for Screens' scale) and a numeric field whose list starts with Auto, which is on (Leading).
+fn preset_row(ctx: &egui::Context, time: &Cell<f64>, events: Vec<Event>) -> PresetPicks {
+    time.set(time.get() + 0.05);
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+    let mut got = NO_PICK;
+    let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+        ui.horizontal(|ui| {
+            got.0 = widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[1.0, 2.0, 4.0]);
+            got.1 = widgets::spin_field(ui, "size", Some(13.0), Unit::Points, 100.0, 1.0, 0.0, &[9.0, 12.0]);
+            got.2 = widgets::text_presets(ui, "scale", "1x", &["1x", "2x"], 100.0);
+            got.3 = widgets::spin_field_auto(ui, "leading", Some(14.0), Some(true), Unit::Points, 100.0, 1.0, 0.0, &[12.0, 14.0]);
+        });
+        ENTER_LEFT.set(crate::shortcuts::pressed_anew(ui.ctx(), Key::Enter));
+    });
+    out.textures_delta.clear();
+    got
+}
+
+/// Tab goes from one field to the next in one press: it does not stop on a field's spinner or on
+/// the chevron that opens its presets, and Shift+Tab goes back the same way.
+#[test]
+fn tab_goes_from_field_to_field_past_the_spinner_and_the_preset_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    preset_row(&ctx, &time, vec![]);
+    preset_row(&ctx, &time, vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 8, |events| {
+        preset_row(&ctx, &time, events);
+    });
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 8, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 40.0), "only the fields are Tab stops, not the spinners or chevrons: {widths:?}");
+    assert_eq!(stops[..4], stops[4..], "four fields, then back to the first: {widths:?}");
+    let mut back = vec![];
+    for _ in 0..2 {
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::SHIFT)]);
+        preset_row(&ctx, &time, vec![]);
+        back.extend(ctx.memory(|m| m.focused()));
+    }
+    assert_eq!(back, [stops[2], stops[1]], "Shift+Tab goes back field by field");
+}
+
+/// The Transparency row's opacity slider chevron is not a Tab stop either: Tab goes from the
+/// Opacity field straight to the next field.
+#[test]
+fn tab_goes_from_the_opacity_field_past_its_slider_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let frame = |events: Vec<Event>| {
+        time.set(time.get() + 0.05);
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+            ui.horizontal(|ui| {
+                widgets::opacity_blend(ui, "transparency", Some(0.5), None, true);
+                widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[]);
+            });
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    frame(vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 6, frame);
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 6, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 20.0), "the 18 pt slider chevron is not a Tab stop: {widths:?}");
+    assert_eq!(stops[..3], stops[3..], "blend mode, Opacity and the next field, then back: {widths:?}");
+}
+
+/// Gives the keyboard focus to the field that `tabs` presses of Tab reach in [`preset_row`], with
+/// every list closed, and returns that field.
+fn focus_preset_field(ctx: &egui::Context, time: &Cell<f64>, tabs: usize) -> Option<egui::Id> {
+    egui::Popup::close_all(ctx);
+    ctx.memory_mut(|m| m.surrender_focus(m.focused().unwrap_or(egui::Id::NULL)));
+    preset_row(ctx, time, vec![]);
+    for _ in 0..tabs {
+        preset_row(ctx, time, vec![key(Key::Tab, Modifiers::NONE)]);
+    }
+    preset_row(ctx, time, vec![]);
+    ctx.memory(|m| m.focused())
+}
+
+/// The presets stay in reach of the keyboard: Alt+↓ in a field opens its preset list with the
+/// keyboard focus on the chosen preset (the first entry when none is chosen, Auto when it is on),
+/// Tab goes on to the next one and Enter picks it, without reaching a dialog's OK. The field then
+/// has the keyboard focus again.
+#[test]
+fn alt_down_opens_a_fields_presets_for_the_keyboard() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let alt_down = || key(Key::ArrowDown, Modifiers::ALT);
+    // (Tabs to the field, the pick after Tab and Enter in its list.)
+    let cases = [
+        (1, (Some(4.0), None, None, None)),
+        (2, (None, Some(12.0), None, None)),
+        (3, (None, None, Some("2x".to_string()), None)),
+        (4, (None, None, None, Some(widgets::SpinPick::Value(12.0)))),
+    ];
+    for (tabs, picked) in cases {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        assert!(field.is_some(), "{tabs}");
+        assert_eq!(preset_row(&ctx, &time, vec![alt_down()]), NO_PICK, "{tabs}");
+        preset_row(&ctx, &time, vec![]);
+        let entry = ctx.memory(|m| m.focused());
+        assert!(entry.is_some() && entry != field, "{tabs}: the list takes the focus");
+        let layer = ctx.read_response(entry.unwrap_or(egui::Id::NULL)).map(|r| r.layer_id.order);
+        assert_eq!(layer, Some(egui::Order::Foreground), "{tabs}: on an entry of the list");
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::NONE)]);
+        preset_row(&ctx, &time, vec![]);
+        let mut got = preset_row(&ctx, &time, vec![enter()]);
+        assert!(!ENTER_LEFT.get(), "{tabs}: the list takes the Enter, so a dialog's OK does not");
+        if got == NO_PICK {
+            got = preset_row(&ctx, &time, vec![]);
+        }
+        assert_eq!(got, picked, "{tabs}: Enter picks the next preset");
+        preset_row(&ctx, &time, vec![]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Escape closes a preset list that Alt+↓ opened without picking anything, and the field has the
+/// keyboard focus again.
+#[test]
+fn escape_closes_a_fields_presets_and_returns_to_the_field() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    for tabs in [1, 3] {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::ALT)]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(egui::Popup::is_any_open(&ctx), "{tabs}: Alt+↓ opened the list");
+        let mut picks = vec![preset_row(&ctx, &time, vec![key(Key::Escape, Modifiers::NONE)])];
+        picks.push(preset_row(&ctx, &time, vec![]));
+        picks.push(preset_row(&ctx, &time, vec![]));
+        assert!(picks.iter().all(|p| *p == NO_PICK), "{tabs}: nothing picked: {picks:?}");
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Only Alt+↓ with no other modifier opens the presets: Shift+Alt+↓ in a field with presets
+/// steps it down by ten, as before, and leaves the list closed.
+#[test]
+fn shift_alt_down_still_steps_a_field_with_presets() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let field = focus_preset_field(&ctx, &time, 2);
+    let mut got = preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::SHIFT | Modifiers::ALT)]);
+    if got == NO_PICK {
+        got = preset_row(&ctx, &time, vec![]);
+    }
+    assert_eq!(got.1, Some(3.0), "13 pt steps down by ten");
+    assert!(!egui::Popup::is_any_open(&ctx), "the list stays closed");
+    assert_eq!(ctx.memory(|m| m.focused()), field);
 }
 
 #[test]
@@ -645,11 +920,10 @@ fn wheel(at: Pos2, unit: egui::MouseWheelUnit, dy: f32, modifiers: Modifiers) ->
     ]
 }
 
-/// The mouse wheel over a focused numeric field steps it as ↑/↓ do (#485): a notch a step, Shift
-/// ten, Ctrl/Cmd a tenth; a trackpad's points add up to notches. Unfocused, or with the pointer
-/// elsewhere, the wheel isn't the field's.
+/// Hover stepping (#5949) keeps the existing units, modifiers and trackpad accumulation,
+/// without taking keyboard focus. Outside the field, the wheel is left alone.
 #[test]
-fn the_wheel_steps_a_focused_field_under_the_pointer() {
+fn the_wheel_steps_a_hovered_field_without_taking_focus() {
     use egui::MouseWheelUnit::{Line, Point};
     let mut f = Field::new();
     let u = Unit::Millimeters;
@@ -657,16 +931,13 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(u.to_pt(mm.get())), u, 80.0).inspect(|&v| mm.set(u.from_pt(v)));
     f.frame(vec![], &draw);
     let at = f.rect.get().center();
-    assert_eq!(f.frame(wheel(at, Line, 1.0, Modifiers::NONE), &draw), None, "unfocused");
-    f.frame(f.click(1), &draw);
-    f.frame(vec![], &draw);
     for (dy, mods, want) in
         [(1.0, Modifiers::NONE, 5.0), (2.0, Modifiers::SHIFT, 25.0), (-1.0, Modifiers::COMMAND, 24.9), (-1.0, Modifiers::NONE, 24.0)]
     {
         assert!(f.frame(wheel(at, Line, dy, mods), &draw).is_some(), "{dy} {mods:?}");
         assert!((mm.get() - want).abs() < 1e-6, "{dy} {mods:?}: {}", mm.get());
     }
-    assert_eq!(f.selection(), Some((0, "24 mm".len())), "the new value is selected");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())), "hover never takes keyboard focus");
     // Points: a step for each line's worth, what is left carried to the next turn.
     let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
     assert_eq!(f.frame(wheel(at, Point, line * 0.6, Modifiers::NONE), &draw), None);
@@ -682,16 +953,16 @@ fn the_wheel_steps_a_focused_field_under_the_pointer() {
     assert_eq!(f.frame(wheel(f.rect.get().center(), Line, -1.0, Modifiers::NONE), &count), Some(2.0));
 }
 
-/// The wheel over a focused field steps it and leaves the panel where it is; over an unfocused one
-/// it scrolls the panel as before.
+/// Both focused and unfocused hovered fields own the wheel, including its smoothing tail.
 #[test]
-fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
+fn the_wheel_scrolls_the_panel_unless_over_a_numeric_field() {
     for focus in [false, true] {
         let mut f = Field::new();
         let offset = Cell::new(0.0);
+        let value = Cell::new(10.0);
         let draw = |ui: &mut egui::Ui| {
             let out = egui::ScrollArea::vertical().max_height(60.0).show(ui, |ui| {
-                let v = widgets::plain_field(ui, "f", 10.0, "", 0, 80.0);
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
                 ui.add_space(600.0);
                 v
             });
@@ -719,11 +990,520 @@ fn the_wheel_scrolls_the_panel_unless_over_the_focused_field() {
         for _ in 0..20 {
             f.frame(vec![], &draw);
         }
-        if focus {
-            assert_eq!((stepped, offset.get()), (Some(8.0), 0.0));
-        } else {
-            assert!(stepped.is_none() && offset.get() > 0.0, "{stepped:?} {}", offset.get());
+        assert_eq!((stepped, offset.get()), (Some(8.0), 0.0), "focus {focus}");
+        let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), None);
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(at, egui::MouseWheelUnit::Point, -line * 0.6, Modifiers::NONE), &draw), Some(7.0));
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
         }
+        assert_eq!(offset.get(), 0.0);
+        assert_eq!(f.frame(wheel(Pos2::new(20.0, 45.0), egui::MouseWheelUnit::Line, -2.0, Modifiers::NONE), &draw), None);
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
+        }
+        assert!(offset.get() > 0.0, "outside the field scrolls the panel");
+    }
+}
+
+/// A wheel notch of `dy` lines (up positive) from `source`, with no pointer movement.
+fn notch(dy: f32, source: egui::MouseWheelSource) -> Event {
+    Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE, source }
+}
+
+/// A notch down from a mouse wheel.
+fn notch_down() -> Event {
+    notch(-1.0, egui::MouseWheelSource::Wheel)
+}
+
+/// A panel scrolled with a still pointer keeps scrolling when a number field slides under the
+/// pointer, and the field keeps its value. The field used to take each notch that came while it
+/// was under the pointer.
+#[test]
+fn scrolling_a_panel_past_a_number_field_under_a_still_pointer_keeps_the_value() {
+    let mut f = Field::new();
+    let offset = Cell::new(0.0);
+    let value = Cell::new(10.0);
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            ui.add_space(60.0);
+            let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+            ui.add_space(600.0);
+            v
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![Event::PointerMoved(Pos2::new(20.0, 20.0))], &draw);
+    let mut stepped = None;
+    for _ in 0..30 {
+        stepped = stepped.or(f.frame(vec![notch_down()], &draw));
+    }
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    assert_eq!((stepped, value.get()), (None, 10.0), "the field kept its value");
+    assert!(offset.get() > 200.0, "the panel scrolled the field past the pointer: {}", offset.get());
+}
+
+/// A number field that slid under a still pointer takes the wheel only after the pointer is moved
+/// onto it; an event at the same position is not a move. Until then the panel scrolls.
+#[test]
+fn a_number_field_that_slid_under_a_still_pointer_steps_after_the_pointer_moves() {
+    let mut f = Field::new();
+    let top = Cell::new(60.0);
+    let value = Cell::new(10.0);
+    let draw = |ui: &mut egui::Ui| {
+        ui.add_space(top.get());
+        widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v))
+    };
+    f.frame(vec![], &draw);
+    let at = Pos2::new(20.0, 20.0);
+    f.frame(vec![Event::PointerMoved(at)], &draw);
+    top.set(0.0);
+    f.frame(vec![], &draw);
+    assert!(f.rect.get().contains(at), "the field is under the pointer");
+    for _ in 0..2 {
+        f.time += crate::widgets::WHEEL_STREAM_GAP;
+        assert_eq!(f.frame(vec![notch_down()], &draw), None, "the pointer did not move");
+    }
+    f.time += crate::widgets::WHEEL_STREAM_GAP;
+    assert_eq!(f.frame(vec![Event::PointerMoved(at), notch_down()], &draw), None, "the same position");
+    f.time += crate::widgets::WHEEL_STREAM_GAP;
+    let moved = Pos2::new(21.0, 20.0);
+    assert_eq!(f.frame(vec![Event::PointerMoved(moved), notch_down()], &draw), Some(9.0));
+    // The field moves again under the pointer, in the frame of a turn: the turn is not the field's,
+    // and the field waits for another move.
+    top.set(2.0);
+    assert_eq!(f.frame(vec![notch_down()], &draw), None, "the field moved in the frame of the turn");
+    f.time += crate::widgets::WHEEL_STREAM_GAP;
+    assert_eq!(f.frame(vec![notch_down()], &draw), None, "the field moved");
+    f.time += crate::widgets::WHEEL_STREAM_GAP;
+    assert_eq!(f.frame(vec![Event::PointerMoved(at), notch_down()], &draw), Some(8.0));
+}
+
+/// A wheel stream stays with what it began on until it pauses for the stream gap: one that began
+/// off the field never steps it, one that left the field (the pointer moved off it or out of the
+/// window) does not come back to it, and trackpad momentum never starts one on the field.
+#[test]
+fn a_number_field_wheel_stream_stays_with_what_it_began_on() {
+    use egui::MouseWheelSource::{Momentum, Trackpad};
+    let mut f = Field::new();
+    let value = Cell::new(10.0);
+    let draw = |ui: &mut egui::Ui| widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+    f.frame(vec![], &draw);
+    let (on, off) = (f.rect.get().center(), Pos2::new(300.0, 150.0));
+    let gap = |f: &mut Field| f.time += crate::widgets::WHEEL_STREAM_GAP;
+    // Began on the field, left it, came back within the stream.
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+    assert_eq!(f.frame(vec![Event::PointerMoved(off), notch_down()], &draw), None);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), None, "left its field");
+    gap(&mut f);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(8.0), "a new stream");
+    // Began off the field.
+    f.frame(vec![Event::PointerMoved(off)], &draw);
+    gap(&mut f);
+    assert_eq!(f.frame(vec![notch_down()], &draw), None);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), None, "began off the field");
+    gap(&mut f);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(7.0));
+    // The pointer left the window.
+    assert_eq!(f.frame(vec![Event::PointerGone], &draw), None);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), None, "left the window");
+    // Momentum after a pause starts no stream on the field, and the stream it starts stays off it.
+    gap(&mut f);
+    assert_eq!(f.frame(vec![notch(-1.0, Momentum)], &draw), None, "momentum");
+    assert_eq!(f.frame(vec![notch(-1.0, Trackpad)], &draw), None, "the momentum's stream");
+    gap(&mut f);
+    assert_eq!(f.frame(vec![notch(-1.0, Trackpad)], &draw), Some(6.0));
+    assert_eq!(value.get(), 6.0);
+}
+
+/// A frame whose turns begin on the field and go on after the pointer moved off it scrolls the
+/// panel with all of them and leaves the value.
+#[test]
+fn a_frame_with_turns_on_and_off_a_number_field_scrolls_the_panel() {
+    let mut f = Field::new();
+    let offset = Cell::new(0.0);
+    let value = Cell::new(10.0);
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+            ui.add_space(600.0);
+            v
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    let (on, off) = (Pos2::new(20.0, 12.0), Pos2::new(20.0, 80.0));
+    let events = vec![Event::PointerMoved(on), notch_down(), Event::PointerMoved(off), notch_down()];
+    assert_eq!(f.frame(events, &draw), None);
+    assert!(offset.get() > 0.0, "the panel scrolled in the same frame");
+    assert_eq!(value.get(), 10.0);
+}
+
+/// The rest of a notch that a number field took, which egui spreads over the next frames, scrolls
+/// no panel after the pointer leaves the field: neither the field's own panel nor a panel drawn
+/// before it. A notch turned after that scrolls the panel under the pointer by one whole notch.
+#[test]
+fn the_rest_of_a_notch_a_number_field_took_scrolls_no_panel_after_the_pointer_leaves() {
+    for to_other_panel in [false, true] {
+        let mut f = Field::new();
+        let (left, right, value, field) = (Cell::new(0.0), Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+        let draw = |ui: &mut egui::Ui| {
+            ui.horizontal_top(|ui| {
+                let out = egui::ScrollArea::vertical().id_salt("left").max_height(120.0).show(ui, |ui| {
+                    ui.allocate_space(vec2(100.0, 600.0));
+                });
+                left.set(out.state.clamped_offset().y);
+                let out = egui::ScrollArea::vertical().id_salt("right").max_height(120.0).show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                        field.set(ui.min_rect());
+                        ui.add_space(600.0);
+                        v
+                    })
+                    .inner
+                });
+                right.set(out.state.clamped_offset().y);
+                out.inner
+            })
+            .inner
+        };
+        f.frame(vec![], &draw);
+        f.frame(vec![], &draw);
+        let on = field.get().center();
+        let off = if to_other_panel { Pos2::new(50.0, 60.0) } else { Pos2::new(on.x, field.get().bottom() + 40.0) };
+        assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+        f.frame(vec![Event::PointerMoved(off)], &draw);
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
+        }
+        assert_eq!((left.get(), right.get(), value.get()), (0.0, 0.0, 9.0), "pointer moved to the other panel: {to_other_panel}");
+        assert_eq!(f.frame(vec![notch_down()], &draw), None);
+        for _ in 0..30 {
+            f.frame(vec![], &draw);
+        }
+        let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+        let (scrolled, still) = if to_other_panel { (left.get(), right.get()) } else { (right.get(), left.get()) };
+        assert!((scrolled - line).abs() < 0.01 && still == 0.0, "other panel {to_other_panel}: {scrolled} {still}");
+        assert_eq!(value.get(), 9.0);
+    }
+}
+
+/// A wheel touch that starts and never ends (some mouse wheels send no end) stops counting as a
+/// touch once no wheel event comes for a while, as egui stops it, so the rest of a notch a number
+/// field takes after that still scrolls no panel after the pointer leaves.
+#[test]
+fn a_wheel_touch_with_no_end_does_not_let_the_rest_of_a_later_notch_scroll_the_panel() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                ui.add_space(600.0);
+                v
+            })
+            .inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    let start = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::Vec2::ZERO,
+        phase: egui::TouchPhase::Start,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    f.frame(vec![start], &draw);
+    for _ in 0..10 {
+        f.frame(vec![], &draw);
+    }
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(8.0));
+    f.frame(vec![Event::PointerMoved(off)], &draw);
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    assert_eq!((offset.get(), value.get()), (0.0, 8.0));
+}
+
+/// A whole wheel touch (start, turn and end) in one pass that a number field takes leaves nothing
+/// for egui to let out later, so the next notch on the panel scrolls it by one whole notch.
+#[test]
+fn a_whole_touch_in_one_pass_on_a_number_field_leaves_the_next_panel_notch_whole() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    let touch = |phase| Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: if phase == egui::TouchPhase::Move { vec2(0.0, -1.0) } else { egui::Vec2::ZERO },
+        phase,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    let events = vec![touch(egui::TouchPhase::Start), touch(egui::TouchPhase::Move), touch(egui::TouchPhase::End)];
+    assert_eq!(f.frame(events, &draw), Some(8.0));
+    f.frame(vec![Event::PointerMoved(off), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    assert!((offset.get() - line).abs() < 0.01, "{} {line}", offset.get());
+    assert_eq!(value.get(), 8.0);
+}
+
+/// A turn and the end of the wheel stream in one pass that a number field takes leave nothing for
+/// egui to let out later, so the next notch on the panel scrolls it by one whole notch.
+#[test]
+fn a_turn_ended_in_its_own_pass_on_a_number_field_leaves_the_next_panel_notch_whole() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    let end = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::Vec2::ZERO,
+        phase: egui::TouchPhase::End,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down(), end], &draw), Some(9.0));
+    f.frame(vec![Event::PointerMoved(off), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    assert!((offset.get() - line).abs() < 0.01, "{} {line}", offset.get());
+    assert_eq!(value.get(), 9.0);
+}
+
+/// A small turn the other way on the panel while the rest of a notch a number field took is still
+/// being let out scrolls the panel by the whole turn.
+#[test]
+fn a_turn_the_other_way_while_a_number_field_notch_runs_out_scrolls_the_panel_by_the_whole_turn() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            ui.add_space(150.0);
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    let above = |field: Rect| Pos2::new(field.center().x, field.top() - 30.0);
+    f.frame(vec![Event::PointerMoved(Pos2::new(field.get().center().x, 10.0)), notch_down(), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let scrolled = offset.get();
+    assert!((scrolled - 2.0 * line).abs() < 0.01, "{scrolled}");
+    f.frame(vec![Event::PointerMoved(field.get().center())], &draw);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(9.0));
+    let up = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 10.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    f.frame(vec![Event::PointerMoved(above(field.get())), up], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    assert!((offset.get() - (scrolled - 10.0)).abs() < 0.01, "{} {scrolled}", offset.get());
+    assert_eq!(value.get(), 9.0);
+}
+
+/// A number field that missed a pass (its panel was hidden) waits for the pointer to move onto it
+/// again before it takes the wheel, with or without another number field drawn meanwhile.
+#[test]
+fn a_number_field_that_missed_a_pass_waits_for_a_pointer_move() {
+    for other in [false, true] {
+        let mut f = Field::new();
+        let shown = Cell::new(true);
+        let draw = |ui: &mut egui::Ui| {
+            let v = if shown.get() { widgets::plain_field(ui, "f", 10.0, "", 0, 80.0) } else { None };
+            if other {
+                ui.add_space(100.0);
+                widgets::plain_field(ui, "other", 1.0, "", 0, 80.0);
+            }
+            v
+        };
+        f.frame(vec![], &draw);
+        let at = Pos2::new(20.0, 12.0);
+        f.frame(vec![Event::PointerMoved(at)], &draw);
+        shown.set(false);
+        f.frame(vec![], &draw);
+        shown.set(true);
+        f.frame(vec![], &draw);
+        assert_eq!(f.frame(vec![notch_down()], &draw), None, "missed a pass, other field {other}");
+        f.time += crate::widgets::WHEEL_STREAM_GAP;
+        assert_eq!(f.frame(vec![Event::PointerMoved(at + vec2(1.0, 0.0)), notch_down()], &draw), Some(9.0), "other field {other}");
+    }
+}
+
+/// Two number fields, `a` above `b`; the frame returns `b`'s new value, and `a`'s goes in `a`.
+fn two_fields<'a>(a: &'a Cell<f64>, b: &'a Cell<f64>, rects: &'a Cell<[Rect; 2]>) -> impl Fn(&mut egui::Ui) -> Option<f64> + 'a {
+    move |ui: &mut egui::Ui| {
+        if let Some(v) = widgets::plain_field(ui, "a", a.get(), "", 0, 80.0) {
+            a.set(v);
+        }
+        let first = ui.min_rect();
+        ui.add_space(40.0);
+        let top = ui.cursor().top();
+        let v = widgets::plain_field(ui, "b", b.get(), "", 0, 80.0).inspect(|&v| b.set(v));
+        rects.set([first, Rect::from_x_y_ranges(first.x_range(), top..=ui.min_rect().bottom())]);
+        v
+    }
+}
+
+/// A stream that began on one number field scrolls the panel when the pointer moves onto another
+/// field, until the wheel pauses for the stream gap or the pointer is pressed on the other field.
+#[test]
+fn a_press_on_a_number_field_gives_it_the_running_wheel_stream() {
+    let mut f = Field::new();
+    let (a, b, rects) = (Cell::new(10.0), Cell::new(20.0), Cell::new([Rect::NOTHING; 2]));
+    let draw = two_fields(&a, &b, &rects);
+    f.frame(vec![], &draw);
+    let [on_a, on_b] = rects.get().map(|r| r.center());
+    f.frame(vec![Event::PointerMoved(on_a), notch_down()], &draw);
+    assert_eq!(a.get(), 9.0, "the stream began on a");
+    assert_eq!(f.frame(vec![Event::PointerMoved(on_b), notch_down()], &draw), None, "moved onto b within the stream");
+    let press = |pressed| Event::PointerButton { pos: on_b, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    f.frame(vec![press(true), press(false)], &draw);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(19.0), "pressed on b");
+    assert_eq!(a.get(), 9.0);
+    // A press on the field that holds the stream keeps it there.
+    f.frame(vec![press(true), press(false)], &draw);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(18.0));
+}
+
+/// A window or overlay that comes and goes over a still pointer, with no input while it is up,
+/// leaves the number field under it waiting for the pointer to move onto it again.
+#[test]
+fn a_number_field_covered_by_an_overlay_waits_for_a_pointer_move() {
+    let mut f = Field::new();
+    let value = Cell::new(10.0);
+    let covered = Cell::new(false);
+    let draw = |ui: &mut egui::Ui| {
+        let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+        if covered.get() {
+            let cover = ui.min_rect().expand(5.0);
+            egui::Area::new(egui::Id::unique("numfields overlay")).order(egui::Order::Foreground).fixed_pos(cover.min).show(ui.ctx(), |ui| {
+                ui.allocate_exact_size(cover.size(), egui::Sense::click());
+            });
+        }
+        v
+    };
+    f.frame(vec![], &draw);
+    let at = f.rect.get().center();
+    f.frame(vec![Event::PointerMoved(at)], &draw);
+    covered.set(true);
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    covered.set(false);
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    assert_eq!(f.frame(vec![notch_down()], &draw), None, "the overlay covered the field");
+    f.time += crate::widgets::WHEEL_STREAM_GAP;
+    assert_eq!(f.frame(vec![Event::PointerMoved(at + vec2(1.0, 0.0)), notch_down()], &draw), Some(9.0));
+}
+
+/// A wheel turn over an unfocused field steps it without consuming an arrow key in the same frame.
+#[test]
+fn hover_wheel_keeps_arrow_keys_for_the_keyboard_focus() {
+    let mut f = Field::new();
+    let arrows = Cell::new(false);
+    let draw = |ui: &mut egui::Ui| {
+        let v = widgets::plain_field(ui, "f", 1.123, "", 3, 80.0);
+        arrows.set(ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Key { key: Key::ArrowUp, .. }))));
+        v
+    };
+    f.frame(vec![], &draw);
+    let at = f.rect.get().center();
+    assert_eq!(f.frame(vec![Event::PointerMoved(at), key(Key::ArrowUp, Modifiers::NONE)], &draw), None);
+    assert!(arrows.get());
+    let mut events = wheel(at, egui::MouseWheelUnit::Line, 1.0, Modifiers::NONE);
+    events.push(key(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(f.frame(events, &draw), Some(2.0), "existing next-multiple rounding, wheel only");
+    assert!(arrows.get(), "hover does not consume arrows");
+    assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())));
+}
+
+/// Hover steps stop at both bounds, leave mixed values blank, and never edit disabled fields.
+#[test]
+fn hover_wheel_preserves_limits_mixed_values_and_disabled_fields() {
+    for (value, enabled, dy, want) in [
+        (Some(0.5), true, -1.0, Some(0.0)),
+        (Some(0.0), true, -1.0, None),
+        (Some(9.5), true, 1.0, Some(10.0)),
+        (Some(10.0), true, -1.0, Some(9.0)),
+        (None, true, -1.0, None),
+        (Some(10.0), false, -1.0, None),
+    ] {
+        let mut f = Field::new();
+        let draw = |ui: &mut egui::Ui| ui.add_enabled_ui(enabled, |ui| widgets::range_field(ui, "f", value, 0.0..=10.0, "", 3, 80.0)).inner;
+        f.frame(vec![], &draw);
+        assert_eq!(f.frame(wheel(f.rect.get().center(), egui::MouseWheelUnit::Line, dy, Modifiers::NONE), &draw), want);
     }
 }
 
@@ -809,6 +1589,23 @@ fn a_short_drag_released_as_a_click_keeps_its_caret() {
     assert_eq!(f.frame(vec![enter()], &draw), Some(1273456.0), "typing lands where the drag left the caret");
 }
 
+/// #1326: a pointer movement well under egui's click tolerance must keep the caret too; only a
+/// press released within a point of where it went down selects all.
+#[test]
+fn a_sub_threshold_movement_released_as_a_click_keeps_its_caret() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    let pressed = f.selection();
+    let nudge = egui::vec2(1.5, 0.0);
+    f.frame(vec![Event::PointerMoved(at + nudge)], &draw);
+    f.frame(vec![pointer_button(at + nudge, false)], &draw);
+    assert_ne!(f.selection(), Some((0, field_text(0).chars().count())), "a 1.5 px movement is a drag, not a tap (#1326)");
+    assert_eq!(f.selection(), pressed, "the movement keeps the caret where the press landed");
+}
+
 /// A tap (no movement) on a fresh numeric field still selects all on release.
 #[test]
 fn a_tap_without_movement_still_selects_all_on_release() {
@@ -820,6 +1617,20 @@ fn a_tap_without_movement_still_selects_all_on_release() {
     f.frame(vec![], &draw);
     f.frame(vec![pointer_button(at, false)], &draw);
     assert_eq!(f.selection(), Some((0, field_text(0).chars().count())), "a plain tap selects all");
+}
+
+/// A pen or trackpad tap often moves a pixel between press and release: it is still a tap.
+#[test]
+fn a_tap_with_a_pixel_of_jitter_still_selects_all_on_release() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    let jitter = egui::vec2(0.7, -0.6);
+    f.frame(vec![Event::PointerMoved(at + jitter)], &draw);
+    f.frame(vec![pointer_button(at + jitter, false)], &draw);
+    assert_eq!(f.selection(), Some((0, field_text(0).chars().count())), "a jittery tap selects all");
 }
 
 #[test]

@@ -8,6 +8,10 @@ description = "VectorCraft PDF export and import"
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_pdf::reads_of` and `imports_of` for other crates' tests (dev-dependencies only).
+read-count = []
+
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -26,6 +30,7 @@ craft-pdf = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 smallvec = "1"
+siphasher = "1"
 weezl = "0.2"
 serde = { workspace = true }
 # The XMP packet that File Info is read from (file_info.rs); the version usvg already uses.
@@ -48,3 +53,9 @@ vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 serde_json = { workspace = true }
 # `draw_text`, to write test files with live text as other writers do.
 krilla = { workspace = true, features = ["simple-text"] }
+
+# An independent raster oracle for gradient placement in PDF forms. These are test-only macOS
+# bindings; the exporter stays portable Rust and does not depend on an OS PDF renderer.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFData"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGDataProvider", "CGImage", "CGPDFDocument", "CGPDFPage"] }

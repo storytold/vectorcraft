@@ -53,7 +53,7 @@ fn area(runs: Vec<TextRun>, frame: Rect) -> TextObject {
 }
 
 /// `t` as Shrink Text to Fit lays it out at factor `f`, without fitting: sizes, explicit leading
-/// and baseline shifts scaled (inline art's own shift too), paragraph spacing kept.
+/// and baseline shifts scaled (inline art's own shift and tate-chu-yoko offsets too), paragraph spacing kept.
 fn scaled_by(t: &TextObject, f: f64) -> TextObject {
     let mut s = t.clone();
     s.area.fit = AreaFit::None;
@@ -61,6 +61,8 @@ fn scaled_by(t: &TextObject, f: f64) -> TextObject {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        r.style.tcy_up_down *= f;
+        r.style.tcy_left_right *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }
@@ -332,14 +334,14 @@ fn composer_x_mixed_sizes() {
     assert_eq!(x.line, 0);
     assert!(l.lines[0].ascent > l.lines[1].ascent + 1.0, "{:?}", l.lines);
     // A rectangle that wraps around an object, and a frame that isn't a rectangle (a corner cut),
-    // both far below the text, break mixed sizes line by line and still break uniform sizes with
-    // the every-line composer.
+    // both far below the text, break mixed sizes and uniform sizes alike with the every-line
+    // composer.
     let below = PathData::from_bezpath(&Rect::new(0.0, 180.0, 20.0, 190.0).to_path(0.1));
-    for (x, want) in [(&wide, every), (&big, greedy)] {
+    for x in [&wide, &big] {
         let mut t = area(runs(x.clone()), Rect::new(0.0, 0.0, w, 200.0));
         t.wrap = vec![vectorcraft_doc::WrapShape { path: below.clone(), wrap: Default::default() }];
         t.para.composer = Composer::EveryLine;
-        assert_eq!(line_texts(&t, &layout(db(), &t)), want, "wrap, {}", x.size);
+        assert_eq!(line_texts(&t, &layout(db(), &t)), every, "wrap, {}", x.size);
     }
     let cut = kurbo::BezPath::from_vec(vec![
         kurbo::PathEl::MoveTo((0.0, 0.0).into()),
@@ -349,12 +351,174 @@ fn composer_x_mixed_sizes() {
         kurbo::PathEl::LineTo((0.0, 200.0).into()),
         kurbo::PathEl::ClosePath,
     ]);
-    for (x, want) in [(&wide, every), (&big, greedy)] {
+    for x in [&wide, &big] {
         let mut t = area(runs(x.clone()), Rect::ZERO);
         t.kind = TextKind::Area { frame: PathData::from_bezpath(&cut) };
         t.para.composer = Composer::EveryLine;
-        assert_eq!(line_texts(&t, &layout(db(), &t)), want, "cut corner, {}", x.size);
+        assert_eq!(line_texts(&t, &layout(db(), &t)), every, "cut corner, {}", x.size);
     }
+}
+
+/// Text with the word `X` set in `x` and the rest in 12 pt.
+fn with_x(x: CharStyle) -> Vec<TextRun> {
+    let st = sans(12.0);
+    vec![
+        run("Destroy all creatures with toughness ", st.clone()),
+        run("X", x),
+        run(" or less. Then draw a card for each creature destroyed this way.", st),
+    ]
+}
+
+/// The width the text of [`with_x`] is set in.
+fn x_width() -> f64 {
+    natural_width("Destroy all creatures with toughness X or", 12.0) + 2.0
+}
+
+#[test]
+fn composer_x_mixed_sizes_in_a_stepped_frame() {
+    // A frame as wide as the first line down to 40 pt and half as wide below. A 36 pt word makes
+    // the line it is on reach below the step, where the frame is narrow: the every-line composer
+    // breaks the paragraph with each line's measure where its height sets it, not as the
+    // single-line composer does, and every line keeps within its room.
+    let w = x_width();
+    let set = |x: CharStyle, composer: Composer| {
+        let mut t = stepped(w, w * 0.5, 40.0, 300.0);
+        t.runs = with_x(x);
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{composer:?}: {:?}", l.lines);
+        (line_texts(&t, &l), l)
+    };
+    let (every, l) = set(sans(36.0), Composer::EveryLine);
+    assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each", "creature destroyed", "this way."]);
+    // The 36 pt line reaches below the step and is set at the narrow measure.
+    let tall = &l.lines[1];
+    assert!(tall.ascent > 30.0 && tall.baseline + tall.descent > 40.0 && tall.avail.1 < w * 0.5 + 0.01, "{:?}", l.lines);
+    let (greedy, _) = set(sans(36.0), Composer::SingleLine);
+    assert_ne!(every, greedy);
+    // Uniform sizes keep the breaks they had.
+    let (uniform, _) = set(sans(12.0), Composer::EveryLine);
+    assert_eq!(uniform, ["Destroy all creatures with toughness X or", "less. Then draw a card for each creature", "destroyed this way."]);
+}
+
+#[test]
+fn composer_x_mixed_sizes_around_text_wrap() {
+    // A wrap object across the middle of the frame from 40 pt down splits the lines beside it in
+    // two. The line of the 36 pt word, which starts with a 12 pt word, falls beside it, and the
+    // every-line composer measures each of the two spans across the line's whole height: no
+    // glyph runs into the object.
+    let w = x_width();
+    let object = Rect::new(w * 0.4, 40.0, w * 0.6, 70.0);
+    let set = |composer: Composer| {
+        let mut runs = with_x(sans(36.0));
+        // A no-break space keeps the 36 pt word on the line of the 12 pt word before it.
+        runs[0] = run("Destroy all creatures with toughness\u{a0}", sans(12.0));
+        let mut t = area(runs, Rect::new(0.0, 0.0, w, 300.0));
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&object.to_path(0.1)), wrap: Default::default() }];
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        (line_texts(&t, &l), l, t)
+    };
+    let (every, l, t) = set(Composer::EveryLine);
+    assert_eq!(
+        every,
+        ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature", "destroyed this", "way."]
+    );
+    assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{:?}", l.lines);
+    // Two spans share each baseline beside the object.
+    assert_eq!(l.lines[1].baseline, l.lines[2].baseline);
+    assert!(l.lines[1].ascent > 30.0 && l.lines[2].avail.0 > object.x1, "{:?}", l.lines);
+    let text = t.plain_text();
+    let hits = l.glyphs.iter().filter(|g| {
+        let li = &l.lines[g.line];
+        let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
+        across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
+    });
+    assert_eq!(hits.count(), 0, "{:?}", l.lines);
+    let (greedy, _, _) = set(Composer::SingleLine);
+    assert_ne!(every, greedy);
+}
+
+#[test]
+fn composer_x_mixed_sizes_in_a_frame_that_widens() {
+    // A frame as wide as "Destroy all" down to 20 pt and as wide as the first line of
+    // `composer_x_mixed_sizes_in_a_stepped_frame` below. The second line is too long for the narrow
+    // part until it takes in the 48 pt word, which sets it lower, where the frame is wide: the
+    // every-line composer tries that longer line and sets it there.
+    let w = x_width();
+    let narrow = natural_width("Destroy all", 12.0) + 2.0;
+    let set = |composer: Composer| {
+        let mut t = stepped(narrow, w, 20.0, 300.0);
+        t.runs = with_x(sans(48.0));
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{composer:?}: {:?}", l.lines);
+        (line_texts(&t, &l), l)
+    };
+    let (every, l) = set(Composer::EveryLine);
+    assert_eq!(every, ["Destroy all", "creatures with toughness X or less.", "Then draw a card for each creature", "destroyed this way."]);
+    let tall = &l.lines[1];
+    assert!(tall.ascent > 40.0 && tall.baseline - tall.ascent > 20.0 && tall.avail.1 > narrow + 1.0, "{:?}", l.lines);
+    let (greedy, _) = set(Composer::SingleLine);
+    assert_eq!(greedy, ["Destroy all", "creatures", "with toughness X or less. Then draw", "a card for each creature destroyed this", "way."]);
+}
+
+#[test]
+fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
+    // A stepped frame too short for the paragraph: the lines that fit are set, in order, each once
+    // and within its room, and the frame overflows.
+    let w = x_width();
+    let mut t = stepped(w, w * 0.5, 40.0, 75.0);
+    t.runs = with_x(sans(36.0));
+    t.para.composer = Composer::EveryLine;
+    let l = layout(db(), &t);
+    assert!(l.overflow && l.lines.len() >= 2, "{:?}", l.lines);
+    assert_eq!(l.lines[0].start, 0);
+    assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start && p[0].start < p[0].end), "{:?}", l.lines);
+    assert!(past_their_room(&t, &l).is_empty(), "{:?}", l.lines);
+    assert!(l.lines.iter().all(|li| li.baseline + li.descent <= 75.0 + 0.01), "{:?}", l.lines);
+}
+
+#[test]
+fn composer_x_mixed_sizes_long_paragraph_in_a_shaped_frame() {
+    // A long paragraph of mixed sizes in a stepped frame is laid out whole, its lines in order and
+    // each within its room, whether the composer's search finishes or stops at its limits.
+    let w = x_width();
+    let mut t = stepped(w, w * 0.5, 40.0, 100_000.0);
+    t.runs = (0..150).flat_map(|_| with_x(sans(36.0))).collect();
+    t.para.composer = Composer::EveryLine;
+    let l = layout(db(), &t);
+    assert!(!l.overflow, "{} lines", l.lines.len());
+    assert_eq!(l.lines.last().map(|li| li.end), Some(t.plain_text().len()));
+    assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start), "lines out of order");
+    assert!(past_their_room(&t, &l).is_empty());
+}
+
+/// A frame `w` wide down to `y`, and `narrow` wide below it.
+fn stepped(w: f64, narrow: f64, y: f64, bottom: f64) -> TextObject {
+    let frame = kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((0.0, 0.0).into()),
+        kurbo::PathEl::LineTo((w, 0.0).into()),
+        kurbo::PathEl::LineTo((w, y).into()),
+        kurbo::PathEl::LineTo((narrow, y).into()),
+        kurbo::PathEl::LineTo((narrow, bottom).into()),
+        kurbo::PathEl::LineTo((0.0, bottom).into()),
+        kurbo::PathEl::ClosePath,
+    ]);
+    let mut t = area(vec![], Rect::ZERO);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+    t
+}
+
+/// The lines of `l` whose glyphs reach past either end of the room they were set in.
+fn past_their_room(t: &TextObject, l: &TextLayout) -> Vec<usize> {
+    let text = t.plain_text();
+    let past = |i: usize| {
+        let (a, b) = l.lines[i].avail;
+        let mut glyphs = l.glyphs.iter().filter(|g| g.line == i && !text[g.byte..].starts_with(char::is_whitespace));
+        glyphs.any(|g| g.origin.x < a - 0.01 || g.origin.x + g.advance > b + 0.01)
+    };
+    (0..l.lines.len()).filter(|&i| past(i)).collect()
 }
 
 #[test]

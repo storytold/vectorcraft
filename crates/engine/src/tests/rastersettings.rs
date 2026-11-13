@@ -409,3 +409,96 @@ fn a_gradient_exports_at_the_resolution_the_file_opens_with() {
         assert_eq!(sizes, [(10, 10)], "saved as {saved}");
     }
 }
+
+/// Rasterize in a CMYK document's colour model makes a CMYK image of the art's inks (#4882): the
+/// image says CMYK, CMYK colours keep their numbers, a CMYK export keeps them, and a transparent
+/// background becomes the image's opacity mask.
+#[test]
+fn rasterize_to_cmyk_makes_a_cmyk_image() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": "cmyk"})).unwrap();
+    let r = id(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+    s.execute("paint.setFill", &json!({"color": {"c": 0.2, "m": 0.4, "y": 0.6, "k": 0.1}, "ids": [r.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [r.0]})).unwrap();
+    let want = [51u8, 102, 153, 26];
+    let near = |p: &[u8]| p.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 1);
+    let rasterize = |s: &mut Session, background: &str| {
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        let p = json!({"ppi": 72, "colorModel": "cmyk", "background": background, "addAround": 5});
+        let img = id(&s.execute("object.rasterize", &p).unwrap());
+        assert_eq!(s.execute("image.info", &json!({"id": img.0})).unwrap()["colorMode"], "CMYK");
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(img).unwrap().clone();
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        let inks = d.images[&im.key].cmyk().expect("a CMYK image");
+        assert_eq!((inks.width, inks.height), (50, 50));
+        let at = |x: u32, y: u32| inks.data[((y * 50 + x) * 4) as usize..][..4].to_vec();
+        assert!(near(&at(25, 25)), "the fill's inks: {:?}", at(25, 25));
+        assert_eq!(at(1, 1), [0; 4], "no ink around the art");
+        n
+    };
+    let opaque = rasterize(&mut s, "white");
+    assert!(opaque.extras().mask.is_none(), "opaque: no mask");
+    // A CMYK TIFF export keeps the image's inks.
+    let tiff = s.execute("document.export", &json!({"format": "tiff", "colorModel": "cmyk", "ppi": 72})).unwrap();
+    let tiff = vectorcraft_format::base64_decode(tiff["dataBase64"].as_str().unwrap()).unwrap();
+    let inks = vectorcraft_doc::ImageBlob::new("image/tiff", tiff).cmyk().expect("a CMYK TIFF");
+    let at = ((30 * inks.width + 30) * 4) as usize;
+    assert!(near(&inks.data[at..at + 4]), "exported: {:?}", &inks.data[at..at + 4]);
+    // Transparent: the art's coverage is the image's opacity mask.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let masked = rasterize(&mut s, "transparent");
+    let mask = masked.extras().mask.as_deref().expect("an opacity mask").clone();
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Image(m) = &mask.art.kind else { panic!("the mask is an image") };
+    let alpha = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_luma8();
+    assert_eq!((alpha.get_pixel(1, 1).0, alpha.get_pixel(25, 25).0), ([0], [255]));
+    assert!(mask.clip);
+}
+
+/// Rasterize with the Grayscale or Bitmap colour model makes a grayscale image (#6969): the
+/// image says Grayscale, its file holds one gray channel (one bit a pixel for an opaque Bitmap,
+/// gray and alpha over a transparent background), in a CMYK document too, and a fill color
+/// colorizes it.
+#[test]
+fn rasterize_to_grayscale_or_bitmap_makes_a_grayscale_image() {
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": mode})).unwrap();
+        let r = id(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [r.0]})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true, "ids": [r.0]})).unwrap();
+        let mut rasterize = |model: &str, background: &str| {
+            s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+            let p = json!({"ppi": 72, "colorModel": model, "background": background, "addAround": 5});
+            let img = id(&s.execute("object.rasterize", &p).unwrap());
+            let info = s.execute("image.info", &json!({"id": img.0})).unwrap();
+            let d = &s.doc().unwrap().doc;
+            let n = d.node(img).unwrap();
+            assert!(n.extras().mask.is_none(), "{mode} {model} {background}: no opacity mask");
+            let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+            let blob = d.images[&im.key].clone();
+            let pixels = image::load_from_memory(&blob.bytes).unwrap().to_luma_alpha8();
+            assert_eq!(pixels.dimensions(), (50, 50));
+            let at = |x, y| pixels.get_pixel(x, y).0;
+            s.execute("edit.undo", &json!({})).unwrap();
+            (info["colorMode"].clone(), blob.gray_source(), at(25, 25), at(1, 1))
+        };
+        let gray = |one_bit, alpha| Some(vectorcraft_doc::GraySource { one_bit, alpha });
+        let (info, source, [level, alpha], corner) = rasterize("grayscale", "white");
+        assert_eq!((info, source, alpha, corner), (json!("Grayscale"), gray(false, false), 255, [255, 255]), "{mode}");
+        if mode == "rgb" {
+            assert_eq!(level, 54, "red's Rec. 709 luma");
+        } else {
+            assert!((1..=254).contains(&level), "the CMYK red's screen color as a gray: {level}");
+        }
+        assert_eq!(rasterize("grayscale", "transparent"), (json!("Grayscale"), gray(false, true), [level, 255], [255, 0]), "{mode}");
+        assert_eq!(rasterize("bitmap", "white"), (json!("Grayscale"), gray(true, false), [0, 255], [255, 255]), "{mode}");
+        assert_eq!(rasterize("bitmap", "transparent"), (json!("Grayscale"), gray(false, true), [0, 255], [255, 0]), "{mode}");
+        // A fill color colorizes the image, as it does any grayscale image.
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        let img = id(&s.execute("object.rasterize", &json!({"ppi": 72, "colorModel": "grayscale"})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [img.0]})).unwrap();
+        assert!(s.doc().unwrap().doc.node(img).unwrap().extras().colorize.is_some(), "{mode}: colorized");
+    }
+}

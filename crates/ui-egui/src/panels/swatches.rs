@@ -1,5 +1,6 @@
-//! Swatches panel: proxy, Recent Colors, find field, thumbnail grid (15.5 pt tiles on a 17 pt pitch)
-//! or list, colour groups as folders, None/Registration first, bottom bar and panel menu.
+//! Swatches panel: proxy, Recent Colors (hidden by the panel menu's Show Recent Colors), find
+//! field, thumbnail grid (15.5 pt tiles on a 17 pt pitch) or list, colour groups as folders,
+//! None/Registration first, bottom bar and panel menu.
 //!
 //! Swatches drag to reorder, into and out of colour groups (`swatch.move`) and onto art (the active
 //! proxy's paint command with the object's id) and onto the Gradient panel's ramp; a Fill/Stroke
@@ -13,6 +14,7 @@ use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LI
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::patternlib::{self, PATTERN_LIBRARIES};
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
@@ -39,8 +41,8 @@ use dnd::drag_of;
 use dnd::highlighted;
 pub(crate) use dnd::{click_selection, drag_preview};
 pub(crate) use libraries::{
-    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, limit_key, limit_name, load_library, open_library, other_library, user_library,
-    window_menu,
+    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_label, library_list, limit_key, limit_name, load_library, open_library,
+    other_library, user_library, window_menu,
 };
 #[cfg(test)]
 pub(crate) use tiles::describe;

@@ -375,6 +375,29 @@ fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
     assert!(matches!(fill(&app), Paint::Pattern { ref pattern, .. } if pattern == "Checks"), "{:?}", fill(&app));
 }
 
+/// A spot swatch dropped on the list (as the Swatches panel drags it, with its name) is added as
+/// a spot colour of that ink, at its tint (#5812).
+#[test]
+fn a_spot_swatch_dropped_on_the_list_stays_spot() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    app.run("swatch.new", json!({"name": "Kiss-cut", "color": "#ff00ff", "spot": true})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let into = at(&texts, "Brand").center() + vec2(0.0, 80.0);
+    for tint in [1.0, 0.5] {
+        let paint = app.session.active().unwrap().doc.tint_paint("Kiss-cut", tint).unwrap();
+        let drag = PanelDrag::Paint { params: crate::panels::paint_params(&paint), paint, rows: None, library: None };
+        drop_at(&mut app, &ctx, drag, into);
+    }
+    let lib = app.session.libraries.get("Brand").unwrap();
+    let inks: Vec<_> = lib.colors.iter().map(|c| (c.spot.as_deref(), c.tint)).collect();
+    assert_eq!(inks, [(Some("Kiss-cut"), 1.0), (Some("Kiss-cut"), 0.5)]);
+}
+
 /// New Group… and Rename Group… ask for a name and act on the library and group they came
 /// from; the dialog shows only the name.
 #[test]
@@ -391,6 +414,89 @@ fn group_dialogs_run_with_their_library_and_group() {
     crate::dialogs::confirm(&mut app).unwrap();
     let got = app.run("library.get", json!({})).unwrap();
     assert_eq!(got["groups"], json!([{"name": "Cold", "items": [{"kind": "color", "item": "Blue"}]}]));
+}
+
+/// A `button` click at `pos`, pressed in one frame and released in the next.
+fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, pos: egui::Pos2, button: egui::PointerButton) -> Vec<(String, Rect)> {
+    let event = |pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
+    frame_at(app, ctx, 600.0, vec![egui::Event::PointerMoved(pos), event(true)]);
+    frame_at(app, ctx, 600.0, vec![event(false)]);
+    frame_at(app, ctx, 600.0, vec![]).0
+}
+
+/// The menu entries shown in `texts`, in order from the top: the labels starting with the menu's
+/// indent.
+fn menu_entries(texts: &[(String, Rect)]) -> Vec<String> {
+    let mut entries: Vec<_> = texts.iter().filter(|(t, _)| t.starts_with("   ")).map(|(t, r)| (t.trim().to_string(), r.top())).collect();
+    entries.sort_by(|a, b| a.1.total_cmp(&b.1));
+    entries.into_iter().map(|(t, _)| t).collect()
+}
+
+/// A right-click on a library character style opens its menu without applying it: Apply
+/// Character Style (only with type selected), Add to Character Styles, Move to Group, Rename… and
+/// Delete. Add puts the style in the document's character styles and leaves the selected type as
+/// it was; Rename… opens a dialog with the style's name that renames it on OK and changes nothing
+/// on Cancel. A paragraph style's menu stays Move to Group and Delete.
+#[test]
+fn a_character_style_s_menu_applies_adds_renames_and_deletes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let data = json!({"name": "Type", "charStyles": [{"name": "Headline", "attrs": {"size": 31.0}}], "paraStyles": [{"name": "Body", "attrs": {}}]});
+    let lib = app.run("library.import", json!({"data": data.to_string()})).unwrap()["id"].as_str().unwrap().to_string();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    // No type selected: Apply is there but does nothing.
+    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
+    assert_eq!(menu_entries(&menu), ["Apply Character Style", "Add to Character Styles", "Move to Group", "Rename…", "Delete"]);
+    click_at(&mut app, &ctx, at(&menu, "   Apply Character Style").center(), egui::PointerButton::Primary);
+    assert!(app.session.active().unwrap().doc.char_styles.is_empty(), "disabled without type");
+    // With type selected: a right-click applies nothing; Add adds the style, unapplied.
+    let t = app.run("text.create", json!({"x": 10, "y": 80, "text": "Type", "size": 9})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    let style_of = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(t)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(text) => (text.runs[0].style.size, text.runs[0].style.style_name.clone()),
+        _ => panic!("not text"),
+    };
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
+    assert_eq!(style_of(&app), (9.0, None), "a right-click applies nothing");
+    let undo = app.session.active().unwrap().history.undo.len();
+    click_at(&mut app, &ctx, at(&menu, "   Add to Character Styles").center(), egui::PointerButton::Primary);
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.char_styles.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Headline"]);
+    assert_eq!(style_of(&app), (9.0, None), "added, not applied");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    // Apply applies it.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
+    click_at(&mut app, &ctx, at(&menu, "   Apply Character Style").center(), egui::PointerButton::Primary);
+    assert_eq!(style_of(&app), (31.0, Some("Headline".into())));
+    // Rename…: Cancel keeps the name, OK renames.
+    for (ok, want) in [(false, "Headline"), (true, "Title")] {
+        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+        let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
+        click_at(&mut app, &ctx, at(&menu, "   Rename…").center(), egui::PointerButton::Primary);
+        let d = app.ui.dialog.as_mut().expect("the Rename dialog");
+        assert_eq!((d.str("__command"), d.str("name")), ("library.renameItem".to_string(), "Headline".to_string()));
+        d.fields.insert("name".into(), json!("Title"));
+        if ok {
+            crate::dialogs::confirm(&mut app).unwrap();
+        } else {
+            crate::dialogs::cancel(&mut app);
+        }
+        assert_eq!(style_order(&mut app), [want]);
+    }
+    // The paragraph style's menu.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let menu = click_at(&mut app, &ctx, at(&texts, "Body").center(), egui::PointerButton::Secondary);
+    assert_eq!(menu_entries(&menu), ["Move to Group", "Delete"]);
+    // Delete removes the character style from the library only.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let menu = click_at(&mut app, &ctx, at(&texts, "Title").center(), egui::PointerButton::Secondary);
+    click_at(&mut app, &ctx, at(&menu, "   Delete").center(), egui::PointerButton::Primary);
+    assert!(app.session.libraries.get(&lib).unwrap().char_styles.is_empty());
+    assert_eq!(app.session.active().unwrap().doc.char_styles.len(), 1, "the document's style stays");
 }
 
 /// Export Library… writes the library's file and Import Library… adds it back as a new library.

@@ -133,8 +133,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them. The status bar shows the export's first
-/// warning.
+/// output, else the image); the web downloads them. The status bar shows the export's warnings as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -150,7 +150,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         }
         match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
             Some(first) => io::report_saved(app, first, &r),
-            None => app.status(format!("Downloaded {} file(s)", names.len())),
+            None => app.status(crate::i18n::msg_n(names.len() as u64, "Downloaded {n} file", "Downloaded {n} files", &[])),
         }
         return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
@@ -170,21 +170,29 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
 }
 
 /// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
-/// [`io::report_saved`] puts the first in the status bar as a save's note.
+/// [`io::report_saved`] shows them in the status bar as a save's notes.
 fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
 }
 
+/// The preview page's name from the document's title `stem`: one file name in the preview folder.
+/// `file_stem` gives back a title it can't take a stem of ("../.."), so one with a separator or of
+/// dots only is "Untitled".
+pub(super) fn preview_name(stem: &str) -> &str {
+    if stem.trim().is_empty() || stem.contains(['/', '\\']) || stem.chars().all(|c| c == '.') { "Untitled" } else { stem }
+}
+
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
-/// default browser (desktop). When the export has warnings, the status bar shows the first in
-/// place of "Opened …".
+/// default browser (desktop). When the export has warnings, the status bar shows them as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
     }
+    app.refuse_automation("file.saveForWeb.browser")?;
     let stem = app.session.active().map(|st| vectorcraft_engine::cmd::fileio::file_stem(&st.doc.title)).ok_or("no document")?;
     let dir = temp_folder()?;
-    let path = format!("{dir}/{}.html", if stem.trim().is_empty() { "Untitled" } else { stem.as_str() });
+    let path = format!("{dir}/{}.html", preview_name(&stem));
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.insert("path".into(), json!(path));

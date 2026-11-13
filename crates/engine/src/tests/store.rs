@@ -5,12 +5,10 @@ use serde_json::{Value, json};
 use vectorcraft_color::cms;
 
 use crate::Session;
-use crate::store::{MAX_PRESET_FILE, file_stem};
+use crate::store::{MAX_PRESET_FILE, file_stem, holds};
 
-fn fresh_dir(tag: &str) -> std::path::PathBuf {
-    let dir = vectorcraft_testkit::temp_dir(&format!("store-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn fresh_dir(tag: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("store-{tag}"))
 }
 
 fn saved_names(s: &mut Session) -> Vec<String> {
@@ -20,7 +18,8 @@ fn saved_names(s: &mut Session) -> Vec<String> {
 
 #[test]
 fn saved_presets_come_back_in_the_next_session_and_renames_and_deletes_follow() {
-    let dir = fresh_dir("presets").join("PDF Presets");
+    let root = fresh_dir("presets");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Press", "description": "for the printer", "preset": "Press Quality"})).unwrap();
@@ -42,7 +41,8 @@ fn saved_presets_come_back_in_the_next_session_and_renames_and_deletes_follow() 
 
 #[test]
 fn a_rename_that_cannot_be_written_keeps_the_preset_under_its_old_name() {
-    let dir = fresh_dir("rename-fails").join("PDF Presets");
+    let root = fresh_dir("rename-fails");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
@@ -59,7 +59,8 @@ fn a_rename_that_cannot_be_written_keeps_the_preset_under_its_old_name() {
 
 #[test]
 fn a_rename_that_only_changes_case_keeps_one_file() {
-    let dir = fresh_dir("rename-case").join("PDF Presets");
+    let root = fresh_dir("rename-case");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
@@ -80,7 +81,8 @@ fn file_names(dir: &std::path::Path) -> Vec<String> {
 #[cfg(windows)]
 #[test]
 fn a_rename_that_only_changes_case_and_cannot_be_written_keeps_the_old_file() {
-    let dir = fresh_dir("rename-case-fails").join("PDF Presets");
+    let root = fresh_dir("rename-case-fails");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
@@ -103,7 +105,8 @@ fn a_rename_that_only_changes_case_and_cannot_be_written_keeps_the_old_file() {
 #[cfg(not(any(windows, target_vendor = "apple")))]
 #[test]
 fn a_rename_that_only_changes_case_and_cannot_be_moved_keeps_the_old_preset() {
-    let dir = fresh_dir("rename-case-blocked").join("PDF Presets");
+    let root = fresh_dir("rename-case-blocked");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Web", "description": "for screens"})).unwrap();
@@ -118,7 +121,8 @@ fn a_rename_that_only_changes_case_and_cannot_be_moved_keeps_the_old_preset() {
 
 #[test]
 fn a_folder_that_does_not_exist_yet_takes_the_presets_the_preferences_held() {
-    let dir = fresh_dir("seed").join("PDF Presets");
+    let root = fresh_dir("seed");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.execute("pdf.preset.save", &json!({"name": "From Preferences"})).unwrap();
     a.attach_pdf_preset_store(dir.clone());
@@ -128,9 +132,52 @@ fn a_folder_that_does_not_exist_yet_takes_the_presets_the_preferences_held() {
     assert_eq!(saved_names(&mut b), ["From Preferences"]);
 }
 
+/// Serves `0` bytes without end and counts how many were read.
+struct Endless(u64);
+
+impl std::io::Read for Endless {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.0 > 1 << 24 {
+            return Err(std::io::Error::other("read too far"));
+        }
+        buf.fill(0);
+        self.0 += buf.len() as u64;
+        Ok(buf.len())
+    }
+}
+
+#[test]
+fn a_write_reads_the_file_it_replaces_only_one_byte_past_the_new_length() {
+    let mut old = Endless(0);
+    assert!(!holds(&mut old, &[0; 10]));
+    assert_eq!(old.0, 11);
+    assert!(holds(&[1, 2, 3][..], &[1, 2, 3]));
+    assert!(!holds(&[1, 2, 3, 4][..], &[1, 2, 3]));
+    assert!(!holds(&[1, 2][..], &[1, 2, 3]));
+    assert!(holds(&[][..], &[]));
+}
+
+#[test]
+fn a_saved_preset_replaces_an_oversized_file_in_its_place() {
+    let root = fresh_dir("oversized-put");
+    let dir = root.join("PDF Presets");
+    let mut a = Session::new();
+    a.attach_pdf_preset_store(dir.clone());
+    a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
+    let file = dir.join(format!("{}.vcpdfpresets", file_stem("Web")));
+    let saved = std::fs::read(&file).unwrap();
+    let mut oversized = saved.clone();
+    oversized.resize(usize::try_from(MAX_PRESET_FILE).unwrap() * 2, b' ');
+    std::fs::write(&file, &oversized).unwrap();
+
+    a.execute("pdf.preset.save", &json!({"name": "Web"})).unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), saved);
+}
+
 #[test]
 fn damaged_unsafe_and_oversized_preset_files_are_skipped() {
-    let dir = fresh_dir("damaged").join("PDF Presets");
+    let root = fresh_dir("damaged");
+    let dir = root.join("PDF Presets");
     let mut a = Session::new();
     a.attach_pdf_preset_store(dir.clone());
     a.execute("pdf.preset.save", &json!({"name": "Good"})).unwrap();
@@ -173,7 +220,8 @@ fn icc_named(name: &str) -> Vec<u8> {
 
 #[test]
 fn stored_profiles_register_again_and_removing_one_removes_its_copy() {
-    let dir = fresh_dir("profiles").join("Color Profiles");
+    let root = fresh_dir("profiles");
+    let dir = root.join("Color Profiles");
     std::fs::create_dir_all(&dir).unwrap();
     let name = "StoreRGB-1";
     let file = format!("{}.icc", file_stem(name));
@@ -188,7 +236,8 @@ fn stored_profiles_register_again_and_removing_one_removes_its_copy() {
 
     // A profile loaded from elsewhere is copied in, whatever the file is called.
     let other = "StoreRGB-2";
-    let loose = vectorcraft_testkit::temp_dir("store-loose").join("whatever.icm");
+    let loose_dir = vectorcraft_testkit::TempDir::new("store-loose");
+    let loose = loose_dir.join("whatever.icm");
     std::fs::write(&loose, icc_named(other)).unwrap();
     let r = s.execute("color.loadProfile", &json!({"path": loose.to_str().unwrap()})).unwrap();
     assert_eq!((r["name"].as_str(), r["remembered"].as_bool()), (Some(other), Some(true)));

@@ -106,6 +106,37 @@ fn export_as_png_picks_the_file_then_shows_png_options() {
     assert_eq!(&written.borrow()[0].1[16..20], 120u32.to_be_bytes(), "60 pt at 144 ppi");
 }
 
+/// File › Export › Export As PNG… exports the artboard in use, not the first (#5502), and each
+/// artboard the Artboard tool has selected, one file each.
+#[test]
+fn export_as_png_exports_the_active_artboard() {
+    let (mut app, written) = app(2);
+    // The ellipse is on the first artboard; the second is empty.
+    let opaque = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_rgba8().pixels().any(|p| p.0[3] > 0);
+    app.view_mut().unwrap().artboard = 1;
+    app.run("file.export.png", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["artboard"], json!(1));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(!opaque(&written.borrow()[0].1), "the second artboard, which is empty");
+    app.view_mut().unwrap().artboard = 0;
+    app.run("file.export.png", json!({})).unwrap();
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(opaque(&written.borrow()[1].1), "the first artboard, with the ellipse");
+    // A choice given is kept.
+    app.run("file.export.png", json!({"useArtboards": false})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none_or(serde_json::Value::is_null));
+    app.ui.dialog = None;
+    // Artboards the Artboard tool selected: one file each.
+    app.select_tool("artboard");
+    app.session.set_tool_option("selected", &json!([0, 1]));
+    app.run("file.export.png", json!({})).unwrap();
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(names(&written)[2..], ["/out/Untitled-1-Artboard-1.png", "/out/Untitled-1-Artboard-2.png"]);
+}
+
 #[test]
 fn export_as_with_a_range_then_png_options_writes_one_file_per_artboard() {
     let (mut app, written) = app(3);
@@ -149,8 +180,17 @@ fn a_bad_range_keeps_export_as_open() {
     assert!(written.borrow().is_empty());
 }
 
+/// An emptied Range field shows an example of the artboard numbers it takes, as Save As's does.
 #[test]
-fn svg_continues_in_svg_options_and_pdf_art_is_written_directly() {
+fn an_empty_export_as_range_shows_an_example() {
+    let (mut app, _) = app(2);
+    app.run("file.exportAs", json!({"useArtboards": true, "range": ""})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.lines().any(|l| l == "1-3, 5"), "{text}");
+}
+
+#[test]
+fn svg_continues_in_svg_options() {
     let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "svg", "useArtboards": true})).unwrap();
     confirm(&mut app).unwrap();
@@ -161,12 +201,45 @@ fn svg_continues_in_svg_options_and_pdf_art_is_written_directly() {
     confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert_eq!(names(&written), ["/out/Untitled-1-Artboard-1.svg", "/out/Untitled-1-Artboard-2.svg"]);
-    // Without artboards: one file of the art's bounds, with no options dialog for a PDF.
+}
+
+/// Without Use Artboards, a PDF continues in Save PDF too, without its artboard choice, and the
+/// file is one page of the art's bounds. Its options apply: a drawing 10 m long is written at
+/// full size in points with "Write pages longer than 200 in at full size in points" (on by
+/// default), and with a `UserUnit` without it.
+#[test]
+fn pdf_art_continues_in_the_save_pdf_dialog() {
+    let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["path"], "/out/Untitled-1.pdf");
-    let pdf = vectorcraft_pdf::import(&written.borrow()[2].1).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("savePdf"), "the PDF options follow");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("path"), "/out/Untitled-1.pdf");
+    assert!(written.borrow().is_empty());
+    frame(&mut app);
+    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.pdf");
+    let pdf = vectorcraft_pdf::import(&written.borrow()[0].1).unwrap();
+    assert_eq!(pdf.artboards.len(), 1);
     assert_eq!((pdf.artboards[0].rect.width().round(), pdf.artboards[0].rect.height().round()), (30.0, 20.0), "the ellipse's bounds");
+
+    app.run("shape.rectangle", json!({"x": 0, "y": 100, "width": 28_346.46, "height": 50})).unwrap();
+    app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
+    confirm(&mut app).unwrap();
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let bytes = written.borrow()[1].1.clone();
+    assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
+    assert!((28_346.0..28_350.0).contains(&width), "{width}");
+
+    app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "longPagesInPoints", json!(false));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let bytes = written.borrow()[2].1.clone();
+    assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
+    assert!((28_346.0..28_350.0).contains(&width), "{width}");
 }
 
 #[test]
@@ -290,8 +363,17 @@ fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
         out.textures_delta.clear();
     };
-    // Each format whose options follow the panel (PDF's with Use Artboards: Save PDF).
-    let formats = [("png", false), ("svg", false), ("pdf", true), ("txt", false), ("dxf", false), ("eps", false), ("plugin.test.ui.held", false)];
+    // Each format whose options follow the panel (PDF's: Save PDF, with Use Artboards on or off).
+    let formats = [
+        ("png", false),
+        ("svg", false),
+        ("pdf", true),
+        ("pdf", false),
+        ("txt", false),
+        ("dxf", false),
+        ("eps", false),
+        ("plugin.test.ui.held", false),
+    ];
     for (format, artboards) in formats {
         let (mut app, written) = app(1);
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();

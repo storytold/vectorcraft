@@ -70,6 +70,28 @@ fn a_group_fill_paints_both_members_and_the_contents_slot_moves() {
 }
 
 #[test]
+fn ungroup_leaves_the_groups_opacity_with_the_group() {
+    let mut s = session();
+    let red = id_of(&run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 40})));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let blue = id_of(&run(&mut s, "shape.rectangle", json!({"x": 100, "y": 20, "width": 60, "height": 40})));
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff"}));
+    run(&mut s, "object.setProps", json!({"ids": [blue.0], "opacity": 40}));
+    run(&mut s, "select.set", json!({"ids": [red.0, blue.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "object.setProps", json!({"ids": [g.0], "opacity": 50}));
+    run(&mut s, "object.ungroup", json!({}));
+    // Each member keeps its own opacity: the red square is opaque again and the blue one stays at 40%.
+    assert!((node(&s, red).opacity - 1.0).abs() < 1e-6, "{}", node(&s, red).opacity);
+    assert!((node(&s, blue).opacity - 0.4).abs() < 1e-6, "{}", node(&s, blue).opacity);
+    assert_eq!(pixel(&s, 40, 40), RED);
+    // One undo step brings the group back at 50%.
+    run(&mut s, "edit.undo", json!({}));
+    assert!((node(&s, g).opacity - 0.5).abs() < 1e-6);
+    assert!((node(&s, red).opacity - 1.0).abs() < 1e-6);
+}
+
+#[test]
 fn appearance_commands_target_the_object_or_its_contents() {
     let mut s = session();
     let (g, [a, b]) = group(&mut s);
@@ -234,6 +256,122 @@ fn an_images_stroke_with_outline_object_draws_exports_and_expands_along_its_fram
     assert!(kids[0].appearance.fill_paint().is_none());
 }
 
+/// A 100×100 PNG, transparent but for an opaque red disc of radius 30 in its middle.
+fn disc_png() -> Vec<u8> {
+    let mut png = vec![];
+    image::RgbaImage::from_fn(100, 100, |x, y| {
+        let r = (f64::from(x) + 0.5 - 50.0).hypot(f64::from(y) + 0.5 - 50.0);
+        image::Rgba([255, 0, 0, if r <= 30.0 { 255 } else { 0 }])
+    })
+    .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+    .unwrap();
+    png
+}
+
+#[test]
+fn an_images_stroke_with_outline_object_follows_its_opaque_area() {
+    let mut s = session();
+    // The frame runs from 50 to 150, the disc from 70 to 130.
+    let r = run(&mut s, "file.place", json!({"name": "disc.png", "dataBase64": vectorcraft_format::base64_encode(&disc_png()), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 8, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "path.outlineObject", "item": 0}));
+    // Under the image, the stroke's outer 4 pt shows around the disc, from 66 to 70; nothing runs
+    // along the frame.
+    let shade = |s: &Session, x: u32, y: u32| match pixel(s, x, y) {
+        p if p == RED => "red",
+        [r, g, b, _] if r.max(g).max(b) < 40 => "black",
+        [r, g, b, _] if r.min(g).min(b) > 215 => "white",
+        p => panic!("({x}, {y}) is {p:?}"),
+    };
+    assert_eq!([shade(&s, 64, 100), shade(&s, 67, 100), shade(&s, 100, 100), shade(&s, 100, 132)], ["white", "black", "red", "black"]);
+    assert_eq!([shade(&s, 49, 100), shade(&s, 52, 100)], ["white", "white"]);
+    // SVG and PDF hold the disc's outline stroked 8 pt.
+    let doc = s.doc().unwrap().doc.clone();
+    let disc = |b: vectorcraft_geom::Rect| [b.x0 - 70.0, b.y0 - 70.0, b.x1 - 130.0, b.y1 - 130.0].iter().all(|d| d.abs() < 0.5);
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    assert!(svg.contains("<image") && svg.contains("stroke-width=\"8\""), "{svg}");
+    let back = vectorcraft_pdf::import(&vectorcraft_pdf::export(&doc, &Default::default()).unwrap()).unwrap();
+    let mut outlines = 0;
+    for l in &back.layers {
+        l.walk(&mut |n| {
+            let stroked = (n.appearance.stroke_width() - 8.0).abs() < 0.01;
+            outlines += usize::from(matches!(n.kind, NodeKind::Path { .. }) && stroked && n.geometric_bounds().is_some_and(disc));
+        });
+    }
+    assert_eq!(outlines, 1);
+    // Expand Appearance leaves the disc's outline below the image.
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, im);
+    let kids = n.children().unwrap();
+    assert!(kids.len() == 2 && matches!(kids[1].kind, NodeKind::Image(_)), "{n:?}");
+    assert!(disc(kids[0].geometric_bounds().unwrap()), "{:?}", kids[0].geometric_bounds());
+    run(&mut s, "edit.undo", json!({}));
+    // An Offset Path of 3 pt after Outline Object moves the stroke 3 pt out: it shows from 63 to 70.
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 3}, "item": 0}));
+    assert_eq!([shade(&s, 61, 100), shade(&s, 64, 100)], ["white", "black"]);
+    // Relinked to an opaque image, the stroke follows the frame 3 pt out: it shows from 43 to 50.
+    let dir = vectorcraft_testkit::TempDir::new("outline-object-relink");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("opaque.png");
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(100, 100, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    std::fs::write(&path, png).unwrap();
+    run(&mut s, "links.relink", json!({"ids": [im.0], "path": path}));
+    assert_eq!([shade(&s, 41, 100), shade(&s, 45, 100), shade(&s, 64, 100)], ["white", "black", "red"]);
+}
+
+#[test]
+fn an_images_outline_object_stroke_exports_selects_and_measures_along_its_opaque_area() {
+    let mut s = session();
+    // The frame runs from 50 to 150, the disc from 70 to 130.
+    let r = run(&mut s, "file.place", json!({"name": "disc.png", "dataBase64": vectorcraft_format::base64_encode(&disc_png()), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "weight": 20, "color": "#000000"}));
+    run(&mut s, "effect.apply", json!({"effect": "path.outlineObject", "item": 0}));
+    // EPS and the PDF-compatible .ai draw the disc's outline stroked 20 pt, 20 pt inside the
+    // image's frame on each side (EPS moves the art to its bounding box).
+    let disc_outlines = |d: &vectorcraft_doc::Document| {
+        let mut frame = None;
+        d.walk(|c| {
+            if matches!(c.kind, NodeKind::Image(_)) {
+                frame = c.geometric_bounds();
+            }
+        });
+        let f = frame.unwrap();
+        let mut n = 0;
+        d.walk(|c| {
+            let disc = |b: vectorcraft_geom::Rect| {
+                [b.x0 - f.x0 - 20.0, b.y0 - f.y0 - 20.0, f.x1 - b.x1 - 20.0, f.y1 - b.y1 - 20.0].iter().all(|d| d.abs() < 0.6)
+            };
+            let stroked = (c.appearance.stroke_width() - 20.0).abs() < 0.01;
+            n += usize::from(matches!(c.kind, NodeKind::Path { .. }) && stroked && c.geometric_bounds().is_some_and(disc));
+        });
+        n
+    };
+    let saved = |s: &mut Session, p: Value| vectorcraft_format::base64_decode(run(s, "file.saveCopy", p)["dataBase64"].as_str().unwrap()).unwrap();
+    let eps = saved(&mut s, json!({"format": "eps", "previewFormat": "none", "thumbnails": false}));
+    assert_eq!(disc_outlines(&vectorcraft_eps::import_with(&eps, false).unwrap().document), 1);
+    let ai = saved(&mut s, json!({"format": "ai"}));
+    assert_eq!(disc_outlines(&crate::cmd::fileio::page_document(&ai, 0, &Default::default()).unwrap().0), 1);
+    // An Offset Path of 30 pt after Outline Object: the stroke runs round a circle of radius 60,
+    // from 30 to 50 on the left, where along the frame it would run from 10 to 30.
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 30}, "item": 0}));
+    assert_eq!((pixel(&s, 35, 100), pixel(&s, 15, 100)), ([0, 0, 0, 255], [255; 4]));
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 35.0, 100.0), [im]);
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 15.0, 100.0).is_empty());
+    // Use Preview Bounds measures the stroke round the circle.
+    s.prefs.use_preview_bounds = true;
+    let b = s.transform_bounds(&[im]).unwrap();
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 170.0, b.y1 - 170.0].iter().all(|d| d.abs() < 1.0), "{b:?}");
+}
+
 /// Click with the Selection tool at (x, y) on a 100% view: what is selected afterwards.
 fn click(s: &mut Session, x: f64, y: f64) -> Vec<NodeId> {
     let v = ViewInfo::default();
@@ -320,6 +458,7 @@ fn group_appearance_round_trips_and_expands() {
     assert!((n.visual_bounds().unwrap().y0 - 69.5).abs() < 1e-6);
 }
 
+/// Type in a group with a geometry effect exports and expands with its look.
 #[test]
 fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
     let mut s = session();
@@ -345,6 +484,7 @@ fn type_in_a_group_with_a_geometry_effect_exports_and_expands_with_its_look() {
     assert!(!matches!(outlines.kind, NodeKind::Text(_)) && (outlines.opacity - 0.5).abs() < 1e-6 && !outlines.visible, "{outlines:?}");
 }
 
+/// Hidden type with a geometry effect (Offset Path) is left out of SVG export.
 #[test]
 fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
     let mut s = session();
@@ -356,4 +496,123 @@ fn hidden_type_with_a_geometry_effect_is_left_out_of_svg_export() {
     run(&mut s, "object.hide", json!({}));
     let hidden = svg(&s);
     assert_eq!((vectorcraft_testkit::svg_shapes(&shown), vectorcraft_testkit::svg_shapes(&hidden)), (1, 0), "{hidden}");
+}
+
+/// A selected group whose stack is, in paint order (bottom first), `F0 S1 FA S3` with the Contents
+/// row above the bottom two: listed top-down `S3, FA, Contents, S1, F0` (fills red F0 and green FA,
+/// strokes 1 and 3 pt).
+fn straddling_group(s: &mut Session) -> NodeId {
+    let (g, _) = group(s);
+    run(s, "appearance.addFill", json!({}));
+    run(s, "paint.setFill", json!({"color": "#ff0000", "item": 0}));
+    run(s, "appearance.addStroke", json!({}));
+    run(s, "stroke.set", json!({"item": 1, "weight": 1}));
+    run(s, "appearance.addFill", json!({}));
+    run(s, "paint.setFill", json!({"color": "#00ff00", "item": 2}));
+    run(s, "appearance.addStroke", json!({}));
+    run(s, "stroke.set", json!({"item": 3, "weight": 3}));
+    run(s, "appearance.moveItem", json!({"from": "contents", "to": 2}));
+    assert_eq!(stack(s, g), (vec!["F0", "S1", "FA", "S3"], 2));
+    g
+}
+
+/// The group's items in paint order (F0/FA by fill colour, S<weight>) and how many paint below its
+/// Contents row.
+fn stack(s: &Session, g: NodeId) -> (Vec<&'static str>, usize) {
+    let ap = node(s, g).appearance;
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    let names = ap
+        .items
+        .iter()
+        .map(|it| match it {
+            vectorcraft_doc::AppearanceItem::Stroke(st) if st.width == 1.0 => "S1",
+            vectorcraft_doc::AppearanceItem::Stroke(_) => "S3",
+            it if *it.paint() == red => "F0",
+            _ => "FA",
+        })
+        .collect();
+    (names, ap.contents_at())
+}
+
+/// Fills/strokes moved together land as one block; the Contents row stays among the rows that did not move.
+#[test]
+fn several_items_move_as_one_block_and_the_contents_row_keeps_its_unmoved_neighbours() {
+    let mut s = session();
+    let g = straddling_group(&mut s);
+    // FA (active) and S1 dropped on S3: listed top-down FA, S1, S3, Contents, F0.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 2}));
+    let r = run(&mut s, "appearance.moveItem", json!({"indices": [2, 1], "to": 2}));
+    assert_eq!(stack(&s, g), (vec!["F0", "S3", "S1", "FA"], 1));
+    assert_eq!(r["index"], json!(2), "where the lowest of them landed");
+    assert_eq!(s.appearance_item(), Some(3), "the active row moved with its row");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "FA", "S3"], 2), "one undo step");
+    // `contents` places the Contents row: under the stack, the block goes to the bottom with
+    // Contents above it and F0.
+    run(&mut s, "appearance.moveItem", json!({"indices": [1, 2], "to": 0, "contents": 3}));
+    assert_eq!(stack(&s, g), (vec!["S1", "FA", "F0", "S3"], 3));
+    run(&mut s, "edit.undo", json!({}));
+    // Without it, a block landing right at the Contents row keeps its lowest item's side.
+    run(&mut s, "appearance.moveItem", json!({"indices": [1, 3], "to": 1}));
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "S3", "FA"], 3));
+    run(&mut s, "edit.undo", json!({}));
+    // A missing index, or both `from` and `indices`, fail and change nothing.
+    assert!(s.execute("appearance.moveItem", &json!({"indices": [1, 9], "to": 0})).is_err());
+    assert!(s.execute("appearance.moveItem", &json!({"from": 1, "indices": [1, 2], "to": 0})).is_err());
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "FA", "S3"], 2));
+}
+
+/// Fills/strokes copied together land as one block where they are dropped.
+#[test]
+fn several_items_copy_as_one_block_where_they_are_dropped() {
+    let mut s = session();
+    let g = straddling_group(&mut s);
+    // Alt-dropped on the object row: the copies go on top; Contents stays between the same rows.
+    run(&mut s, "appearance.duplicateItem", json!({"indices": [1, 2], "to": 4}));
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "FA", "S3", "S1", "FA"], 2));
+    run(&mut s, "edit.undo", json!({}));
+    // `contents` puts copies landing right at the Contents row above it.
+    run(&mut s, "appearance.duplicateItem", json!({"indices": [1, 2], "to": 2, "contents": 2}));
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "S1", "FA", "FA", "S3"], 2));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(s.execute("appearance.duplicateItem", &json!({"indices": [1, 7], "to": 0})).is_err());
+    assert_eq!(stack(&s, g), (vec!["F0", "S1", "FA", "S3"], 2));
+}
+
+/// Several objects with stacks of different lengths: a block moved past the end of the shorter
+/// stack lands at a different index on each. The active row follows its row on the first selected
+/// object (whose stack it is in), and the result says where the block landed there, not on the
+/// last one.
+#[test]
+fn a_block_move_keeps_the_active_row_on_the_first_objects_stack() {
+    let mut s = session();
+    let a = id_of(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})));
+    let b = id_of(&run(&mut s, "shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})));
+    run(&mut s, "appearance.addFill", json!({"ids": [b.0]}));
+    run(&mut s, "appearance.addStroke", json!({"ids": [b.0]}));
+    assert_eq!((node(&s, a).appearance.items.len(), node(&s, b).appearance.items.len()), (2, 4));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    // On A the fill lands at 1 (its top), on B at 3.
+    let r = run(&mut s, "appearance.moveItem", json!({"indices": [0], "to": 3}));
+    assert_eq!(s.appearance_item(), Some(1), "the active row is A's moved fill");
+    assert_eq!(r["index"], 1, "where it landed on the first target, whose stack the panel lists");
+}
+
+/// An Alt-drop (`appearance.duplicateItem` with `to`) on several objects with stacks of different
+/// lengths places the copies at a different index on each: the active row shifts by where they
+/// landed on its own object (the first selected one), not on the first target processed.
+#[test]
+fn a_block_copy_shifts_the_active_row_by_its_own_objects_landing() {
+    let mut s = session();
+    let a = id_of(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})));
+    let b = id_of(&run(&mut s, "shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})));
+    run(&mut s, "appearance.addFill", json!({"ids": [b.0]}));
+    run(&mut s, "appearance.addStroke", json!({"ids": [b.0]}));
+    // B first: the active row is in B's stack [F, S, F, S].
+    run(&mut s, "select.set", json!({"ids": [b.0, a.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 2}));
+    // The copies land at 3 on B (above its active fill) and at 2 on A, its top.
+    run(&mut s, "appearance.duplicateItem", json!({"indices": [0], "to": 3}));
+    assert_eq!(s.appearance_item(), Some(2), "the copy landed above B's active fill: it stays at 2");
 }

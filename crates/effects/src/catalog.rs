@@ -1,4 +1,7 @@
-use super::{CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value, json, trap};
+use super::{
+    CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, CROP_MARKS, EXTRUDE, INFLATE, PATHFINDER_EFFECTS, RASTERIZE, REVOLVE, ROTATE, TRAP, Value,
+    json, trap,
+};
 
 /// Catalogue entry for one effect.
 #[derive(Clone, Debug, PartialEq)]
@@ -43,13 +46,25 @@ pub fn is_length(id: &str, key: &str, relative: bool) -> bool {
 }
 
 /// The range in points that distance parameter `key` of effect `id` is kept within, as its
-/// parameter documentation gives it (`{maxRadius: pt 4..127 (8), …}`); `None` when it gives none.
+/// parameter documentation gives it (`{edgeWidth: pt 1..14 (2), …}`); `None` when it gives none.
 pub fn length_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    documented_range(id, key, "pt")
+}
+
+/// The range of parameter `key` of effect `id` when it is a size in pixels of the Document Raster
+/// Effects resolution (`{maxRadius: px 4..127 (8), …}`), which no unit setting changes and which
+/// stays in pixels when the resolution does; `None` for other parameters.
+pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    documented_range(id, key, "px")
+}
+
+/// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
+fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
     let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
-        rest.strip_prefix(": pt ").or_else(|| rest.strip_prefix("?: pt "))
+        rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
     })?;
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
@@ -68,6 +83,8 @@ fn lengths_of(id: &str) -> Lengths {
         "path.offsetPath" => always(&["offset"]),
         "threeD.revolve" => always(&["offset"]),
         "threeD.extrude" => always(&["depth", "bevelWidth", "bevelHeight"]),
+        "threeD.classicExtrude" => always(&["depth", "bevelHeight"]),
+        "threeD.classicRevolve" => always(&["offset"]),
         "threeD.inflate" => always(&["depth"]),
         "path.outlineStroke" => always(&["width"]),
         "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" | "blur.smart" | "sharpen.unsharpMask" => always(&["radius"]),
@@ -77,11 +94,12 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
         "brushStrokes.accentedEdges" => always(&["edgeWidth"]),
         "artistic.paletteKnife" => always(&["strokeSize"]),
+        "artistic.coloredPencil" => always(&["pencilWidth"]),
+        "artistic.paintDaubs" => always(&["brushSize"]),
         "brushStrokes.angledStrokes" | "brushStrokes.crosshatch" | "brushStrokes.inkOutlines" => always(&["strokeLength"]),
         "brushStrokes.spatter" => always(&["sprayRadius"]),
         "brushStrokes.sprayedStrokes" => always(&["strokeLength", "sprayRadius"]),
         "brushStrokes.sumiE" => always(&["strokeWidth"]),
-        "pixelate.colorHalftone" => always(&["maxRadius"]),
         "pixelate.crystallize" | "pixelate.pointillize" => always(&["cellSize"]),
         "texture.craquelure" => always(&["crackSpacing"]),
         "texture.mosaicTiles" => always(&["tileSize"]),
@@ -94,12 +112,13 @@ fn lengths_of(id: &str) -> Lengths {
         "sketch.waterPaper" => always(&["fiberLength"]),
         TRAP => always(&["thickness", "precision"]),
         RASTERIZE => always(&["addAround"]),
+        // The points one unit of the filter measures.
+        crate::SVG_FILTER => always(&["scale"]),
         _ => Lengths::default(),
     }
 }
 
-const WARP_DOC: &str =
-    "{bend: % (-100..100, 50), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\"}";
+const WARP_DOC: &str = "{bend: % (-100..100, 50; with a bend or a distortion, placed gradients move and scale from the object's bounds to its warped bounds, and images bend as 10 × 10 cells of two triangles unless the pieces would make the art pass 2,000,000 objects or the image's frame keeps its shape past the anchor budget), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\", version: 0|1 (the map: 1 bends each style as one Bézier patch over the bounds, which new and imported warps get; 0, or none, is VectorCraft's earlier map, which warps saved without a version keep)}";
 
 const DT: &[&str] = &["Effect", "Distort & Transform"];
 
@@ -163,29 +182,50 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             REVOLVE,
             "Revolve…",
             &["Effect", "3D and Materials"],
-            "{angle: degrees (0..360, 360), offset: pt (0..100000, 0), edge: left|right, rotationX: degrees (0), rotationY: degrees (0), rotationZ: degrees (0), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), segments: integer (8..128, 64), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), cap: bool (true, close circular ends of open profiles; partial-sweep cut sides stay open), expandVisibleOnly: bool (true, trim covered opaque solid surfaces only on Expand Appearance)}. Shaded surfaces use smooth vector gradients automatically; intersecting profiles use approximate painter visibility.",
-            json!({"angle":360.0,"offset":0.0,"edge":"left","rotationX":0.0,"rotationY":0.0,"rotationZ":0.0,"perspectiveAngle":0.0,"segments":64,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"cap":true,"expandVisibleOnly":true}),
+            "{angle: degrees (0..360, 360), offset: pt (0..100000, 0), edge: left|right, rotationX: degrees (0), rotationY: degrees (0), rotationZ: degrees (0), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), segments: integer (8..128, 64), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a hard-edged shadow, black at 50% times the art's opacity), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), cap: bool (true, close circular ends of open profiles; partial-sweep cut sides stay open), expandVisibleOnly: bool (true, trim covered opaque solid surfaces only on Expand Appearance; surfaces with graphics keep every face), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the swept side, see threeD.mapGraphic: symbol: name of a document symbol, face: front (the side), x: pt (0; the offset of the graphic's center from the middle of the side, around the axis: the angle times the profile's distance from the axis at that point), y: pt (0; along the profile, toward its lower end), scale: % (1..10000, 100), rotation: degrees (-360..360, 0; counterclockwise); wrapped around the side at its own size, so it reaches farther around where the profile comes nearer the axis, shaded with it and drawn only where the side's outside faces the viewer; a full turn cuts it at the back; nothing on the caps)}. Shaded surfaces use smooth vector gradients automatically; intersecting profiles use approximate painter visibility.",
+            json!({"angle":360.0,"offset":0.0,"edge":"left","rotationX":0.0,"rotationY":0.0,"rotationZ":0.0,"perspectiveAngle":0.0,"segments":64,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"cap":true,"expandVisibleOnly":true,"graphics":[]}),
         ),
         g(
             EXTRUDE,
             "Extrude & Bevel…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
-            json!({"depth":50.0,"twist":0.0,"taper":100.0,"cap":true,"bevel":"none","bevelWidth":4.0,"bevelHeight":4.0,"bevelRepeat":1,"bevelSpace":0.0,"bevelInside":false,"bevelBothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0}),
+            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a hard-edged shadow, black at 50% times the art's opacity), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the caps, see threeD.mapGraphic: symbol: name of a document symbol, face: front|back (front; the back reads left to right as seen from behind), x: pt (0; the offset of the graphic's center from the center of the object's bounds, in the face's own plane), y: pt (0), scale: % (1..10000, 100; of the symbol's own size), rotation: degrees (-360..360, 0; counterclockwise); drawn turned, foreshortened and shaded with the cap and clipped to it, on a solid cap only)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
+            json!({"depth":50.0,"twist":0.0,"taper":100.0,"cap":true,"bevel":"none","bevelWidth":4.0,"bevelHeight":4.0,"bevelRepeat":1,"bevelSpace":0.0,"bevelInside":false,"bevelBothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"graphics":[]}),
         ),
         g(
             INFLATE,
             "Inflate…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth)}. Painted with the top fill (else the top stroke).",
-            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0}),
+            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a hard-edged shadow, black at 50% times the art's opacity), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across)}. Painted with the top fill (else the top stroke).",
+            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0}),
         ),
         g(
             ROTATE,
             "Rotate…",
             &["Effect", "3D and Materials"],
-            "{rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth)}. Turns the flat art in 3D about the centre of its bounds; every fill and stroke keeps its paint, shaded as one plane.",
-            json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0}),
+            "{rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a hard-edged shadow, black at 50% times the art's opacity), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the plane, as Extrude & Bevel's, with face front only)}. Turns the flat art in 3D about the centre of its bounds; every fill and stroke keeps its paint, shaded as one plane.",
+            json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"graphics":[]}),
+        ),
+        g(
+            CLASSIC_EXTRUDE,
+            "Extrude & Bevel (Classic)…",
+            &["Effect", "3D and Materials", "3D (Classic)"],
+            "{depth: pt (0..2000, 50), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelHeight: pt (1..100, 4; the bevel is as wide as it is tall), bevelInside: bool (false: added around the shape; true: carved into it), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: wireframe|none|diffuse|plastic (plastic; wireframe draws the edges of every face, hidden ones included, and fills none; none keeps the paint unlit; diffuse lights the faces softly; plastic adds a glossy highlight), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, every face whichever way it faces), highlightIntensity: % (0..100, 60; plastic only), highlightSize: % (0..100, 90; 100 broad, 0 a small spot; plastic only), blendSteps: integer (1..256, 25; how many levels the shading and the highlight are rounded to), shadingColor: black|custom|none (black; the color the faces darken toward; none keeps the paint and adds only the highlight), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward), drawHiddenFaces: bool (false; also draws the faces turned away, behind the others)}. The front face is the art, extruded backwards about the center of its bounds; a solid is built for the top fill and for each stroke, each in its own paint. The defaults are VectorCraft's own.",
+            json!({"depth":50.0,"cap":true,"bevel":"none","bevelHeight":4.0,"bevelInside":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"surface":"plastic","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":100.0,"ambient":50.0,"highlightIntensity":60.0,"highlightSize":90.0,"blendSteps":25,"shadingColor":"black","shadingCustom":"#000000","drawHiddenFaces":false}),
+        ),
+        g(
+            CLASSIC_REVOLVE,
+            "Revolve (Classic)…",
+            &["Effect", "3D and Materials", "3D (Classic)"],
+            "{angle: degrees (0..360, 360; how far the profile sweeps round the axis), cap: bool (true: solid, the open ends closed; false: hollow), offset: pt (0..1000, 0; the axis's distance from the profile, a ring past 0), edge: left|right (left; the axis is at the left or the right edge of the profile's bounds), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: wireframe|none|diffuse|plastic (plastic; wireframe draws the edges of every face and fills none; none keeps the paint unlit; diffuse lights the faces softly; plastic adds a glossy highlight), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, every face whichever way it faces), highlightIntensity: % (0..100, 60; plastic only), highlightSize: % (0..100, 90; 100 broad, 0 a small spot; plastic only), blendSteps: integer (1..256, 25; how many levels the shading and the highlight are rounded to), shadingColor: black|custom|none (black; the color the faces darken toward; none keeps the paint and adds only the highlight), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward)}. The profile sweeps round a vertical axis, as Revolve's does, painted with the top fill (else the top stroke); every face is drawn, back to front. The defaults are VectorCraft's own.",
+            json!({"angle":360.0,"cap":true,"offset":0.0,"edge":"left","rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"surface":"plastic","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":100.0,"ambient":50.0,"highlightIntensity":60.0,"highlightSize":90.0,"blendSteps":25,"shadingColor":"black","shadingCustom":"#000000"}),
+        ),
+        g(
+            CLASSIC_ROTATE,
+            "Rotate (Classic)…",
+            &["Effect", "3D and Materials", "3D (Classic)"],
+            "{rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: none|diffuse (diffuse; none keeps the paint unlit; diffuse lights the art softly), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, the art whichever way it faces), blendSteps: integer (1..256, 25; how many levels the shading is rounded to), shadingColor: black|custom|none (black; the color the art darkens toward; none keeps the paint), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward)}. Every fill and stroke turns as one flat plane about the center of the object's bounds, as Rotate's do, each in its own paint, and is seen from either side. The defaults are VectorCraft's own.",
+            json!({"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"surface":"diffuse","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":100.0,"ambient":50.0,"blendSteps":25,"shadingColor":"black","shadingCustom":"#000000"}),
         ),
         g(
             "convertToShape.rectangle",
@@ -212,7 +252,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.freeDistort",
             "Free Distort…",
             DT,
-            "{corners: [[x,y]×4] (new positions of the bounding-box corners TL, TR, BR, BL in unit box coordinates; identity [[0,0],[1,0],[1,1],[0,1]])}",
+            "{corners: [[x,y]×4] (new positions of the bounding-box corners TL, TR, BR, BL in unit box coordinates; identity [[0,0],[1,0],[1,1],[0,1]]; placed gradients move and scale from the object's bounds to its distorted bounds)}",
             json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}),
         ),
         g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % (-200 pucker … 200 bloat, default 0)}", json!({"amount": 0.0})),
@@ -220,14 +260,14 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "distort.roughen",
             "Roughen…",
             DT,
-            "{size: 0..100 (5), relative: bool (true: % of size; false: pt), detail: per inch 0..100 (10), points: \"smooth\"|\"corner\", seed: int (0)}",
+            "{size: 0..100 (5; 0 keeps the outline and adds its points along it), relative: bool (true: % of size; false: pt), detail: per inch 0..100 (10), points: \"smooth\"|\"corner\", seed: int (0)}",
             json!({"size": 5.0, "relative": true, "detail": 10.0, "points": "smooth", "seed": 0}),
         ),
         g(
             "distort.transform",
             "Transform…",
             DT,
-            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise), copies: 0..1000 (0; each copy transforms the last again), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw), objects: bool (true; Transform Objects: off, the geometry stays where it is and makes no copies, and only the two options below apply, once), patterns: bool (false; Transform Patterns: pattern fills and strokes transform along; with copies the original keeps its pattern and copy k takes the transformation k times), strokes: bool (false; Scale Strokes & Effects: stroke weights and dashes, and the distances of the effects on the fills and strokes, scale by the mean scale √|scaleH·scaleV|, copy k by its k-th power)}",
+            "{scaleH: % (100), scaleV: % (100), moveH: pt (0; right = +), moveV: pt (0; down = +), rotate: deg (0; counter-clockwise; when the effect turns, reflects or scales the object unevenly, a gradient fitted to the object is fixed to its fit and turns with the object and with each copy), copies: 0..1000 (0; each copy transforms the last again and is painted below it, the object on top; a group's copies each hold all its members, and a group with a member that carries a geometry, Pathfinder or 3D effect copies each member in its place; placed gradients transform with the object and with each copy), reflectX: bool (false; flips left to right), reflectY: bool (false; flips top to bottom), reference: 0..8 (4; the point of the bounds' 9-point grid it scales, rotates and reflects about: 0 top left, 4 centre, 8 bottom right), random: bool (false; each scale goes a random share of the way from 100 % to its value, each move and the angle a random share of theirs, differently for each object and the same on every redraw), objects: bool (true; Transform Objects: off, the geometry stays where it is and makes no copies, and only the two options below apply, once; on, without copies or random, the raster effects listed before this effect (Rasterize and SVG filters excepted) transform with the art whatever strokes says: their sizes scale by the mean scale and a Drop Shadow's offset turns, reflects and scales, while the angles and light directions of pixel filters stay as they are; so do the raster effects of the object's fills and strokes and, on a group, those of its members, of their fills and strokes and of their linked opacity masks' art, after their own Transform effects, including those that a member's own Transform effect with copies or random holds back), patterns: bool (false; Transform Patterns: pattern fills and strokes transform along; with copies the original keeps its pattern and copy k takes the transformation k times), strokes: bool (false; Scale Strokes & Effects: stroke weights and dashes, and the distances of the effects on the fills and strokes, scale by the mean scale √|scaleH·scaleV|, copy k by its k-th power; raster effects that transform with the art are not scaled again; on a fill or stroke, the effects listed after this effect in that fill's or stroke's own list keep their distances and apply to the transformed art, and with objects off so do the effects before it)}",
             json!({"scaleH": 100.0, "scaleV": 100.0, "moveH": 0.0, "moveV": 0.0, "rotate": 0.0, "copies": 0, "reflectX": false, "reflectY": false, "reference": 4, "random": false, "objects": true, "patterns": false, "strokes": false}),
         ),
         g(
@@ -256,7 +296,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "path.outlineObject",
             "Outline Object",
             PATH,
-            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change",
+            "{} type is drawn, exported and expanded as its glyph outlines and stays editable, and the effects after it reshape those outlines; paths and images do not change. On an image's own fill or stroke it gives the outline of the image's pixels that are at least half opaque (VectorCraft's own cutoff), and nothing when no pixel is; it gives the image's frame when the image has no transparency, its pixels can't be read, or the image or its outline is too large to trace",
             json!({}),
         ),
         g(
@@ -296,7 +336,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffff00"}),
         ),
         r("stylize.feather", "Feather…", STYLIZE, "{radius: pt (5)}", json!({"radius": 5.0})),
-        r("blur.gaussian", "Gaussian Blur…", BLUR, "{radius: pt (5)}", json!({"radius": 5.0})),
+        r(
+            "blur.gaussian",
+            "Gaussian Blur…",
+            BLUR,
+            "{radius: pt (5), linear?: bool (false; blurs the colours in linear light, as an SVG filter with color-interpolation-filters=\"linearRGB\" does)}",
+            json!({"radius": 5.0}),
+        ),
         r(
             "artistic.coloredPencil",
             "Colored Pencil…",
@@ -343,7 +389,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "artistic.paintDaubs",
             "Paint Daubs…",
             ARTISTIC,
-            "{brushSize: 1..50 (10; dab centres farther apart), sharpness: 0..40 (25; harder dab edges), brushType: \"simple\"|\"lightRough\"|\"darkRough\"|\"wideSharp\"|\"wideBlurry\"|\"sparkle\" (\"simple\")} repaints the object with thick round brush dabs in the local colours, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            "{brushSize: 1..50 (10; spacing of the dab centers in document units),sharpness: 0..40 (25; harder dab edges), brushType: \"simple\"|\"lightRough\"|\"darkRough\"|\"wideSharp\"|\"wideBlurry\"|\"sparkle\" (\"simple\")} repaints the object with thick round brush dabs in the local colours, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
             json!({"brushSize": 10.0, "sharpness": 25.0, "brushType": "simple"}),
         ),
         r(
@@ -633,7 +679,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "pixelate.colorHalftone",
             "Color Halftone…",
             PIXELATE,
-            "{maxRadius: pt 4..127 (8; the radius of a dot at full strength, which fills its square cell), channel1: screen angle deg -360..360 (108), channel2: deg (162), channel3: deg (90), channel4: deg (45)} screens each colour channel (red, green, blue: channels 1 to 3; in CMYK documents cyan, magenta, yellow, black: 1 to 4) at its angle into dots whose area follows the channel's mean over their cell",
+            "{maxRadius: px 4..127 (8; the radius of a dot at full strength, which fills its square cell, in pixels of the Document Raster Effects resolution), channel1: screen angle deg -360..360 (108), channel2: deg (162), channel3: deg (90), channel4: deg (45)} screens each colour channel (red, green, blue: channels 1 to 3; in CMYK documents cyan, magenta, yellow, black: 1 to 4) at its angle into dots whose area follows the channel's mean over their cell",
             json!({"maxRadius": 8.0, "channel1": 108.0, "channel2": 162.0, "channel3": 90.0, "channel4": 45.0}),
         ),
         r(
@@ -793,6 +839,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
     }
     v.extend(crate::addons::color::catalog());
     v.extend(crate::addons::halftone::catalog());
+    v.extend(crate::addons::path::catalog());
     v.push(g(TRAP, "Trap…", PATHFINDER, trap::EFFECT_PARAMS_DOC, trap::effect_defaults()));
     v.push(g(
         CROP_MARKS,
@@ -807,6 +854,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
         &["Effect"],
         "{colorModel: \"document\" (the document's mode, RGB or CMYK)|\"grayscale\"|\"bitmap\" (\"document\"), useDocumentResolution: bool (true: Document Raster Effects Settings › Resolution), resolution: ppi 1..2400 (72; with useDocumentResolution false), background: \"white\"|\"transparent\" (\"transparent\"), antiAlias: \"none\"|\"art\"|\"type\" (\"art\"; none: hard edges), clippingMask: bool (false; the image clipped to the art's outline), addAround: pt 0..1000 (0; room around the art)} draws the object as an image of square pixels over its bounds and the room around them, leaving its paths, type and other art as they are; when it is the object's only raster effect, Expand Appearance makes the image Object › Rasterize makes",
         json!({"colorModel": "document", "useDocumentResolution": true, "resolution": 72.0, "background": "transparent", "antiAlias": "art", "clippingMask": false, "addAround": 0.0}),
+    ));
+    v.push(r(
+        crate::SVG_FILTER,
+        "SVG Filter",
+        &["Effect", "SVG Filters"],
+        "{name: string (the filter's id), xml: string (one SVG <filter> element with an id and 1..64 primitives, at most 64 KB), scale: number 0.001..1000 (1; points per unit of the filter's user space), origin: [x, y] pt ([0, 0]; where the filter's user space starts in the document)} runs the SVG filter on the object's pixels, its lengths in points times scale, at the Document Raster Effects resolution or finer; svgFilter.apply applies one of the document's filters (svgFilter.list)",
+        json!({"scale": 1.0, "origin": [0.0, 0.0]}),
     ));
     v
 }

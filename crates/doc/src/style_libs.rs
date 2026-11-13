@@ -98,6 +98,10 @@ impl GraphicStyle {
 /// The extension (and `format` header) of graphic style library files.
 pub const STYLES_EXT: &str = "vcstyles";
 
+/// The version of the `.vcstyles` files [`write`] writes. Version 2: a positive Twist angle turns
+/// clockwise ([`crate::twist`]).
+const STYLES_VERSION: u32 = crate::twist::TWIST_CLOCKWISE_SINCE;
+
 /// The file: a header around the library.
 #[derive(Serialize, Deserialize)]
 struct NativeFile {
@@ -109,17 +113,21 @@ struct NativeFile {
 
 /// `lib` as a `.vcstyles` file.
 pub fn write(lib: &StyleLibrary) -> String {
-    let file = NativeFile { format: STYLES_EXT.into(), version: 1, library: lib.clone() };
+    let file = NativeFile { format: STYLES_EXT.into(), version: STYLES_VERSION, library: lib.clone() };
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
 
-/// Read a `.vcstyles` file; an unnamed library is called `name`.
+/// Read a `.vcstyles` file; an unnamed library is called `name`. A version 1 file was written by
+/// an app that turned Twist counterclockwise: its Twist angles are negated.
 pub fn read(text: &str, name: &str) -> Result<StyleLibrary, String> {
     let f: NativeFile = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("not a graphic style library: {e}"))?;
     if f.format != STYLES_EXT {
         return Err(format!("not a graphic style library (format `{}`)", f.format));
     }
     let mut lib = f.library;
+    if f.version < STYLES_VERSION {
+        crate::twist::negate_library(&mut lib);
+    }
     if lib.name.trim().is_empty() {
         lib.name = name.into();
     }
@@ -147,9 +155,13 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "shadows-glows", name: "Shadows and Glows", make: shadows_glows },
     BuiltinStyleLibrary { id: "outlines-rules", name: "Outlines and Rules", make: outlines_rules },
     BuiltinStyleLibrary { id: "hand-drawn", name: "Hand-Drawn", make: hand_drawn },
+    BuiltinStyleLibrary { id: "textures", name: "Textures", make: textures },
+    BuiltinStyleLibrary { id: "painted-sketched", name: "Painted and Sketched", make: painted_sketched },
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
+    BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
+    BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
 ];
 
 /// Built-in library `id`, made once.
@@ -182,8 +194,14 @@ fn round(h: &str, width: f64) -> StrokeLayer {
     StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..stroke(h, width) }
 }
 
-/// Live effect `id` with `params` (the others keep the effect's defaults).
-fn fx(id: &str, params: Value) -> Effect {
+/// Live effect `id` with `params` (the others keep the effect's defaults). A Warp draws with its
+/// style's Bézier net, as a new Warp does.
+fn fx(id: &str, mut params: Value) -> Effect {
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::live::WARP_NET));
+    }
     Effect { id: id.into(), params, visible: true }
 }
 
@@ -309,6 +327,97 @@ fn hand_drawn() -> Vec<GraphicStyle> {
         ),
         style("Puffy", vec![F(fill("#ffc8dd")), S(round("#c9184a", 1.5))], vec![fx("distort.puckerBloat", json!({"amount": 25.0}))]),
         style("Starburst", vec![F(fill("#ffbe0b")), S(stroke("#fb5607", 1.0))], vec![fx("distort.puckerBloat", json!({"amount": -40.0}))]),
+    ]
+}
+
+/// Painted and Sketched: one catalog paint or sketch effect over the whole appearance, so it
+/// repaints the fill and the stroke together (watercolor, dry brush, pastels, charcoal and ink).
+fn painted_sketched() -> Vec<GraphicStyle> {
+    vec![
+        style(
+            "Washed Blue",
+            vec![F(fill("#8ab9c9"))],
+            vec![fx("artistic.watercolor", json!({"brushDetail": 8.0, "shadowIntensity": 2.0, "texture": 2.0}))],
+        ),
+        style(
+            "Bristle Ochre",
+            vec![F(fill("#c4975a")), S(stroke("#76533d", 1.0))],
+            vec![fx("artistic.dryBrush", json!({"brushSize": 4.0, "brushDetail": 7.0, "texture": 2.0}))],
+        ),
+        style(
+            "Pastel Heather",
+            vec![F(fill("#a78ca5"))],
+            vec![fx(
+                "artistic.roughPastels",
+                json!({
+                    "strokeLength": 8.0,
+                    "strokeDetail": 9.0,
+                    "texture": "canvas",
+                    "scaling": 100.0,
+                    "relief": 5.0,
+                    "lightDirection": "topLeft",
+                    "invert": false
+                }),
+            )],
+        ),
+        style(
+            "Charcoal Shade",
+            vec![F(fill("#666666"))],
+            vec![fx("sketch.charcoal", json!({"thickness": 3.0, "detail": 3.0, "lightDarkBalance": 55.0}))],
+        ),
+        style(
+            "Ink Contour",
+            vec![F(fill("#d9e2df")), S(stroke("#26323b", 1.0))],
+            vec![fx("brushStrokes.inkOutlines", json!({"strokeLength": 6.0, "darkIntensity": 24.0, "lightIntensity": 8.0}))],
+        ),
+        style(
+            "Wet Ink",
+            vec![F(fill("#637b85"))],
+            vec![fx("brushStrokes.sumiE", json!({"strokeWidth": 7.0, "strokePressure": 5.0, "contrast": 20.0}))],
+        ),
+        style(
+            "Fine Pen",
+            vec![F(fill("#d8d4c6"))],
+            vec![fx("sketch.graphicPen", json!({"strokeLength": 6.0, "lightDarkBalance": 55.0, "strokeDirection": "rightDiagonal"}))],
+        ),
+    ]
+}
+
+/// Textures: fills and strokes painted with the catalog's texture effects (grain, canvas and
+/// burlap surfaces, craquelure, tiles, patchwork, stained glass and water paper).
+fn textures() -> Vec<GraphicStyle> {
+    let surface = |texture: &str, scaling: f64, relief: f64, light: &str| {
+        fx("texture.texturizer", json!({"texture": texture, "scaling": scaling, "relief": relief, "lightDirection": light, "invert": false}))
+    };
+    vec![
+        style(
+            "Fine Grain",
+            vec![F(fill("#c9ada7")), S(stroke("#4a4e69", 1.0))],
+            vec![fx("texture.grain", json!({"intensity": 35.0, "contrast": 55.0, "grainType": "regular"}))],
+        ),
+        style("Canvas Weave", vec![F(fill("#e9d8a6"))], vec![surface("canvas", 100.0, 6.0, "topLeft")]),
+        style("Burlap Sack", vec![F(fill("#bc8a5f")), S(stroke("#6f4518", 1.5))], vec![surface("burlap", 120.0, 8.0, "top")]),
+        style(
+            "Cracked Glaze",
+            vec![F(fill("#94d2bd")), S(stroke("#005f73", 1.0))],
+            vec![fx("texture.craquelure", json!({"crackSpacing": 12.0, "crackDepth": 5.0, "crackBrightness": 8.0}))],
+        ),
+        style(
+            "Mosaic Floor",
+            vec![F(fill("#0a9396"))],
+            vec![fx("texture.mosaicTiles", json!({"tileSize": 10.0, "groutWidth": 3.0, "lightenGrout": 8.0}))],
+        ),
+        style("Quilted Squares", vec![F(fill("#ee9b00"))], vec![fx("texture.patchwork", json!({"squareSize": 5.0, "relief": 10.0}))]),
+        style(
+            "Leaded Glass",
+            vec![F(FillLayer::new(linear(-45.0, &[(0.0, "#ae2012", 1.0), (0.5, "#ee9b00", 1.0), (1.0, "#005f73", 1.0)])))],
+            vec![fx("texture.stainedGlass", json!({"cellSize": 8.0, "borderThickness": 4.0, "lightIntensity": 3.0}))],
+        ),
+        style(
+            "Damp Paper",
+            vec![F(fill("#4895ef")), S(stroke("#3f37c9", 1.0))],
+            vec![fx("sketch.waterPaper", json!({"fiberLength": 12.0, "brightness": 55.0, "contrast": 60.0}))],
+        ),
     ]
 }
 
@@ -445,6 +554,71 @@ fn blends_transparency() -> Vec<GraphicStyle> {
     ]
 }
 
+/// Game HUD: fills and glows for health, mana, damage and quest chrome (original arcade/HUD look).
+fn game_hud() -> Vec<GraphicStyle> {
+    vec![
+        style("Health Fill", vec![F(fill("#e74c3c")), S(stroke("#5c1a1a", 1.25))], vec![]),
+        style(
+            "Mana Glow",
+            vec![F(fill("#3498db"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 7.0, "color": "#5dade2"}))],
+        ),
+        style(
+            "Damage Flash",
+            vec![F(fill("#ff6b35"))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 80.0, "blur": 8.0, "color": "#ffe66d", "source": "edge"}))],
+        ),
+        style("Quest Outline", vec![F(fill("#f7f3e8")), S(round("#2c3e50", 3.0))], vec![]),
+        style(
+            "Coin Shine",
+            vec![F(fill("#f1c40f")), S(stroke("#b7950b", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "multiply", "opacity": 40.0, "x": 2.0, "y": 3.0, "blur": 4.0, "color": "#1d1b2a"}))],
+        ),
+        style(
+            "Boss Alert",
+            vec![F(fill("#1a1a2e")), S(round("#e94560", 2.5))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 6.0, "color": "#e94560"}))],
+        ),
+    ]
+}
+
+/// Status Effects: buffs and debuffs for RPG/gamedev art (original, catalogue stylize effects only).
+fn status_effects() -> Vec<GraphicStyle> {
+    let stealth = GraphicStyle {
+        opacity: 0.45,
+        blend: BlendMode::Normal,
+        ..style("Stealth Fade", vec![F(fill("#7f8c8d")), S(stroke("#2c3e50", 1.0))], vec![])
+    };
+    vec![
+        style(
+            "Poison Tint",
+            vec![F(fill("#2ecc71"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 80.0, "blur": 6.0, "color": "#58d68d"}))],
+        ),
+        style(
+            "Freeze Edge",
+            vec![F(fill("#aed6f1")), S(stroke("#5dade2", 2.0))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 70.0, "blur": 5.0, "color": "#d6eaf8", "source": "edge"}))],
+        ),
+        style(
+            "Burn Aura",
+            vec![F(fill("#e67e22"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 8.0, "color": "#f39c12"}))],
+        ),
+        style(
+            "Stun Pulse",
+            vec![F(fill("#f4d03f"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 7.0, "color": "#f7dc6f"}))],
+        ),
+        stealth,
+        style(
+            "Shield Buff",
+            vec![F(fill("#85c1e9")), S(round("#2874a6", 2.0))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 70.0, "blur": 5.0, "color": "#5dade2"}))],
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,6 +641,74 @@ mod tests {
         }
         assert!(Arc::ptr_eq(&builtin_style_library("hand-drawn").unwrap(), &builtin_style_library("hand-drawn").unwrap()), "made once");
         assert!(builtin_style_library("nope").is_none());
+        let game = builtin_style_library("game-hud").unwrap();
+        assert_eq!(game.name, "Game HUD");
+        let names: Vec<&str> = game.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Health Fill", "Mana Glow", "Damage Flash", "Quest Outline", "Coin Shine", "Boss Alert"]);
+        let status = builtin_style_library("status-effects").unwrap();
+        assert_eq!(status.name, "Status Effects");
+        let status_names: Vec<&str> = status.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
+        let textures = builtin_style_library("textures").unwrap();
+        assert_eq!(textures.name, "Textures");
+        let texture_names: Vec<&str> = textures.styles.iter().map(|g| g.name.as_str()).collect();
+        let expected =
+            ["Fine Grain", "Canvas Weave", "Burlap Sack", "Cracked Glaze", "Mosaic Floor", "Quilted Squares", "Leaded Glass", "Damp Paper"];
+        assert_eq!(texture_names, expected);
+        for b in STYLE_LIBRARIES.iter().filter(|b| b.id != "textures") {
+            let lib = builtin_style_library(b.id).unwrap();
+            assert!(lib.styles.iter().all(|g| !expected.contains(&g.name.as_str())), "{} shares a name with Textures", b.id);
+        }
+        let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
+        assert_eq!(ids.iter().position(|&i| i == "textures"), ids.iter().position(|&i| i == "hand-drawn").map(|i| i + 1), "after Hand-Drawn");
+    }
+
+    /// The built-in styles' Warps draw with the map a new Warp takes.
+    #[test]
+    fn builtin_warp_styles_take_the_nets_map() {
+        let mut warps = 0;
+        for b in STYLE_LIBRARIES {
+            let lib = builtin_style_library(b.id).unwrap();
+            for g in &lib.styles {
+                let mut effects: Vec<&Effect> = g.appearance.effects.iter().collect();
+                effects.extend(g.appearance.items.iter().flat_map(|i| i.effects()));
+                for e in effects.into_iter().filter(|e| e.id.starts_with("warp.")) {
+                    assert_eq!(e.params["version"], json!(crate::live::WARP_NET), "{} › {}: {}", b.id, g.name, e.id);
+                    warps += 1;
+                }
+            }
+        }
+        assert!(warps >= 3, "{warps}");
+    }
+
+    #[test]
+    fn painted_and_sketched_follows_textures_with_one_effect_per_style() {
+        let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
+        let at = ids.iter().position(|&id| id == "painted-sketched").expect("listed");
+        assert_eq!(ids[at - 1], "textures");
+        let lib = builtin_style_library("painted-sketched").unwrap();
+        assert_eq!(lib.name, "Painted and Sketched");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Washed Blue", "Bristle Ochre", "Pastel Heather", "Charcoal Shade", "Ink Contour", "Wet Ink", "Fine Pen"]);
+        let effects: Vec<&str> = lib.styles.iter().flat_map(|g| g.appearance.effects.iter().map(|e| e.id.as_str())).collect();
+        assert_eq!(
+            effects,
+            [
+                "artistic.watercolor",
+                "artistic.dryBrush",
+                "artistic.roughPastels",
+                "sketch.charcoal",
+                "brushStrokes.inkOutlines",
+                "brushStrokes.sumiE",
+                "sketch.graphicPen"
+            ]
+        );
+        assert!(lib.styles.iter().all(|g| g.appearance.items.iter().all(|i| i.effects().is_empty())), "no effects on a fill or stroke");
+        // No other built-in library holds a style of the same name.
+        for b in STYLE_LIBRARIES.iter().filter(|b| b.id != "painted-sketched") {
+            let other = builtin_style_library(b.id).unwrap();
+            assert!(other.styles.iter().all(|g| !names.contains(&g.name.as_str())), "{}", b.id);
+        }
     }
 
     #[test]

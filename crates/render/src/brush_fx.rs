@@ -115,25 +115,51 @@ impl BrushCache {
         self.library(doc, stamp);
         self.key
     }
+
+    /// [`Self::library_key`] checked now, between frames: `doc` may be the document of the last
+    /// frame, edited in place.
+    pub(crate) fn library_key_now(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.checked = (u64::MAX, 0);
+        self.library_key(doc, stamp)
+    }
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol
-/// instances measured by their art from `symbols`, with the brushed strokes in that art.
+/// instances measured by their art from `symbols`, with the brushed strokes in that art. A path
+/// whose live-effect plug-ins paint their pieces leaves that room past each piece
+/// ([`crate::fx::painted_cull_bounds`]). A group or layer leaves that room past each of its
+/// members, as the renderer measures a group by its members (`Renderer::bounds_of`).
 pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = crate::fx::cull_bounds(symbols, n)?;
+    if let Some(b) = crate::fx::painted_cull_bounds(symbols, n) {
+        return b;
+    }
+    let b = crate::fx::brushed_cull_bounds(symbols, n)?;
     let pad = pad(symbols, n);
     Some(b.inflate(pad, pad))
+}
+
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds, when the
+/// renderer measures it by those ([`crate::fx::path_cull_bounds`]); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let b = crate::fx::path_cull_bounds(symbols, n, visual)?;
+    Some(b.map(|b| {
+        let pad = pad(symbols, n);
+        b.inflate(pad, pad)
+    }))
 }
 
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
 /// has a visible brushed stroke and of the objects in that art that have one
-/// ([`SymbolBoxes::brush_width`]), and 0 when neither has one.
+/// ([`SymbolBoxes::brush_width`]) or the pieces live-effect plug-ins paint for them
+/// ([`crate::fx::painted_brush_width`]), and 0 when neither has one.
 pub(crate) fn pad(symbols: &SymbolBoxes, n: &Node) -> f64 {
     let own = vectorcraft_brush::has_brush(n)
         .then(|| n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max));
     let art = match &n.kind {
-        NodeKind::SymbolInstance { symbol, .. } => symbols.brush_width(symbol).map(|w| w.max(1.0)),
+        NodeKind::SymbolInstance { symbol, .. } => {
+            symbols.brush_width(symbol).into_iter().chain(crate::fx::painted_brush_width(symbols, symbol)).reduce(f64::max).map(|w| w.max(1.0))
+        }
         _ => None,
     };
     own.into_iter().chain(art).reduce(f64::max).map_or(0.0, |w| 16.0 * w + 8.0)
@@ -212,7 +238,7 @@ impl Renderer {
                 self.draw_kept_node(ctx, f, p);
                 self.fx_owner = owner;
             } else {
-                self.draw_node(ctx, f, p, true);
+                self.draw_forced_arc(ctx, f, p);
             }
         }
         (self.made_again, self.cur) = outer;
@@ -258,6 +284,36 @@ mod tests {
         // Second frame hits the cache and paints the same.
         let again = render(&mut r, &d);
         assert_eq!(again.pixels, img.pixels);
+    }
+
+    #[test]
+    fn art_brush_piece_applies_its_root_mask() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_doc::OpacityMask;
+
+        let mut d = doc_with_line(Some("Masked art"), 1.0);
+        let mut art = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, -5.0, 10.0, 5.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let black = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        art.extras_mut().mask = Some(Box::new(OpacityMask::new(black, true)));
+        let brush = Brush {
+            name: "Masked art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+
+        let mut renderer = Renderer::new();
+        for _ in 0..2 {
+            let img = render(&mut renderer, &d);
+            assert_eq!(img.pixel(100, 50), [255, 255, 255, 255]);
+        }
     }
 
     /// Object opacity fades a brushed stroke's art as a whole, with or without a dash and a fill:
@@ -340,7 +396,7 @@ mod tests {
             shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
             Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
         );
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let mut inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 50.0)) });
         inst.appearance.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
@@ -364,7 +420,7 @@ mod tests {
         let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
         ap.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
         let art = Node::path(vectorcraft_doc::NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), ap);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-6.0, 0.0)) });
         let l = d.layers[0].id;
@@ -394,7 +450,7 @@ mod tests {
             let moved = Affine::translate((-8.0, 0.0));
             let source = if instance {
                 let art = line(&mut d);
-                d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
                 Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: moved })
             } else {
                 let mut n = line(&mut d);

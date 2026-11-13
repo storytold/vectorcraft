@@ -64,6 +64,36 @@ fn paintbrush_sends_pen_pressure() {
     assert_eq!(stroke("pencil", [0.25, 0.5, 1.0]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
 }
 
+/// #764: the Paintbrush sends each point's pen tilt and barrel rotation where the pen reads
+/// them, `null` for what a point lacks; the Pencil sends plain points.
+#[test]
+fn paintbrush_sends_pen_tilt_and_rotation() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let stroke = |id: &str, pressure: f32, poses: [Option<PenPose>; 3]| {
+        let mut t = GestureTool::new(id);
+        let kinds = [PointerKind::Down, PointerKind::Drag, PointerKind::Up];
+        let mut last = vec![];
+        for ((k, x), pen) in kinds.into_iter().zip([0.0, 40.0, 80.0]).zip(poses) {
+            last = t.pointer(&cx, &PointerEvent { pressure, pen, ..PointerEvent::new(k, x, 0.0) });
+        }
+        let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
+        v["points"].clone()
+    };
+    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+    assert_eq!(
+        stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
+        json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
+    );
+    // A pen without a rotation axis, pressing fully: no pressure, the tilt alone.
+    assert_eq!(stroke("paintbrush", 1.0, [leaning(30.0, None); 3])[1], json!([40.0, 0.0, null, 30.0, -10.0, null]));
+    // A pose that reads nothing is a mouse's.
+    assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+}
+
 #[test]
 fn pencil_previews_and_commits() {
     let (d, _) = doc_with_rect();
@@ -124,7 +154,8 @@ fn pencil_with_live_curve_fitting_off_previews_the_stroke_unfitted() {
 
 /// A stroke whose Fidelity is finer than half a screen pixel previews fitted at half a pixel, which
 /// looks the same at a fraction of the fit's cost (#4565); the release, and another tool chosen
-/// while it is drawn, fit it at its own Fidelity. A coarser Fidelity previews as it is kept.
+/// while it is drawn, fit it at its own Fidelity. A coarser Fidelity previews as it is kept. Fidelity
+/// is in screen pixels, so the stroke is fitted in points at Fidelity / zoom (#5729).
 #[test]
 fn fine_fidelity_previews_at_half_a_pixel() {
     let (d, _) = doc_with_rect();
@@ -136,23 +167,126 @@ fn fine_fidelity_previews_at_half_a_pixel() {
         acts.iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect()
     };
     for id in ["pencil", "paintbrush"] {
-        for (zoom, fidelity, drawn) in [(1.0, 0.01, 0.5), (4.0, 0.01, 0.125), (1.0, 1.5, 1.5)] {
+        for (zoom, fidelity, drawn, kept) in [(1.0, 0.01, 0.5, 0.01), (4.0, 0.01, 0.125, 0.0025), (1.0, 1.5, 1.5, 1.5), (4.0, 1.5, 0.375, 0.375)] {
             cx.zoom = zoom;
             let mut t = GestureTool::new(id);
             t.set_option("fidelity", &json!(fidelity));
             let acts = drag(&mut t, &cx, &stroke, Mods::default());
             let (release, during) = acts.split_last().unwrap();
-            assert_eq!(fidelities(&during.concat()), [drawn; 3], "{id} at {zoom}x, {fidelity} pt");
-            assert_eq!(fidelities(release), [fidelity], "{id} at {zoom}x, {fidelity} pt: the release");
+            assert_eq!(fidelities(&during.concat()), [drawn; 3], "{id} at {zoom}x, {fidelity} px");
+            assert_eq!(fidelities(release), [kept], "{id} at {zoom}x, {fidelity} px: the release");
             t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
             for &(x, y) in &stroke[1..] {
                 t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
             }
             let acts = t.deactivate(&cx);
-            let kept = if drawn > fidelity { [fidelity].to_vec() } else { vec![] };
-            assert_eq!(fidelities(&acts), kept, "{id} at {zoom}x, {fidelity} pt: another tool chosen");
+            let stale = if drawn > kept { [kept].to_vec() } else { vec![] };
+            assert_eq!(fidelities(&acts), stale, "{id} at {zoom}x, {fidelity} px: another tool chosen");
             assert_eq!(acts.last(), Some(&Action::Commit));
         }
+    }
+}
+
+/// #5729: the Pencil's and the Paintbrush's Fidelity is in screen pixels. The same stroke drawn on
+/// screen at 1x and at 4x is fitted at the same tolerance on screen, so it keeps as many points
+/// whatever the zoom (another tool chosen mid-stroke: `fine_fidelity_previews_at_half_a_pixel`).
+#[test]
+fn fidelity_is_in_screen_pixels_at_any_zoom() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let screen = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)];
+    for id in ["pencil", "paintbrush"] {
+        let on_screen = |cx: &ToolContext, zoom: f64| {
+            let pts: Vec<_> = screen.iter().map(|&(x, y)| (x / zoom, y / zoom)).collect();
+            let mut t = GestureTool::new(id);
+            t.set_option("fidelity", &json!(1.5));
+            let acts = drag(&mut t, cx, &pts, Mods::default());
+            let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+            v["fidelity"].as_f64().unwrap() * zoom
+        };
+        cx.zoom = 1.0;
+        let at_1 = on_screen(&cx, 1.0);
+        cx.zoom = 4.0;
+        let at_4 = on_screen(&cx, 4.0);
+        assert_eq!(at_1, 1.5, "{id}");
+        assert_eq!(at_4, at_1, "{id}: fidelity in screen px at 1x vs 4x");
+    }
+}
+
+/// The highest Fidelity (100 px) at the lowest zoom (3.13 %) is sent, while the stroke is drawn and
+/// at its release, as [`crate::draw2::MAX_FIT_TOLERANCE`], the coarsest tolerance `path.freehand`
+/// reads.
+#[test]
+fn highest_fidelity_at_the_lowest_zoom_sends_the_coarsest_tolerance() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.zoom = 0.0313;
+    let stroke: Vec<_> = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)].iter().map(|&(x, y)| (x / cx.zoom, y / cx.zoom)).collect();
+    for id in ["pencil", "paintbrush"] {
+        let mut t = GestureTool::new(id);
+        t.set_option("fidelity", &json!(100.0));
+        let acts = drag(&mut t, &cx, &stroke, Mods::default());
+        let sent: Vec<_> =
+            acts.concat().into_iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect();
+        assert_eq!(sent, [crate::draw2::MAX_FIT_TOLERANCE; 4], "{id}");
+    }
+}
+
+/// `path.freehand` rejects a `fidelity` outside `MIN_FIT_TOLERANCE..=MAX_FIT_TOLERANCE`, so at a zoom
+/// beyond the view's range the Pencil and the Paintbrush send the nearer end of it, while the stroke
+/// is drawn and at its release.
+#[test]
+fn fidelity_sent_stays_within_what_path_freehand_takes() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let (lo, hi) = (crate::draw2::MIN_FIT_TOLERANCE, crate::draw2::MAX_FIT_TOLERANCE);
+    for (zoom, fidelity, release) in [(0.01, 100.0, hi), (1000.0, 0.01, lo)] {
+        cx.zoom = zoom;
+        let stroke: Vec<_> = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)].iter().map(|&(x, y)| (x / zoom, y / zoom)).collect();
+        for id in ["pencil", "paintbrush"] {
+            let mut t = GestureTool::new(id);
+            t.set_option("fidelity", &json!(fidelity));
+            let acts = drag(&mut t, &cx, &stroke, Mods::default());
+            let sent: Vec<_> =
+                acts.concat().into_iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect();
+            assert!(sent.iter().all(|f| (lo..=hi).contains(f)), "{id} at {zoom}x: {sent:?}");
+            assert_eq!(sent.last(), Some(&release), "{id} at {zoom}x: {sent:?}");
+        }
+    }
+}
+
+/// The Blob Brush's Fidelity stays in points (#5729 is the Pencil's and the Paintbrush's): its
+/// stroke, and another tool chosen while it is drawn, send it as set at any zoom.
+#[test]
+fn blob_brush_fidelity_stays_in_points_at_any_zoom() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let stroke = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)];
+    for zoom in [1.0, 4.0] {
+        cx.zoom = zoom;
+        let mut t = GestureTool::new("blobBrush");
+        t.set_option("fidelity", &json!(1.5));
+        let acts = drag(&mut t, &cx, &stroke, Mods::default());
+        let sent: Vec<_> = acts
+            .concat()
+            .into_iter()
+            .filter_map(|a| if let Action::Exec(_, v) | Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None })
+            .collect();
+        assert_eq!(sent, [1.5], "at {zoom}x");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        for &(x, y) in &stroke[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
+        }
+        let acts = t.deactivate(&cx);
+        assert!(!acts.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "path.freehand")), "at {zoom}x: {acts:?}");
     }
 }
 
@@ -294,6 +428,36 @@ fn blob_brush_drag_shows_scrub_length_measurement_labels() {
     assert!(!quiet.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
 }
 
+/// #4343: while it is dragged, a round Blob Brush shows the outline of the area `path.blob` adds,
+/// which reaches half the brush beyond the ends of the stroke (round tips), not a line as wide as
+/// the brush that ends square at them.
+#[test]
+fn blob_brush_preview_is_the_outline_of_the_area_with_round_tips() {
+    use vectorcraft_geom::kurbo::Shape;
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("blobBrush");
+    t.size = 20.0;
+    assert_eq!(t.roundness, 100.0, "a round tip by default");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 300.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 300.0));
+    let outlines: Vec<_> =
+        t.overlays(&cx).into_iter().filter_map(|o| if let Overlay::Path { path, width, .. } = o { Some((path, width)) } else { None }).collect();
+    assert!(outlines.iter().all(|(_, width)| f64::from(*width) < t.size / 2.0), "no line as wide as the brush: {outlines:?}");
+    // The stroke's outline is the widest one (the tip at the pointer is another).
+    let Some((path, _)) = outlines.iter().max_by(|a, b| a.0.bounding_box().width().total_cmp(&b.0.bounding_box().width())) else {
+        panic!("no outline")
+    };
+    let b = path.bounding_box();
+    assert!((b.x0 - 40.0).abs() < 0.5 && (b.x1 - 160.0).abs() < 0.5, "round tips reach half the size past the ends: {b:?}");
+    assert!((b.y0 - 290.0).abs() < 0.5 && (b.y1 - 310.0).abs() < 0.5, "{b:?}");
+    // Round, not square: the corner of the box a square-ended line would fill is outside the area.
+    assert!(!path.contains(vectorcraft_geom::Point::new(41.0, 291.0)));
+    assert!(path.contains(vectorcraft_geom::Point::new(45.0, 300.0)));
+}
+
 /// The Blob Brush has Keep selected and Merge only with selection, both off by default, and its
 /// stroke sends both.
 #[test]
@@ -344,7 +508,8 @@ fn blob_brush_shift_keeps_the_stroke_horizontal_or_vertical() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let mut cx = cx(&d, &s, &p);
+    // Precise cursors: no tip outline, only the stroke's own overlay.
+    let mut cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = GestureTool::new("blobBrush");
     let ev = |k, x, y, m| PointerEvent::new(k, x, y).with_mods(m);
@@ -872,7 +1037,440 @@ fn pencil_alt_smooths_within_the_smooth_tools_radius() {
     }
 }
 
-/// An Alt smoothing drag uses the Smooth tool's Fidelity for both Pencil and Blob Brush.
+/// The dashed paths among the overlays.
+fn bands(t: &GestureTool, cx: &ToolContext) -> Vec<vectorcraft_geom::BezPath> {
+    t.overlays(cx).into_iter().filter_map(|o| if let Overlay::Path { path, dashed: true, .. } = o { Some(path) } else { None }).collect()
+}
+
+/// How far `q` is from the polyline through `pts`.
+fn dist_to_drag(q: Point, pts: &[Point]) -> f64 {
+    pts.windows(2)
+        .map(|w| {
+            let ab = w[1] - w[0];
+            let t = if ab.hypot2() > 0.0 { ((q - w[0]).dot(ab) / ab.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+            q.distance(w[0] + ab * t)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Check the band a smoothing drag through the tool's points shows at radius `r`: one dashed path,
+/// every point of which is `r` from the drag, around an area that holds every point nearer than `r`
+/// and none farther. Returns the path.
+fn check_band(t: &GestureTool, cx: &ToolContext, r: f64) -> vectorcraft_geom::BezPath {
+    use vectorcraft_geom::kurbo::Shape;
+    let pts = &t.points;
+    let found = bands(t, cx);
+    let [outline] = found.as_slice() else { panic!("one band, got {found:?}") };
+    for seg in outline.segments() {
+        for s in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let q = seg.eval(s);
+            let dq = dist_to_drag(q, pts);
+            assert!((dq - r).abs() < 0.02 * r, "{q:?} on the outline is {dq} from the drag, radius {r}");
+        }
+    }
+    let kept = t.band.take();
+    let areas: Vec<_> = kept.iter().flat_map(|b| b.tiles.values().map(|t| t.area.to_bezpath())).collect();
+    t.band.set(kept);
+    let b = outline.bounding_box();
+    let mut probes = 0;
+    for i in 0..=80 {
+        for j in 0..=80 {
+            let q = Point::new(b.x0 - r + (b.width() + 2.0 * r) * f64::from(i) / 80.0, b.y0 - r + (b.height() + 2.0 * r) * f64::from(j) / 80.0);
+            let dq = dist_to_drag(q, pts);
+            let inside = areas.iter().any(|a| a.contains(q));
+            if dq < 0.97 * r {
+                assert!(inside, "{q:?} {dq} from the drag is inside the band, radius {r}");
+                probes += 1;
+            } else if dq > 1.03 * r {
+                assert!(!inside, "{q:?} {dq} from the drag is outside the band, radius {r}");
+            }
+        }
+    }
+    assert!(probes > 100, "{probes}");
+    outline.clone()
+}
+
+/// While a smoothing drag has a selected path to smooth, it shows dashed the band its release smooths:
+/// everything within the radius it sends of the drag, round at both ends, around the drag's thin
+/// line. Alt smoothing with the Pencil, Paintbrush and Blob Brush shows it too; a drag with nothing
+/// selected and a Blob Brush stroke that paints do not.
+#[test]
+fn smoothing_drag_shows_the_band_it_smooths() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let none = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let pts = [(50.0, 150.0), (150.0, 150.0)];
+    for zoom in [1.0, 2.0, 0.5, 200.0] {
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.zoom = zoom;
+        let r = match drag(&mut GestureTool::new("smooth"), &cx, &pts, Mods::default()).last().and_then(|a| a.first()) {
+            Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["radius"].as_f64().unwrap_or(0.0),
+            a => panic!("expected path.smoothRegion, got: {a:?}"),
+        };
+        for (id, alt_smooth, m) in [("smooth", false, Mods::default()), ("pencil", true, alt), ("paintbrush", false, alt), ("blobBrush", false, alt)]
+        {
+            let mut t = GestureTool::new(id);
+            t.set_option("altSmooth", &json!(alt_smooth));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(m));
+            let band = check_band(&t, &cx, r);
+            let b = band.bounding_box();
+            let near = |a: f64, w: f64| (a - w).abs() < 0.02 * r;
+            assert!(near(b.x0, 50.0 - r) && near(b.x1, 150.0 + r) && near(b.y0, 150.0 - r) && near(b.y1, 150.0 + r), "{id} at zoom {zoom}: {b:?}");
+            // The whole outline shows: two sides and two half circles.
+            let length: f64 = band.segments().map(|s| s.arclen(1e-6 * r)).sum();
+            let want = 200.0 + 2.0 * std::f64::consts::PI * r;
+            assert!((length - want).abs() < 0.02 * want, "{id} at zoom {zoom}: outline {length}, band {want}");
+            assert!(
+                t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, dashed: false, .. } if *width == 1.0)),
+                "{id}: the drag's line"
+            );
+        }
+        // Nothing selected: the release smooths nothing, so no band shows.
+        let mut empty = crate::testutil::cx(&d, &none, &p);
+        empty.zoom = zoom;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&empty, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+        t.pointer(&empty, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1));
+        assert!(bands(&t, &empty).is_empty());
+        // A Blob Brush stroke that paints shows its own area, not the band.
+        let mut t = GestureTool::new("blobBrush");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1));
+        assert!(bands(&t, &cx).is_empty());
+    }
+}
+
+/// The band shown while a long drag goes on, grown step by step, is one outline that holds every
+/// point within the radius of the drag and none farther, whether the drag crosses itself or runs
+/// on across the page; a zoom change mid-drag with the pointer still asks for frames until the band
+/// covers the whole drag at the new radius, and the next drag does not keep the last one's band.
+#[test]
+fn smoothing_band_follows_a_long_drag() {
+    use vectorcraft_geom::kurbo::Shape;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    // A curve that crosses itself, and one that runs on across the page.
+    let crossing: Vec<Point> =
+        (0..240).map(|i| f64::from(i) * 0.05).map(|a| Point::new(250.0 + 80.0 * (a * 1.3).sin(), 250.0 + 60.0 * (a * 0.7).cos())).collect();
+    let across: Vec<Point> =
+        (0..900).map(f64::from).map(|i| Point::new(20.0 + 0.5 * i, 250.0 + 100.0 * (i * 0.05).sin() + 30.0 * (i * 0.37).sin())).collect();
+    for pts in [crossing, across] {
+        cx.zoom = 1.0;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+        for q in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+            assert_eq!(bands(&t, &cx).len(), 1);
+        }
+        check_band(&t, &cx, cx.tol(12.0));
+        assert!(!t.overlays_pending(), "the band covers the drag");
+        // The view zooms in mid-drag while the pointer holds still: the tool asks for frames until
+        // the band covers the whole drag at the new radius.
+        cx.zoom = 2.0;
+        let mut frames = 1;
+        bands(&t, &cx);
+        while t.overlays_pending() {
+            assert!(frames <= pts.len(), "the band reaches the whole drag");
+            bands(&t, &cx);
+            frames += 1;
+        }
+        let n = t.points.len();
+        assert_eq!(frames, (n - 1).div_ceil(BAND_STEP * BAND_STEPS_PER_CALL), "frames for {n} points");
+        check_band(&t, &cx, cx.tol(12.0));
+        assert!(!t.overlays_pending());
+        let last = pts[pts.len() - 1];
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, last.x, last.y));
+        // The next drag shows only its own band.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 450.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 420.0, 450.0));
+        let b = check_band(&t, &cx, cx.tol(12.0)).bounding_box();
+        assert!(b.x0 > 390.0 && b.y0 > 440.0, "{b:?}");
+    }
+}
+
+/// A segment of a drag too long for the squares at the current zoom (a jump drawn zoomed out,
+/// viewed zoomed in, or one reaching far off the page) shows as the two sides of its band, and the
+/// band goes on past it: the parts dragged before and after it show, and nothing stays pending.
+/// Two such segments that cross show no edge inside each other's band, and one that runs back
+/// along another shows its sides once.
+#[test]
+fn smoothing_band_shows_a_segment_too_long_for_its_squares() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let before = [Point::new(100.0, 100.0), Point::new(130.0, 100.0)];
+    let after = [Point::new(20_100.0, 100.0), Point::new(20_100.0, 130.0), Point::new(20_130.0, 130.0)];
+    let far = [Point::new(1e17, 100.0)];
+    let crossing = [(100.0, 100.0), (30_100.0, 100.0), (30_100.0, 130.0), (15_100.0, -20_000.0), (15_130.0, -20_000.0)].map(Point::from);
+    let back = [(100.0, 100.0), (30_100.0, 100.0), (130.0, 100.0)].map(Point::from);
+    for (case, pts) in [
+        ("jump", [&before[..], &after[..]].concat()),
+        ("far", [&before[..], &far[..], &after[..]].concat()),
+        ("crossing", crossing.to_vec()),
+        ("back", back.to_vec()),
+    ] {
+        // Drawn zoomed out, where the jump is about 42 half squares, then viewed at 1,000%, where
+        // it is more than 4,096.
+        cx.zoom = 0.1;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+        for q in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+            bands(&t, &cx);
+        }
+        cx.zoom = 10.0;
+        let r = cx.tol(12.0);
+        let mut frames = 0;
+        let mut found = bands(&t, &cx);
+        while t.overlays_pending() {
+            assert!(frames < pts.len(), "{case}: the band reaches the whole drag");
+            found = bands(&t, &cx);
+            frames += 1;
+        }
+        let [outline] = found.as_slice() else { panic!("{case}: one band, got {found:?}") };
+        for seg in outline.segments() {
+            for s in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                let q = seg.eval(s);
+                let dq = dist_to_drag(q, &pts);
+                assert!((dq - r).abs() < 0.02 * r, "{case}: {q:?} on the outline is {dq} from the drag, radius {r}");
+            }
+        }
+        // The band of each long segment shows on both of its sides, as far as the release reaches,
+        // except where the band of another part of the drag holds the side (on the page: a point
+        // on a segment to 1e17 resolves only to about 10 units).
+        let on_outline = |q: Point| {
+            outline.segments().any(|seg| {
+                (0..=8).any(|k| seg.eval(f64::from(k) / 8.0).distance(q) < 0.02 * r) || dist_to_drag(q, &[seg.start(), seg.end()]) < 0.02 * r
+            })
+        };
+        for w in pts.windows(2).filter(|w| w[0].distance(w[1]) > 10_000.0 && w[0].x < 1e6 && w[1].x < 1e6) {
+            let d = w[1] - w[0];
+            let n = vectorcraft_geom::kurbo::Vec2::new(-d.y, d.x) * (r / d.hypot());
+            for k in 1..40 {
+                for q in [w[0].lerp(w[1], f64::from(k) / 40.0) + n, w[0].lerp(w[1], f64::from(k) / 40.0) - n] {
+                    if dist_to_drag(q, &pts) > 0.98 * r {
+                        assert!(on_outline(q), "{case}: {q:?} on a side of {w:?} shows");
+                    }
+                }
+            }
+        }
+        if case == "back" {
+            // Running back along the jump draws its sides once: two sides and two half circles.
+            let length: f64 = outline.segments().map(|s| s.arclen(1e-6 * r)).sum();
+            let want = 2.0 * 30_000.0 + 2.0 * std::f64::consts::PI * r;
+            assert!((length - want).abs() < 0.01 * want, "{case}: outline {length}, band {want}");
+        }
+        let kept = t.band.take();
+        let areas: Vec<_> = kept.iter().flat_map(|b| b.tiles.values().map(|t| t.area.to_bezpath())).collect();
+        t.band.set(kept);
+        // Every point near each short part dragged on either side of a long segment is in the band.
+        for w in pts.windows(2).filter(|w| w[0].distance(w[1]) < 1_000.0) {
+            for q in (0..=20).map(|k| w[0].lerp(w[1], f64::from(k) / 20.0)) {
+                for (dx, dy) in [(0.0, 0.0), (0.9, 0.0), (-0.9, 0.0), (0.0, 0.9), (0.0, -0.9)] {
+                    let probe = q + vectorcraft_geom::kurbo::Vec2::new(dx * r, dy * r);
+                    assert!(areas.iter().any(|a| a.contains(probe)), "{case}: {probe:?} near the drag is in the band");
+                }
+            }
+        }
+    }
+}
+
+/// A drag drawn zoomed out whose every segment is too long for the squares once the view zooms in,
+/// and whose segments all cross one another, is outlined over several calls: no call does more
+/// than about [`BAND_WORK_PER_CALL`] of work on the long segments, and the band then shows in full.
+#[test]
+fn smoothing_band_of_many_long_segments_is_made_in_bounded_calls() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    // A star whose chords nearly all pass through its middle, 4,000 units each.
+    let step = std::f64::consts::PI * (1.0 - 1.0 / 40.3);
+    let pts: Vec<Point> = (0..161).map(|k| f64::from(k) * step).map(|a| Point::new(5000.0 + 2000.0 * a.cos(), 5000.0 + 2000.0 * a.sin())).collect();
+    cx.zoom = 0.05;
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+    for q in &pts[1..] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+        bands(&t, &cx);
+    }
+    cx.zoom = 640.0;
+    let r = cx.tol(SMOOTH_RADIUS);
+    let work = |t: &GestureTool| {
+        let kept = t.band.take();
+        let w = kept.as_ref().map_or(0, |b| b.work);
+        t.band.set(kept);
+        w
+    };
+    let mut found = bands(&t, &cx);
+    let mut frames = 1;
+    let mut most = work(&t);
+    while t.overlays_pending() {
+        assert!(frames < 10_000, "the band reaches the whole drag");
+        found = bands(&t, &cx);
+        most = most.max(work(&t));
+        frames += 1;
+    }
+    assert!(most <= 2 * BAND_WORK_PER_CALL, "{most} work in one call");
+    assert!(frames > 2, "{frames} calls");
+    let kept = t.band.take();
+    let long = kept.as_ref().map_or(0, |b| b.long.len());
+    t.band.set(kept);
+    assert_eq!(long, pts.len() - 1, "every segment is long");
+    let [outline] = found.as_slice() else { panic!("one band, got {}", found.len()) };
+    for seg in outline.segments().step_by(7) {
+        for s in [0.0, 0.5, 1.0] {
+            let q = seg.eval(s);
+            let dq = dist_to_drag(q, &pts);
+            assert!((dq - r).abs() < 0.02 * r, "{q:?} on the outline is {dq} from the drag, radius {r}");
+        }
+    }
+}
+
+/// The band is kept in squares; a straight drag whose band edge runs along a side of a square, or
+/// just inside or outside it, still shows that edge, and the sides between two squares the band
+/// fills do not show.
+#[test]
+fn smoothing_band_shows_an_edge_along_a_square_side() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for zoom in [1.0, 3.0] {
+        cx.zoom = zoom;
+        let r = cx.tol(SMOOTH_RADIUS);
+        let side = BAND_TILE_RADII * r;
+        // A side of the squares near 230 (across and down: the grid is square).
+        let at = (BAND_TILE_OFFSET + (230.0 / side - BAND_TILE_OFFSET).round()) * side;
+        let eps = 1e-3 * r;
+        for off in [0.0, 0.5 * eps, -0.5 * eps, 1.5 * eps, -1.5 * eps] {
+            for (edge, upright) in [(-r, false), (r, false), (-r, true), (r, true)] {
+                let c = at + edge + off;
+                let ends = if upright {
+                    [Point::new(c, 100.0), Point::new(c, 100.0 + 2.5 * side)]
+                } else {
+                    [Point::new(100.0, c), Point::new(100.0 + 2.5 * side, c)]
+                };
+                let mut t = GestureTool::new("smooth");
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, ends[0].x, ends[0].y));
+                for i in 1..=20 {
+                    let q = ends[0].lerp(ends[1], f64::from(i) / 20.0);
+                    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+                }
+                let band = check_band(&t, &cx, r);
+                // Two sides and two half circles, each shown once.
+                let length: f64 = band.segments().map(|s| s.arclen(1e-6 * r)).sum();
+                let want = 2.0 * 2.5 * side + 2.0 * std::f64::consts::PI * r;
+                assert!(
+                    (length - want).abs() < 0.02 * want,
+                    "zoom {zoom}, edge {edge}, off {off}, upright {upright}: outline {length}, band {want}, {:?}",
+                    band.bounding_box()
+                );
+            }
+        }
+    }
+}
+
+/// A drag whose band edge runs along a side of a square and then turns across it shows the edge
+/// up to the turn and no line where the band goes on across the side.
+#[test]
+fn smoothing_band_shows_no_seam_where_it_turns_across_a_square_side() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for zoom in [1.0, 3.0] {
+        cx.zoom = zoom;
+        let r = cx.tol(SMOOTH_RADIUS);
+        let side = BAND_TILE_RADII * r;
+        let at = (BAND_TILE_OFFSET + (230.0 / side - BAND_TILE_OFFSET).round()) * side;
+        let eps = 1e-3 * r;
+        for off in [0.0, 0.5 * eps, -0.5 * eps] {
+            for (edge, upright) in [(-r, false), (r, false), (-r, true), (r, true)] {
+                let c = at + edge + off;
+                // Along the side, then across it.
+                let turn = 100.0 + 1.5 * side;
+                let corners = [(100.0, c), (turn, c), (turn, c - edge.signum() * 2.0 * side)];
+                let pts: Vec<Point> = corners.into_iter().map(|(u, v)| if upright { Point::new(v, u) } else { Point::new(u, v) }).collect();
+                let mut t = GestureTool::new("smooth");
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+                for w in pts.windows(2) {
+                    for i in 1..=12 {
+                        let q = w[0].lerp(w[1], f64::from(i) / 12.0);
+                        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+                    }
+                }
+                check_band(&t, &cx, r);
+            }
+        }
+    }
+}
+
+/// One straight piece of a square's outline along a side, where the band goes on across only part
+/// of it, shows only the part with nothing across.
+#[test]
+fn smoothing_band_square_shows_only_the_open_part_of_a_side() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let mut band = SmoothBand::new(Point::ZERO, 10.0);
+    let r = band.tile_rect((0, 0));
+    let (x, y) = (r.x0, r.y1);
+    let area = |x0: f64, y0: f64, x1: f64, y1: f64| vectorcraft_geom::shapes::rectangle(Rect::new(x0, y0, x1, y1));
+    let tile = |area| BandTile { area, outline: vectorcraft_geom::BezPath::new(), near_long: vec![], cut: vectorcraft_geom::BezPath::new() };
+    // Along the bottom side from 10 to 60, with the band across it from 40 to 60.
+    band.tiles.insert((0, 0), tile(area(x + 10.0, y - 20.0, x + 60.0, y)));
+    band.tiles.insert((0, 1), tile(area(x + 40.0, y, x + 60.0, y + 20.0)));
+    let outline = band.tile_outline((0, 0));
+    let along: f64 = outline.segments().filter(|s| s.bounding_box().height() < 1e-9 && (s.start().y - y).abs() < 1e-9).map(|s| s.arclen(1e-9)).sum();
+    assert!((along - 30.0).abs() < 1e-6, "{along} of the side shows: {}", outline.to_svg());
+    for s in outline.segments() {
+        assert!(!((s.start().y - y).abs() < 1e-9 && (s.end().y - y).abs() < 1e-9 && s.start().x.max(s.end().x) > x + 40.0 + 1e-9), "{s:?}");
+    }
+}
+
+/// A selection with no path the Smooth tool can change (a two-anchor line) shows no band.
+#[test]
+fn smoothing_drag_shows_no_band_without_a_path_it_smooths() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 300.0));
+    let o = t.overlays(&cx);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. })), "{o:?}");
+}
+
+/// An Alt smoothing drag uses the Smooth tool's Fidelity for Pencil, Paintbrush and Blob Brush.
 #[test]
 fn alt_smoothing_uses_the_smooth_tools_fidelity() {
     let (d, id) = doc_with_rect();
@@ -888,19 +1486,99 @@ fn alt_smoothing_uses_the_smooth_tools_fidelity() {
     };
     let alt = Mods { alt: true, ..Default::default() };
     let want = fidelity(&drag(&mut GestureTool::new("smooth"), &cx, &pts, Mods::default()));
-    for id in ["pencil", "blobBrush"] {
+    for (id, alt_smooth) in [("pencil", true), ("blobBrush", false), ("paintbrush", false), ("paintbrush", true)] {
         let mut t = GestureTool::new(id);
-        if id == "pencil" {
-            t.set_option("altSmooth", &json!(true));
-        }
+        t.set_option("altSmooth", &json!(alt_smooth));
         t.set_option("fidelity", &json!(10.0));
-        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), want, "{id}");
+        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), want, "{id} altSmooth={alt_smooth}");
         t.set_option("smoothFidelity", &json!(7.5));
-        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), 7.5, "{id}");
+        assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), 7.5, "{id} altSmooth={alt_smooth}");
         // Drawing keeps the tool's own Fidelity; Smooth's setting stays out of its options.
         assert_eq!(t.options()["fidelity"], json!(10.0), "{id}");
         assert!(t.options().get("smoothFidelity").is_none(), "{id}");
     }
+}
+
+/// Alt pressed after a Paintbrush stroke begins closes it, and an empty selection still draws.
+#[test]
+fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws() {
+    let (d, id) = doc_with_rect();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let empty = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let mut t = GestureTool::new("paintbrush");
+    let selected_cx = cx(&d, &selected, &p);
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(alt));
+    // While drawing, Alt shows the closing ring though the selection could be smoothed.
+    assert_eq!(t.cursor(&selected_cx, Point::new(pts[1].0, pts[1].1), alt), Cursor::PaintbrushClose);
+    let last = t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Up, pts[2].0, pts[2].1).with_mods(alt));
+    assert!(matches!(last.first(), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
+    let cx = cx(&d, &empty, &p);
+    let last = drag_held(&mut t, &cx, &pts, alt);
+    assert!(matches!(last.last().and_then(|a| a.first()), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
+}
+
+/// The Paintbrush shows Smooth before an Alt press only with a selected path, and through the
+/// drag that smooths it, with Alt let go too.
+#[test]
+fn paintbrush_alt_cursor_matches_selection_at_press() {
+    let (d, id) = doc_with_rect();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let empty = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx(&d, &selected, &p), Point::new(50.0, 150.0), alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&cx(&d, &empty, &p), Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let selected_cx = cx(&d, &selected, &p);
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), Mods::default()), Cursor::Smooth);
+}
+
+/// A selected text object leaves Alt Paintbrush drawing a closed stroke with its close cursor.
+#[test]
+fn paintbrush_alt_with_only_text_selected_draws_a_closed_stroke() {
+    let (d, text_id) = doc_with_area_type();
+    let mut selected = Selection::default();
+    selected.set([text_id]);
+    let p = paint();
+    let cx = cx(&d, &selected, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let acts = drag_held(&mut t, &cx, &[(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)], alt);
+    assert!(acts.iter().flatten().any(|a| matches!(a, Action::Preview(c, v) if c == "path.freehand" && v["closed"] == true)), "{acts:?}");
+    assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
+}
+
+/// A selected two-anchor line leaves Alt Paintbrush drawing a closed stroke with its close cursor.
+#[test]
+fn paintbrush_alt_with_only_two_anchor_line_selected_draws_a_closed_stroke() {
+    let (mut d, _) = doc_with_rect();
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(layer), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let p = paint();
+    let cx = cx(&d, &selected, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("paintbrush");
+    assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let acts = drag_held(&mut t, &cx, &[(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)], alt);
+    assert!(acts.iter().flatten().any(|a| matches!(a, Action::Preview(c, v) if c == "path.freehand" && v["closed"] == true)), "{acts:?}");
+    assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
 }
 
 /// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
@@ -1278,6 +1956,103 @@ fn knife_shift_alt_cuts_at_45_degree_steps() {
     assert_eq!(knife_points(acts.last().unwrap()), vec![(0.0, 0.0), (30.0, -10.0), (50.0, -60.0)]);
 }
 
+/// With Smart Guides on, a straight Knife cut starts at the anchor or path its press snaps to,
+/// and its release snaps the same way, as the Pencil's straight line's ends do. Centers and lines
+/// up do not move the press. The overlay shows the same line.
+#[test]
+fn knife_alt_cut_snaps_where_smart_guides_snap() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    // Near the rectangle's corner anchor: the cut starts on it, and the release near the opposite
+    // corner ends on that one.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 101.0, 99.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 201.0, 198.0).with_mods(alt));
+    assert_eq!(overlay_points(&t, &cx), vec![(100.0, 100.0), (200.0, 200.0)]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 201.0, 198.0).with_mods(alt));
+    assert_eq!(knife_points(&a), vec![(100.0, 100.0), (200.0, 200.0)]);
+    assert!(t.overlays(&cx).is_empty());
+    // Near the top side, away from its anchors: the cut starts on the path.
+    let acts = drag_held(&mut t, &cx, &[(130.0, 101.5), (260.0, 240.0)], alt);
+    assert_eq!(knife_points(acts.last().unwrap()), vec![(130.0, 100.0), (260.0, 240.0)]);
+    // Near the rectangle's center, or in line with its top side, the press stays where it is.
+    for press in [(151.0, 149.0), (50.0, 101.5)] {
+        let acts = drag_held(&mut t, &cx, &[press, (260.0, 240.0)], alt);
+        assert_eq!(knife_points(acts.last().unwrap()), vec![press, (260.0, 240.0)]);
+    }
+    // An Alt-click on the snapped press cuts nothing, and neither does a drag back to where the
+    // pointer went down.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 101.0, 99.0).with_mods(alt));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 101.0, 99.0).with_mods(alt)), vec![]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 101.0, 99.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 201.0, 198.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.2, 99.0).with_mods(alt));
+    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. })), "the line goes");
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 101.2, 99.0).with_mods(alt)), vec![]);
+    // A freehand cut keeps its press.
+    let acts = drag(&mut t, &cx, &[(101.0, 99.0), (150.0, 120.0), (201.0, 198.0)], Mods::default());
+    assert_eq!(knife_points(acts.last().unwrap()), vec![(101.0, 99.0), (150.0, 120.0), (201.0, 198.0)]);
+}
+
+/// With Smart Guides off, a straight Knife cut starts where it is pressed, with Snap to Point on
+/// or off.
+#[test]
+fn knife_alt_cut_without_smart_guides_keeps_its_press() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    for snap_to_point in [false, true] {
+        cx.snap_to_point = snap_to_point;
+        let acts = drag_held(&mut t, &cx, &[(101.0, 99.0), (201.0, 198.0)], alt);
+        assert_eq!(knife_points(acts.last().unwrap()), vec![(101.0, 99.0), (201.0, 198.0)], "Snap to Point {snap_to_point}");
+    }
+}
+
+/// With Smart Guides on, a straight Knife cut does not start on art in a hidden layer, whose own
+/// visibility is still on.
+#[test]
+fn knife_alt_cut_does_not_snap_to_hidden_art() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    d.node_mut(l).unwrap().visible = false;
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    let acts = drag_held(&mut t, &cx, &[(101.0, 99.0), (201.0, 198.0)], alt);
+    assert_eq!(knife_points(acts.last().unwrap()), vec![(101.0, 99.0), (201.0, 198.0)]);
+}
+
+/// With Smart Guides on, Shift and Alt keep the Knife's cut at 45° steps from the snapped press,
+/// and an anchor near the release does not pull the cut off that step.
+#[test]
+fn knife_shift_alt_cut_steps_from_the_snapped_press() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
+    let mut t = GestureTool::new("knife");
+    // Pressed by the bottom-left corner, released by the top-right one.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 101.0, 199.0).with_mods(shift_alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 203.0, 104.0).with_mods(shift_alt));
+    let shown = overlay_points(&t, &cx);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 203.0, 104.0).with_mods(shift_alt));
+    let cut = knife_points(&a);
+    assert_eq!(shown, cut);
+    assert_eq!(cut[0], (100.0, 200.0));
+    let step = 103f64.hypot(96.0) / 2f64.sqrt();
+    assert!((cut[1].0 - (100.0 + step)).abs() < 1e-9 && (cut[1].1 - (200.0 - step)).abs() < 1e-9, "{cut:?}");
+}
+
 /// The Eraser's Angle and Roundness (Eraser Tool Options) go with its stroke, kept within
 /// −180–180° and 1–100%; while it drags, a tip that is not round shows the outline of the area
 /// it covers, and a round one the drag as wide as the tip.
@@ -1286,7 +2061,8 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let cx = cx(&d, &s, &p);
+    // Precise cursors: no tip outline, only the stroke's own overlay.
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     let mut t = GestureTool::new("eraser");
     t.set_option("size", &json!(20));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
@@ -1317,6 +2093,120 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
     let b = vectorcraft_geom::Shape::bounding_box(path);
     assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
     assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+}
+
+/// The Blob Brush's Angle and Roundness (Blob Brush Tool Options, 0° and 100% by default) go with
+/// its stroke, kept within −180–180° and 0–100%; while it drags, a tip that is not round shows the
+/// outline of the area it covers with the length label, and an Alt drag that smooths shows the
+/// Smooth tool's thin line and the dashed band it smooths.
+#[test]
+fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(0.0), Some(100.0)));
+    t.set_option("size", &json!(20));
+    for (angle, roundness, sent) in [(45.0, 25.0, (45.0, 25.0)), (400.0, -5.0, (180.0, 0.0)), (-400.0, 250.0, (-180.0, 100.0))] {
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        assert_eq!((t.options()["angle"].as_f64(), t.options()["roundness"].as_f64()), (Some(sent.0), Some(sent.1)));
+        let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+        assert!(
+            matches!(&acts[2][0], Action::Exec(c, v) if c == "path.blob" && v["size"] == 20.0 && v["angle"] == sent.0 && v["roundness"] == sent.1),
+            "{acts:?}"
+        );
+    }
+    // A tip 20 pt long and 5 pt wide, standing upright: along a horizontal drag from x 50 to
+    // x 150 the outline reaches 2.5 pt either side of the drag and 10 pt above and below its ends.
+    t.set_option("angle", &json!(90));
+    t.set_option("roundness", &json!(25));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+    let o = t.overlays(&cx);
+    let Some(Overlay::Path { path, width, .. }) = o.iter().find(|o| matches!(o, Overlay::Path { .. })) else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    let b = vectorcraft_geom::Shape::bounding_box(path);
+    assert!((b.x0 - 47.5).abs() < 0.1 && (b.x1 - 152.5).abs() < 0.1, "{b:?}");
+    assert!((b.y0 - 140.0).abs() < 0.1 && (b.y1 - 160.0).abs() < 0.1, "{b:?}");
+    assert!(o.iter().any(|o| matches!(o, Overlay::Measure { .. })), "{o:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 150.0));
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    let o = t.overlays(&cx);
+    let [Overlay::Path { dashed: true, .. }, Overlay::Path { path, width, dashed: false, .. }] = &o[..] else { panic!("{o:?}") };
+    assert_eq!(*width, 1.0);
+    assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
+}
+
+/// #4977: the Blob Brush and the Eraser show their tip at the pointer before a press and while
+/// painting: its outline at its size, angle and roundness, a black line on a white halo, following
+/// `[` / `]` and Tool Options at once. It goes when the hover ends, with precise cursors (Caps
+/// Lock), while Cmd/Ctrl lends a selection tool and while Alt lends the Blob Brush the Smooth
+/// tool. The other gesture tools show none.
+#[test]
+fn the_blob_brush_and_the_eraser_show_their_tip_at_the_pointer() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let bounds = |t: &GestureTool, cx: &ToolContext| match &t.overlays(cx)[..] {
+        [Overlay::Path { path: halo, color: [0xff, 0xff, 0xff], width: 3.0, .. }, Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => {
+            assert_eq!(halo, path);
+            Some(vectorcraft_geom::Shape::bounding_box(path))
+        }
+        [] => None,
+        o => panic!("{o:?}"),
+    };
+    let near = |b: Option<vectorcraft_geom::Rect>, want: (f64, f64, f64, f64)| {
+        let b = b.unwrap_or_else(|| panic!("no tip"));
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let hover = |t: &mut GestureTool, cx: &ToolContext, m: Mods| t.pointer(cx, &PointerEvent::new(PointerKind::Move, 100.0, 50.0).with_mods(m));
+    for id in ["blobBrush", "eraser"] {
+        let mut t = GestureTool::new(id);
+        assert_eq!(bounds(&t, &cx), None, "{id}: nothing before the pointer comes");
+        hover(&mut t, &cx, Mods::default());
+        near(bounds(&t, &cx), (95.0, 45.0, 105.0, 55.0));
+        // `]` grows it at once, without a move; Tool Options too.
+        t.key(&cx, ToolKey::BracketRight, Mods::default());
+        near(bounds(&t, &cx), (94.5, 44.5, 105.5, 55.5));
+        t.set_option("size", &json!(20));
+        near(bounds(&t, &cx), (90.0, 40.0, 110.0, 60.0));
+        // Upright and a quarter as wide: 5 pt across, 20 pt tall.
+        t.set_option("angle", &json!(90));
+        t.set_option("roundness", &json!(25));
+        near(bounds(&t, &cx), (97.5, 40.0, 102.5, 60.0));
+        // It follows the drag, over the stroke's footprint.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 50.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 50.0));
+        let o = t.overlays(&cx);
+        assert!(matches!(&o[o.len() - 2..], [Overlay::Path { width: 3.0, .. }, Overlay::Path { color: [0, 0, 0], width: 1.0, .. }]), "{id}: {o:?}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 50.0));
+        let precise = ToolContext { precise_cursors: true, ..crate::testutil::cx(&d, &s, &p) };
+        assert_eq!(bounds(&t, &precise), None, "{id}: precise cursors show the crosshair alone");
+        t.hover_ended(&cx);
+        assert_eq!(bounds(&t, &cx), None, "{id}: gone with the hover");
+        hover(&mut t, &cx, Mods::default());
+        assert!(t.deactivate(&cx).is_empty());
+        assert_eq!(bounds(&t, &cx), None, "{id}: gone with the tool");
+    }
+    // Alt before a press lends the Blob Brush the Smooth tool, and Cmd/Ctrl either tool a
+    // selection tool, whose cursors show instead.
+    let mut t = GestureTool::new("blobBrush");
+    hover(&mut t, &cx, Mods { alt: true, ..Default::default() });
+    assert_eq!(bounds(&t, &cx), None);
+    let mut t = GestureTool::new("eraser");
+    hover(&mut t, &cx, Mods { cmd: true, ..Default::default() });
+    assert_eq!(bounds(&t, &cx), None);
+    for id in ["pencil", "paintbrush", "smooth", "knife", "pathEraser", "join"] {
+        let mut t = GestureTool::new(id);
+        hover(&mut t, &cx, Mods::default());
+        assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, .. } if *width == 3.0)), "{id}");
+    }
 }
 
 #[test]

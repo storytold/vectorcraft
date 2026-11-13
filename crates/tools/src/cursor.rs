@@ -125,9 +125,11 @@ pub enum Cursor {
     /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
     /// closes the path. A crosshair with a ring.
     PaintbrushClose,
-    /// The Blob Brush tool.
+    /// The Blob Brush tool: a dot at the brush's centre, the tool drawing the tip's outline round
+    /// it on the canvas.
     BlobBrush,
-    /// The Eraser tool.
+    /// The Eraser tool: a dot at the tip's centre, the tool drawing the tip's outline round it on
+    /// the canvas.
     Eraser,
     /// The Smooth tool.
     Smooth,
@@ -139,8 +141,21 @@ pub enum Cursor {
     Knife,
     /// The Shaper tool.
     Shaper,
-    /// The Live Paint Bucket.
+    /// The Live Paint Bucket where a click paints nothing: an empty paint bucket.
     LivePaintBucket,
+    /// The Live Paint Bucket where a click fills a face (of a Live Paint group, or a region of
+    /// the selected paths): a filled paint bucket.
+    LivePaintBucketFace,
+    /// The Live Paint Bucket where a click paints an edge of a Live Paint group: a brush.
+    LivePaintBucketEdge,
+    /// Live Paint Selection over a face of a Live Paint group that a click selects: the arrow with a
+    /// filled square.
+    LivePaintSelectFace,
+    /// Live Paint Selection over an edge of a Live Paint group that a click selects: the arrow with
+    /// a short line.
+    LivePaintSelectEdge,
+    /// Live Paint Selection where a click selects no face or edge: the arrow with an x.
+    LivePaintSelectOutside,
     /// The Measure tool.
     Measure,
     /// The Print Tiling tool.
@@ -163,6 +178,14 @@ pub enum Cursor {
     SymbolStyler,
     /// The vertical type tools: a turned I-beam.
     TypeVertical,
+    /// A type tool over a closed path's outline: a click sets area type inside it.
+    TypeArea,
+    /// ...the vertical type tools.
+    TypeAreaVertical,
+    /// A type tool over a path's outline: a click sets type along it.
+    TypeOnPath,
+    /// ...the vertical type tools.
+    TypeOnPathVertical,
     /// The Scissors over a path segment (a click splits the path there)...
     Scissors,
     /// ...or away from every segment (a click does nothing).
@@ -180,6 +203,15 @@ pub enum Cursor {
     /// The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a shape out from its
     /// centre; a selected shape's handles edit it.
     ParametricShape,
+    /// The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor cuts a corner;
+    /// a corner's marker resizes it.
+    CornerTool,
+    /// The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag runs an anchor along
+    /// the path.
+    SlideAnchor,
+    /// The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the two paths'
+    /// touching edges under the brush, or makes an end there.
+    SharedEdge,
     /// The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path (over
     /// a path or while drawing it shows the Pen's and Direct Selection's cursors).
     SmartPen,
@@ -224,7 +256,8 @@ impl Cursor {
     }
 
     /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
-    /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools') become a plain crosshair at the hotspot.
+    /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools', the Live
+    /// Paint tools') become a plain crosshair at the hotspot.
     pub fn precise(self) -> Self {
         match self {
             Cursor::Pen
@@ -261,6 +294,11 @@ impl Cursor {
             | Cursor::Knife
             | Cursor::Shaper
             | Cursor::LivePaintBucket
+            | Cursor::LivePaintBucketFace
+            | Cursor::LivePaintBucketEdge
+            | Cursor::LivePaintSelectFace
+            | Cursor::LivePaintSelectEdge
+            | Cursor::LivePaintSelectOutside
             | Cursor::Measure
             | Cursor::PrintTiling
             | Cursor::SymbolSprayer
@@ -278,6 +316,9 @@ impl Cursor {
             | Cursor::ExtendPath
             | Cursor::MeasureInspect
             | Cursor::ParametricShape
+            | Cursor::CornerTool
+            | Cursor::SlideAnchor
+            | Cursor::SharedEdge
             | Cursor::SmartPen => Cursor::Crosshair,
             c => c,
         }
@@ -293,14 +334,11 @@ impl Cursor {
             | Cursor::MagicWand
             | Cursor::Pencil
             | Cursor::Paintbrush
-            | Cursor::BlobBrush
-            | Cursor::Eraser
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join
             | Cursor::Knife
             | Cursor::Shaper
-            | Cursor::LivePaintBucket
             | Cursor::Measure
             | Cursor::ObjectsOnPath
             | Cursor::PrintTiling
@@ -316,7 +354,10 @@ impl Cursor {
             | Cursor::AnchorEraser
             | Cursor::ExtendPath
             | Cursor::MeasureInspect
-            | Cursor::ParametricShape => Some(Cursor::Crosshair),
+            | Cursor::ParametricShape
+            | Cursor::CornerTool
+            | Cursor::SlideAnchor
+            | Cursor::SharedEdge => Some(Cursor::Crosshair),
             Cursor::TypeVertical => Some(Cursor::Text),
             Cursor::MeshAdd | Cursor::PuppetPin => Some(Cursor::PenAdd),
             Cursor::SmartPen => Some(Cursor::Pen),

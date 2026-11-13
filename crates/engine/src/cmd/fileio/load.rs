@@ -7,9 +7,10 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
+use super::super::fileinfo::imported_title;
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, jxlread, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -29,6 +30,8 @@ pub struct Loaded {
     /// A PDF, or a `.ai` or `.ait` that holds a PDF, read through the editor's own copy of its art
     /// that it carries (its layers), not from its PDF part alone.
     pub editing_data: bool,
+    /// Whether the native source declared a PDF; other formats carry no native save preference.
+    pub native_pdf_compatible: Option<bool>,
 }
 
 impl Loaded {
@@ -41,10 +44,27 @@ impl Loaded {
         }
         self
     }
+
+    /// The file in the units of Preferences › Units › General when it records none of its own: a
+    /// PDF, an EPS or `.ai` without ruler units, a raster image, a metafile, an Affinity file or
+    /// what an importer plug-in reads, as the reference app opens such files (#5820). A native
+    /// document (also one that an SVG, PDF, `.ai` or EPS file carries, `restored`), an SVG (the
+    /// units of its root's size, pixels when it gives none), a DXF drawing (the unit it was read
+    /// in) and a `.ai` or EPS with ruler units keep theirs. Only the units the document shows
+    /// change, not its art.
+    pub(crate) fn with_unit_prefs(mut self, prefs: &Prefs) -> Self {
+        let records_units =
+            self.restored || self.doc.units_from_file || matches!(self.format.id, "vectorcraft" | "template" | "svg" | "svgz" | "dxf");
+        if !records_units {
+            self.doc.units = crate::units::pref_unit(&prefs.units_general);
+        }
+        self
+    }
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
 /// (what browsers, PDF and SVG viewers show).
+#[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
     pub key: String,
@@ -53,6 +73,8 @@ pub struct RasterImage {
     pub height: u32,
     /// The resolution the file declares (see [`super::ppi::resolution`]).
     pub ppi: Option<(f64, f64)>,
+    /// A DCS file's clipping path, in the image's pixel space ([`crate::cmd::place::dcs`]).
+    pub clip: Option<vectorcraft_geom::PathData>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -67,7 +89,7 @@ pub fn file_name(name: &str) -> String {
 /// The readable format of a file: from its content (magic bytes) when that tells, else from the
 /// extension of `name`.
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
-    let by_name = format_for_name(name).filter(|f| f.read);
+    let by_name = readable_format_for_name(name);
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
@@ -97,11 +119,40 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if psdread::is_psd(bytes) {
         return format(if psdread::is_psb(bytes) { "psb" } else { "psd" });
     }
+    if super::pxrread::is_pxr(bytes) {
+        return format("pxr");
+    }
+    if jxlread::is_jxl(bytes) {
+        return format("jxl");
+    }
+    if super::jp2read::is_jpeg2000(bytes) {
+        return format("jpeg2000");
+    }
+    if super::heifread::is_heif(bytes) {
+        return format("heif");
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
+    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
+    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
+    // signature starts the file is checked first.
+    if vectorcraft_metafile::is_pict(bytes) {
+        return format("pict");
+    }
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
+    }
+    // HP-GL has no signature: a file that starts with plotter instructions, named as one or with an
+    // extension no other format (text, the formats VectorCraft names as unsupported, and the files
+    // File › Open takes in other ways included) reads.
+    let ext = super::extension(name);
+    let other = by_name.is_some_and(|f| f.id != "hpgl")
+        || super::TEXT_EXTS.contains(&ext.as_str())
+        || super::unsupported(&ext).is_some()
+        || super::opens_as_other(&ext);
+    if !other && vectorcraft_cad::hpgl::is_hpgl(bytes) {
+        return format("hpgl");
     }
     by_name
 }
@@ -159,14 +210,19 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
 /// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
-/// first page's `UserUnit`) → (document, warnings, whether its layers were read).
-fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>, bool) {
-    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
-        return (doc, warnings, false);
-    }
-    let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings, false) };
+/// first page's `UserUnit`) → (document, warnings, whether its layers were read). `layers`: the
+/// editor's copy ([`editing_copy`]), as far as it was decoded and read.
+fn through_editing_data(
+    layers: Option<vectorcraft_eps::AiLayers>,
+    opts: &LoadOptions,
+    doc: Document,
+    warnings: Vec<String>,
+    unit: f64,
+) -> (Document, Vec<String>, bool) {
+    let Some(layers) = layers else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) =
+        vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit, opts.legacy_names);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -183,18 +239,55 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
     (doc, warnings, true)
 }
 
-/// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
-/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers or the
-/// editing data are off), an error when it can't be read.
-fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
+/// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page), `opened`, from the
+/// editor's own copy of its art alone: `None` when the file has none (or the pages picked don't
+/// name every page, or layers or the editing data are off), an error when it can't be read.
+fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
+    if !every_page(opened.page_count(), opts) || !opts.layers || !opts.editing_data {
+        return None;
+    }
+    let private = opened.illustrator_data()?;
+    Some(editing_copy_alone(&private, opts))
+}
+
+/// [`from_editing_data_alone`] of `private`, the editor's copy already read.
+fn editing_copy_alone(private: &[u8], opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    vectorcraft_eps::ai_alone_with(private, opts.legacy_names)
+        .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
+}
+
+/// Does a file opened with `opts` read the editor's own copy of its art: no pages picked, and
+/// layers and the editing data on?
+fn reads_editing_copy(opts: &LoadOptions) -> bool {
+    opts.pages.is_none() && opts.layers && opts.editing_data
+}
+
+/// May a file opened with `opts` open from the editor's own copy of its art without its PDF part
+/// being imported ([`vectorcraft_eps::ai_layers_alone`]): it reads the editor's copy, on the pages'
+/// trim boxes (the crop box asked for, as a file with the editor's copy opens on them), with its
+/// type as text?
+fn reads_layers_alone(opts: &LoadOptions) -> bool {
+    reads_editing_copy(opts) && opts.crop == vectorcraft_pdf::CropTo::Crop && opts.text_as != vectorcraft_pdf::TextAs::Outlines
+}
+
+/// The editor's own copy of its art that `opened` carries (as [`vectorcraft_pdf::illustrator_data`]
+/// reads it), when `opts` read it ([`reads_editing_copy`]).
+fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<Vec<u8>> {
+    reads_editing_copy(opts).then(|| opened.illustrator_data()).flatten()
+}
+
+/// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
+/// error) from the editor's own copy of its art alone, as a file saved without PDF compatibility
+/// is read, its first note saying why: `None` when pages are picked, layers or the editing data
+/// are off, or the file has no editing data that reads. Its type is outlines when `opts` asks.
+fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option<(Document, Vec<String>)> {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
         return None;
     }
-    let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
-    Some(
-        vectorcraft_eps::ai_alone(&private)
-            .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})"))),
-    )
+    let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
+    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit, opts.legacy_names).ok()?;
+    let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
+    Some(outlined_if_asked(doc, notes, opts))
 }
 
 /// Is `w` a note on the PDF part as a page, which says nothing was skipped: that the art off the
@@ -233,10 +326,10 @@ pub(super) fn outlined_if_asked(mut doc: Document, warnings: Vec<String>, opts: 
     (doc, warnings)
 }
 
-/// Does `doc` hold no art: only layers, with nothing in them?
+/// Does `doc` hold no art: only layers, with nothing in them but ruler guides?
 fn draws_nothing(doc: &Document) -> bool {
     let mut art = false;
-    doc.walk(|n| art |= !n.is_layer());
+    doc.walk(|n| art |= !n.is_layer() && !n.is_ruler_guide());
     !art
 }
 
@@ -246,28 +339,35 @@ pub(crate) fn is_placeholder(e: &EngineError) -> bool {
     e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string()
 }
 
-/// Do `opts` read every page of the PDF `bytes`: no `pages`, or a range that names each one?
-fn every_page(bytes: &[u8], opts: &LoadOptions) -> bool {
+/// Do `opts` read every page of a PDF of `count` pages: no `pages`, or a range that names each one?
+fn every_page(count: usize, opts: &LoadOptions) -> bool {
     let Some(range) = &opts.pages else { return true };
-    vectorcraft_pdf::info(bytes, opts.password.as_deref()).is_ok_and(|i| parse_range(range, i.pages.len()).is_ok_and(|p| p.len() == i.pages.len()))
+    parse_range(range, count).is_ok_and(|p| p.len() == count)
 }
 
-/// A page read from a PDF or `.ai` (`read`, as [`super::page_document`] reads it) → (document,
-/// notes, false); for a `.ai` saved without PDF compatibility (its page only a placeholder), the
-/// file `name` read as `document.open` reads it with `password`, from its editing copy alone →
-/// (document, notes, true).
+/// Page `page_index` (0-based) read from a PDF or `.ai` (`read`, as [`super::page_document`] reads
+/// it) → (document, notes, false); for a `.ai` saved without PDF compatibility (its page only a
+/// placeholder), the file `name` read as `document.open` reads it with `opts`' password, from its
+/// editing copy alone → (document, notes, true). So too, read with `opts` but every page, for the
+/// first page of a `.ai` or PDF whose PDF part can't be read and whose editing copy reads; the
+/// error of any other page stays.
 pub(crate) fn page_or_editing_data(
     name: &str,
     bytes: &[u8],
-    password: Option<&str>,
+    opts: &LoadOptions,
+    page_index: usize,
     read: Result<(Document, Vec<String>)>,
 ) -> Result<(Document, Vec<String>, bool)> {
     match read {
         Ok((doc, notes)) => Ok((doc, notes, false)),
         Err(e) if is_placeholder(&e) => {
-            let l = load_with(name, bytes, &LoadOptions { password: password.map(str::to_string), ..Default::default() })?;
+            let l = load_with(name, bytes, &LoadOptions { password: opts.password.clone(), legacy_names: opts.legacy_names, ..Default::default() })?;
             Ok((l.doc, l.warnings, true))
         }
+        Err(e) if page_index == 0 => match load_with(name, bytes, &LoadOptions { pages: None, ..opts.clone() }) {
+            Ok(l) if l.editing_data => Ok((l.doc, l.warnings, true)),
+            _ => Err(e),
+        },
         Err(e) => Err(e),
     }
 }
@@ -279,21 +379,29 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
     })?;
     let title = file_name(name);
+    // The File Info a PDF, `.ai` or `.ait` gives.
+    let mut file_info = None;
     let mut converted = false;
     let mut preview_only = false;
     let mut editing_data = false;
+    let mut native_pdf_compatible = None;
     let (mut doc, mut warnings, restored) = match format.id {
         // EPS, .ps and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
+            // A DCS file's plates print from its file: it is only placed linked.
+            if crate::cmd::place::dcs::is_dcs(bytes) {
+                return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
+            }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_trusting(bytes, opts.editing_data, opts.trust_editing_data)
+                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
         }
         "vectorcraft" | "template" => {
             let (d, info, warnings) = native_file(bytes)?;
+            native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)
         }
@@ -302,48 +410,98 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
             // Relative links are found in the SVG's folder (when `name` is a path).
             let folder = std::path::Path::new(name).parent().map(|f| f.to_string_lossy()).filter(|f| !f.is_empty()).map(|f| absolute_path(&f));
-            restore_or_import(editing, || import_svg(&text, folder.as_deref()))?
+            restore_or_import(editing, || open_svg(&text, folder.as_deref()))?
         }
         "pdf" | "ai" | "ait" => {
+            // The file is read and checked once, for the document it carries, its pages, the
+            // editor's copy and its File Info.
+            let opened = vectorcraft_pdf::open_pdf(bytes, opts.password.as_deref());
             // Saved with Preserve Editing: the document it carries, unless some pages are picked.
-            let editing = opts
-                .pages
-                .is_none()
-                .then(|| vectorcraft_pdf::editing_with(bytes, opts.password.as_deref()))
+            let editing = (opts.pages.is_none() && opts.native)
+                .then(|| opened.as_ref().ok().and_then(|o| o.editing()))
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
-            restore_or_import(editing, || match super::pdfimport::import(bytes, opts, format.id != "pdf") {
-                Ok(r) => {
-                    // Pages of text alone: the editing copy alone where it reads, as for a file
-                    // saved without its PDF part (#1387: else the page, which is the art). So too
-                    // pages that draw nothing at all: there is no page art to check the layers
-                    // against, and the empty page would lose all of it.
-                    // A page is empty only when nothing on it was skipped (an image that can't be
-                    // decoded draws nothing either): its notes are at most the page's own.
-                    let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
-                    let alone = (r.only_text || empty)
-                        .then(|| from_editing_data_alone(bytes, opts))
-                        .flatten()
-                        .and_then(|read| read.ok())
-                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
-                    let (doc, warnings, read) = match alone {
-                        Some((doc, warnings)) => (doc, warnings, true),
-                        None => through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit),
-                    };
-                    editing_data = read;
-                    Ok((doc, warnings))
+            let imported = || match &opened {
+                Ok(o) => super::pdfimport::import(bytes, o, opts, format.id != "pdf"),
+                Err(e) => Err(err(e)),
+            };
+            let mut read = restore_or_import(editing, || {
+                // Type all from the text document and nothing that needs the PDF part: the layers
+                // alone, the PDF part not imported. Else what was read of the layers is kept for
+                // reading them with the PDF part.
+                let mut layers = None;
+                if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
+                {
+                    let pages = o.trim_pages();
+                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names) {
+                        Ok((mut doc, warnings)) => {
+                            doc.setup.bleed = pages.bleed;
+                            editing_data = true;
+                            return Ok((doc, warnings));
+                        }
+                        Err(read) => layers = Some(read),
+                    }
                 }
-                // Saved without its PDF part: the editing copy is all the file has (`pages` that
-                // name every page read it as the whole file).
-                Err(e) if is_placeholder(&e) => {
-                    let whole = LoadOptions { pages: None, ..opts.clone() };
-                    from_editing_data_alone(bytes, if every_page(bytes, opts) { &whole } else { opts })
+                match imported() {
+                    Ok(r) => {
+                        // The editor's copy, read once the import is done with the pages, unless
+                        // its layers were read before it.
+                        let private = layers.is_none().then(|| opened.as_ref().ok().and_then(|o| editing_copy(o, opts))).flatten();
+                        // Pages of text alone: the editing copy alone where it reads, as for a file
+                        // saved without its PDF part (#1387: else the page, which is the art). So too
+                        // pages that draw nothing at all: there is no page art to check the layers
+                        // against, and the empty page would lose all of it.
+                        // A page is empty only when nothing on it was skipped (an image that can't be
+                        // decoded draws nothing either): its notes are at most the page's own.
+                        let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
+                        let copy_alone = || match &private {
+                            Some(private) => Some(editing_copy_alone(private, opts)),
+                            None if layers.is_some() => {
+                                opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p, opts))
+                            }
+                            None => None,
+                        };
+                        let alone = (r.only_text || empty)
+                            .then(copy_alone)
+                            .flatten()
+                            .and_then(|read| read.ok())
+                            .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
+                        let (doc, warnings, read) = match alone {
+                            Some((doc, warnings)) => (doc, warnings, true),
+                            None => {
+                                let layers = layers.or_else(|| private.as_deref().map(vectorcraft_eps::AiLayers::decode));
+                                through_editing_data(layers, opts, r.document, r.warnings, r.user_unit)
+                            }
+                        };
+                        editing_data = read;
+                        Ok((doc, warnings))
+                    }
+                    // Saved without its PDF part: the editing copy is all the file has (`pages` that
+                    // name every page read it as the whole file).
+                    Err(e) if is_placeholder(&e) => opened
+                        .as_ref()
+                        .ok()
+                        .and_then(|o| from_editing_data_alone(o, opts))
                         .unwrap_or(Err(e))
                         .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
-                        .inspect(|_| editing_data = true)
+                        .inspect(|_| editing_data = true),
+                    // A PDF part that can't be read (a stream the import refuses): the editing copy
+                    // alone where it reads, else the error.
+                    Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
                 }
-                Err(e) => Err(e),
-            })?
+            })?;
+            // The File Info of a file read from its pages or its editing copy.
+            if !read.2 {
+                file_info = opened.as_ref().ok().map(|o| o.file_info());
+            }
+            // A restored document opens on the artboard that the editing copy beside it names as
+            // active, as a file read from that copy does (the restored document never holds one).
+            if read.2
+                && let Some(private) = opened.as_ref().ok().and_then(|o| o.illustrator_data())
+            {
+                read.0.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &read.0);
+            }
+            read
         }
         "dxf" => {
             let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;
@@ -353,10 +511,28 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
+        "pict" => {
+            let (doc, warnings) = super::metafile::import_pict(bytes)?;
+            (doc, warnings, false)
+        }
+        "hpgl" => {
+            let i = vectorcraft_cad::hpgl::import(bytes).map_err(err)?;
+            (i.document, i.warnings, false)
+        }
         "affinity" => {
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
+        // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
+        "psd" | "psb" if opts.layers => {
+            let cms = vectorcraft_color::cms::active();
+            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
+                Ok(Some((doc, warnings))) => (doc, warnings, false),
+                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+            }
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
@@ -365,37 +541,81 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
         && !restored
-        && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
+        && let Some(info) = file_info
     {
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }
     // Threaded type read from a file flows through its frames (the threaded type of a restored
     // document keeps its text as saved), and every frame of a thread takes its first frame's
-    // Optical Margin Alignment setting.
+    // Optical Margin Alignment setting and writing direction. When that changes the direction of a
+    // frame of a restored document, the story flows through that frame's thread again. Threaded
+    // frames keep their size: Auto Size is off for them. The story is laid out in the document's
+    // own composite fonts.
+    let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
+    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
+        crate::cmd::threads::keep_frame_sizes(&mut doc);
         crate::cmd::threads::share_optical_margin(&mut doc);
+        crate::cmd::threads::share_orientation(&mut doc);
         // A frame whose first paragraph continues from the frame before draws it without the
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
     }
+    drop(lent);
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
+    // The title the file gives itself (an SVG's `<title>`, a PDF's, `.ai`'s or `.ait`'s XMP `dc:title`
+    // or Info `Title`, which the readers put in File Info) is separate from the document's name.
+    // Restored File Info is preserved exactly; newly imported SVG candidates and a restored
+    // document's legacy name fallback are cleaned as imported text. The name stays the file's (#3626).
+    if !restored && matches!(format.id, "svg" | "svgz") {
+        doc.metadata.title = doc.metadata.title.as_deref().and_then(imported_title);
+    }
+    let held = restored.then_some(doc.title.as_str()).filter(|t| *t != title);
+    doc.metadata.title = doc.metadata.title.or_else(|| held.and_then(imported_title));
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
     warnings.extend(doc.images.values().filter_map(|b| size_note(&b.bytes)));
-    Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })
+    Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data, native_pdf_compatible })
 }
 
 /// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's
 /// own): rasters stay linked, SVG files become art, missing ones placeholders (see
 /// [`vectorcraft_svg::ImportOptions`]).
 pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    import_svg_finding(text, folder, &std::collections::HashSet::new()).map(|(doc, warnings, _)| (doc, warnings))
+}
+
+/// [`import_svg`] for a document opened from an SVG: with the variable data the file carries (SVG
+/// Options › Include Variable Data), read as [`crate::cmd::variablecmds::svg_library`] says. Variable
+/// data that can't be read is left out with a warning; the art opens either way.
+fn open_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    let lib = match crate::cmd::variablecmds::svg_library(text) {
+        None => return import_svg(text, folder),
+        Some(Err(e)) => {
+            let (doc, mut warnings) = import_svg(text, folder)?;
+            warnings.push(format!("the file's variable data wasn't read: {e}"));
+            return Ok((doc, warnings));
+        }
+        Some(Ok(lib)) => lib,
+    };
+    let (mut doc, mut warnings, found) = import_svg_finding(text, folder, &lib.elements())?;
+    warnings.extend(crate::cmd::variablecmds::give_svg_library(&mut doc, lib, &found));
+    Ok((doc, warnings))
+}
+
+/// [`import_svg`], also returning the object made of each element whose id `ids` lists.
+fn import_svg_finding(
+    text: &str,
+    folder: Option<&str>,
+    ids: &std::collections::HashSet<String>,
+) -> Result<(Document, Vec<String>, vectorcraft_svg::Found)> {
     // The importer reads on a thread of its own (for its stack): what may be read is what may be
     // read here.
     let scope = crate::file_access::ScopeHandle::capture();
@@ -411,7 +631,7 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
             Some((bytes, link))
         })
     };
-    vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
+    vectorcraft_svg::import_finding(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }, ids).map_err(err)
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
@@ -449,13 +669,19 @@ impl ReadFile {
 
 /// The first half of [`open_bytes_with`], which needs no session (an app may do it on another
 /// thread): read and decode the file, read its linked files and lay out its type → what
-/// [`open_read`] opens. The linked files are looked for from `path`, where the file was read from,
+/// [`open_read`] opens. Type in the file's composite fonts is measured again once the document
+/// opens and its composite fonts are registered. The linked files are looked for from `path`, where the file was read from,
 /// and modified ones are read again when `update_links` (Preferences › File Handling › Update
-/// Links set to Automatically; see [`crate::cmd::links::resolve`]).
+/// Links set to Automatically; see [`crate::cmd::links::resolve`]). A file an importer plug-in
+/// reads (`importer` in `p`, or an extension only an importer lists) is read by it
+/// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = load_with(name, bytes, &opts)?;
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path.as_deref(), update_links, low_res_proxy_eps);
+    let mut loaded = match super::importer::pick(name, bytes, p)? {
+        Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
+        None => load_with(name, bytes, &opts)?,
+    };
+    let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
 }
@@ -475,14 +701,16 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
+    let base = crate::cmd::links::LinkBase::file(path);
+    let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
     open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
 /// Make a loaded file the new active document; `links` is what became of its linked files, and
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
+        loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read.
     let losses: Vec<String> = warnings
@@ -503,6 +731,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
+        doc.metadata.title = None;
     }
     // A .ai (or .ait) another app wrote carries no open Layers rows we read: all of them start
     // closed, its top-level layers as its groups (#1475). Ours carry their own.
@@ -514,11 +743,15 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     // writes .ai that way).
     let partial = format.id == "pdf" && opts.is_partial();
     let lossy_ai = format.id == "ai" && !restored;
+    let read_from = path.clone();
     let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
     let saves_back = path.is_some();
     let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
     let st = s.doc_mut()?;
+    if let Some(pdf) = native_pdf_compatible {
+        st.save_options.insert("pdfCompatible".into(), json!(pdf));
+    }
     if saves_back {
         st.format = format.id;
         // An SVG that reopened as the full document saves as one again: Save keeps Preserve
@@ -530,8 +763,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     st.converted = converted;
     st.imported_from = source_path;
     st.import_losses = losses;
+    st.links_from = read_from;
     let opened = &s.documents()[index];
-    let (title, file_info_title) = (opened.title(), opened.doc.title.clone());
+    let (title, file_info_title) = (opened.title(), opened.doc.info_title().to_string());
     Ok(super::merge(
         json!({ "index": index, "title": title, "fileInfoTitle": file_info_title, "format": format.id, "warnings": warnings, "restored": restored }),
         links.to_json(),
@@ -559,7 +793,14 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 }
 
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
-    let src = source(p, "document.open")?;
+    // A file only an importer plug-in reads is read up to the importer's input limit.
+    let src = match str_param(p, "path") {
+        Some(path) => Source { name: path, bytes: super::importer::read_path(path, p)?, path: Some(path) },
+        None => {
+            super::importer::check_data(p)?;
+            source(p, "document.open")?
+        }
+    };
     // A relative path is the file in the working directory: its folder is where relative links
     // are found (a bare file name has no folder of its own).
     let path = src.path.map(super::absolute_path);
@@ -616,12 +857,23 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
 /// A PCX file is recognized by its header ([`super::pcxread::is_pcx`]) and read by
 /// [`super::pcxread::decode`], which refuses an image past [`MAX_RASTER_ALLOC`] before decoding.
+/// A Pixar picture file is recognized by its magic number ([`super::pxrread::is_pxr`]) and read by
+/// [`super::pxrread::decode`], which does the same.
+/// A HEIC or HEIF file is recognized by its `ftyp` brands ([`super::heifread::is_heif`]) and read
+/// by [`super::heifread::decode`], which does the same.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
 /// as RGBA, need more than [`MAX_RASTER_ALLOC`] is refused as too large to draw.
 /// A TIFF with more strips or tiles than the decoder can count
-/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw.
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
+/// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
+/// A PNG, JPEG, GIF, WebP or TIFF whose orientation ([`vectorcraft_doc::cmyk::exif_orientation`]) turns or flips it is
+/// stored as it is shown, with its resolution's axes swapped when it turns a quarter; a CMYK JPEG
+/// or TIFF keeps its inks, at the 8 or 16 bits the file has, and its CMYK ICC profile as a CMYK
+/// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
+/// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
+/// other samples become 8-bit RGBA.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -629,14 +881,29 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, ppi);
+        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+    }
+    if jxlread::is_jxl(bytes) {
+        let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
+        return as_png(img, icc, jxlread::oriented_resolution(ppi, orientation));
+    }
+    if super::jp2read::is_jpeg2000(bytes) {
+        return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
+    }
+    if super::heifread::is_heif(bytes) {
+        // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
+        let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
+    }
+    if super::pxrread::is_pxr(bytes) {
+        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {
         reader.set_format(image::ImageFormat::Tga);
     }
     if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
-        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+        return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
@@ -645,7 +912,16 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
-    let turned = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff") && exif_orientation(bytes).is_some();
+    let orientation = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff").then(|| vectorcraft_doc::cmyk::exif_orientation(bytes)).flatten();
+    let turned = orientation.is_some();
+    // The resolution describes the stored pixels; a quarter turn swaps its axes.
+    let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
+    let shown_ppi = ppi.map(|(x, y)| if quarter { (y, x) } else { (x, y) });
+    if let Some(orientation) = orientation.filter(|_| matches!(f.id, "jpg" | "tiff"))
+        && let Some((tiff, size)) = vectorcraft_doc::cmyk::turned_cmyk(bytes, orientation, shown_ppi)
+    {
+        return stored(tiff, "image/tiff", size, shown_ppi);
+    }
     let kept = match f.id {
         _ if turned => None,
         "png" | "jpg" | "gif" | "webp" => Some(bytes.to_vec()),
@@ -660,10 +936,12 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         let cms = vectorcraft_color::cms::active();
         vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
+    // The ICC profile of the samples the image decoder reads; the other readers give sRGB pixels.
+    let mut icc = None;
     let mut img = match (f.id == "tiff").then(extra_samples).flatten() {
-        Some(img) => img,
+        Some(img) => image::DynamicImage::ImageRgba8(img),
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
-            Some(read) => read.map_err(err)?,
+            Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
                 use image::ImageDecoder as _;
                 let mut decoder = reader.into_decoder().map_err(err)?;
@@ -672,32 +950,52 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
                 if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                let orientation = decoder.orientation().unwrap_or(image::metadata::Orientation::NoTransforms);
-                let mut img = image::DynamicImage::from_decoder(decoder).map_err(err)?;
-                img.apply_orientation(orientation);
-                img.to_rgba8()
+                // A profile the decoder can't read leaves the image without one. The image decoder
+                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
+                // read by the TIFF decoder itself.
+                icc = match f.id {
+                    "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
+                    _ => decoder.icc_profile().ok().flatten(),
+                };
+                image::DynamicImage::from_decoder(decoder).map_err(err)?
             }
         },
     };
+    img.apply_orientation(orientation.unwrap_or(image::metadata::Orientation::NoTransforms));
     if f.id == "tga" {
+        let mut img = img.into_rgba8();
         super::tgaread::fix_alpha(bytes, &mut img);
+        return as_png(img, None, shown_ppi);
     }
-    as_png(img, ppi)
+    use image::DynamicImage as D;
+    let img = match img {
+        D::ImageLuma8(_) | D::ImageLumaA8(_) | D::ImageRgb8(_) | D::ImageRgba8(_) => img,
+        D::ImageLuma16(_) | D::ImageLumaA16(_) | D::ImageRgb16(_) | D::ImageRgba16(_) => img,
+        other => D::ImageRgba8(other.into_rgba8()),
+    };
+    let icc = icc.filter(|icc| png_takes_icc(&img, icc));
+    as_png(img, icc, shown_ppi)
 }
 
-/// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
-/// it leaves them as stored, or the image has none.
-pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
-    use image::ImageDecoder as _;
-    let mut decoder = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
-    decoder.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)
+/// Can a PNG of `img`'s samples carry ICC profile `icc`? Its color space must be the samples':
+/// `GRAY` for gray samples, `RGB ` for RGB ones.
+fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
+    let want = if img.color().has_color() { *b"RGB " } else { *b"GRAY" };
+    vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want)
 }
 
-/// `img` stored as a PNG that keeps the file's resolution.
-fn as_png(img: image::RgbaImage, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
-    let size = img.dimensions();
+/// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
+/// colors are in. `img` has samples a PNG holds: 8 or 16 bits of gray or RGB, with or without alpha.
+pub(super) fn as_png(img: impl Into<image::DynamicImage>, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+    use image::ImageEncoder as _;
+    let img: image::DynamicImage = img.into();
+    let size = (img.width(), img.height());
     let mut png = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).map_err(err)?;
+    }
+    img.write_with_encoder(encoder).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,
@@ -748,13 +1046,13 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob::new(mime, bytes);
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
 }
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, ppi, .. } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;
@@ -780,13 +1078,38 @@ fn is_loss(note: &str) -> bool {
 /// Another name keeps the original file, with all it has.
 pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
     let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    Err(lossy_overwrite(target, losses, cmd))
+}
+
+/// The refusal to write `target`, the file the document was read from, when reading it left out `losses`.
+fn lossy_overwrite(target: &str, losses: &[String], cmd: &str) -> EngineError {
     let what = losses_summary(losses);
-    Err(bad(
+    bad(
         cmd,
         format!(
             "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
         ),
-    ))
+    )
+}
+
+/// The file the document was read from and what reading it left out, when a write to that file
+/// needs `acknowledgeLoss` and `p` does not have it ([`overwrite_losses`]).
+pub(crate) fn lossy_source(st: &crate::DocState, p: &Value) -> Option<(String, Vec<String>)> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false)).then(|| (source.to_string(), st.import_losses.clone()))
+}
+
+/// None of the files `targets` (every file a save writes, before any is written) is the
+/// `source` file that reading left `losses` out of ([`lossy_source`]).
+pub(crate) fn check_files_not_lossy_overwrite<'a>(
+    source: &(String, Vec<String>),
+    targets: impl IntoIterator<Item = &'a str>,
+    cmd: &str,
+) -> Result<()> {
+    match targets.into_iter().find(|t| same_file(&source.0, t)) {
+        Some(target) => Err(lossy_overwrite(target, &source.1, cmd)),
+        None => Ok(()),
+    }
 }
 
 /// What writing the file `target` for document `st` would lose for good: the notes of what reading

@@ -8,20 +8,30 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 
 mod area;
 mod char_style;
+mod composite;
 mod object;
 mod para_style;
 mod runs;
 mod tabs_lists;
+mod wrap;
 
-pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextWrap, VerticalAlign, WrapShape};
+pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
-pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, ScriptMetrics};
-pub use para_style::{
-    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,
-    ParaStyle, SingleWordJustify,
+pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, ScriptMetrics};
+pub use composite::{
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
+    CompositeParts,
 };
-pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef};
-pub use tabs_lists::{Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, NumberStyle, ParaList, TabAlign, TabStop};
+pub use para_style::{
+    Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
+    Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
+};
+pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef, TypeAntiAlias};
+pub use tabs_lists::{
+    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
+    TabStop,
+};
+pub use wrap::{resolve_wrap, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
@@ -42,7 +52,7 @@ pub struct TextObject {
     /// the object, so the runs (and their styles) stay the text itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ruby: Vec<RubySpan>,
-    #[serde(default)]
+    #[serde(default = "ParaStyle::omitted")]
     pub para: ParaStyle,
     /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -67,6 +77,15 @@ pub struct TextObject {
     /// them up round the inside.
     #[serde(default, rename = "pathSpacing", skip_serializing_if = "crate::skip::is_default")]
     pub path_spacing: f64,
+    /// Type › Dynamic Text. On type on a path, the layout scales the text by one factor so it
+    /// fills the span between its start and end brackets, and fits it again after each edit; the
+    /// stored sizes keep their proportions, and the layout's `fit_scale` is the factor drawn. On
+    /// area type it is Block: after each edit the engine sets each line as typed to the frame's
+    /// width by its font size and writes the sizes into the characters, with the gaps of
+    /// [`AreaOptions::word_gap`] and [`AreaOptions::line_gap`]. Point type does not use it. Off for
+    /// new type and for documents from before it, and saved only when on.
+    #[serde(default, rename = "dynamicText", skip_serializing_if = "crate::skip::is_default")]
+    pub dynamic_text: bool,
     /// Wrap objects above this area type, resolved by the engine after each edit (text space).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrap: Vec<WrapShape>,
@@ -76,6 +95,11 @@ pub struct TextObject {
     /// Off for new type and for documents from before it, and saved only when on.
     #[serde(default, rename = "opticalMarginAlignment", skip_serializing_if = "crate::skip::is_default")]
     pub optical_margin: bool,
+    /// Character panel › Anti-aliasing Method: how the type's edges are drawn as pixels. Each
+    /// frame of a thread keeps its own method. Sharp for new type and for documents from before it,
+    /// and saved only when it is another method.
+    #[serde(default, rename = "antiAlias", skip_serializing_if = "crate::skip::is_default")]
+    pub anti_alias: TypeAntiAlias,
     /// Character panel menu › System Layout, copied from the document: when on, each character
     /// that takes space advances by a whole number of points. Off by default, and saved only when
     /// on. The document setting is [`crate::DocSetup::system_layout`].
@@ -94,6 +118,11 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
+    /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
+    /// and the file saves them only when not empty. A file's longer list opens with the first 8.
+    #[serde(default, rename = "listLevelCounts", skip_serializing_if = "Vec::is_empty", deserialize_with = "tabs_lists::read_level_counts")]
+    pub list_level_counts: Vec<u32>,
     /// Cached layout bounds in text space, filled in by the layout engine (not serialized).
     #[serde(skip)]
     pub cached_bounds: Option<Rect>,
@@ -101,6 +130,12 @@ pub struct TextObject {
     /// vertical column's centre line), filled in with `cached_bounds` (not serialized).
     #[serde(skip)]
     pub cached_baselines: Vec<(Point, Point)>,
+    /// Cached ink of the glyphs in text space, underline and strikethrough bars included
+    /// (`vectorcraft_effects::preview::laid_out_ink`, `None` when nothing draws),
+    /// with the `cached_bounds` it was measured with: filled in with `cached_bounds` by the engine's
+    /// text edits, and stale once `cached_bounds` differs ([`Self::ink`]). Not serialized.
+    #[serde(skip)]
+    pub cached_ink: Option<(Rect, Option<Rect>)>,
 }
 
 /// Conversion from stored character attributes to document-space type controls.

@@ -263,7 +263,7 @@ fn retain_effects(n: &mut Node, members: bool, keep: &dyn Fn(&Effect) -> bool) {
         it.effects_mut().retain(keep);
     }
     if members {
-        for c in n.children_mut().into_iter().flatten() {
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
             retain_effects(Arc::make_mut(c), true, keep);
         }
     }
@@ -351,7 +351,9 @@ fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
     whole.appearance.effects.remove(at);
     (whole.opacity, whole.blend) = (1.0, Default::default());
     whole.extras_mut().mask = None;
-    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize").ok()?;
+    // shortcut: expanded Rasterize effects stay RGB, as the object keeps its own opacity mask and the
+    // image's transparency would need one too; upgrade when CMYK images carry alpha.
+    let image = super::menucmds::rasterize_art(d, vec![whole], &p, "object.rasterize", false).ok()?;
     Some(image.into_node(d))
 }
 
@@ -365,7 +367,9 @@ pub(crate) fn replace_with_image(mut v: Node, image: Node) -> Node {
     v.appearance = Default::default();
     v.set_clips(false);
     if let Some(ch) = v.children_mut() {
-        *ch = vec![Arc::new(image)];
+        // Its ruler guides stay above the image.
+        let guides = ch.split_off(Node::guide_run_start(ch));
+        *ch = std::iter::once(Arc::new(image)).chain(guides).collect();
     }
     v
 }
@@ -453,8 +457,9 @@ fn placed_symbol(d: &Document, n: &Node) -> Option<Node> {
 enum Which {
     /// Every raster effect (PDF).
     All,
-    /// Effects SVG cannot represent faithfully, with their other raster effects.
-    Pixel { cmyk: bool },
+    /// Effects SVG cannot represent faithfully, with their other raster effects; `filters`: the SVG
+    /// written has filters (SVG Tiny 1.2 has none).
+    Pixel { cmyk: bool, filters: bool },
 }
 
 /// Has `n` (its own, its fills' or strokes') raster effects `which` turns into an image?
@@ -462,8 +467,14 @@ fn imaged(n: &Node, which: Which) -> bool {
     let fx = raster_fx(n);
     match which {
         Which::All => !fx.is_empty(),
-        Which::Pixel { cmyk } => {
-            fx.iter().any(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_)))
+        Which::Pixel { cmyk, filters } => {
+            // An SVG filter that is the object's last effect, and its only pixel effect, stays a filter.
+            let pixels = fx.iter().filter(|f| matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_))).count();
+            let live = filters
+                && pixels == 1
+                && effects::svg_filter::writes_live(&n.appearance.effects)
+                && fx.iter().any(|f| matches!(f, RasterFx::Pixel(effects::PixelFx::Svg(s)) if s.in_points() && (!s.measured() || fx.len() == 1) && s.writes_as_svg11()));
+            (pixels > 0 && !live)
                 || (fx.iter().any(|f| matches!(f, RasterFx::DropShadow { darkness: Some(_), .. })) && (cmyk || !simple_rgb_shadow_source(n, &fx)))
         }
     }
@@ -590,7 +601,13 @@ pub fn flatten_raster_effects(doc: &Document) -> Option<Document> {
 /// Mask…) or Rasterize are images as [`flatten_raster_effects`] makes them (SVG export: its
 /// filters draw the other raster effects live), or `None` when there are none.
 pub fn flatten_pixel_effects(doc: &Document) -> Option<Document> {
-    flatten(doc, &mut FlattenReport::new(Which::Pixel { cmyk: doc.color_mode == ColorMode::Cmyk }, doc))
+    flatten_pixel_effects_for(doc, true)
+}
+
+/// [`flatten_pixel_effects`] for SVG that has filters (`filters`) or not (SVG Tiny 1.2): without
+/// them an SVG filter (Effect › SVG Filters) also makes its object an image.
+pub fn flatten_pixel_effects_for(doc: &Document, filters: bool) -> Option<Document> {
+    flatten(doc, &mut FlattenReport::new(Which::Pixel { cmyk: doc.color_mode == ColorMode::Cmyk, filters }, doc))
 }
 
 fn flatten(doc: &Document, report: &mut FlattenReport) -> Option<Document> {
@@ -628,8 +645,8 @@ pub fn export_pdf(doc: &Document, opts: &vectorcraft_pdf::PdfOptions) -> std::re
     export_pdf_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export_pdf`], also returning the writer's warnings (options not applied yet, features
-/// approximated or left out).
+/// Like [`export_pdf`], also returning the writer's warnings (features approximated or left out)
+/// and its notes on the options (options not applied yet).
 pub fn export_pdf_with_report(
     doc: &Document,
     opts: &vectorcraft_pdf::PdfOptions,

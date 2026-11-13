@@ -1,9 +1,9 @@
-use super::nodes::{MASK, doc_path};
+use super::nodes::{MASK, UNDECODED, doc_path};
 use super::output::sanitize_id;
 use super::{
     Affine, BezPath, BlendMode, Color, FillLayer, FillRule, GradientKind, GradientPaint, HashMap, ImageBlob, ImageMode, LineCap, LineJoin,
-    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, fmt_num,
-    stroke, xml_escape,
+    LinkedImage, Node, NodeKind, Paint, PathData, Point, Props, Rect, StrokeAlign, StrokeLayer, Writer, Written, base64_encode, blend_css, css,
+    fmt_num, stroke, xml_escape,
 };
 
 /// Image `b` as SVG viewers show it: PNG, JPEG, GIF, WebP and SVG as they are, other formats (a
@@ -38,6 +38,127 @@ pub(super) enum StrokePlan {
 }
 
 impl Writer<'_> {
+    pub(super) fn count_colorized_images(&mut self, art: &Node) {
+        art.walk(&mut |n| {
+            let NodeKind::Image(im) = &n.kind else { return };
+            let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            let shown = self.doc.shown_image(n, im);
+            let im = &*shown;
+            if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
+                return;
+            }
+            let key = self.colorized_key(im, *color);
+            *self.colorized_counts.entry(key).or_default() += 1;
+        });
+    }
+
+    fn colorized_key(&self, im: &vectorcraft_doc::ImageObject, color: Color) -> super::ColorizedKey {
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        (im.key.clone(), im.width, im.height, self.tiny().then_some(rgb))
+    }
+
+    /// Colorize the decoded gray pixels without changing the source blob. The white pixels of the
+    /// coverage image contribute their alpha to an alpha mask; Tiny uses the same alpha in RGBA.
+    pub(super) fn colorized_image(&mut self, n: &Node, im: &vectorcraft_doc::ImageObject, color: Color, blob: &ImageBlob) {
+        let key = self.colorized_key(im, color);
+        let rgb = color.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        let href = if let Some(href) = self.colorized_hrefs.get(&key) {
+            href.clone()
+        } else {
+            let Some((width, height, coverage)) = blob.coverage() else {
+                self.warn(UNDECODED);
+                return;
+            };
+            if u64::from(width)
+                .checked_mul(u64::from(height))
+                .and_then(|pixels| pixels.checked_mul(4))
+                .is_none_or(|bytes| bytes > vectorcraft_doc::MAX_RASTER_ALLOC)
+            {
+                self.warn(UNDECODED);
+                return;
+            }
+            let mut rgba = Vec::with_capacity(coverage.len().saturating_mul(4));
+            for alpha in coverage {
+                rgba.extend_from_slice(&if self.tiny() { [rgb[0], rgb[1], rgb[2], alpha] } else { [255, 255, 255, alpha] });
+            }
+            let Some(pixels) = image::RgbaImage::from_raw(width, height, rgba) else {
+                self.warn(UNDECODED);
+                return;
+            };
+            let mut png = Vec::new();
+            if pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+                self.warn(UNDECODED);
+                return;
+            }
+            let href = self.blob_href(&ImageBlob::png(png));
+            self.colorized_hrefs.insert(key.clone(), href.clone());
+            href
+        };
+        let shared = if self.opts.images == ImageMode::Embed && self.colorized_counts.get(&key).is_some_and(|count| *count > 1) {
+            if let Some(id) = self.shared_colorized.get(&key) {
+                Some(id.clone())
+            } else {
+                let id = self.fresh_id("colorize-image");
+                self.def(
+                    0,
+                    &format!(
+                        "<image id=\"{id}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                        im.width,
+                        im.height,
+                        xml_escape(&href)
+                    ),
+                );
+                self.shared_colorized.insert(key, id.clone());
+                Some(id)
+            }
+        } else {
+            None
+        };
+        let id = self.id_attr(n);
+        let transform = self.matrix(self.xf * im.xf);
+        let outer = self.attrs(&css::transparency(n));
+        let sampling = if n.extras().pixelated { " image-rendering=\"pixelated\"" } else { "" };
+        if self.tiny() {
+            if let Some(shared) = shared {
+                self.line(&format!("<use{id} transform=\"{transform}\"{outer}{sampling} xlink:href=\"#{shared}\"/>"));
+            } else {
+                self.line(&format!(
+                    "<image{id} width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{outer}{sampling} xlink:href=\"{}\"/>",
+                    im.width, im.height, xml_escape(&href)
+                ));
+            }
+            return;
+        }
+        let mask = self.fresh_id("colorize-mask");
+        let size = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height));
+        let b = (self.xf * im.xf).transform_rect_bbox(size).inflate(1.0, 1.0);
+        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+        self.def(1, &format!("<mask id=\"{mask}\" {MASK} mask-type=\"alpha\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
+        if let Some(shared) = shared {
+            self.def(2, &format!("<use transform=\"{transform}\"{sampling} xlink:href=\"#{shared}\"/>"));
+        } else {
+            self.def(
+                2,
+                &format!(
+                    "<image width=\"{}\" height=\"{}\" transform=\"{transform}\" preserveAspectRatio=\"none\"{sampling} xlink:href=\"{}\"/>",
+                    im.width,
+                    im.height,
+                    xml_escape(&href)
+                ),
+            );
+        }
+        self.def(1, "</mask>");
+        self.line(&format!("<g{id} mask=\"url(#{mask})\"{outer}>"));
+        self.depth += 1;
+        self.line(&format!("<g transform=\"{transform}\">"));
+        self.depth += 1;
+        self.line(&format!("<rect width=\"{}\" height=\"{}\" fill=\"{}\"{sampling}/>", im.width, im.height, color.to_hex()));
+        self.depth -= 1;
+        self.line("</g>");
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
     /// The `href` of image `im`: its file with [`ImageMode::Link`] (or when its pixels are
     /// missing), else its bytes. `None` when it has neither.
     pub(super) fn image_href(&mut self, im: &vectorcraft_doc::ImageObject) -> Option<String> {
@@ -52,11 +173,19 @@ impl Writer<'_> {
     /// Images drawn more than once in `art` (the pieces of a distorted image) go into the defs
     /// once; each piece then draws them with `<use>`.
     pub(super) fn share_images(&mut self, art: &Node) {
+        self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
-                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
+                let shown = self.doc.shown_image(c, im);
+                let im = &*shown;
+                if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+                    && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
+                {
+                    return;
+                }
+                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, im.clone())).0 += 1;
             }
         });
         let mut repeated: Vec<_> = seen.into_iter().filter(|(k, (n, _))| *n > 1 && !self.shared_images.contains_key(k)).collect();
@@ -139,13 +268,36 @@ impl Writer<'_> {
             // Object fills and strokes are images (see `raster_paint`); characters' paints aren't.
             self.warn("freeform gradients on characters are written as linear gradients");
         }
+        if g.gradient.kind == GradientKind::Conic {
+            // SVG has no conic gradient; object fills and strokes are wedges or images (see
+            // `raster_paint`).
+            self.warn("conic gradients on characters are written as linear gradients");
+        }
+        if g.gradient.kind == GradientKind::Diamond {
+            // Object fills and strokes are four linear gradients or images (see `raster_paint`).
+            self.warn("diamond gradients on characters are written as radial gradients");
+        }
+        // A gradient that repeats or reflects: one run of its stops over its period, and
+        // `spreadMethod` to carry it on past both ends.
+        let spread = g.gradient.is_spread();
         let mut geom = g.resolve(bounds);
+        if spread {
+            // A conic is written as a linear gradient along its vector: its runs lie along it.
+            let written = if g.gradient.kind == GradientKind::Conic { GradientKind::Linear } else { g.gradient.kind };
+            geom = geom.period(written, g.gradient.repeat_count());
+        }
         geom.transform(self.xf, g.gradient.kind);
+        if g.gradient.kind != GradientKind::Radial {
+            // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
+            // carry one that draws nothing).
+            geom.focal = None;
+        }
         let (s, e) = (geom.start, geom.end);
         // An off-centre focal point: `fx`/`fy`, in the gradient's own (unsquashed) space.
         let focal = |w: &Self, f: Point| format!(" fx=\"{}\" fy=\"{}\"", w.num(f.x), w.num(f.y));
         let (tag, prefix, attrs) = match g.gradient.kind {
-            GradientKind::Radial => {
+            // A diamond's circle runs through its square's corners.
+            GradientKind::Radial | GradientKind::Diamond => {
                 let r = self.num((e - s).hypot());
                 let attrs = if (geom.aspect - 1.0).abs() < 1e-9 {
                     let f = geom.focal.map(|f| focal(self, f)).unwrap_or_default();
@@ -158,11 +310,16 @@ impl Writer<'_> {
                 };
                 ("radialGradient", "radial-gradient", attrs)
             }
-            GradientKind::Linear | GradientKind::Freeform => (
+            GradientKind::Linear | GradientKind::Freeform | GradientKind::Conic => (
                 "linearGradient",
                 "linear-gradient",
                 format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
             ),
+        };
+        let attrs = match g.gradient.spread {
+            _ if !spread => attrs,
+            vectorcraft_color::GradientSpread::Reflect => format!("{attrs} spreadMethod=\"reflect\""),
+            _ => format!("{attrs} spreadMethod=\"repeat\""),
         };
         let stops: Vec<String> = g
             .gradient
@@ -302,39 +459,84 @@ impl Writer<'_> {
 
     /// A gradient `g` painted over `bounds` (the space [`Self::xf`] maps into user space) that is
     /// drawn as pixels ([`GradientPaint::draws_as_pixels`]) when it paints a fill (`fill`) or a
-    /// stroke: an `<image>` over its painted box, clipped to `clip` (outlines in user space filled
-    /// by `rule`), in a group with `props` and the `side` attribute. A freeform gradient's colour
+    /// stroke: an `<image>` over its painted box and over `area` (a stroke's outline, whose miters,
+    /// caps and arrowheads can reach past the box), clipped to `clip` (outlines in user space
+    /// filled by `rule`), in a group with `props` and the `side` attribute. A freeform gradient's
+    /// image covers the painted box only. A freeform gradient's colour
     /// field, which SVG can't express, is sampled as the canvas samples it (at twice the box's size
-    /// in points); a linear or radial gradient at the document's raster effects resolution (at most
-    /// [`MAX_GRADIENT_PX`] a side), with dither's noise on a fill. Nothing is written for an empty
-    /// box.
+    /// in points); a linear, radial, conic or diamond gradient at the document's raster effects resolution
+    /// (at most [`MAX_GRADIENT_PX`] a side), with dither's noise on a fill. Nothing is written for
+    /// an empty box.
+    ///
+    /// A conic gradient (SVG has none) with opaque stops that isn't drawn as pixels is written as
+    /// [`CONIC_WEDGES`] solid wedges around its center in the same clip group instead, each
+    /// running on to the seam under the next ([`vectorcraft_color::GradientGeom::conic_wedges`]):
+    /// vector art with a sharp seam. With translucent stops, where wedges drawn over each other
+    /// would add up their opacity, it is an image.
+    ///
+    /// A diamond gradient (SVG has none) with opaque stops that isn't drawn as pixels is written
+    /// as four linear gradients in the same clip group, one for each quadrant of its frame and
+    /// equal to the diamond there, overlapping so no hairline shows between them
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). With translucent stops, where
+    /// the overlaps would add up their opacity, or without an extent, it is an image.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn raster_paint(&mut self, g: &GradientPaint, bounds: Rect, clip: &[String], rule: FillRule, props: &Props, side: &str, fill: bool) {
+    pub(super) fn raster_paint(
+        &mut self,
+        g: &GradientPaint,
+        bounds: Rect,
+        area: Rect,
+        clip: &[String],
+        rule: FillRule,
+        props: &Props,
+        side: &str,
+        fill: bool,
+    ) {
         use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let freeform = g.gradient.kind == GradientKind::Freeform;
-        let (rgba, cols, rows): (Vec<u8>, u16, u16) = if freeform {
-            let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
-            let field = g.freeform_on(b).field(spread_scale(b));
-            let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            (field.grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
+        // The box the paint covers: the painted box, and a stroke's outline, whose miters, caps
+        // and arrowheads can reach past it (a freeform gradient's field covers the painted box).
+        let cover = if freeform { b } else { Some(b.union(area.abs())).filter(|r| r.is_finite()).unwrap_or(b) };
+        let conic = g.gradient.kind == GradientKind::Conic;
+        let opaque = g.gradient.stops.iter().all(|s| s.opacity >= 1.0);
+        let wedges = conic && !g.draws_as_pixels(fill) && opaque;
+        let quadrants = (g.gradient.kind == GradientKind::Diamond && !g.draws_as_pixels(fill) && opaque)
+            .then(|| g.resolve(bounds).diamond_quadrants(cover))
+            .flatten();
+        let href = if wedges {
+            self.warn("conic gradients are written as solid wedges clipped to their shapes");
+            None
+        } else if quadrants.is_some() {
+            self.warn("diamond gradients are written as four linear gradients clipped to their shapes");
+            None
         } else {
-            let k = self.doc.raster_effects_ppi / 72.0;
-            let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_GRADIENT_PX) as u16;
-            let (cols, rows) = (along(b.width()), along(b.height()));
-            (g.pixels(b, b, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
+            let (rgba, cols, rows): (Vec<u8>, u16, u16) = if freeform {
+                let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
+                let field = g.freeform_on(b).model_field(spread_scale(b));
+                let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                (field.display_grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect(), cols, rows)
+            } else {
+                let k = self.doc.raster_effects_ppi / 72.0;
+                let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_GRADIENT_PX) as u16;
+                let (cols, rows) = (along(cover.width()), along(cover.height()));
+                (g.pixels(b, cover, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
+            };
+            let mut png = Vec::new();
+            let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
+            if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+                return;
+            }
+            self.warn(if freeform {
+                "freeform gradients are written as images clipped to their shapes"
+            } else if conic {
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
+            } else if g.gradient.kind == GradientKind::Diamond {
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
+            } else {
+                "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
+            });
+            Some(self.blob_href(&ImageBlob::new("image/png", png)))
         };
-        let mut png = Vec::new();
-        let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
-        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
-            return;
-        }
-        self.warn(if freeform {
-            "freeform gradients are written as images clipped to their shapes"
-        } else {
-            "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
-        });
-        let href = self.blob_href(&ImageBlob::new("image/png", png));
         let cid = self.fresh_id("clip-path");
         let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
         self.def(1, &format!("<clipPath id=\"{cid}\">"));
@@ -352,12 +554,35 @@ impl Writer<'_> {
             self.line(&format!("<g clip-path=\"url(#{cid})\"{a}>"));
         }
         self.depth += 1;
-        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
-        let tr = if self.xf == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(self.xf)) };
-        self.line(&format!(
-            "<image x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{tr} preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
-            xml_escape(&href)
-        ));
+        match href {
+            Some(href) => {
+                let (x, y, w, h) = (self.num(cover.x0), self.num(cover.y0), self.num(cover.width()), self.num(cover.height()));
+                let tr = if self.xf == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(self.xf)) };
+                self.line(&format!(
+                    "<image x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{tr} preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                    xml_escape(&href)
+                ));
+            }
+            None => match quadrants {
+                Some(quadrants) => {
+                    let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+                    for (pts, geom) in quadrants {
+                        // Not named after the swatch: four defs, none of them the swatch's gradient.
+                        let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+                        let id = self.gradient_def(&linear, b);
+                        let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
+                        self.line(&format!("<path d=\"{d}\" fill=\"url(#{id})\"/>"));
+                    }
+                }
+                None => {
+                    let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
+                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, g.gradient.conic_wedge_count(CONIC_WEDGES), true) {
+                        let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
+                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(spread(t) as f32).0.to_hex()));
+                    }
+                }
+            },
+        }
         self.depth -= 1;
         self.line("</g>");
         if nested {
@@ -372,13 +597,30 @@ impl Writer<'_> {
     /// gradients require rendered-effect preparation by the caller to preserve their appearance.
     /// Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
-    /// such objects into images first).
+    /// such objects into images first). An SVG filter (Effect › SVG Filters) that is the last
+    /// effect is written as its own `<filter>` element; elsewhere in the stack it is left out
+    /// like them.
     pub(super) fn filtered(&mut self, n: &Node) {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
+        // An SVG filter's user-space coordinates are the document's from the effect's origin: the
+        // object is written in them, in a group that moves it where the rest of the art goes.
+        let xf = self.xf;
+        let origin = live_svg_filter(&n.appearance.effects).map(|f| Affine::translate(f.origin()));
+        let moved = origin.is_some_and(|o| xf * o != Affine::IDENTITY);
+        if let Some(o) = origin.filter(|_| moved) {
+            self.line(&format!("<g transform=\"{}\">", self.matrix(xf * o)));
+            self.depth += 1;
+            self.xf = o.inverse();
+        }
         let opened = self.open_filters(n, &n.appearance.effects);
         self.node_body(&inner);
         self.close_filters(opened);
+        if moved {
+            self.xf = xf;
+            self.depth -= 1;
+            self.line("</g>");
+        }
     }
 
     /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
@@ -400,7 +642,27 @@ impl Writer<'_> {
                 + 2.0;
         let region = bounds.map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
         let mut opened = 0;
-        for f in fx.iter().rev() {
+        // An SVG filter that is the object's last effect is written as it is ([`Self::filtered`]).
+        let live = if std::ptr::eq(effects, n.appearance.effects.as_slice()) { live_svg_filter(effects) } else { None };
+        for (k, f) in fx.iter().enumerate().rev() {
+            if let RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(sf)) = f
+                && live.is_some()
+                && k + 1 == fx.len()
+            {
+                let fid = self.fresh_id("filter");
+                // The filter as it is drawn: a region given against the object's box is measured
+                // against the object alone, which is all it runs on ([`live_svg_filter`]).
+                let mut input = n.clone();
+                input.appearance.effects.clear();
+                let input_bounds = input.visual_bounds_with(&self.doc.symbol_boxes()).unwrap_or_default();
+                if let Some(def) = sf.written_xml(input_bounds).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid)) {
+                    self.def(1, &def);
+                    self.line(&format!("<g filter=\"url(#{fid})\">"));
+                    self.depth += 1;
+                    opened += 1;
+                    continue;
+                }
+            }
             if matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_)) {
                 self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
@@ -476,7 +738,10 @@ impl Writer<'_> {
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\" result=\"soft\"/><feComposite in=\"SourceGraphic\" in2=\"soft\" operator=\"in\" result=\"f\"/><feComposite in=\"f\" in2=\"SourceAlpha\" operator=\"in\"/>",
                     sd(*radius)
                 ),
-                RasterFx::GaussianBlur { radius } => format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/>", sd(*radius)),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let space = if *linear { " color-interpolation-filters=\"linearRGB\"" } else { "" };
+                    format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"{space}/>", sd(*radius))
+                }
                 RasterFx::Pixel(_) | RasterFx::Rasterize(_) => continue,
             };
             // Filters composite normally: a shadow's or glow's other blend mode is recorded for import.
@@ -504,14 +769,38 @@ impl Writer<'_> {
     }
 }
 
-/// Most pixels along a side of a linear or radial gradient's image.
+/// Most pixels along a side of a linear, radial, conic or diamond gradient's image.
 const MAX_GRADIENT_PX: f64 = 4096.0;
 
+/// Wedges a conic gradient with opaque stops is written as: one a degree.
+const CONIC_WEDGES: usize = 360;
+
 /// The gradient a fill (`fill`) or stroke paint is, if it is drawn as pixels
-/// ([`GradientPaint::draws_as_pixels`]; SVG has no freeform gradients, for one).
+/// ([`GradientPaint::draws_as_pixels`]; SVG has no freeform gradients, for one) or is a conic or
+/// diamond gradient (SVG has neither: [`Writer::raster_paint`] draws a conic as wedges or an
+/// image, a diamond as four linear gradients or an image).
 pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     match p {
-        Paint::Gradient(g) if g.draws_as_pixels(fill) => Some(g),
+        Paint::Gradient(g) if g.draws_as_pixels(fill) || matches!(g.gradient.kind, GradientKind::Conic | GradientKind::Diamond) => Some(g),
+        _ => None,
+    }
+}
+
+/// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
+/// its last visible effect, measured in points.
+fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
+    if !vectorcraft_effects::svg_filter::writes_live(effects) {
+        return None;
+    }
+    let mut fx = vectorcraft_effects::raster_effects(effects);
+    // A region measured against the object's box is kept only when the filter runs on the object itself.
+    let alone = fx.len() == 1;
+    match fx.pop() {
+        Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
+            if f.in_points() && (alone || !f.measured()) && f.writes_as_svg11() =>
+        {
+            Some(f)
+        }
         _ => None,
     }
 }

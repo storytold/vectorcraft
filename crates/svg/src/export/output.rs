@@ -19,12 +19,18 @@ pub(super) fn xml_text(s: &str) -> String {
     xml_escape(&s)
 }
 
+/// `s` without the characters XML 1.0 does not allow, ready for a double-quoted attribute.
+pub(super) fn xml_attr_valid(s: &str) -> String {
+    let s: String = s.chars().filter(|c| valid_xml_value(c.encode_utf8(&mut [0; 4]))).collect();
+    xml_attr_escape(&s)
+}
+
 pub(super) fn valid_xml_value(s: &str) -> bool {
     s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
 }
 
 /// An XML name without a colon (an NCName): a letter or `_`, then [`xml_name_char`]s.
-fn xml_ncname(s: &str) -> bool {
+pub(super) fn xml_ncname(s: &str) -> bool {
     let mut chars = s.chars();
     chars.next().is_some_and(|c| c.is_alphabetic() || c == '_') && chars.all(xml_name_char)
 }
@@ -82,7 +88,7 @@ fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
     let info = &doc.metadata;
     let mut terms = vec![("format", "image/svg+xml".to_string())];
     let created = info.created.map(vectorcraft_doc::metadata::iso8601).unwrap_or_default();
-    let fields = [("title", doc.title.as_str()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
+    let fields = [("title", doc.info_title()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
     let rights = [("rights", info.copyright_notice.as_str()), ("rights", info.copyright_url.as_str()), ("date", created.as_str())];
     let keywords = info.keywords.iter().map(|k| ("subject", k.as_str()));
     terms.extend(fields.into_iter().chain(keywords).chain(rights).filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k, v.to_string())));
@@ -115,7 +121,7 @@ impl Writer<'_> {
     pub(super) fn line(&mut self, s: &str) {
         let ind = self.indent(self.depth);
         self.body.push_str(&ind);
-        self.body.push_str(s);
+        self.body.push_str(&merge_class_attrs(s));
         if !self.opts.minify {
             self.body.push('\n');
         }
@@ -164,6 +170,10 @@ impl Writer<'_> {
         }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
+            // Ruler guides are not written, so their names reserve no id.
+            if n.is_ruler_guide() {
+                return;
+            }
             if let Some(name) = &n.name {
                 named.push((n.id, sanitize_id(name)));
             }
@@ -183,6 +193,9 @@ impl Writer<'_> {
             return String::new();
         }
         let mut out = self.names.get(&n.id).map_or_else(String::new, |id| format!(" id=\"{}\"", xml_escape(id)));
+        if let Some(id) = self.names.get(&n.id).filter(|_| !self.bound.is_empty()).cloned() {
+            self.note_bound(n.id, &id);
+        }
         if let (Some(id), Some(name)) = (self.names.get(&n.id), n.name.as_deref())
             && name != id
         {
@@ -195,6 +208,19 @@ impl Writer<'_> {
         // Preserve sublayer identity independently of object data attributes.
         if !out.is_empty() && n.is_layer() && self.layer_nest > 1 {
             out.push_str(&format!(" {}=\"sublayer\"", crate::import::SUBLAYER));
+        }
+        let classes: Vec<&str> = n
+            .extras()
+            .attrs
+            .as_deref()
+            .map_or(&[][..], |a| a.classes.as_slice())
+            .iter()
+            .map(String::as_str)
+            .filter(|c| !c.is_empty() && !c.chars().any(|ch| ch.is_control() || matches!(ch, '\u{fffe}' | '\u{ffff}')))
+            .collect();
+        // SVG Tiny 1.2 has `class` among its core attributes, so every profile writes them.
+        if !classes.is_empty() {
+            out.push_str(&format!(" class=\"{}\"", xml_attr_escape(&classes.join(" "))));
         }
         let mut keys = HashSet::new();
         for (k, v) in n.extras().attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
@@ -357,7 +383,7 @@ impl Writer<'_> {
             line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
             line(3, "<rdf:Description rdf:about=\"\">");
             for (term, value) in dublin_core(self.doc) {
-                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_escape(&value)));
+                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_text(&value)));
             }
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");
@@ -502,11 +528,43 @@ impl Writer<'_> {
         })
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed ([`crate::Output::warnings`]). A note about an option goes to [`Self::note_setting`].
     pub(super) fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
         }
     }
+
+    /// Note `w`, once, about an option that wasn't applied or was applied another way while the
+    /// art reaches the file as it looks ([`crate::Output::setting_notes`]).
+    pub(super) fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
+        }
+    }
+}
+
+/// An element that has both its own classes and a generated `cls-N` would write `class` twice:
+/// join the two into one attribute (the first, the object's own, comes first).
+fn merge_class_attrs(s: &str) -> std::borrow::Cow<'_, str> {
+    const KEY: &str = " class=\"";
+    let tag_end = s.find('>').unwrap_or(s.len());
+    let tag = s.get(..tag_end).unwrap_or(s);
+    let Some(first) = tag.find(KEY) else { return s.into() };
+    let first_val = first + KEY.len();
+    let Some(first_len) = tag.get(first_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let first_end = first_val + first_len;
+    let Some(second) = tag.get(first_end..).and_then(|t| t.find(KEY)).map(|i| i + first_end) else { return s.into() };
+    let second_val = second + KEY.len();
+    let Some(second_len) = tag.get(second_val..).and_then(|t| t.find('"')) else { return s.into() };
+    let second_end = second_val + second_len;
+    let (Some(b), Some(head), Some(mid), Some(rest)) =
+        (s.get(second_val..second_end), s.get(..first_end), s.get(first_end + 1..second), s.get(second_end + 1..))
+    else {
+        return s.into();
+    };
+    format!("{head} {b}\"{mid}{rest}").into()
 }
 
 /// The rectangle whose corners `q` are, in order either way round, with its edges alternately

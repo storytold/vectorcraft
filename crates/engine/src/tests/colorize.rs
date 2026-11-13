@@ -173,13 +173,29 @@ fn blend_recolors_a_colorized_gray_image_without_alpha() {
     assert_eq!(colorize(&s, middle), Some(Paint::solid(Color::rgb(0.5, 0.5, 0.5))));
 }
 
+/// A colorized image shows a fill and no stroke, so selecting it loads them for new art as any
+/// object without a stroke does (the weight stays).
+#[test]
+fn selecting_a_colorized_image_gives_new_art_its_fill_and_no_stroke() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(s.paint.fill.color().map(|c| c.to_hex()), Some("#336699".into()));
+    assert_eq!((s.paint.stroke.clone(), s.paint.stroke_width), (Paint::None, 5.0));
+}
+
 #[test]
 fn fill_proxy_invert_recolors_a_colorized_gray_image_and_undo_restores_it() {
     let mut s = session();
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id).unwrap();
-    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#cc9966".into()));
     assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#cc9966".into()));
     s.execute("edit.undo", &json!({})).unwrap();
@@ -193,7 +209,7 @@ fn fill_proxy_complement_recolors_a_colorized_gray_image_and_undo_restores_it() 
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id).unwrap();
     let expected = Paint::solid(Color::rgb8(0, 255, 255));
-    assert_eq!(s.execute("paint.complement", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.complement", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id), Some(expected.clone()));
     assert_eq!(s.proxy_paints().0, expected);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -209,7 +225,7 @@ fn stroke_proxy_invert_leaves_a_colorized_image_fill_unchanged() {
     let key = image_key(&s, id);
     s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(255, 0, 0)));
-    assert_eq!(s.execute("paint.invert", &json!({"stroke": true})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("paint.invert", &json!({"stroke": true})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(0, 255, 255)));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
@@ -223,7 +239,10 @@ fn edit_colors_invert_without_fill_recolors_a_colorized_images_stroke() {
     s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false, "stroke": true})).unwrap(), json!({"changed": 1}));
+    assert_eq!(
+        s.execute("edit.colors.invert", &json!({"fill": false, "stroke": true})).unwrap(),
+        json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}})
+    );
     assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().paint.color(), Some(Color::rgb8(0, 255, 255)));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
@@ -251,7 +270,10 @@ fn edit_colors_recolors_an_image_colorize_with_pixels_excluded() {
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     let before = colorize(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"includeImages": false})).unwrap(), json!({"changed": 1}));
+    assert_eq!(
+        s.execute("edit.colors.invert", &json!({"includeImages": false})).unwrap(),
+        json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}})
+    );
     assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(0, 255, 255))));
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(colorize(&s, id), before);
@@ -264,7 +286,7 @@ fn edit_colors_invert_recolors_colorize_without_changing_pixels_and_undo_restore
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({})).unwrap(), json!({"changed": 1}));
+    assert_eq!(s.execute("edit.colors.invert", &json!({})).unwrap(), json!({"changed": 1, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#cc9966".into()));
     assert_eq!(image_key(&s, id), key);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -292,7 +314,7 @@ fn edit_colors_invert_without_fill_leaves_colorized_image_unchanged() {
     s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
     let before = colorize(&s, id);
     let key = image_key(&s, id);
-    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false})).unwrap(), json!({"changed": 0}));
+    assert_eq!(s.execute("edit.colors.invert", &json!({"fill": false})).unwrap(), json!({"changed": 0, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(colorize(&s, id), before);
     assert_eq!(image_key(&s, id), key);
 }
@@ -326,7 +348,7 @@ fn proxy_invert_recolors_a_colorized_image_and_another_fill_in_one_undo_step() {
     s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
     s.execute("select.set", &json!({"ids": [id.0, shape.0]})).unwrap();
     let undo = s.doc().unwrap().history.undo.len();
-    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 2}));
+    assert_eq!(s.execute("paint.invert", &json!({})).unwrap(), json!({"changed": 2, "notChanged": {"locked": 0, "hidden": 0}}));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(0, 255, 255))));
     assert_eq!(s.doc().unwrap().doc.node(shape).unwrap().appearance.fill().unwrap().paint.color(), Some(Color::rgb8(255, 255, 0)));
@@ -370,13 +392,117 @@ fn colorized_gray_image_is_flattened_for_pdf_x_1a() {
     assert!(!String::from_utf8_lossy(&bytes).contains("/SMask"), "PDF/X-1a has no soft mask");
 }
 
+/// A colorized image with a gray pixel is left out; one of black and white pixels is written as an
+/// image mask and kept.
 #[test]
 fn colorized_gray_image_is_omitted_from_legacy_ai_when_requested() {
+    let mut s = session();
+    let mid = png(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 128]).unwrap()));
+    let id = image(&mut s, "mid", mid);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
+    let out = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "omit"})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
     let mut s = session();
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
     let out = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "omit"})).unwrap();
-    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
+    assert!(!out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
+}
+
+#[test]
+fn eps_export_writes_a_colorized_image_in_its_spot_ink_without_flattening() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"swatch": "Ink", "ids": [id.0]})).unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+    let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+    let ps = String::from_utf8_lossy(&bytes);
+    assert!(ps.contains("imagemask") && ps.contains("/Separation (Ink) cvn"), "the image prints on the Ink plate");
+    assert!(ps.contains("%%DocumentCustomColors: (Ink)"));
+
+    // Opacity still flattens it.
+    s.execute("transparency.set", &json!({"ids": [id.0], "opacity": 50})).unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+}
+
+#[test]
+fn eps_export_still_flattens_a_colorize_paint_on_a_color_image() {
+    let mut s = session();
+    let rgb = png(image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(2, 1, vec![0, 128, 255, 255, 0, 0]).unwrap()));
+    let id = image(&mut s, "rgb", rgb);
+    s.edit("Colorize", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+}
+
+/// A linked image showing the missing-link placeholder draws uncolorized, so its colorize paint
+/// doesn't flatten it in EPS or PDF 1.3 export.
+#[test]
+fn a_colorized_missing_link_placeholder_is_not_flattened() {
+    let mut s = session();
+    let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    s.edit("Colorize", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let flattened =
+        |out: &serde_json::Value| out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("transparency is flattened"));
+    let eps = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(!flattened(&eps), "{}", eps["warnings"]);
+    let pdf = s.execute("document.exportPdf", &json!({"compatibility": "1.3"})).unwrap();
+    assert!(!flattened(&pdf), "{}", pdf["warnings"]);
+    assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(255, 0, 0))), "the image keeps its paint");
+}
+
+/// A fill color on a colorized image that shows the missing-link placeholder recolors the image,
+/// as the Fill proxy shows its colorize paint, and adds no fill item.
+#[test]
+fn a_fill_color_recolors_a_colorized_missing_link_placeholder() {
+    let mut s = session();
+    let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    s.edit("Colorize", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let appearance = s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [id.0]})).unwrap();
+    assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#0000ff".into()));
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance, appearance, "no fill item");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#0000ff".into()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(255, 0, 0))));
+}
+
+/// The pixels behind the placeholder may have an alpha channel, so a missing-link image colorized
+/// with a spot color takes another spot color, black or white, and refuses a process color.
+#[test]
+fn a_colorized_missing_link_placeholder_in_a_spot_color_refuses_a_process_color() {
+    let mut s = session();
+    let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    s.execute("swatch.new", &json!({"name": "Ink 2", "color": {"c": 100, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.edit("Colorize", |d, _| {
+        let ink = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(ink));
+        Ok(())
+    })
+    .unwrap();
+    let before = colorize(&s, id);
+    let e = s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [id.0]})).unwrap_err().to_string();
+    assert!(e.contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!(colorize(&s, id), before);
+    s.execute("paint.setFill", &json!({"swatch": "Ink 2", "ids": [id.0]})).unwrap();
+    assert!(matches!(colorize(&s, id), Some(Paint::Solid { swatch: Some(w), .. }) if w == "Ink 2"), "{:?}", colorize(&s, id));
 }
 
 #[test]

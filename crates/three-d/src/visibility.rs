@@ -293,6 +293,7 @@ mod tests {
         Face {
             points: vec![Point::new(rect.x0, rect.y0), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)],
             depth: brightness,
+            normal: [0.0, 0.0, 1.0],
             brightness,
             gradient: None,
             illumination: [brightness; 3],
@@ -301,6 +302,7 @@ mod tests {
             outline: None,
             cap: false,
             visibility_pieces: None,
+            surface: None,
         }
     }
 

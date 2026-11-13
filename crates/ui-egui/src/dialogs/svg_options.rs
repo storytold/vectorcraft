@@ -112,7 +112,8 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
 /// only when saving).
 fn options(d: &Dialog) -> Value {
     let mode = Mode::of(d);
-    let mut o: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut o: Map<String, Value> =
+        d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str()) && !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     if mode == Mode::Export {
         o.remove("preserveEditing");
         if d.bool("useArtboards") {
@@ -226,6 +227,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     check(ui, d, "embedFonts", tl!("Embed Fonts (Glyphs Used)"), !d.bool("outlineText") && !tiny);
     check(ui, d, "fewerTspans", tl!("Fewer <tspan> Elements"), !d.bool("outlineText"));
     check(ui, d, "metadata", tl!("Include Metadata"), true);
+    if !screens {
+        check(ui, d, "variableData", tl!("Include Variable Data"), true);
+    }
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
@@ -379,6 +383,19 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("decimals", 0.0), 1.0);
     }
 
+    /// A dialog a save panel opened carries the dialog layer's own `__` fields; the save is given
+    /// only the SVG options, so it is not refused for an unknown key.
+    #[test]
+    fn save_as_svg_from_a_save_panel_passes_only_the_options() {
+        let (mut app, written) = app("/tmp/panel.svg");
+        app.run("file.saveAs", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert(crate::dialogs::AFTER_PANEL.into(), json!(true));
+        assert!(options(app.ui.dialog.as_ref().unwrap()).get(crate::dialogs::AFTER_PANEL).is_none());
+        let d = app.ui.dialog.take().unwrap();
+        confirm(&mut app, &d).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(written.borrow()[0].0, "/tmp/panel.svg");
+    }
+
     #[test]
     fn all_artboards_export_one_file_each() {
         let (mut app, written) = app("/tmp/set.svg");
@@ -427,6 +444,24 @@ mod tests {
         assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none());
         super::super::confirm(&mut app).unwrap();
         assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
+    }
+
+    /// Include Variable Data starts off, draws in the dialog, and writes the text variables and
+    /// data sets into the saved SVG when it is on.
+    #[test]
+    fn include_variable_data_reaches_the_file() {
+        let (mut app, written) = app("/tmp/vars.svg");
+        let id = app.run("text.create", json!({"x": 10, "y": 60, "text": "Alice"})).unwrap()["id"].clone();
+        app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Name", "ids": [id]})).unwrap();
+        app.run("dataset.new", json!({"name": "Row", "values": {"Name": "Bob"}})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("variableData"), "off at first");
+        frame(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("variableData".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let svg = text(&written, 0);
+        assert!(svg.contains("<variable varName=\"Name\"") && svg.contains("dataSetName=\"Row\"") && svg.contains("<p>Bob</p>"), "{svg}");
     }
 
     #[test]

@@ -17,7 +17,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
 use vectorcraft_engine::cmd::TracePresetChange;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-use super::{first_selected, library_panel, pstate, set_pstate, swatches};
+use super::{first_selected, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -44,24 +44,6 @@ fn palette_label(id: &str) -> &'static str {
         "documentLibrary" => tl!("Document Library"),
         _ => tl!("Limited"),
     }
-}
-
-/// The name of Document Library's library `key` (the document's swatches or a swatch library); a
-/// library that is gone shows its key.
-fn library_label(app: &VectorcraftApp, key: &str) -> String {
-    match swatches::limit_name(app, key) {
-        Some(_) if key == DOCUMENT_SWATCHES => tl!(swatches::DOCUMENT_SWATCHES).to_string(),
-        Some(name) => library_panel::library_name(key, &name).to_string(),
-        None => key.to_string(),
-    }
-}
-
-/// Document Library's choices: the document's swatches, then the colour libraries (`current`
-/// checked) → the key chosen.
-fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
-    let document = menu_item(ui, swatches::DOCUMENT_SWATCHES, true, current == DOCUMENT_SWATCHES).then(|| DOCUMENT_SWATCHES.to_string());
-    ui.separator();
-    library_panel::library_items(ui, &swatches::colour_libraries(app), &|id| id == current).or(document)
 }
 
 /// Document Library's Colors choices with the document's swatches: All, then the document's color
@@ -288,6 +270,21 @@ fn preset_label(name: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "imageTrace", name)
 }
 
+/// The buttons above the Image Trace panel's Preset dropdown, in panel order: each one's name and the
+/// built-in preset a click chooses. The help page lists these options before Preset
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-panel-options.html>);
+/// which preset each one chooses is VectorCraft's own.
+fn preset_buttons() -> [(&'static str, &'static str); 6] {
+    [
+        (preset_label("Auto Color"), "Auto Color"),
+        (tl!("High Color"), "High Fidelity Photo"),
+        (tl!("Low Color"), "Low Fidelity Photo"),
+        (tl!("Grayscale"), "Shades of Gray"),
+        (tl!("Black and White"), "Black and White Logo"),
+        (preset_label("Outline"), "Outline"),
+    ]
+}
+
 fn preset_list(app: &mut VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
     let mut chosen = None;
     let list = presets(app, ui.ctx());
@@ -332,7 +329,7 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     if main.on_hover_text(tl!("Trace the image with the Default preset")).clicked() {
         trace_with(app, "Default");
     }
-    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| preset_list(app, ui, "")).and_then(|r| r.inner) {
+    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| widgets::menu_scroll(ui, |ui| preset_list(app, ui, ""))).and_then(|r| r.inner) {
         trace_with(app, &p);
     }
 }
@@ -364,7 +361,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     if widgets::flat_button(ui, tl!("Expand"), 64.0).clicked() {
         app.run("imageTrace.expand", json!({})).ok();
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
     true
 }
 
@@ -577,6 +574,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let restored = sync_with_object(&mut st, stored, object, &all, &changes);
     let mut retrace = false;
 
+    // A preset button chooses its preset as the Preset dropdown does; the button of the panel's
+    // preset shows as selected.
+    ui.horizontal_wrapped(|ui| {
+        for (label, name) in preset_buttons() {
+            let selected = st.preset == name;
+            if cfg!(test) {
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique(("trace-preset-button", name)), selected));
+            }
+            if ui.add(egui::Button::selectable(selected, label)).on_hover_text(preset_label(name)).clicked()
+                && let Some(p) = all.iter().find(|p| p.0 == name)
+            {
+                st.preset = name.to_string();
+                st.params = p.1.clone();
+                retrace = true;
+            }
+        }
+    });
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Preset:"));
         let manage = 24.0;
@@ -656,7 +670,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Library:"));
                 let key = st.params["library"].as_str().unwrap_or(DOCUMENT_SWATCHES).to_string();
-                if let Some(k) = widgets::combo(ui, "it-library", &library_label(app, &key), 170.0, |ui| library_list(app, ui, &key)) {
+                if let Some(k) =
+                    widgets::combo(ui, "it-library", &swatches::library_label(app, &key), 170.0, |ui| swatches::library_list(app, ui, &key))
+                {
                     if k != DOCUMENT_SWATCHES {
                         st.params["colorGroup"] = Value::Null;
                     }

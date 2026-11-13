@@ -4,6 +4,9 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod common;
+
+use common::TempFolder;
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
@@ -98,7 +101,7 @@ fn tool_definitions_are_valid() {
 
 #[test]
 fn every_tool_survives_empty_and_junk_arguments() {
-    let dir = vectorcraft_testkit::temp_dir("mcp-junk");
+    let dir = TempFolder::new("mcp-junk");
     let safe = dir.join("junk.vectorcraft").to_string_lossy().to_string();
     let mut failures = vec![];
     for t in tool_definitions() {
@@ -169,7 +172,7 @@ proptest! {
         tail in junk_tail(),
         tool in prop::sample::select(vec!["open_file", "save_file", "export", "screenshot"]),
     ) {
-        let base = vectorcraft_testkit::temp_dir("mcp-confined");
+        let base = TempFolder::new("mcp-confined");
         let root = base.join("a/b/c/root");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(base.join("outside")).unwrap();
@@ -290,8 +293,16 @@ fn resources_are_json() {
     let list = rpc(&mut s, 2, "resources/list", json!({}));
     for r in list["result"]["resources"].as_array().unwrap() {
         let v = rpc(&mut s, 3, "resources/read", json!({"uri": r["uri"]}));
-        let text = v["result"]["contents"][0]["text"].as_str().unwrap();
-        serde_json::from_str::<Value>(text).unwrap();
+        let content = &v["result"]["contents"][0];
+        assert_eq!(content["mimeType"], r["mimeType"], "{}", r["uri"]);
+        assert_eq!(content["uri"], r["uri"]);
+        let text = content["text"].as_str().unwrap();
+        if r["mimeType"] == "application/json" {
+            serde_json::from_str::<Value>(text).unwrap();
+        } else {
+            assert_eq!(r["mimeType"], "text/markdown; charset=utf-8", "{}", r["uri"]);
+            assert!(text.starts_with("# ") && text.ends_with('\n'), "{}", r["uri"]);
+        }
     }
 }
 

@@ -2,8 +2,8 @@ use super::controls::collect_for_export_menu;
 use super::model::{Place, Row, opens, painted_name};
 use super::thumbs::{node_arc, real_thumb, thumb};
 use super::{
-    Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, SQUARE_X, Sense, Stroke, StrokeKind,
-    TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
+    Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
+    StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
 
 /// Stable id for the layers panel's per-name UI state.
@@ -16,8 +16,24 @@ pub(super) fn rename_id() -> egui::Id {
     egui::Id::unique("layers-rename")
 }
 
-/// Ghost rows are drawn at this opacity.
-const GHOST_OPACITY: f32 = 0.5;
+/// Whether a row's name is italic: a layer whose Layer Options › Print is off does not print, and
+/// the panel shows that in its name, as the reference application does (a template layer's Print is
+/// off too).
+fn prints_italic(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Layer { printable: false, .. })
+}
+
+/// Paints the row name `name` at `pos` (left, vertically centred), italic when `italic`, and
+/// returns its rect. Row names are painted rather than widgets, so italics come from a layout job's
+/// text format: egui slants the glyphs itself, no italic face is needed.
+fn paint_name(painter: &egui::Painter, pos: egui::Pos2, name: &str, font: egui::FontId, color: Color32, italic: bool) -> egui::Rect {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(name, 0.0, egui::TextFormat { font_id: font, color, italics: italic, ..Default::default() });
+    let galley = painter.layout_job(job);
+    let rect = egui::Align2::LEFT_CENTER.anchor_size(pos, galley.size());
+    painter.galley(rect.min, galley, color);
+    rect
+}
 
 /// The colour of the layer holding `id`.
 fn layer_colour(doc: &Document, id: NodeId) -> Color32 {
@@ -50,23 +66,18 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
     let Some(n) = node_arc(doc, src) else { return };
     let n = &n;
     let (grab, width, depth) = ui.data(|d| d.get_temp::<(egui::Vec2, f32, usize)>(key("grab"))).unwrap_or((vec2(h, h / 2.0), 240.0, 0));
-    // A plain Ui on the tooltip layer, not an Area: a new Area is invisible for a frame and fades in.
     let r = egui::Rect::from_min_size(pos - grab, vec2(width, h));
-    let id = key("ghost");
-    let mut ui = Ui::new(ui.ctx().clone(), id, egui::UiBuilder::new().layer_id(egui::LayerId::new(egui::Order::Tooltip, id)).max_rect(r));
-    ui.set_opacity(GHOST_OPACITY);
-    let p = ui.painter();
-    p.rect_filled(r, 0.0, t.row_selected);
-    p.rect_stroke(r, 0.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
-    let mut x = r.left() + 2.0 * COLUMN + 2.0;
-    colour_bar(&ui, n, r, x, layer_colour(doc, src));
-    x += 22.0 + depth as f32 * INDENT;
-    if view.opts.thumb(n) {
-        x = row_thumb(&ui, view, n, r, x).right() + 4.0;
-    }
-    let label = n.identify_label(view.identify_xml_id);
-    let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
-    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
+    widgets::drag_ghost(ui.ctx(), key("ghost"), r, |ui, r| {
+        let mut x = r.left() + 2.0 * COLUMN + 2.0;
+        colour_bar(ui, n, r, x, layer_colour(doc, src));
+        x += 22.0 + depth as f32 * INDENT;
+        if view.opts.thumb(n) {
+            x = row_thumb(ui, view, n, r, x).right() + 4.0;
+        }
+        let label = n.identify_label(view.identify_xml_id);
+        let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
+        paint_name(ui.painter(), egui::pos2(x, r.center().y), &name, egui::FontId::proportional(13.0), t.text, prints_italic(n));
+    });
 }
 
 /// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
@@ -74,22 +85,22 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
 pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
-    ui.data_mut(|d| d.insert_temp(key("focus"), true));
-    let at = |id: NodeId| list.iter().position(|r| r.node.id == id);
-    if m.shift
-        && let Some(a) = anchor.or(view.rows.last().copied())
-        && let (Some(i), Some(j)) = (at(a), at(id))
-    {
-        let range: Vec<u64> = list.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.node.id.0).collect();
-        out.actions.push(("layer.highlight".into(), json!({"ids": range, "mode": if m.command { "add" } else { "set" }})));
-        return;
+    crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
+    let click = widgets::row_click(&order, &view.rows, anchor, id, m);
+    if click.moves_anchor() {
+        ui.data_mut(|d| d.insert_temp(key("anchor"), id));
     }
-    ui.data_mut(|d| d.insert_temp(key("anchor"), id));
-    if m.command {
-        out.actions.push(("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})));
-    } else {
-        out.actions.push(("layer.setCurrent".into(), json!({"id": id.0})));
-    }
+    let mut rows = view.rows.clone();
+    widgets::apply_row_click(&mut rows, &click);
+    out.rows_after_click = Some(rows);
+    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    out.actions.push(match click {
+        widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
+        widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),
+        widgets::RowClick::Range(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "set"})),
+        widgets::RowClick::AddRange(rows) => ("layer.highlight".into(), json!({"ids": ids(&rows), "mode": "add"})),
+    });
 }
 
 /// Whether row `n` can take `drag` inside it.
@@ -105,19 +116,27 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
     }
 }
 
-/// The row of ruler guide `i` on the layer of `item`: a guide mark and its name, the selection
-/// square when it is selected. A click selects the guide; Shift or Cmd adds it to (or takes it
-/// from) the selected guides. A guide on a hidden or locked layer can't be selected or dragged.
+/// The row of ruler guide `i` on the layer of `item`: the guide's own eye and lock, a guide mark
+/// and its name, the selection square when it is selected. The eye and lock hide and lock this
+/// guide alone (`layer.setProps` on its node, one undo step), and take part in a drag down either
+/// column, as other rows do; they work while its layer is hidden or locked, and the guide shows or
+/// can be edited only when its layer allows it too. A click elsewhere selects the guide and leaves
+/// no row highlighted; Shift or Cmd adds it to (or takes it from) the selected guides. Dragged onto
+/// another layer's row the guide goes to that layer, and onto the trash it is deleted. A hidden or
+/// locked guide, or one on a hidden or locked layer, can't be selected or dragged.
 fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let (t, h) = (&view.t, view.h);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    let Some(g) = view.doc.guides.get(i) else { return };
+    let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
     if editable && resp.hovered() {
         ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
     }
     ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    if let Some(node) = g.id.and_then(|id| view.doc.node(id)) {
+        eye_and_lock(ui, view, node, r, out);
+    }
     let mut x = r.left() + 2.0 * COLUMN + 2.0;
     colour_bar(ui, &item.node, r, x, item.colour);
     x += 6.0 + item.depth as f32 * INDENT + 16.0;
@@ -138,14 +157,21 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     }
     if editable && resp.clicked() {
         let m = ui.input(|i| i.modifiers);
+        // The highlighted rows are let go, so Delete then deletes the selected guide (Edit › Clear)
+        // rather than those rows.
+        if !view.rows.is_empty() {
+            out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
+            out.rows_after_click = Some(vec![]);
+        }
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
-    if editable && resp.drag_started() {
+    // Only the primary button drags a guide row, and not while a drag down a column passes it.
+    if editable && resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
         let guides = if selected { view.guides.clone() } else { vec![i] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Guides(guides));
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     // Guides dropped here go to this guide's layer.
@@ -153,6 +179,47 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         && let LayersDrag::Guides(guides) = &*drag
     {
         guide_drop(ui, view, guides, item.node.id, r, &resp, out);
+    }
+}
+
+/// The row of the spine of blend `item` (#4820): a path mark and `<Path>`, the selection square
+/// while the blend is selected. A click selects the blend, whose spine Direct Selection then edits
+/// on the canvas; Shift or Cmd adds it to (or takes it from) the selection. The spine of a hidden
+/// or locked blend can't be selected.
+fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let (t, h) = (&view.t, view.h);
+    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    if editable && resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
+    }
+    ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
+    let mut x = r.left() + 2.0 * COLUMN + 2.0;
+    colour_bar(ui, &item.node, r, x, item.colour);
+    x += 6.0 + item.depth as f32 * INDENT + 16.0;
+    // The path mark: a short diagonal between two anchor dots.
+    let (a, b) = (egui::pos2(x + 2.0, r.center().y + 5.0), egui::pos2(x + 14.0, r.center().y - 5.0));
+    ui.painter().line_segment([a, b], Stroke::new(1.5, t.accent));
+    for p in [a, b] {
+        ui.painter().rect_filled(egui::Rect::from_center_size(p, vec2(3.0, 3.0)), 0.0, t.accent);
+    }
+    x += 22.0;
+    let name = format!("<{}>", tl!("Path"));
+    let color = if item.dim { t.text_dim } else { t.text };
+    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), color);
+    let col_x = r.right() - 43.5;
+    ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
+    if selected {
+        let q = egui::Rect::from_center_size(egui::pos2(r.right() - SQUARE_X, r.center().y), vec2(7.0, 7.0));
+        ui.painter().rect_filled(q, 0.0, item.colour);
+        ui.painter().rect_stroke(q, 0.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
+    }
+    if editable && resp.clicked() {
+        let m = ui.input(|i| i.modifiers);
+        let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
+        out.actions.push((action.into(), json!({"ids": [blend.0]})));
     }
 }
 
@@ -205,6 +272,9 @@ fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: b
 pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     if let Some(i) = item.guide {
         return guide_row(ui, view, item, i, out);
+    }
+    if item.spine {
+        return spine_row(ui, view, item, out);
     }
     let n = &*item.node;
     let (depth, clip_path, has_children, open, color) = (item.depth, item.clip_path, item.opens, item.open, item.colour);
@@ -283,7 +353,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             } else {
                 painted_name(n, &n.display_name(), crate::i18n::current())
             };
-            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, if item.dim { t.text_dim } else { t.text });
+            let text = paint_name(&painter, egui::pos2(x, r.center().y), &shown, font, if item.dim { t.text_dim } else { t.text }, prints_italic(n));
             name_end = text.right();
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
@@ -308,7 +378,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     }
     let sq_resp = ui.interact(egui::Rect::from_center_size(sq, vec2(18.0, h)), ui.scope_id().with(("selsq", n.id.0)), Sense::click_and_drag());
     // Dragging the selected-art square carries the selection to another row.
-    if (is_sel || child_sel) && sq_resp.drag_started() {
+    if (is_sel || child_sel) && sq_resp.drag_started_by(egui::PointerButton::Primary) {
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Art);
     }
     let m = ui.input(|i| i.modifiers);
@@ -341,14 +411,18 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
         });
     });
-    // Dragging rows: the highlighted rows when this is one of them, else this row.
-    if resp.drag_started() && view.column.is_none() {
+    // Dragging rows: the highlighted rows when this is one of them, else this row. Only the primary
+    // button drags; the secondary button opens the row menu, and a drag with it moves nothing.
+    if resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Rows(ids));
         let grab = resp.interact_pointer_pos().map_or(vec2(h, h / 2.0), |p| p - r.min);
-        ui.data_mut(|d| d.insert_temp(key("grab"), (grab, r.width(), depth)));
+        ui.data_mut(|d| {
+            d.insert_temp(key("grab"), (grab, r.width(), depth));
+            d.insert_temp(key("grabbed"), n.id);
+        });
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
@@ -366,8 +440,8 @@ fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
         (false, true) => "layer.lockOthers",
         (false, false) => "layer.unlockAll",
     };
-    // Show All and Unlock All take no rows.
-    let params = if cmd.ends_with("Others") { json!({ "ids": [n.id.0] }) } else { json!({}) };
+    // Show All and Unlock All take no rows; a ruler guide's row names its layer.
+    let params = if cmd.ends_with("Others") { json!({ "ids": [layer_row(n, own).0] }) } else { json!({}) };
     (cmd.into(), params)
 }
 
@@ -377,11 +451,17 @@ fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
 fn outline_others_action(doc: &Document, n: &Node) -> (String, Value) {
     let own = doc.layer_of(n.id);
     if doc.layers.iter().any(|l| Some(l.id) != own && !matches!(l.kind, NodeKind::Layer { preview: false, .. })) {
-        ("layer.outlineOthers".into(), json!({ "ids": [n.id.0] }))
+        ("layer.outlineOthers".into(), json!({ "ids": [layer_row(n, own).0] }))
     } else {
         // Preview All takes no rows.
         ("layer.previewAll".into(), json!({}))
     }
+}
+
+/// The row the layer commands of an Alt-click on row `n`'s eye or lock name: `n` itself, or for a
+/// ruler guide's row the layer `own` that holds the guide (the layer commands refuse a guide).
+fn layer_row(n: &Node, own: Option<NodeId>) -> NodeId {
+    if n.is_ruler_guide() { own.unwrap_or(n.id) } else { n.id }
 }
 
 /// The eye and lock columns of row `n` at `r`.
@@ -431,10 +511,10 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
-    // Dragging down a column gives every row it passes this row's new state.
-    if er.drag_started() {
+    // Dragging down a column with the primary button gives every row it passes this row's new state.
+    if er.drag_started_by(egui::PointerButton::Primary) {
         out.column = Some(Some(ColumnDrag { eye: true, value: !n.visible, ids: vec![n.id.0] }));
-    } else if lr.drag_started() {
+    } else if lr.drag_started_by(egui::PointerButton::Primary) {
         out.column = Some(Some(ColumnDrag { eye: false, value: !n.locked, ids: vec![n.id.0] }));
     } else if let Some(c) = out.column.clone().unwrap_or_else(|| view.column.clone())
         && !c.ids.contains(&n.id.0)
@@ -509,7 +589,10 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
 /// copies it) or the trash.
 fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
     let resp = ui.interact(egui::Rect::from_center_size(c, vec2(16.0, h)), ui.scope_id().with(("target", n.id.0)), Sense::click_and_drag());
-    widgets::drag_source(ui, &resp, || PanelDrag::Appearance(n.id));
+    // Only the primary button carries the appearance away.
+    if resp.drag_started_by(egui::PointerButton::Primary) {
+        egui::DragAndDrop::set_payload(ui.ctx(), PanelDrag::Appearance(n.id));
+    }
     let held = resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(id) if id != n.id));
     if let Some(d) = resp.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(source) = *d
@@ -526,7 +609,7 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     if has_styled_target(n) {
         ui.painter().circle_filled(c, 3.2, t.icon);
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     resp

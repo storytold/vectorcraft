@@ -4,6 +4,7 @@ use std::rc::Rc;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::tests_folder::Folder;
 use crate::{FilePick, Services, theme};
 
 type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
@@ -197,7 +198,7 @@ fn board_files_of(app: &VectorcraftApp, boards: [bool; 4]) -> Vec<Option<String>
 #[test]
 fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
     let (mut app, written, _) = desktop("again.ai");
-    let dir = vectorcraft_testkit::temp_dir("ai-options-enter");
+    let dir = Folder::adopt(vectorcraft_testkit::temp_dir("ai-options-enter"));
     let orig = dir.join("orig.ai");
     std::fs::write(&orig, vectorcraft_testkit::ai::ai(&vectorcraft_testkit::ai::sample_data(), vectorcraft_testkit::ai::page_pdf())).unwrap();
     app.run("document.open", json!({"path": orig.to_string_lossy()})).unwrap();
@@ -215,12 +216,13 @@ fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
 #[test]
 fn save_a_copy_and_template_suggest_their_names() {
     let (mut app, written, picks) = desktop("copy.vectorcraft");
-    let folder = vectorcraft_testkit::temp_dir("save-template-dialog");
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-dialog"));
     app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
     app.run("file.saveCopy", json!({})).unwrap();
     assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
     assert!(app.ui.dialog.is_none(), "the native format has no options");
     assert!(vectorcraft_format::sniff(&written.borrow()[0].1));
+    assert!(vectorcraft_format::pdf_content(&written.borrow()[0].1).is_some());
     assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
     app.run("file.saveAsTemplate", json!({})).unwrap();
     let pick = &picks.borrow()[1];
@@ -236,7 +238,8 @@ fn save_a_copy_and_template_suggest_their_names() {
 #[test]
 fn save_as_template_writes_ait_when_it_is_picked() {
     let (mut app, written, _) = desktop("flyer.ait");
-    app.session.prefs.templates_folder = vectorcraft_testkit::temp_dir("save-template-ait").to_string_lossy().into_owned();
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-ait"));
+    app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
     app.run("file.saveAsTemplate", json!({})).unwrap();
     assert!(app.ui.dialog.is_none(), "a template asks no options");
     let (path, bytes) = written.borrow()[0].clone();
@@ -268,13 +271,26 @@ fn the_ait_template_options_have_no_version_row() {
     assert!(!names("ait").contains(&"aiVersion"), "{:?}", names("ait"));
 }
 
+/// The native options dialog has no row for `precision`, which agents give with the save
+/// command; the rows it has stay.
+#[test]
+fn the_native_options_have_no_precision_row() {
+    for id in ["vectorcraft", "template"] {
+        let f = fileio::format(id).unwrap();
+        assert!(f.options.iter().any(|o| o.name == "precision"), "{id}");
+        let names: Vec<&str> = shown(f).map(|o| o.name).collect();
+        assert!(!names.contains(&"precision") && names.contains(&"version") && names.contains(&"compress"), "{id}: {names:?}");
+    }
+}
+
 /// A name typed in the Save as Template panel with a Save As format's extension has it
 /// replaced with the template's, as Save As replaces the extension of a format it doesn't write.
 #[test]
 fn save_as_template_replaces_a_save_formats_extension() {
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-ext"));
     for (picked, saved) in [("card.pdf", "card.vctemplate"), ("card.vectorcraft", "card.vctemplate"), ("card.svg", "card.vctemplate")] {
         let (mut app, written, _) = desktop(picked);
-        app.session.prefs.templates_folder = vectorcraft_testkit::temp_dir("save-template-ext").to_string_lossy().into_owned();
+        app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
         app.run("file.saveAsTemplate", json!({})).unwrap();
         let (path, bytes) = written.borrow()[0].clone();
         assert_eq!(path, saved, "typed {picked}");
@@ -333,17 +349,254 @@ fn save_as_pdf_asks_with_the_save_pdf_dialog_and_remembers_its_options() {
     assert_eq!(dialog(&app).str("__save"), "file.saveCopy");
 }
 
+/// The `%%BoundingBox` line of an EPS file.
+fn bounding_box(eps: &[u8]) -> String {
+    let ps = std::str::from_utf8(vectorcraft_eps::sections(eps).unwrap().0).unwrap();
+    ps.lines().find(|l| l.starts_with("%%BoundingBox:")).expect("a bounding box").to_string()
+}
+
 #[test]
-fn eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches() {
+fn eps_save_as_shows_use_artboards_off_and_writes_the_art_or_the_artboard() {
     let (mut app, written, _) = desktop("art.eps");
     app.run("file.saveAs", json!({})).unwrap();
     let names: Vec<_> = shown(fileio::format("eps").unwrap()).map(|option| option.name).collect();
-    assert!(!names.contains(&"useArtboards") && !names.contains(&"selectedOnly"));
+    assert!(names.contains(&"useArtboards") && !names.contains(&"selectedOnly") && !names.contains(&"range"), "{names:?}");
     assert!(names.contains(&"previewFormat"));
+    // EPS alone gains the row: the other save formats keep their own checkbox or none.
+    for id in SAVE_FORMATS.iter().chain(TEMPLATE_FORMATS).filter(|id| **id != "eps") {
+        let f = fileio::format(id).unwrap();
+        assert!(!shown(f).any(|o| o.name == "useArtboards") && board_switch(f) != Some("useArtboards"), "{id}");
+    }
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    assert!(text.contains("Use Artboards") && text.contains("All") && text.contains("Range:"), "{text}");
+    assert!(!dialog(&app).bool("useArtboards"), "Use Artboards starts off");
     super::super::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
-    let saved = written.borrow();
-    assert_eq!(saved[0].0, "art.eps");
-    assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+    {
+        let saved = written.borrow();
+        assert_eq!(saved[0].0, "art.eps");
+        assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+        // The box Export writes of the visible art, not the artboard.
+        let exported = app.session.execute("document.export", &json!({"format": "eps"})).unwrap();
+        let exported = vectorcraft_format::base64_decode(exported["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(bounding_box(&saved[0].1), bounding_box(&exported));
+        assert_ne!(bounding_box(&saved[0].1), "%%BoundingBox: 0 0 100 80");
+    }
     assert_eq!(app.session.active().unwrap().format, "eps");
+    // Checked, the artboard is the page, and an artboard remembered from an earlier save doesn't
+    // narrow All.
+    app.run("file.saveAs", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("useArtboards".into(), json!(true));
+    d.fields.insert("artboard".into(), json!(3));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    {
+        let saved = written.borrow();
+        assert_eq!(saved.len(), 2, "one artboard: one file");
+        assert_eq!(bounding_box(&saved[1].1), "%%BoundingBox: 0 0 100 80");
+    }
+    // A save that named an artboard without Use Artboards (as document.save {artboard} does) had
+    // it on: the dialog shows it on, on that artboard, and OK writes the artboard again.
+    let st = app.session.active_mut().unwrap();
+    st.save_options.remove("useArtboards");
+    st.save_options.insert("artboard".into(), json!(0));
+    app.run("file.saveAs", json!({})).unwrap();
+    assert!(dialog(&app).bool("useArtboards"));
+    assert_eq!(dialog(&app).str("range"), "1");
+    super::super::confirm(&mut app).unwrap();
+    let saved = written.borrow();
+    assert_eq!(saved.len(), 3);
+    assert_eq!(bounding_box(&saved[2].1), "%%BoundingBox: 0 0 100 80");
+}
+
+/// Save As › EPS shows the options of Export's EPS Options: Preview, Overprints, Flattener preset
+/// and PostScript as menus of readable names (not fields holding `tiffColor`, `preserve` and
+/// `medium`), the checkboxes under written labels, and the PostScript level last.
+#[test]
+fn eps_save_options_are_menus_with_readable_names() {
+    let (mut app, _, _) = desktop("art.eps");
+    app.run("file.saveAs", json!({})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    let lines: Vec<&str> = text.lines().collect();
+    for shown in [
+        "Preview:",
+        "TIFF (8-bit Color)",
+        "Transparent",
+        "Opaque",
+        "Overprints:",
+        "Preserve",
+        "Flattener preset:",
+        "Medium Resolution",
+        "Embed Fonts (for other applications)",
+        "Include Linked Files",
+        "Include Document Thumbnails",
+        "Include CMYK PostScript in RGB Files",
+        "Compatible Gradient and Gradient Mesh Printing",
+        "PostScript:",
+        "Language Level 3",
+    ] {
+        assert!(lines.contains(&shown), "{shown:?} in {text}");
+    }
+    for id in ["tiffColor", "preserve", "medium", "Cmyk Post Script", "Preview Format:", "Level:", "Thumbnails"] {
+        assert!(!lines.contains(&id), "{id:?} in {text}");
+    }
+    let at = |s: &str| lines.iter().position(|l| *l == s).unwrap();
+    assert!(at("PostScript:") > at("Compatible Gradient and Gradient Mesh Printing"), "{text}");
+}
+
+/// Every option the save options dialog shows, in every format it serves, has a written label:
+/// none is painted as its name split into words.
+#[test]
+fn save_options_have_written_labels() {
+    // The web's Save As and Save as Template dialogs show the options of every format they pick.
+    let formats = SAVE_FORMATS.iter().map(|id| (*id, "file.saveAs")).chain(TEMPLATE_FORMATS.iter().map(|id| (*id, "file.saveAsTemplate")));
+    for (id, command) in formats {
+        let (mut app, _) = web();
+        app.run(command, json!({})).unwrap();
+        let mut d = app.ui.dialog.take().unwrap();
+        switch_format(&mut app, &mut d, id);
+        app.ui.dialog = Some(d);
+        assert_eq!((dialog(&app).kind.as_str(), dialog(&app).str("format").as_str()), (KIND, id));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+        let f = fileio::format(id).unwrap();
+        for o in shown(f) {
+            let written = written_label(o);
+            assert!(written.is_some(), "{id}: {} has no written label", o.name);
+            let split = form::humanize(o.name);
+            let split = split.trim_end_matches(':');
+            assert!(
+                written.as_deref().map(|w| w.trim_end_matches(':')) == Some(split) || !text.lines().any(|l| l == split),
+                "{id}: {split:?} in {text}"
+            );
+        }
+    }
+}
+
+/// A pick from an EPS menu saves the option's value: the id, the level as a number, a saved
+/// flattener preset by its name. The file is written with them.
+#[test]
+fn picking_eps_menu_items_saves_their_values() {
+    let (mut app, written, _) = desktop("art.eps");
+    app.session.prefs.flattener_presets.push(vectorcraft_engine::cmd::FlattenerPreset {
+        name: "Mine".into(),
+        options: vectorcraft_engine::cmd::FlattenOptions::preset("low").unwrap(),
+    });
+    app.run("file.saveAs", json!({})).unwrap();
+    let f = fileio::format("eps").unwrap();
+    let mut d = app.ui.dialog.take().unwrap();
+    for (name, pick, value) in [
+        ("previewFormat", "None", json!("none")),
+        ("overprints", "Discard", json!("discard")),
+        ("flattenerPreset", "Mine", json!("Mine")),
+        ("level", "Language Level 2", json!(2)),
+    ] {
+        let o = f.options.iter().find(|o| o.name == name).unwrap();
+        let c = choices(&app, f, o, &Value::Null).unwrap_or_else(|| panic!("{name} is a menu"));
+        let i = c.names.iter().position(|n| n == pick).unwrap_or_else(|| panic!("{pick} in {name}: {:?}", c.names));
+        choose(&mut d, o, &c, i);
+        assert_eq!(d.fields[name], value, "{name}");
+        assert_eq!(choices(&app, f, o, &value).unwrap().at, Some(i), "{name}: the menu shows the pick");
+    }
+    // The built-in presets come first, by id. A value picks the entry the save reads it as: a
+    // preset by id or name in any case, a level by its digits, a preview or overprint by id only.
+    let at = |name: &str, value: Value| {
+        let o = f.options.iter().find(|o| o.name == name).unwrap();
+        choices(&app, f, o, &value).unwrap().at
+    };
+    let o = f.options.iter().find(|o| o.name == "flattenerPreset").unwrap();
+    let c = choices(&app, f, o, &Value::Null).unwrap();
+    assert_eq!(c.values, [json!("high"), json!("medium"), json!("low"), json!("Mine")]);
+    assert_eq!((c.builtins, c.at), (3, None));
+    assert_eq!(
+        (at("flattenerPreset", json!("MEDIUM RESOLUTION")), at("flattenerPreset", json!("mine")), at("flattenerPreset", json!("Other"))),
+        (Some(1), Some(3), None)
+    );
+    assert_eq!((at("level", json!("level2")), at("level", json!(3)), at("level", json!(4))), (Some(0), Some(1), None));
+    assert_eq!((at("previewFormat", json!("TIFFBW")), at("previewFormat", json!("TIFF (8-bit Color)"))), (Some(1), None));
+    assert_eq!((at("overprints", json!("Discard")), at("overprints", json!("keep"))), (Some(1), None));
+    app.ui.dialog = Some(d);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "saved: {}", app.ui.status);
+    let saved = &app.session.active().unwrap().save_options;
+    for (name, value) in [("previewFormat", json!("none")), ("overprints", json!("discard")), ("flattenerPreset", json!("Mine")), ("level", json!(2))]
+    {
+        assert_eq!(saved[name], value, "{name}");
+    }
+    let bytes = written.borrow()[0].1.clone();
+    let (ps, preview) = vectorcraft_eps::sections(&bytes).unwrap();
+    assert!(preview.is_none(), "no preview");
+    assert!(String::from_utf8_lossy(ps).contains("%%LanguageLevel: 2"));
+}
+
+/// Save As › EPS: Transparent and Opaque apply to the color TIFF preview only, and are disabled
+/// with any other preview. Embed Fonts shows checked and disabled. A flattener preset that no
+/// entry of the menu names shows as it is.
+#[test]
+fn eps_save_transparency_follows_the_color_preview() {
+    use crate::widgets::accessibility_tests::{named, role_and_state, tree};
+    use egui::accesskit::Toggled;
+    let (mut app, _, _) = desktop("art.eps");
+    app.run("file.saveAs", json!({})).unwrap();
+    let set = |app: &mut VectorcraftApp, k: &str, v: Value| {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    };
+    set(&mut app, "previewFormat", json!("tiffColor"));
+    set(&mut app, "transparentPreview", json!(false));
+    let t = tree(|ui| super::super::show(&mut app, ui.ctx()));
+    assert!(!named(&t, "Transparent").is_disabled() && !named(&t, "Opaque").is_disabled());
+    assert_eq!((role_and_state(&t, "Transparent").1, role_and_state(&t, "Opaque").1), (Some(Toggled::False), Some(Toggled::True)));
+    let fonts = named(&t, "Embed Fonts (for other applications)");
+    assert_eq!((fonts.is_disabled(), fonts.toggled()), (true, Some(Toggled::True)));
+    for preview in ["none", "tiffBw"] {
+        set(&mut app, "previewFormat", json!(preview));
+        let t = tree(|ui| super::super::show(&mut app, ui.ctx()));
+        assert!(named(&t, "Transparent").is_disabled() && named(&t, "Opaque").is_disabled(), "{preview}");
+    }
+    set(&mut app, "flattenerPreset", json!("Gone"));
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    assert!(text.lines().any(|l| l == "Gone"), "{text}");
+}
+
+/// #4931: a native file's Version is a menu of the versions VectorCraft writes, the current one
+/// first and chosen, each named by the releases that read it. An older version without
+/// compression saves plain, whatever Use Compression held.
+#[test]
+fn native_version_is_a_menu_of_the_versions_vectorcraft_writes() {
+    let listed: Vec<u32> = NATIVE_VERSIONS.iter().map(|(n, _)| *n).collect();
+    let writable: Vec<u32> = (vectorcraft_format::MIN_VERSION..=vectorcraft_format::VERSION).rev().collect();
+    assert_eq!(listed, writable, "every version VectorCraft writes, newest first");
+    let (mut app, written, _) = desktop("art.vectorcraft");
+    assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    assert!(text.contains("VectorCraft 0.8 and later (version 4)"), "{text}");
+    assert_eq!(native_version_of(dialog(&app)), vectorcraft_format::VERSION);
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("version".into(), json!(2));
+    d.fields.insert("compress".into(), json!(true));
+    assert!(uncompressed(d));
+    frame(&mut app, true);
+    assert!(app.ui.dialog.is_none(), "saved: {}", app.ui.status);
+    let (_, bytes) = written.borrow()[0].clone();
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(200)]).to_string();
+    assert!(head.contains("\"version\": 2") || head.contains("\"version\":2"), "{head}");
+}
+
+/// #4933: a save refused before anything is written (here a version agents can still set) says
+/// so in the "Can't save" alert, in the reason's words without the command's, and writes nothing.
+#[test]
+fn a_refused_save_says_so_in_an_alert() {
+    let (mut app, written, _) = desktop("art.vectorcraft");
+    assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+    app.ui.dialog.as_mut().unwrap().fields.insert("version".into(), json!(55));
+    frame(&mut app, false);
+    frame(&mut app, true);
+    let d = dialog(&app);
+    assert_eq!(
+        (d.kind.as_str(), d.str("message").as_str(), d.str("detail").as_str()),
+        (crate::dialogs::confirm::MESSAGE, "Can't save “art.vectorcraft”.", "can't save version 55: VectorCraft writes versions 1 to 4")
+    );
+    assert!(written.borrow().is_empty());
+    let st = app.session.active().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "not saved");
 }

@@ -176,7 +176,8 @@ impl<'a> Scene<'a> {
     }
 
     fn node(&mut self, n: &Node, force: bool) {
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        // Ruler guides draw on screen only: no record and no loss warning.
+        if n.is_ruler_guide() || n.is_template() {
             return;
         }
         if !force && !n.visible {
@@ -212,13 +213,14 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
+                    && let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n)
+                    && let Some(art) =
+                        if self.clips { self.doc.place_symbol_art(symbol, &art, *xf) } else { self.doc.place_symbol_art_unclipped(symbol, &art, *xf) }
                 {
-                    let mut art = (*sym.art).clone();
-                    art.transform(*xf, false);
                     self.nest += 1;
                     self.node(&art, true);
                     self.nest -= 1;
@@ -236,6 +238,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.opacity = opacity;
     }
@@ -407,18 +411,19 @@ impl<'a> Scene<'a> {
         let (cols, rows) = (along(area.width()), along(area.height()));
         let pixels: Vec<u8> = if g.gradient.kind == GradientKind::Freeform {
             let Some(b) = painted_box(bounds) else { return };
-            let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
-            field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
+            let field = g.freeform_on(b).model_field(spread_scale(b));
+            field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
         } else {
             let geom = g.resolve(bounds);
+            let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
             let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
             (0..usize::from(rows) * usize::from(cols))
                 .flat_map(|i| {
                     let (x, y) = (i % usize::from(cols), i / usize::from(cols));
                     let p = Point::new(area.x0 + (x as f64 + 0.5) * cw, area.y0 + (y as f64 + 0.5) * ch);
-                    let t = geom.param_at(g.gradient.kind, p);
+                    let t = spread(geom.param_at(g.gradient.kind, p));
                     let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
-                    let (c, a) = g.gradient.sample(t as f32);
+                    let (c, a) = sample(t as f32);
                     c.to_rgba8(a)
                 })
                 .collect()

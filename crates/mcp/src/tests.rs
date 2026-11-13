@@ -45,10 +45,62 @@ fn text_of(result: &Value) -> String {
     result["content"].as_array().unwrap().iter().filter(|c| c["type"] == "text").map(|c| c["text"].as_str().unwrap().to_string()).collect()
 }
 
-fn tmp(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir.join(name)
+/// A test's own folder under the temp dir, `vectorcraft-mcp-<tag>-<pid>`, made empty when created
+/// and removed with everything in it when dropped, also when the test panics. A removal that fails
+/// (a file still open) is ignored.
+struct TempFolder(std::path::PathBuf);
+
+impl TempFolder {
+    fn new(tag: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    /// The path of `name` in the folder.
+    fn file(&self, name: &str) -> std::path::PathBuf {
+        self.0.join(name)
+    }
+}
+
+impl std::ops::Deref for TempFolder {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempFolder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A `TempFolder` starts empty, and dropping it removes it with the files and folders in it, also
+/// when the test that holds it panics.
+#[test]
+fn temp_folders_start_empty_and_are_removed_when_dropped() {
+    let leftover = std::env::temp_dir().join(format!("vectorcraft-mcp-drop-check-{}", std::process::id()));
+    std::fs::create_dir_all(&leftover).unwrap();
+    std::fs::write(leftover.join("old.txt"), b"old").unwrap();
+    let dir = TempFolder::new("drop-check");
+    assert_eq!(std::fs::read_dir(&*dir).unwrap().count(), 0, "a leftover folder is emptied");
+    std::fs::write(dir.file("a.txt"), b"a").unwrap();
+    std::fs::create_dir(dir.file("sub")).unwrap();
+    std::fs::write(dir.file("sub").join("b.txt"), b"b").unwrap();
+    let path = dir.to_path_buf();
+    drop(dir);
+    assert!(!path.exists(), "{} is removed", path.display());
+
+    let panicked = std::panic::catch_unwind(|| {
+        let dir = TempFolder::new("panic-check");
+        std::fs::write(dir.file("a.txt"), b"a").unwrap();
+        panic!("the test fails with {} in use", dir.display());
+    });
+    assert!(panicked.is_err());
+    let path = std::env::temp_dir().join(format!("vectorcraft-mcp-panic-check-{}", std::process::id()));
+    assert!(!path.exists(), "{} is removed after a panic", path.display());
 }
 
 // ---------- framing ----------
@@ -209,15 +261,84 @@ fn tool_schemas_are_valid() {
         "export",
         "undo",
         "redo",
+        "command_list",
+        "command_run",
+        "command_batch",
+        "doc_inspect",
+        "render_preview",
+        "ui_inspect",
+        "ui_screenshot",
+        "type_text",
+        "answer_dialog",
+        "add_text",
+        "apply_effect",
+        "pathfinder",
+        "transform",
+        "create_graph",
+        "text_wrap",
     ] {
         assert!(names.contains(want), "missing tool {want}");
     }
+    assert_eq!(tools.len(), 33, "parity docs and #6460 expect 33 MCP tools");
+}
+
+/// Headless `command_list` must expose engine commands that a stale release CLI used to omit (#6460).
+#[test]
+fn headless_command_list_includes_post_022_engine_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "actionSet.read",
+        "engine.apiReference",
+        "script.run",
+        "script.stop",
+        "text.spelling.check",
+        "document.move",
+        "document.compare",
+        "edit.newDocumentFromState",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 10 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|c| c["id"] == *id), "missing {id} in {list}");
+    }
+}
+
+/// Headless `command_list` lists desktop UI commands with `ui: true` (#6460).
+#[test]
+fn headless_command_list_includes_ui_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "addon.arrange.zoomSelection",
+        "file.newDialog",
+        "view.fitArtboard",
+        "view.rotateReset",
+        "app.quit",
+        "window.arrange.tile",
+        "align.horizontalLeft",
+        "ui.action.play",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 20 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        let entry = list.as_array().unwrap().iter().find(|c| c["id"] == *id).unwrap_or_else(|| panic!("missing {id} in {list}"));
+        assert_eq!(entry["ui"], true, "{entry}");
+    }
+    let r = call(&mut s, 40, "command_run", json!({"id": "view.fitArtboard", "params": {}}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("--connect"), "{r}");
 }
 
 // ---------- headless end-to-end ----------
 
 #[test]
 fn headless_end_to_end() {
+    let dir = TempFolder::new("headless-end-to-end");
     let mut s = server();
     rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
     s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
@@ -266,7 +387,7 @@ fn headless_end_to_end() {
     assert_eq!(call(&mut s, 44, "doc_inspect", json!({"ids": [999_999]}))["isError"], true);
 
     // Screenshot returns image content (base64 PNG) and text.
-    let shot_path = tmp("shot.png");
+    let shot_path = dir.file("shot.png");
     let r = call(&mut s, 5, "screenshot", json!({"path": shot_path.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
     let img = r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").expect("image content");
@@ -276,14 +397,14 @@ fn headless_end_to_end() {
     assert_eq!(std::fs::read(&shot_path).unwrap(), png);
 
     // Export SVG.
-    let svg_path = tmp("out.svg");
+    let svg_path = dir.file("out.svg");
     let r = call(&mut s, 6, "export", json!({"path": svg_path.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
     let svg = std::fs::read_to_string(&svg_path).unwrap();
     assert!(svg.contains("<svg") && (svg.contains("<rect") || svg.contains("<path")), "{svg}");
 
     // Save native, open it back.
-    let dc = tmp("out.vectorcraft");
+    let dc = dir.file("out.vectorcraft");
     assert_eq!(call(&mut s, 7, "save_file", json!({"path": dc.to_str().unwrap()}))["isError"], false);
     let r = call(&mut s, 8, "open_file", json!({"path": dc.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
@@ -291,9 +412,9 @@ fn headless_end_to_end() {
     assert_eq!(r["isError"], false, "{r}");
 
     // PDF and PDF-compatible .ai open headless too.
-    let pdf_path = tmp("out.pdf");
+    let pdf_path = dir.file("out.pdf");
     assert_eq!(call(&mut s, 20, "export", json!({"path": pdf_path.to_str().unwrap()}))["isError"], false);
-    let ai_path = tmp("out.ai");
+    let ai_path = dir.file("out.ai");
     std::fs::copy(&pdf_path, &ai_path).unwrap();
     for (id, p) in [(21, &pdf_path), (22, &ai_path)] {
         let r = call(&mut s, id, "open_file", json!({"path": p.to_str().unwrap()}));
@@ -304,7 +425,7 @@ fn headless_end_to_end() {
 
     // Resources.
     let v = rpc(&mut s, 10, "resources/list", json!({}));
-    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 3);
+    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 4);
     let v = rpc(&mut s, 11, "resources/read", json!({"uri": "vectorcraft://document"}));
     let text = v["result"]["contents"][0]["text"].as_str().unwrap();
     assert!(serde_json::from_str::<Value>(text).unwrap()["layers"].is_array());
@@ -318,9 +439,10 @@ fn headless_end_to_end() {
 /// succeeds, the expanded trace holds no image, and its paths keep the image's colors.
 #[test]
 fn trace_and_style_prompt_steps_run_in_order() {
+    let dir = TempFolder::new("trace-and-style");
     let mut s = server();
     // 60 × 40 pixels: a red and a blue block on white.
-    let png = tmp("trace-and-style.png");
+    let png = dir.file("trace-and-style.png");
     image::RgbImage::from_fn(60, 40, |x, y| match (x, y) {
         (5..25, 5..35) => image::Rgb([220, 30, 30]),
         (35..55, 5..35) => image::Rgb([30, 60, 200]),
@@ -373,8 +495,9 @@ fn trace_and_style_prompt_steps_run_in_order() {
 /// result, as exports do. The image is a dark disc (r = 30 px) on blue, traced with Ignore White.
 #[test]
 fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
+    let dir = TempFolder::new("trace-views");
     let mut s = server();
-    let png = tmp("trace-views.png");
+    let png = dir.file("trace-views.png");
     image::RgbImage::from_fn(100, 100, |x, y| {
         let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
         if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
@@ -422,6 +545,7 @@ fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
 
 #[test]
 fn headless_path_gesture_undo() {
+    let dir = TempFolder::new("path-gesture-undo");
     let mut s = server();
     let count = |s: &mut Server| -> u64 {
         let r = call(s, 90, "inspect_document", json!({}));
@@ -475,9 +599,9 @@ fn headless_path_gesture_undo() {
     assert_eq!(r["isError"], false, "{r}");
     let r = call(&mut s, 11, "select_tool", json!({"tool": "pen"}));
     assert_eq!(r["isError"], false, "{r}");
-    let r = call(&mut s, 12, "export", json!({"path": tmp("x.png").to_str().unwrap(), "scale": 0.5}));
+    let r = call(&mut s, 12, "export", json!({"path": dir.file("x.png").to_str().unwrap(), "scale": 0.5}));
     assert_eq!(r["isError"], false, "{r}");
-    assert_eq!(&std::fs::read(tmp("x.png")).unwrap()[..4], b"\x89PNG");
+    assert_eq!(&std::fs::read(dir.file("x.png")).unwrap()[..4], b"\x89PNG");
 }
 
 /// A hover's reply comes once the tool's highlight is ready, also when the tool finds it on another
@@ -498,6 +622,15 @@ fn headless_hover_waits_for_the_shape_builder_map() {
     assert!(!r.is_error, "{r:?}");
     assert!(!h.session.tool_waiting());
     assert!(!h.session.overlays(h.view).is_empty(), "the region under the pointer is highlighted");
+    // A click's reply comes once the merge the tool computes on another thread is applied, with
+    // the selection after it.
+    let click = json!({"events": [{"kind": "down", "x": 115, "y": 110}, {"kind": "up", "x": 115, "y": 110}]});
+    let r = crate::call_tool(&mut h, "pointer_gesture", &click);
+    assert!(!r.is_error, "{r:?}");
+    assert!(!h.session.tool_waiting() && !h.session.tool_editing());
+    let text: String = r.content.iter().filter_map(|c| c["text"].as_str()).collect();
+    let reply: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(reply["selection"].as_array().map(Vec::len), Some(41), "the overlap and the 40 squares, two of them cut: {reply}");
 }
 
 /// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
@@ -709,6 +842,18 @@ fn errors_are_tool_results_not_crashes() {
 
 /// A fake control server: answers `document.inspect`, echoes `engine.execute`, errors otherwise.
 fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_refusing_confirm(None)
+}
+
+/// [`fake_app`], answering `ui.dialog.confirm` with the error `refusal` when one is given.
+fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_with(refusal, true)
+}
+
+/// [`fake_app_refusing_confirm`]. With `answers_in_set`, `ui.dialog.set {action}` also confirms or
+/// cancels the dialog and replies `{dialog, result}`, as the app does; without it the set ignores
+/// `action`, as an app that predates it does.
+fn fake_app_with(refusal: Option<&'static str>, answers_in_set: bool) -> (String, std::thread::JoinHandle<Vec<Value>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -724,6 +869,18 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
                 "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                "ui.dialog.set" if answers_in_set && msg["params"].get("action").is_some() => {
+                    let dialog = json!({"echo": {"fields": msg["params"]["fields"]}});
+                    match msg["params"]["action"].as_str() {
+                        Some("confirm") if refusal.is_some() => json!({"ok": false, "error": refusal}),
+                        Some("confirm") => json!({"ok": true, "result": {"dialog": dialog, "result": {"echo": {}}}}),
+                        _ => {
+                            dialog_open = false;
+                            json!({"ok": true, "result": {"dialog": dialog, "result": null}})
+                        }
+                    }
+                }
+                "ui.dialog.confirm" if refusal.is_some() => json!({"ok": false, "error": refusal}),
                 m if m.starts_with("ui.dialog.") => {
                     dialog_open &= m != "ui.dialog.cancel";
                     json!({"ok": true, "result": {"echo": msg["params"]}})
@@ -760,8 +917,10 @@ fn remote_forwards_methods() {
     assert_eq!(seen[1]["params"], json!({"command": "object.group", "params": {}}));
 }
 
+/// Fields and `action` go to the app in one `ui.dialog.set`, so the dialog the fields are set in is
+/// the one confirmed or canceled.
 #[test]
-fn answer_dialog_sets_fields_in_order_then_confirms() {
+fn answer_dialog_sets_fields_in_order_and_confirms_in_one_request() {
     let (addr, h) = fake_app();
     let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
     let set = json!([{"field": "discard", "value": true}, {"field": "note"}]);
@@ -770,7 +929,11 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
     let fields = json!([{"field": "discard", "value": true}, {"field": "note", "value": null}]);
     assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": {"echo": {}}}));
-    let r = call(&mut s, 2, "answer_dialog", json!({"action": "cancel"}));
+    let r = call(&mut s, 2, "answer_dialog", json!({"set": set}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": null}));
+    let r = call(&mut s, 3, "answer_dialog", json!({"action": "cancel"}));
     assert_eq!(r["isError"], false, "{r}");
     // Bad arguments are refused before anything reaches the app.
     for (i, args) in [
@@ -792,8 +955,26 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     drop(s);
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
-    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm", "ui.dialog.cancel"]);
-    assert_eq!(seen[0]["params"], json!({"fields": fields}));
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.set", "ui.dialog.cancel"]);
+    assert_eq!(seen[0]["params"], json!({"fields": fields, "action": "confirm"}));
+    assert_eq!(seen[1]["params"], json!({"fields": fields}));
+}
+
+/// An app whose `ui.dialog.set` predates `action` replies with the dialog alone; the dialog is
+/// then confirmed with its own `ui.dialog.confirm`.
+#[test]
+fn answer_dialog_confirms_separately_when_the_app_set_did_not_answer() {
+    let (addr, h) = fake_app_with(None, false);
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "copy", "value": true}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": set, "action": "confirm"}}, "result": {"echo": {}}}));
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
 }
 
 /// When the app refuses the `ui.dialog.set`, the call is an error and nothing is confirmed.
@@ -811,7 +992,24 @@ fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
     assert_eq!(methods, ["ui.dialog.cancel", "ui.dialog.set"], "one set call, refused, and no confirm");
-    assert_eq!(seen[1]["params"], json!({"fields": set}));
+    assert_eq!(seen[1]["params"], json!({"fields": set, "action": "confirm"}));
+}
+
+/// The app refuses to confirm a plug-in's install approval for automation: the call is an error
+/// with the app's reason, and nothing else is sent that could install the module.
+#[test]
+fn answer_dialog_reports_that_the_app_refuses_to_approve_a_plugin_install() {
+    let refusal = "Only the person at the keyboard can approve installing a plug-in";
+    let (addr, h) = fake_app_refusing_confirm(Some(refusal));
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "__params", "value": {"dataBase64": "AAAA"}}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains(refusal), "{r}");
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set"]);
 }
 
 #[test]
@@ -932,8 +1130,9 @@ fn relative_to_cwd(p: &std::path::Path) -> Option<std::path::PathBuf> {
 
 #[test]
 fn headless_file_tools_take_relative_paths() {
+    let dir = TempFolder::new("relative-paths");
     let mut s = server();
-    let file = tmp("relative.vectorcraft");
+    let file = dir.file("relative.vectorcraft");
     let Some(rel) = relative_to_cwd(&file) else { return };
     let rel = rel.to_str().unwrap();
     assert!(std::path::Path::new(rel).is_relative());
@@ -1297,8 +1496,55 @@ fn headless_backend_methods() {
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(600), Some(400)));
     let cmds = h.call("engine.commands", json!({})).unwrap();
     assert!(cmds.as_array().unwrap().iter().any(|c| c["id"] == "file.export"));
-    assert!(h.call("ui.tool.list", json!({})).unwrap().is_array());
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
+        assert_eq!(selected["tool"], tool.id);
+    }
     assert!(h.call("ui.resize", json!({})).is_err());
+}
+
+/// The headless key, pointer and screenshot calls refuse a value of the wrong type and change
+/// nothing; omitting it or giving null keeps its default.
+#[test]
+fn headless_methods_refuse_params_of_the_wrong_type() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 300, "height": 200}})).unwrap();
+    h.call("ui.tool.select", json!({"tool": "rectangle"})).unwrap();
+    let before = h.call("document.json", json!({})).unwrap();
+    let drag = |mods: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60, "mods": mods}, {"kind": "up", "x": 60, "y": 60}]});
+    let after_rect = |last: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60}, {"kind": "up", "x": 60, "y": 60}, last]});
+    for (method, params, key) in [
+        ("ui.render", json!({"artboard": "0"}), "artboard"),
+        ("ui.render", json!({"scale": "2"}), "scale"),
+        ("ui.render", json!({"traceViews": 1}), "traceViews"),
+        ("ui.screenshot", json!({"data": "yes", "path": "x.png"}), "data"),
+        ("ui.key", json!({"key": "Delete", "shift": "true"}), "shift"),
+        ("ui.pointer", drag(json!({"shift": "yes"})), "mods"),
+        ("ui.pointer", json!({"mods": 1, "events": []}), "mods"),
+        ("ui.pointer", drag(json!([true])), "mods"),
+        // A whole rectangle comes before the malformed event, and none of it is drawn.
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": "bad", "y": 0})), "x"),
+        ("ui.pointer", after_rect(json!({"kind": "wiggle", "x": 0, "y": 0})), "wiggle"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "pressure": "bad"})), "pressure"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "holdMs": true})), "holdMs"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "tiltX": "5"})), "tiltX"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "rotation": [0]})), "rotation"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "space": "screeen"})), "space"),
+    ] {
+        let e = h.call(method, params.clone()).unwrap_err();
+        assert!(e.contains(&format!("`{key}`")), "{method} {params}: {e}");
+    }
+    assert_eq!(h.call("document.json", json!({})).unwrap(), before, "a refused call changes nothing");
+    let r = h.call("ui.render", json!({"artboard": null, "scale": null, "traceViews": null})).unwrap();
+    assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(300), Some(200)));
+    h.call("ui.pointer", drag(Value::Null)).unwrap();
+    assert_ne!(h.call("document.json", json!({})).unwrap(), before, "null mods keep the packet's");
 }
 
 // ---------- workflow tools ----------
@@ -1358,13 +1604,14 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
 #[test]
 fn oversized_screenshot_and_png_export_are_errors() {
     // 16383 pt at the maximum scale (16) is 262 128 px a side: an error result, not a crashed server.
+    let dir = TempFolder::new("oversized-export");
     let mut s = server();
     let r = call(&mut s, 1, "run_command", json!({"command": "file.new", "params": {"width": 16383, "height": 16383}}));
     assert_eq!(r["isError"], false, "{r}");
     let r = call(&mut s, 2, "screenshot", json!({"scale": 16}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(text_of(&r).contains("pixels"), "{r}");
-    let path = tmp("huge.png");
+    let path = dir.file("huge.png");
     let r = call(&mut s, 3, "export", json!({"path": path.to_str().unwrap(), "scale": 16}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(!path.exists());
@@ -1396,6 +1643,112 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(click(&mut s, 6, 225.0, json!({})), json!([]), "path only: the fill doesn't select");
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
+}
+
+#[test]
+fn pointer_gesture_forwards_backquote_on_each_event() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let selected = call(&mut s, 2, "run_command", json!({"command": "select.set", "params": {"ids": [id]}}));
+    assert_eq!(selected["isError"], false, "{selected}");
+    let drag = call(
+        &mut s,
+        3,
+        "pointer_gesture",
+        json!({"tool": "selection", "backquote": true, "events": [
+            {"kind": "down", "x": 125, "y": 125},
+            {"kind": "drag", "x": 145, "y": 125},
+            {"kind": "up", "x": 145, "y": 125}
+        ]}),
+    );
+    assert_eq!(drag["isError"], false, "{drag}");
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let rect = doc["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).unwrap();
+    assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
+}
+
+/// The documented Rotate View calls reach the desktop control methods, preserving document
+/// coordinates and modifiers, and a successful null reset remains a successful MCP response.
+#[test]
+fn rotate_view_calls_forward_to_desktop_control() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct Recording(Rc<RefCell<Vec<(String, Value)>>>);
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.0.borrow_mut().push((method.into(), params));
+            Ok(Value::Null)
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "desktop control contract".into()
+        }
+    }
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let mut s = Server::new(Box::new(Recording(seen.clone())));
+    let selected = call(&mut s, 1, "select_tool", json!({"tool": "rotateView"}));
+    let turned = call(
+        &mut s,
+        2,
+        "pointer_gesture",
+        json!({"events": [
+        {"kind": "down", "x": 300, "y": 150}, {"kind": "drag", "x": 200, "y": 250}, {"kind": "up", "x": 200, "y": 250}
+    ], "mods": {"shift": true}}),
+    );
+    let reset = call(&mut s, 3, "command_run", json!({"id": "view.rotateReset", "params": {}}));
+    for reply in [&selected, &turned, &reset] {
+        assert_eq!(reply["isError"], false, "{reply}");
+    }
+    assert_eq!(text_of(&reset), "null");
+    assert_eq!(
+        *seen.borrow(),
+        vec![
+            ("ui.tool.select".into(), json!({"tool": "rotateView"})),
+            (
+                "ui.pointer".into(),
+                json!({"events": [
+            {"kind": "down", "x": 300, "y": 150, "space": "doc"},
+            {"kind": "drag", "x": 200, "y": 250, "space": "doc"},
+            {"kind": "up", "x": 200, "y": 250, "space": "doc"}
+        ], "mods": {"shift": true}})
+            ),
+            ("engine.execute".into(), json!({"command": "view.rotateReset", "params": {}}))
+        ]
+    );
+}
+
+/// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
+#[test]
+fn pointer_gesture_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let drag = |top: Option<Value>, first: Option<Value>| {
+        let mut down = json!({"kind": "down", "x": 300, "y": 300});
+        if let Some(b) = first {
+            down["backquote"] = b;
+        }
+        let mut a = json!({"tool": "rectangle", "events": [down, {"kind": "drag", "x": 350, "y": 350}, {"kind": "up", "x": 350, "y": 350}]});
+        if let Some(b) = top {
+            a["backquote"] = b;
+        }
+        a
+    };
+    for (n, args) in [drag(Some(json!("true")), None), drag(None, Some(json!(1)))].into_iter().enumerate() {
+        let r = call(&mut s, 2 + n as u64, "pointer_gesture", args);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(text_of(&r).contains("`backquote` must be a boolean"), "{r}");
+    }
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let children = doc["layers"][0]["children"].as_array().unwrap();
+    assert_eq!(children.iter().map(|n| n["id"].as_u64()).collect::<Vec<_>>(), vec![Some(id)], "{doc}");
 }
 
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
@@ -1466,6 +1819,56 @@ fn c_and_f_during_an_arc_gesture_go_to_the_arc_tool() {
     assert_eq!(count(&mut s, 6), before + 1);
     let r = call(&mut s, 7, "press_key", json!({"key": "c"}));
     assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
+}
+
+/// `press_key` with `f`, `v`, `x` and `c` while a rectangular or polar grid is being dragged goes
+/// to the grid tool, and the release draws one grid. With nothing dragged, V is a shortcut again.
+#[test]
+fn f_v_x_and_c_during_a_grid_gesture_go_to_the_grid_tool() {
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({"depth": 0}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["layers"][0]["childCount"].as_u64().unwrap()
+    };
+    for tool in ["rectangularGrid", "polarGrid"] {
+        let mut s = server();
+        let before = count(&mut s, 1);
+        let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+        let r = call(&mut s, 2, "pointer_gesture", json!({"tool": tool, "events": begin}));
+        assert_eq!(r["isError"], false, "{r}");
+        for (id, key) in [(3, "f"), (4, "v"), (5, "x"), (6, "c")] {
+            let r = call(&mut s, id, "press_key", json!({"key": key}));
+            assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool} {key}: {r}");
+        }
+        let r = call(&mut s, 7, "pointer_gesture", json!({"tool": tool, "events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert_eq!(r["isError"], false, "{r}");
+        assert_eq!(count(&mut s, 8), before + 1, "{tool}");
+        let r = call(&mut s, 9, "press_key", json!({"key": "v"}));
+        assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool}: {r}");
+    }
+}
+
+/// Grid letters with Shift reach the grid tool during a drag; with Ctrl, Cmd or Alt they do not.
+#[test]
+fn shifted_grid_letters_during_a_drag_go_to_the_grid_tool() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "pointer_gesture",
+        json!({"tool": "polarGrid", "events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key, mods, tool) in [
+        (2, "v", json!({"shift": true}), true),
+        (3, "f", json!({"ctrl": true}), false),
+        (4, "x", json!({"cmd": true}), false),
+        (5, "c", json!({"cmd": true}), false),
+        (6, "v", json!({"alt": true}), false),
+    ] {
+        let r = call(&mut s, id, "press_key", json!({"key": key, "mods": mods}));
+        let handled = serde_json::from_str::<Value>(&text_of(&r)).ok().is_some_and(|v| v["handledBy"] == "tool");
+        assert_eq!(handled, tool, "{key} {mods}: {r}");
+    }
 }
 
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies
@@ -1659,6 +2062,10 @@ fn drawing_gestures_snap_to_smart_guides() {
         let b = &made["bounds"];
         [&b["x"], &b["y"], &b["width"], &b["height"]].map(|v| v.as_f64().unwrap())
     };
+    // The rectangle drawn first stays selected, and the press lands on its box's corner handle,
+    // which would scale it instead of drawing.
+    let r = call(&mut s, 30, "run_command", json!({"command": "select.none", "params": {}}));
+    assert_eq!(r["isError"], false, "{r}");
     let events = json!([{"kind": "move", "x": 202, "y": 203}, {"kind": "down", "x": 202, "y": 203}, {"kind": "drag", "x": 330, "y": 341}, {"kind": "up", "x": 330, "y": 341}]);
     assert_eq!(bounds(&mut s, 3, events, "rectangle"), [200.0, 200.0, 130.0, 141.0]);
     let r = call(&mut s, 5, "run_command", json!({"command": "select.none", "params": {}}));

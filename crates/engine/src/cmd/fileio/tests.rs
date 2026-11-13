@@ -48,6 +48,19 @@ fn image_of(s: &Session) -> vectorcraft_doc::ImageObject {
     }
 }
 
+/// A path outside a confined request's read roots shows as its file name, after the last `/` or `\`
+/// on every platform; one that ends in no name shows as nothing. Without roots it shows whole.
+#[test]
+fn a_hidden_path_shows_as_its_file_name_on_every_platform() {
+    let windows = "C:\\Users\\someone\\art\\red.png";
+    crate::file_access::confine(Some(&crate::file_access::AutomationRoots::none()), || {
+        for (path, name) in [("/home/someone/art/red.png", "red.png"), (windows, "red.png"), ("/home/someone/..", ""), ("C:\\Users\\someone\\", "")] {
+            assert_eq!(shown_path(path), name, "{path}");
+        }
+    });
+    assert_eq!(shown_path(windows), windows);
+}
+
 #[test]
 fn opens_every_readable_format() {
     let mut s = session(200.0, 100.0, 1);
@@ -366,20 +379,32 @@ fn templates_open_untitled() {
 #[test]
 fn open_exts_cover_every_readable_format() {
     for f in FORMATS.iter().filter(|f| f.read) {
-        for e in f.extensions {
+        for e in read_extensions(f) {
             assert!(OPEN_EXTS.contains(e), "OPEN_EXTS lacks .{e} ({})", f.label);
         }
     }
     for e in OPEN_EXTS {
-        assert!(format(e).is_some_and(|f| f.read), ".{e} in OPEN_EXTS is no readable format");
+        assert!(readable_format(e).is_some(), ".{e} in OPEN_EXTS is no readable format");
     }
     let filters: Vec<_> = open_filters().collect();
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        9 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF and print presets, shortcut sets, scripts, plug-ins"
+        13 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch and graphic style libraries, libraries, flattener, PDF, print, perspective grid and export presets, composite \
+         fonts, shortcut sets, scripts, plug-ins"
     );
+    let at = |label: &str| filters.iter().position(|f| f.0 == label).unwrap_or_else(|| panic!("File › Open has no {label} filter"));
+    let styles: &[&str] = &[vectorcraft_doc::style_libs::STYLES_EXT];
+    assert_eq!(filters[at("Graphic Style Libraries")].1, styles, "File › Open opens graphic style libraries");
+    assert_eq!(at("Graphic Style Libraries"), at("Swatch libraries") + 1, "next to the swatch libraries");
+    assert_eq!(filters[at("Perspective grid presets")].1, crate::cmd::perspgrid::PRESET_EXTS, "File › Open imports perspective grid presets");
+    assert_eq!(at("Perspective grid presets"), at("Print presets") + 1, "among the presets");
+    assert_eq!(at("Export presets"), at("Perspective grid presets") + 1, "among the presets");
+    for e in [vectorcraft_doc::style_libs::STYLES_EXT].iter().chain(crate::cmd::perspgrid::PRESET_EXTS) {
+        assert!(!filters[0].1.contains(e), "All readable files lists documents only, not .{e}");
+    }
+    assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
@@ -390,6 +415,11 @@ fn library_open_filters_list_library_formats_first() {
     assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
     assert!(filters[0].1.contains(&"ase"));
     assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
+    let styles: &'static [&'static str] = std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT);
+    for (label, exts) in [("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS), ("Graphic Style Libraries", styles)] {
+        let filters: Vec<_> = library_open_filters(label, exts).collect();
+        assert_eq!(filters.iter().filter(|f| f.0 == label).count(), 1, "{label} is listed once");
+    }
 }
 
 /// The extensions usage texts list for export: one per writable format, each picking that format
@@ -417,6 +447,7 @@ fn export_extensions_name_every_writable_format() {
             "eps",
             "emf",
             "wmf",
+            "plt",
             "tga",
             "psd"
         ]
@@ -452,13 +483,14 @@ fn formats_query_lists_readers_writers_and_options() {
             "eps",
             "emf",
             "wmf",
+            "hpgl",
             "tga",
             "psd"
         ]
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 
@@ -679,7 +711,9 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
     for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
         let path = d.join(name).to_string_lossy().to_string();
-        let p = json!({"path": path, "compress": compress});
+        // A PDF-compatible file's PDF is dated to the second it is written, so the byte comparison
+        // uses files without one.
+        let p = json!({"path": path, "compress": compress, "pdfCompatible": false});
         let r = s.execute("file.saveCopy", &p).unwrap();
         let written = std::fs::read(&path).unwrap();
         assert_eq!(r["bytes"], written.len(), "{r}");
@@ -689,6 +723,17 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
         assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
         assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
     }
+    // A save with the default options streams a file that carries its PDF.
+    let path = d.join("d.vectorcraft").to_string_lossy().to_string();
+    let p = json!({"path": path});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let written = std::fs::read(&path).unwrap();
+    assert_eq!(r["bytes"], written.len(), "{r}");
+    assert!(vectorcraft_format::pdf_content(&written).is_some());
+    let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    assert!(job.streams());
+    assert!(vectorcraft_format::pdf_content(&job.encode().unwrap().files[0].1).is_some());
     // A writer that fails: the save fails with its error.
     let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
     let job = save_job(&mut s, plan).unwrap();
@@ -703,8 +748,8 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
 }
 
 /// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
-/// values is refused before anything is written; `compress`, `version` or `preview` beside the path of a format that doesn't
-/// read it is named in the warnings.
+/// values is refused before anything is written; `compress`, `version`, `preview` or `precision` beside the path of a format
+/// that doesn't read it is named in the warnings.
 #[test]
 fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let d = tmp_dir("save-options");
@@ -751,6 +796,16 @@ fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
     let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
+    // `precision` is read by native files and templates only.
+    for name in ["p.svg", "p.pdf", "p.ai", "p.eps"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(w.iter().any(|w| w.starts_with("`precision` was not used:")), "{name}: {w:?}");
+    }
+    for name in ["p.vectorcraft", "p.vctemplate"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{name}: {r}");
+    }
     let _ = std::fs::remove_dir_all(&d);
 }
 
@@ -866,4 +921,516 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
     let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
     let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
+}
+
+/// Where the first stored pixel shows once EXIF (or TIFF) `orientation` turns the image, as
+/// (right, bottom): orientations 1 and 5 keep it at the top left, 2 and 6 put it at the top right,
+/// 3 and 7 at the bottom right, 4 and 8 at the bottom left. Values outside 1 to 8 leave it.
+fn first_pixel_at(orientation: u16) -> (bool, bool) {
+    match orientation {
+        2 | 6 => (true, false),
+        3 | 7 => (true, true),
+        4 | 8 => (false, true),
+        _ => (false, false),
+    }
+}
+
+/// A little-endian EXIF block (a TIFF header and directory, as a PNG `eXIf` chunk or a WebP
+/// `EXIF` chunk holds it) with an Orientation of `orientation` and an XResolution and YResolution
+/// of `x` and `y` pixels per inch.
+fn exif_block(orientation: u16, (x, y): (u32, u32)) -> Vec<u8> {
+    let entry = |tag: u16, kind: u16, value: u32| [&tag.to_le_bytes()[..], &kind.to_le_bytes(), &1u32.to_le_bytes(), &value.to_le_bytes()].concat();
+    // Orientation, XResolution, YResolution, ResolutionUnit inches; the two rationals follow.
+    [
+        b"II".as_slice(),
+        &[0x2a, 0, 8, 0, 0, 0],
+        &4u16.to_le_bytes(),
+        &entry(0x0112, 3, u32::from(orientation)),
+        &entry(0x011a, 5, 62),
+        &entry(0x011b, 5, 70),
+        &entry(0x0128, 3, 2),
+        &[0, 0, 0, 0],
+        &[x.to_le_bytes(), 1u32.to_le_bytes(), y.to_le_bytes(), 1u32.to_le_bytes()].concat(),
+    ]
+    .concat()
+}
+
+/// A photo turned a quarter by its EXIF orientation keeps its physical size: the resolution's
+/// axes swap with the pixels', in what Place reports and in the stored image. Every orientation
+/// puts the first stored pixel in its corner once, and the stored image, read again, is not turned
+/// a second time. Values outside 1 to 8 leave the photo as stored.
+#[test]
+fn a_quarter_turn_swaps_the_resolution_axes() {
+    // 48 × 32: the top-left 16 × 16 (one whole JPEG MCU) red, the rest white.
+    let rgb = image::RgbImage::from_fn(48, 32, |x, y| if x < 16 && y < 16 { image::Rgb([220, 0, 0]) } else { image::Rgb([255, 255, 255]) });
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    for orientation in [0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9] {
+        let exif = [b"Exif\0\0".as_slice(), &exif_block(orientation, (300, 150))].concat();
+        // Without a JFIF density the resolution comes from the EXIF block.
+        let mut turned = jpg[..2].to_vec();
+        turned.extend([0xff, 0xe1]);
+        turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+        turned.extend(&exif);
+        turned.extend(&jpg[2..]);
+        let what = format!("orientation {orientation}");
+        assert_eq!(super::ppi::resolution(&turned), Some((300.0, 150.0)), "{what}: as stored");
+        let quarter = (5..=8).contains(&orientation);
+        let (size, ppi) = if quarter { ((32, 48), (150.0, 300.0)) } else { ((48, 32), (300.0, 150.0)) };
+        let img = raster_image(&turned).unwrap();
+        assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
+        assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+        let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+        let red = |x: u32, y: u32| px.get_pixel(x, y)[1] < 80;
+        let (w, h) = size;
+        let corners = [(false, false), (true, false), (true, true), (false, true)];
+        let reds: Vec<_> =
+            corners.into_iter().filter(|&(right, bottom)| red(if right { w - 4 } else { 4 }, if bottom { h - 4 } else { 4 })).collect();
+        assert_eq!(reds, [first_pixel_at(orientation)], "{what}: the first stored pixel's corner");
+        let again = raster_image(&img.blob.bytes).unwrap();
+        assert_eq!(((again.width, again.height), again.ppi), (size, Some(ppi)), "{what}: read again, it isn't turned again");
+    }
+}
+
+/// `tiff` (little-endian) with an Orientation tag (274) of `value`, a SHORT or, when `long`, a
+/// LONG, and, when `y_ppi` is given, a YResolution (283, which `tiff` must have) of that many
+/// pixels per inch: its first directory copied to the end of the file with the tag added in order,
+/// and the header pointing there, so that every other offset in the file still holds.
+fn tiff_oriented(tiff: &[u8], value: u16, long: bool, y_ppi: Option<u32>) -> Vec<u8> {
+    let at = usize::try_from(u32::from_le_bytes(tiff[4..8].try_into().unwrap())).unwrap();
+    let n = usize::from(u16::from_le_bytes([tiff[at], tiff[at + 1]]));
+    let mut entries: Vec<Vec<u8>> = tiff[at + 2..at + 2 + 12 * n].chunks(12).map(<[u8]>::to_vec).collect();
+    let i = entries.iter().position(|e| u16::from_le_bytes([e[0], e[1]]) > 274).unwrap_or(n);
+    let (kind, v) = if long { (4u16, u32::from(value).to_le_bytes()) } else { (3, [value.to_le_bytes(), [0, 0]].concat().try_into().unwrap()) };
+    entries.insert(i, [&274u16.to_le_bytes()[..], &kind.to_le_bytes(), &1u32.to_le_bytes(), &v].concat());
+    let mut out = tiff.to_vec();
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    if let Some(y) = y_ppi {
+        let rational = u32::try_from(out.len()).unwrap();
+        out.extend([y.to_le_bytes(), 1u32.to_le_bytes()].concat());
+        let e = entries.iter_mut().find(|e| u16::from_le_bytes([e[0], e[1]]) == 283).unwrap();
+        e[8..12].copy_from_slice(&rational.to_le_bytes());
+    }
+    let ifd = u32::try_from(out.len()).unwrap();
+    out[4..8].copy_from_slice(&ifd.to_le_bytes());
+    out.extend(u16::try_from(n + 1).unwrap().to_le_bytes());
+    out.extend(entries.concat());
+    out.extend([0; 4]);
+    out
+}
+
+/// TIFFs the image decoder can't read, grayscale with an alpha channel and 1-bit ones compressed
+/// with CCITT Group 3, turn and flip as their Orientation tag says, as the others do (#4284),
+/// whether the tag is a SHORT or a LONG. A quarter turn swaps the resolution's axes.
+#[test]
+fn tiffs_read_without_the_image_decoder_follow_their_orientation() {
+    // 3 × 2 at 150 × 300 ppi, the first pixel black and the rest white, opaque.
+    let gray = hand_tiff(1, 8, &[2], false, &[vec![0, 255, 255, 255, 255, 255], vec![255; 6]]);
+    let rows: Vec<Vec<bool>> = (0..2).map(|y| (0..3).map(|x| x == 0 && y == 0).collect()).collect();
+    let g = vectorcraft_testkit::tiff::Group3 {
+        rows: &rows,
+        compression: 2,
+        t4_options: 0,
+        photometric: 0,
+        fill_order: 1,
+        rows_per_strip: 2,
+        tile: None,
+        rtc: false,
+    };
+    let fax = vectorcraft_testkit::tiff::group3(&g);
+    // The Group 3 file declares no resolution.
+    for (kind, file, y_ppi) in [("Group 3", fax, None), ("gray with alpha", gray, Some(300))] {
+        assert!(image::load_from_memory(&file).is_err(), "{kind}: the image decoder reads it now");
+        for (orientation, long) in (1..=8).flat_map(|o| [(o, false), (o, true)]) {
+            let what = format!("{kind}, orientation {orientation}, LONG {long}");
+            let img = raster_image(&tiff_oriented(&file, orientation, long, y_ppi)).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let quarter = orientation >= 5;
+            let size = if quarter { (2, 3) } else { (3, 2) };
+            let ppi = y_ppi.map(|y| if quarter { (f64::from(y), 150.0) } else { (150.0, f64::from(y)) });
+            assert_eq!(((img.width, img.height), img.ppi), (size, ppi), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), ppi, "{what}: the stored image");
+            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let (right, bottom) = first_pixel_at(orientation);
+            let (x, y) = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
+            assert_eq!(black, [(x, y)], "{what}: the first stored pixel's corner");
+        }
+    }
+}
+
+/// A CMYK TIFF that its Orientation tag turns or flips keeps its inks, turned, whether it stores
+/// them together or one plane per ink, at 8 or 16 bits; a quarter turn swaps the resolution's axes.
+/// Read again, the stored image is not turned a second time.
+#[test]
+fn cmyk_tiffs_turned_by_their_orientation_keep_their_inks() {
+    // 3 × 2 at 150 × 300 ppi: the first pixel full cyan, the others 30% black.
+    let first: [u8; 4] = [255, 0, 0, 0];
+    let other: [u8; 4] = [0, 0, 0, 77];
+    let channel = |i: usize| -> Vec<u16> { (0..6).map(|p| u16::from(if p == 0 { first[i] } else { other[i] })).collect() };
+    for (bits, planar) in [(8, false), (8, true), (16, false), (16, true)] {
+        let channels: Vec<Vec<u16>> = (0..4).map(|i| channel(i).iter().map(|v| if bits == 16 { v * 257 } else { *v }).collect()).collect();
+        let file = hand_tiff(5, bits, &[], planar, &channels);
+        for orientation in 1..=8 {
+            let what = format!("{bits} bits, planar {planar}, orientation {orientation}");
+            let img = raster_image(&tiff_oriented(&file, orientation, false, Some(300))).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let quarter = orientation >= 5;
+            let size = if quarter { (2, 3) } else { (3, 2) };
+            let ppi = if quarter { (300.0, 150.0) } else { (150.0, 300.0) };
+            assert_eq!(((img.width, img.height), img.ppi, img.blob.mime.as_str()), (size, Some(ppi), "image/tiff"), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+            let inks = img.blob.cmyk().unwrap_or_else(|| panic!("{what}: the inks are lost"));
+            assert_eq!((inks.width, inks.height), size, "{what}: the inks' size");
+            let (right, bottom) = first_pixel_at(orientation);
+            let at = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            for (i, px) in inks.data.chunks(4).enumerate() {
+                let (x, y) = (u32::try_from(i).unwrap() % size.0, u32::try_from(i).unwrap() / size.0);
+                assert_eq!(px, if (x, y) == at { first } else { other }, "{what}: the inks of pixel ({x}, {y})");
+            }
+            let again = raster_image(&img.blob.bytes).unwrap();
+            assert_eq!(((again.width, again.height), again.blob.cmyk()), (size, Some(inks)), "{what}: read again, it isn't turned again");
+        }
+    }
+}
+
+/// A CMYK JPEG that its EXIF orientation turns or flips keeps its inks, turned, stored as a CMYK
+/// TIFF; a quarter turn swaps the resolution's axes. Orientation 1 keeps the JPEG as it is, and
+/// the stored image, read again, is not turned a second time.
+#[test]
+fn cmyk_jpegs_turned_by_their_orientation_keep_their_inks() {
+    use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+    // 48 × 32: the top-left 16 × 16 (one whole JPEG MCU) full cyan, the rest 30% black.
+    let inks: Vec<u8> =
+        (0..32u32).flat_map(|y| (0..48u32).flat_map(move |x| if x < 16 && y < 16 { [255, 0, 0, 0] } else { [0, 0, 0, 77] })).collect();
+    let o = JpegOptions { color_model: ColorModel::Cmyk, embed_icc: false, ..Default::default() };
+    let jpg = jpeg::encode(&inks, 48, 32, 100, None, &o).unwrap();
+    for orientation in 1..=8u16 {
+        let exif = [b"Exif\0\0".as_slice(), &exif_block(orientation, (300, 150))].concat();
+        let mut file = jpg[..2].to_vec();
+        file.extend([0xff, 0xe1]);
+        file.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+        file.extend(&exif);
+        file.extend(&jpg[2..]);
+        let what = format!("orientation {orientation}");
+        let quarter = orientation >= 5;
+        let (size, ppi) = if quarter { ((32, 48), (150.0, 300.0)) } else { ((48, 32), (300.0, 150.0)) };
+        let mime = if orientation == 1 { "image/jpeg" } else { "image/tiff" };
+        let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(((img.width, img.height), img.ppi, img.blob.mime.as_str()), (size, Some(ppi), mime), "{what}");
+        assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+        let inks = img.blob.cmyk().unwrap_or_else(|| panic!("{what}: the inks are lost"));
+        assert_eq!((inks.width, inks.height), size, "{what}: the inks' size");
+        let (w, h) = size;
+        let at = |x: u32, y: u32| inks.data[usize::try_from((y * w + x) * 4).unwrap()..][..4].to_vec();
+        let cyan = |p: &[u8]| p[0] > 200 && p[3] < 40;
+        let corners = [(false, false), (true, false), (true, true), (false, true)];
+        let cyans: Vec<_> =
+            corners.into_iter().filter(|&(right, bottom)| cyan(&at(if right { w - 4 } else { 4 }, if bottom { h - 4 } else { 4 }))).collect();
+        assert_eq!(cyans, [first_pixel_at(orientation)], "{what}: the first stored pixel's corner");
+        let black = at(w / 2, h / 2);
+        assert!(black[0] < 40 && (60..=95).contains(&black[3]), "{what}: the other inks, {black:?}");
+        let again = raster_image(&img.blob.bytes).unwrap();
+        assert_eq!(((again.width, again.height), again.blob.cmyk()), (size, Some(inks)), "{what}: read again, it isn't turned again");
+    }
+}
+
+/// A PNG (its `eXIf` chunk and `pHYs` resolution), a WebP (its `EXIF` chunk) and an RGB TIFF read
+/// by the image decoder, turned a quarter by their orientation, swap their resolution's axes; a
+/// half turn keeps them.
+#[test]
+fn png_webp_and_rgb_tiff_turned_a_quarter_swap_their_resolution() {
+    use image::ImageEncoder as _;
+    let rgb = image::RgbImage::from_fn(3, 2, |x, y| image::Rgb(if x == 0 && y == 0 { [0, 0, 0] } else { [255, 255, 255] }));
+    for orientation in [3u16, 6, 8] {
+        let mut png = Vec::new();
+        let mut enc = image::codecs::png::PngEncoder::new(&mut png);
+        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
+        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let png = super::ppi::with_png_resolution(&png, (150.0, 300.0));
+        let mut webp = Vec::new();
+        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut webp);
+        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
+        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let channel = |c: usize| -> Vec<u16> { rgb.pixels().map(|p| u16::from(p[c])).collect() };
+        let tiff = tiff_oriented(&hand_tiff(2, 8, &[], false, &[channel(0), channel(1), channel(2)]), orientation, false, Some(300));
+        for (kind, file) in [("PNG", png), ("WebP", webp), ("TIFF", tiff)] {
+            let what = format!("{kind}, orientation {orientation}");
+            assert_eq!(super::ppi::resolution(&file), Some((150.0, 300.0)), "{what}: as stored");
+            let quarter = orientation >= 5;
+            let (size, ppi) = if quarter { ((2, 3), (300.0, 150.0)) } else { ((3, 2), (150.0, 300.0)) };
+            let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let (right, bottom) = first_pixel_at(orientation);
+            let at = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
+            assert_eq!(black, [at], "{what}: the first stored pixel's corner");
+        }
+    }
+}
+
+/// A made-up ICC profile of `len` bytes (at least a header's 128) whose header names the color
+/// space `space`; the bytes after the header differ from place to place.
+fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {
+    let mut icc: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+    icc[..4].copy_from_slice(&u32::try_from(len).unwrap().to_be_bytes());
+    icc[12..16].copy_from_slice(b"mntr");
+    icc[16..20].copy_from_slice(space);
+    icc[36..40].copy_from_slice(b"acsp");
+    icc
+}
+
+/// `tiff` (little-endian) with an ICCProfile tag (34675, of type UNDEFINED) holding `icc`: its first
+/// directory copied to the end of the file with the tag added in order, as [`tiff_oriented`] adds
+/// its tag.
+fn tiff_with_icc(tiff: &[u8], icc: &[u8]) -> Vec<u8> {
+    let at = usize::try_from(u32::from_le_bytes(tiff[4..8].try_into().unwrap())).unwrap();
+    let n = usize::from(u16::from_le_bytes([tiff[at], tiff[at + 1]]));
+    let mut entries: Vec<Vec<u8>> = tiff[at + 2..at + 2 + 12 * n].chunks(12).map(<[u8]>::to_vec).collect();
+    let mut out = tiff.to_vec();
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    let data = u32::try_from(out.len()).unwrap();
+    out.extend(icc);
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    let i = entries.iter().position(|e| u16::from_le_bytes([e[0], e[1]]) > 34675).unwrap_or(n);
+    let count = u32::try_from(icc.len()).unwrap();
+    entries.insert(i, [&34675u16.to_le_bytes()[..], &7u16.to_le_bytes(), &count.to_le_bytes(), &data.to_le_bytes()].concat());
+    let ifd = u32::try_from(out.len()).unwrap();
+    out[4..8].copy_from_slice(&ifd.to_le_bytes());
+    out.extend(u16::try_from(n + 1).unwrap().to_le_bytes());
+    out.extend(entries.concat());
+    out.extend([0; 4]);
+    out
+}
+
+/// The ICC profile and pixels of a stored image, read by the image decoder for its format.
+fn stored_pixels(what: &str, img: &RasterImage) -> (Option<Vec<u8>>, image::ExtendedColorType, image::DynamicImage) {
+    use image::ImageDecoder as _;
+    let bytes = Cursor::new(img.blob.bytes.as_slice());
+    let mut d: Box<dyn image::ImageDecoder> = match img.blob.mime.as_str() {
+        "image/png" => Box::new(image::codecs::png::PngDecoder::new(bytes).unwrap()),
+        "image/tiff" => Box::new(image::codecs::tiff::TiffDecoder::new(bytes).unwrap()),
+        other => panic!("{what}: stored as {other}"),
+    };
+    let icc = d.icc_profile().unwrap();
+    let color = d.original_color_type();
+    (icc, color, image::DynamicImage::from_decoder(d).unwrap())
+}
+
+/// An image turned by its orientation and stored as PNG keeps the gray or RGB ICC profile its file
+/// carries, and its 16-bit samples at 16 bits, from a PNG, a JPEG, a WebP and a TIFF; a TIFF the
+/// image decoder reads, stored as PNG without a turn, keeps them too. A profile of another color
+/// space than the samples' is left out.
+#[test]
+fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
+    use image::{DynamicImage, ImageEncoder as _};
+    let (rgb_icc, gray_icc, cmyk_icc) = (icc_profile(b"RGB ", 600), icc_profile(b"GRAY", 300), icc_profile(b"CMYK", 400));
+    // 3 × 2, every sample's low byte different.
+    let rgb16 = image::ImageBuffer::from_fn(3, 2, |x, y| {
+        let v = u16::try_from(x * 0x1111 + y * 0x2345).unwrap();
+        image::Rgb([0x1000 + v, 0x8001 + v, 0xF0F3 - v])
+    });
+    let rgb16 = DynamicImage::ImageRgb16(rgb16);
+    let gray16 = DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(3, 2, |x, y| image::Luma([u16::try_from(x * 0x3001 + y * 0x0107).unwrap()])));
+    let rgb8 = DynamicImage::ImageRgb8(image::RgbImage::from_fn(3, 2, |x, y| image::Rgb([u8::try_from(x * 70 + y * 9).unwrap(), 200, 13])));
+    let png = |img: &DynamicImage, icc: &[u8], orientation: u16| {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::png::PngEncoder::new(&mut out);
+        enc.set_icc_profile(icc.to_vec()).unwrap();
+        enc.set_exif_metadata(exif_block(orientation, (150, 150))).unwrap();
+        img.write_with_encoder(enc).unwrap();
+        out
+    };
+    let webp = {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut out);
+        enc.set_icc_profile(rgb_icc.clone()).unwrap();
+        enc.set_exif_metadata(exif_block(6, (150, 150))).unwrap();
+        rgb8.write_with_encoder(enc).unwrap();
+        out
+    };
+    let tiff = |orientation: Option<u16>| {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::tiff::TiffEncoder::new(Cursor::new(&mut out));
+        enc.set_icc_profile(rgb_icc.clone()).unwrap();
+        rgb16.write_with_encoder(enc).unwrap();
+        match orientation {
+            Some(o) => tiff_oriented(&out, o, false, None),
+            None => out,
+        }
+    };
+    // (what, file, the ICC profile to keep, the pixels as they show, 16 bits)
+    type Case<'a> = (&'a str, Vec<u8>, Option<&'a [u8]>, DynamicImage, bool);
+    let cases: Vec<Case> = vec![
+        ("16-bit RGB PNG, orientation 6", png(&rgb16, &rgb_icc, 6), Some(&rgb_icc), rgb16.rotate90(), true),
+        ("16-bit gray PNG, orientation 8", png(&gray16, &gray_icc, 8), Some(&gray_icc), gray16.rotate270(), true),
+        ("8-bit RGB PNG, orientation 3", png(&rgb8, &rgb_icc, 3), Some(&rgb_icc), rgb8.rotate180(), false),
+        ("RGB PNG with a CMYK profile, orientation 6", png(&rgb8, &cmyk_icc, 6), None, rgb8.rotate90(), false),
+        ("WebP, orientation 6", webp, Some(&rgb_icc), rgb8.rotate90(), false),
+        ("16-bit RGB TIFF, not turned", tiff(None), Some(&rgb_icc), rgb16.clone(), true),
+        ("16-bit RGB TIFF, orientation 6", tiff(Some(6)), Some(&rgb_icc), rgb16.rotate90(), true),
+    ];
+    for (what, file, icc, want, wide) in cases {
+        let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!((img.width, img.height, img.blob.mime.as_str()), (want.width(), want.height(), "image/png"), "{what}");
+        let (kept, color, px) = stored_pixels(what, &img);
+        assert_eq!(kept.as_deref(), icc, "{what}: the ICC profile");
+        assert_eq!(color.bits_per_pixel() / u16::from(color.channel_count()), if wide { 16 } else { 8 }, "{what}: the sample depth");
+        if wide {
+            assert_eq!(px.to_rgb16(), want.to_rgb16(), "{what}: the samples");
+        } else {
+            assert_eq!(px.to_rgb8(), want.to_rgb8(), "{what}: the samples");
+        }
+    }
+    // A JPEG's samples change in encoding; its profile is kept.
+    let mut jpg = Vec::new();
+    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpg, 95);
+    enc.set_icc_profile(rgb_icc.clone()).unwrap();
+    rgb8.write_with_encoder(enc).unwrap();
+    let exif = [b"Exif\0\0".as_slice(), &exif_block(6, (150, 150))].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height, img.blob.mime.as_str()), (2, 3, "image/png"), "JPEG");
+    assert_eq!(stored_pixels("JPEG", &img).0, Some(rgb_icc.clone()), "JPEG: the ICC profile");
+    // Not turned, a PNG keeps its own bytes.
+    let plain = png(&rgb16, &rgb_icc, 1);
+    assert_eq!(raster_image(&plain).unwrap().blob.bytes.as_slice(), plain.as_slice(), "a PNG as taken keeps its bytes");
+}
+
+/// A CMYK TIFF stored again, because it stores one plane per ink or because its orientation turns
+/// it, keeps its ICC profile as tag 34675 and its 8 or 16 bits a sample, exactly; one that stores
+/// its inks together and isn't turned keeps its own bytes.
+#[test]
+fn cmyk_tiffs_written_again_keep_their_icc_profile_and_depth() {
+    use image::DynamicImage;
+    let icc = icc_profile(b"CMYK", 900);
+    // 3 × 2, no black, every sample's low byte different.
+    let ink = |c: usize, p: usize| -> u16 { u16::try_from(0x0101 * (c * 5 + p + 1) + 0x10 * p + c).unwrap() };
+    for bits in [8u16, 16] {
+        let sample = |c: usize, p: usize| match (c, bits) {
+            (3, _) => 0,
+            (_, 16) => ink(c, p),
+            _ => ink(c, p) & 0xFF,
+        };
+        let channels: Vec<Vec<u16>> = (0..4).map(|c| (0..6).map(|p| sample(c, p)).collect()).collect();
+        // The image decoder shows a CMYK pixel without black as 1 - C, 1 - M, 1 - Y, exactly.
+        let full = if bits == 16 { 0xFFFF } else { 0xFF };
+        let shown: Vec<u16> = (0..6).flat_map(|p| (0..3).map(|c| full - channels[c][p]).collect::<Vec<_>>()).collect();
+        let shown = if bits == 16 {
+            DynamicImage::ImageRgb16(image::ImageBuffer::from_raw(3, 2, shown).unwrap())
+        } else {
+            DynamicImage::ImageRgb8(image::RgbImage::from_raw(3, 2, shown.iter().map(|v| u8::try_from(*v).unwrap()).collect()).unwrap())
+        };
+        for planar in [false, true] {
+            let file = tiff_with_icc(&hand_tiff(5, bits, &[], planar, &channels), &icc);
+            for (orientation, want) in [(None, shown.clone()), (Some(6), shown.rotate90()), (Some(3), shown.rotate180())] {
+                let what = format!("{bits} bits, planar {planar}, orientation {orientation:?}");
+                let file = orientation.map_or_else(|| file.clone(), |o| tiff_oriented(&file, o, false, Some(150)));
+                let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+                if orientation.is_none() && !planar {
+                    assert_eq!(img.blob.bytes.as_slice(), file.as_slice(), "{what}: kept as it is");
+                }
+                let (kept, color, px) = stored_pixels(&what, &img);
+                assert_eq!(kept.as_deref(), Some(icc.as_slice()), "{what}: the ICC profile");
+                let depth = if bits == 16 { image::ExtendedColorType::Cmyk16 } else { image::ExtendedColorType::Cmyk8 };
+                assert_eq!(color, depth, "{what}: the sample depth");
+                assert_eq!(px, want, "{what}: the samples");
+            }
+        }
+    }
+}
+
+/// A CMYK JPEG turned by its orientation and stored as a CMYK TIFF keeps its whole ICC profile,
+/// put together from the two APP2 segments a profile larger than one segment is split into.
+#[test]
+fn a_turned_cmyk_jpeg_keeps_its_icc_profile_from_every_segment() {
+    use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+    let icc = icc_profile(b"CMYK", 70_000);
+    let inks: Vec<u8> = (0..16u32 * 8).flat_map(|i| [u8::try_from(i).unwrap(), 0, 0, 40]).collect();
+    let o = JpegOptions { color_model: ColorModel::Cmyk, embed_icc: false, ..Default::default() };
+    let jpg = jpeg::encode(&inks, 16, 8, 100, None, &o).unwrap();
+    let exif = [b"Exif\0\0".as_slice(), &exif_block(6, (300, 300))].concat();
+    let mut file = jpg[..2].to_vec();
+    file.extend([0xff, 0xe1]);
+    file.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    file.extend(&exif);
+    let chunks: Vec<&[u8]> = icc.chunks(65_519).collect();
+    assert_eq!(chunks.len(), 2, "the profile takes two segments");
+    for (i, chunk) in chunks.iter().enumerate() {
+        file.extend([0xff, 0xe2]);
+        file.extend(u16::try_from(chunk.len() + 16).unwrap().to_be_bytes());
+        file.extend(b"ICC_PROFILE\0");
+        file.extend([u8::try_from(i + 1).unwrap(), 2]);
+        file.extend(*chunk);
+    }
+    file.extend(&jpg[2..]);
+    let img = raster_image(&file).unwrap();
+    assert_eq!((img.width, img.height, img.blob.mime.as_str()), (8, 16, "image/tiff"));
+    let (kept, color, _) = stored_pixels("CMYK JPEG", &img);
+    assert_eq!(color, image::ExtendedColorType::Cmyk8);
+    assert!(kept.as_deref() == Some(icc.as_slice()), "the whole ICC profile: {:?} bytes", kept.map(|k| k.len()));
+}
+
+/// With `importer` named, a file up to the importer's limit is read whole and a larger one is an
+/// error, whatever its content.
+#[test]
+fn read_path_for_a_named_importer_stops_at_the_limit() {
+    let limit = vectorcraft_plugins::import::MAX_INPUT_BYTES as u64;
+    let dir = tmp_dir("read-path-limit");
+    let path = dir.join("drawing.tuv");
+    let name = path.to_string_lossy().into_owned();
+    let named = json!({"importer": "plugin.test.notinstalled"});
+    let sized = |len: u64| {
+        std::fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
+        std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(len).unwrap();
+    };
+    for len in [8, 64 << 10, 70_000, limit] {
+        sized(len);
+        assert_eq!(importer::read_path(&name, &named).unwrap().len() as u64, len);
+    }
+    sized(limit + 1);
+    let e = importer::read_path(&name, &named).unwrap_err();
+    assert!(e.to_string().contains("larger than") && e.to_string().contains("drawing.tuv"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// #3084, #2096: Export for Screens writes JPGs a strict reader opens, in every colour model and at
+/// the qualities and scales the reports used. A four-component (CMYK) file has no JFIF segment,
+/// which describes only one- and three-component images (#3140); RGB and gray files keep it.
+#[test]
+fn export_for_screens_jpgs_open_in_every_colour_model() {
+    let mut s = session(100.0, 80.0, 1);
+    s.execute("paint.setFill", &json!({"color": "#cc3300"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+    for (model, components) in [("rgb", 3), ("cmyk", 4), ("gray", 1)] {
+        for quality in [100, 80, 50] {
+            let r = s
+                .execute(
+                    "document.exportForScreens",
+                    &json!({"formats": [{"format": "jpg"}, {"format": "jpg", "scale": 2}], "settings": {"jpg": {"colorModel": model, "quality": quality}}}),
+                )
+                .unwrap();
+            let files = r["files"].as_array().unwrap();
+            assert_eq!(files.len(), 2, "{model} {quality}: {r}");
+            for (f, width) in files.iter().zip([100, 200]) {
+                let bytes = b64(f);
+                let what = format!("{model} q{quality} {}", f["name"]);
+                assert_eq!(bytes.get(..2), Some(&[0xFF, 0xD8][..]), "{what}: starts with SOI");
+                let jfif = bytes.get(2..4) == Some(&[0xFF, 0xE0][..]);
+                assert_eq!(jfif, components != 4, "{what}: JFIF only on one- and three-component files");
+                let image = image::load_from_memory(&bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
+                assert_eq!(image.width(), width, "{what}");
+            }
+        }
+    }
 }

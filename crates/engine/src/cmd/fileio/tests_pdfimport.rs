@@ -147,6 +147,76 @@ fn load_options_read_pages_crop_and_password() {
     assert_eq!(LoadOptions::from_params("x", &Value::Null).unwrap(), LoadOptions::default());
 }
 
+/// `cropTo` (and `crop`), `password`, `colorMode` and `textAs` given as anything but a string are an
+/// error naming the param: `document.open` opens nothing and `file.place` places nothing and records
+/// no undo step. Null is the same as leaving the param out.
+#[test]
+fn pdf_options_of_the_wrong_type_are_refused() {
+    let bytes = three_pages();
+    let wrong = [
+        ("cropTo", json!(5)),
+        ("crop", json!(true)),
+        ("password", json!(123)),
+        ("colorMode", json!(5)),
+        ("textAs", json!(true)),
+        ("textAs", json!(["outlines"])),
+    ];
+    let one = |key: &str, v: &Value| {
+        let mut p = json!({});
+        p[key] = v.clone();
+        p
+    };
+    let mut s = Session::new();
+    for (key, v) in &wrong {
+        let e = open(&mut s, &bytes, one(key, v)).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}` must be a string")), "{key}: {e}");
+        assert!(s.active().is_none(), "{key}: nothing opened");
+    }
+    // A wrong `cropTo` is refused even when `crop` is a box, and a wrong `crop` when `cropTo` is.
+    let e = open(&mut s, &bytes, json!({"cropTo": 2, "crop": "art"})).unwrap_err().to_string();
+    assert!(e.contains("`cropTo` must be a string"), "{e}");
+    let e = open(&mut s, &bytes, json!({"cropTo": "art", "crop": 2})).unwrap_err().to_string();
+    assert!(e.contains("`crop` must be a string"), "{e}");
+    assert!(s.active().is_none(), "nothing opened");
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let nodes = s.doc().unwrap().doc.node_count();
+    for (key, v) in &wrong {
+        let mut p = json!({"name": "pages.pdf", "dataBase64": b64(&bytes)});
+        p[*key] = v.clone();
+        let e = s.execute("file.place", &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}` must be a string")), "{key}: {e}");
+        assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().doc.node_count()), (undo, nodes), "{key}: nothing placed");
+    }
+    // Null is left out; valid strings read as before.
+    let nulls = json!({"cropTo": null, "crop": null, "password": null, "colorMode": null, "textAs": null});
+    assert_eq!(LoadOptions::from_params("x", &nulls).unwrap(), LoadOptions::default());
+    let o = LoadOptions::from_params("x", &json!({"cropTo": null, "crop": "Bleed", "colorMode": "CMYK", "textAs": "outlines"})).unwrap();
+    assert_eq!(
+        (o.crop, o.color_mode, o.text_as),
+        (vectorcraft_pdf::CropTo::Bleed, Some(vectorcraft_doc::ColorMode::Cmyk), vectorcraft_pdf::TextAs::Outlines)
+    );
+}
+
+/// `document.pdfInfo`'s `thumbnailSize` given as anything but a number is an error, with or without
+/// a `thumbnail`; null is 160 px.
+#[test]
+fn pdf_info_refuses_a_thumbnail_size_that_is_not_a_number() {
+    let bytes = three_pages();
+    let mut s = Session::new();
+    for v in [json!("100"), json!(true)] {
+        for p in [json!({"dataBase64": b64(&bytes), "thumbnail": 1, "thumbnailSize": v}), json!({"dataBase64": b64(&bytes), "thumbnailSize": v})] {
+            let e = s.execute("document.pdfInfo", &p).unwrap_err().to_string();
+            assert!(e.contains("`thumbnailSize` must be a number"), "{v}: {e}");
+        }
+    }
+    let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "colorMode": 1})).unwrap_err().to_string();
+    assert!(e.contains("`colorMode` must be a string"), "{e}");
+    let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "thumbnail": 1, "thumbnailSize": null})).unwrap();
+    let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
+    assert_eq!(image::load_from_memory(&png).unwrap().width(), 160);
+}
+
 #[test]
 fn a_postscript_ai_file_says_it_cannot_be_opened_yet() {
     // PostScript opens through the EPS reader now (tests_epsimport.rs): a program it can't read,

@@ -67,6 +67,41 @@ fn png_refuses_a_buffer_of_the_wrong_size() {
     assert!(encode(&[], 0, 0, &PngOptions::default()).is_err());
 }
 
+/// Object › Rasterize's Grayscale and Bitmap images (#6969): a grey PNG of one channel when
+/// opaque and grey and alpha otherwise; Bitmap's black and white as a 1-bit TIFF when opaque,
+/// else as a grey PNG with alpha. Odd widths keep each row on a byte.
+#[test]
+fn gray_and_bilevel_images_store_gray() {
+    let header = |file: &[u8]| (file[24], file[25]);
+    let gray = |file: &[u8]| image::load_from_memory(file).unwrap().to_luma_alpha8().into_raw();
+    // 3 × 2, premultiplied: black, red, light grey; white, mid grey, almost black.
+    let mut img = Rendered {
+        width: 3,
+        height: 2,
+        pixels: [[0, 0, 0], [255, 0, 0], [200; 3], [255; 3], [128; 3], [127; 3]].iter().flat_map(|&[r, g, b]| [r, g, b, 255]).collect(),
+    };
+    let levels: Vec<u8> = [0u8, 54, 200, 255, 128, 127].iter().flat_map(|&g| [g, 255]).collect();
+    let file = img.to_gray_png().unwrap();
+    assert_eq!(header(&file), (8, 0), "8-bit grey");
+    assert_eq!(gray(&file), levels);
+    let (mime, file) = img.to_bilevel(150.0).unwrap();
+    assert_eq!(mime, "image/tiff");
+    let mut d = ::tiff::decoder::Decoder::new(std::io::Cursor::new(&file)).unwrap();
+    assert_eq!(d.colortype().unwrap(), ::tiff::ColorType::Gray(1));
+    let bw: Vec<u8> = [0u8, 0, 255, 255, 255, 0].iter().flat_map(|&g| [g, 255]).collect();
+    assert_eq!(gray(&file), bw, "from 128 up is white");
+    // Half-covered white over the light grey; a clear pixel is white.
+    img.pixels[8..12].copy_from_slice(&[100, 100, 100, 100]);
+    img.pixels[20..24].copy_from_slice(&[0; 4]);
+    let file = img.to_gray_png().unwrap();
+    assert_eq!(header(&file), (8, 4), "grey and alpha");
+    assert_eq!(gray(&file), [0, 255, 54, 255, 255, 100, 255, 255, 128, 255, 255, 0]);
+    let (mime, file) = img.to_bilevel(150.0).unwrap();
+    assert_eq!((mime, header(&file)), ("image/png", (8, 4)), "no 1-bit grey with alpha");
+    assert_eq!(gray(&file), [0, 255, 0, 255, 255, 100, 255, 255, 255, 255, 255, 0], "still black and white");
+    assert!(super::png::encode_gray(&levels[..10], 3, 2, &PngOptions::default()).is_err());
+}
+
 /// A 40×30 pt document with a black circle off the pixel grid.
 fn circle_doc() -> Document {
     let mut d = Document::new(40.0, 30.0);
@@ -236,7 +271,7 @@ fn art_bounds_take_in_the_effects_in_a_symbols_art() {
     let mut art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), black);
     let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 8, "y": 0, "blur": 0}), visible: true };
     art.appearance.effects.push(shadow);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Box".into(), art: std::sync::Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Box".into(), art: std::sync::Arc::new(art) });
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = vectorcraft_geom::Affine::translate((20.0, 20.0));
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf })).unwrap();

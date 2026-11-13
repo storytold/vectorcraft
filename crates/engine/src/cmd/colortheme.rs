@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Theme",
             ["Window", "Color Themes"],
             None,
-            "{colors: [1–5 colours] | color + rule (a harmony rule id or label, see color.harmony: its 5-colour theme from that base colour, base first), rule?: the rule it was made with, name?: (default \"Theme N\"), replace?: a saved theme's name (overwrite that theme in place, e.g. after editing it; it may be renamed), color?: one colour (as colors: [colour])} save a colour theme to the local theme library (the preferences) → {name, count: themes saved}",
+            "{colors: [1–5 colours] (#rrggbbaa and #rgba are refused) | color + rule (a harmony rule id or label, see color.harmony: its 5-colour theme from that base colour, base first), rule?: the rule it was made with, name?: (default \"Theme N\"), replace?: a saved theme's name (overwrite that theme in place, e.g. after editing it; it may be renamed), color?: one colour (as colors: [colour])} save a colour theme to the local theme library (the preferences) → {name, count: themes saved}",
             always,
             save
         ),

@@ -18,6 +18,8 @@
 //! did before (the printed page, or the PDF), with a warning saying why.
 
 mod blend;
+mod brush;
+mod envelope;
 mod frames;
 mod lex;
 mod mesh;
@@ -32,9 +34,33 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use brush::{BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object};
+pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
+pub(crate) use envelope::MAX_CHECKED;
+pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
+pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
+pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
+pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, variables};
-pub(crate) use read::{slot_frame, slot_of};
+pub use obj::{NameEncoding, Names};
+pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+#[cfg(test)]
+pub(crate) use read::objects_read;
+#[cfg(test)]
+pub use read::read;
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
+pub use read::{
+    BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,
+    palette, read_beside, read_in, symbols, variables,
+};
+pub(crate) use read::{
+    MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with,
+    symbol_art_member,
+};
+
+pub(crate) use read::is_look_slot;
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;
@@ -64,6 +90,19 @@ fn data_limit(memory: Option<u64>) -> u64 {
 const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// Most Zstandard frames read (the app writes one).
 const MAX_FRAMES: usize = 4096;
+
+#[cfg(test)]
+thread_local! {
+    /// How many bytes [`Codec::decode`] has looked at on this thread to find whether another
+    /// Zstandard frame follows or only zero padding is left.
+    static PADDING_LOOKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`PADDING_LOOKS`] of this thread.
+#[cfg(test)]
+fn padding_looks() -> u64 {
+    PADDING_LOOKS.get()
+}
 
 const EPS_BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
 const EPS_END: &[u8] = b"%AI9_PrivateDataEnd";
@@ -158,11 +197,15 @@ impl Codec {
                 flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).map_err(|_| damaged("its zlib compression"))?;
             }
             Codec::Zstd => {
-                // The data may be several frames one after the other, padded with zeros.
-                let end = data.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
-                let mut src = data.get(..end).unwrap_or_default();
+                // The data may be several frames one after the other, padded with zeros. A frame
+                // can itself end in a zero byte, so the padding is what is left after the last frame.
+                let mut src = data;
                 let mut frames = 0usize;
-                while !src.is_empty() {
+                while src.iter().any(|b| {
+                    #[cfg(test)]
+                    PADDING_LOOKS.set(PADDING_LOOKS.get().saturating_add(1));
+                    *b != 0
+                }) {
                     frames += 1;
                     if frames > MAX_FRAMES {
                         return Err(damaged("its Zstandard compression"));

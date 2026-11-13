@@ -1,4 +1,6 @@
-use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, target_paths};
+use vectorcraft_pathops::addons::pathtools as pt;
+
+use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, subpath_len, target_paths};
 use super::{
     Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Result, Session, SimplifyOptions, SubPath, Value, json,
     number_or, po,
@@ -6,10 +8,22 @@ use super::{
 
 // ---------- Smooth ----------
 
-/// Refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
-fn refit_run(anchors: &[Anchor], tol: f64) -> Vec<Anchor> {
+/// The spread (points) of the Gaussian the Smooth tool smooths a path along its length with before
+/// refitting it, as a share of the tool's reach: a third, so each point is averaged with the stretch
+/// of path within the reach on either side of it. VectorCraft's own value.
+const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
+
+/// The options the Smooth tool refits with: the path smoothed along its length by a Gaussian of
+/// spread `sigma` (none at 0), then refitted within `tol` of that and within twice the distance the
+/// smoothing moved it, keeping a corner only where the path turns back on itself.
+fn refit_options(tol: f64, sigma: f64) -> SimplifyOptions {
+    SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, smooth: sigma, smooth_moved_only: true }
+}
+
+/// Smooth and refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
+fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64) -> Vec<Anchor> {
     let piece = PathData::single(SubPath::new(anchors.to_vec(), false));
-    let fitted = po::simplify_with(&piece, &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false });
+    let fitted = po::simplify_with(&piece, &refit_options(tol, sigma));
     let Some(mut out) = fitted.subpaths.into_iter().next().map(|s| s.anchors).filter(|a| a.len() >= 2) else { return anchors.to_vec() };
     let (f, l) = (anchors[0], anchors[anchors.len() - 1]);
     let last = out.len() - 1;
@@ -23,7 +37,7 @@ fn refit_run(anchors: &[Anchor], tol: f64) -> Vec<Anchor> {
     out
 }
 
-fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Option<SubPath> {
+fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Option<SubPath> {
     let n = sp.anchors.len();
     let marked: Vec<bool> = sp.anchors.iter().map(|a| near(a.p)).collect();
     if n < 3 || !marked.iter().any(|m| *m) {
@@ -31,9 +45,8 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
     }
     if sp.closed {
         let Some(k) = marked.iter().position(|m| !m) else {
-            // Everything is in range: smooth the whole closed path.
-            let f =
-                po::simplify_with(&PathData::single(sp.clone()), &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false });
+            // Everything is in range: smooth the whole closed path, across its start too.
+            let f = po::simplify_with(&PathData::single(sp.clone()), &refit_options(tol, sigma));
             return f.subpaths.into_iter().next();
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
@@ -44,14 +57,14 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
         open.anchors.push(open.anchors[0]);
         m.push(false);
         open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, near, tol);
+        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma);
         let l = res.pop()?;
         if let Some(r0) = res.first_mut() {
             r0.h_in = l.h_in;
         }
         return Some(SubPath::new(res, true));
     }
-    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol), false))
+    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol, sigma), false))
 }
 
 /// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
@@ -80,10 +93,11 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
     (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
 }
 
-/// `anchors` with each run of `marked` ones refitted, together with the stretch of the segments
-/// leading into the run that is in the drag's reach (`near`): a short drag smooths what is under
-/// it, and the rest of a long segment next to it stays as it was (#1512).
-fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64) -> Vec<Anchor> {
+/// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
+/// within `tol`, together with the stretch of the segments leading into the run that is in the
+/// drag's reach (`near`): a short drag smooths what is under it, and the rest of a long segment next
+/// to it stays as it was (#1512).
+fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Vec<Anchor> {
     let n = anchors.len();
     let mut runs = vec![];
     let mut i = 0;
@@ -123,7 +137,7 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
             head = Some(Anchor { h_out: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, far.p2, reach.p1);
         }
-        let new = refit_run(&piece, tol);
+        let new = refit_run(&piece, tol, sigma);
         out.splice(lo..=hi, head.into_iter().chain(new).chain(tail));
     }
     out
@@ -134,6 +148,7 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     let pts = points_param(p, "points", C)?;
     let radius = number_or(p, "radius", 12.0, C)?.max(0.0);
     let tol = number_or(p, "fidelity", 2.5, C)?.clamp(vectorcraft_tools::draw2::SMOOTH_MIN_FIDELITY, 100.0);
+    let sigma = radius * SMOOTH_SPREAD;
     let st = s.doc()?;
     let near = |q: Point| dist_to_polyline(&pts, q) <= radius;
     let mut plan = vec![];
@@ -144,7 +159,7 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
         let subs: Vec<SubPath> = pd
             .subpaths
             .iter()
-            .map(|sp| match smooth_subpath(sp, &near, tol) {
+            .map(|sp| match smooth_subpath(sp, &near, tol, sigma) {
                 Some(n) if n != *sp && n.anchors.len() >= 2 => {
                     changed = true;
                     n
@@ -163,9 +178,13 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "ids": [], "before": 0, "after": 0 }));
     }
     let ids: Vec<NodeId> = plan.iter().map(|(id, _)| *id).collect();
-    s.edit("Smooth", |d, _| {
+    s.edit("Smooth", |d, sel| {
         for (id, np) in plan {
             *path_mut(d, id)? = np;
+            // The smoothed path has new anchors, so the old anchor and segment indices are
+            // dropped and the path stays selected whole.
+            sel.anchors.remove(&id);
+            sel.segments.remove(&id);
         }
         Ok(())
     })?;
@@ -177,11 +196,121 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Join tool ----------
 
+/// Most open subpaths the Join tool compares pairwise for crossings before it only joins ends.
+const MAX_TRIM_SUBPATHS: usize = 64;
+
+/// One end of an open subpath that runs on past where it crosses another: the part kept, which
+/// ends at the crossing, and the part past it.
+struct Overhang {
+    kept: SubPath,
+    cut: SubPath,
+}
+
+impl Overhang {
+    fn at(&self) -> Option<Point> {
+        self.kept.anchors.last().map(|a| a.p)
+    }
+}
+
+/// The overhangs of `sp` at its first and last crossing (`places`: subpath, segment, t, in order).
+/// A crossing on an end anchor leaves no overhang there.
+fn overhangs(sp: &SubPath, places: &[(usize, usize, f64)]) -> Vec<Overhang> {
+    let mut out = vec![];
+    for (place, at_start) in [(places.first(), true), (places.last(), false)] {
+        let Some(&(_, seg, t)) = place else { continue };
+        let (split, marks) = pt::insert_at(sp, &[(seg, t)]);
+        let Ok([first, second]) = <[SubPath; 2]>::try_from(split.cut_at(&marks)) else { continue };
+        let (mut kept, cut) = if at_start { (second, first) } else { (first, second) };
+        if at_start {
+            kept.reverse();
+        }
+        out.push(Overhang { kept, cut });
+    }
+    out
+}
+
+/// Does the scrub `pts` (`scrub` as a path) cross `cut` or pass within `tol` of it?
+fn scrubbed(cut: &SubPath, pts: &[Point], scrub: &PathData, tol: f64) -> bool {
+    let pd = PathData::single(cut.clone());
+    pt::crossings(&[&pd, scrub], false).is_some_and(|c| c.first().is_some_and(|v| !v.is_empty()))
+        || cut.anchors.iter().any(|a| dist_to_polyline(pts, a.p) <= tol)
+        || pts.iter().any(|q| pd.nearest(*q).is_some_and(|n| n.4 <= tol))
+}
+
+/// Two crossing open subpaths, each `(path, subpath)`, trimmed and joined at the crossing.
+struct TrimJoin {
+    a: (NodeId, usize),
+    b: (NodeId, usize),
+    joined: SubPath,
+}
+
+/// #5844: two open subpaths among `ids` that cross, where the scrub runs over the part of each
+/// that overhangs the crossing, trimmed at the crossing and joined there with a corner. When
+/// several pairs or ends qualify, the one trimming the least wins.
+fn trim_join(d: &vectorcraft_doc::Document, ids: &[NodeId], pts: &[Point], tol: f64) -> Result<Option<TrimJoin>> {
+    let mut open = vec![];
+    for &id in ids {
+        let (pd, _) = path_of(d, id)?;
+        open.extend(pd.subpaths.into_iter().enumerate().filter(|(_, sp)| !sp.closed && sp.anchors.len() >= 2).map(|(si, sp)| (id, si, sp)));
+    }
+    if open.len() > MAX_TRIM_SUBPATHS {
+        return Ok(None);
+    }
+    let scrub = PathData::single(SubPath::polyline(pts, false));
+    let mut best: Option<(f64, TrimJoin)> = None;
+    for (i, (ida, sa, a)) in open.iter().enumerate() {
+        for (idb, sb, b) in open.iter().skip(i + 1) {
+            let (pa, pb) = (PathData::single(a.clone()), PathData::single(b.clone()));
+            let Some(places) = pt::crossings(&[&pa, &pb], false) else { continue };
+            let (Some(on_a), Some(on_b)) = (places.first(), places.get(1)) else { continue };
+            let (oa, ob) = (overhangs(a, on_a), overhangs(b, on_b));
+            for x in oa.iter().filter(|o| scrubbed(&o.cut, pts, &scrub, tol)) {
+                for y in ob.iter().filter(|o| scrubbed(&o.cut, pts, &scrub, tol)) {
+                    let (Some(xa), Some(ya)) = (x.at(), y.at()) else { continue };
+                    let trimmed = subpath_len(&x.cut) + subpath_len(&y.cut);
+                    if xa.distance(ya) > 1e-2 || best.as_ref().is_some_and(|b| b.0 <= trimmed) {
+                        continue;
+                    }
+                    // `x` ends at the crossing; `y`, reversed, starts there: one corner anchor.
+                    let mut joined = x.kept.clone();
+                    let mut rest = y.kept.clone();
+                    rest.reverse();
+                    let (Some(last), Some(first)) = (joined.anchors.last_mut(), rest.anchors.first()) else { continue };
+                    *last =
+                        Anchor { p: last.p, h_in: last.h_in, h_out: first.h_out + (last.p - first.p), kind: vectorcraft_geom::AnchorKind::Corner };
+                    joined.anchors.extend(rest.anchors.into_iter().skip(1));
+                    best = Some((trimmed, TrimJoin { a: (*ida, *sa), b: (*idb, *sb), joined }));
+                }
+            }
+        }
+    }
+    Ok(best.map(|(_, t)| t))
+}
+
 pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.joinScrub";
     let pts = points_param(p, "points", C)?;
     let tol = number_or(p, "tolerance", 12.0, C)?.max(0.0);
     let st = s.doc()?;
+    let targets = target_paths(&st.doc, &st.selection, poly_bounds(&pts, tol));
+    // Paths that cross with their ends scrubbed are trimmed there and joined (#5844).
+    if let Some(TrimJoin { a: (ida, sa), b: (idb, sb), joined }) = trim_join(&st.doc, &targets, &pts, tol)? {
+        s.edit("Join", |d, sel| {
+            let missing = || crate::EngineError::Other("Join: a subpath went missing".into());
+            *path_mut(d, ida)?.subpaths.get_mut(sa).ok_or_else(missing)? = joined;
+            let pbm = path_mut(d, idb)?;
+            if sb >= pbm.subpaths.len() {
+                return Err(missing());
+            }
+            pbm.subpaths.remove(sb);
+            if ida != idb && pbm.is_empty() {
+                d.remove(idb)?;
+            }
+            sel.set([ida]);
+            Ok(())
+        })?;
+        return Ok(json!({ "id": ida.0 }));
+    }
     // Open endpoints near the scrub, ordered along it: (order, id, subpath, at_start).
     let poly = {
         let mut bp = BezPath::new();
@@ -200,7 +329,7 @@ pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let (first_pt, last_pt) = (pts.first().copied(), pts.last().copied());
     let mut ends: Vec<(f64, NodeId, usize, bool, Point)> = vec![];
-    for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, tol)) {
+    for id in targets {
         let (pd, _) = path_of(&st.doc, id)?;
         for (si, sp) in pd.subpaths.iter().enumerate() {
             if sp.closed || sp.anchors.len() < 2 {

@@ -1,7 +1,7 @@
 //! The Links panel, its flyout, Link Info, Edit Original / Show in Folder, the Placement Options
 //! dialog and the Properties panel's image section, drawn headless.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use serde_json::json;
@@ -132,6 +132,103 @@ fn shift_click_selects_a_range_of_links_and_ctrl_click_toggles_one() {
     assert_eq!(selected(&app), id(&[3]));
 }
 
+/// A linked image kept only in a symbol's art has a row of its own: a click picks it in the panel
+/// (the canvas selection is cleared), Link Info shows it, Ctrl/Cmd-click adds an image in the
+/// layers, a change of the canvas selection drops the pick, and Go To clears the selection and
+/// says it has no place on the canvas.
+#[test]
+fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
+    let dir = Folder::new("nested");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let inside = dir.file("inside.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": inside, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({"ids": selected(&app)})).unwrap();
+    let outside = dir.file("layer.png", &png(20, 20));
+    let layer = app.run("file.place", json!({"path": outside, "at": [300, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "symbol", "{list}");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shown = |app: &mut VectorcraftApp, time: f64| -> Vec<String> {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect()
+    };
+    assert!(shown(&mut app, 0.5).iter().any(|t| t == "20 × 20 px"), "Link Info of the selected image in the layers");
+    click_row(&mut app, &ctx, "inside.png", egui::Modifiers::NONE, 1.0);
+    assert!(selected(&app).is_empty(), "the canvas can't select it");
+    assert!(shown(&mut app, 1.5).iter().any(|t| t == "30 × 20 px"), "Link Info of the symbol's image");
+    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 2.0);
+    assert_eq!(selected(&app), [layer]);
+    // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
+    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 3.0);
+    assert!(selected(&app).is_empty());
+    assert!(shown(&mut app, 3.5).iter().any(|t| t == "30 × 20 px"), "the symbol's image is still picked");
+    app.run("select.set", json!({"ids": [layer]})).unwrap();
+    assert!(shown(&mut app, 4.0).iter().any(|t| t == "20 × 20 px"));
+    app.run("select.set", json!({"ids": []})).unwrap();
+    let text = shown(&mut app, 4.5);
+    assert!(!text.iter().any(|t| t == "30 × 20 px" || t == "20 × 20 px"), "nothing is picked: {text:?}");
+    // Go To clears the selection and says the link has no place on the canvas.
+    app.run("select.set", json!({"ids": [layer]})).unwrap();
+    super::links::go_to(&mut app, row["id"].as_u64().unwrap());
+    assert_eq!(app.ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
+    assert!(selected(&app).is_empty(), "the image in the layers is no longer selected");
+}
+
+/// The tooltip of a row outside the layer tree says where the image is stored, so two rows of the
+/// same file in different symbols or masks can be told apart.
+#[test]
+fn a_nested_rows_tooltip_names_what_holds_it() {
+    let tip = |owner: serde_json::Value, mask: Option<&str>| {
+        let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png", "owner": owner});
+        super::links::status_tip(&row, mask.map(str::to_string))
+    };
+    assert_eq!(tip(json!({"kind": "symbol", "name": "Mark"}), None), "/x/a.png\nSymbols: Mark");
+    assert_eq!(tip(json!({"kind": "pattern", "name": "Dots"}), None), "/x/a.png\nPattern: Dots");
+    assert_eq!(tip(json!({"kind": "graphDesign", "name": "Bar"}), None), "/x/a.png\nGraph Design: Bar");
+    assert_eq!(tip(json!({"kind": "layers", "maskOf": 7}), Some("<Ellipse>")), "/x/a.png\nOpacity Mask: <Ellipse>");
+    assert_eq!(tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None), "/x/a.png\nSymbols: Mark\nOpacity Mask: 7");
+    // A row in the layers says only its file.
+    let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png"});
+    assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
+}
+
+/// The tooltip of an image in the opacity mask of an object inside a symbol names that object,
+/// which the panel finds among the objects it collected with the list.
+#[test]
+fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
+    let dir = Folder::new("mask-owner");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let mask = dir.file("mask.png", &png(20, 20));
+    let mask = app.run("file.place", json!({"path": mask, "at": [40, 40]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("transparency.makeOpacityMask", json!({"ids": [rect, mask]})).unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [rect]})).unwrap();
+    app.run("edit.clear", json!({"ids": selected(&app)})).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "mask.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "symbol", "{list}");
+    let owner = vectorcraft_doc::NodeId(row["owner"]["maskOf"].as_u64().unwrap_or_else(|| panic!("{list}")));
+    let doc = app.session.active().unwrap().doc.clone();
+    assert!(doc.node(owner).is_none(), "the masked object is outside the layer tree");
+    let name = super::layers::shown_name(&app, doc.stored_node(owner).unwrap().0, crate::i18n::current());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
+        super::tests_appearance::frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::show)
+    };
+    let at = super::tests_appearance::text_rect(&frame(&mut app, vec![], 1.0), "mask.png").center();
+    frame(&mut app, vec![egui::Event::PointerMoved(at)], 2.0);
+    frame(&mut app, vec![], 4.0);
+    let text: Vec<String> = frame(&mut app, vec![], 4.1).into_iter().map(|(t, _)| t).collect();
+    let want = format!("Opacity Mask: {name}");
+    assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
+}
+
 #[test]
 fn an_empty_document_shows_how_to_add_images() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -168,11 +265,61 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+/// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
+/// Original opens a raster image in the app that made it, PhotoCraft, and falls back to the
+/// system's default app when PhotoCraft isn't installed or the file isn't a raster image.
+#[test]
+fn edit_original_opens_raster_images_in_photocraft_without_system_defaults() {
+    /// What each open asked for: (`true` for PhotoCraft, the path).
+    type Opened = Rc<RefCell<Vec<(bool, String)>>>;
+    let dir = Folder::new("with");
+    let (mut app, linked, _) = app(&dir);
+    let opened: Opened = Rc::default();
+    let installed = Rc::new(Cell::new(true));
+    let (o, w, i) = (opened.clone(), opened.clone(), installed.clone());
+    app.services.open_file = Some(Box::new(move |p: &str| {
+        o.borrow_mut().push((false, p.to_string()));
+        Ok(())
+    }));
+    app.services.open_in_photocraft = Some(Box::new(move |p: &str| {
+        if i.get() {
+            w.borrow_mut().push((true, p.to_string()));
+        }
+        Ok(i.get())
+    }));
+    // On (the default): the system's app.
+    let path = app.run("links.editOriginal", json!({"id": linked})).unwrap()["path"].as_str().unwrap().to_string();
+    app.run("prefs.set", json!({"key": "editOriginalSystemDefaults", "value": false})).unwrap();
+    app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    installed.set(false);
+    app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    installed.set(true);
+    // A file that isn't a raster image goes to the system's app.
+    crate::io::open_original(&mut app, "/Art/plan.emf").unwrap();
+    assert_eq!(*opened.borrow(), [(false, path.clone()), (true, path.clone()), (false, path), (false, "/Art/plan.emf".to_string())]);
+    // PhotoCraft failing to open it is said, not hidden behind the system's app.
+    app.services.open_in_photocraft = Some(Box::new(|_: &str| Err("PhotoCraft didn't start".to_string())));
+    assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
+    assert_eq!(opened.borrow().len(), 4);
+}
+
 /// Edit Original hands only regular image and document files to the system's default app.
 #[test]
 fn edit_original_opens_image_and_document_files_only() {
     let dir = Folder::new("kinds");
-    for f in ["photo.png", "Art.SVG", "run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop"] {
+    for f in [
+        "photo.png",
+        "Art.SVG",
+        "scan.dib",
+        "photo.PDD",
+        "run.exe",
+        "run.bat",
+        "photo.png.lnk",
+        "page.hta",
+        "app.desktop",
+        "art.affinity",
+        "scan.jpeg2000",
+    ] {
         dir.file(f, b"");
     }
     for f in ["Tool.app", "folder.png"] {
@@ -180,7 +327,21 @@ fn edit_original_opens_image_and_document_files_only() {
     }
     let ok = |f: &str| super::links::openable_original(&dir.0.join(f).to_string_lossy()).is_ok();
     assert!(ok("photo.png") && ok("Art.SVG"));
-    for f in ["run.exe", "run.bat", "photo.png.lnk", "page.hta", "app.desktop", "Tool.app", "folder.png", "missing.png", ""] {
+    assert!(ok("scan.dib") && ok("photo.PDD"), "BMP and Photoshop files by their other names");
+    // A format's id is not one of its extensions.
+    for f in [
+        "run.exe",
+        "run.bat",
+        "photo.png.lnk",
+        "page.hta",
+        "app.desktop",
+        "art.affinity",
+        "scan.jpeg2000",
+        "Tool.app",
+        "folder.png",
+        "missing.png",
+        "",
+    ] {
         assert!(!ok(f), "{f}");
     }
     #[cfg(unix)]

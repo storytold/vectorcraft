@@ -1,5 +1,6 @@
-//! New Character Style and New Paragraph Style: the new style's name. OK makes the style from the
-//! text that was selected when the dialog opened (`charStyle.new`, `paraStyle.new`).
+//! New Character Style and New Paragraph Style: the new style's name and the sections of Character
+//! or Paragraph Style Options, filled in from the text that was selected when the dialog opened.
+//! OK makes the style with those attributes (`charStyle.new`, `paraStyle.new`).
 //!
 //! Fields: `name`, `__para` (true for a paragraph style) and `__target` (the `id`, `start` and
 //! `end` of the Type tool's selection, empty for the selected objects, and the `attrs` that text had
@@ -31,19 +32,72 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
     let d = &app.session.active().ok_or("no document open")?.doc;
     let name = vectorcraft_engine::cmd::textstyles::new_style_name(d, para);
     let mut target = target;
-    if let Some(attrs) = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para) {
-        target["attrs"] = Value::Object(attrs);
+    let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
+    let attrs = selected_attrs.unwrap_or_else(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, para));
+    target["attrs"] = Value::Object(attrs);
+    let mut fields = Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })).fields;
+    if para {
+        fields.insert("section".into(), json!("general"));
+        let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
+        fields.extend(super::para_style_options::form_fields(&attrs, app.session.general_unit()));
+        fields.insert("__vertical".into(), json!(super::para_style_options::vertical_text(app)));
+    } else {
+        fields.insert("section".into(), json!("general"));
+        fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));
+        fields.insert("__superscript".into(), json!(d.setup.superscript));
+        fields.insert("__subscript".into(), json!(d.setup.subscript));
+        fields.insert("__swatches".into(), super::char_style_options::swatch_choices(d));
+        let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
+        fields.extend(super::char_style_options::fields_from_attrs(&attrs));
+        fields.insert("__attrs".into(), Value::Object(attrs));
     }
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })));
+    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(json!({ "dialog": KIND }))
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    grid(ui, |ui| {
-        label(ui, tl!("Style Name:"));
-        form::text(ui, d, "name", 190.0);
-        ui.end_row();
+    if !para(d) {
+        ui.horizontal(|ui| {
+            super::char_style_options::section_list(ui, d);
+            ui.separator();
+            if d.str("section") == "basic" {
+                super::char_style_options::basic_body(ui, d);
+            } else if d.str("section") == "advanced" {
+                super::char_style_options::advanced_body(ui, d);
+            } else if d.str("section") == "color" {
+                super::char_style_options::color_body(ui, d);
+            } else if d.str("section") == "opentype" {
+                super::char_style_options::opentype_body(ui, d);
+            } else {
+                ui.vertical(|ui| {
+                    grid(ui, |ui| {
+                        label(ui, tl!("Style Name:"));
+                        form::text(ui, d, "name", 190.0);
+                        ui.end_row();
+                    });
+                    if let Ok(attrs) = super::char_style_options::edited_attrs(d) {
+                        for (key, value) in attrs {
+                            ui.label(format!("{}: {}", super::humanize(&key), value));
+                        }
+                    }
+                });
+            }
+        });
+        super::char_style_options::reset_button(ui, d);
+        if let Err(why) = super::char_style_options::edited_attrs(d) {
+            super::char_style_options::attrs_error(ui, &why);
+        }
+        return false;
+    }
+    ui.horizontal(|ui| {
+        super::para_style_options::section_list(ui, d);
+        ui.separator();
+        ui.vertical(|ui| super::para_style_options::section_body(ui, d));
     });
+    super::para_style_options::reset_button(ui, d);
+    if let Err(why) = super::para_style_options::edited_attrs(d) {
+        super::char_style_options::attrs_error(ui, &why);
+    }
     false
 }
 
@@ -52,6 +106,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__target").filter(|t| t.is_object()).cloned().unwrap_or_else(|| json!({}));
     params["name"] = json!(d.str("name"));
+    params["attrs"] = Value::Object(if para(d) { super::para_style_options::edited_attrs(d)? } else { super::char_style_options::edited_attrs(d)? });
     let r = app.run(if para(d) { "paraStyle.new" } else { "charStyle.new" }, params);
     if let Ok(v) = &r {
         app.ui.dialog = None;

@@ -517,7 +517,12 @@ fn rename(n: &mut Node, prefix: &str) {
                     paint(&mut r.style.stroke);
                 }
             }
-            NodeKind::Image(im) => im.key = format!("{prefix}{}", im.key),
+            NodeKind::Image(im) => {
+                im.key = format!("{prefix}{}", im.key);
+                if let Some(m) = n.extras.0.as_deref_mut().and_then(|e| e.color_mask.as_deref_mut()) {
+                    (m.key, m.from) = (format!("{prefix}{}", m.key), format!("{prefix}{}", m.from));
+                }
+            }
             NodeKind::PlacedDocument(p) => p.key = format!("{prefix}{}", p.key),
             NodeKind::SymbolInstance { symbol, .. } => *symbol = format!("{prefix}{symbol}"),
             _ => {}
@@ -559,6 +564,9 @@ impl Document {
             reads += usize::from(read_full && depth > 0);
             let full = if read_full { full_bytes(&p, &blob) } else { None };
             if full.and_then(|b| read(&p, &b)).is_none() {
+                // A full read cached for another caller (one allowed to read the file) must not
+                // stand in for the one refused or not tried here: the preview shows instead.
+                cache().entries.remove(&(p.key.clone(), false));
                 let preview = if blob.is_proxy() { Some(blob.bytes.clone()) } else { blob.proxy.clone() };
                 if let Some(bytes) = preview {
                     read_preview(&p, &bytes);
@@ -667,7 +675,7 @@ mod tests {
                 pixels: None,
             })),
         );
-        d.symbols.push(Symbol { name: "Star".into(), art: Arc::new(art) });
+        d.symbols.push(Symbol { dynamic: false, name: "Star".into(), art: Arc::new(art) });
         d.images.insert("pic".into(), ImageBlob::new("image/png", vec![1, 2, 3]));
         let mut children = vec![Arc::new(Node::new(NodeId(51), NodeKind::SymbolInstance { symbol: "Star".into(), xf: Affine::IDENTITY }))];
         if bytes.starts_with(b"nest") {
@@ -676,6 +684,30 @@ mod tests {
             children.push(Arc::new(Node::new(NodeId(52), NodeKind::PlacedDocument(Box::new(inner)))));
         }
         Some((d, Node::new(NodeId(0), NodeKind::Group { children, clip: false }), Rect::new(0.0, 0.0, 40.0, 20.0)))
+    }
+
+    /// A color-masked image in a placed document's art keeps its masked pixels under the prefixed
+    /// names its resources get.
+    #[test]
+    fn a_color_mask_takes_the_prefixed_image_names() {
+        let im =
+            ImageObject { key: "own".into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        let mut n = Node::new(NodeId(7), NodeKind::Image(Box::new(im)));
+        n.extras_mut().color_mask = Some(Box::new(crate::color_mask::ColorMask {
+            key: "masked".into(),
+            from: "own".into(),
+            background: Default::default(),
+            colors: vec![],
+            contiguous: true,
+            measure: Default::default(),
+            tolerance: 10.0,
+            softness: 10.0,
+        }));
+        rename(&mut n, "p:");
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        let m = Document::color_mask_of(&n).unwrap();
+        assert_eq!((im.key.as_str(), m.key.as_str(), m.from.as_str()), ("p:own", "p:masked", "p:own"));
+        assert!(m.made_for(im));
     }
 
     #[test]
@@ -702,7 +734,11 @@ mod tests {
     fn the_art_and_its_resources_join_only_a_prepared_copy_under_their_own_names() {
         set_loader(stub_loader);
         let mut d = Document::new(200.0, 200.0);
-        d.symbols.push(Symbol { name: "Star".into(), art: Arc::new(Node::new(NodeId(60), NodeKind::Group { children: vec![], clip: false })) });
+        d.symbols.push(Symbol {
+            dynamic: false,
+            name: "Star".into(),
+            art: Arc::new(Node::new(NodeId(60), NodeKind::Group { children: vec![], clip: false })),
+        });
         d.images.insert("doc1-1".into(), ImageBlob::new("application/json", b"nest".to_vec()));
         let p = placed("doc1-1");
         let layer = d.layers[0].id;

@@ -28,10 +28,11 @@ pub struct Timer {
     beat: f64,
 }
 
-/// Each frame: the startup question once, the timer and the heartbeat (`now`: app time in
-/// seconds) → in how many seconds they want the next frame (none while Data Recovery is off).
+/// Each frame: the startup question once no other dialog is open, the timer and the heartbeat
+/// (`now`: app time in seconds) → in how many seconds they want the next frame (none while Data Recovery is off).
 pub fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
-    if !app.recovery.checked {
+    // A dialog already open at launch (the Safe Mode choice) is answered first.
+    if !app.recovery.checked && app.ui.dialog.is_none() {
         app.recovery.checked = true;
         offer(app);
     }
@@ -104,8 +105,8 @@ fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn
     let mut started = 0;
     for job in jobs {
         let (uid, label, title) = (job.uid, format!("Saving recovery data for {}", job.title), job.title.clone());
-        let (done, store) = (job.clone(), store.clone());
-        let work = move |_: Writer| job.write(store.as_ref());
+        let done = job.clone();
+        let work = move |_: Writer| job.write();
         let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
             let r = r?;
             done.finish(&mut app.session);
@@ -142,9 +143,16 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if !errors.is_empty() {
         return Err(errors.join("; "));
     }
-    app.status(match id {
-        "file.recovery.discard" => format!("Discarded {} recovered document(s)", done.len()),
-        _ => format!("Restored {} recovered document(s): save them to keep them", done.len()),
-    });
+    app.status(recovered_status(id == "file.recovery.discard", done.len()));
     Ok(json!(done))
+}
+
+/// The status bar's line for `n` recovered documents discarded or restored.
+pub(crate) fn recovered_status(discarded: bool, n: usize) -> String {
+    let (one, other) = if discarded {
+        ("Discarded {n} recovered document", "Discarded {n} recovered documents")
+    } else {
+        ("Restored {n} recovered document: save it to keep it", "Restored {n} recovered documents: save them to keep them")
+    };
+    crate::i18n::msg_n(n as u64, one, other, &[])
 }

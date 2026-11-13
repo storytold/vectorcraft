@@ -130,6 +130,28 @@ fn print_as_bitmap_prints_an_image_of_each_artboard() {
     assert!(crate::cmd::printadvanced::prepare("file.print", doc(&s), &set, &saved, false).unwrap().is_none());
 }
 
+/// Print as Bitmap of an artboard longer than the renderer draws at the raster effects resolution
+/// (32,768 pixels a side) prints an image of all of it, at a lower resolution.
+#[test]
+fn print_as_bitmap_prints_all_of_a_long_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 9000, "height": 100})).unwrap();
+    s.execute("document.rasterEffectsSettings", &json!({"resolution": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 9000, "height": 100})).unwrap();
+    let set = settings(json!({"advanced": {"printAsBitmap": true}}));
+    let saved = s.prefs.flattener_presets.clone();
+    let bitmap = crate::cmd::printadvanced::prepare("file.print", doc(&s), &set, &saved, false).unwrap().unwrap();
+    let mut placed = vec![];
+    bitmap.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            placed.push((im.width, im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)))));
+        }
+    });
+    let [(width, b)] = placed[..] else { panic!("one image: {placed:?}") };
+    assert!(width <= vectorcraft_render::MAX_RASTER_SIDE, "{width} pixels");
+    assert!(b.x0 <= 0.0 && b.x1 >= 9000.0, "the image covers the artboard: {b:?}");
+}
+
 /// Appearance of Black › Printing / Exporting (#394): Print as Bitmap draws pure CMYK black as RGB
 /// black when `rich_black` is on.
 #[test]

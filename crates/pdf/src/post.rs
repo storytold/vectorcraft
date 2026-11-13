@@ -1,5 +1,6 @@
 //! What the export does to the file once it is written, in this order: the pages' thumbnails
-//! (General › Embed page thumbnails), the seal of the editing data, fast web view (a linearised
+//! (General › Embed page thumbnails), a `.ai` file's editing copy of the art
+//! ([`crate::PrivateData`]), the seal of the editing data, fast web view (a linearised
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
 //! through between its two steps so that it stays linearised. Also here: what makes a file say it
 //! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, the file's
@@ -203,16 +204,23 @@ fn linearised(pdf: &[u8], set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
 }
 
 /// The file the export wrote (`pdf`), finished as `opts` say; `editing`: it carries the editing
-/// data, to seal once the pages are final. What can't be done comes back in `warnings`.
-pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
+/// data, to seal once the pages are final. The options it can't apply come back in `settings`.
+pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, settings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
     let set = &opts.settings;
     let pdf = match (set.thumbnails, opts.thumbnails.is_empty()) {
         (true, false) => thumbnails(pdf, &opts.thumbnails, set.standard.is_pdfx())?,
         (true, true) => {
-            warnings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
+            settings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
             pdf
         }
         (false, _) => pdf,
+    };
+    let pdf = match &opts.private_data {
+        Some(p) => {
+            let at = opts.modified.or(opts.created).or_else(vectorcraft_doc::metadata::output_time).unwrap_or(0);
+            crate::piece_info::add(pdf, p, at)?
+        }
+        None => pdf,
     };
     let pdf = if editing { crate::editing::seal(pdf)? } else { pdf };
     if !set.fast_web_view {
@@ -221,7 +229,7 @@ pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &
     match linearised(&pdf, set) {
         Ok(out) => Ok(out),
         Err(e) => {
-            warnings.push(format!("the file isn't optimized for fast web view: {e}"));
+            settings.push(format!("the file isn't optimized for fast web view: {e}"));
             crate::encrypt::protect(pdf, set)
         }
     }

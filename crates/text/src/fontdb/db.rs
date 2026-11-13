@@ -21,6 +21,9 @@ use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, P
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
 
+/// The next [`FontDb::id`].
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,
     /// read with their subfolders, and font files).
@@ -64,11 +67,14 @@ impl FontDb {
             family_cache: Mutex::new(None),
             menu_cache: Mutex::new(None),
             generation: AtomicU64::new(0),
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             #[cfg(not(target_arch = "wasm32"))]
             sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
             #[cfg(not(target_arch = "wasm32"))]
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
+            composites: RwLock::new(HashMap::new()),
+            composite_loans: Mutex::new(HashMap::new()),
         }
     }
 
@@ -81,6 +87,18 @@ impl FontDb {
         }
         #[cfg(target_arch = "wasm32")]
         let _ = on;
+    }
+
+    /// Is the lazy system-font fallback on ([`Self::set_system_fallback`])?
+    pub(crate) fn system_fallback_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
     }
 
     /// Process-wide database: the bundled fonts, then the installed system fonts, cataloged the
@@ -114,6 +132,12 @@ impl FontDb {
         self.generation.load(Ordering::Relaxed)
     }
 
+    /// A number no other database made in this process has: with [`FontDb::generation`], it tells
+    /// what a list built from a database was built from.
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     /// Family names available (loaded plus installed system fonts), sorted and deduplicated.
     pub fn families(&self) -> Vec<String> {
         self.family_list().to_vec()
@@ -138,7 +162,8 @@ impl FontDb {
     /// The families font menus and lists show: [`FontDb::family_list`] without the system's hidden
     /// families, whose names start with "." (macOS keeps ".SF NS", ".LastResort" and others for its
     /// own interface, and Mac apps don't list them). Those still resolve by name, for documents and
-    /// fallbacks that name them. Cheap to call every frame.
+    /// fallbacks that name them. The composite fonts ([`FontDb::composite_font_names`]) come first.
+    /// Cheap to call every frame.
     pub fn menu_family_list(&self) -> Arc<[String]> {
         let all = self.family_list();
         let mut cache = self.menu_cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -147,9 +172,36 @@ impl FontDb {
         {
             return list.clone();
         }
-        let list: Arc<[String]> = all.iter().filter(|f| !f.starts_with('.')).cloned().collect();
+        let composites = self.composite_font_names();
+        let list: Arc<[String]> = composites.into_iter().chain(all.iter().filter(|f| !f.starts_with('.')).cloned()).collect();
         *cache = Some((all, list.clone()));
         list
+    }
+
+    /// Whether the installed fonts are cataloged, so lookups by family name no longer wait for
+    /// the scan. Always true on wasm, which has no installed fonts.
+    pub fn installed_fonts_ready(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.cataloged.get().is_some()
+        }
+        #[cfg(target_arch = "wasm32")]
+        true
+    }
+
+    /// [`FontDb::menu_family_list`] without waiting for the installed fonts' scan: until it ends,
+    /// the families already loaded (the bundled fonts and any loaded meanwhile), sorted, without
+    /// the hidden ones. For what is built every frame, such as the menu bar's Type › Font, so the
+    /// window's first frame doesn't wait for the scan of a large font library (#5483).
+    /// [`FontDb::generation`] changes when the scan ends.
+    pub fn menu_family_list_now(&self) -> Arc<[String]> {
+        if self.installed_fonts_ready() {
+            return self.menu_family_list();
+        }
+        let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).filter(|f| !f.starts_with('.')).collect();
+        v.sort_by_key(|a| a.to_lowercase());
+        v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        self.composite_font_names().into_iter().chain(v).collect()
     }
 
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
@@ -190,6 +242,30 @@ impl FontDb {
         v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
         v.dedup_by(|a, b| a.2 == b.2);
         v.into_iter().map(|t| t.2).collect()
+    }
+
+    /// The style a style-less request gets for `family`: its face nearest Regular upright, by the
+    /// catalog's or the loaded faces' metadata. Unlike [`FontDb::face`] it reads no font files, so
+    /// the closest styles of many families cost little.
+    pub fn closest_style(&self, family: &str) -> Option<String> {
+        let (family, _) = self.canonical(family, "");
+        let family = family.as_str();
+        let mut best: Option<(f32, String)> = None;
+        let consider = |best: &mut Option<(f32, String)>, weight: f32, italic: bool, style: &str| {
+            let d = super::build::weight_distance(weight, italic, 400.0, false);
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                *best = Some((d, style.to_string()));
+            }
+        };
+        for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+            consider(&mut best, f.weight, f.italic, &f.style);
+        }
+        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            for cf in &c.faces {
+                consider(&mut best, cf.weight, cf.italic, &cf.style);
+            }
+        }
+        best.map(|(_, style)| style)
     }
 
     /// Add a user font (TTF/OTF/TTC bytes). Returns the number of faces added (0 if unparseable or
@@ -390,6 +466,7 @@ impl FontDb {
             let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
             sys.scans = sys.scans.wrapping_add(1);
             sys.misses.clear();
+            sys.file_searches = 0;
         }
         self.changed();
         n
