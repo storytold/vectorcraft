@@ -1,3 +1,4 @@
+use vectorcraft_engine::cmd::fontfiles::{MAX_FONT_FILE, TOO_LARGE};
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
@@ -141,6 +142,11 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 /// A file that adds no face, being no font or a web font, is an error saying why; one whose faces
 /// the session has already says so.
 fn add_font(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<Value, String> {
+    // Refused before it is encoded: base64 of a huge file would take the memory before the command's
+    // own size check could refuse it.
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_FONT_FILE {
+        return Err(TOO_LARGE.to_string());
+    }
     let font = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)});
     let r = app.run("text.addFonts", json!({ "fonts": [font] }))?;
     let (added, kept) = (face_names(&r["added"]), face_names(&r["kept"]));
