@@ -1851,6 +1851,8 @@ digits	Hindi	Hindi
 	Objects on Path Tool	Công cụ Đối tượng trên đường dẫn
 	Attach Objects on Path	Gắn đối tượng lên đường dẫn
 	Expand Objects on Path	Mở rộng đối tượng trên đường dẫn
+	Detach	Tách
+	Detach Object from Path	Tách đối tượng khỏi đường dẫn
 	Release Live Paint	Giải phóng tô trực tiếp
 	Release Repeat	Giải phóng lặp lại
 	Release Slice	Giải phóng lát cắt
@@ -5142,6 +5144,7 @@ theme	Appearance	Giao diện
 @msg	paths contain invalid coordinates	đường dẫn chứa tọa độ không hợp lệ
 @msg	paths: give at least one file	đường dẫn: hãy cung cấp ít nhất một tệp
 @msg	replace: the object to replace was changed or deleted	thay thế: đối tượng cần thay thế đã bị thay đổi hoặc xóa
+@msg	the document it was prepared for is no longer active	tài liệu được chuẩn bị không còn hoạt động
 @msg	pattern missing	thiếu họa tiết
 @msg	patterns nested too deeply are filled with mid-grey	họa tiết lồng nhau quá sâu được tô bằng màu xám trung tính
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng
@@ -5224,6 +5227,7 @@ theme	Appearance	Giao diện
 @msg	select a repeat	hãy chọn một đối tượng lặp
 @msg	select an Intertwine group	hãy chọn một nhóm đan xen
 @msg	select an Objects on Path group	hãy chọn một nhóm đối tượng trên đường dẫn
+@msg	choose the object to detach with its Select/Move widget	hãy chọn đối tượng cần tách bằng tiện ích Chọn/Di chuyển của nó
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	không thể gắn đối tượng lên một đường dẫn nằm trong đường dẫn phức, đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen
 @msg	a clipping path can't take objects	không thể gắn đối tượng lên đường dẫn cắt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	không thể gắn các đối tượng nằm trong đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen lên đường dẫn
@@ -5344,7 +5348,9 @@ theme	Appearance	Giao diện
 @msg	`{GRAPHICS}` face must be front or back	face của `{GRAPHICS}` phải là front hoặc back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Đồ họa được đặt lên các mặt phẳng: hãy dùng loại đối tượng Kéo dài hoặc Mặt phẳng
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
 @msg	The graphics are too complex: simplify the symbols' art	Đồ họa quá phức tạp: hãy đơn giản hóa hình vẽ của các ký hiệu

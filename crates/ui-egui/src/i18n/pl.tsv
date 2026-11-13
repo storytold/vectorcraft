@@ -1761,6 +1761,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Narzędzie Obiekty na ścieżce
 	Attach Objects on Path	Dołącz obiekty do ścieżki
 	Expand Objects on Path	Rozszerz obiekty na ścieżce
+	Detach	Odłącz
+	Detach Object from Path	Odłącz obiekt od ścieżki
 	Release Live Paint	Uwolnij aktywne malowanie
 	Release Repeat	Uwolnij powtórzenie
 	Release Slice	Uwolnij plasterek
@@ -4902,6 +4904,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	ścieżki zawierają nieprawidłowe współrzędne
 @msg	paths: give at least one file	paths: podaj co najmniej jeden plik
 @msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
+@msg	the document it was prepared for is no longer active	dokument, dla którego to przygotowano, nie jest już aktywny
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
 @msg	percent must be above 0 and at most 6400, not {p}	percent musi być większy od 0 i nie większy niż 6400, nie {p}
@@ -4937,6 +4940,7 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	zaznacz powtórzenie
 @msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select an Objects on Path group	zaznacz grupę obiektów na ścieżce
+@msg	choose the object to detach with its Select/Move widget	wybierz obiekt do odłączenia jego uchwytem Zaznacz/Przesuń
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	do ścieżki wewnątrz ścieżki złożonej, przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć obiektów
 @msg	a clipping path can't take objects	do ścieżki przycinającej nie można dołączyć obiektów
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	obiektów wewnątrz przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć do ścieżki
@@ -5790,7 +5794,9 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front or back	face w `{GRAPHICS}` musi mieć wartość front lub back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiki są nakładane na płaskie ściany: użyj typu obiektu Wyciągnięcie lub Płaszczyzna
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość rysunki symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
 @msg	The graphics are too complex: simplify the symbols' art	Grafiki są zbyt złożone: uprość rysunki symboli

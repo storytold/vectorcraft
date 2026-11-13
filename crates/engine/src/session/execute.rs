@@ -1,6 +1,6 @@
 use super::{
-    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
-    strip_replay_only, waits_for_tool_edit,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd, find_command,
+    given_ids, guard, strip_replay_only, waits_for_tool_edit,
 };
 
 /// A command's result `r` with the warnings of the previews that settling an interaction applied
@@ -115,7 +115,7 @@ impl Session {
             if id == "effect.refreshDeferred" {
                 cmd::given_object_ids(params, id)?;
             } else {
-                cmd::given_objects(self, params, id)?;
+                cmd::given_nodes(self, params, id, TAKES_GUIDE_IDS.contains(&id))?;
             }
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
@@ -134,7 +134,8 @@ impl Session {
         // whichever tool is chosen.
         let given = given_ids(spec.params, params);
         // The guide commands take ruler guides by index; an object command given one's id is refused.
-        if let (Some(ids), Some(st)) = (&given, self.active())
+        if !TAKES_GUIDE_IDS.contains(&id)
+            && let (Some(ids), Some(st)) = (&given, self.active())
             && let Some(guide) = ids.iter().find(|i| st.doc.node(**i).is_some_and(|n| n.is_ruler_guide()))
         {
             let value = guide.0;

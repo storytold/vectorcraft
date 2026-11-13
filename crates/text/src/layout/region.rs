@@ -73,6 +73,67 @@ fn poly_intervals(polys: &[Vec<Point>], y: f64) -> Vec<(f64, f64)> {
     xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect()
 }
 
+/// The part of the horizontal line at `y` closer than `r` to the segment `a`–`b`: the line's
+/// intersection with the segment's two end disks and the band between them, which together make
+/// a convex shape, so the result is one interval.
+fn near_segment(a: Point, b: Point, y: f64, r: f64) -> Option<(f64, f64)> {
+    if y <= a.y.min(b.y) - r || y >= a.y.max(b.y) + r {
+        return None;
+    }
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for p in [a, b] {
+        let h = r * r - (y - p.y) * (y - p.y);
+        if h > 0.0 {
+            lo = lo.min(p.x - h.sqrt());
+            hi = hi.max(p.x + h.sqrt());
+        }
+    }
+    let d = b - a;
+    let len = d.hypot();
+    if len > 0.0 {
+        let n = kurbo::Vec2::new(-d.y, d.x) * (r / len);
+        let band = [a + n, b + n, b - n, a - n];
+        for i in 0..4 {
+            let (p, q) = (band[i], band[(i + 1) % 4]);
+            if (p.y <= y) != (q.y <= y) {
+                let x = p.x + (y - p.y) / (q.y - p.y) * (q.x - p.x);
+                lo = lo.min(x);
+                hi = hi.max(x);
+            }
+        }
+    }
+    (hi > lo).then_some((lo, hi))
+}
+
+/// The x at which some point of the band `top..bottom` (`top <= bottom`) is closer than `r` to the
+/// segment `a`–`b`. The points closer than `r` to the segment make a convex shape, so within the
+/// band its leftmost and rightmost points lie on the band's top or bottom or beside an end of the
+/// segment inside the band, and the result is one interval.
+fn near_segment_in_band(a: Point, b: Point, top: f64, bottom: f64, r: f64) -> Option<(f64, f64)> {
+    let ends = [a, b].into_iter().filter(|p| p.y >= top && p.y <= bottom).map(|p| (p.x - r, p.x + r));
+    let (lo, hi) = [near_segment(a, b, top, r), near_segment(a, b, bottom, r)]
+        .into_iter()
+        .flatten()
+        .chain(ends)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (c, d)| (lo.min(c), hi.max(d)));
+    (hi > lo).then_some((lo, hi))
+}
+
+/// [`band_intervals`] less every x at which some point of the band `top..bottom` is closer than
+/// `inset` to an edge of `polys` (holes included), measured from the edge itself.
+fn band_inset_intervals(polys: &[Vec<Point>], top: f64, bottom: f64, inset: f64) -> Vec<(f64, f64)> {
+    let iv = band_intervals(polys, top, bottom);
+    if inset <= 0.0 || iv.is_empty() {
+        return iv;
+    }
+    if !inset.is_finite() {
+        return vec![];
+    }
+    let (top, bottom) = (top.min(bottom), top.max(bottom));
+    let near = polys.iter().flat_map(|p| (0..p.len()).filter_map(move |i| near_segment_in_band(p[i], p[(i + 1) % p.len()], top, bottom, inset)));
+    subtract_intervals(&iv, &union_intervals(near.collect()))
+}
+
 /// Union of sorted-or-not intervals.
 fn union_intervals(mut v: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     v.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -355,14 +416,18 @@ impl Region {
 
     /// `iv` minus every x at which a wrap object lies somewhere in the band `top..bottom` (or the x
     /// inside it over the whole band, for Invert Wrap). Offsets grow each wrap shape vertically
-    /// and horizontally.
+    /// and horizontally. Along the line, the text also keeps the inset beside each wrap object
+    /// (outside it, or inside it for Invert Wrap); above and below a wrap object only its offset
+    /// applies.
     fn wrapped(&self, mut iv: Vec<(f64, f64)>, top: f64, bottom: f64) -> Vec<(f64, f64)> {
         let (top, bottom) = (top.min(bottom), top.max(bottom));
+        let inset = self.inset;
         for (polys, off, invert) in self.wraps.iter() {
             if iv.is_empty() {
                 break;
             }
             let grow = |v: Vec<(f64, f64)>| union_intervals(v.into_iter().map(|(a, b)| (a - off, b + off)).collect());
+            let shrink = |v: Vec<(f64, f64)>| v.into_iter().map(|(a, b)| (a + inset, b - inset)).filter(|(a, b)| b > a).collect::<Vec<_>>();
             iv = if *invert {
                 // The band is cut into pieces. Each height of a piece `y0..y1` is within the offset
                 // of some height from `y0` plus the offset to `y1` less the offset, so an x the
@@ -395,14 +460,15 @@ impl Region {
                 for w in cuts.windows(2) {
                     let (a, b) = (w[0] + off, w[1] - off);
                     let held = if a <= b { band_intervals(polys, a, b) } else { band_cover_closed(polys, b, a) };
-                    iv = intersect_intervals(&iv, &grow(held));
+                    iv = intersect_intervals(&iv, &shrink(grow(held)));
                     if iv.is_empty() {
                         break;
                     }
                 }
                 iv
             } else {
-                subtract_intervals(&iv, &grow(band_cover(polys, top - off, bottom + off, false)))
+                let w = grow(band_cover(polys, top - off, bottom + off, false));
+                subtract_intervals(&iv, &union_intervals(w.into_iter().map(|(a, b)| (a - inset, b + inset)).collect()))
             };
         }
         iv
@@ -416,8 +482,10 @@ impl Region {
     /// Every horizontal span inside the frame (and the cell) over the band `top..bottom`, left to
     /// right (text wraps on both sides of an object).
     pub(super) fn spans(&self, top: f64, bottom: f64) -> Vec<(f64, f64)> {
+        // The inset from the cell's edges; `band_inset_intervals` already keeps it from the frame's
+        // edges and `wrapped` beside the wrap objects.
         let clip = |(a, b): (f64, f64)| {
-            let (a, b) = (a.max(self.cell.x0) + self.inset, b.min(self.cell.x1) - self.inset);
+            let (a, b) = (a.max(self.cell.x0 + self.inset), b.min(self.cell.x1 - self.inset));
             (b > a).then_some((a, b))
         };
         let plain = self.polys.is_empty() || self.rect;
@@ -433,7 +501,7 @@ impl Region {
         };
         // `max` then `min` rather than `clamp`, which panics on a frame less than 2e-4 tall.
         let clamp = |y: f64| if plain { y } else { y.max(fb.y0 + 1e-4).min(fb.y1 - 1e-4) };
-        let free = if plain { vec![(self.cell.x0, self.cell.x1)] } else { band_intervals(&self.polys, clamp(top), clamp(bottom)) };
+        let free = if plain { vec![(self.cell.x0, self.cell.x1)] } else { band_inset_intervals(&self.polys, clamp(top), clamp(bottom), self.inset) };
         // Wrap objects split lines: keep what is free of them over the whole band.
         let free = if self.wraps.is_empty() { free } else { self.wrapped(free, clamp(top), clamp(bottom)) };
         free.into_iter().filter_map(clip).collect()
@@ -455,12 +523,13 @@ fn the_cells_of_a_frame_share_its_polygons_and_the_wrap_shapes() {
     assert!(cells.iter().all(|c| c.polys.as_ptr() == first.polys.as_ptr() && c.wraps.as_ptr() == first.wraps.as_ptr()));
 }
 
+/// A path with one closed subpath through each list of points.
 #[cfg(test)]
-fn polygon_path(contours: &[&[(f64, f64)]]) -> BezPath {
+fn closed(subpaths: &[&[(f64, f64)]]) -> BezPath {
     let mut path = BezPath::new();
-    for c in contours {
-        path.move_to(c[0]);
-        for &p in &c[1..] {
+    for pts in subpaths {
+        path.move_to(pts[0]);
+        for &p in &pts[1..] {
             path.line_to(p);
         }
         path.close_path();
@@ -468,10 +537,18 @@ fn polygon_path(contours: &[&[(f64, f64)]]) -> BezPath {
     path
 }
 
+/// The spans of every cell of `path` over the band `top..bottom`.
+#[cfg(test)]
+fn cell_spans(path: &BezPath, opts: &LayoutOptions, wrap: &[vectorcraft_doc::WrapShape], top: f64, bottom: f64) -> Vec<Vec<(f64, f64)>> {
+    Region::cells(path, opts, wrap).iter().map(|c| c.spans(top, bottom)).collect()
+}
+
 #[cfg(test)]
 fn assert_spans(got: &[(f64, f64)], want: &[(f64, f64)]) {
     assert_eq!(got.len(), want.len(), "{got:?} != {want:?}");
-    assert!(got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-9 && (g.1 - w.1).abs() < 1e-9), "{got:?} != {want:?}");
+    for (g, w) in got.iter().zip(want) {
+        assert!((g.0 - w.0).abs() < 1e-9 && (g.1 - w.1).abs() < 1e-9, "{got:?} != {want:?}");
+    }
 }
 
 /// A line stays inside a frame whose right edge pinches in to a point between any fixed heights of
@@ -479,9 +556,8 @@ fn assert_spans(got: &[(f64, f64)], want: &[(f64, f64)]) {
 #[cfg(test)]
 #[test]
 fn a_line_stays_inside_a_frame_that_pinches_in_within_its_band() {
-    let notch = |tip: (f64, f64), (y0, y1): (f64, f64)| {
-        polygon_path(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, y0), tip, (100.0, y1), (100.0, 100.0), (0.0, 100.0)]])
-    };
+    let notch =
+        |tip: (f64, f64), (y0, y1): (f64, f64)| closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, y0), tip, (100.0, y1), (100.0, 100.0), (0.0, 100.0)]]);
     let far = PathData::from_bezpath(&Rect::new(300.0, 0.0, 310.0, 100.0).to_path(0.1));
     let far = vectorcraft_doc::WrapShape { path: far, wrap: Default::default() };
     for (frame, x) in
@@ -503,7 +579,7 @@ fn a_line_stays_inside_a_frame_that_pinches_in_within_its_band() {
 fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     let frame = Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1);
     let spans = |shape: &[(f64, f64)], offset: f64, invert: bool| {
-        let path = PathData::from_bezpath(&polygon_path(&[shape]));
+        let path = PathData::from_bezpath(&closed(&[shape]));
         let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset, invert } };
         let cells = Region::cells(&frame, &LayoutOptions::default(), &[wrap]);
         assert!(cells[0].rect);
@@ -513,7 +589,7 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     assert_spans(&spans(&[(100.0, 47.0), (40.0, 47.5), (100.0, 48.0)], 1.0, false), &[(0.0, 39.0)]);
     // Two contours that cancel each other (even-odd) hold no area and leave the line whole.
     let band: &[(f64, f64)] = &[(0.0, 45.0), (100.0, 45.0), (100.0, 55.0), (0.0, 55.0)];
-    let path = PathData::from_bezpath(&polygon_path(&[band, band]));
+    let path = PathData::from_bezpath(&closed(&[band, band]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert: false } };
     assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     let notch = [(0.0, 0.0), (100.0, 0.0), (100.0, 45.0), (60.0, 47.5), (100.0, 50.0), (100.0, 100.0), (0.0, 100.0)];
@@ -524,19 +600,19 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     // An Invert Wrap shape that steps sideways within the band keeps the room its offset bridges.
     let upper: &[(f64, f64)] = &[(0.0, 0.0), (40.0, 0.0), (40.0, 50.0), (0.0, 50.0)];
     let lower: &[(f64, f64)] = &[(45.0, 50.0), (85.0, 50.0), (85.0, 100.0), (45.0, 100.0)];
-    let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
+    let path = PathData::from_bezpath(&closed(&[upper, lower]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0), &[(40.0, 45.0)]);
     // An Invert Wrap shape of two parts whose offsets meet across the gap between them (45.25 + 5
     // reaches past 55.125 - 5) keeps the whole line.
     let upper: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 0.0), (100.0, 45.25), (0.0, 45.25)];
     let lower: &[(f64, f64)] = &[(0.0, 55.125), (100.0, 55.125), (100.0, 100.0), (0.0, 100.0)];
-    let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
+    let path = PathData::from_bezpath(&closed(&[upper, lower]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     // A gap the offsets do not bridge (45 + 5 stops short of 55.125 - 5) holds no line.
     let upper: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 0.0), (100.0, 45.0), (0.0, 45.0)];
-    let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
+    let path = PathData::from_bezpath(&closed(&[upper, lower]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert!(Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0).is_empty());
 }
@@ -546,7 +622,7 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
 #[cfg(test)]
 #[test]
 fn a_hole_inside_a_band_splits_the_line() {
-    let frame = polygon_path(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], &[(40.0, 52.0), (60.0, 52.0), (60.0, 58.0), (40.0, 58.0)]]);
+    let frame = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)], &[(40.0, 52.0), (60.0, 52.0), (60.0, 58.0), (40.0, 58.0)]]);
     let cells = Region::cells(&frame, &LayoutOptions::default(), &[]);
     assert!(!cells[0].rect);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 40.0), (60.0, 100.0)]);
@@ -564,48 +640,42 @@ fn a_hole_inside_a_band_splits_the_line() {
 #[cfg(test)]
 #[test]
 fn lines_cross_an_edge_two_contours_share() {
-    let seam = polygon_path(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (0.0, 100.0)]]);
+    let seam = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (0.0, 100.0)]]);
     let cells = Region::cells(&seam, &LayoutOptions::default(), &[]);
     assert!(!cells[0].rect);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
-    let step = polygon_path(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)]]);
+    let step = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)]]);
     let cells = Region::cells(&step, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 50.0)]);
     // Contours that meet along a seam that bends within the band, one drawn each way along it.
-    let bent = polygon_path(&[
+    let bent = closed(&[
         &[(0.0, 0.0), (50.0, 0.0), (70.0, 47.5), (50.0, 100.0), (0.0, 100.0)],
         &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0), (70.0, 47.5)],
     ]);
     let cells = Region::cells(&bent, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     // Contours side by side, meeting along a vertical edge.
-    let side = polygon_path(&[&[(0.0, 0.0), (50.0, 0.0), (50.0, 100.0), (0.0, 100.0)], &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)]]);
+    let side = closed(&[&[(0.0, 0.0), (50.0, 0.0), (50.0, 100.0), (0.0, 100.0)], &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)]]);
     let cells = Region::cells(&side, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     // The same, with an extra anchor on one side of the shared edge.
-    let split = polygon_path(&[
-        &[(0.0, 0.0), (50.0, 0.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)],
-        &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)],
-    ]);
+    let split =
+        closed(&[&[(0.0, 0.0), (50.0, 0.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)], &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)]]);
     let cells = Region::cells(&split, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     // A slanted shared edge with an extra anchor on one side.
-    let slanted = polygon_path(&[
-        &[(0.0, 0.0), (40.0, 0.0), (50.0, 50.0), (60.0, 100.0), (0.0, 100.0)],
-        &[(40.0, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0, 100.0)],
-    ]);
+    let slanted =
+        closed(&[&[(0.0, 0.0), (40.0, 0.0), (50.0, 50.0), (60.0, 100.0), (0.0, 100.0)], &[(40.0, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0, 100.0)]]);
     let cells = Region::cells(&slanted, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
     // Slanted edges of two contours 1e-7 pt apart are not one edge: the line stops at each.
-    let near = polygon_path(&[
-        &[(0.0, 0.0), (40.0, 0.0), (60.0, 100.0), (0.0, 100.0)],
-        &[(40.0 + 1e-7, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0 + 1e-7, 100.0)],
-    ]);
+    let near =
+        closed(&[&[(0.0, 0.0), (40.0, 0.0), (60.0, 100.0), (0.0, 100.0)], &[(40.0 + 1e-7, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0 + 1e-7, 100.0)]]);
     let cells = Region::cells(&near, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(0.0, 48.0), (52.0 + 1e-7, 100.0)]);
     // The same 1e-6 pt apart, 1e8 pt from the origin.
     let (x, y) = (1e8, 1e8);
-    let far = polygon_path(&[
+    let far = closed(&[
         &[(x, y), (x + 40.0, y), (x + 60.0, y + 100.0), (x, y + 100.0)],
         &[(x + 40.0 + 1e-6, y), (x + 100.0, y), (x + 100.0, y + 100.0), (x + 60.0 + 1e-6, y + 100.0)],
     ]);
@@ -614,14 +684,14 @@ fn lines_cross_an_edge_two_contours_share() {
     assert!(spans.len() == 2 && spans[0].1 < x + 48.001 && spans[1].0 > x + 51.999, "{spans:?}");
     // A real gap of 0.01 pt between contours far from the origin stays a gap.
     let x = 1e8;
-    let apart = polygon_path(&[
+    let apart = closed(&[
         &[(x, 0.0), (x + 50.0, 0.0), (x + 50.0, 100.0), (x, 100.0)],
         &[(x + 50.01, 0.0), (x + 100.0, 0.0), (x + 100.0, 100.0), (x + 50.01, 100.0)],
     ]);
     let cells = Region::cells(&apart, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(x, x + 50.0), (x + 50.01, x + 100.0)]);
     // So does a gap of 1e-7 pt between vertical edges there, a few units of rounding wide.
-    let apart = polygon_path(&[
+    let apart = closed(&[
         &[(x, 0.0), (x + 50.0, 0.0), (x + 50.0, 100.0), (x, 100.0)],
         &[(x + 50.0 + 1e-7, 0.0), (x + 100.0, 0.0), (x + 100.0, 100.0), (x + 50.0 + 1e-7, 100.0)],
     ]);
@@ -637,7 +707,7 @@ fn many_overlapping_edges_in_a_band_hold_no_line_outside_the_frame() {
     let strips: Vec<Vec<(f64, f64)>> =
         (0..200).map(|i| f64::from(i) * 2.0).map(|x| vec![(x, 0.0), (x + 1.0, 0.0), (x + 501.0, 100.0), (x + 500.0, 100.0)]).collect();
     let strips: Vec<&[(f64, f64)]> = strips.iter().map(Vec::as_slice).collect();
-    let cells = Region::cells(&polygon_path(&strips), &LayoutOptions::default(), &[]);
+    let cells = Region::cells(&closed(&strips), &LayoutOptions::default(), &[]);
     assert!(cells[0].spans(40.0, 60.0).is_empty());
     assert!(!cells[0].spans(50.0, 50.0).is_empty());
 }
@@ -648,7 +718,7 @@ fn many_overlapping_edges_in_a_band_hold_no_line_outside_the_frame() {
 #[test]
 fn flat_frames_and_rectangles_keep_their_spans() {
     for height in [0.0, 1e-5] {
-        let flat = polygon_path(&[&[(0.0, 0.0), (10.0, 0.0), (0.0, height)], &[(20.0, 0.0), (30.0, 0.0), (20.0, height)]]);
+        let flat = closed(&[&[(0.0, 0.0), (10.0, 0.0), (0.0, height)], &[(20.0, 0.0), (30.0, 0.0), (20.0, height)]]);
         let cells = Region::cells(&flat, &LayoutOptions::default(), &[]);
         assert!(!cells[0].rect);
         assert!(cells[0].spans(-5.0, 5.0).iter().all(|&(a, b)| b - a < 1e-3));
@@ -658,4 +728,73 @@ fn flat_frames_and_rectangles_keep_their_spans() {
     assert!(cells[0].rect);
     assert_eq!((cells[0].top(), cells[0].bottom()), (10.0, 90.0));
     assert_spans(&cells[0].spans(40.0, 60.0), &[(10.0, 90.0)]);
+}
+
+/// On a triangle, the inset keeps the line 10 pt from the sloped edge, measured from the edge
+/// itself (x + y <= 100 - 10√2 at the band's bottom), not 10 pt along the line.
+#[cfg(test)]
+#[test]
+fn inset_on_a_shaped_frame_is_measured_from_its_sloped_edge() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    let inset = |inset| cell_spans(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[], 40.0, 60.0);
+    assert_spans(&inset(10.0)[0], &[(10.0, 40.0 - 10.0 * std::f64::consts::SQRT_2)]);
+    assert_spans(&inset(0.0)[0], &[(0.0, 40.0)]);
+}
+
+/// A rectangular frame keeps its inset from each side, and its first line starts the inset below
+/// its top.
+#[cfg(test)]
+#[test]
+fn a_rectangular_frame_keeps_its_inset_from_each_side() {
+    let cells = Region::cells(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1), &LayoutOptions { inset: 10.0, ..LayoutOptions::default() }, &[]);
+    assert!(cells[0].rect);
+    assert_eq!((cells[0].top(), cells[0].bottom()), (10.0, 90.0));
+    assert_spans(&cells[0].spans(40.0, 60.0), &[(10.0, 90.0)]);
+}
+
+/// The inset keeps text clear of a hole's sloped edges too.
+#[cfg(test)]
+#[test]
+fn inset_keeps_text_clear_of_a_hole_s_sloped_edges() {
+    let square = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    let diamond = [(50.0, 30.0), (70.0, 50.0), (50.0, 70.0), (30.0, 50.0)];
+    let spans = cell_spans(&closed(&[&square, &diamond]), &LayoutOptions { inset: 5.0, ..LayoutOptions::default() }, &[], 40.0, 44.0);
+    let clear = 5.0 * std::f64::consts::SQRT_2;
+    assert_spans(&spans[0], &[(5.0, 36.0 - clear), (64.0 + clear, 95.0)]);
+}
+
+/// In a frame of columns, the inset is kept once from a column's inner edge and once from the
+/// frame's sloped edge.
+#[cfg(test)]
+#[test]
+fn inset_applies_once_at_a_column_s_edge_and_at_the_frame_s_edge() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    let spans = cell_spans(&triangle, &LayoutOptions { inset: 10.0, columns: 2, gutter: 0.0, ..LayoutOptions::default() }, &[], 10.0, 20.0);
+    assert_spans(&spans[0], &[(10.0, 40.0)]);
+    assert_spans(&spans[1], &[(60.0, 80.0 - 10.0 * std::f64::consts::SQRT_2)]);
+}
+
+/// An inset wider than a shaped frame leaves no room for text, whatever its size.
+#[cfg(test)]
+#[test]
+fn an_inset_wider_than_a_shaped_frame_leaves_no_room() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    for inset in [40.0, 1e300, f64::INFINITY] {
+        let cells = Region::cells(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[]);
+        assert!(cells[0].spans(40.0, 60.0).is_empty() && cells[0].span(40.0, 60.0).is_none(), "inset {inset}");
+    }
+}
+
+/// Along the line, text keeps the inset beside a wrap object, around it and, with Invert Wrap,
+/// inside it.
+#[cfg(test)]
+#[test]
+fn text_keeps_the_inset_beside_a_wrap_object_along_the_line() {
+    let frame = Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1);
+    let shape = PathData::from_bezpath(&Rect::new(40.0, 40.0, 60.0, 60.0).to_path(0.1));
+    let opts = LayoutOptions { inset: 5.0, ..LayoutOptions::default() };
+    for (invert, want) in [(false, vec![(5.0, 35.0), (65.0, 95.0)]), (true, vec![(45.0, 55.0)])] {
+        let wrap = vectorcraft_doc::WrapShape { path: shape.clone(), wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert } };
+        assert_spans(&cell_spans(&frame, &opts, &[wrap], 45.0, 55.0)[0], &want);
+    }
 }

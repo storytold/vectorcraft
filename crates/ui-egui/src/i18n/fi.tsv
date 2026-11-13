@@ -1817,6 +1817,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Objektit polulla -työkalu
 	Attach Objects on Path	Kiinnitä objektit polulle
 	Expand Objects on Path	Laajenna objektit polulla
+	Detach	Irrota
+	Detach Object from Path	Irrota objekti polulta
 	Release Live Paint	Vapauta elävä maalaus
 	Release Repeat	Vapauta toisto
 	Release Slice	Vapauta siivu
@@ -4982,6 +4984,7 @@ imageTrace	Outline	Ääriviiva
 @msg	paths contain invalid coordinates	polut sisältävät virheellisiä koordinaatteja
 @msg	paths: give at least one file	paths: anna vähintään yksi tiedosto
 @msg	replace: the object to replace was changed or deleted	replace: korvattavaa objektia on muutettu tai se on poistettu
+@msg	the document it was prepared for is no longer active	asiakirja, jota varten se valmisteltiin, ei ole enää aktiivinen
 @msg	pattern missing	kuvio puuttuu
 @msg	patterns nested too deeply are filled with mid-grey	liian syvälle sisäkkäiset kuviot täytetään keskiharmaalla
 @msg	percent must be above 0 and at most 6400, not {p}	percent-arvon on oltava yli 0 ja enintään 6400, ei {p}
@@ -5841,7 +5844,9 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiikat sijoitetaan tasaisille pinnoille: käytä objektityyppiä Pursota tai Taso
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
+@msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
 @msg	The graphics are too complex: simplify the symbols' art	Grafiikat ovat liian monimutkaisia: yksinkertaista symbolien kuvitusta
@@ -6049,6 +6054,7 @@ mark-style	Japanese	Japanilainen
 @msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
+@msg	choose the object to detach with its Select/Move widget	valitse irrotettava objekti sen Valitse/Siirrä-säätimellä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja
 @msg	a clipping path can't take objects	leikkauspolkuun ei voi kiinnittää objekteja
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevia objekteja ei voi kiinnittää polulle

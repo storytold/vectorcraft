@@ -1844,6 +1844,8 @@ digits	Malayalam	Malajálamské
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
+	Detach	Odpojit
+	Detach Object from Path	Odpojit objekt od cesty
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -5076,6 +5078,7 @@ imageTrace	Outline	Obrys
 @msg	paths contain invalid coordinates	cesty obsahují neplatné souřadnice
 @msg	paths: give at least one file	paths: zadejte alespoň jeden soubor
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
+@msg	the document it was prepared for is no longer active	dokument, pro který bylo připraveno, už není aktivní
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
 @msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
@@ -5111,6 +5114,7 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	choose the object to detach with its Select/Move widget	vyberte objekt k odpojení jeho ovládacím prvkem Vybrat/Přesunout
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
 @msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu
@@ -5959,7 +5963,9 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
 @msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
