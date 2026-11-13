@@ -220,14 +220,17 @@ fn is_open(i: &Interp, o: ObjId) -> JsResult<Option<Value>> {
 }
 
 /// Closes the object's open file, if it has one, which writes what the script wrote to it. → false
-/// after setting `error` when that could not be written.
+/// after setting `error` when that could not be written; the file then stays open, so a later
+/// `close` tries again.
 fn close_open(i: &mut Interp, o: ObjId) -> JsResult<bool> {
     let mut written = true;
     if let Some(h) = is_open(i, o)? {
         let r = host(i, "close", &[h])?;
         written = outcome(i, o, &r)?;
     }
-    set_slot(i, o, HANDLE, Value::Number(-1.0))?;
+    if written {
+        set_slot(i, o, HANDLE, Value::Number(-1.0))?;
+    }
     Ok(written)
 }
 

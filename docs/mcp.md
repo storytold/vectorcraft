@@ -2300,7 +2300,8 @@ VectorCraft writes files by these rules of its own:
   `Script file access denied`.
 - What a script writes is written when it closes the file or when the run ends, also when the run fails. At the
   run's end the files left open are written in the order they were opened. A file
-  that `close` could not write is written again when the run ends, and a `write` that would pass the run's limit
+  that `close` could not write stays open, so a later `close` tries again, and is written again when the run ends; a
+  `write` that would pass the run's limit
   is not written. A run that
   would otherwise succeed fails when a changed file it left open cannot be written, with
   `Error: the script left open files that could not be written` and the files' paths. One file

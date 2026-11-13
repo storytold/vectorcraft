@@ -730,6 +730,21 @@ fn script_file_copy_of_an_open_file_has_its_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A file whose `close` could not write it stays open, so a later `close` writes it.
+#[test]
+fn script_file_close_that_fails_can_be_tried_again() {
+    let base = folder("closeagain");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, f = new File(d + '/f.txt'); f.open('w'); f.write('kept');\n\
+         new File(f.fsName).readonly = true; var out = [f.close(), f.error];\n\
+         new File(f.fsName).readonly = false; out.push(f.close());\n\
+         var g = new File(f.fsName); g.open('r'); out.push(g.read()); g.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[false, "Script file could not be written", true, "kept"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `copy` gives the copy the source's permissions: the copy of a read-only file is read-only.
 #[test]
 fn script_file_copy_keeps_the_source_read_only() {
