@@ -404,7 +404,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** a paragraph's Auto Leading also sets the Leading the Character panel shows for Auto type, the leading the
   Alt+↑/↓ nudge steps from and the lines Fill with Placeholder Text counts; estimate unchanged.
 - **Missing:** CJK vertical
-  composition (ruby, mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
+  composition (ruby, custom mojikumi sets and the Mojikumi Settings dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
 - **Done:** Ruby (ふりがな) for live text (`type.ruby`): a reading over a byte range, above or below (right of the
   column in vertical type), aligned, sized, overhanging or squeezed; saved natively, laid out with line growth, drawn
   on the canvas and in SVG/PDF (outlines where ruby is present), EPS, EMF/WMF and legacy `.ai` (outlines where ruby is
@@ -442,7 +442,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   export, where the type's outlines used to leave them out; bitmap glyphs (emoji) too, as images that hold their
   own pixels until a document takes them in; estimate unchanged.
 - **Missing:** CJK vertical
-  composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
+  composition (custom mojikumi sets and the Mojikumi Settings dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi, digit types, Character Direction and Kashidas (Middle Eastern composers, a split caret), spell check (its engine is done, #4936: `text.spelling.check` and
   `text.spelling.suggest` on craft-proof; the custom dictionary and Ignore All commands; Auto Spell Check, `edit.autoSpellCheck`, with a right-click on an underlined word offering its suggestions, Ignore All and Add to Dictionary, and Spelling › Auto Spell Check in the context menu of type; the Edit Custom Dictionary dialog; the Check Spelling dialog remains),
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
@@ -663,7 +663,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
-  Global Edit of groups holding type or images, and rotated copies as matches; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
+  Global Edit of groups holding type or images, and rotated copies as matches.
 - **Estimate:** 5–15 h.
 
 ## G3 3D and Materials

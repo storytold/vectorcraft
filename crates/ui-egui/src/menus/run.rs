@@ -684,6 +684,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        crate::touch::TOGGLE_MODE => Ok(crate::touch::toggle_mode(app)),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
@@ -830,6 +831,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.layerDelete" => crate::panels::layers::delete(app, p),
         "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
@@ -984,6 +986,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
         crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
+        crate::panels::actions::INSERT_SELECT_PATH => crate::panels::actions::insert_select_path(app, p),
         crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),

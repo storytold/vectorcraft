@@ -353,6 +353,142 @@ fn a_stroke_past_the_limits_is_left_out() {
     }
 }
 
+/// Each solid [`built_solids`] gives for effect `id` on `n` within `limit` faces together, as its
+/// face count (`None` for a stroke left out) or the error, every result the iterator gives.
+fn solid_faces(id: &str, n: &Node, limit: usize) -> Vec<Result<Option<usize>, String>> {
+    let shapes = [Profile { path: profile(n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(n), opacity: 1.0, scopes: vec![] }];
+    let p = crate::merged_params(id, &json!({}));
+    let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
+    built_solids(id, &p, &parts, bounds, limit).map(|r| r.map(|f| f.map(|f| f.len()))).collect()
+}
+
+/// The solids of one object count their faces together: at the limit they all build, one face past
+/// it is an error, and the solids after the one that passes it are never built.
+#[test]
+fn an_objects_solids_count_their_faces_together() {
+    for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
+        let mut n = square_node();
+        // A second stroke, so a solid follows the one that passes the limit.
+        let stroke = n.appearance.items[1].clone();
+        n.appearance.items.push(stroke);
+        let counts: Vec<usize> = solid_faces(id, &n, MAX_OBJECT_FACES).into_iter().map(|c| c.unwrap().unwrap()).collect();
+        assert!(counts.len() == 3 && counts.iter().all(|c| *c > 0), "{id}: {counts:?}");
+        let total: usize = counts.iter().sum();
+        assert!(solid_faces(id, &n, total).iter().all(Result::is_ok), "{id}: at the limit");
+        let past = solid_faces(id, &n, total - 1);
+        assert_eq!(past.last(), Some(&Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string())), "{id}");
+        SOLIDS_BUILT.with(|b| b.set(0));
+        let past = solid_faces(id, &n, counts[0] + counts[1] - 1);
+        assert!(past.len() == 2 && past[1].is_err(), "{id}: {past:?}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get), 2, "{id}: the second stroke's solid is never built");
+    }
+}
+
+/// A convex polygon of `corners` corners about (20,000, 20,000), filled red, with no stroke.
+fn polygon_node(id: u64, corners: usize) -> Node {
+    let points: Vec<Point> = (0..corners)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / corners as f64).sin_cos();
+            Point::new(20_000.0 + 10_000.0 * c, 20_000.0 + 10_000.0 * s)
+        })
+        .collect();
+    let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    Node::path(NodeId(id), path, Appearance::basic(Paint::solid(RED), Paint::None, 0.0))
+}
+
+/// A group whose members' solids each fit, but not all of them together, draws its source art, and
+/// the commands that check the effect report the error, as do its mesh and its wireframe; one
+/// member fewer, within the limit, draws.
+#[test]
+fn a_groups_solids_together_past_the_limit_draw_the_source() {
+    let member = polygon_node(1, 16_384);
+    let mut alone = member.clone();
+    alone.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let [Ok(Some(each))] = solid_faces(EXTRUDE, &alone, MAX_OBJECT_FACES)[..] else { panic!("one solid") };
+    // Members stacked in one place each build the same solid.
+    let fits = MAX_OBJECT_FACES / each;
+    let group = |count: usize| {
+        let members = (0..count)
+            .map(|k| {
+                let mut m = member.clone();
+                m.id = NodeId(k as u64 + 1);
+                Arc::new(m)
+            })
+            .collect();
+        let mut g = Node::group(NodeId(9999), members);
+        g.appearance.effects.push(fx(EXTRUDE, json!({})));
+        g
+    };
+    let within = group(fits);
+    assert!(validate_solid(&within, EXTRUDE, &json!({})).is_ok(), "{fits} × {each} faces");
+    assert!(solid_art(&within).is_some());
+    let past = group(fits + 1);
+    assert_eq!(validate_solid(&past, EXTRUDE, &json!({})), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert!(solid_art(&past).is_none(), "the source art draws");
+    assert_eq!(three_d_meshes(&past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert_eq!(three_d_wireframe_in(None, &past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+}
+
+/// A fill and strokes whose solids each fit, but not all of them together, draw the source art,
+/// and the strokes after the one past the limit are not left out to make room.
+#[test]
+fn a_fill_and_strokes_together_past_the_limit_draw_the_source() {
+    let mut n = polygon_node(1, 16_384);
+    n.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let stroke = AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(BLUE), 20.0));
+    n.appearance.items.push(stroke.clone());
+    // Strokes alike each build the same solid.
+    let [Ok(Some(fill)), Ok(Some(each))] = solid_faces(EXTRUDE, &n, MAX_OBJECT_FACES)[..] else { panic!("a fill's solid and a stroke's") };
+    let fits = (MAX_OBJECT_FACES - fill) / each;
+    assert!(fits >= 2, "{fill} + {fits} × {each}");
+    n.appearance.items.extend(std::iter::repeat_n(stroke, fits - 1));
+    assert!(validate_solid(&n, EXTRUDE, &json!({})).is_ok(), "{fill} + {fits} × {each}");
+    let art = solid_art(&n).unwrap();
+    assert!(faces(&art).iter().any(|f| blue(f)));
+    n.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(BLUE), 20.0)));
+    assert_eq!(validate_solid(&n, EXTRUDE, &json!({})), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert!(solid_art(&n).is_none(), "the source art draws");
+}
+
+/// The check builds the solids from the shapes the art draws them from: after the geometry effects
+/// before the 3D effect, on an object, on its fill and on a group. Copies a Transform effect before
+/// it makes that take the solids past the limit fail the check, as the art then draws the source.
+#[test]
+fn the_check_counts_the_faces_after_the_geometry_effects_before() {
+    let mut alone = polygon_node(1, 16_384);
+    alone.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let [Ok(Some(each))] = solid_faces(EXTRUDE, &alone, MAX_OBJECT_FACES)[..] else { panic!("one solid") };
+    // Side by side, each copy builds the same solid.
+    let copies = |k: usize| fx("distort.transform", json!({"moveH": 30_000.0, "copies": k}));
+    for (k, fits) in [(1, true), (MAX_OBJECT_FACES / each, false)] {
+        let mut n = polygon_node(1, 16_384);
+        n.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&n, EXTRUDE, &json!({})).is_ok(), fits, "on the object, {k} copies");
+        assert_eq!(solid_art(&n).is_some(), fits, "on the object, {k} copies");
+        let mut f = polygon_node(1, 16_384);
+        f.appearance.items[0].effects_mut().extend([copies(k), fx(EXTRUDE, json!({}))]);
+        assert_eq!(validate_three_d_at(&f, EXTRUDE, &json!({}), (Some(0), 1)).is_ok(), fits, "on the fill, {k} copies");
+        assert_eq!(solid_art(&f).is_some(), fits, "on the fill, {k} copies");
+        let mut g = Node::group(NodeId(9999), vec![Arc::new(polygon_node(1, 16_384))]);
+        g.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&g, EXTRUDE, &json!({})).is_ok(), fits, "on a group, {k} copies");
+        assert_eq!(solid_art(&g).is_some(), fits, "on a group, {k} copies");
+        // A new effect goes after the copies.
+        let mut new = polygon_node(1, 16_384);
+        new.appearance.effects = vec![copies(k)];
+        assert_eq!(validate_three_d_at(&new, EXTRUDE, &json!({}), (None, 1)).is_ok(), fits, "a new effect, {k} copies");
+    }
+    // A hidden effect checked at its own index counts only the effects before it: copies after it
+    // copy the drawn art once it is shown again.
+    let mut hidden = polygon_node(1, 16_384);
+    let mut extrude = fx(EXTRUDE, json!({}));
+    extrude.visible = false;
+    hidden.appearance.effects = vec![extrude, copies(MAX_OBJECT_FACES / each)];
+    assert!(validate_three_d_at(&hidden, EXTRUDE, &json!({}), (None, 0)).is_ok());
+    hidden.appearance.effects[0].visible = true;
+    assert!(solid_art(&hidden).is_some());
+}
+
 /// At no volume Inflate's front is flat: turned, the fill's cells are all drawn before the stroke's,
 /// whatever their depths, as the extrusion's caps are. When the fill puffs, a stroke too narrow to
 /// puff on the grid stays flat and keeps its depths: the fill's puff is drawn over its far side.

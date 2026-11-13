@@ -3930,6 +3930,28 @@ fn point_type(attrs: &str, text: &str) -> String {
     format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n{attrs}\n({text}) Tx\nTO\n")
 }
 
+/// Legacy type is set in the installed face of exactly the PostScript name its `Tf` gives, as type
+/// from a text document is: not a face whose name differs only in case and loads first, nor the
+/// copy the family and style resolve to when the name's own is another (it names its version).
+#[test]
+fn legacy_type_takes_the_face_of_its_exact_postscript_name() {
+    use vectorcraft_text::test_fonts::named_copy;
+    let db = vectorcraft_text::FontDb::global();
+    for (inter, names) in [
+        (true, ("TWINLEGACY INK", "Regular", "Version 1.000", "TWINLEGACYINK-Regular")),
+        (false, ("Twinlegacy Ink", "Regular", "Version 2.000", "TwinlegacyInk-Regular")),
+    ] {
+        assert_eq!(db.add_font(named_copy(inter, names).unwrap()), 1, "{names:?}");
+    }
+    let face = |font: &str| {
+        let texts = legacy_texts(&point_type("", "Hi").replace("/_Helvetica 12 Tf", &format!("/_{font} 12 Tf")));
+        let f = db.style_face(&texts[0].runs[0].style).unwrap();
+        (f.postscript_name(), f.version.clone())
+    };
+    assert_eq!(face("TwinlegacyInk-Regular"), ("TwinlegacyInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face("TWINLEGACYINK-Regular"), ("TWINLEGACYINK-Regular".to_string(), "Version 1.000".to_string()));
+}
+
 /// `TC` and `TW` (§15.4.7) set the paragraph's letter and word spacing, `Tq` its hanging
 /// punctuation and `Th` (§22) its hyphenation; each paragraph keeps the values in force at its
 /// first character, and they last into the next text object.

@@ -357,6 +357,42 @@ fn a_file_that_lost_its_clipping_path_unclips_the_image() {
     );
 }
 
+#[test]
+fn a_file_that_gains_its_clipping_path_again_clips_the_group_that_stayed() {
+    let dir = temp_dir("update-regained-clip");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let placed = NodeId(r["ids"][0].as_u64().unwrap());
+    let id = image_of(&s, &r["ids"][0]).id;
+    let other = s.execute("file.place", &json!({ "path": path, "at": [200, 100] })).unwrap();
+    s.execute("symbol.new", &json!({ "name": "Pic", "ids": [other["ids"][0]] })).unwrap();
+    let unclipped = String::from_utf8(two_plates()).unwrap().replacen("closepath clip newpath", "closepath newpath     ", 1);
+    // The symbol's art: how deep the image is.
+    let depth = |s: &Session| {
+        fn find(n: &Node, at: usize) -> Option<usize> {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                return Some(at);
+            }
+            n.children().and_then(|ch| ch.iter().find_map(|c| find(c, at + 1)))
+        }
+        find(&s.doc().unwrap().doc.symbols.iter().find(|w| w.name == "Pic").expect("the symbol").art, 0)
+    };
+    let clipped_depth = depth(&s);
+    for _ in 0..2 {
+        std::fs::write(&path, unclipped.as_bytes()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        std::fs::write(&path, two_plates()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(doc.parent_of(id), Some(placed), "the placed group holds the image itself");
+        let NodeKind::Group { children, clip: true } = &doc.node(placed).unwrap().kind else { panic!("a clip group again") };
+        assert!(matches!(&children[..], [c, im] if matches!(c.kind, NodeKind::Path { clipping: true, .. }) && im.id == id));
+        assert_eq!(depth(&s), clipped_depth, "the symbol's image is not nested deeper");
+        assert!(symbol_clip_width(&s, "Pic").is_some(), "the symbol's image is clipped again");
+    }
+}
+
 /// The kind of group `g` is, as (clip, the kinds of its children are just one image).
 fn plain_group_of_image(g: &Node) -> Option<(bool, bool)> {
     match &g.kind {
@@ -633,6 +669,86 @@ fn a_saved_document_reads_the_plates_again_and_prints_the_spot_ink() {
 }
 
 #[test]
+fn a_saved_document_reads_the_plates_again_with_the_low_resolution_eps_proxy() {
+    let dir = temp_dir("saved-proxy");
+    // Plates wider than a preview, so the saved document keeps a preview of the image.
+    let wide = |gray: u8| {
+        let hex = format!("{gray:02x}").repeat(300);
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n20 10 scale\n300 1 8 [300 0 0 -1 0 1] <{hex}> image\nshowpage\n%%Trailer\n%%EOF\n"
+        )
+    };
+    let file = single_file(&[("Cyan", wide(0)), ("PANTONE 185 C", wide(128))], "%%CMYKCustomColor: 0 .91 .76 0 (PANTONE 185 C)\n");
+    let path = write(&dir, "pic.eps", &file);
+    let saved = dir.join("doc.vectorcraft").to_string_lossy().into_owned();
+    let mut s = session();
+    s.execute("file.place", &json!({ "path": path })).unwrap();
+    s.execute("document.save", &json!({ "path": saved })).unwrap();
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "lowResProxyEps", "value": true})).unwrap();
+    s.execute("document.open", &json!({ "path": saved })).unwrap();
+    let list = s.execute("links.list", &json!({})).unwrap();
+    assert_eq!(list["links"][0]["format"], "DCS", "{list}");
+    let id = NodeId(list["links"][0]["id"].as_u64().unwrap());
+    let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { not_an_image() };
+    assert!(s.doc().unwrap().doc.images[&im.key].separated().is_some(), "the plates, read from the file again");
+}
+
+#[test]
+fn a_dcs_header_is_found_at_the_start_of_a_file_or_behind_a_binary_eps_header() {
+    use crate::cmd::place::dcs::{HEAD_BYTES, head_is_dcs, is_dcs};
+    // A whole file, as `is_dcs` reads it.
+    let whole = |b: &[u8]| {
+        let is = head_is_dcs(b, b.len() as u64);
+        assert_eq!(is, Some(is_dcs(b)));
+        is
+    };
+    let ps = two_plates();
+    assert_eq!(whole(&ps), Some(true));
+    assert_eq!(whole(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n"), Some(false));
+    let binary = |start: u32| {
+        let mut b = vec![0xC5, 0xD0, 0xD3, 0xC6];
+        b.extend(start.to_le_bytes());
+        b.extend((ps.len() as u32).to_le_bytes());
+        b.resize(start as usize, 0);
+        b.extend(&ps);
+        b
+    };
+    assert_eq!(whole(&binary(30)), Some(true));
+    // A binary header whose PostScript or TIFF preview ends past the end of the file names none.
+    let mut cut = binary(30);
+    cut[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(whole(&cut), Some(false));
+    let mut tiff = binary(30);
+    tiff[20..24].copy_from_slice(&30u32.to_le_bytes());
+    tiff[24..28].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(whole(&tiff), Some(false));
+    // A file longer than the bytes read, its PostScript running past them: its header is read from
+    // the part there is, unless the header puts the PostScript or the preview past the file's end.
+    let mut big = binary(30);
+    big.resize(HEAD_BYTES, b' ');
+    big[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(true));
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20) - 1), Some(false));
+    big[20..24].copy_from_slice(&30u32.to_le_bytes());
+    big[24..28].copy_from_slice(&(65u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(false));
+    // PostScript that starts past the bytes read: the whole file is needed.
+    let far = binary(HEAD_BYTES as u32 + 10);
+    assert_eq!(head_is_dcs(&far[..HEAD_BYTES], far.len() as u64), None);
+    // A header that goes on past the bytes read may name its plates further on.
+    let mut long = b"%!PS-Adobe-3.0 EPSF-3.0\n".to_vec();
+    while long.len() < HEAD_BYTES {
+        long.extend(format!("%%Title: {}\n", "x".repeat(190)).as_bytes());
+    }
+    long.truncate(HEAD_BYTES);
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), None);
+    // One that ended within them names none.
+    long[30..45].copy_from_slice(b"\n%%EndComments\n");
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), Some(false));
+}
+
+#[test]
 fn dcs_transparency_marks_transparent_and_overlapped_dcs_images() {
     let dir = temp_dir("transparency");
     let path = write(&dir, "pic.eps", &two_plates());
@@ -655,6 +771,88 @@ fn dcs_transparency_marks_transparent_and_overlapped_dcs_images() {
     s.execute("transparency.set", &json!({"ids": [image.0], "opacity": 80})).unwrap();
     assert!(marked(&mut s), "the image itself");
     assert!(error(&mut s, "links.list", json!({ "dcsTransparency": "yes" })).contains("dcsTransparency"), "a flag that isn't true or false");
+}
+
+#[test]
+fn dcs_transparency_looks_only_at_the_part_of_an_image_its_clipping_path_shows() {
+    let dir = temp_dir("transparency-clipped");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let image = image_of(&s, &r["ids"][0]).id;
+    let (clip, all) = {
+        let doc = &s.doc().unwrap().doc;
+        let NodeKind::Group { children, clip: true } = &doc.node(group).unwrap().kind else { panic!("a clipping group") };
+        (children[0].geometric_bounds().unwrap(), doc.node(image).unwrap().geometric_bounds().unwrap())
+    };
+    assert!(all.x1 - clip.x1 > 2.0, "the file's clipping path shows the left half: {clip:?} of {all:?}");
+    // A half-transparent square over the part of the image the clipping path hides.
+    let x = (clip.x1 + all.x1) / 2.0 - 1.0;
+    let over = s.execute("shape.rectangle", &json!({"x": x, "y": all.y0, "width": 2, "height": 2})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [over], "opacity": 50})).unwrap();
+    let marked = |s: &mut Session| s.execute("links.list", &json!({ "dcsTransparency": true })).unwrap()["links"][0]["dcsTransparency"] == true;
+    assert!(!marked(&mut s), "the square is over the hidden part only");
+    s.execute("transparency.set", &json!({"ids": [over], "opacity": 100})).unwrap();
+    let shown = s.execute("shape.rectangle", &json!({"x": clip.x0, "y": all.y0, "width": 2, "height": 2})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [shown], "opacity": 50})).unwrap();
+    assert!(marked(&mut s), "a square over the part that shows");
+}
+
+#[test]
+fn dcs_transparency_skips_a_transparent_object_its_own_clipping_paths_hide() {
+    let dir = temp_dir("transparency-clipped-over");
+    let path = write(&dir, "pic.eps", &two_plates());
+    // A session with the file placed, and the top-left corner of the image, inside the part its
+    // clipping path shows.
+    let placed = || {
+        let mut s = session();
+        let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+        let b = image_of(&s, &r["ids"][0]).geometric_bounds().unwrap();
+        (s, b.x0, b.y0)
+    };
+    let rect = |s: &mut Session, x: f64, y: f64, width: f64| {
+        s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": width, "height": 2})).unwrap()["id"].as_u64().unwrap()
+    };
+    let make = |s: &mut Session, ids: [u64; 2]| {
+        s.execute("select.set", &json!({ "ids": ids })).unwrap();
+        s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap()
+    };
+    let marked = |s: &mut Session| s.execute("links.list", &json!({ "dcsTransparency": true })).unwrap()["links"][0]["dcsTransparency"] == true;
+    // A half-transparent square over the part of the image that shows.
+    let square = |s: &mut Session, x: f64, y: f64| {
+        let id = rect(s, x, y, 2.0);
+        s.execute("transparency.set", &json!({"ids": [id], "opacity": 50})).unwrap();
+        assert!(marked(s), "the square over the image");
+        id
+    };
+
+    // Its own clip group's clipping path is beside it.
+    let (mut s, x, y) = placed();
+    let over = square(&mut s, x, y);
+    let beside = rect(&mut s, x + 5.0, y, 2.0);
+    make(&mut s, [over, beside]);
+    assert!(!marked(&mut s), "a clip group that hides the square");
+
+    // Its layer's clipping path is beside it.
+    let (mut s, x, y) = placed();
+    s.execute("layer.new", &json!({})).unwrap();
+    square(&mut s, x, y);
+    rect(&mut s, x + 5.0, y, 2.0);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("layer.clippingMask.toggle", &json!({})).unwrap()["clip"].as_bool().unwrap());
+    assert!(!marked(&mut s), "a clipping layer that hides the square");
+
+    // Each of two nested clipping paths shows part of the inner group, and only the inner one
+    // covers the square.
+    let (mut s, x, y) = placed();
+    let over = square(&mut s, x, y);
+    let inner = rect(&mut s, x, y, 40.0);
+    let group = make(&mut s, [over, inner]);
+    assert!(marked(&mut s), "the inner clipping path shows the square");
+    let outer = rect(&mut s, x + 10.0, y, 20.0);
+    make(&mut s, [group, outer]);
+    assert!(!marked(&mut s), "the two clipping paths together hide the square");
 }
 
 #[test]

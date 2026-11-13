@@ -566,6 +566,10 @@ pub struct UiState {
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
+    /// The drawing tool last chosen in this window, which a two-finger tap in the Touch workspace
+    /// returns to from the Selection tool ([`crate::touch::toggle_mode`]). Not saved.
+    #[serde(skip)]
+    pub touch_drawing_tool: Option<String>,
     pub status: String,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
@@ -1130,6 +1134,7 @@ impl Default for UiState {
             answering_control: false,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
+            touch_drawing_tool: None,
             status: String::new(),
             replace_font_warning: None,
             status_notes: None,

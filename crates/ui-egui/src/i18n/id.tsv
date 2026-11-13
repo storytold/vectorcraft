@@ -1839,6 +1839,10 @@ digits	Malayalam	Malayalam
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
 	Push In First	Dorong masuk dahulu
@@ -1974,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
+	Delete the selected items and their artwork?	Hapus item yang dipilih beserta karya seninya?
+	Delete this layer and its artwork?	Hapus lapisan ini beserta karya seninya?
 	Delete “{name}”?	Hapus “{name}”?
 	Document Swatches	Swatch dokumen
 	Edit or Apply Color Group	Edit atau terapkan grup warna
@@ -3516,9 +3522,11 @@ theme	Appearance	Tampilan
 	Enable Background Export	Aktifkan ekspor di latar belakang
 	Enable Background Save	Aktifkan penyimpanan di latar belakang
 	Enable in-menu font previews	Aktifkan pratinjau font dalam menu
+	Show samples on white	Tampilkan sampel di atas putih
 	Enable Missing Glyph Protection	Aktifkan perlindungan glyph yang hilang
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
+	Switch Selection and Drawing Modes	Beralih antara mode seleksi dan menggambar
 	Enable Touch Workspace	Aktifkan ruang kerja sentuh
 	English: UK	Inggris: UK
 	Every (minutes)	Setiap (menit)
@@ -4301,6 +4309,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` harus berupa bilangan bulat antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` harus di antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be one of {_1}	`{key}` harus salah satu dari {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` harus salah satu dari {_1}, bukan {got}
 @msg	`{key}` must be true or false	`{key}` harus true atau false
 @msg	`{k}` must be [x, y]	`{k}` harus [x, y]
 @msg	`{name}` has no options	`{name}` tidak memiliki opsi
@@ -6005,6 +6014,13 @@ axis	Y Axis	Sumbu Y
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
+	Insert Select Path	Sisipkan pemilihan jalur
+	Select Path	Pilih jalur
+@msg	select one whole path or compound path	pilih satu jalur utuh atau jalur majemuk
+@msg	select only one path	pilih hanya satu jalur
+@msg	the path is hidden or locked, or cannot be selected here	jalur tersembunyi atau terkunci, atau tidak dapat dipilih di sini
+@msg	object {value} is not the stored path: it changed, or the document is another one	objek {value} bukan jalur yang disimpan: jalur itu berubah, atau dokumennya berbeda
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` harus berupa "v1:" dan 16 digit heksadesimal huruf kecil
 	Select Object…	Pilih objek…
 	Select Object	Pilih objek
 	Set Selection	Atur seleksi
