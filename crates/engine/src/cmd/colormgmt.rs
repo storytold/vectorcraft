@@ -5,9 +5,11 @@
 //! Colour settings and the proof view are process-wide (`vectorcraft_color::cms::active`,
 //! `vectorcraft_render::proof::view`). A document's assigned profiles are stored in
 //! `Document::color_profiles` (files before format v3: `Document.unknown["colorProfiles"]`) and
-//! take the place of the working spaces in the active settings when assigned, and when the working
-//! settings change while the document is in front ([`use_front_profiles`]); the working spaces stay
-//! as Edit → Color Settings set them.
+//! take the place of the working spaces in the active settings while the document is in front
+//! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
+//! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
+//! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
+//! Settings set them.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -181,7 +183,7 @@ fn touch_all(s: &mut Session) {
 /// Make the active settings the working settings with the profiles the front document is assigned
 /// in place of the working spaces (none, or no document open: the working spaces). The open
 /// documents redraw when the active settings change.
-fn use_front_profiles(s: &mut Session) {
+pub(crate) fn use_front_profiles(s: &mut Session) {
     let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
     if cms::use_document_profiles(rgb.as_deref(), cmyk.as_deref()) {
         touch_all(s);

@@ -3372,6 +3372,20 @@ digits	Malayalam	Малаялам
 	Spot Color Objects	Обекти със спот цветове
 	Pattern Objects	Обекти с мостри
 	Gradient Objects	Обекти с градиенти
+	Font Details	Подробности за шрифтовете
+	Linked Images	Свързани изображения
+	Embedded Images	Вградени изображения
+	Compound Paths	Съставни пътища
+	Text Objects	Текстови обекти
+	Placed Documents	Поставени документи
+	Symbol Instances	Екземпляри на символи
+	Gradient Meshes	Мрежи с градиент
+	Blends	Преливания
+	Envelopes	Пликове
+	Intertwine Groups	Групи с преплитане
+	Opacity Masks	Маски за непрозрачност
+	Objects with Effects	Обекти с ефекти
+	Path Length	Дължина на пътя
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -4057,6 +4071,10 @@ axis	Both	И двете
 	Dock Panel	Закотвен панел
 	Dock to Top	Закотвяне горе
 	Dock to Bottom	Закотвяне долу
+	Dock to Left	Закотвяне вляво
+	Dock to Right	Закотвяне вдясно
+	Dock Toolbar	Закотвяне на лентата с инструменти
+	Float Toolbar	Плаваща лента с инструменти
 	Control Bar Options	Опции на контролната лента
 	Tool Options	Опции за инструмент
 	Object Options	Опции за обект

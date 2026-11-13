@@ -853,6 +853,10 @@
 	Dock Panel	Dok panel
 	Dock to Top	Dok øverst
 	Dock to Bottom	Dok nederst
+	Dock to Left	Dok til venstre
+	Dock to Right	Dok til højre
+	Dock Toolbar	Dok værktøjslinjen
+	Float Toolbar	Flydende værktøjslinje
 	Control Bar Options	Indstillinger for kontrollinjen
 	Tool Options	Værktøjsindstillinger
 	Object Options	Objektindstillinger
@@ -3734,6 +3738,19 @@ theme	Appearance	Udseende
 	Spot Color Objects	Objekter med spotfarver
 	Pattern Objects	Objekter med mønstre
 	Gradient Objects	Objekter med gradienter
+	Font Details	Skrifttypedetaljer
+	Linked Images	Linkede billeder
+	Embedded Images	Indlejrede billeder
+	Compound Paths	Sammensatte kurver
+	Text Objects	Tekstobjekter
+	Placed Documents	Placerede dokumenter
+	Symbol Instances	Symbolforekomster
+	Gradient Meshes	Gradientnet
+	Blends	Blandinger
+	Envelopes	Konvolutter
+	Intertwine Groups	Sammenfletningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekter med effekter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve

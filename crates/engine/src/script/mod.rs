@@ -672,6 +672,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        s.sync_front_profiles();
         exact
     }
 }
@@ -2231,6 +2232,9 @@ fn failure_text(report: &Value) -> String {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The run's front document draws and converts through its own profiles, and the interface's
+    // again after the slice.
+    s.sync_front_profiles();
     s.script_in_run = true;
     let cell = job.host.session.clone();
     std::mem::swap(s, &mut *cell.borrow_mut());
@@ -2253,6 +2257,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.script_in_run = false;
     job.world.swap(s);
     s.depth = depth;
+    s.sync_front_profiles();
     r
 }
 
