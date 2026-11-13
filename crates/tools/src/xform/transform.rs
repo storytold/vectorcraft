@@ -144,12 +144,14 @@ impl TransformTool {
                 let ratio = |a: f64, b: f64| if a.abs() > 1e-6 { b / a } else { 1.0 };
                 let (mut sx, mut sy) = (ratio(d0.x, d1.x), ratio(d0.y, d1.y));
                 // Shift: a drag within 22.5° of an axis scales along that axis alone, a diagonal
-                // one uniformly (#6324).
+                // one uniformly (#6324). A drag that starts level with the reference point on that
+                // axis has nothing to scale it by, so it stays uniform.
                 let moved = p - start;
                 let angle = moved.y.abs().atan2(moved.x.abs()).to_degrees();
-                if shift && moved.hypot() > 1e-9 && angle <= 22.5 {
+                let along = moved.hypot() > 1e-9;
+                if shift && along && angle <= 22.5 && d0.x.abs() > 1e-6 {
                     sy = 1.0;
-                } else if shift && moved.hypot() > 1e-9 && angle >= 67.5 {
+                } else if shift && along && angle >= 67.5 && d0.y.abs() > 1e-6 {
                     sx = 1.0;
                 } else if shift {
                     let l2 = d0.hypot2();
@@ -477,6 +479,16 @@ mod tests {
         // Diagonal: both, by the same factor.
         let (sx, sy) = scales(Point::new(200.0, 180.0));
         assert!((sx - sy).abs() < 1e-9 && sx > 1.0, "{sx} {sy}");
+        // A drag that starts straight above (beside) the reference point has no width (height) to
+        // scale, so a sideways (up or down) Shift-drag from there scales uniformly, as before.
+        let from = |start: Point, p: Point| {
+            let c = t.matrix_for(o, start, p, true, Rect::ZERO).0.as_coeffs();
+            (c[0], c[3])
+        };
+        let (sx, sy) = from(Point::new(100.0, 150.0), Point::new(150.0, 160.0));
+        assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
+        let (sx, sy) = from(Point::new(150.0, 100.0), Point::new(160.0, 150.0));
+        assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
     }
 
     #[test]
