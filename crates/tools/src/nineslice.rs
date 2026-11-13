@@ -5,10 +5,15 @@
 //! takes the Move cursor, and dragging the guide moves it (`symbol.options`'s
 //! `nineSliceGuides`), in one undo step.
 //!
-//! VectorCraft's own rules: a guide stays within the art's box and stops short of the opposite
-//! guide; the drag does not snap and its modifiers change nothing; a guide within reach takes the
-//! press before the art and the bounding box, and of two guides within reach the nearer one, else
-//! the first of left, top, right and bottom; Escape during the drag puts the guide back.
+//! A guide may be dragged past the art's edges, and the instance still scales by the slices its
+//! art falls in.
+//!
+//! VectorCraft's own rules: a guide stays within 16 times the art's width or height of its edge
+//! and stops short of the opposite guide; a guide outside the art is drawn and taken along the
+//! art's height or width beside it; the drag does not snap and its modifiers change nothing; a
+//! guide within reach takes the press before the art and the bounding box, and of two guides
+//! within reach the nearer one, else the first of left, top, right and bottom; Escape during the
+//! drag puts the guide back.
 
 use serde_json::json;
 use vectorcraft_doc::{EditedNineSlice, NineSliceGuide};
@@ -201,6 +206,36 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 150.0, 125.0));
         let a = t.pointer(&c, &ev(PointerKind::Drag, 10.0, 140.0));
         assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([0.25, 0.4, 0.25, 0.25]));
+    }
+
+    /// A guide outside the art is taken beside the art, along its height, and a drag may take a
+    /// guide past the art's edge and back; Escape puts it back where it was.
+    #[test]
+    fn a_guide_outside_the_art_is_taken_and_dragged_past_the_arts_edge() {
+        let d = editing(SymbolNineSlice::new(-0.25, 0.25, 0.25, 0.25));
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let at = |x: f64, y: f64| guide_at(&c, Point::new(x, y)).map(|(_, g)| g);
+        assert_eq!(at(75.0, 150.0), Some(NineSliceGuide::Left), "25 % left of the art at x = 100");
+        assert_eq!(at(77.0, 110.0), Some(NineSliceGuide::Left));
+        assert_eq!(at(75.0, 95.0), None, "the guide ends with the art's height");
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&c, Point::new(75.0, 150.0), Mods::default()), Cursor::Move);
+        t.pointer(&c, &ev(PointerKind::Down, 75.0, 150.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 50.0, 150.0));
+        assert_eq!(a[0], Action::Begin("Symbol Options".into()));
+        assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([-0.5, 0.25, 0.25, 0.25]));
+        let (_, v) = preview(&t.pointer(&c, &ev(PointerKind::Drag, 110.0, 150.0))[0]);
+        assert_eq!(v["nineSliceGuides"], json!([0.1, 0.25, 0.25, 0.25]), "back inside the art");
+        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        // From inside the art, the default bottom guide passes the art's bottom edge at y = 200.
+        let d = editing(Some(SymbolNineSlice::default()));
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 175.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 250.0));
+        assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([0.25, 0.25, 0.25, -0.5]));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 250.0)), vec![Action::Commit]);
     }
 
     /// Escape during a guide drag cancels it and is the tool's; the release after it commits

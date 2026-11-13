@@ -1631,6 +1631,7 @@ antiAlias	Sharp	날카롭게
 	Enable Opacity Mask	불투명 마스크 사용
 	Enable Rubber Band for	러버 밴드 사용 대상
 	Enable Touch Gestures	터치 제스처 사용
+	Switch Selection and Drawing Modes	선택 모드와 그리기 모드 전환
 	Enable Touch Workspace	터치 작업 영역 사용
 	Enable copying of text, images and other content	텍스트, 이미지 및 기타 콘텐츠 복사 허용
 	Enable in-menu font previews	메뉴에서 글꼴 미리 보기 사용
@@ -1981,6 +1982,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -2948,6 +2951,9 @@ mark-style	Japanese	일본식
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
+	Prominent Colors	주요 색상
+	Save All Colors	모든 색상 저장
+	Save Prominent Colors	주요 색상 저장
 	Reset to Default	기본값으로 재설정
 	Reset to White, Black	흰색, 검정으로 재설정
 	Reset {name}	{name} 재설정
@@ -3272,6 +3278,20 @@ mark-style	Japanese	일본식
 	Spot Color Objects	별색을 사용한 개체
 	Pattern Objects	패턴을 사용한 개체
 	Gradient Objects	그레이디언트를 사용한 개체
+	Font Details	글꼴 세부 정보
+	Linked Images	연결된 이미지
+	Embedded Images	포함된 이미지
+	Compound Paths	컴파운드 패스
+	Text Objects	텍스트 개체
+	Placed Documents	가져온 문서
+	Symbol Instances	심볼 인스턴스
+	Gradient Meshes	그레이디언트 메시
+	Blends	블렌드
+	Envelopes	엔벨로프
+	Intertwine Groups	교차 그룹
+	Opacity Masks	불투명 마스크
+	Objects with Effects	효과를 사용한 개체
+	Pattern Swatches	패턴 견본
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
@@ -3352,6 +3372,8 @@ mark-style	Japanese	일본식
 	Rename Library Group	라이브러리 그룹 이름 바꾸기
 	Delete Library Group	라이브러리 그룹 삭제
 	Move Library Item to Group	라이브러리 항목을 그룹으로 이동
+	Rename Library Item	라이브러리 항목 이름 바꾸기
+	Add to Character Styles	문자 스타일에 추가
 	Library	라이브러리
 	Rename Library	라이브러리 이름 바꾸기
 	Show Library	라이브러리 표시
@@ -4126,6 +4148,10 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Dock to Left	왼쪽에 고정
+	Dock to Right	오른쪽에 고정
+	Dock Toolbar	도구 막대 고정
+	Float Toolbar	도구 막대 분리
 	Control Bar Options	컨트롤 막대 옵션
 	Tool Options	도구 옵션
 	Object Options	개체 옵션
@@ -4417,6 +4443,7 @@ theme	Appearance	외관
 @msg	the layer to flatten into is hidden	병합 대상 레이어가 숨겨져 있습니다
 @msg	there are no objects to release	해제할 개체가 없습니다
 @msg	no library `{id}`	`{id}` 라이브러리가 없습니다
+@msg	the library has another item of that kind named `{name}`	라이브러리에 같은 종류의 다른 항목 `{name}`이(가) 이미 있습니다
 @msg	{path}: not a file	{path}: 파일이 아닙니다
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 이미지는 쓸 수 없습니다
@@ -4479,6 +4506,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
@@ -5085,6 +5113,7 @@ theme	Appearance	외관
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
 @msg	replace: the object to replace was changed or deleted	replace: 바꿀 개체가 변경되었거나 삭제되었습니다
+@msg	the document it was prepared for is no longer active	준비한 문서가 더 이상 활성 상태가 아닙니다
 @msg	Couldn't place {name}: {e}	{name}을(를) 가져올 수 없습니다: {e}
 @msg	no print service	인쇄 서비스가 없습니다
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
@@ -5148,6 +5177,7 @@ theme	Appearance	외관
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5512,7 +5542,9 @@ lighting	Light	광원
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	그래픽은 평평한 면에 매핑됩니다. 돌출 또는 평면 개체 유형을 사용하십시오
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
 @msg	The graphics are too complex: simplify the symbols' art	그래픽이 너무 복잡합니다. 심볼의 아트를 단순화하십시오
@@ -5979,6 +6011,35 @@ axis	Y Axis	Y축
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
+@msg	a number >= {_1}	{_1} 이상인 숫자
+@msg	a number > {_1}	{_1} 초과인 숫자
+@msg	a number <= {_1}	{_1} 이하인 숫자
+@msg	a number < {_1}	{_1} 미만인 숫자
+@msg	a number {_1} to {_2}	{_1} 이상 {_2} 이하인 숫자
+@msg	a number >= {_1} and < {_2}	{_1} 이상 {_2} 미만인 숫자
+@msg	a number > {_1} and <= {_2}	{_1} 초과 {_2} 이하인 숫자
+@msg	a number > {_1} and < {_2}	{_1} 초과 {_2} 미만인 숫자
+@msg	a number ({_1})	숫자({_1})
+@msg	a number >= {_1} ({_2})	{_1} 이상인 숫자({_2})
+@msg	a number > {_1} ({_2})	{_1} 초과인 숫자({_2})
+@msg	a number <= {_1} ({_2})	{_1} 이하인 숫자({_2})
+@msg	a number < {_1} ({_2})	{_1} 미만인 숫자({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} 이상 {_2} 이하인 숫자({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	{_1} 이상 {_2} 미만인 숫자({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	{_1} 초과 {_2} 이하인 숫자({_3})
+@msg	a number > {_1} and < {_2} ({_3})	{_1} 초과 {_2} 미만인 숫자({_3})
+@msg	an integer	정수
+@msg	an integer >= {_1}	{_1} 이상인 정수
+@msg	an integer <= {_1}	{_1} 이하인 정수
+@msg	an integer {_1} to {_2}	{_1} 이상 {_2} 이하인 정수
+@msg	one of {_1}	{_1} 중 하나
+@msg	`{path}` must be one of {_1}, not {got}	`{path}`은(는) {_1} 중 하나여야 합니다({got} 사용 불가)
+@msg	an object id (a non-negative integer)	개체 ID(음수가 아닌 정수)
+@msg	a list of object ids	개체 ID 목록
+@msg	a color (a string, [r, g, b] or an object)	색상(문자열, [r, g, b] 또는 개체)
+@msg	[x, y] (two numbers)	[x, y](숫자 두 개)
+@msg	an object	개체
+@msg	a list	목록
 @msg	unknown key `{k}`; the keys here are {_1}	알 수 없는 키 `{k}`: 여기서 사용할 수 있는 키: {_1}
 @msg	{_1} is listed twice	{_1}이(가) 두 번 나열되었습니다
 @msg	{_1} is not the id of an input object	{_1}은(는) 입력 개체의 ID가 아닙니다
@@ -6086,6 +6147,7 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+@msg	Batch cannot play an action with a View menu step	일괄 처리에서는 보기 메뉴 단계가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
 	Insert Select Path	패스 선택 삽입
@@ -6269,6 +6331,13 @@ axis	Y Axis	Y축
 	Area Text	영역 문자
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	픽셀에 스냅 옵션
+	Pixel Snapping Options…	픽셀에 스냅 옵션…
+	Snap to Pixel While Drawing	그리는 동안 픽셀에 스냅
+	Snap to Pixel While Moving	이동하는 동안 픽셀에 스냅
+	Snap to Pixel While Scaling	크기를 조절하는 동안 픽셀에 스냅
+	These options take effect when View › Snap to Pixel is on.	이 옵션은 보기 › 픽셀에 스냅이 켜져 있을 때 적용됩니다.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6900,6 +6969,19 @@ breakText	Glyphs	글리프
 	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
+	View more	자세히 보기
+	Finish tutorial	튜토리얼 완료
+	Next Up	다음
+	You finished the last tutorial in this skill.	이 기술의 마지막 튜토리얼을 완료했습니다.
+	Back to skills	기술로 돌아가기
+	Open Tutorial Sample	튜토리얼 샘플 열기
+	Finish Tutorial	튜토리얼 완료
+	Next Tutorial	다음 튜토리얼
+	Back to Skills	기술로 돌아가기
+@msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
+@msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
+@msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
+@msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

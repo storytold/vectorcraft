@@ -685,6 +685,31 @@ struct AiEditingData {
     editing_data: Option<bool>,
 }
 
+/// Why a `.ai` file of the art's bounds (`useArtboards: false`) carries no editing data.
+pub const AI_EDITING_NEEDS_THE_ARTBOARDS: &str =
+    "Preserve editing was left out: an .ai file of the art's bounds would replace the document's artboards when reopened";
+
+/// The error for a `.ai` file of the art's bounds without PDF content.
+pub const ART_PAGE_NEEDS_PDF: &str = "pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false";
+
+/// With `useArtboards: false` in `p`: the PDF-compatible `.ai` file of one page, the bounds of
+/// `doc`'s visible art ([`super::encode::art_page`]). It carries neither the native document nor
+/// the editing copy for other apps, and its notes end with [`AI_EDITING_NEEDS_THE_ARTBOARDS`].
+/// `pdfCompatible: false` is refused. `None` when `p` asks for the artboards or for a legacy
+/// version 7 `.ai` file.
+pub(super) fn encode_ai_art_page(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Option<Encoded>> {
+    if super::encode::use_artboards(cmd, p)? != Some(false) || super::legacy_ai::wanted(cmd, f, p)? {
+        return Ok(None);
+    }
+    if !bool_or(p, "pdfCompatible", true) {
+        return Err(bad(cmd, ART_PAGE_NEEDS_PDF));
+    }
+    let Some((art, q)) = super::encode::art_page(cmd, doc, p)? else { return Ok(None) };
+    let mut enc = encode_ai_pages(cmd, f, &art, &q, false)?;
+    enc.setting_notes.push(AI_EDITING_NEEDS_THE_ARTBOARDS.to_string());
+    Ok(Some(enc))
+}
+
 /// The shared Save and Export encoder for `.ai` files (and `.ait` templates, the same file):
 /// PDF-compatible by default, without PDF content (`pdfCompatible: false`), or legacy version 7
 /// `.ai` files (`aiVersion: "7"`).
@@ -692,12 +717,22 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
     if super::legacy_ai::wanted(cmd, f, p)? {
         return super::legacy_ai::encode(cmd, f, doc, p);
     }
+    encode_ai_pages(cmd, f, doc, p, true)
+}
+
+/// [`encode_ai`] of a `.ai` file with or without PDF content, carrying the native document and
+/// the editing copy for other apps when `editing` is true, and neither otherwise.
+fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bool) -> Result<Encoded> {
     let mut params = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = params.as_object_mut() {
-        o.insert("preserveEditing".into(), json!(true));
+        o.insert("preserveEditing".into(), json!(editing));
         // Keep upstream AI PDF layers, including hidden layers, unless a standard decides.
         if o.get("standard").is_none_or(Value::is_null) {
             o.entry("createLayers").or_insert(json!(true));
+        }
+        // A page longer than 14,400 pt keeps its `UserUnit` (PDF export writes it in points).
+        if o.get("longPagesInPoints").is_none_or(Value::is_null) {
+            o.insert("longPagesInPoints".into(), json!(false));
         }
         if let Some(c) = o.get("compress").and_then(Value::as_bool) {
             let compression = o.entry("compression").or_insert_with(|| json!({}));

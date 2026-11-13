@@ -151,13 +151,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let start =
         move |app: &mut VectorcraftApp| background::run(app, enabled, label, None, work, move |app, r| packaged(app, r, web, in_background.get()));
     // Both in the background: the package, collected from the document as it is now, starts once
-    // the save is written.
+    // the save is written, with the automation roots in force at OK.
     if let Some(id) = saving.filter(|_| enabled) {
         later.set(true);
         app.ui.dialog = None;
+        let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
         background::after(app, id, move |app, r| {
             if saved(r)
-                && let Err(e) = start(app)
+                && let Err(e) = scope.run(|| start(app))
             {
                 app.status(e);
             }

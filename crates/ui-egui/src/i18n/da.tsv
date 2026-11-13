@@ -853,6 +853,10 @@
 	Dock Panel	Dok panel
 	Dock to Top	Dok øverst
 	Dock to Bottom	Dok nederst
+	Dock to Left	Dok til venstre
+	Dock to Right	Dok til højre
+	Dock Toolbar	Dok værktøjslinjen
+	Float Toolbar	Flydende værktøjslinje
 	Control Bar Options	Indstillinger for kontrollinjen
 	Tool Options	Værktøjsindstillinger
 	Object Options	Objektindstillinger
@@ -2675,6 +2679,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
 	Color Theme Picker	Farvetemavælger
 	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
+	Prominent Colors	Fremtrædende farver
+	Save All Colors	Gem alle farver
+	Save Prominent Colors	Gem fremtrædende farver
 	Separate colors into rows	Opdel farver i rækker
 	Unlink harmony colors	Fjern sammenkædning af harmonifarver
 	1 Color Job	1-farvejob
@@ -3337,6 +3344,8 @@ theme	Appearance	Udseende
 	Rename Library Group	Omdøb biblioteksgruppe
 	Delete Library Group	Slet biblioteksgruppe
 	Move Library Item to Group	Flyt bibliotekselement til gruppe
+	Rename Library Item	Omdøb bibliotekselement
+	Add to Character Styles	Føj til tegnstile
 	Rename Library	Omdøb bibliotek
 	Show Library	Vis bibliotek
 	Use Library Item	Brug bibliotekselement
@@ -3526,6 +3535,7 @@ theme	Appearance	Udseende
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
+	Switch Selection and Drawing Modes	Skift mellem markerings- og tegnetilstand
 	Enable Touch Workspace	Aktivér touch-arbejdsområde
 	English: UK	Engelsk: UK
 	Every (minutes)	Hvert (minut)
@@ -3728,6 +3738,19 @@ theme	Appearance	Udseende
 	Spot Color Objects	Objekter med spotfarver
 	Pattern Objects	Objekter med mønstre
 	Gradient Objects	Objekter med gradienter
+	Font Details	Skrifttypedetaljer
+	Linked Images	Linkede billeder
+	Embedded Images	Indlejrede billeder
+	Compound Paths	Sammensatte kurver
+	Text Objects	Tekstobjekter
+	Placed Documents	Placerede dokumenter
+	Symbol Instances	Symbolforekomster
+	Gradient Meshes	Gradientnet
+	Blends	Blandinger
+	Envelopes	Konvolutter
+	Intertwine Groups	Sammenfletningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekter med effekter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
@@ -4182,6 +4205,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} trin|{n} trin
 @plural	{n} stroke|{n} strokes	{n} kontur|{n} konturer
 @msg	no library `{id}`	intet bibliotek `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteket har allerede et andet element af den type med navnet `{name}`
 @msg	select some type first	markér først noget tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning skal være et tal, „auto“ eller „optical“
 @msg	{_1} has no {_2} style	{_1} har ingen {_2}-stil
@@ -4308,6 +4332,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` skal være et heltal mellem {min} og {max} (fik {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` skal være mellem {min} og {max} (fik {x})
 @msg	`{key}` must be one of {_1}	`{key}` skal være en af {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` skal være en af {_1}, ikke {got}
 @msg	`{key}` must be true or false	`{key}` skal være true eller false
 @msg	`{k}` must be [x, y]	`{k}` skal være [x, y]
 @msg	`{name}` has no options	`{name}` har ingen indstillinger
@@ -4589,6 +4614,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	stierne indeholder ugyldige koordinater
 @msg	paths: give at least one file	stier: angiv mindst én fil
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
+@msg	the document it was prepared for is no longer active	dokumentet, det blev forberedt til, er ikke længere aktivt
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
 @msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
@@ -5816,6 +5842,8 @@ swatch	Bright Violet	Kraftig violet
 	Objects on Path Tool	Objekter på kurve-værktøj
 	Attach Objects on Path	Tilknyt objekter til kurve
 	Expand Objects on Path	Udvid objekter på kurve
+	Detach	Frigør
+	Detach Object from Path	Frigør objekt fra kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -6010,6 +6038,7 @@ axis	Y Axis	Y-akse
 @msg	message must be text	message skal være tekst
 @msg	allowContinue must be true or false	allowContinue skal være true eller false
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
+@msg	Batch cannot play an action with a View menu step	Batch kan ikke afspille en handling med et trin fra menuen Vis
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
 	Insert Select Path	Indsæt kurvemarkering
@@ -6174,6 +6203,13 @@ axis	Y Axis	Y-akse
 	Area Text	Områdetekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Indstillinger for fastgørelse til pixel
+	Pixel Snapping Options…	Indstillinger for fastgørelse til pixel…
+	Snap to Pixel While Drawing	Fastgør til pixel ved tegning
+	Snap to Pixel While Moving	Fastgør til pixel ved flytning
+	Snap to Pixel While Scaling	Fastgør til pixel ved skalering
+	These options take effect when View › Snap to Pixel is on.	Disse indstillinger virker, når Vis › Fastgør til pixel er slået til.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6758,6 +6794,19 @@ breakText	Glyphs	Glyffer
 	Show where this tool is	Vis, hvor dette værktøj er
 @msg	missing `tutorial` (see learn.list)	`tutorial` mangler (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ukendt vejledning `{id}` (se learn.list)
+	View more	Vis mere
+	Finish tutorial	Afslut vejledning
+	Next Up	Næste
+	You finished the last tutorial in this skill.	Du har afsluttet den sidste vejledning i denne færdighed.
+	Back to skills	Tilbage til færdigheder
+	Open Tutorial Sample	Åbn eksempel til vejledning
+	Finish Tutorial	Afslut vejledning
+	Next Tutorial	Næste vejledning
+	Back to Skills	Tilbage til færdigheder
+@msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` er den sidste vejledning i sin færdighed
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter

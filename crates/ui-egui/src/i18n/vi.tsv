@@ -1012,6 +1012,10 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Dock to Left	Neo sang trái
+	Dock to Right	Neo sang phải
+	Dock Toolbar	Neo thanh công cụ
+	Float Toolbar	Thả nổi thanh công cụ
 	Control Bar Options	Tùy chọn thanh điều khiển
 	Tool Options	Tùy chọn công cụ
 	Object Options	Tùy chọn đối tượng
@@ -1207,6 +1211,7 @@ font-technology	Variable	Biến thiên
 	Enable Rubber Band for	Bật vùng chọn kéo cho
 	Enable text access for screen readers	Bật truy cập văn bản cho trình đọc màn hình
 	Enable Touch Gestures	Bật cử chỉ cảm ứng
+	Switch Selection and Drawing Modes	Chuyển giữa chế độ chọn và vẽ
 	Enable Touch Workspace	Bật không gian làm việc cảm ứng
 	Encoding	Mã hóa
 	Encoding:	Mã hóa:
@@ -1846,6 +1851,8 @@ digits	Hindi	Hindi
 	Objects on Path Tool	Công cụ Đối tượng trên đường dẫn
 	Attach Objects on Path	Gắn đối tượng lên đường dẫn
 	Expand Objects on Path	Mở rộng đối tượng trên đường dẫn
+	Detach	Tách
+	Detach Object from Path	Tách đối tượng khỏi đường dẫn
 	Release Live Paint	Giải phóng tô trực tiếp
 	Release Repeat	Giải phóng lặp lại
 	Release Slice	Giải phóng lát cắt
@@ -2423,6 +2430,8 @@ digits	Hindi	Hindi
 	Move Guide to Layer	Di chuyển đường căn vào lớp
 	Move in Perspective	Di chuyển theo phối cảnh
 	Move Library Item to Group	Di chuyển mục thư viện vào nhóm
+	Rename Library Item	Đổi tên mục thư viện
+	Add to Character Styles	Thêm vào các kiểu ký tự
 	Move Locked and Hidden Artwork with Artboard	Di chuyển tác phẩm đã khóa và ẩn cùng bảng vẽ
 	Move Mesh Point	Di chuyển điểm lưới
 	Move Mesh Points	Di chuyển các điểm lưới
@@ -3234,6 +3243,9 @@ mark-style	Japanese	Kiểu Nhật
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
 	Color Theme Picker	Bộ chọn bộ màu
 	Click or drag across the art to pick its colors; Shift adds more	Nhấp hoặc kéo qua tác phẩm để lấy màu của nó; Shift để thêm
+	Prominent Colors	Màu nổi bật
+	Save All Colors	Lưu tất cả màu
+	Save Prominent Colors	Lưu màu nổi bật
 	Reset to Default	Đặt lại về mặc định
 	Reset to default	Đặt lại về mặc định
 	Reset to White, Black	Đặt lại về Trắng, Đen
@@ -3845,6 +3857,20 @@ mark-style	Japanese	Kiểu Nhật
 	Spot Color Objects	Đối tượng có màu đặc biệt
 	Pattern Objects	Đối tượng có họa tiết
 	Gradient Objects	Đối tượng có chuyển sắc
+	Font Details	Chi tiết phông chữ
+	Linked Images	Hình ảnh đã liên kết
+	Embedded Images	Hình ảnh đã nhúng
+	Compound Paths	Đường dẫn phức
+	Text Objects	Đối tượng văn bản
+	Placed Documents	Tài liệu đã đặt
+	Symbol Instances	Thực thể ký hiệu
+	Gradient Meshes	Lưới chuyển sắc
+	Blends	Hòa trộn
+	Envelopes	Envelope
+	Intertwine Groups	Nhóm đan xen
+	Opacity Masks	Mặt nạ độ mờ
+	Objects with Effects	Đối tượng có hiệu ứng
+	Pattern Swatches	Mẫu màu họa tiết
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun
@@ -4973,8 +4999,10 @@ theme	Appearance	Giao diện
 @msg	no interaction in progress	không có tương tác nào đang tiến hành
 @msg	no key object	không có đối tượng khóa
 @msg	no library `{id}`	không có thư viện `{id}`
+@msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Liên kết nằm trong ký hiệu, thiết kế biểu đồ, họa tiết hoặc mặt nạ độ mờ và không có vị trí trên canvas
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó
 @msg	no Live Paint face at that point	không có mặt tô trực tiếp tại điểm đó
 @msg	no native format	không có định dạng gốc
@@ -5116,6 +5144,7 @@ theme	Appearance	Giao diện
 @msg	paths contain invalid coordinates	đường dẫn chứa tọa độ không hợp lệ
 @msg	paths: give at least one file	đường dẫn: hãy cung cấp ít nhất một tệp
 @msg	replace: the object to replace was changed or deleted	thay thế: đối tượng cần thay thế đã bị thay đổi hoặc xóa
+@msg	the document it was prepared for is no longer active	tài liệu được chuẩn bị không còn hoạt động
 @msg	pattern missing	thiếu họa tiết
 @msg	patterns nested too deeply are filled with mid-grey	họa tiết lồng nhau quá sâu được tô bằng màu xám trung tính
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng
@@ -5198,6 +5227,7 @@ theme	Appearance	Giao diện
 @msg	select a repeat	hãy chọn một đối tượng lặp
 @msg	select an Intertwine group	hãy chọn một nhóm đan xen
 @msg	select an Objects on Path group	hãy chọn một nhóm đối tượng trên đường dẫn
+@msg	choose the object to detach with its Select/Move widget	hãy chọn đối tượng cần tách bằng tiện ích Chọn/Di chuyển của nó
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	không thể gắn đối tượng lên một đường dẫn nằm trong đường dẫn phức, đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen
 @msg	a clipping path can't take objects	không thể gắn đối tượng lên đường dẫn cắt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	không thể gắn các đối tượng nằm trong đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen lên đường dẫn
@@ -5318,7 +5348,9 @@ theme	Appearance	Giao diện
 @msg	`{GRAPHICS}` face must be front or back	face của `{GRAPHICS}` phải là front hoặc back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Đồ họa được đặt lên các mặt phẳng: hãy dùng loại đối tượng Kéo dài hoặc Mặt phẳng
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
 @msg	The graphics are too complex: simplify the symbols' art	Đồ họa quá phức tạp: hãy đơn giản hóa hình vẽ của các ký hiệu
@@ -5999,6 +6031,35 @@ axis	Y Axis	Trục Y
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
+@msg	a number >= {_1}	một số >= {_1}
+@msg	a number > {_1}	một số > {_1}
+@msg	a number <= {_1}	một số <= {_1}
+@msg	a number < {_1}	một số < {_1}
+@msg	a number {_1} to {_2}	một số từ {_1} đến {_2}
+@msg	a number >= {_1} and < {_2}	một số >= {_1} và < {_2}
+@msg	a number > {_1} and <= {_2}	một số > {_1} và <= {_2}
+@msg	a number > {_1} and < {_2}	một số > {_1} và < {_2}
+@msg	a number ({_1})	một số ({_1})
+@msg	a number >= {_1} ({_2})	một số >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	một số > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	một số <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	một số < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	một số từ {_1} đến {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	một số >= {_1} và < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	một số > {_1} và <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	một số > {_1} và < {_2} ({_3})
+@msg	an integer	một số nguyên
+@msg	an integer >= {_1}	một số nguyên >= {_1}
+@msg	an integer <= {_1}	một số nguyên <= {_1}
+@msg	an integer {_1} to {_2}	một số nguyên từ {_1} đến {_2}
+@msg	one of {_1}	một trong các giá trị {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` phải là một trong các giá trị {_1}, không phải {got}
+@msg	an object id (a non-negative integer)	một ID đối tượng (một số nguyên không âm)
+@msg	a list of object ids	một danh sách ID đối tượng
+@msg	a color (a string, [r, g, b] or an object)	một màu (một chuỗi, [r, g, b] hoặc một đối tượng)
+@msg	[x, y] (two numbers)	[x, y] (hai số)
+@msg	an object	một đối tượng
+@msg	a list	một danh sách
 @msg	unknown key `{k}`; the keys here are {_1}	khóa không xác định `{k}`; các khóa ở đây là {_1}
 @msg	{_1} is listed twice	{_1} được liệt kê hai lần
 @msg	{_1} is not the id of an input object	{_1} không phải là id của một đối tượng đầu vào
@@ -6106,6 +6167,7 @@ axis	Y Axis	Trục Y
 @msg	message must be text	message phải là văn bản
 @msg	allowContinue must be true or false	allowContinue phải là true hoặc false
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
+@msg	Batch cannot play an action with a View menu step	Hàng loạt không thể phát hành động có bước của menu Hiển thị
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
 	Insert Select Path	Chèn chọn đường dẫn
@@ -6289,6 +6351,13 @@ axis	Y Axis	Trục Y
 	Area Text	Chữ vùng
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Tùy chọn hút vào pixel
+	Pixel Snapping Options…	Tùy chọn hút vào pixel…
+	Snap to Pixel While Drawing	Hút vào pixel khi vẽ
+	Snap to Pixel While Moving	Hút vào pixel khi di chuyển
+	Snap to Pixel While Scaling	Hút vào pixel khi thay đổi tỉ lệ
+	These options take effect when View › Snap to Pixel is on.	Các tùy chọn này có hiệu lực khi Hiển thị › Hút vào pixel đang bật.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph
@@ -6920,6 +6989,19 @@ breakText	Glyphs	Glyph
 	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
+	View more	Xem thêm
+	Finish tutorial	Hoàn tất hướng dẫn
+	Next Up	Tiếp theo
+	You finished the last tutorial in this skill.	Bạn đã hoàn tất hướng dẫn cuối cùng của kỹ năng này.
+	Back to skills	Quay lại kỹ năng
+	Open Tutorial Sample	Mở tệp mẫu của hướng dẫn
+	Finish Tutorial	Hoàn tất hướng dẫn
+	Next Tutorial	Hướng dẫn tiếp theo
+	Back to Skills	Quay lại kỹ năng
+@msg	tutorial `{id}` has no practice sample	hướng dẫn `{id}` không có tệp mẫu thực hành
+@msg	open the practice sample of `{id}` first (see learn.openSample)	hãy mở tệp mẫu thực hành của `{id}` trước (xem learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	hãy hoàn tất `{id}` trước (xem learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` là hướng dẫn cuối cùng trong kỹ năng của nó
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn

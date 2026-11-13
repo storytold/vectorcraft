@@ -42,14 +42,21 @@ pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft
 
 /// The first selected text descendant, shared by Character and Paragraph controls.
 pub(crate) fn first_selected_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+    match &first_selected_text_node(app)?.kind {
+        NodeKind::Text(t) => Some(t.as_ref()),
+        _ => None,
+    }
+}
+
+/// The node of [`first_selected_text`]: the first text object among the selected objects and
+/// their descendants, in selection order, then paint order within each selected object.
+pub(crate) fn first_selected_text_node(app: &VectorcraftApp) -> Option<&vectorcraft_doc::Node> {
     let st = app.session.active()?;
     for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
         let mut text = None;
         node.walk(&mut |n| {
-            if text.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                text = Some(t.as_ref());
+            if text.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                text = Some(n);
             }
         });
         if text.is_some() {
@@ -940,15 +947,89 @@ const FONT_HEIGHT_REFERENCES: [(vectorcraft_doc::FontHeightReference, &str); 4] 
     (vectorcraft_doc::FontHeightReference::IcfBox, "icfBox"),
 ];
 
+/// The size of the icon before each name in the Set Font Height Reference dropdown.
+const FONT_HEIGHT_ICON: f32 = 16.0;
+
 /// The Set Font Height Reference dropdown, `width` wide: the height of the font that the Font Size
-/// measures, blank where the characters the panel acts on differ.
+/// measures, blank where the characters the panel acts on differ. Each reference shows an icon of
+/// the height it measures before its name ([`paint_font_height_icon`], #6304).
 fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     // The labels of [`FONT_HEIGHT_REFERENCES`], in its order.
     let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
     let current = shared(app, |s| s.font_height_reference);
-    let shown = FONT_HEIGHT_REFERENCES.iter().zip(labels).find(|(r, _)| Some(r.0) == current).map_or("", |(_, l)| l);
-    if let Some((_, key)) = widgets::dropdown_names(ui, "ch-font-height", shown, &labels, width).and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
+    let shown = FONT_HEIGHT_REFERENCES.iter().position(|(r, _)| Some(*r) == current);
+    let accent = Tokens::get(ui.ctx()).accent;
+    let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, highlighted: bool| {
+        // On the highlighted row the selection fill is accent-tinted, so the measure takes the
+        // name's colour there to keep its contrast.
+        let mark = if highlighted { ink } else { accent };
+        if let Some((r, _)) = FONT_HEIGHT_REFERENCES.get(i) {
+            paint_font_height_icon(ui.painter(), rect, *r, ink, mark);
+        }
+    };
+    let picked = widgets::dropdown_icon_names(ui, "ch-font-height", shown, &labels, width, FONT_HEIGHT_ICON, icon);
+    if let Some((_, key)) = picked.and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
         format(app, json!({"fontHeightReference": key}));
+    }
+}
+
+/// Paints the icon of font height reference `r` into the square `rect` (#6304): a letter drawn in
+/// `ink` on a baseline, and in `mark` the height the reference measures. Em Box frames the whole
+/// square around an "A"; Cap Height puts a bar from the baseline to the top of a capital "A"
+/// beside it; x-Height a bar from the baseline to the top of a lowercase "x"; ICF Box frames a
+/// square inset in the faint em square around an ideograph-like cross, as the ideographic
+/// character face sits inside the em box. The drawings are VectorCraft's own.
+fn paint_font_height_icon(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    r: vectorcraft_doc::FontHeightReference,
+    ink: egui::Color32,
+    mark: egui::Color32,
+) {
+    use vectorcraft_doc::FontHeightReference as R;
+    // A point at (x, y) in the unit square mapped onto `rect`.
+    let p = |x: f32, y: f32| rect.lerp_inside(vec2(x, y));
+    let glyph = egui::Stroke::new(1.3, ink);
+    let measure = egui::Stroke::new(1.2, mark);
+    let line = |a: (f32, f32), b: (f32, f32), stroke: egui::Stroke| painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
+    let frame = |min: f32, max: f32, stroke: egui::Stroke| {
+        painter.rect_stroke(egui::Rect::from_min_max(p(min, min), p(max, max)), 0.0, stroke, egui::StrokeKind::Middle);
+    };
+    // A capital A from `left` to `right`, its apex at `top` and its feet on `base`.
+    let capital = |left: f32, right: f32, top: f32, base: f32| {
+        let mid = (left + right) / 2.0;
+        painter.add(egui::Shape::line(vec![p(left, base), p(mid, top), p(right, base)], glyph));
+        let bar = top + (base - top) * 0.62;
+        let inset = (right - left) * 0.5 * 0.62;
+        line((mid - inset, bar), (mid + inset, bar), glyph);
+    };
+    // A vertical measure from `top` to `base` at `x`, with ticks at its ends.
+    let height_bar = |x: f32, top: f32, base: f32| {
+        line((x, top), (x, base), measure);
+        line((x - 0.1, top), (x + 0.1, top), measure);
+        line((x - 0.1, base), (x + 0.1, base), measure);
+    };
+    let (base, cap_top, x_top) = (0.86, 0.16, 0.46);
+    match r {
+        R::EmBox => {
+            frame(0.06, 0.94, measure);
+            capital(0.26, 0.74, 0.26, 0.76);
+        }
+        R::CapHeight => {
+            capital(0.06, 0.6, cap_top, base);
+            height_bar(0.82, cap_top, base);
+        }
+        R::XHeight => {
+            line((0.1, x_top), (0.54, base), glyph);
+            line((0.54, x_top), (0.1, base), glyph);
+            height_bar(0.82, x_top, base);
+        }
+        R::IcfBox => {
+            frame(0.06, 0.94, egui::Stroke::new(1.0, ink.gamma_multiply(0.4)));
+            frame(0.2, 0.8, measure);
+            line((0.33, 0.5), (0.67, 0.5), glyph);
+            line((0.5, 0.31), (0.5, 0.69), glyph);
+        }
     }
 }
 
@@ -1073,7 +1154,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
     size_field(app, ui, "cb-font-size", 96.0);
     ui.add_space(4.0);
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 /// The panel state key of the panel menu's Show Snap to Glyph Options.

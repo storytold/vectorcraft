@@ -535,9 +535,9 @@ fn expanded_art_keeps_the_random_transforms_the_canvas_drew() {
 }
 
 /// The reply lists each object whose appearance expanded once, by the id it has in the document,
-/// starting with the selected object. In "group copies" the two copies of the square share an id
-/// until Expand Appearance gives them ids of their own, and the reply names the group, then each
-/// copy by its new id.
+/// starting with the selected object. In "group copies" the group's art holds the square with its
+/// stroke's effect applied, so the reply names the group alone; the two copies of the square share
+/// ids until Expand Appearance gives every object in them an id of its own.
 #[test]
 fn the_reply_names_each_expanded_copy_by_its_own_id() {
     for case in RANDOM_CASES {
@@ -551,8 +551,17 @@ fn the_reply_names_each_expanded_copy_by_its_own_id() {
         assert!(ids.iter().all(|&i| s.doc().unwrap().doc.node(NodeId(i)).is_some()), "{case}: {ids:?}");
         if case == "group copies" {
             let art = node(&s, id);
-            let copies: Vec<u64> = art.children().unwrap()[0].children().unwrap().iter().map(|c| c.id.0).collect();
-            assert_eq!(ids, [vec![id.0], copies].concat(), "{case}");
+            assert_eq!(ids, [id.0], "{case}");
+            let copies = art.children().unwrap();
+            assert_eq!(copies.len(), 2, "{case}");
+            let mut seen = std::collections::HashSet::new();
+            let mut repeated = vec![];
+            art.walk(&mut |n| {
+                if !seen.insert(n.id) {
+                    repeated.push(n.id);
+                }
+            });
+            assert!(repeated.is_empty(), "{case}: {repeated:?}");
         }
     }
 }

@@ -32,6 +32,59 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     }
 }
 
+/// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
+/// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
+/// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
+#[test]
+fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let names = |words: &[&str]| english.split(|c: char| !c.is_ascii_alphabetic()).any(|w| words.contains(&w));
+        let banned: [(bool, &[&str]); 6] = [
+            (names(&["save", "saves", "saved", "saving"]), &["बचा", "सहेज"]),
+            (names(&["swatch", "swatches"]), &["घड़ी"]),
+            (names(&["crop"]), &["फसल"]),
+            (names(&["resolution", "resolutions"]), &["संकल्प"]),
+            (names(&["path", "paths"]), &["पथ"]),
+            (true, &["पाठ", "कई अंक"]),
+        ];
+        for (applies, words) in banned {
+            if let Some(word) = words.iter().find(|w| applies && translation.contains(**w)) {
+                wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+            }
+        }
+        if english.contains("number of points") && !(translation.contains("संख्या") && translation.contains("पॉइंट")) {
+            wrong.push(format!("no number in points in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi messages and labels keep the condition, quantity and clauses of their English.
+#[test]
+fn hindi_rows_keep_the_meaning_of_their_english() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    assert_eq!(message(hi, "`shift` must be a number of points"), "`shift` पॉइंट में एक संख्या होनी चाहिए");
+    assert_eq!(
+        message(hi, "`spacing` must be a number of points, 0 or more, or \"auto\""),
+        "`spacing` पॉइंट में 0 या उससे बड़ी संख्या, या \"auto\" होनी चाहिए"
+    );
+    assert_eq!(tr(hi, "Check an artboard to save."), "सेव करने के लिए किसी आर्टबोर्ड पर चेक लगाएँ।");
+    assert_eq!(tr(hi, "Save the applied preferences to a JSON file"), "लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सेव करें");
+    assert_eq!(message(hi, "the script is not UTF-8 text"), "स्क्रिप्ट UTF-8 टेक्स्ट नहीं है");
+    assert_eq!(message(hi, "only solid-colour swatches can be spot colours"), "केवल ठोस रंग वाले स्वॉच स्पॉट रंग हो सकते हैं");
+    assert_eq!(message(hi, "select area type"), "एरिया टाइप सिलेक्ट करें");
+    assert_eq!(message(hi, "12 MB of images, at most 10 MB"), "इमेज के 12 MB, अधिकतम 10 MB");
+    let all =
+        message(hi, "SVG keeps 1 of the document's 3 artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.");
+    assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
+    let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
+    assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+}
+
 /// Locale tags name their language by region or script (in either case, with an encoding or
 /// modifier), and a tag that names no language resolves to none.
 #[test]
@@ -184,6 +237,23 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Objects on Path Options section's Detach button, its undo step and the message for a
+/// Detach with no object chosen.
+#[test]
+fn objects_on_path_detach_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Detach", "Detach Object from Path"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let choose = "choose the object to detach with its Select/Move widget";
+    assert!(message_literals().contains(choose));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, choose), choose, "{code}");
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
@@ -239,24 +309,33 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
-/// The titles of Document Info's Spot Color Objects, Pattern Objects and Gradient Objects
-/// categories, which the panel, its menu and the Objects category's counts show.
+/// Document Info's labels: every category title, which the panel and its menu show, every count
+/// label of the Objects category, and the Document category's fixed row labels (the artboard rows
+/// show artboard names and are left out).
 #[test]
-fn document_info_object_category_titles_are_in_complete_catalogs() {
+fn document_info_labels_are_in_complete_catalogs() {
     let mut session = vectorcraft_engine::Session::new();
     session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+    session.execute("shape.rectangle", &serde_json::json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     let info = session.execute("document.info", &serde_json::json!({})).unwrap();
-    let titles: Vec<&str> = info["sections"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|s| matches!(s["id"].as_str(), Some("spotColors" | "patterns" | "gradients")))
-        .filter_map(|s| s["title"].as_str())
-        .collect();
-    assert_eq!(titles, ["Spot Color Objects", "Pattern Objects", "Gradient Objects"]);
+    let sections = info["sections"].as_array().unwrap();
+    let titles: Vec<&str> = sections.iter().filter_map(|s| s["title"].as_str()).collect();
+    let categories: Vec<&str> = vectorcraft_engine::cmd::CATEGORIES.iter().map(|&(_, title)| title).collect();
+    assert_eq!(titles, categories);
+    let mut labels = categories;
+    labels.extend(vectorcraft_engine::cmd::OBJECT_LABELS.iter().map(|&(_, label)| label));
+    let objects = sections.iter().find(|s| s["id"] == "objects").unwrap()["rows"].as_array().unwrap();
+    assert!(objects.iter().any(|r| r[0] == "Path Length"), "{objects:?}");
+    labels.push("Path Length");
+    let document = sections.iter().find(|s| s["id"] == "document").unwrap()["rows"].as_array().unwrap();
+    let artboards = document.iter().position(|r| r[0] == "Artboards").unwrap();
+    let names = artboards + 1..=artboards + document[artboards][1].as_str().unwrap().parse::<usize>().unwrap();
+    let fixed: Vec<&str> = document.iter().enumerate().filter(|(k, _)| !names.contains(k)).filter_map(|(_, r)| r[0].as_str()).collect();
+    assert_eq!(fixed.len(), 9, "{fixed:?}");
+    labels.extend(fixed);
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
-        for title in &titles {
-            assert!(lang.catalog().plain(title).is_some(), "{} is missing {title}", lang.code);
+        for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
 }
@@ -2058,7 +2137,7 @@ fn three_d_refusals_translate_with_their_values() {
         vectorcraft_engine::EngineError::BadParams { cmd: "effect.apply".into(), msg: e }.to_string()
     };
     let errors = [
-        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), Some((0, 0)))), "goes on the group itself", vec![]),
+        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), (Some(0), 0))), "goes on the group itself", vec![]),
         (
             refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"lights": [{"intensity": 500}]}))),
             "must be a number from",
@@ -2915,6 +2994,14 @@ fn parameter_schema_errors_are_translated() {
     s.execute("file.new", &json!({})).unwrap();
     let errors = [
         (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "must be", "-1"),
+        (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "a number > 0", "-1"),
+        (s.execute("view.saved.new", &json!({"center": 5, "zoom": 1})).unwrap_err().to_string(), "`center`", "two numbers", "5"),
+        (
+            s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 1, "rotation": "x"})).unwrap_err().to_string(),
+            "`rotation`",
+            "a number (deg)",
+            "\"x\"",
+        ),
         (s.execute("view.saved.new", &json!({"center": [0, 0]})).unwrap_err().to_string(), "`zoom`", "missing", ""),
         (s.execute("view.saved.list", &json!(5)).unwrap_err().to_string(), "5", "must be", ""),
     ];
@@ -2932,6 +3019,152 @@ fn parameter_schema_errors_are_translated() {
         for (e, kept) in &nested {
             let shown = message(lang, e);
             assert!(shown.contains(kept) && !shown.contains("unknown parameter") && !shown.contains("must be"), "{code}: {shown}");
+        }
+    }
+}
+
+/// The phrases a parameter schema's error uses for what a value must be, as `@msg` sources: one
+/// for each type, and for a number each range and unit form.
+const SCHEMA_PHRASES: &[&str] = &[
+    "a number",
+    "a number >= {_1}",
+    "a number > {_1}",
+    "a number <= {_1}",
+    "a number < {_1}",
+    "a number {_1} to {_2}",
+    "a number >= {_1} and < {_2}",
+    "a number > {_1} and <= {_2}",
+    "a number > {_1} and < {_2}",
+    "a number ({_1})",
+    "a number >= {_1} ({_2})",
+    "a number > {_1} ({_2})",
+    "a number <= {_1} ({_2})",
+    "a number < {_1} ({_2})",
+    "a number {_1} to {_2} ({_3})",
+    "a number >= {_1} and < {_2} ({_3})",
+    "a number > {_1} and <= {_2} ({_3})",
+    "a number > {_1} and < {_2} ({_3})",
+    "an integer",
+    "an integer >= {_1}",
+    "an integer <= {_1}",
+    "an integer {_1} to {_2}",
+    "true or false",
+    "a string",
+    "one of {_1}",
+    "an object id (a non-negative integer)",
+    "a list of object ids",
+    "a color (a string, [r, g, b] or an object)",
+    "[x, y] (two numbers)",
+    "an object",
+    "a list",
+];
+
+/// What a value of each parameter type must be is translated in every language that translates
+/// every message, for every range and unit of a number: the matched row's placeholders take the
+/// bounds, the unit and the names exactly as the English gives them, and the whole error keeps
+/// the parameter's path and the refused value.
+#[test]
+fn parameter_schema_expected_phrases_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_apischema::{Bound, Param, ParamSchema, Problem, Type};
+    let number = |min, max, unit| Type::Number { min, max, unit };
+    let (incl, excl) = (|x| Some(Bound::Inclusive(x)), |x| Some(Bound::Exclusive(x)));
+    // (type, a value it refuses, the placeholder values of the phrase's row)
+    let cases: Vec<(Type, Value, Vec<&str>)> = vec![
+        (Type::NUMBER, json!("x"), vec![]),
+        (number(incl(-2.5), None, None), json!(-3), vec!["-2.5"]),
+        (number(excl(0.0), None, None), json!(0), vec!["0"]),
+        (number(None, incl(1.5), None), json!(2), vec!["1.5"]),
+        (number(None, excl(100.0), None), json!(100), vec!["100"]),
+        (number(incl(-1.0), incl(1.0), None), json!(2), vec!["-1", "1"]),
+        (number(incl(0.0), excl(360.0), None), json!(360), vec!["0", "360"]),
+        (number(excl(0.0), incl(1.0), None), json!(0), vec!["0", "1"]),
+        (number(excl(-0.5), excl(0.5), None), json!(1), vec!["-0.5", "0.5"]),
+        (number(None, None, Some("deg")), json!("x"), vec!["deg"]),
+        (number(incl(0.25), None, Some("pt")), json!(0), vec!["0.25", "pt"]),
+        (number(excl(0.0), None, Some("pt")), json!(0), vec!["0", "pt"]),
+        (number(None, incl(-1.0), Some("mm")), json!(0), vec!["-1", "mm"]),
+        (number(None, excl(10.0), Some("px")), json!(10), vec!["10", "px"]),
+        (number(incl(0.0), incl(100.0), Some("%")), json!(101), vec!["0", "100", "%"]),
+        (number(incl(-180.0), excl(180.0), Some("deg")), json!(180), vec!["-180", "180", "deg"]),
+        (number(excl(0.0), incl(1000.0), Some("pt")), json!(0), vec!["0", "1000", "pt"]),
+        (number(excl(-1.0), excl(1.0), Some("in")), json!(1), vec!["-1", "1", "in"]),
+        (Type::Integer { min: None, max: None }, json!(1.5), vec![]),
+        (Type::Integer { min: Some(1), max: None }, json!(0), vec!["1"]),
+        (Type::Integer { min: None, max: Some(-1) }, json!(0), vec!["-1"]),
+        (Type::Integer { min: Some(1), max: Some(25) }, json!(26), vec!["1", "25"]),
+        (Type::Boolean, json!(1), vec![]),
+        (Type::String, json!(1), vec![]),
+        (Type::Enum(&["left", "center", "right"]), json!("top"), vec![r#""left", "center", "right""#]),
+        (Type::Enum(&["only"]), json!("other"), vec![r#""only""#]),
+        (Type::Id, json!(-1), vec![]),
+        (Type::Ids, json!(5), vec![]),
+        (Type::Color, json!(5), vec![]),
+        (Type::Point, json!(5), vec![]),
+        (Type::Object(&[]), json!(5), vec![]),
+        (Type::Array(&Type::NUMBER), json!(5), vec![]),
+    ];
+    let one = |name: &'static str, ty: Type| ParamSchema::new(Box::leak(Box::new([Param::new(name, ty)])), "");
+    let inner: &'static [Param] = Box::leak(Box::new([Param::new("zoom", number(excl(0.0), None, None))]));
+    let nested = one("edits", Type::Array(Box::leak(Box::new(Type::Object(inner)))));
+    let mut errors: Vec<_> = cases.iter().map(|(ty, bad, caps)| (one("x", *ty).validate(&json!({ "x": bad })), caps.clone())).collect();
+    errors.push((nested.validate(&json!({"edits": [{"zoom": 1}, {"zoom": -1}]})), vec!["0"]));
+    let mut seen = std::collections::BTreeSet::new();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for phrase in SCHEMA_PHRASES {
+            assert!(entries.iter().any(|(ctx, src, _)| ctx == "@msg" && src == phrase), "{code}: no row for {phrase:?}");
+        }
+        for (result, caps) in &errors {
+            let Err(e) = result else { panic!("accepted: {result:?}") };
+            let Problem::WrongType { expected, got } = &e.problem else { panic!("{e}") };
+            seen.insert(expected.clone());
+            let (_, matched) = lang.catalog().message(expected).unwrap_or_else(|| panic!("{code}: no row matches {expected:?}"));
+            let values: Vec<&str> = matched.iter().map(|(_, v)| *v).collect();
+            assert_eq!(&values, caps, "{code}: {expected:?}");
+            let phrase = message(lang, expected);
+            assert_ne!(&phrase, expected, "{code}");
+            let mut from = 0;
+            for value in caps {
+                let at = phrase[from..].find(value).unwrap_or_else(|| panic!("{code}: {value:?} in {expected:?} -> {phrase:?}"));
+                from += at + value.len();
+            }
+            let shown = message(lang, &e.to_string());
+            let path = format!("`{}`", e.path);
+            let kept = caps.iter().all(|value| shown.contains(value));
+            assert!(kept && shown.contains(&path) && shown.contains(got.as_str()), "{code}: {shown}");
+            assert!(!holds_word(&shown, expected) && !shown.contains("must be") && !shown.contains(", not "), "{code}: {shown}");
+        }
+    }
+    // A catalog's `{key}` must be one of {_1}` row would take `"a", "b", not "c"` as its list.
+    let enum_error = one("x", Type::Enum(&["a", "b"])).validate(&json!({"x": "c"})).map_or_else(|e| e.to_string(), |_| String::new());
+    assert_eq!(enum_error, r#"`x` must be one of "a", "b", not "c""#);
+    for lang in Lang::all().filter(|l| l.code() != Lang::EN.code() && !l.0.source.is_empty()) {
+        let shown = message(lang, &enum_error);
+        assert!(!shown.contains(", not ") && shown.contains(r#""a", "b""#) && shown.contains(r#""c""#), "{}: {shown}", lang.code());
+    }
+    for phrase in
+        ["a number > -0.5 and < 0.5", "a number 0 to 100 (%)", "an integer 1 to 25", r#"one of "left", "center", "right""#, "[x, y] (two numbers)"]
+    {
+        assert!(seen.contains(phrase), "{phrase:?} not in {seen:?}");
+    }
+}
+
+/// A JSON object or array inside a translated message stays as it is, and an exact message that
+/// starts with a bracket is still translated.
+#[test]
+fn bracketed_message_parts_translate_only_as_exact_messages() {
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let point = message(lang, "[x, y] (two numbers)");
+        assert_ne!(point, "[x, y] (two numbers)", "{code}");
+        assert!(point.contains("[x, y]"), "{code}: {point}");
+        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#] {
+            let shown = message(lang, &format!("`center` must be [x, y] (two numbers), not {got}"));
+            assert!(shown.contains(&point) && shown.contains(got), "{code}: {shown}");
+            let shown = message(lang, &format!("`p` must be an object, not {got}"));
+            assert!(shown.contains(got) && !shown.contains("an object"), "{code}: {shown}");
         }
     }
 }
@@ -3463,6 +3696,7 @@ fn translated_messages_keep_the_command_ids_their_english_names() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
+    "nl",
 ];
 
 /// Crates whose error and status messages reach the status bar.

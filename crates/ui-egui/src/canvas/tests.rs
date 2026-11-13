@@ -184,6 +184,9 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
         Cursor::PencilNew,
         Cursor::PencilStraight,
         Cursor::PencilContinue,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
     ] {
         assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
         assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");
@@ -964,6 +967,88 @@ fn two_finger_tap_undoes_and_three_finger_tap_redoes() {
     app.session.prefs.touch_gestures = false;
     tap(&mut app, 2);
     assert_eq!(count(&app), 2, "off: the first finger draws as the pointer, and nothing is undone");
+}
+
+/// In the Touch workspace a two-finger tap switches between the Selection tool and the drawing tool
+/// chosen last, and undoes nothing; three fingers still redo. Outside it, two fingers undo again.
+#[test]
+fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
+    crate::workspaces::switch(&mut app.ui, crate::workspaces::TOUCH).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let c = app.canvas_rect.unwrap().center();
+    let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let tap = |app: &mut VectorcraftApp, fingers: u64| {
+        let at = |n: u64| c + vec2(n as f32 * 50.0, 0.0);
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::Start, at(0)), egui::Event::PointerMoved(at(0)), button(at(0), true)]);
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::Move, at(0) + vec2(6.0, 6.0)), egui::Event::PointerMoved(at(0) + vec2(6.0, 6.0))]);
+        frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::Start, at(n))).collect());
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::End, at(0)), button(at(0) + vec2(6.0, 6.0), false), egui::Event::PointerGone]);
+        frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::End, at(n))).collect());
+        frame(app, &ctx, vec![]);
+    };
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("selection", 1), "selection mode, nothing undone or drawn");
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("rectangle", 1), "back to the drawing tool");
+    // A tool chosen by hand becomes the drawing tool a switch returns to.
+    app.select_tool("ellipse");
+    tap(&mut app, 2);
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("ellipse", 1));
+    // The switches added no undo step: undo still takes the rectangle away, and three fingers redo it.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(count(&app), 0);
+    tap(&mut app, 3);
+    assert_eq!(count(&app), 1, "three fingers redo in Touch too");
+    // Presentation Mode runs neither.
+    app.ui.screen_mode = 3;
+    frame(&mut app, &ctx, vec![]);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "ellipse", "Presentation Mode: no switch");
+    app.ui.screen_mode = 0;
+    // Enable Touch Gestures off: no switch.
+    app.session.prefs.touch_gestures = false;
+    app.select_tool("selection");
+    frame(&mut app, &ctx, vec![]);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "selection", "off: no switch");
+    app.session.prefs.touch_gestures = true;
+    // Another workspace: two fingers undo again and switch no tool.
+    crate::workspaces::switch(&mut app.ui, crate::workspaces::ESSENTIALS).unwrap();
+    app.select_tool("rectangle");
+    frame(&mut app, &ctx, vec![]);
+    let before = count(&app);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "rectangle");
+    assert_eq!(count(&app), before - 1, "Essentials: undone");
+}
+
+/// Switch Selection and Drawing Modes from the command: Pencil when no drawing tool was chosen yet,
+/// a view tool is left for Selection without becoming the drawing tool, and every selection tool
+/// switches to drawing mode.
+#[test]
+fn switch_selection_and_drawing_modes_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(app.ui.touch_drawing_tool.is_none());
+    app.select_tool("selection");
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap();
+    assert_eq!((r, app.session.tool_id()), (json!({"tool": "pencil"}), "pencil"), "no drawing tool chosen yet: Pencil");
+    app.select_tool("hand");
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "selection"}));
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pencil"}), "the Hand tool is no drawing tool");
+    app.select_tool("pen");
+    for id in ["directSelection", "groupSelection", "magicWand", "lasso"] {
+        app.select_tool(id);
+        assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}), "{id}");
+    }
 }
 
 /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
@@ -3881,6 +3966,16 @@ fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
     assert_eq!(guides_now(&app).left, 0.25, "one undo step");
     app.run("edit.redo", json!({})).unwrap();
     assert!((guides_now(&app).left - 0.1).abs() < 1e-3);
+    // Dragged on past the art's left edge at x = 100, the guide lies outside the art and is drawn
+    // there, along the art's height.
+    let (from, to) = (xf.to_screen(Point::new(110.0, 150.0)), xf.to_screen(Point::new(80.0, 150.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    for k in 1..=4 {
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert!((guides_now(&app).left + 0.2).abs() < 1e-3, "{:?}", guides_now(&app));
+    assert!(dots(&mut app, Point::new(80.0, 100.0), Point::new(80.0, 200.0)) > 10, "the guide drawn outside the art");
     app.run("symbol.exitEditing", json!({})).unwrap();
     assert_eq!(dots(&mut app, Point::new(110.0, 100.0), Point::new(110.0, 200.0)), 0, "none outside the mode");
 }

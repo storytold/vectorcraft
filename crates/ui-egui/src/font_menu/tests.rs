@@ -21,40 +21,44 @@ fn the_thai_filter_lists_fonts_with_thai() {
 /// stay clear of it.
 #[test]
 fn the_scroll_bar_leaves_the_stars_clear() {
-    // Every family starred, so each row draws its star. Tests running alongside add fonts and
-    // composite fonts to the process-wide database, which the menu lists too: the ★ filter keeps
-    // the rows to the families starred here.
-    let all = vectorcraft_text::FontDb::global().families();
+    // A database of the bundled fonts alone, each family starred, so each row draws its star:
+    // fonts that tests running alongside add to the process-wide database stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let favorites: Vec<String> = ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"].map(str::to_string).into();
     let ctx = egui::Context::default();
+    // Under the search field and the filters, room for fewer rows than the four families.
     let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
     let mut st = super::MenuState { favorites_only: true, ..Default::default() };
-    let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
-    let mut stars = vec![];
-    for _ in 0..3 {
+    let look = super::MenuLook { samples: false, favorites: &favorites, ..Default::default() };
+    let (mut list, mut stars) = (None, vec![]);
+    // Frames enough for the scroll bar to finish appearing.
+    for _ in 0..30 {
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(area), ..Default::default() }, |ui| {
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
-            super::list(&mut child, egui::Id::unique("fonts"), &mut st, "", None, look);
+            let shown = super::list_of(&mut child, &db, egui::Id::unique("fonts"), &mut st, "Inter", None, look);
+            list = Some((shown.inner_rect, shown.content_size));
         });
         out.textures_delta.clear();
         stars = out
             .shapes
             .iter()
             .filter_map(|c| match &c.shape {
-                // The rows' stars, not the ★ filter button at the top left.
-                egui::Shape::Text(t) if t.galley.text() == "★" && t.pos.x > area.center().x => Some(t.visual_bounding_rect().right()),
+                egui::Shape::Text(t) if t.galley.text() == "★" => Some(t.visual_bounding_rect()),
                 _ => None,
             })
             .collect();
     }
-    let families = st.rows.len();
-    assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
-    // The rows don't fill the list without enough families to scroll, and then there is no bar.
-    if families as f32 * look.row > area.height() {
-        let bar = super::widgets::list_scroll_style();
-        let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
-        for right in stars {
-            assert!(right <= area.right() - column + 0.5, "a star at {right} runs under the scroll bar");
-        }
+    let Some((inner, content)) = list else { panic!("the list was not drawn") };
+    let families: Vec<&str> = st.rows.iter().filter_map(super::Row::family).collect();
+    assert_eq!(families.len(), favorites.len(), "the starred families are listed: {families:?}");
+    assert!(content.y > inner.height() + 0.5, "the rows, {} high, fill a list {} high", content.y, inner.height());
+    // The rows' stars in the list, not the ★ filter above it.
+    let stars: Vec<_> = stars.into_iter().filter(|s| inner.contains(s.center())).collect();
+    assert!(!stars.is_empty(), "no row star drawn in the list at {inner:?}");
+    let bar = super::widgets::list_scroll_style();
+    let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
+    for star in stars {
+        assert!(star.right() <= area.right() - column + 0.5, "a star at {} runs under the scroll bar", star.right());
     }
 }
 
@@ -104,14 +108,33 @@ fn the_widest_name_is_measured_again_when_the_interface_fonts_change() {
     };
     // A width no name has, kept as if measured for the fonts as they are.
     frame(&mut |ui| {
-        let key = super::family_name_key(ui, true);
+        let key = super::family_name_key(ui, vectorcraft_text::FontDb::global(), true);
         ui.data_mut(|d| d.insert_temp(super::family_name_id(), (key, -1.0_f32)));
     });
     frame(&mut |ui| {
         let data = ui.ctx().fonts(|f| f.definitions().font_data.values().next().cloned()).expect("an interface font");
         ui.ctx().add_font(egui::epaint::text::FontInsert { name: "font-menu-test-face".into(), data: (*data).clone(), families: vec![] });
     });
-    frame(&mut |ui| assert!(super::family_name_width(ui, true) >= 0.0, "measured again"));
+    frame(&mut |ui| assert!(super::family_name_width(ui, vectorcraft_text::FontDb::global(), true) >= 0.0, "measured again"));
+}
+
+/// The widest family name measured for one font database is not taken for another one at the same
+/// generation.
+#[test]
+fn each_font_database_has_its_own_widest_name() {
+    use vectorcraft_doc::CompositeFont;
+    let short = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let long = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    assert!(short.set_composite_font(&CompositeFont::new("C", "Inter", "Regular")));
+    assert!(long.set_composite_font(&CompositeFont::new("A composite font with a name longer than any family", "Inter", "Regular")));
+    assert_eq!(short.generation(), long.generation());
+    let ctx = egui::Context::default();
+    let mut widths = (0.0, 0.0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        widths = (super::family_name_width(ui, &short, true), super::family_name_width(ui, &long, true));
+    });
+    out.textures_delta.clear();
+    assert!(widths.1 > widths.0 + 1.0, "the long name's database measured {} and the other {}", widths.1, widths.0);
 }
 
 /// Without a row of filters drawn yet, the menu still makes room for the widest name, its sample,
@@ -125,7 +148,7 @@ fn the_menu_makes_room_for_the_widest_name_and_its_sample() {
     let mut out = ctx.run_ui(input, |ui| {
         let st = super::MenuState::default();
         let look = super::MenuLook::default();
-        let names = super::name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+        let names = super::name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
         assert!(names > 0.0, "a family is listed");
         let width = super::menu_width(ui, &st, look);
         assert!(width >= DISCLOSURE + names + NAME_GAP + SAMPLE_W + STAR, "the menu is {width} wide for a name {names} wide");
@@ -143,14 +166,15 @@ fn only_listed_style_names_widen_the_names() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let long = format!("SemiCondensed ExtraLight Italic {}", "W".repeat(80));
+    let db = vectorcraft_text::FontDb::global();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        let families = super::name_width(ui, true, &[]);
+        let families = super::name_width(ui, db, true, &[]);
         let font = egui::FontId::proportional(super::NAME_SIZE);
         let style = STYLE_INDENT + ui.painter().layout_no_wrap(long.clone(), font, egui::Color32::WHITE).size().x;
         assert!(style > families, "the style name is wider than every family name");
         let listed = [Row::Family("A".into()), Row::Style("A".into(), long.clone())];
-        assert_eq!(super::name_width(ui, true, &listed), style);
-        assert!(super::name_width(ui, true, &listed[..1]) < style, "a style not listed is not measured");
+        assert_eq!(super::name_width(ui, db, true, &listed), style);
+        assert!(super::name_width(ui, db, true, &listed[..1]) < style, "a style not listed is not measured");
     });
     out.textures_delta.clear();
 }
@@ -788,6 +812,108 @@ fn a_modified_turn_that_starts_a_stream_keeps_it_off_the_field() {
     assert_eq!((left, notches), (1, 0));
     let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![plain_turn()]);
     assert_eq!((left, notches), (1, 0), "the stream began as a modified turn");
+}
+
+/// The font menus of two panels (other ids, other scopes) share their filters: a filter chosen in
+/// one menu is on when the other opens, and it lists its rows by it.
+#[test]
+fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
+    use vectorcraft_text::FontClass;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let fields = [("character", "character-font", 10.0), ("control-bar", "control-font", 60.0)];
+    let field = |top: f32| egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(200.0, 30.0));
+    // Draws both fields (and the open menu), and returns the texts drawn with their centers and
+    // each menu's state.
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0))), ..Default::default() };
+        let mut ids = [egui::Id::NULL; 2];
+        let mut out = ctx.run_ui(input, |ui| {
+            for (i, (scope, id, top)) in fields.into_iter().enumerate() {
+                ui.push_id(scope, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(field(top)), |ui| {
+                        ids[i] = ui.scope_id().with(id).with("font-menu");
+                        super::font_menu(ui, id, "Inter", 200.0, None, super::MenuLook { samples: false, ..Default::default() });
+                    });
+                });
+            }
+        });
+        out.textures_delta.clear();
+        let texts: Vec<(String, egui::Pos2)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => None,
+            })
+            .collect();
+        let states = ids.map(|id| ctx.data(|d| d.get_temp::<super::MenuState>(id)).unwrap_or_default());
+        (texts, states)
+    };
+    let press = |at: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(vec![button(false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    let open = |i: usize| press(field(fields[i].2).min + egui::vec2(10.0, 10.0));
+    let close = || {
+        let escape = [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+        frame(escape.to_vec());
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    // The topmost text `label`: a filter chip, above the rows.
+    let chip = |label: &str| {
+        let (texts, _) = frame(vec![]);
+        texts
+            .into_iter()
+            .filter(|(t, _)| t == label)
+            .map(|(_, at)| at)
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap_or_else(|| panic!("{label} is drawn"))
+    };
+    let families = |st: &super::MenuState| st.rows.iter().filter(|r| matches!(r, Row::Family(_))).count();
+    let filters = |st: &super::MenuState| (st.script, st.class, st.variable_only, st.favorites_only);
+    frame(vec![]);
+    // Favorites only, chosen in the first panel's menu, with no favorites: the second lists nothing.
+    open(0);
+    press(chip("★"));
+    close();
+    let (_, [first, second]) = frame(vec![]);
+    assert!(first.favorites_only && second.favorites_only, "the second menu has the filter before it opens");
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert!(second.favorites_only);
+    assert_eq!(families(&second), 0, "no favorites, so the second menu lists no family");
+    // A script, a kind and Variable chosen in the second panel's menu are on in the first.
+    press(chip(super::script_label(3)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(0);
+    let (_, [first, _]) = frame(vec![]);
+    assert_eq!(filters(&first), (3, Some(FontClass::Monospaced), true, true));
+    // Every filter, turned off in the first menu, is off in the second, which lists families again.
+    press(chip("★"));
+    press(chip(super::script_label(0)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert_eq!(filters(&second), (0, None, false, false));
+    assert!(families(&second) > 0, "every family is listed again");
 }
 
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.

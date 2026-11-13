@@ -1050,6 +1050,7 @@ font-technology	Variable	Variabili
 	Enable Rubber Band for	Attiva elastico per
 	Enable text access for screen readers	Consenti l'accesso al testo per le utilità di lettura dello schermo
 	Enable Touch Gestures	Attiva gesti touch
+	Switch Selection and Drawing Modes	Passa tra modalità selezione e disegno
 	Enable Touch Workspace	Attiva area di lavoro touch
 	Encoding	Codifica
 	Encoding:	Codifica:
@@ -1622,6 +1623,8 @@ file-filter	Templates	Modelli
 	Objects on Path Tool	Strumento Oggetti su tracciato
 	Attach Objects on Path	Aggancia oggetti al tracciato
 	Expand Objects on Path	Espandi oggetti su tracciato
+	Detach	Sgancia
+	Detach Object from Path	Sgancia oggetto dal tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -2954,6 +2957,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Reimposta le righe sui colori della grafica
 	Color Theme Picker	Selettore tema colore
 	Click or drag across the art to pick its colors; Shift adds more	Fai clic o trascina sulla grafica per prelevarne i colori; Maiusc ne aggiunge altri
+	Prominent Colors	Colori prominenti
+	Save All Colors	Salva tutti i colori
+	Save Prominent Colors	Salva colori prominenti
 	Reset to Default	Reimposta valori predefiniti
 	Reset to White, Black	Reimposta su bianco, nero
 	Reset with Mesh	Reimposta con trama
@@ -3506,6 +3512,20 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Oggetti con colori spot
 	Pattern Objects	Oggetti con motivi
 	Gradient Objects	Oggetti con sfumature
+	Font Details	Dettagli font
+	Linked Images	Immagini collegate
+	Embedded Images	Immagini incorporate
+	Compound Paths	Tracciati composti
+	Text Objects	Oggetti di testo
+	Placed Documents	Documenti inseriti
+	Symbol Instances	Istanze di simbolo
+	Gradient Meshes	Trame sfumatura
+	Blends	Fusioni
+	Envelopes	Involucri
+	Intertwine Groups	Gruppi intrecciati
+	Opacity Masks	Maschere di opacità
+	Objects with Effects	Oggetti con effetti
+	Pattern Swatches	Campioni motivo
 	Spot Colors	Colori spot
 	Spot Colors…	Colori spot…
 	Spread:	Estensione:
@@ -3627,6 +3647,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Rinomina gruppo di libreria
 	Delete Library Group	Elimina gruppo di libreria
 	Move Library Item to Group	Sposta elemento della libreria nel gruppo
+	Rename Library Item	Rinomina elemento della libreria
+	Add to Character Styles	Aggiungi agli stili carattere
 	Library	Libreria
 	Rename Library	Rinomina libreria
 	Show Library	Mostra libreria
@@ -4200,6 +4222,10 @@ axis	Both	Entrambi
 	Dock Panel	Ancora pannello
 	Dock to Top	Ancora in alto
 	Dock to Bottom	Ancora in basso
+	Dock to Left	Ancora a sinistra
+	Dock to Right	Ancora a destra
+	Dock Toolbar	Ancora barra degli strumenti
+	Float Toolbar	Rendi mobile barra degli strumenti
 	Control Bar Options	Opzioni barra di controllo
 	Tool Options	Opzioni strumento
 	Object Options	Opzioni oggetto
@@ -4217,6 +4243,7 @@ axis	Both	Entrambi
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	nessuna libreria `{id}`
+@msg	the library has another item of that kind named `{name}`	la libreria ha già un altro elemento di questo tipo chiamato `{name}`
 @msg	select some type first	seleziona prima del testo
 @msg	kerning must be a number, "auto", or "optical"	kerning deve essere un numero, «auto» o «optical»
 @msg	the selection has no gradient fill	la selezione non ha una sfumatura di riempimento
@@ -4795,6 +4822,7 @@ axis	Both	Entrambi
 @msg	paths contain invalid coordinates	i tracciati contengono coordinate non valide
 @msg	paths: give at least one file	paths: specifica almeno un file
 @msg	replace: the object to replace was changed or deleted	replace: l’oggetto da sostituire è stato modificato o eliminato
+@msg	the document it was prepared for is no longer active	il documento per cui è stato preparato non è più attivo
 @msg	pattern missing	motivo mancante
 @msg	patterns nested too deeply are filled with mid-grey	i motivi annidati troppo in profondità vengono riempiti di grigio medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve essere maggiore di 0 e al massimo 6400, non {p}
@@ -4830,6 +4858,7 @@ axis	Both	Entrambi
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
+@msg	choose the object to detach with its Select/Move widget	scegli l’oggetto da sganciare con il suo controllo Seleziona/Sposta
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracciato all'interno di un tracciato composto, una fusione, un involucro, una ripetizione o un gruppo intrecciato non può ricevere oggetti
 @msg	a clipping path can't take objects	un tracciato di ritaglio non può ricevere oggetti
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	gli oggetti all'interno di una fusione, un involucro, una ripetizione o un gruppo intrecciato non possono essere agganciati a un tracciato
@@ -5154,6 +5183,7 @@ axis	Both	Entrambi
 @msg	every numbered name for it is taken in the Fonts folder	tutti i nomi numerati per il file sono già usati nella cartella Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tutti i nomi numerati per {name} sono già usati nella cartella del documento
 @msg	No linked files to look for	Nessun file collegato da cercare
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Il collegamento si trova in un simbolo, un design di grafico, un motivo o una maschera di opacità e non ha una posizione nell’area di disegno
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servizi
@@ -5551,7 +5581,9 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` face must be front or back	face di `{GRAPHICS}` deve essere front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Le grafiche si applicano a facce piane: usate il tipo di oggetto Estrusione o Piano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione
+@msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore
 @msg	The graphics are too complex: simplify the symbols' art	Le grafiche sono troppo complesse: semplificate il disegno dei simboli
@@ -6018,6 +6050,35 @@ axis	Y Axis	Asse Y
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
 @msg	true or false	true o false
+@msg	a number >= {_1}	un numero >= {_1}
+@msg	a number > {_1}	un numero > {_1}
+@msg	a number <= {_1}	un numero <= {_1}
+@msg	a number < {_1}	un numero < {_1}
+@msg	a number {_1} to {_2}	un numero da {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	un numero >= {_1} e < {_2}
+@msg	a number > {_1} and <= {_2}	un numero > {_1} e <= {_2}
+@msg	a number > {_1} and < {_2}	un numero > {_1} e < {_2}
+@msg	a number ({_1})	un numero ({_1})
+@msg	a number >= {_1} ({_2})	un numero >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un numero > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un numero <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un numero < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un numero da {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un numero >= {_1} e < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un numero > {_1} e <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un numero > {_1} e < {_2} ({_3})
+@msg	an integer	un intero
+@msg	an integer >= {_1}	un intero >= {_1}
+@msg	an integer <= {_1}	un intero <= {_1}
+@msg	an integer {_1} to {_2}	un intero da {_1} a {_2}
+@msg	one of {_1}	uno tra {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` deve essere uno tra {_1}, non {got}
+@msg	an object id (a non-negative integer)	un ID di oggetto (un intero non negativo)
+@msg	a list of object ids	un elenco di ID di oggetti
+@msg	a color (a string, [r, g, b] or an object)	un colore (una stringa, [r, g, b] o un oggetto)
+@msg	[x, y] (two numbers)	[x, y] (due numeri)
+@msg	an object	un oggetto
+@msg	a list	un elenco
 @msg	unknown key `{k}`; the keys here are {_1}	chiave sconosciuta `{k}`; le chiavi qui sono {_1}
 @msg	{_1} is listed twice	{_1} è elencato due volte
 @msg	{_1} is not the id of an input object	{_1} non è l’id di un oggetto di input
@@ -6125,6 +6186,7 @@ axis	Y Axis	Asse Y
 @msg	message must be text	message deve essere testo
 @msg	allowContinue must be true or false	allowContinue deve essere true o false
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
+@msg	Batch cannot play an action with a View menu step	L'elaborazione batch non può eseguire un'azione con un passaggio del menu Visualizza
 	Insert Menu Item…	Inserisci voce di menu…
 	Insert Menu Item	Inserisci voce di menu
 	Insert Select Path	Inserisci selezione tracciato
@@ -6308,6 +6370,13 @@ axis	Y Axis	Asse Y
 	Area Text	Testo in area
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Misura il testo in base ai limiti del glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opzioni di aggancio ai pixel
+	Pixel Snapping Options…	Opzioni di aggancio ai pixel…
+	Snap to Pixel While Drawing	Aggancia ai pixel durante il disegno
+	Snap to Pixel While Moving	Aggancia ai pixel durante lo spostamento
+	Snap to Pixel While Scaling	Aggancia ai pixel durante il ridimensionamento
+	These options take effect when View › Snap to Pixel is on.	Queste opzioni hanno effetto quando Visualizza › Aggancia ai pixel è attivo.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra opzioni di aggancio a glifo
 	Hide Snap to Glyph Options	Nascondi opzioni di aggancio a glifo
@@ -6939,6 +7008,19 @@ breakText	Glyphs	Glifi
 	Show where this tool is	Mostra dove si trova questo strumento
 @msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+	View more	Mostra altro
+	Finish tutorial	Termina il tutorial
+	Next Up	Prossimo
+	You finished the last tutorial in this skill.	Hai terminato l’ultimo tutorial di questa competenza.
+	Back to skills	Torna alle competenze
+	Open Tutorial Sample	Apri l’esempio del tutorial
+	Finish Tutorial	Termina il tutorial
+	Next Tutorial	Tutorial successivo
+	Back to Skills	Torna alle competenze
+@msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
+@msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina prima `{id}` (vedi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` è l’ultimo tutorial della sua competenza
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati

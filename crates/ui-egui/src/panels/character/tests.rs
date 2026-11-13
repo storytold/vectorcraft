@@ -822,6 +822,135 @@ fn show_font_height_options_shows_the_font_height_reference() {
     assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_none());
 }
 
+/// The Set Font Height Reference dropdown shows an icon before each reference's name, in the
+/// closed field and in the open list, and each reference's icon is its own (#6304).
+#[test]
+fn font_height_references_show_their_icons() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    // Every text drawn with its rect, and the rects of every other shape drawn.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, marks: &mut Vec<egui::Rect>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, marks)),
+                egui::Shape::Noop => {}
+                s => marks.push(s.visual_bounding_rect()),
+            }
+        }
+        let (mut texts, mut marks) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut marks);
+        }
+        (texts, marks)
+    };
+    // The shapes in the icon's place before the text `rect`, relative to that place and rounded.
+    let icon = |marks: &[egui::Rect], rect: egui::Rect| {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        let mut found: Vec<[i32; 4]> = marks
+            .iter()
+            .filter(|m| m.is_finite() && place.contains_rect(**m))
+            .map(|m| [m.min.x - place.min.x, m.min.y - place.min.y, m.max.x - place.min.x, m.max.y - place.min.y].map(|v| v.round() as i32))
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    assert!(icon(&marks, field).len() >= 2, "no icon before Em Box in the closed field: {:?}", icon(&marks, field));
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let mut icons = vec![];
+    for name in ["Em Box", "Cap Height", "x-Height", "ICF Box"] {
+        // The list's row is the last text of that name drawn (the closed field is drawn first).
+        let row = texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}: {texts:?}"));
+        let found = icon(&marks, row);
+        assert!(found.len() >= 2, "no icon before {name} in the open list: {found:?}");
+        icons.push(found);
+    }
+    for (i, a) in icons.iter().enumerate() {
+        assert!(icons.iter().skip(i + 1).all(|b| a != b), "two references share an icon: {icons:?}");
+    }
+}
+
+/// In the open Set Font Height Reference list, the current reference's row is drawn on the
+/// accent-tinted selection fill, so its icon draws the measure in the name's colour rather than
+/// the accent, which would lose its contrast there; the other rows keep the accent (#6304).
+#[test]
+fn the_highlighted_font_height_icon_keeps_its_contrast() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    let accent = Tokens::get(&ctx).accent;
+    // Every text drawn with its rect, and every stroke drawn with its rect and colour.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, strokes: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, strokes)),
+                egui::Shape::LineSegment { stroke, .. } => strokes.push((s.visual_bounding_rect(), stroke.color)),
+                egui::Shape::Path(p) => {
+                    if let egui::epaint::ColorMode::Solid(c) = p.stroke.color {
+                        strokes.push((s.visual_bounding_rect(), c));
+                    }
+                }
+                egui::Shape::Rect(r) => strokes.push((s.visual_bounding_rect(), r.stroke.color)),
+                _ => {}
+            }
+        }
+        let (mut texts, mut strokes) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut strokes);
+        }
+        (texts, strokes)
+    };
+    // The stroke colours in the icon's place before the text `rect`.
+    let colours = |strokes: &[(egui::Rect, egui::Color32)], rect: egui::Rect| -> Vec<egui::Color32> {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        strokes.iter().filter(|(r, _)| r.is_finite() && place.contains_rect(*r)).map(|(_, c)| *c).collect()
+    };
+    frame(&ctx, &mut app);
+    let (texts, _) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, strokes) = frame(&ctx, &mut app);
+    let row = |name: &str| texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}"));
+    // The list fades in, so colours are compared without their alpha.
+    let rgb = |c: egui::Color32| {
+        let [r, g, b, _] = c.to_srgba_unmultiplied();
+        [r, g, b]
+    };
+    let is_accent = |c: &egui::Color32| rgb(*c).iter().zip(rgb(accent)).all(|(a, b)| a.abs_diff(b) <= 4);
+    let current = colours(&strokes, row("Em Box"));
+    assert!(!current.is_empty() && !current.iter().any(is_accent), "the highlighted Em Box icon draws in the accent: {current:?}");
+    let other = colours(&strokes, row("Cap Height"));
+    assert!(other.iter().any(is_accent), "the other rows keep the accent measure: {other:?}");
+}
+
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
 /// selected characters.
 #[test]

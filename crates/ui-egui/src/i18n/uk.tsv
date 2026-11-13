@@ -1044,6 +1044,7 @@ font-technology	Variable	Варіативні
 	Enable Rubber Band for	Включити «гумову смугу» для
 	Enable text access for screen readers	Дозволити доступ до тексту для програм читання з екрану
 	Enable Touch Gestures	Увімкнути сенсорні жести
+	Switch Selection and Drawing Modes	Перемкнути режими виділення та малювання
 	Enable Touch Workspace	Включити сенсорне робоче середовище
 	Encoding	Кодування
 	Encoding:	Кодування:
@@ -1616,6 +1617,8 @@ file-filter	Templates	Шаблони
 	Objects on Path Tool	Інструмент «Об’єкти на контурі»
 	Attach Objects on Path	Прикріпити об’єкти до контуру
 	Expand Objects on Path	Розібрати об’єкти на контурі
+	Detach	Відкріпити
+	Detach Object from Path	Відкріпити об’єкт від контуру
 	Release Live Paint	Звільнити швидку заливку
 	Release Repeat	Звільнити повтор
 	Release Slice	Звільнити фрагмент
@@ -2946,6 +2949,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Скинути рядки до кольорів малюнка
 	Color Theme Picker	Вибір колірної теми
 	Click or drag across the art to pick its colors; Shift adds more	Клацніть або проведіть по малюнку, щоб узяти його кольори; Shift додає ще
+	Prominent Colors	Переважні кольори
+	Save All Colors	Зберегти всі кольори
+	Save Prominent Colors	Зберегти переважні кольори
 	Reset to Default	Скинути до значень за замовчуванням
 	Reset to White, Black	Скинути до білого, чорного
 	Reset with Mesh	Скинути із сіткою
@@ -3499,6 +3505,20 @@ effect	Points	Точки
 	Spot Color Objects	Об’єкти з плашковими кольорами
 	Pattern Objects	Об’єкти з візерунками
 	Gradient Objects	Об’єкти з градієнтами
+	Font Details	Відомості про шрифти
+	Linked Images	Пов’язані зображення
+	Embedded Images	Впроваджені зображення
+	Compound Paths	Складені контури
+	Text Objects	Текстові об’єкти
+	Placed Documents	Розміщені документи
+	Symbol Instances	Екземпляри символів
+	Gradient Meshes	Градієнтні сітки
+	Blends	Переходи
+	Envelopes	Оболонки
+	Intertwine Groups	Групи переплетення
+	Opacity Masks	Маски непрозорості
+	Objects with Effects	Об’єкти з ефектами
+	Pattern Swatches	Зразки візерунків
 	Spot Colors	Плашкові кольори
 	Spot Colors…	Плашкові кольори…
 	Spread:	Розворот:
@@ -3620,6 +3640,8 @@ effect	Points	Точки
 	Rename Library Group	Перейменувати групу бібліотеки
 	Delete Library Group	Видалити групу бібліотеки
 	Move Library Item to Group	Перемістити елемент бібліотеки в групу
+	Rename Library Item	Перейменувати елемент бібліотеки
+	Add to Character Styles	Додати до стилів символів
 	Library	Бібліотека
 	Rename Library	Перейменувати бібліотеку
 	Show Library	Показати бібліотеку
@@ -4189,6 +4211,10 @@ axis	Both	Обидві
 	Dock Panel	Прикріпити панель
 	Dock to Top	Прикріпити вгорі
 	Dock to Bottom	Прикріпити внизу
+	Dock to Left	Прикріпити ліворуч
+	Dock to Right	Прикріпити праворуч
+	Dock Toolbar	Прикріпити панель інструментів
+	Float Toolbar	Від’єднати панель інструментів
 	Control Bar Options	Параметри панелі керування
 	Tool Options	Параметри інструменту
 	Object Options	Параметри об’єкта
@@ -4201,6 +4227,7 @@ axis	Both	Обидві
 	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
+@msg	the library has another item of that kind named `{name}`	у бібліотеці вже є інший елемент цього виду з назвою `{name}`
 @msg	select some type first	спочатку виділіть текст
 @msg	kerning must be a number, "auto", or "optical"	kerning має бути числом, «auto» або «optical»
 @msg	the selection has no gradient fill	виділення не має градієнтної заливки
@@ -4779,6 +4806,7 @@ axis	Both	Обидві
 @msg	paths contain invalid coordinates	контури містять неприпустимі координати
 @msg	paths: give at least one file	paths: вкажіть щонайменше один файл
 @msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
+@msg	the document it was prepared for is no longer active	документ, для якого це було підготовлено, більше не активний
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
 @msg	percent must be above 0 and at most 6400, not {p}	percent має бути більше 0 і не більше 6400, а не {p}
@@ -4814,6 +4842,7 @@ axis	Both	Обидві
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
 @msg	select an Objects on Path group	виділіть групу об’єктів на контурі
+@msg	choose the object to detach with its Select/Move widget	виберіть об’єкт для відкріплення його елементом «Вибрати/Перемістити»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	до контуру всередині складеного контуру, переходу, оболонки, повтору або групи переплетення не можна прикріпити об’єкти
 @msg	a clipping path can't take objects	до відсічного контуру не можна прикріпити об’єкти
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	об’єкти всередині переходу, оболонки, повтору або групи переплетення не можна прикріпити до контуру
@@ -5138,6 +5167,7 @@ axis	Both	Обидві
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Зв’язок міститься в символі, дизайні діаграми, візерунку або масці непрозорості й не має місця на полотні
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -5531,7 +5561,9 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графіка наноситься на плоскі грані: використайте тип об’єкта «Видавлювання» або «Площина»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
 @msg	The graphics are too complex: simplify the symbols' art	Графіка надто складна: спростіть ілюстрації символів
@@ -5998,6 +6030,35 @@ axis	Y Axis	Вісь Y
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число від {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} і < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} і <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} і < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число від {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} і < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} і <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} і < {_2} ({_3})
+@msg	an integer	ціле число
+@msg	an integer >= {_1}	ціле число >= {_1}
+@msg	an integer <= {_1}	ціле число <= {_1}
+@msg	an integer {_1} to {_2}	ціле число від {_1} до {_2}
+@msg	one of {_1}	одне зі значень {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` має бути одним зі значень {_1}, а не {got}
+@msg	an object id (a non-negative integer)	ідентифікатор об’єкта (невід’ємне ціле число)
+@msg	a list of object ids	список ідентифікаторів об’єктів
+@msg	a color (a string, [r, g, b] or an object)	колір (рядок, [r, g, b] або об’єкт)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	об’єкт
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	невідомий ключ `{k}`; тут допустимі ключі {_1}
 @msg	{_1} is listed twice	{_1} вказано двічі
 @msg	{_1} is not the id of an input object	{_1} не є ідентифікатором вхідного об’єкта
@@ -6105,6 +6166,7 @@ axis	Y Axis	Вісь Y
 @msg	message must be text	message має бути текстом
 @msg	allowContinue must be true or false	allowContinue має бути true або false
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
+@msg	Batch cannot play an action with a View menu step	Пакет не може відтворити дію з кроком із меню Перегляд
 	Insert Menu Item…	Вставити пункт меню…
 	Insert Menu Item	Вставити пункт меню
 	Insert Select Path	Вставити виділення контуру
@@ -6288,6 +6350,13 @@ axis	Y Axis	Вісь Y
 	Area Text	Текст в області
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметри прив’язки до пікселя
+	Pixel Snapping Options…	Параметри прив’язки до пікселя…
+	Snap to Pixel While Drawing	Прив’язати до пікселя під час малювання
+	Snap to Pixel While Moving	Прив’язати до пікселя під час переміщення
+	Snap to Pixel While Scaling	Прив’язати до пікселя під час масштабування
+	These options take effect when View › Snap to Pixel is on.	Ці параметри діють, коли ввімкнено Перегляд › Прив’язати до пікселя.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа
@@ -6919,6 +6988,19 @@ breakText	Glyphs	Гліфи
 	Show where this tool is	Показати, де розташований цей інструмент
 @msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
+	View more	Докладніше
+	Finish tutorial	Завершити урок
+	Next Up	Далі
+	You finished the last tutorial in this skill.	Ви завершили останній урок цієї навички.
+	Back to skills	Назад до навичок
+	Open Tutorial Sample	Відкрити приклад уроку
+	Finish Tutorial	Завершити урок
+	Next Tutorial	Наступний урок
+	Back to Skills	Назад до навичок
+@msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
+@msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
