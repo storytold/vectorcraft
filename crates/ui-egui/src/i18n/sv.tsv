@@ -6415,6 +6415,13 @@ axis	Y Axis	Y-axel
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
+	Insert Select Path	Infoga markering av bana
+	Select Path	Markera bana
+@msg	select one whole path or compound path	markera en hel bana eller sammansatt bana
+@msg	select only one path	markera bara en bana
+@msg	the path is hidden or locked, or cannot be selected here	banan är dold eller låst, eller kan inte markeras här
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} är inte den sparade banan: den har ändrats, eller så är dokumentet ett annat
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` måste vara "v1:" och 16 hexadecimala siffror med gemener
 	Select Object…	Markera objekt…
 	Select Object	Markera objekt
 	Set Selection	Ange markering

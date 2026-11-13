@@ -6288,6 +6288,13 @@ axis	Y Axis	Oś Y
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
 	Insert Menu Item…	Wstaw polecenie menu…
 	Insert Menu Item	Wstaw polecenie menu
+	Insert Select Path	Wstaw zaznaczenie ścieżki
+	Select Path	Zaznacz ścieżkę
+@msg	select one whole path or compound path	zaznacz jedną całą ścieżkę lub ścieżkę złożoną
+@msg	select only one path	zaznacz tylko jedną ścieżkę
+@msg	the path is hidden or locked, or cannot be selected here	ścieżka jest ukryta lub zablokowana albo nie można jej tu zaznaczyć
+@msg	object {value} is not the stored path: it changed, or the document is another one	obiekt {value} nie jest zapisaną ścieżką: zmienił się albo dokument jest inny
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` musi mieć postać "v1:" i 16 cyfr szesnastkowych małymi literami
 	Select Object…	Zaznacz obiekt…
 	Select Object	Zaznacz obiekt
 	Set Selection	Ustaw zaznaczenie

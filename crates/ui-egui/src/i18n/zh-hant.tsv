@@ -6077,6 +6077,13 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
+	Insert Select Path	插入選取路徑
+	Select Path	選取路徑
+@msg	select one whole path or compound path	請選取一條完整路徑或複合路徑
+@msg	select only one path	請只選取一條路徑
+@msg	the path is hidden or locked, or cannot be selected here	該路徑已隱藏或鎖定，或無法在此處選取
+@msg	object {value} is not the stored path: it changed, or the document is another one	物件 {value} 不是儲存的路徑：它已變更，或這是另一份文件
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必須為 "v1:" 加上 16 位小寫十六進位數字
 	Select Object…	選取物件…
 	Select Object	選取物件
 	Set Selection	設定選取範圍

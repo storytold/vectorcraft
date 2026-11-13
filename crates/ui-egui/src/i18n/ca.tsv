@@ -4043,6 +4043,13 @@ digits	Malayalam	Malaiàlam
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
+	Insert Select Path	Insereix una selecció de traçat
+	Select Path	Selecciona el traçat
+@msg	select one whole path or compound path	selecciona un traçat sencer o un traçat compost
+@msg	select only one path	selecciona només un traçat
+@msg	the path is hidden or locked, or cannot be selected here	el traçat està amagat o bloquejat, o no es pot seleccionar aquí
+@msg	object {value} is not the stored path: it changed, or the document is another one	l’objecte {value} no és el traçat desat: ha canviat o el document és un altre
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` ha de ser "v1:" i 16 dígits hexadecimals en minúscula
 	Select Object…	Selecciona un objecte…
 	Select Object	Selecciona un objecte
 	Set Selection	Defineix la selecció

@@ -6020,6 +6020,13 @@ axis	Y Axis	Y축
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
+	Insert Select Path	패스 선택 삽입
+	Select Path	패스 선택
+@msg	select one whole path or compound path	전체 패스 또는 컴파운드 패스를 하나 선택하세요
+@msg	select only one path	패스를 하나만 선택하세요
+@msg	the path is hidden or locked, or cannot be selected here	패스가 숨겨져 있거나 잠겨 있거나 여기에서 선택할 수 없습니다
+@msg	object {value} is not the stored path: it changed, or the document is another one	개체 {value}은(는) 저장된 패스가 아닙니다: 변경되었거나 다른 문서입니다
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint`는 "v1:"과 소문자 16진수 16자리여야 합니다
 	Select Object…	개체 선택…
 	Select Object	개체 선택
 	Set Selection	선택 영역 설정

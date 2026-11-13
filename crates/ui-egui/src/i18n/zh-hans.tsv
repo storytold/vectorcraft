@@ -6272,6 +6272,13 @@ axis	Y Axis	Y 轴
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
+	Insert Select Path	插入选择路径
+	Select Path	选择路径
+@msg	select one whole path or compound path	请选择一条完整路径或复合路径
+@msg	select only one path	请只选择一条路径
+@msg	the path is hidden or locked, or cannot be selected here	该路径已隐藏或锁定，或无法在此处选择
+@msg	object {value} is not the stored path: it changed, or the document is another one	对象 {value} 不是存储的路径：它已更改，或这是另一个文档
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必须为 "v1:" 加 16 位小写十六进制数字
 	Select Object…	选择对象…
 	Select Object	选择对象
 	Set Selection	设置选区

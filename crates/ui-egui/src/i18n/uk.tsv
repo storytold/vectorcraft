@@ -6039,6 +6039,13 @@ axis	Y Axis	Вісь Y
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
 	Insert Menu Item…	Вставити пункт меню…
 	Insert Menu Item	Вставити пункт меню
+	Insert Select Path	Вставити виділення контуру
+	Select Path	Виділити контур
+@msg	select one whole path or compound path	виділіть один цілий контур або складений контур
+@msg	select only one path	виділіть лише один контур
+@msg	the path is hidden or locked, or cannot be selected here	контур прихований або заблокований, або його не можна виділити тут
+@msg	object {value} is not the stored path: it changed, or the document is another one	об'єкт {value} не є збереженим контуром: його змінено або це інший документ
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` має складатися з "v1:" і 16 шістнадцяткових цифр у нижньому регістрі
 	Select Object…	Виділити об’єкт…
 	Select Object	Виділити об’єкт
 	Set Selection	Задати виділення

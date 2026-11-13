@@ -6385,6 +6385,13 @@ axis	Y Axis	Άξονας Y
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
 	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
 	Insert Menu Item	Εισαγωγή στοιχείου μενού
+	Insert Select Path	Εισαγωγή επιλογής διαδρομής
+	Select Path	Επιλογή διαδρομής
+@msg	select one whole path or compound path	επιλέξτε μία ολόκληρη διαδρομή ή σύνθετη διαδρομή
+@msg	select only one path	επιλέξτε μόνο μία διαδρομή
+@msg	the path is hidden or locked, or cannot be selected here	η διαδρομή είναι κρυφή ή κλειδωμένη, ή δεν μπορεί να επιλεγεί εδώ
+@msg	object {value} is not the stored path: it changed, or the document is another one	το αντικείμενο {value} δεν είναι η αποθηκευμένη διαδρομή: άλλαξε ή το έγγραφο είναι άλλο
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	το `fingerprint` πρέπει να είναι "v1:" και 16 πεζά δεκαεξαδικά ψηφία
 	Select Object…	Επιλογή αντικειμένου…
 	Select Object	Επιλογή αντικειμένου
 	Set Selection	Ορισμός επιλογής

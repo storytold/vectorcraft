@@ -6040,6 +6040,13 @@ axis	Y Axis	Trục Y
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
+	Insert Select Path	Chèn chọn đường dẫn
+	Select Path	Chọn đường dẫn
+@msg	select one whole path or compound path	hãy chọn một đường dẫn trọn vẹn hoặc đường dẫn phức
+@msg	select only one path	chỉ chọn một đường dẫn
+@msg	the path is hidden or locked, or cannot be selected here	đường dẫn bị ẩn hoặc bị khóa, hoặc không thể chọn ở đây
+@msg	object {value} is not the stored path: it changed, or the document is another one	đối tượng {value} không phải là đường dẫn đã lưu: nó đã thay đổi, hoặc đây là tài liệu khác
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` phải là "v1:" và 16 chữ số thập lục phân viết thường
 	Select Object…	Chọn đối tượng…
 	Select Object	Chọn đối tượng
 	Set Selection	Đặt vùng chọn

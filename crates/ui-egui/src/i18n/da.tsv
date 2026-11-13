@@ -6005,6 +6005,13 @@ axis	Y Axis	Y-akse
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
+	Insert Select Path	Indsæt kurvemarkering
+	Select Path	Markér kurve
+@msg	select one whole path or compound path	markér én hel kurve eller sammensat kurve
+@msg	select only one path	markér kun én kurve
+@msg	the path is hidden or locked, or cannot be selected here	kurven er skjult eller låst, eller kan ikke markeres her
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} er ikke den gemte kurve: den er ændret, eller dokumentet er et andet
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` skal være "v1:" og 16 hexadecimale cifre med små bogstaver
 	Select Object…	Markér objekt…
 	Select Object	Markér objekt
 	Set Selection	Angiv markering

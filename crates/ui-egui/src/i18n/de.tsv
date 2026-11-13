@@ -6025,6 +6025,13 @@ axis	Y Axis	Y-Achse
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
 	Insert Menu Item…	Menübefehl einfügen…
 	Insert Menu Item	Menübefehl einfügen
+	Insert Select Path	Pfadauswahl einfügen
+	Select Path	Pfad auswählen
+@msg	select one whole path or compound path	wählen Sie einen ganzen Pfad oder zusammengesetzten Pfad aus
+@msg	select only one path	wählen Sie nur einen Pfad aus
+@msg	the path is hidden or locked, or cannot be selected here	der Pfad ist ausgeblendet oder gesperrt oder kann hier nicht ausgewählt werden
+@msg	object {value} is not the stored path: it changed, or the document is another one	Objekt {value} ist nicht der gespeicherte Pfad: Er wurde geändert, oder es ist ein anderes Dokument
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` muss aus "v1:" und 16 hexadezimalen Ziffern in Kleinbuchstaben bestehen
 	Select Object…	Objekt auswählen…
 	Select Object	Objekt auswählen
 	Set Selection	Auswahl festlegen
