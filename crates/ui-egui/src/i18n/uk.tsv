@@ -3503,6 +3503,20 @@ effect	Points	Точки
 	Spot Color Objects	Об’єкти з плашковими кольорами
 	Pattern Objects	Об’єкти з візерунками
 	Gradient Objects	Об’єкти з градієнтами
+	Font Details	Відомості про шрифти
+	Linked Images	Пов’язані зображення
+	Embedded Images	Впроваджені зображення
+	Compound Paths	Складені контури
+	Text Objects	Текстові об’єкти
+	Placed Documents	Розміщені документи
+	Symbol Instances	Екземпляри символів
+	Gradient Meshes	Градієнтні сітки
+	Blends	Переходи
+	Envelopes	Оболонки
+	Intertwine Groups	Групи переплетення
+	Opacity Masks	Маски непрозорості
+	Objects with Effects	Об’єкти з ефектами
+	Pattern Swatches	Зразки візерунків
 	Spot Colors	Плашкові кольори
 	Spot Colors…	Плашкові кольори…
 	Spread:	Розворот:
@@ -4195,6 +4209,10 @@ axis	Both	Обидві
 	Dock Panel	Прикріпити панель
 	Dock to Top	Прикріпити вгорі
 	Dock to Bottom	Прикріпити внизу
+	Dock to Left	Прикріпити ліворуч
+	Dock to Right	Прикріпити праворуч
+	Dock Toolbar	Прикріпити панель інструментів
+	Float Toolbar	Від’єднати панель інструментів
 	Control Bar Options	Параметри панелі керування
 	Tool Options	Параметри інструменту
 	Object Options	Параметри об’єкта

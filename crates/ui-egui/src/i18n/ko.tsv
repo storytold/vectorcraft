@@ -3276,6 +3276,20 @@ mark-style	Japanese	일본식
 	Spot Color Objects	별색을 사용한 개체
 	Pattern Objects	패턴을 사용한 개체
 	Gradient Objects	그레이디언트를 사용한 개체
+	Font Details	글꼴 세부 정보
+	Linked Images	연결된 이미지
+	Embedded Images	포함된 이미지
+	Compound Paths	컴파운드 패스
+	Text Objects	텍스트 개체
+	Placed Documents	가져온 문서
+	Symbol Instances	심볼 인스턴스
+	Gradient Meshes	그레이디언트 메시
+	Blends	블렌드
+	Envelopes	엔벨로프
+	Intertwine Groups	교차 그룹
+	Opacity Masks	불투명 마스크
+	Objects with Effects	효과를 사용한 개체
+	Pattern Swatches	패턴 견본
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
@@ -4132,6 +4146,10 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Dock to Left	왼쪽에 고정
+	Dock to Right	오른쪽에 고정
+	Dock Toolbar	도구 막대 고정
+	Float Toolbar	도구 막대 분리
 	Control Bar Options	컨트롤 막대 옵션
 	Tool Options	도구 옵션
 	Object Options	개체 옵션

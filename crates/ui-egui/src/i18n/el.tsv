@@ -2257,6 +2257,10 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Dock to Left	Αγκύρωση αριστερά
+	Dock to Right	Αγκύρωση δεξιά
+	Dock Toolbar	Αγκύρωση γραμμής εργαλείων
+	Float Toolbar	Αιωρούμενη γραμμή εργαλείων
 	Control Bar Options	Επιλογές γραμμής ελέγχου
 	Tool Options	Επιλογές εργαλείου
 	Object Options	Επιλογές αντικειμένου
@@ -3969,6 +3973,20 @@ digits	Malayalam	Μαλαγιάλαμ
 	Spot Color Objects	Αντικείμενα με χρώματα spot
 	Pattern Objects	Αντικείμενα με μοτίβα
 	Gradient Objects	Αντικείμενα με ντεγκραντέ
+	Font Details	Λεπτομέρειες γραμματοσειρών
+	Linked Images	Συνδεδεμένες εικόνες
+	Embedded Images	Ενσωματωμένες εικόνες
+	Compound Paths	Σύνθετες διαδρομές
+	Text Objects	Αντικείμενα κειμένου
+	Placed Documents	Τοποθετημένα έγγραφα
+	Symbol Instances	Στιγμιότυπα συμβόλων
+	Gradient Meshes	Πλέγματα ντεγκραντέ
+	Blends	Αναμείξεις
+	Envelopes	Περιβλήματα
+	Intertwine Groups	Ομάδες διαπλοκής
+	Opacity Masks	Μάσκες αδιαφάνειας
+	Objects with Effects	Αντικείμενα με εφέ
+	Path Length	Μήκος διαδρομής
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)

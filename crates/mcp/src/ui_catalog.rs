@@ -563,7 +563,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name: string} delete the toolbar made with New Toolbar called `name`, and the groups torn off it, from the current workspace, as Manage Toolbars' trash can does",
     ),
-    ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
+    (
+        "window.toolbar.dock",
+        "Dock Toolbar",
+        "",
+        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` in the lane along the window's left or right edge (omitted: the edge it docked at last, the left at first), as Dock to Left and Dock to Right in its title bar's context menu and dropping its title bar on that edge do; `order` is its place in that edge's stack, 0 at the top (omitted: the end, or where it is when it is docked at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.float",
+        "Float Toolbar",
+        "",
+        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in screen points (both or neither; omitted: where it floated last), as Float Toolbar in its title bar's context menu and dragging its title bar out of its lane do; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.list",
+        "List Toolbars",
+        "",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its place in that edge's stack while docked (else null)",
+    ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
         "window.pathfinder.compoundShapes",
