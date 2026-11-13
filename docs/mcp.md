@@ -4051,7 +4051,15 @@ center?, to?}` uses one: a graphic is placed centred on `center` (pasted with it
 gives another colour merges into the document's), a colour paints the selection's fill or stroke, and a style is added
 to the document under its name without the white space around it (numbered when that name is taken by other
 attributes) and applied to the selected text, each as one undo step. `library.removeItem {library?, kind, item}` removes
-one.
+one. `library.addToCharacterStyles {library?, item}` adds a character style to the document's character styles without
+applying it, so no text needs to be selected: a document style of that name with the same attributes is reused
+(`existing: true`, no undo step), and a name taken by other attributes gets a number, as `library.use` names it; a new
+style is one undo step. With either command, a character style's color linked to a swatch that is not a global or spot
+swatch of the document keeps the color it shows without the link. `library.renameItem {library?, kind, item, name}` renames an item in place, its group keeping it
+(a graphic keeps its id); the name is trimmed and has 1 to 256 characters, another item of its kind with that name is
+an error, renaming an item to its own name writes nothing, and a rename is not a document undo step. A right-click on a
+character style in the panel offers Apply Character Style (with type selected), Add to Character Styles, Move to Group,
+Rename… and Delete ([help page](https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/add-and-use-text-and-character-styles-in-libraries.html)).
 
 Gradients and patterns are kinds of their own (the panel's + button lists Fill Gradient, Stroke Gradient, Fill Pattern
 and Stroke Pattern, and a gradient or pattern swatch dragged from the Swatches panel onto the list is added).

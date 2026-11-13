@@ -15,7 +15,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bulgarian, Danish, Indonesian and Dutch are in the list. No language has help content: there is no translated (or
+Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
@@ -51,7 +51,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 |---|---|---|---|
 | Traditional Chinese (Taiwan) | `zh-hant` | 4,892 rows, 790 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted (80% overall) | partial |
 | Italian | `it` | 4,011 / 4,020 | full |
-| Dutch | `nl` | 5,317 rows, 777 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
+| Dutch | `nl` | 7,299 rows, 1,609 of them `@msg` and 47 `@msgplural` (counted 2026-11-13 on `main` at `9a1a158a3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for German; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
