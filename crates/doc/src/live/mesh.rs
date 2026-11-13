@@ -1449,15 +1449,14 @@ impl GradientMesh {
         // A point on the outline takes the nearest point of the edge on every side: the nonzero
         // winding number counts a point on some edges as outside (a rectangle's bottom and right
         // edges) and on the others as inside.
-        let edge = self.nearest_edge(p);
-        if let Some((_, r, c, u, v)) = edge.filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
+        if let Some((_, r, c, u, v)) = self.nearest_edge(p, ON_OUTLINE).filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
             return Some((r, c, u, v));
         }
         if self.outline().to_bezpath().winding(p) == 0 {
             if tol.is_nan() || tol <= 0.0 {
                 return None;
             }
-            return edge.filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
+            return self.nearest_edge(p, tol).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -1495,12 +1494,20 @@ impl GradientMesh {
     }
 
     /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
-    /// boundary patch and local (u, v).
-    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+    /// boundary patch and local (u, v). Edges whose control points all lie farther than `within`
+    /// from `p` are skipped, so `None` means no edge is within `within`.
+    fn nearest_edge(&self, p: Point, within: f64) -> Option<(f64, usize, usize, f64, f64)> {
         use vectorcraft_geom::kurbo::ParamCurveNearest;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
         let mut best: Option<(f64, usize, usize, f64, f64)> = None;
         let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            // The edge lies inside its control points' box, so a box farther than `within` holds
+            // no point of the edge within it.
+            let b = Rect::from_points(e.p0, e.p1).union_pt(e.p2).union_pt(e.p3);
+            let (dx, dy) = ((b.x0 - p.x).max(p.x - b.x1).max(0.0), (b.y0 - p.y).max(p.y - b.y1).max(0.0));
+            if dx * dx + dy * dy > within * within {
+                return;
+            }
             let n = e.nearest(p, 1e-9);
             if best.is_none_or(|b| n.distance_sq < b.0) {
                 let (r, c, u, v) = at;
