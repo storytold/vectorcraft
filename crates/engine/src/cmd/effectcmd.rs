@@ -457,9 +457,10 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
-            // A new effect goes after the item's others.
+            // A new effect goes after the item's (or the object's) others.
             let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
-            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            let on = on.and_then(|i| Some((Some(i), n.appearance.items.get(i)?.effects().len())));
+            let on = on.unwrap_or((None, n.appearance.effects.len()));
             effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if let Some(name) = effects::missing_symbol(d, &effect.params, None) {
                 return Err(bad(C, format!("no symbol named `{name}`")));
@@ -786,7 +787,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad(C, format!("no symbol named `{name}`")));
             }
             if visible != Some(false) {
-                effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
+                effects::validate_three_d_at_in(Some(d), n, to, &prospective, (target, index)).map_err(|e| bad(C, e))?;
             } else {
                 // Hidden, the effect draws nothing, so its object need not fit. The values given are
                 // checked, and after a change of 3D type so is every value it keeps.
