@@ -5480,6 +5480,243 @@ fn a_graphic_style_on_a_label_is_kept_for_its_kind() {
     assert!(rows_of(&looks, "0").0.iter().any(|(fill, hex, _, _)| *fill && hex == "#0080ff"), "{looks:?}");
 }
 
+/// The character style of the first run of label `text` in group `grp`.
+fn label_run_style(s: &Session, id: NodeId, grp: &str, text: &str) -> CharStyle {
+    let NodeKind::Text(t) = label_node(s, id, grp, text).kind else { panic!("{text} is not type") };
+    t.runs[0].style.clone()
+}
+
+/// A recolor of the whole graph (Invert or Complement on the proxy, an Edit Colors command, a color filter or Recolor
+/// Artwork) is kept for the characters and the rows of every kind of label when the graph is drawn again, and undo takes
+/// it back with its edit.
+#[test]
+fn recoloring_a_graph_keeps_its_labels_paint_for_every_kind() {
+    let cases = [
+        ("paint.invert", json!({})),
+        ("paint.complement", json!({})),
+        ("edit.colors.invert", json!({})),
+        ("edit.colors.toGrayscale", json!({})),
+        ("addon.color.filter", json!({"effect": "addon.color.invert"})),
+        ("recolor.apply", json!({"map": {"#3366cc": "#00ff00", "#ff8000": "#8000ff"}})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        // Characters of every label in a color that every case changes, and an orange fill row on the category labels.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#3366cc"})).unwrap();
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff8000"})).unwrap();
+        let was = spec(&s, id).label_styles;
+        let mut p = params.clone();
+        if *cmd == "recolor.apply" {
+            // Recolor Artwork works on the selection.
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        } else {
+            p["ids"] = json!([id.0]);
+        }
+        s.execute(cmd, &p).unwrap();
+        let hex = |p: &Paint| p.color().map(|c| c.to_hex()).unwrap_or_default();
+        let characters = hex(&label_run_style(&s, id, "Axes", "4").fill);
+        assert_ne!(characters, "#3366cc", "{cmd} recolors the characters");
+        let row = label_node(&s, id, "Axes", "Q2").appearance.items[0].paint().clone();
+        assert_ne!(hex(&row), "#ff8000", "{cmd} recolors the row");
+        let looks = label_looks(&mut s, id);
+        for t in ["0", "Q1", "2024"] {
+            assert!(looks.iter().any(|(x, _, fill)| x == t && *fill == characters), "{cmd}: {t}: {looks:?}");
+        }
+        let rows = redrawn_label_rows(&mut s, id);
+        assert_eq!(rows_of(&rows, "Q1").0.first().map(|r| r.1.clone()), Some(hex(&row)), "{cmd}: {rows:?}");
+        // Undo takes back the recolor and what the graph keeps (the two redraws are undone first).
+        for _ in 0..3 {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert_eq!(spec(&s, id).label_styles, was, "{cmd}");
+    });
+}
+
+/// A recolor of one label changes what the graph keeps for that kind of label only.
+#[test]
+fn recoloring_one_label_keeps_its_paint_for_its_kind_only() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("edit.colors.invert", &json!({"ids": [v.0]})).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#ffffff"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "Q1" && fill == "#000000"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "2024" && fill == "#000000"), "{looks:?}");
+    let g = spec(&s, id).label_styles;
+    assert!(g.categories.is_none() && g.legend.is_none(), "{g:?}");
+}
+
+/// A recolor that leaves a label's first characters as they were and gives the rest the same fill is kept for its kind.
+#[test]
+fn a_recolor_that_evens_out_a_labels_characters_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let q2 = text_id(&s, id, "Axes", "Q2");
+    s.select_tool("type", crate::ViewInfo::default()).unwrap();
+    for (start, end, hex) in [(0, 1, "#ff0000"), (1, 2, "#0000ff")] {
+        s.set_tool_option("textSelection", &json!({"id": q2.0, "start": start, "end": end}));
+        s.execute("paint.setFill", &json!({"color": hex})).unwrap();
+    }
+    s.select_tool("selection", crate::ViewInfo::default()).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories, None, "part of a label's text is not kept");
+    s.execute("select.set", &json!({"ids": [q2.0]})).unwrap();
+    s.execute("recolor.apply", &json!({"map": {"#0000ff": "#ff0000"}})).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, _, fill)| t == "Q1" && fill == "#ff0000"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#000000"), "{looks:?}");
+}
+
+/// Stroke options set with `stroke.set` and a gradient made with `paint.editGradient` on a label's characters are kept
+/// for every label of its kind, the gradient without its placement.
+#[test]
+fn stroke_and_gradient_edits_on_a_labels_characters_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let category = label_run_style(&s, id, "Axes", "Q1");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [v.0], "weight": 3, "cap": "round"})).unwrap();
+    s.execute("paint.editGradient", &json!({"ids": [v.0], "kind": "linear", "stroke": false})).unwrap();
+    assert!(matches!(label_run_style(&s, id, "Axes", "4").fill, Paint::Gradient(_)), "the edit makes a gradient");
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((st.stroke_width, st.stroke_cap), (3.0, vectorcraft_doc::LineCap::Round));
+    assert!(matches!(&st.fill, Paint::Gradient(g) if g.geom.is_none()), "{:?}", st.fill);
+    assert_eq!(label_run_style(&s, id, "Axes", "Q1"), category, "the category labels are left as they were");
+}
+
+/// `stroke.set`, `stroke.weightUp` and `stroke.weightDown` given the whole graph are kept for every kind of label.
+#[test]
+fn stroke_weights_set_on_the_whole_graph_are_kept_for_its_labels() {
+    let cases = [("stroke.set", json!({"weight": 2}), 2.0), ("stroke.weightUp", json!({}), 2.0), ("stroke.weightDown", json!({}), 0.75)];
+    every_case(cases, |(cmd, params, weight)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+        let mut p = params.clone();
+        p["ids"] = json!([id.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(label_run_style(&s, id, "Axes", "4").stroke_width, *weight, "{cmd}");
+        label_looks(&mut s, id);
+        for (grp, t) in [("Axes", "0"), ("Axes", "Q1"), ("Legend", "2024")] {
+            assert_eq!(label_run_style(&s, id, grp, t).stroke_width, *weight, "{cmd}: {t}");
+        }
+    });
+}
+
+/// A stroke weight set on a scaled label is kept as the label shows it, since the graph draws its labels unscaled.
+#[test]
+fn a_stroke_weight_on_a_scaled_label_is_kept_as_it_shows() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("select.set", &json!({"ids": [v.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 200})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [v.0], "weight": 3})).unwrap();
+    assert_eq!(label_run_style(&s, id, "Axes", "4").stroke_width, 1.5, "drawn at twice its size");
+    label_looks(&mut s, id);
+    assert_eq!(label_run_style(&s, id, "Axes", "0").stroke_width, 3.0);
+}
+
+/// When the characters of two labels of one kind are recolored differently, the frontmost one sets what the kind
+/// keeps, whatever order `ids` are in.
+#[test]
+fn the_frontmost_label_of_a_kind_sets_what_its_recolor_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    // Legend labels: the axes tell value and category labels apart by their order, so these are moved instead.
+    let (a, b) = (text_id(&s, id, "Legend", "2024"), text_id(&s, id, "Legend", "2025"));
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#0000ff"})).unwrap();
+    // The label made first goes in front, so neither the order of `ids` nor the order the labels were made in decides.
+    let (front, back) = if a < b { (a, b) } else { (b, a) };
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    let path = |n: NodeId| s.doc().unwrap().doc.index_path(n);
+    assert!(path(front) > path(back), "{:?} {:?}", path(front), path(back));
+    let front_fill = if front == a { "#00ffff" } else { "#ffff00" };
+    s.execute("edit.colors.invert", &json!({"ids": [front.0, back.0]})).unwrap();
+    let kept = spec(&s, id).label_styles.legend.unwrap().fill;
+    assert_eq!(kept.color().map(|c| c.to_hex()).as_deref(), Some(front_fill));
+}
+
+/// Apply Nearest Swatch and the ink limit of Print Ink Fixes on a label are kept for its kind.
+#[test]
+fn nearest_swatch_and_ink_limit_on_a_label_are_kept_for_its_kind() {
+    let cases = [
+        ("addon.color.applyNearestSwatch", json!({"library": "web-safe-216"})),
+        ("addon.color.printFixes", json!({"scope": "selection", "inkLimit": 200})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        // Print Ink Fixes works on CMYK documents.
+        s.execute("file.new", &json!({"width": 800, "height": 800, "colorMode": "cmyk"})).unwrap();
+        let id = graph(&mut s, "column");
+        let v = text_id(&s, id, "Axes", "4");
+        s.execute("paint.setFill", &json!({"ids": [v.0], "color": {"c": 90, "m": 80, "y": 70, "k": 60}})).unwrap();
+        let was = label_run_style(&s, id, "Axes", "4").fill;
+        let mut p = params.clone();
+        p["ids"] = json!([v.0]);
+        s.execute(cmd, &p).unwrap();
+        let now = label_run_style(&s, id, "Axes", "4").fill;
+        assert_ne!(now, was, "{cmd} changes the fill");
+        label_looks(&mut s, id);
+        assert_eq!(label_run_style(&s, id, "Axes", "0").fill, now, "{cmd}");
+    });
+}
+
+/// Swap Fill and Stroke and Default Fill and Stroke on a label are kept for its kind.
+#[test]
+fn swap_and_default_fill_and_stroke_on_a_label_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.swap", &json!({"ids": [v.0]})).unwrap();
+    let swapped = label_run_style(&s, id, "Axes", "4");
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((&st.fill, &st.stroke), (&swapped.fill, &swapped.stroke));
+    assert_eq!(st.fill.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "4").0]})).unwrap();
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((st.fill.color().map(|c| c.to_hex()).as_deref(), st.stroke.is_none()), (Some("#000000"), true));
+}
+
+/// On a pie with Legends in Wedges, a recolor of the whole graph leaves the legend labels to the graph's black or white.
+#[test]
+fn a_recolor_leaves_wedge_legend_labels_their_contrast() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.legend, None);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+    // The first series' black wedge is white now, so its label is black.
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()).as_deref(), Some("#000000"));
+    // A recolor of one legend label gives the kind that label's fill.
+    s.execute("edit.colors.invert", &json!({"ids": [text_id(&s, id, "Legend", "a").0]})).unwrap();
+    let kept = spec(&s, id).label_styles.legend.map(|st| st.fill);
+    assert_eq!(kept.and_then(|f| f.color()).map(|c| c.to_hex()).as_deref(), Some("#ffffff"));
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();

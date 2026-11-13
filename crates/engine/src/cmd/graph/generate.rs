@@ -6,7 +6,7 @@ use super::labels::{
     recolour_text, runs, shadow_of,
 };
 use super::markers::{MARKER_BUDGET, marker_cost, marker_designs};
-use super::series::{series_marks, with_series_opacity};
+use super::series::{picks_legend_fill, series_marks, with_series_opacity};
 use super::{
     Arc, BezPath, Color, Document, GraphKind, GraphSpec, Justify, Node, NodeKind, Paint, PathData, Point, Rect, TickLength, ValueAxisSide, shapes,
 };
@@ -397,8 +397,7 @@ impl<'a> Plot<'a> {
         let at = ring.centre + dir(mid) * (ring.hole + (ring.rad - ring.hole) * 0.62);
         let t = self.b.label(Role::Legend, Point::new(at.x, at.y + self.ls * 0.35), &label, Justify::Center, true);
         // White on a dark wedge, unless the legend labels were given a colour of their own.
-        let own_colour = self.g.label_styles.legend.as_ref().is_some_and(|st| st.fill != Paint::solid(Color::BLACK));
-        self.wedge_labels.push(if dark && !own_colour { recolour_text(&t, Color::WHITE) } else { t });
+        self.wedge_labels.push(if dark && picks_legend_fill(self.g) { recolour_text(&t, Color::WHITE) } else { t });
     }
 
     /// The pie's category name.
