@@ -4655,7 +4655,8 @@ mod tests {
     }
 
     /// An action set with a View menu step saves as version 6 and loads back with the step; one whose
-    /// View menu step has params that are not an object is not an action set file.
+    /// View menu step has params that are not an object is not an action set file. A View menu step
+    /// in a recorded batch counts too, since playback runs it as its own step.
     #[test]
     fn a_saved_view_step_survives_as_version_6() {
         let (app, _) = app_with_a_view_step();
@@ -4666,9 +4667,14 @@ mod tests {
         assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
         for params in [json!(5), json!([1]), json!(null)] {
             let step = json!({"command": "view.zoomIn", "params": params});
-            let bad = json!({"format": "vcactions", "version": 6, "name": "Bad", "actions": [{"name": "A", "steps": [step]}]});
-            assert_eq!(files::read_set(&bad.to_string(), "Test").unwrap_err(), "not an action set file", "{params}");
+            for step in [step.clone(), json!({"command": "command.batch", "params": {"commands": [step]}})] {
+                let bad = json!({"format": "vcactions", "version": 6, "name": "Bad", "actions": [{"name": "A", "steps": [step]}]});
+                assert_eq!(files::read_set(&bad.to_string(), "Test").unwrap_err(), "not an action set file", "{step}");
+            }
         }
+        let nested = json!({"commands": [{"command": "view.outline", "params": {}}]});
+        let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(6), "a step in a recorded batch counts");
     }
 
     /// At Accelerated, the steps up to a stop play as saved steps, as they do without a stop: a key

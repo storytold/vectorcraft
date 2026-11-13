@@ -153,6 +153,22 @@ fn select_paths_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
     steps_in(super::SELECT_PATH_STEP, command, params)
 }
 
+/// The params of the View menu steps ([`crate::menus::plays_in_app`]) in a step, as [`stops_in`]
+/// finds stops.
+fn ui_steps_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    if crate::menus::plays_in_app(command) {
+        return vec![params];
+    }
+    if command != "command.batch" {
+        return vec![];
+    }
+    let steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+    steps
+        .filter(|step| step.get("command").and_then(Value::as_str).is_some_and(crate::menus::plays_in_app))
+        .map(|step| step.get("params").unwrap_or(&Value::Null))
+        .collect()
+}
+
 /// `set` as the text of an action set file.
 pub fn write_set(set: &ActionSet) -> String {
     let actions = set
@@ -174,7 +190,7 @@ pub fn write_set(set: &ActionSet) -> String {
     let has_select_object = steps().any(|(command, params)| !select_objects_in(command, params).is_empty());
     let has_select_path = steps().any(|(command, params)| !select_paths_in(command, params).is_empty());
     let has_stop = steps().any(|(command, params)| !stops_in(command, params).is_empty());
-    let has_ui_step = steps().any(|(command, _)| crate::menus::plays_in_app(command));
+    let has_ui_step = steps().any(|(command, params)| !ui_steps_in(command, params).is_empty());
     let version = match (has_select_path, has_select_object, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
         _ if has_ui_step => 6,
         (true, ..) => 5,
@@ -217,8 +233,8 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if select_objects.any(|p| super::select_object_params(p).is_err()) {
         return Err("not an action set file".into());
     }
-    let mut ui_steps = f.actions.iter().flat_map(|a| &a.steps).filter(|s| crate::menus::plays_in_app(&s.command));
-    if ui_steps.any(|s| !s.params.is_object()) {
+    let mut ui_steps = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| ui_steps_in(&s.command, &s.params));
+    if ui_steps.any(|p| !p.is_object()) {
         return Err("not an action set file".into());
     }
     let actions = f
