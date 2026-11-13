@@ -1246,6 +1246,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool, recentColors?: bool, rgbPercent?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), Show Options (true) or Hide Options (false), check (true) or uncheck (false) Show Recent Colors, which shows or hides the panel's Recent Colors row (applied colors still join the list while it is hidden; the Swatches panel keeps its row), and show the RGB mode's R, G and B in percent (true) or from 0 to 255 (false), as a double-click right of an RGB field switches them (the color does not change; Web Safe RGB and the hex field stay in 0 to 255); all four are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options, ui.color_show_recent_colors, ui.color_rgb_percent) → {mode (null: none picked yet), options, recentColors, rgbPercent, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
     ),
     (
+        "ui.colorRgbPercent",
+        "Toggle RGB Percent",
+        "",
+        "{} switch the Color panel's R, G and B between percent and 0 to 255, as a double-click right of an RGB field does (ui.colorPanel {rgbPercent}); the color does not change, and the choice is kept with the preferences; a parameter is an error and changes nothing → true when they show in percent",
+    ),
+    (
         "ui.savePdfDialog",
         "Save PDF Dialog",
         "",

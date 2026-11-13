@@ -17,7 +17,8 @@
 //! A double-click right of an RGB field switches R, G and B between 0 to 255 and percent (the app
 //! keeps it between sessions too); Web Safe RGB and the hex field stay in 0 to 255.
 //! `ui.colorPanel` picks a mode, shows or hides the options and checks or unchecks Show Recent
-//! Colors as the panel menu does, and switches RGB to percent and back.
+//! Colors as the panel menu does, and switches RGB to percent and back. `ui.colorRgbPercent`
+//! switches RGB between percent and 0 to 255 from the command palette or a keyboard shortcut.
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
@@ -584,6 +585,27 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     }))
 }
 
+/// `ui.colorRgbPercent {}`: [`switch_rgb_units`]. A parameter is an error and changes nothing.
+pub(crate) fn rgb_percent_command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    match p {
+        Value::Null => {}
+        Value::Object(o) => {
+            if let Some(key) = o.keys().next() {
+                return Err(format!("unknown parameter `{key}`; the command takes no parameters"));
+            }
+        }
+        got => return Err(format!("the params must be an object, not {got}")),
+    }
+    Ok(json!(switch_rgb_units(app)))
+}
+
+/// Switch the RGB mode's R, G and B between percent and 0 to 255, as a double-click right of an
+/// RGB field does. → whether they now show in percent.
+fn switch_rgb_units(app: &mut VectorcraftApp) -> bool {
+    app.ui.color_rgb_percent = !app.ui.color_rgb_percent;
+    app.ui.color_rgb_percent
+}
+
 /// Tint mode's rows: the swatch's chip and name, and the T slider and field. Returns a new tint
 /// (0..1) and its phase.
 fn tint_rows(ui: &mut Ui, tint: &Tint, slider_w: f32, field_w: f32) -> Option<(f32, Live)> {
@@ -783,8 +805,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     if switch_units {
-        let percent = app.ui.color_rgb_percent;
-        command(app, &json!({ "rgbPercent": !percent })).ok();
+        switch_rgb_units(app);
     }
     ui.add_space(4.0);
     // A clicked chip or spectrum colour: the active colour, or with Alt the inactive proxy's.

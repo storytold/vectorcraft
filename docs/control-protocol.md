@@ -251,7 +251,9 @@ shown}`: `mode` is null until a mode is picked, and `shown` is the mode the pane
 tint of a global or spot swatch. Another mode, `lab` included, answers an error, as does an `options`, `recentColors`
 or `rgbPercent` value that is not true or false. The desktop app keeps the four settings with its preferences, and
 `ui.inspect` reports them as `ui.color_mode`, `ui.color_hide_options`, `ui.color_show_recent_colors` and
-`ui.color_rgb_percent`.
+`ui.color_rgb_percent`. `ui.colorRgbPercent {}` (Toggle RGB Percent in the command palette and Keyboard Shortcuts)
+switches R, G and B between percent and 0 to 255 and answers true when they show in percent; a parameter answers an
+error and changes nothing.
 
 Color Themes panel (`window.panel {panel: "colorThemes"}`): its Create tab makes a theme on a harmony wheel and its
 My Themes tab lists the saved themes; every action runs a command (`colorTheme.save`, `colorTheme.delete`,

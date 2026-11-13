@@ -849,6 +849,37 @@ fn rgb_percent_comes_back_after_a_restart() {
     assert_eq!(app.run("ui.colorPanel", json!({"rgbPercent": false})).unwrap()["rgbPercent"], false);
 }
 
+/// Toggle RGB Percent switches the units from the keyboard: the command palette lists it, Keyboard
+/// Shortcuts takes a key for it, and each run switches R, G and B between percent and 0 to 255 as
+/// the double-click does, without changing the color.
+#[test]
+fn toggle_rgb_percent_switches_the_units_from_the_keyboard() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+    app.run("ui.colorPanel", json!({"mode": "rgb"})).unwrap();
+    let listed = crate::palette::items().into_iter().any(|(label, id, _)| id == "ui.colorRgbPercent" && label == "Toggle RGB Percent");
+    assert!(listed, "the command palette lists it");
+    let e = crate::shortcut_editor::entry("ui.colorRgbPercent").expect("listed in Keyboard Shortcuts");
+    assert_eq!(e.label, "Toggle RGB Percent");
+    assert_eq!(crate::shortcut_editor::default_of("ui.colorRgbPercent"), None, "no default key");
+    assert_eq!(app.run("ui.colorRgbPercent", json!({})).unwrap(), json!(true));
+    assert!(app.ui.color_rgb_percent);
+    frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["rgbPercent"], true);
+    for p in [json!({"rgbPercent": true}), json!({"on": false})] {
+        let e = app.run("ui.colorRgbPercent", p.clone()).unwrap_err();
+        assert!(e.ends_with("; the command takes no parameters"), "{p}: {e}");
+    }
+    for p in [json!(false), json!([]), json!("on")] {
+        assert_eq!(app.run("ui.colorRgbPercent", p.clone()).unwrap_err(), format!("the params must be an object, not {p}"));
+    }
+    assert!(app.ui.color_rgb_percent, "a parameter changes nothing");
+    assert_eq!(app.run("ui.colorRgbPercent", json!({})).unwrap(), json!(false));
+    assert!(!app.ui.color_rgb_percent);
+    assert_eq!(paints_hex(&app).0, "#336699", "the color does not change");
+}
+
 /// `ui.colorPanel {mode}` picks a mode as the panel menu does: HSB shows an RGB fill as H, S and
 /// B, and CMYK converts it as one undo step.
 #[test]
