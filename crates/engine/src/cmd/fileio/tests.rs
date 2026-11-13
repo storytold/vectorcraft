@@ -390,9 +390,20 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        11 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF, print and export presets, composite fonts, shortcut sets, scripts, plug-ins"
+        13 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch and graphic style libraries, libraries, flattener, PDF, print, perspective grid and export presets, composite \
+         fonts, shortcut sets, scripts, plug-ins"
     );
+    let at = |label: &str| filters.iter().position(|f| f.0 == label).unwrap_or_else(|| panic!("File › Open has no {label} filter"));
+    let styles: &[&str] = &[vectorcraft_doc::style_libs::STYLES_EXT];
+    assert_eq!(filters[at("Graphic Style Libraries")].1, styles, "File › Open opens graphic style libraries");
+    assert_eq!(at("Graphic Style Libraries"), at("Swatch libraries") + 1, "next to the swatch libraries");
+    assert_eq!(filters[at("Perspective grid presets")].1, crate::cmd::perspgrid::PRESET_EXTS, "File › Open imports perspective grid presets");
+    assert_eq!(at("Perspective grid presets"), at("Print presets") + 1, "among the presets");
+    assert_eq!(at("Export presets"), at("Perspective grid presets") + 1, "among the presets");
+    for e in [vectorcraft_doc::style_libs::STYLES_EXT].iter().chain(crate::cmd::perspgrid::PRESET_EXTS) {
+        assert!(!filters[0].1.contains(e), "All readable files lists documents only, not .{e}");
+    }
     assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
@@ -404,6 +415,11 @@ fn library_open_filters_list_library_formats_first() {
     assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
     assert!(filters[0].1.contains(&"ase"));
     assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
+    let styles: &'static [&'static str] = std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT);
+    for (label, exts) in [("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS), ("Graphic Style Libraries", styles)] {
+        let filters: Vec<_> = library_open_filters(label, exts).collect();
+        assert_eq!(filters.iter().filter(|f| f.0 == label).count(), 1, "{label} is listed once");
+    }
 }
 
 /// The extensions usage texts list for export: one per writable format, each picking that format
