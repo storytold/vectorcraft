@@ -730,6 +730,34 @@ fn script_file_copy_of_an_open_file_has_its_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `copy` gives the copy the source's permissions: the copy of a read-only file is read-only.
+#[test]
+fn script_file_copy_keeps_the_source_read_only() {
+    let base = folder("copyreadonly");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('x'); s.close(); s.readonly = true;\n\
+         var out = [s.copy(d + '/t.txt'), new File(d + '/t.txt').readonly, new File(d + '/t.txt').length];\n\
+         s.readonly = false; new File(d + '/t.txt').readonly = false; vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, true, 1]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `write` with several values joins them before making them text, so a surrogate pair split
+/// between two values is written as one character.
+#[test]
+fn script_file_write_joins_a_surrogate_pair_split_between_values() {
+    let base = folder("surrogates");
+    let r = run(
+        &base,
+        "var f = new File(Folder.temp.fsName + '/s.txt'); f.encoding = 'UTF-8'; f.open('w'); f.write('\\uD83D', '\\uDE00'); f.close();\n\
+         f.open('r'); var t = f.read(); f.close(); vc.log([t === '\\uD83D\\uDE00', t.length]);",
+    );
+    assert_eq!(r["log"], json!([[true, 2]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A grant that would make the grants file larger than it may be read is not kept, and the grants
 /// file keeps the grants it had.
 #[test]
@@ -752,6 +780,34 @@ fn script_file_grants_file_stays_within_its_size_limit() {
     assert_eq!(std::fs::read(&store).unwrap(), full, "the grants file is left as it was");
     assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1);
     let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grants file that is there but cannot be read (another version, not JSON, a grant that is not
+/// well formed, or no list of grants) is not written over: a grant picked with Always is not kept, and a revoke fails, so the grants it holds stay.
+#[test]
+fn script_file_grants_file_that_cannot_be_read_is_left_as_it_is() {
+    let cases = [
+        ("newer", br#"{"version": 2, "grants": [{"script": "x"}]}"#.as_slice()),
+        ("broken", b"{ not json".as_slice()),
+        ("malformed", br#"{"version": 1, "grants": [{"script": "x"}]}"#.as_slice()),
+        ("nolist", br#"{"version": 1, "grants": {}}"#.as_slice()),
+    ];
+    for (name, held) in cases {
+        let base = folder(&format!("store-{name}"));
+        let out = base.join("picked/out.txt");
+        std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+        let store = base.join("settings/Script Grants.json");
+        write(&store, held);
+        let mut s = with_data(&base);
+        start_framed(&mut s, &base, "var f = File.saveDialog('p'); vc.log(f === null ? null : f.fsName);");
+        assert!(pump_to_picker(&mut s).is_none());
+        assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![out.to_string_lossy().into_owned()], always: true }));
+        let _ = pump_to_picker(&mut s).unwrap();
+        assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: the grants file is left as it was");
+        assert!(s.execute("script.grants.revoke", &json!({"all": true})).is_err(), "{name}");
+        assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: a revoke leaves it too");
+        let _ = std::fs::remove_dir_all(base);
+    }
 }
 
 /// `copy` of a file over 8 MiB is refused, as opening one is.
@@ -1387,6 +1443,12 @@ fn script_file_dialog_grants_are_kept_for_the_same_script_text() {
     let grants = s.execute("script.grants", &json!({})).unwrap();
     assert_eq!(grants["grants"].as_array().unwrap().len(), 1, "{grants}");
     assert_eq!(grants["grants"][0]["write"], true);
+    // Under automation read roots, a path outside them is named by its file name alone.
+    let roots = AutomationRoots::new(&[&base.join("main")], &[]).unwrap();
+    let hidden = confine(roots.as_ref(), || s.execute("script.grants", &json!({}))).unwrap();
+    assert_eq!(hidden["grants"][0]["path"], "out.txt", "{hidden}");
+    assert_eq!(hidden["grants"][0]["script"], grants["grants"][0]["script"], "the script inside the roots is named whole: {hidden}");
+    assert_eq!(hidden["file"], "Script Grants.json", "{hidden}");
 
     start_framed(&mut s, &base, &text);
     let r = pump_to_picker(&mut s).unwrap().unwrap();

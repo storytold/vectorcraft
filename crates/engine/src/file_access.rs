@@ -176,7 +176,7 @@ fn with_scope<T>(scope: Option<Scope>, f: impl FnOnce() -> T) -> T {
 /// Run `f` with `roots` in force on this thread (`None`: as things stand).
 pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -> T {
     match roots {
-        Some(r) => with_scope(Some(Scope::Confined(r.clone())), f),
+        Some(r) => with_gate_reads_exempt(false, || with_scope(Some(Scope::Confined(r.clone())), f)),
         None => f(),
     }
 }
@@ -184,24 +184,44 @@ pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -
 /// Run `f` with no roots in force on this thread: what the person at the keyboard does, and the
 /// app's own folders.
 pub fn unconfined<T>(f: impl FnOnce() -> T) -> T {
-    with_scope(Some(Scope::Unconfined), f)
+    with_gate_reads_exempt(true, || with_scope(Some(Scope::Unconfined), f))
+}
+
+thread_local! {
+    /// Are reads on this thread exempt from the gate of the script command it runs? Only inside an
+    /// [`unconfined`] entered after the gate was put in force ([`with_script_gate`]).
+    static GATE_READS_EXEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Puts the exemption it replaced back when dropped (also when `f` panics).
+struct RestoreExempt(bool);
+
+impl Drop for RestoreExempt {
+    fn drop(&mut self) {
+        GATE_READS_EXEMPT.with(|e| e.set(self.0));
+    }
+}
+
+fn with_gate_reads_exempt<T>(exempt: bool, f: impl FnOnce() -> T) -> T {
+    let _restore = RestoreExempt(GATE_READS_EXEMPT.with(|e| e.replace(exempt)));
+    f()
 }
 
 /// This thread's scope, with the gate of the script command it runs, to carry to work it hands to
 /// another thread ([`ScopeHandle::run`]).
 #[derive(Clone, Debug)]
-pub struct ScopeHandle(Option<Scope>, Option<Arc<ScriptGate>>);
+pub struct ScopeHandle(Option<Scope>, Option<Arc<ScriptGate>>, bool);
 
 impl ScopeHandle {
     /// The scope of the calling thread.
     pub fn capture() -> Self {
-        Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()))
+        Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
 
     /// Run `f` in the captured scope.
     pub fn run<T>(self, f: impl FnOnce() -> T) -> T {
-        let Self(scope, gate) = self;
-        with_gate(gate, || with_scope(scope, f))
+        let Self(scope, gate, exempt) = self;
+        with_gate(gate, || with_gate_reads_exempt(exempt, || with_scope(scope, f)))
     }
 }
 
@@ -252,17 +272,18 @@ fn with_gate<T>(gate: Option<Arc<ScriptGate>>, f: impl FnOnce() -> T) -> T {
 }
 
 /// Runs `f`, a command a script runs, with `gate` in force on this thread: every path it reads or
-/// writes must pass the gate as well as the automation roots. Reads of the app's own folders,
-/// inside [`unconfined`], are not checked; writes there are, so a script's command does not save
-/// into the app's libraries.
+/// writes must pass the gate as well as the automation roots, also when the run itself is
+/// [`unconfined`] (one the person started). Reads of the app's own folders, inside an
+/// [`unconfined`] the command enters, are not checked; writes there are, so a script's command
+/// does not save into the app's libraries.
 pub(crate) fn with_script_gate<T>(gate: ScriptGate, f: impl FnOnce() -> T) -> T {
-    with_gate(Some(Arc::new(gate)), f)
+    with_gate(Some(Arc::new(gate)), || with_gate_reads_exempt(false, f))
 }
 
 /// May `path` be read (or written) by the script command this thread runs? Always outside one,
-/// and for a read inside [`unconfined`].
+/// and for a read inside an [`unconfined`] the command entered.
 fn check_gate(path: &str, access: Access) -> Result<(), String> {
-    if matches!(access, Access::Read) && SCOPE.with(|s| matches!(*s.borrow(), Some(Scope::Unconfined))) {
+    if matches!(access, Access::Read) && GATE_READS_EXEMPT.with(std::cell::Cell::get) {
         return Ok(());
     }
     GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))

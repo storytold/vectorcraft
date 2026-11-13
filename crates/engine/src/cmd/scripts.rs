@@ -341,7 +341,17 @@ fn list_installed(s: &mut Session, _: &Value) -> Result<Value> {
 fn grants(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(dir) = s.script_data_dir() else { return Ok(json!({"grants": [], "file": null})) };
     let file = dir.with_file_name(script::files::GRANTS_FILE);
-    Ok(json!({"grants": script::files::stored_grants(dir), "file": file.to_string_lossy()}))
+    // A script or a granted path outside the automation read roots is named by its file name alone.
+    let mut grants = script::files::stored_grants(dir);
+    for g in &mut grants {
+        for key in ["script", "path"] {
+            if let Some(name) = g[key].as_str().and_then(hidden_name) {
+                g[key] = json!(name);
+            }
+        }
+    }
+    let file = file.to_string_lossy();
+    Ok(json!({"grants": grants, "file": super::fileio::shown_path(&file)}))
 }
 
 fn grants_revoke(s: &mut Session, p: &Value) -> Result<Value> {

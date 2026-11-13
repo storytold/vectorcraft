@@ -2263,7 +2263,7 @@ The help page's writing members work as it describes
 - `open('w')` empties the file, or makes it, `open('e')` opens a file that is there, and `open('a')` opens it at its
   end. `write(...values)` writes the values as `String(value)` gives them, and `writeln(...values)` adds the line end
   `lineFeed` names: CR LF for `Windows`, CR for `Macintosh` and LF for `Unix`. A byte order mark is written only
-  when the script writes `﻿`.
+  when the script writes `\uFEFF`.
 - `copy(target)` copies the file to a path or a `File` and replaces a file that is there. `remove()` deletes a file,
   or a folder only when it is empty (`Script folder is not empty`), at once and without the trash. `rename(name)`
   takes a name without a folder; a name that is in use gives `Script file name is already in use`, and the object
@@ -2345,10 +2345,12 @@ VectorCraft writes files by these rules of its own:
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
 takes its place), and `file` the grants
-file's path, or `null` without a settings folder. `script.grants.revoke {script?, path?, all?}` removes the grants of
+file's path, or `null` without a settings folder. Under automation read roots, a `script`, `path` or `file` outside them
+is given as its file name alone. `script.grants.revoke {script?, path?, all?}` removes the grants of
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. While a script
-runs it is refused with the busy error, as the run keeps the grants it started with. A script cannot run either
-command.
+runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
+cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. A script
+cannot run either command.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.grants.revoke","params":{"all":true}}}

@@ -431,7 +431,7 @@ impl Disk {
         }
         let (Some((script, hash)), Some(store)) = (&self.script, self.store_path()) else { return };
         let (script, code) = (shown(script), self.ran.iter().cloned().collect::<Vec<_>>());
-        let mut grants = read_store(&store);
+        let Ok(mut grants) = try_read_store(&store) else { return };
         for g in &mut grants {
             let ours = g["script"] == *script
                 && g["sha256"] == *hash
@@ -565,7 +565,8 @@ impl Disk {
     /// takes its place.
     fn keep(&self, paths: &[std::path::PathBuf], write: bool, folder: bool) -> Result<(), &'static str> {
         let (Some((script, hash)), Some(store)) = (&self.script, self.store_path()) else { return Err(NO_ALWAYS) };
-        let mut grants = read_store(&store);
+        // A grants file that is there but cannot be read is left as it is.
+        let mut grants = try_read_store(&store).map_err(|_| NOT_SAVED)?;
         let script = shown(script);
         let code: Vec<&String> = self.ran.iter().collect();
         for p in paths {
@@ -880,15 +881,34 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// The grants the grants file at `store` holds; none when it is missing or cannot be read.
+/// The grants the grants file at `store` holds; none when it is missing or cannot be read. A grant
+/// that is not well formed is left out.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let Ok(bytes) = read_head(store, MAX_STORE_BYTES) else { return Vec::new() };
+    load_store(store, false).unwrap_or_default()
+}
+
+/// The grants the grants file at `store` holds, to change and write back; none when it is missing,
+/// and `Err` when it is there but cannot be read, is too large, is not a grants file of this
+/// version, or holds a grant that is not well formed or more grants than may be kept, so that a
+/// change is not written over it.
+fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    load_store(store, true)
+}
+
+/// The grants file at `store` read as [`read_store`] reads it, or with `strict` as
+/// [`try_read_store`] does.
+fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
+    let bytes = match read_head(store, MAX_STORE_BYTES) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
     if bytes.len() > MAX_STORE_BYTES {
-        return Vec::new();
+        return Err(std::io::Error::other("the grants file is too large"));
     }
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return Vec::new() };
+    let v = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(std::io::Error::other)?;
     if v["version"] != 1 {
-        return Vec::new();
+        return Err(std::io::Error::other("the grants file has another version"));
     }
     let valid = |g: &serde_json::Value| {
         g["script"].is_string()
@@ -898,7 +918,14 @@ fn read_store(store: &Path) -> Vec<serde_json::Value> {
             && g["write"].is_boolean()
             && g["folder"].is_boolean()
     };
-    v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default()
+    if strict {
+        let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
+        if grants.len() > MAX_STORED_GRANTS || !grants.iter().all(valid) {
+            return Err(std::io::Error::other("the grants file holds a grant that cannot be read"));
+        }
+        return Ok(grants.clone());
+    }
+    Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
 }
 
 /// Writes `grants` as the grants file at `store`: to a file beside it, which then takes its place.
@@ -930,7 +957,7 @@ pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
 /// → how many were removed.
 pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
-    let grants = read_store(&store);
+    let grants = try_read_store(&store)?;
     let before = grants.len();
     let kept: Vec<serde_json::Value> =
         grants.into_iter().filter(|g| !(script.is_none_or(|s| g["script"] == *s) && path.is_none_or(|p| g["path"] == *p))).collect();
@@ -1636,28 +1663,33 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     if let Err(m) = ids.iter().try_for_each(|id| disk.flush(*id)) {
         return Ok(error(m));
     }
-    let n = std::fs::metadata(&source).map_or(0, |m| m.len());
-    if n > MAX_FILE_BYTES as u64 {
-        return Ok(error(TOO_LARGE));
-    }
+    // The bytes are read once, no more than the limit, and those bytes are what is charged and
+    // written: a source that grows after it is read does not copy more.
+    let copied = match read_head(&source, MAX_FILE_BYTES) {
+        Ok(bytes) if bytes.len() > MAX_FILE_BYTES => return Ok(error(TOO_LARGE)),
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(error(READ_FAILED)),
+    };
     // The target's open objects each take a copy of the bytes, which count as written too, as does
     // the copy itself when it is written.
     let holders = disk.open.values().filter(|o| o.target.as_deref() == Some(target.as_path())).count();
-    disk.charge_write(usize::try_from(n).unwrap_or(usize::MAX).saturating_mul(holders.saturating_add(usize::from(!itself))))?;
-    let r = if itself { Ok(n) } else { std::fs::copy(&source, &target) };
+    disk.charge_write(copied.len().saturating_mul(holders.saturating_add(usize::from(!itself))))?;
+    // The copy takes the source's permissions, as `std::fs::copy` gives them.
+    let permissions = std::fs::metadata(&source).map(|m| m.permissions());
+    let r =
+        if itself { Ok(()) } else { std::fs::write(&target, &copied).and_then(|()| permissions.and_then(|p| std::fs::set_permissions(&target, p))) };
     if !itself && (r.is_ok() || target.exists()) {
         disk.wrote(&target);
     }
     // Open objects of the target hold the copy, so closing them does not write their older bytes.
-    if r.is_ok() && disk.open.values().any(|o| o.target.as_deref() == Some(target.as_path())) {
-        let copied = read_head(&target, MAX_FILE_BYTES).unwrap_or_default();
+    if r.is_ok() {
         for file in disk.open.values_mut().filter(|o| o.target.as_deref() == Some(target.as_path())) {
             file.bytes.clone_from(&copied);
             file.pos = file.pos.min(copied.len());
             file.dirty = false;
         }
     }
-    Ok(done(r.map(drop).map_err(|_| WRITE_FAILED)))
+    Ok(done(r.map_err(|_| WRITE_FAILED)))
 }
 
 /// `remove(path)`: the file, or the folder when it is empty; a link itself, never what it leads to.

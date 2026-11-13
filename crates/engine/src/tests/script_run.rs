@@ -316,7 +316,8 @@ fn an_export_that_fails_names_no_file() {
 }
 
 /// The commands a script runs read and write only where its `File` and `Folder` objects may (its
-/// temporary folder and what a person allowed it, here), and the files of the open documents.
+/// temporary folder and what a person allowed it, here), and the files of the open documents,
+/// also in a run the person started.
 #[test]
 fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
     let dir = fresh_folder("gate");
@@ -354,6 +355,9 @@ fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
     let r = run(&mut s, &source).unwrap();
     assert_eq!(r["log"], json!(["ok", "ok", "denied", "denied"]), "an open document's own file, and no other: {r}");
     assert!(!outside.join("other.svg").exists());
+    let source = format!("{}{}", call("document.open", &own), call("document.open", &outside.join("copy.svg")));
+    let r = crate::file_access::unconfined(|| run(&mut s, &source)).unwrap();
+    assert_eq!(r["log"], json!(["ok", "denied"]), "a run the person starts reads through the gate as well: {r}");
     std::fs::remove_file(&own).unwrap();
     let r = run(&mut s, &call("document.save", &own)).unwrap();
     assert_eq!(r["log"], json!(["ok"]), "a document's own file that was removed is made again: {r}");

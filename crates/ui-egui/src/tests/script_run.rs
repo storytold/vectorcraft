@@ -553,10 +553,18 @@ fn enter_in_a_scripts_file_dialog_denies() {
     assert_eq!(app.session.script_report().unwrap()["log"], json!([null]));
 }
 
-/// Enter on the file dialog's focused Choose… button goes to that button and does not deny.
+/// Enter on the file dialog's focused Choose… button goes to that button, which opens the folder
+/// picker once, and does not deny.
 #[test]
 fn enter_on_a_focused_choose_button_does_not_deny() {
-    let mut app = app();
+    let asked = std::rc::Rc::new(std::cell::Cell::new(0usize));
+    let counted = asked.clone();
+    let pick_folder: Box<dyn FnMut() -> Option<String>> = Box::new(move || {
+        counted.set(counted.get() + 1);
+        None
+    });
+    let mut app = VectorcraftApp::new(Session::new(), crate::Services { pick_folder: Some(pick_folder), ..Default::default() });
+    app.run("file.new", json!({})).unwrap();
     app.session.prefs.show_external_script_warning = false;
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "vc.log(Folder.selectDialog('Pick'));" })).unwrap().unwrap();
     script_runs::poll(&mut app);
@@ -571,8 +579,10 @@ fn enter_on_a_focused_choose_button_does_not_deny() {
         frame(&mut app, events);
     }
     assert!(ctx.memory(|m| m.focused().is_some()), "Tab gives a button the keyboard focus");
+    assert_eq!(asked.get(), 0);
     frame(&mut app, vec![key(egui::Key::Enter)]);
     frame(&mut app, vec![]);
+    assert_eq!(asked.get(), 1, "Enter chose the focused Choose… button");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::script_run::PICKER_KIND), "the dialog stays open");
     assert!(app.session.script_picker().is_some(), "the run still waits");
     dialogs::cancel(&mut app);

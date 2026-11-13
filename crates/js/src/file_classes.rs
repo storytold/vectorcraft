@@ -542,19 +542,21 @@ fn write_values(i: &mut Interp, this: &Value, args: &[Value], what: &str, line: 
         Value::Number(n) if n.is_finite() && n >= 0.0 => (n as usize).saturating_mul(2),
         _ => usize::MAX,
     };
-    let mut text = String::new();
-    let mut units = 0usize;
+    // The values are joined as UTF-16 code units and made text once, so a surrogate pair split
+    // between two values is one character.
+    let mut joined: Vec<u16> = Vec::new();
     for a in args {
         i.use_fuel()?;
         let s = i.to_str(a)?;
-        units = units.saturating_add(s.len());
-        if units > max {
+        if joined.len().saturating_add(s.len()) > max {
             let m = message(i, "tooLarge")?;
             set_slot(i, o, ERROR, m)?;
             return Ok(Value::Bool(false));
         }
-        text.push_str(&s.to_rust_string());
+        joined.extend_from_slice(&s.flat());
     }
+    let mut text = String::from_utf16_lossy(&joined);
+    drop(joined);
     if line {
         text.push_str(line_end(i, o)?);
     }
