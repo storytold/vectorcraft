@@ -1663,12 +1663,19 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     if let Err(m) = ids.iter().try_for_each(|id| disk.flush(*id)) {
         return Ok(error(m));
     }
-    // The bytes are read once, no more than the limit, and those bytes are what is charged and
-    // written: a source that grows after it is read does not copy more.
-    let copied = match read_head(&source, MAX_FILE_BYTES) {
-        Ok(bytes) if bytes.len() > MAX_FILE_BYTES => return Ok(error(TOO_LARGE)),
-        Ok(bytes) => bytes,
-        Err(_) => return Ok(error(READ_FAILED)),
+    #[cfg(test)]
+    if let Some(hook) = BEFORE_COPY_READ.with(|h| h.borrow_mut().take()) {
+        hook(Path::new(&from), &source);
+    }
+    // The bytes are read once, no more than the limit, under the rules for reading, and those bytes
+    // are what is charged and written: a source that grows after it is read does not copy more,
+    // and a path that leads somewhere else than when it was looked up is refused.
+    let copied = match disk.scope.read(Path::new(&from), MAX_FILE_BYTES) {
+        Ok((at, bytes)) if at == source => bytes,
+        Ok(_) | Err(ScriptRead::Refused) => return Ok(error(ACCESS_DENIED)),
+        Err(ScriptRead::TooLarge) => return Ok(error(TOO_LARGE)),
+        Err(ScriptRead::Missing) => return Ok(error(NOT_FOUND)),
+        Err(ScriptRead::Failed(_)) => return Ok(error(READ_FAILED)),
     };
     // The target's open objects each take a copy of the bytes, which count as written too, as does
     // the copy itself when it is written.
@@ -2193,6 +2200,16 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("pick".into(), call(link, pick)),
     ];
     realm.define_file_classes(items)
+}
+
+/// Tests: what the next `copy` does with its source's path, as given and as its real path, after
+/// looking it up and before reading it.
+#[cfg(test)]
+pub(crate) type CopyHook = Box<dyn FnOnce(&Path, &Path)>;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static BEFORE_COPY_READ: std::cell::RefCell<Option<CopyHook>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(test)]

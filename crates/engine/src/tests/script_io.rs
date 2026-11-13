@@ -513,6 +513,69 @@ fn script_files_write_in_the_temporary_and_data_folders() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `copy` reads its source under the rules for reading: a source that a link to a file outside the
+/// script's places replaced after it was looked up is refused, and nothing is copied.
+#[cfg(unix)]
+#[test]
+fn a_copy_whose_source_becomes_a_link_outside_copies_nothing() {
+    let base = folder("copy-link");
+    let mut s = with_data(&base);
+    let secret = base.join("secret.txt");
+    write(&secret, b"secret");
+    crate::script::files::BEFORE_COPY_READ.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |_: &Path, source: &Path| {
+            std::fs::remove_file(source).unwrap();
+            std::os::unix::fs::symlink(&secret, source).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, a = new File(d + '/a.txt'); a.open('w'); a.write('mine'); a.close();\n\
+         vc.log([a.copy(d + '/b.txt'), a.error, new File(d + '/b.txt').exists]);",
+    )
+    .unwrap();
+    crate::script::files::BEFORE_COPY_READ.with(|h| h.borrow_mut().take());
+    assert_eq!(r["log"], json!([[false, "Script file access denied", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `copy` of a link whose target changes after it was looked up is refused, also when both files
+/// are in the script's places.
+#[cfg(unix)]
+#[test]
+fn a_copy_of_a_link_that_leads_elsewhere_after_it_was_looked_up_copies_nothing() {
+    let base = folder("copy-relink");
+    let mut s = with_data(&base);
+    let first = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName;\n\
+         ['a', 'c'].forEach(function (n) { var f = new File(d + '/' + n + '.txt'); f.open('w'); f.write(n); f.close(); });\n\
+         vc.log(d);",
+    )
+    .unwrap();
+    let data = PathBuf::from(first["log"][0].as_str().unwrap());
+    std::os::unix::fs::symlink(data.join("a.txt"), data.join("link.txt")).unwrap();
+    let other = data.join("c.txt");
+    crate::script::files::BEFORE_COPY_READ.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |given: &Path, _: &Path| {
+            std::fs::remove_file(given).unwrap();
+            std::os::unix::fs::symlink(&other, given).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, l = new File(d + '/link.txt');\n\
+         vc.log([l.copy(d + '/b.txt'), l.error, new File(d + '/b.txt').exists]);",
+    )
+    .unwrap();
+    crate::script::files::BEFORE_COPY_READ.with(|h| h.borrow_mut().take());
+    assert_eq!(r["log"], json!([[false, "Script file access denied", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
 #[test]
 fn a_renamed_file_names_its_old_and_new_paths_in_written() {
