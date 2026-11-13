@@ -1225,8 +1225,8 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
         .collect::<Result<_>>()?;
     // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
-    let frames: Vec<String> =
-        planned.iter().filter(|(id, (_, block))| *block && !super::threads::story_of(d, *id).is_empty()).map(|(id, _)| id.0.to_string()).collect();
+    let threads = super::threads::ThreadIndex::of(d);
+    let frames: Vec<String> = planned.iter().filter(|(id, (_, block))| *block && threads.threaded(*id)).map(|(id, _)| id.0.to_string()).collect();
     if !frames.is_empty() {
         let frames = frames.join(", ");
         return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));

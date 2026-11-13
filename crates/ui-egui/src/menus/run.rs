@@ -814,6 +814,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "ui.indexedColorDialog" => {
+            crate::dialogs::indexed_color::open(app);
+            Ok(Value::Null)
+        }
         "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
         "window.swatchLibrary.other" => crate::panels::swatches::other_library(app, s("path")),
         "ui.saveSwatchLibrary" => {
@@ -933,6 +937,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),
         "ui.justification" => crate::dialogs::justification::open(app),
         "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
+        "ui.warichuSettings" => crate::dialogs::warichu::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),

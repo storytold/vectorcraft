@@ -568,8 +568,10 @@ impl Targets {
     }
 
     /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
-    /// unlocked, as the selection tools pick them) pull the pointer into line where they run.
-    pub(super) fn for_snap_to_point(self, cx: &ToolContext) -> Self {
+    /// unlocked, as the selection tools pick them) pull the pointer into line where they run. It
+    /// snaps without Smart Guides, so it draws none of their labels and lines.
+    pub(super) fn for_snap_to_point(mut self, cx: &ToolContext) -> Self {
+        self.style = GuideStyle { lines: false, labels: false, ..GuideStyle::of(cx) };
         self.anchors_only().with_rulers(cx)
     }
 

@@ -166,18 +166,34 @@ fn subtract_intervals(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
     out
 }
 
-/// `a` ∩ `b`.
+/// `a` ∩ `b` (both sorted left to right, each interval starting no earlier than the one before it
+/// ends, as [`union_intervals`] and [`band_intervals`] give them), left to right. It walks both
+/// lists once, stepping past whichever current interval ends first (both
+/// when they end together), so it looks at no more than `a.len() + b.len()` pairs.
 fn intersect_intervals(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
     let mut out = vec![];
-    for &(s, e) in a {
-        for &(c, d) in b {
-            let (x, y) = (s.max(c), e.min(d));
-            if y > x {
-                out.push((x, y));
-            }
+    let (mut i, mut j) = (0, 0);
+    while let (Some(&(s, e)), Some(&(c, d))) = (a.get(i), b.get(j)) {
+        #[cfg(test)]
+        INTERSECT_PAIRS.set(INTERSECT_PAIRS.get() + 1);
+        let (x, y) = (s.max(c), e.min(d));
+        if y > x {
+            out.push((x, y));
+        }
+        // Ends that are equal, or not numbers, step past both, so the walk always ends.
+        match e.partial_cmp(&d) {
+            Some(std::cmp::Ordering::Less) => i += 1,
+            Some(std::cmp::Ordering::Greater) => j += 1,
+            _ => (i, j) = (i + 1, j + 1),
         }
     }
     out
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many pairs of intervals [`intersect_intervals`] looked at on this thread.
+    static INTERSECT_PAIRS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The most pairs of edges [`slant_boundaries`] compares for one band.
@@ -368,6 +384,80 @@ fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f6
     (union_intervals(edges), paired)
 }
 
+/// The largest magnitude a text wrap offset may have (points), the bound the Text Wrap commands
+/// and `.ai` import keep too.
+const MAX_WRAP_OFFSET: f64 = 1000.0;
+
+/// A wrap object's offset as layout uses it: within [`MAX_WRAP_OFFSET`] either way, and 0 when it
+/// is not a number.
+fn wrap_offset(offset: f64) -> f64 {
+    if offset.is_nan() { 0.0 } else { offset.clamp(-MAX_WRAP_OFFSET, MAX_WRAP_OFFSET) }
+}
+
+/// The x at which some point of the band `top..bottom` (`top <= bottom`) is inside `polys`
+/// (even-odd) and farther than `d` (> 0) from every edge of it, holes included: the cover of the
+/// shape shrunk by `d`. The band is cut into pieces (at most [`INVERT_WRAP_PIECES`] even ones, and
+/// at every anchor's height and `d` above and below it when there are at most that many of those);
+/// in each piece, an x is left out when the shape is nowhere in the piece there, or when the whole
+/// piece there lies within `d` of one edge. A piece where several edges together cover it keeps
+/// its x, so the result can be wider than the shrunk shape, never narrower, and never wider than
+/// the shape's own cover of the band.
+fn eroded_cover(polys: &[Vec<Point>], top: f64, bottom: f64, d: f64) -> Vec<(f64, f64)> {
+    // A point `d` from an edge, up to rounding, counts as near it, so a band that only touches the
+    // shrunk shape is left whole.
+    let r = d * (1.0 + 1e-12);
+    let span = |p: &[Point]| p.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(q.y), hi.max(q.y)));
+    // The shrunk shape lies more than `d` below the shape's top and above its bottom, so a band
+    // outside that holds none of it; within it, only contours that come within `d` of the band
+    // count (the others neither cross it nor bound the shape near it).
+    let (lo, hi) = polys.iter().map(|p| span(p)).fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (c, e)| (a.min(c), b.max(e)));
+    if bottom <= lo + r || top >= hi - r {
+        return vec![];
+    }
+    let near_band: Vec<Vec<Point>> = polys
+        .iter()
+        .filter(|p| {
+            let (lo, hi) = span(p);
+            hi >= top - r && lo <= bottom + r
+        })
+        .cloned()
+        .collect();
+    let polys = near_band.as_slice();
+    let pieces = ((bottom - top) * 4.0 / d).ceil().clamp(1.0, INVERT_WRAP_PIECES);
+    let mut cuts: Vec<f64> = (0..=pieces as usize).map(|k| top + (bottom - top) * k as f64 / pieces).collect();
+    if bottom > top {
+        let mut anchors: Vec<f64> = polys.iter().flatten().flat_map(|p| [p.y - d, p.y, p.y + d]).filter(|&y| y > top && y < bottom).collect();
+        anchors.sort_by(f64::total_cmp);
+        anchors.dedup();
+        if anchors.len() <= INVERT_WRAP_PIECES as usize {
+            cuts.extend(anchors);
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup();
+        }
+    }
+    let mut out = Vec::new();
+    // A band of no height keeps its two equal cuts: one piece of no height, measured at its y.
+    for w in cuts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let cover = band_cover(polys, a, b, false);
+        if cover.is_empty() {
+            continue;
+        }
+        // The points closer than `d` to an edge make a convex shape, so a vertical line within
+        // the piece lies in it when both its ends do.
+        let near = polys.iter().flat_map(|p| {
+            (0..p.len()).filter_map(move |i| {
+                let (s, t) = (p[i], p[(i + 1) % p.len()]);
+                let (u, v) = (near_segment(s, t, a, r)?, near_segment(s, t, b, r)?);
+                let (x, y) = (u.0.max(v.0), u.1.min(v.1));
+                (y > x).then_some((x, y))
+            })
+        });
+        out.extend(subtract_intervals(&cover, &union_intervals(near.collect())));
+    }
+    union_intervals(out)
+}
+
 impl Region {
     pub(super) fn cells(path: &BezPath, opts: &LayoutOptions, wrap: &[vectorcraft_doc::WrapShape]) -> Vec<Region> {
         // A frame out of range has no cells, and a wrap shape out of range is left out.
@@ -376,7 +466,7 @@ impl Region {
         let polys: std::sync::Arc<[Vec<Point>]> = polys.into();
         let wraps: std::sync::Arc<[FlatWrap]> = wrap
             .iter()
-            .filter_map(|w| Some((polygons(&w.path.to_bezpath())?, w.wrap.offset.max(0.0), w.wrap.invert)))
+            .filter_map(|w| Some((polygons(&w.path.to_bezpath())?, wrap_offset(w.wrap.offset), w.wrap.invert)))
             .filter(|w| !w.0.is_empty())
             .collect();
         let bbox = path.bounding_box();
@@ -415,8 +505,10 @@ impl Region {
     }
 
     /// `iv` minus every x at which a wrap object lies somewhere in the band `top..bottom` (or the x
-    /// inside it over the whole band, for Invert Wrap). Offsets grow each wrap shape vertically
-    /// and horizontally. Along the line, the text also keeps the inset beside each wrap object
+    /// inside it over the whole band, for Invert Wrap). A positive offset grows each wrap shape
+    /// vertically and horizontally; a negative one shrinks it by that distance from its edges
+    /// (holes included), so text runs that far into the object, or stays that far inside it for
+    /// Invert Wrap. Along the line, the text also keeps the inset beside each wrap object
     /// (outside it, or inside it for Invert Wrap); above and below a wrap object only its offset
     /// applies.
     fn wrapped(&self, mut iv: Vec<(f64, f64)>, top: f64, bottom: f64) -> Vec<(f64, f64)> {
@@ -428,7 +520,17 @@ impl Region {
             }
             let grow = |v: Vec<(f64, f64)>| union_intervals(v.into_iter().map(|(a, b)| (a - off, b + off)).collect());
             let shrink = |v: Vec<(f64, f64)>| v.into_iter().map(|(a, b)| (a + inset, b - inset)).filter(|(a, b)| b > a).collect::<Vec<_>>();
-            iv = if *invert {
+            let pad = |v: Vec<(f64, f64)>| union_intervals(v.into_iter().map(|(a, b)| (a - inset, b + inset)).collect());
+            iv = if *off < 0.0 {
+                // Invert Wrap keeps the x at which the shape shrunk by the offset holds the whole
+                // band; otherwise the text leaves out the x at which the shrunk shape lies
+                // somewhere in the band.
+                if *invert {
+                    intersect_intervals(&iv, &shrink(band_inset_intervals(polys, top, bottom, -off)))
+                } else {
+                    subtract_intervals(&iv, &pad(eroded_cover(polys, top, bottom, -off)))
+                }
+            } else if *invert {
                 // The band is cut into pieces. Each height of a piece `y0..y1` is within the offset
                 // of some height from `y0` plus the offset to `y1` less the offset, so an x the
                 // shape holds at all of those heights is inside the grown shape over the piece. In
@@ -469,8 +571,7 @@ impl Region {
                 }
                 iv
             } else {
-                let w = grow(band_cover(polys, top - off, bottom + off, false));
-                subtract_intervals(&iv, &union_intervals(w.into_iter().map(|(a, b)| (a - inset, b + inset)).collect()))
+                subtract_intervals(&iv, &pad(grow(band_cover(polys, top - off, bottom + off, false))))
             };
         }
         iv
@@ -622,6 +723,94 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     let path = PathData::from_bezpath(&closed(&[strip]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(50.0, 50.0), &[(15.0, 45.0)]);
+}
+
+/// The spans of a 100 pt square frame over the band `top..bottom` with one wrap object through
+/// `contours` (even-odd).
+#[cfg(test)]
+fn wrap_spans(contours: &[&[(f64, f64)]], offset: f64, invert: bool, top: f64, bottom: f64) -> Vec<(f64, f64)> {
+    let frame = Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1);
+    let wrap = vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&closed(contours)), wrap: vectorcraft_doc::TextWrap { offset, invert } };
+    Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(top, bottom)
+}
+
+/// A negative offset lets text run into a wrap object by that distance, across and along the
+/// line: beside a square, the line reaches 5 pt into it, and a line whose band reaches no more than
+/// 5 pt into its top or bottom runs across it.
+#[cfg(test)]
+#[test]
+fn negative_wrap_offset_insets_rectangle_on_both_axes() {
+    let square: &[(f64, f64)] = &[(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)];
+    assert_spans(&wrap_spans(&[square], -5.0, false, 44.0, 50.0), &[(0.0, 45.0), (55.0, 100.0)]);
+    assert_spans(&wrap_spans(&[square], -5.0, false, 30.0, 45.0), &[(0.0, 100.0)]);
+    assert_spans(&wrap_spans(&[square], -5.0, false, 55.0, 70.0), &[(0.0, 100.0)]);
+    assert_spans(&wrap_spans(&[square], -5.0, false, 30.0, 46.0), &[(0.0, 45.0), (55.0, 100.0)]);
+    // The most an offset may take away is 1000 pt, and an offset that is not a number is 0.
+    assert_spans(&wrap_spans(&[square], f64::NEG_INFINITY, false, 44.0, 50.0), &[(0.0, 100.0)]);
+    assert_spans(&wrap_spans(&[square], f64::NAN, false, 44.0, 50.0), &[(0.0, 40.0), (60.0, 100.0)]);
+}
+
+/// A negative offset is measured from a sloped edge itself (10 pt across the edge of a triangle is
+/// 10√2 pt along the line), and from the edges of a hole too.
+#[cfg(test)]
+#[test]
+fn negative_wrap_offset_insets_sloped_shape_and_hole() {
+    let triangle: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    assert_spans(&wrap_spans(&[triangle], -10.0, false, 40.0, 60.0), &[(0.0, 10.0), (60.0 - 10.0 * std::f64::consts::SQRT_2, 100.0)]);
+    let outer: &[(f64, f64)] = &[(20.0, 20.0), (80.0, 20.0), (80.0, 80.0), (20.0, 80.0)];
+    let hole: &[(f64, f64)] = &[(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)];
+    assert_spans(&wrap_spans(&[outer, hole], -5.0, false, 48.0, 52.0), &[(0.0, 25.0), (35.0, 65.0), (75.0, 100.0)]);
+}
+
+/// With Invert Wrap, a negative offset keeps the text that far inside the object, along and across
+/// the line.
+#[cfg(test)]
+#[test]
+fn negative_invert_wrap_keeps_only_eroded_interior() {
+    let square: &[(f64, f64)] = &[(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)];
+    assert_spans(&wrap_spans(&[square], -5.0, true, 46.0, 54.0), &[(45.0, 55.0)]);
+    assert!(wrap_spans(&[square], -5.0, true, 42.0, 48.0).is_empty());
+    let triangle: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    assert_spans(&wrap_spans(&[triangle], -10.0, true, 40.0, 60.0), &[(10.0, 40.0 - 10.0 * std::f64::consts::SQRT_2)]);
+}
+
+/// A negative offset at least half as large as a wrap object is wide leaves nothing of it: text
+/// runs across it, and with Invert Wrap no text fits inside it.
+#[cfg(test)]
+#[test]
+fn negative_offset_erases_narrow_wrap_shape() {
+    let strip: &[(f64, f64)] = &[(40.0, 0.0), (48.0, 0.0), (48.0, 100.0), (40.0, 100.0)];
+    for offset in [-4.0, -5.0, -1000.0] {
+        assert_spans(&wrap_spans(&[strip], offset, false, 40.0, 60.0), &[(0.0, 100.0)]);
+        assert!(wrap_spans(&[strip], offset, true, 40.0, 60.0).is_empty(), "offset {offset}");
+    }
+    // A band of no height.
+    assert_spans(&wrap_spans(&[strip], -1.0, false, 50.0, 50.0), &[(0.0, 41.0), (47.0, 100.0)]);
+}
+
+/// A negative offset never keeps text farther from a wrap object than an offset of 0 does, on a
+/// shape whose edges meet at many angles.
+#[cfg(test)]
+#[test]
+fn negative_offset_never_wraps_more_than_no_offset() {
+    let star: Vec<(f64, f64)> = (0..40)
+        .map(|k| {
+            let (r, a) = (if k % 2 == 0 { 40.0 } else { 15.0 }, f64::from(k) * std::f64::consts::PI / 20.0);
+            (50.0 + r * a.cos(), 50.0 + r * a.sin())
+        })
+        .collect();
+    for (top, bottom) in [(10.0, 22.0), (44.0, 56.0), (30.0, 31.0), (70.0, 90.0)] {
+        for invert in [false, true] {
+            let zero = wrap_spans(&[star.as_slice()], 0.0, invert, top, bottom);
+            let neg = wrap_spans(&[star.as_slice()], -3.0, invert, top, bottom);
+            let width = |v: &[(f64, f64)]| v.iter().map(|(a, b)| b - a).sum::<f64>();
+            if invert {
+                assert!(width(&neg) <= width(&zero) + 1e-9, "{top}..{bottom}: {neg:?} {zero:?}");
+            } else {
+                assert!(width(&neg) >= width(&zero) - 1e-9, "{top}..{bottom}: {neg:?} {zero:?}");
+            }
+        }
+    }
 }
 
 /// A hole that starts and ends inside a line's band splits the line, and a band below the hole, or
@@ -790,6 +979,80 @@ fn an_inset_wider_than_a_shaped_frame_leaves_no_room() {
         let cells = Region::cells(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[]);
         assert!(cells[0].spans(40.0, 60.0).is_empty() && cells[0].span(40.0, 60.0).is_none(), "inset {inset}");
     }
+}
+
+/// `a` ∩ `b` by comparing every interval of `a` with every interval of `b`: the result
+/// [`intersect_intervals`] is checked against.
+#[cfg(test)]
+fn intersect_every_pair(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    a.iter().flat_map(|&(s, e)| b.iter().map(move |&(c, d)| (s.max(c), e.min(d)))).filter(|(x, y)| y > x).collect()
+}
+
+/// The intersection of two lists of intervals, each sorted with no two overlapping, is the one
+/// every pair of their intervals gives, in the same order, left to right and of positive width, for
+/// every pair of such lists whose ends are among the points 0 to 6: empty lists, intervals that
+/// only touch (in one list or across the two), that end together, that hold one another and that
+/// overlap several others.
+#[cfg(test)]
+#[test]
+fn intervals_intersect_as_every_pair_of_them_does() {
+    // Every list is a shorter list with one more interval after its last.
+    let mut lists: Vec<Vec<(f64, f64)>> = vec![vec![]];
+    let mut k = 0;
+    while let Some(list) = lists.get(k).cloned() {
+        let from = list.last().map_or(0, |l: &(f64, f64)| l.1 as u8);
+        for s in from..6 {
+            for e in s + 1..=6 {
+                let mut next = list.clone();
+                next.push((f64::from(s), f64::from(e)));
+                lists.push(next);
+            }
+        }
+        k += 1;
+    }
+    assert_eq!(lists.len(), 233);
+    for a in &lists {
+        for b in &lists {
+            let got = intersect_intervals(a, b);
+            assert_eq!(got, intersect_every_pair(a, b), "{a:?} ∩ {b:?}");
+            assert!(got.iter().all(|(x, y)| y > x) && got.windows(2).all(|w| w[0].1 <= w[1].0), "{got:?}");
+        }
+    }
+}
+
+/// Intersecting two unions of 3,000 and 2,000 intervals that interleave looks at no more than
+/// 5,000 pairs of intervals, not every one of the 6,000,000 pairs.
+#[cfg(test)]
+#[test]
+fn intersecting_intervals_looks_at_each_interval_once() {
+    let a: Vec<(f64, f64)> = (0..3000).map(|i| f64::from(i) * 4.0).map(|x| (x, x + 3.0)).collect();
+    let b: Vec<(f64, f64)> = (0..2000).map(|i| f64::from(i) * 6.0).map(|x| (x + 1.0, x + 5.0)).collect();
+    INTERSECT_PAIRS.set(0);
+    let got = intersect_intervals(&a, &b);
+    assert!(INTERSECT_PAIRS.get() <= a.len() + b.len(), "{} pairs", INTERSECT_PAIRS.get());
+    assert_eq!(got, intersect_every_pair(&a, &b));
+    assert!(!got.is_empty());
+}
+
+/// A line in area type with an Invert Wrap comb of 500 teeth and an offset keeps a span inside
+/// each tooth, left to right, through every piece of its band, and intersecting the spans with each
+/// piece looks at each span once.
+#[cfg(test)]
+#[test]
+fn a_line_inside_an_invert_wrap_comb_keeps_a_span_in_each_tooth() {
+    let frame = Rect::new(0.0, 0.0, 1000.0, 100.0).to_path(0.1);
+    let teeth: Vec<Vec<(f64, f64)>> =
+        (0..500).map(|k| f64::from(k) * 2.0).map(|x| vec![(x, 0.0), (x + 1.0, 0.0), (x + 1.0, 100.0), (x, 100.0)]).collect();
+    let teeth: Vec<&[(f64, f64)]> = teeth.iter().map(Vec::as_slice).collect();
+    let path = PathData::from_bezpath(&closed(&teeth));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 0.25, invert: true } };
+    let cells = Region::cells(&frame, &LayoutOptions::default(), &[wrap]);
+    INTERSECT_PAIRS.set(0);
+    let got = cells[0].spans(40.0, 60.0);
+    let want: Vec<(f64, f64)> = (0..500).map(|k| f64::from(k) * 2.0).map(|x| ((x - 0.25).max(0.0), x + 1.25)).collect();
+    assert_spans(&got, &want);
+    // At most 64 pieces, each looking at no more than the spans so far and the tooth spans.
+    assert!(INTERSECT_PAIRS.get() <= 64 * (500 + 500), "{} pairs", INTERSECT_PAIRS.get());
 }
 
 /// Along the line, text keeps the inset beside a wrap object, around it and, with Invert Wrap,
