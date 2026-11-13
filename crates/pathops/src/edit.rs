@@ -348,12 +348,37 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends
     }
     // The fit may be `tol * 0.98` from the lines between the samples, those lines may be
     // `SAMPLE_GAP` of `tol` from the path, and the curve the test below turns into a line moves by up
-    // to 1.5% of `tol`: 3/4 of how far its handles may be from the line.
+    // to 1.5% of `tol`: 3/4 of how far its handles may be from the line. The fitted curves join
+    // smoothly, so a curve becomes a line only when the line keeps both of its joins smooth. The last
+    // curve of a loop fitted across its start leaves along the loop's first segment.
     let (t0, t1) = ends.map_or((start_tangent(&first.c), end_tangent(&last.c)), |d| (d, d));
-    for c in fit_cubics(&pts, t0, t1, tol * 0.98) {
-        let line = is_straight(&c, tol * 0.02);
+    let fitted = fit_cubics(&pts, t0, t1, tol * 0.98);
+    let from = result.len();
+    let mut arrive = t0;
+    for (k, &c) in fitted.iter().enumerate() {
+        let leave = match fitted.get(k + 1) {
+            Some(next) => start_tangent(next),
+            None if ends.is_some() => result.get(from).map_or(t1, |s| start_tangent(&s.c)),
+            None => t1,
+        };
+        let line = is_straight(&c, tol * 0.02) && line_keeps_joins(&c, arrive, leave);
+        arrive = if line { unit(c.p3 - c.p0).unwrap_or(arrive) } else { end_tangent(&c) };
         result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
     }
+}
+
+/// Most degrees between the line from a refitted curve's start to its end and the directions the
+/// path arrives and leaves along, for the curve to become that line: so every join next to such a
+/// line turns by at most this much. VectorCraft's own value.
+const LINE_JOIN_DEG: f64 = 0.5;
+
+/// Whether the line from `c.p0` to `c.p3` is within [`LINE_JOIN_DEG`] of `arrive`, the direction the
+/// path arrives at `c.p0` along, and of `leave`, the direction it leaves `c.p3` along. A curve whose
+/// ends are at one point, or a direction of no length, gives `false`.
+fn line_keeps_joins(c: &CubicBez, arrive: Vec2, leave: Vec2) -> bool {
+    let (Some(dir), Some(arrive), Some(leave)) = (unit(c.p3 - c.p0), unit(arrive), unit(leave)) else { return false };
+    let min = LINE_JOIN_DEG.to_radians().cos();
+    dir.dot(arrive) >= min && dir.dot(leave) >= min
 }
 
 /// `pts` (a run's samples, in order) smoothed along the path: each point becomes the Gaussian-weighted
