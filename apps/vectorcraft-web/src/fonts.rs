@@ -49,11 +49,11 @@ pub fn want_chars(chars: &[char]) {
 /// Fetch the `demand` faces `wanted` (indexes into `WEB_FONTS`) that [`Demand::start`] lets start.
 /// A face whose fetch fails is fetched again after the wait [`Demand::finished`] gives.
 fn fetch_demand(wanted: &[usize]) {
-    for i in DEMAND.with(|d| d.borrow_mut().start(wanted, js_sys::Date::now())) {
+    for i in DEMAND.with(|d| d.borrow_mut().start(wanted, vectorcraft_ui_egui::now_ms())) {
         let Some(f) = WEB_FONTS.get(i) else { continue };
         wasm_bindgen_futures::spawn_local(async move {
             let ok = load(f, BACKGROUND_TIMEOUT_MS).await;
-            let retry = DEMAND.with(|d| d.borrow_mut().finished(i, ok, js_sys::Date::now()));
+            let retry = DEMAND.with(|d| d.borrow_mut().finished(i, ok, vectorcraft_ui_egui::now_ms()));
             if ok && let Some(ctx) = REPAINT.with(|r| r.borrow().clone()) {
                 ctx.request_repaint();
             }

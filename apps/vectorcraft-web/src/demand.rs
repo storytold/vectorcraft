@@ -15,9 +15,11 @@ enum State {
         tries: u32,
     },
     Loaded,
-    /// `tries` fetches failed; the next may start at `retry_at` (ms).
+    /// `tries` fetches failed, the last at `failed_at` (ms); the next may start at `retry_at`, or
+    /// at once when the clock reads earlier than `failed_at`.
     Failed {
         tries: u32,
+        failed_at: f64,
         retry_at: f64,
     },
 }
@@ -42,7 +44,7 @@ impl Demand {
             let tries = match *state {
                 State::Idle => Some(0),
                 State::Loading { .. } | State::Loaded => None,
-                State::Failed { tries, retry_at } => (tries < MAX_TRIES && now >= retry_at).then_some(tries),
+                State::Failed { tries, failed_at, retry_at } => (tries < MAX_TRIES && (now >= retry_at || now < failed_at)).then_some(tries),
             };
             if let Some(tries) = tries {
                 *state = State::Loading { tries };
@@ -64,7 +66,7 @@ impl Demand {
         }
         let tries = tries + 1;
         let wait = RETRY_MS << (tries - 1).min(4);
-        *state = State::Failed { tries, retry_at: now + f64::from(wait) };
+        *state = State::Failed { tries, failed_at: now, retry_at: now + f64::from(wait) };
         (tries < MAX_TRIES).then_some(wait)
     }
 }
@@ -106,5 +108,17 @@ mod tests {
         assert_eq!(d.start(&[1], f64::from(RETRY_MS)), [1]);
         assert_eq!(d.finished(1, true, f64::from(RETRY_MS)), None);
         assert!(d.start(&[1], 1e12).is_empty());
+    }
+
+    /// A clock that reads earlier than the failure (one set back meanwhile) does not hold the
+    /// retry back: the timer that asks for it has waited already.
+    #[test]
+    fn a_clock_set_back_after_a_failure_does_not_stop_the_retry() {
+        let mut d = Demand::default();
+        let failed_at = 1e12;
+        d.start(&[0], failed_at);
+        assert_eq!(d.finished(0, false, failed_at), Some(RETRY_MS));
+        assert!(d.start(&[0], failed_at + 1.0).is_empty(), "still waiting");
+        assert_eq!(d.start(&[0], failed_at - 3_600_000.0), [0], "the clock went back an hour");
     }
 }
