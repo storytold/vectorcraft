@@ -3341,6 +3341,8 @@ theme	Appearance	Udseende
 	Rename Library Group	Omdøb biblioteksgruppe
 	Delete Library Group	Slet biblioteksgruppe
 	Move Library Item to Group	Flyt bibliotekselement til gruppe
+	Rename Library Item	Omdøb bibliotekselement
+	Add to Character Styles	Føj til tegnstile
 	Rename Library	Omdøb bibliotek
 	Show Library	Vis bibliotek
 	Use Library Item	Brug bibliotekselement
@@ -4187,6 +4189,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} trin|{n} trin
 @plural	{n} stroke|{n} strokes	{n} kontur|{n} konturer
 @msg	no library `{id}`	intet bibliotek `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteket har allerede et andet element af den type med navnet `{name}`
 @msg	select some type first	markér først noget tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning skal være et tal, „auto“ eller „optical“
 @msg	{_1} has no {_2} style	{_1} har ingen {_2}-stil

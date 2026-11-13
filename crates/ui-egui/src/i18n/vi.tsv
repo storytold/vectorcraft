@@ -2428,6 +2428,8 @@ digits	Hindi	Hindi
 	Move Guide to Layer	Di chuyển đường căn vào lớp
 	Move in Perspective	Di chuyển theo phối cảnh
 	Move Library Item to Group	Di chuyển mục thư viện vào nhóm
+	Rename Library Item	Đổi tên mục thư viện
+	Add to Character Styles	Thêm vào các kiểu ký tự
 	Move Locked and Hidden Artwork with Artboard	Di chuyển tác phẩm đã khóa và ẩn cùng bảng vẽ
 	Move Mesh Point	Di chuyển điểm lưới
 	Move Mesh Points	Di chuyển các điểm lưới
@@ -4978,6 +4980,7 @@ theme	Appearance	Giao diện
 @msg	no interaction in progress	không có tương tác nào đang tiến hành
 @msg	no key object	không có đối tượng khóa
 @msg	no library `{id}`	không có thư viện `{id}`
+@msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó

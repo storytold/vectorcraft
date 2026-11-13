@@ -2877,6 +2877,8 @@ antiAlias	Sharp	शार्प
 	Move in Perspective	पर्सपेक्टिव में मूव करें
 	Move Library Group	लाइब्रेरी ग्रुप मूव करें
 	Move Library Item to Group	लाइब्रेरी आइटम को ग्रुप में मूव करें
+	Rename Library Item	लाइब्रेरी आइटम का नाम बदलें
+	Add to Character Styles	कैरेक्टर स्टाइल्स में जोड़ें
 	Move Locked and Hidden Artwork with Artboard	आर्टबोर्ड के साथ लॉक्ड और छिपा हुआ आर्टवर्क मूव करें
 	Move Mesh Point	मेश पॉइंट मूव करें
 	Move Mesh Points	मेश पॉइंट मूव करें
@@ -7238,6 +7240,7 @@ antiAlias	Sharp	शार्प
 @msg	no layer {id} (see layer.list)	कोई लेयर {id} (layer.list देखें)
 @msg	no layers to export	निर्यात करने के लिए कोई लेयरें नहीं
 @msg	no library `{id}`	नहीं लाइब्रेरी `{id}`
+@msg	the library has another item of that kind named `{name}`	लाइब्रेरी में इस प्रकार का एक और आइटम `{name}` नाम से पहले से है
 @msg	no library `{key}`	नहीं लाइब्रेरी `{key}`
 @msg	no library `{key}` (see {list})	कोई लाइब्रेरी `{key}` ({list} देखें)
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं

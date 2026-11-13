@@ -2638,6 +2638,8 @@ digits	Malayalam	Malaiàlam
 	Move in Perspective	Mou en perspectiva
 	Move Library Group	Mou el grup de la biblioteca
 	Move Library Item to Group	Mou l’element de la biblioteca al grup
+	Rename Library Item	Canvia el nom de l’element de la biblioteca
+	Add to Character Styles	Afegeix als estils de caràcter
 	Move Locked and Hidden Artwork with Artboard	Mou la il·lustració bloquejada i oculta amb el tauler
 	Move Mesh Point	Mou el punt de malla
 	Move Mesh Points	Mou els punts de malla
@@ -5734,6 +5736,7 @@ digits	Malayalam	Malaiàlam
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
