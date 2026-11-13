@@ -3604,6 +3604,8 @@ theme	Appearance	Motiv
 	Rename Library Group	Přejmenovat skupinu knihovny
 	Delete Library Group	Odstranit skupinu knihovny
 	Move Library Item to Group	Přesunout položku knihovny do skupiny
+	Rename Library Item	Přejmenovat položku knihovny
+	Add to Character Styles	Přidat do stylů znaků
 	Rename Library	Přejmenovat knihovnu
 	Show Library	Zobrazit knihovnu
 	Use Library Item	Použít položku knihovny
@@ -4477,6 +4479,7 @@ imageTrace	Outline	Obrys
 
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
+@msg	the library has another item of that kind named `{name}`	knihovna už má jinou položku tohoto druhu s názvem `{name}`
 @msg	select some type first	nejprve vyberte text
 @msg	kerning must be a number, "auto", or "optical"	kerning musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň

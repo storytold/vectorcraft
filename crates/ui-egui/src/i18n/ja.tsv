@@ -3364,6 +3364,8 @@ mark-style	Japanese	日本式
 	Rename Library Group	ライブラリグループ名を変更
 	Delete Library Group	ライブラリグループを削除
 	Move Library Item to Group	ライブラリ項目をグループに移動
+	Rename Library Item	ライブラリ項目名を変更
+	Add to Character Styles	文字スタイルに追加
 	Library	ライブラリ
 	Rename Library	ライブラリ名を変更
 	Show Library	ライブラリを表示
@@ -4491,6 +4493,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
+@msg	the library has another item of that kind named `{name}`	ライブラリには同じ種類の項目 `{name}` がすでにあります
 @msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
