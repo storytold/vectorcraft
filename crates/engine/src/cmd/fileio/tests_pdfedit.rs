@@ -402,26 +402,73 @@ fn ai_export_validates_options_even_when_editing_data_is_omitted() {
     }
 }
 
-#[test]
-fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
+/// Two artboards, a visible 30 × 20 pt rectangle outside them at (180, 100) and a hidden one.
+fn art_outside_the_artboards() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 80, "artboards": 2})).unwrap();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 180, "y": 100, "width": 30, "height": 20})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 50, "height": 40})).unwrap();
     s.execute("object.hide", &json!({})).unwrap();
+    s
+}
+
+/// Whether the `.ai` file `bytes` carries the editing copy of its art for other apps.
+fn carries_private_data(bytes: &[u8]) -> bool {
+    let opts = LoadOptions { native: false, ..Default::default() };
+    load::load_with("a.ai", bytes, &opts).unwrap().editing_data
+}
+
+#[test]
+fn an_ai_of_the_arts_bounds_carries_no_editing_data() {
+    let mut s = art_outside_the_artboards();
     let before = comparable(&s.doc().unwrap().doc);
-    let r = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "range": "2"})).unwrap();
-    let bytes = b64(&r);
-    let pages = vectorcraft_pdf::import(&bytes).unwrap();
-    assert_eq!(pages.artboards.len(), 1);
-    assert_eq!((pages.artboards[0].rect.width(), pages.artboards[0].rect.height()), (30.0, 20.0));
-    let editing = vectorcraft_pdf::editing(&bytes).unwrap();
-    let exported = vectorcraft_format::load(&editing.data).unwrap();
-    assert_eq!(exported.artboards.len(), 1);
-    assert_eq!(exported.artboards[0].rect, vectorcraft_geom::Rect::new(180.0, 100.0, 210.0, 120.0));
-    assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    let left_out = |v: &Value| v["warnings"].as_array().unwrap().iter().any(|w| w == super::save::AI_EDITING_NEEDS_THE_ARTBOARDS);
+    let path = tmp("art-bounds.ai");
+    for extra in [json!({}), json!({"range": "2"}), json!({"editingData": false}), json!({"path": path})] {
+        let mut params = json!({"format": "ai", "useArtboards": false});
+        params.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let r = s.execute("document.export", &params).unwrap();
+        let bytes = if params.get("path").is_some() { std::fs::read(&path).unwrap() } else { b64(&r) };
+        // One page, the visible art's bounds, whatever range names.
+        let pages = vectorcraft_pdf::import(&bytes).unwrap();
+        assert_eq!(pages.artboards.len(), 1, "{params}");
+        assert_eq!((pages.artboards[0].rect.width(), pages.artboards[0].rect.height()), (30.0, 20.0), "{params}");
+        assert!(vectorcraft_pdf::editing(&bytes).is_none(), "{params}");
+        assert!(!carries_private_data(&bytes), "{params}");
+        assert!(left_out(&r), "{params}: {r}");
+        assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    }
+    // The artboards keep both editing copies, without the warning.
+    for params in [json!({"format": "ai"}), json!({"format": "ai", "useArtboards": true})] {
+        let r = s.execute("document.export", &params).unwrap();
+        let bytes = b64(&r);
+        let editing = vectorcraft_pdf::editing(&bytes).expect("editing data");
+        assert_eq!(vectorcraft_format::load(&editing.data).unwrap().artboards.len(), 2, "{params}");
+        assert!(carries_private_data(&bytes), "{params}");
+        assert!(!left_out(&r), "{params}: {r}");
+    }
     assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
+}
+
+#[test]
+fn an_ai_of_the_arts_bounds_without_pdf_is_refused() {
+    let mut s = art_outside_the_artboards();
+    let before = comparable(&s.doc().unwrap().doc);
+    for extra in [json!({}), json!({"editingData": false}), json!({"editingData": true})] {
+        for command in ["document.export", "document.serialize"] {
+            let mut params = json!({"format": "ai", "useArtboards": false, "pdfCompatible": false});
+            params.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            let e = s.execute(command, &params).unwrap_err().to_string();
+            assert!(e.contains(super::save::ART_PAGE_NEEDS_PDF), "{command} {params}: {e}");
+            assert_eq!(comparable(&s.doc().unwrap().doc), before);
+        }
+    }
+    // A document with no visible art is still refused for that.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    let e = s.execute("document.export", &json!({"format": "ai", "useArtboards": false})).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
 }
 
 /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document

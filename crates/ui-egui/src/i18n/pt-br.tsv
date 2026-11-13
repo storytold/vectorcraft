@@ -2913,6 +2913,19 @@ digits	Malayalam	Malaiala
 	Spot Color Objects	Objetos com cores spot
 	Pattern Objects	Objetos com padrões
 	Gradient Objects	Objetos com gradientes
+	Font Details	Detalhes das fontes
+	Linked Images	Imagens vinculadas
+	Embedded Images	Imagens incorporadas
+	Compound Paths	Caminhos compostos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instâncias de símbolo
+	Gradient Meshes	Malhas de gradiente
+	Blends	Mesclagens
+	Envelopes	Envelopes
+	Intertwine Groups	Grupos entrelaçados
+	Opacity Masks	Máscaras de opacidade
+	Objects with Effects	Objetos com efeitos
 	Spot Colors	Cores Spot
 	Spot Colors…	Cores Spot…
 	Spread:	Propagação:
@@ -3382,6 +3395,10 @@ imageTrace	Outline	Contorno
 	Dock Panel	Encaixar Painel
 	Dock to Top	Encaixar na Parte Superior
 	Dock to Bottom	Encaixar na Parte Inferior
+	Dock to Left	Encaixar à Esquerda
+	Dock to Right	Encaixar à Direita
+	Dock Toolbar	Encaixar Barra de Ferramentas
+	Float Toolbar	Flutuar Barra de Ferramentas
 	Control Bar Options	Opções da Barra de Controle
 	Tool Options	Opções de Ferramenta
 	Object Options	Opções de Objeto
@@ -5346,6 +5363,7 @@ axis	Both	Ambos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	O link está dentro de um símbolo, projeto de gráfico, padrão ou máscara de opacidade e não tem lugar na tela
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -6635,6 +6653,13 @@ axis	Y Axis	Eixo Y
 	Area Text	Texto de Área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir Texto pelos Limites do Glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opções de Ajuste ao Pixel
+	Pixel Snapping Options…	Opções de Ajuste ao Pixel…
+	Snap to Pixel While Drawing	Ajustar ao Pixel ao Desenhar
+	Snap to Pixel While Moving	Ajustar ao Pixel ao Mover
+	Snap to Pixel While Scaling	Ajustar ao Pixel ao Dimensionar
+	These options take effect when View › Snap to Pixel is on.	Essas opções têm efeito quando Exibir › Ajustar ao Pixel está ativado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar Opções de Ajuste ao Glifo
 	Hide Snap to Glyph Options	Ocultar Opções de Ajuste ao Glifo

@@ -662,6 +662,101 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
     assert!(linked, "still linked to the swatch it brought");
 }
 
+/// The symbol and pattern art placed art brings takes ids of the document's own: the file's ids
+/// already name other objects there, and the Links panel names linked art in symbols by its id.
+#[test]
+fn placed_art_brings_its_symbols_and_patterns_with_ids_of_the_documents_own() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    // The document's objects take the same ids the file's do.
+    let mut s = session();
+    for x in [0, 20, 40, 60] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 5, "height": 5})).unwrap();
+    }
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.symbols.iter().any(|x| x.name == "Star") && doc.pattern("Dots").is_some());
+    let mut ids = vec![];
+    doc.visit_stored(|n, _| ids.push(n.id.0));
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+}
+
+/// Placing the same file again shares the symbols and patterns the first placement brought: their
+/// art differs from the file's only in its ids, so no `Star 2` or `Dots 2` joins the document.
+#[test]
+fn placing_the_same_art_again_shares_its_symbols_and_patterns() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    let counts = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        (doc.symbols.len(), doc.patterns.len())
+    };
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let once = counts(&s);
+    for _ in 0..2 {
+        place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    }
+    assert_eq!(counts(&s), once);
+    let doc = &s.doc().unwrap().doc;
+    assert!(!doc.symbols.iter().any(|x| x.name == "Star 2") && doc.pattern("Dots 2").is_none());
+}
+
+/// A symbol whose art matches the document's own but uses a pattern the document defines
+/// differently is not shared: it comes in under a free name, using the pattern it brings.
+#[test]
+fn placed_art_does_not_share_a_symbol_whose_pattern_moves() {
+    let mut src = session();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star", "ids": [tile.0]})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    // The document's "Dots" changes; its "Star" still matches the file's.
+    let st = s.doc_mut().unwrap();
+    let d = Arc::make_mut(&mut st.doc);
+    let dots = d.pattern_mut("Dots").unwrap();
+    dots.tile = Rect::new(0.0, 0.0, 50.0, 50.0);
+    let r = place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let mut symbol = None;
+    node(&s, &r["ids"][0]).walk(&mut |n| {
+        if let NodeKind::SymbolInstance { symbol: name, .. } = &n.kind {
+            symbol = Some(name.clone());
+        }
+    });
+    assert_eq!(symbol.as_deref(), Some("Star 2"));
+    let doc = &s.doc().unwrap().doc;
+    let star2 = doc.symbols.iter().find(|x| x.name == "Star 2").unwrap();
+    let mut fills = vec![];
+    star2.art.walk(&mut |n| {
+        fills.extend(n.appearance.items.iter().filter_map(|i| match i {
+            AppearanceItem::Fill(f) => match &f.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            },
+            _ => None,
+        }))
+    });
+    assert_eq!(fills, ["Dots 2"]);
+}
+
 #[test]
 fn placed_art_brings_its_brushes_renaming_on_conflict() {
     // The file: a path with its own brush, and one with a brush the defaults hold.

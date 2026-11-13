@@ -3387,6 +3387,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Objekt med dekorfärger
 	Pattern Objects	Objekt med mönster
 	Gradient Objects	Objekt med gradienter
+	Font Details	Typsnittsdetaljer
+	Linked Images	Länkade bilder
+	Embedded Images	Inbäddade bilder
+	Compound Paths	Sammansatta banor
+	Text Objects	Textobjekt
+	Placed Documents	Placerade dokument
+	Symbol Instances	Symbolinstanser
+	Gradient Meshes	Gradientnät
+	Blends	Blandningar
+	Envelopes	Kuvert
+	Intertwine Groups	Sammanflätningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekt med effekter
 	Spot Colors	Dekorfärger
 	Spot Colors…	Dekorfärger…
 	Spread:	Spridning:
@@ -4071,6 +4084,10 @@ axis	Both	Båda
 	Dock Panel	Docka panel
 	Dock to Top	Docka överst
 	Dock to Bottom	Docka nederst
+	Dock to Left	Docka till vänster
+	Dock to Right	Docka till höger
+	Dock Toolbar	Docka verktygsfältet
+	Float Toolbar	Gör verktygsfältet flytande
 	Control Bar Options	Alternativ för kontrollfältet
 	Tool Options	Verktygsalternativ
 	Object Options	Objektalternativ
@@ -5005,6 +5022,7 @@ axis	Both	Båda
 @msg	every numbered name for it is taken in the Fonts folder	alla numrerade namn för den är upptagna i mappen Typsnitt
 @msg	every numbered name for {name} is taken in the document's folder	alla numrerade namn för {name} är upptagna i dokumentets mapp
 @msg	No linked files to look for	Inga länkade filer att leta efter
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Länken finns i en symbol, en diagramdesign, ett mönster eller en opacitetsmask och har ingen plats på arbetsytan
 	Services	Tjänster
 	Hide VectorCraft	Göm VectorCraft
 	Zoom	Zoom
@@ -6701,6 +6719,13 @@ axis	Y Axis	Y-axel
 	Area Text	Områdestext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mät text efter glyfgränser
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Alternativ för fäst mot pixel
+	Pixel Snapping Options…	Alternativ för fäst mot pixel…
+	Snap to Pixel While Drawing	Fäst mot pixel vid ritning
+	Snap to Pixel While Moving	Fäst mot pixel vid flyttning
+	Snap to Pixel While Scaling	Fäst mot pixel vid skalning
+	These options take effect when View › Snap to Pixel is on.	De här alternativen gäller när Visa › Fäst mot pixel är på.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
