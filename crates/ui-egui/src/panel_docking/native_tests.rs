@@ -683,6 +683,40 @@ fn a_palette_window_keeps_out_of_the_way_of_the_main_windows_dialog_and_menus() 
     assert_ne!(inactive.0, WindowLevel::AlwaysOnTop, "and not above other applications' windows: {:?}", inactive.0);
 }
 
+/// Focus moving between the app's own windows passes through a frame where none has it: the
+/// palettes keep their level then, or the window system hands the keyboard to another palette in
+/// the middle of a press on a palette's bar. They leave the top level once the app has had no
+/// focus for a while.
+#[test]
+fn focus_moving_between_the_apps_windows_leaves_the_palettes_on_top() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    let nowhere = ViewportId::from_hash_of("no window of the app");
+    h.host.borrow_mut().focus = nowhere;
+    h.frames(1);
+    h.host.borrow_mut().focus = viewport;
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "a frame without focus leaves the palette's level");
+    // The wait starts again each time focus leaves: a second frame without focus, longer after
+    // the first than the wait, leaves the level too.
+    h.frames(6);
+    h.host.borrow_mut().focus = nowhere;
+    h.frames(1);
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the wait is counted from when focus last left");
+    h.host.borrow_mut().focus = nowhere;
+    h.frames(8);
+    let (_, levels) = take_palette_commands(&h, viewport);
+    assert_eq!(levels.last(), Some(&palette_window_state(false, false, false).0), "the app left: the palette leaves the top level");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).1, [egui::WindowLevel::AlwaysOnTop], "and takes it again when the app is back");
+}
+
 /// With a menu of the in-window menu bar open, the palettes take the normal level (still shown):
 /// the menu is drawn in the main window, or it would open under them.
 #[test]

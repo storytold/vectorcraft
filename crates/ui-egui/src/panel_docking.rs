@@ -1256,15 +1256,35 @@ fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::Window
     (level, true)
 }
 
+/// How long none of the app's windows has focus before the app counts as inactive. Focus moving
+/// between the app's own windows passes through a frame where none has it (a press on a palette's
+/// bar takes it from the main window): lowering the palettes then let the window system give the
+/// keyboard to another palette in the middle of the press. craft-ui's docking waits as long.
+#[cfg(not(target_arch = "wasm32"))]
+const AWAY_DELAY: f64 = 0.25;
+
 /// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
 /// when they change. craft-ui varies a palette's level through the viewport builder, which egui
 /// applies when the window opens and not to one already on screen, so the commands go explicitly to
 /// the windows there are. A window that opens while the others are hidden (a panel floated under a
 /// dialog, a menu, a flyout or the drawer) opens shown at its palette level, so it gets the commands
-/// in its first frame.
+/// in its first frame. The app is active until none of its windows has had focus for
+/// [`AWAY_DELAY`], counted from the first frame that saw none.
 #[cfg(not(target_arch = "wasm32"))]
 fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
-    let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
+    let (focused, now) = ctx.input(|i| (i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)), i.time));
+    let away_key = area_id().with("palette-levels-away");
+    let active = if focused {
+        ctx.data_mut(|d| d.remove::<f64>(away_key));
+        true
+    } else {
+        let since = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(away_key, || now));
+        let left = AWAY_DELAY - (now - since);
+        if left > 0.0 {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(left));
+        }
+        left > 0.0
+    };
     let key = area_id().with("palette-levels-state");
     let state = (modal, popup, active);
     let windows: Vec<u64> = layout.floating.iter().map(|window| window.id).collect();
