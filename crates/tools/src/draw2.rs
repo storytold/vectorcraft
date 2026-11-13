@@ -34,8 +34,16 @@ pub const MIN_FIDELITY: f64 = 0.01;
 /// Fidelity at the highest zoom (64000 %), whose screen pixels the tools send in points (#5729).
 pub const MIN_FIT_TOLERANCE: f64 = MIN_FIDELITY / 640.0;
 
-/// The lowest Fidelity (points) the Smooth tool takes.
+/// The lowest Fidelity (screen pixels) the Smooth tool takes.
 pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
+
+/// The finest tolerance (points) `path.smoothRegion` refits at: the Smooth tool's lowest Fidelity at
+/// the highest zoom (64000 %), whose screen pixels the tools send in points.
+pub const SMOOTH_MIN_TOLERANCE: f64 = SMOOTH_MIN_FIDELITY / 640.0;
+
+/// The coarsest tolerance (points) `path.smoothRegion` refits at: the highest Fidelity (100 screen
+/// pixels) at the lowest zoom (3.13 %).
+pub const SMOOTH_MAX_TOLERANCE: f64 = 100.0 / 0.0313;
 
 /// The lowest Fidelity tool `id` takes.
 pub fn min_fidelity(id: &str) -> f64 {

@@ -39,7 +39,7 @@ const SMOOTH_RADIUS: f64 = 12.0;
 /// a fit's cost grows as its Fidelity shrinks (at 0.01 pt a long pen stroke lagged, #4565), and
 /// a preview within half a pixel of the stroke looks the same. The release fits it at its Fidelity.
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
-/// The Smooth tool's Fidelity until Smooth Tool Options sets another.
+/// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
 
 pub struct GestureTool {
@@ -67,8 +67,8 @@ pub struct GestureTool {
     /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
     redraw: Option<(NodeId, f64)>,
     /// Fit tolerance (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity"): in screen pixels for the
-    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), in points
-    /// for the others.
+    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), and for the
+    /// Smooth tool, so a drag smooths as much at any zoom; in points for the Blob Brush.
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
@@ -99,8 +99,8 @@ pub struct GestureTool {
     /// preview shows the points joined by straight segments and the release fits them (Pencil
     /// only, on by default).
     pub live_fit: bool,
-    /// The Smooth tool's Fidelity, used when Alt switches the Pencil, Paintbrush or Blob Brush to Smooth.
-    /// The engine sets it from Smooth Tool Options (`smoothFidelity`).
+    /// The Smooth tool's Fidelity (screen pixels), used when Alt switches the Pencil, Paintbrush or
+    /// Blob Brush to Smooth. The engine sets it from Smooth Tool Options (`smoothFidelity`).
     smooth_fidelity: f64,
     /// Active drag is smoothing with the Pencil, Paintbrush or Blob Brush (Alt held).
     smoothing: bool,
@@ -483,7 +483,7 @@ impl GestureTool {
             if has_sel && pts.len() >= 2 {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": self.smooth_fidelity}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.smooth_fidelity)}),
                 )];
             }
             return vec![];
@@ -533,7 +533,10 @@ impl GestureTool {
             )],
             "knife" if pts.len() >= 2 => vec![Action::Exec("path.knife".into(), json!({"points": points_json(pts)}))],
             "smooth" if has_sel && pts.len() >= 2 => {
-                vec![Action::Exec("path.smoothRegion".into(), json!({"points": points_json(pts), "radius": radius, "fidelity": self.fidelity}))]
+                vec![Action::Exec(
+                    "path.smoothRegion".into(),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.fidelity)}),
+                )]
             }
             "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": cx.tol(8.0)}))],
             "join" if pts.len() >= 2 => vec![Action::Exec("path.joinScrub".into(), json!({"points": points_json(pts), "tolerance": tol}))],
