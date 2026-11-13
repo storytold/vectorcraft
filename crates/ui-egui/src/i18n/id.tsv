@@ -3134,6 +3134,29 @@ theme	Appearance	Tampilan
 	Bristle Brush	Kuas bristle
 	Pattern Brush	Kuas pola
 	missing from the Brushes panel	tidak ada di panel Kuas
+	built in	bawaan
+	embedding not allowed	penyematan tidak diizinkan
+	embedding for editing	penyematan untuk pengeditan
+	embedding for preview and print	penyematan untuk pratinjau dan cetak
+	embedding allowed	penyematan diizinkan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
+	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
+	missing	tidak ada
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradien linear
+	Radial gradient	Gradien radial
+	Conic gradient	Gradien kerucut
+	Diamond gradient	Gradien wajik
+	Freeform gradient	Gradien bentuk bebas
+@plural	{n} instance|{n} instances	{n} instans
+@plural	{n} row|{n} rows	{n} baris
+@plural	{n} column|{n} columns	{n} kolom
 	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
 	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru

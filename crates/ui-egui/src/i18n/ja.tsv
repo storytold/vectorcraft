@@ -2439,6 +2439,29 @@ antiAlias	Sharp	シャープ
 	Bristle Brush	剛毛ブラシ
 	Pattern Brush	パターンブラシ
 	missing from the Brushes panel	ブラシパネルにありません
+	built in	内蔵
+	embedding not allowed	埋め込み不可
+	embedding for editing	編集用に埋め込み可
+	embedding for preview and print	プレビューと印刷用に埋め込み可
+	embedding allowed	埋め込み可
+	{file}; {embedding}	{file}、{embedding}
+	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
+	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
+	missing	見つかりません
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}、{instances}
+	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
+	{grid}, {instances}	{grid}、{instances}
+	Linear gradient	線形グラデーション
+	Radial gradient	円形グラデーション
+	Conic gradient	円錐グラデーション
+	Diamond gradient	ひし形グラデーション
+	Freeform gradient	フリーグラデーション
+@plural	{n} instance|{n} instances	インスタンス {n} 個
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
 	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ

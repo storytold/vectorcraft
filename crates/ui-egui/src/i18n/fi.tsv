@@ -3340,6 +3340,29 @@ theme	Appearance	Ulkoasu
 	Bristle Brush	Harjassivellin
 	Pattern Brush	Kuviosivellin
 	missing from the Brushes panel	puuttuu Siveltimet-paneelista
+	built in	sisäänrakennettu
+	embedding not allowed	upottaminen ei sallittu
+	embedding for editing	upottaminen muokkausta varten
+	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
+	embedding allowed	upottaminen sallittu
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
+	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
+	missing	puuttuu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineaarinen liukuväri
+	Radial gradient	Säteittäinen liukuväri
+	Conic gradient	Kartiomainen liukuväri
+	Diamond gradient	Vinoneliöliukuväri
+	Freeform gradient	Vapaamuotoinen liukuväri
+@plural	{n} instance|{n} instances	{n} esiintymä|{n} esiintymää
+@plural	{n} row|{n} rows	{n} rivi|{n} riviä
+@plural	{n} column|{n} columns	{n} sarake|{n} saraketta
 	Select art to make a scatter, art or pattern brush.	Valitse kuvitus, jotta voit luoda sirote-, taide- tai kuviosiveltimen.
 	Brush Art	Siveltimen kuvitus
 	New Symbol	Uusi symboli

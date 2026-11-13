@@ -3280,6 +3280,29 @@ theme	Appearance	Wygląd
 	Bristle Brush	Pędzel włosiankowy
 	Pattern Brush	Pędzel wzorka
 	missing from the Brushes panel	brak w panelu Pędzle
+	built in	wbudowany
+	embedding not allowed	osadzanie niedozwolone
+	embedding for editing	osadzanie do edycji
+	embedding for preview and print	osadzanie do podglądu i drukowania
+	embedding allowed	osadzanie dozwolone
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zastąpiony: wyświetlany krojem {family} {style} ({detail})
+	missing: shown in {family} {style}	brak: wyświetlany krojem {family} {style}
+	missing	brak
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradient liniowy
+	Radial gradient	Gradient promienisty
+	Conic gradient	Gradient stożkowy
+	Diamond gradient	Gradient rombowy
+	Freeform gradient	Gradient dowolny
+@plural	{n} instance|{n} instances	{n} wystąpienie|{n} wystąpienia|{n} wystąpień
+@plural	{n} row|{n} rows	{n} wiersz|{n} wiersze|{n} wierszy
+@plural	{n} column|{n} columns	{n} kolumna|{n} kolumny|{n} kolumn
 	Select art to make a scatter, art or pattern brush.	Zaznacz kompozycję, aby utworzyć pędzel rozproszony, artystyczny lub wzorka.
 	Brush Art	Kompozycja pędzla
 	New Symbol	Nowy symbol

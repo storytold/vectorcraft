@@ -2217,6 +2217,29 @@ file-filter	Templates	Шаблоны
 	Bristle Brush	Щетинная кисть
 	Pattern Brush	Узорная кисть
 	missing from the Brushes panel	отсутствует в панели «Кисти»
+	built in	встроенный
+	embedding not allowed	внедрение запрещено
+	embedding for editing	внедрение для редактирования
+	embedding for preview and print	внедрение для просмотра и печати
+	embedding allowed	внедрение разрешено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	заменен: показан шрифтом {family} {style} ({detail})
+	missing: shown in {family} {style}	отсутствует: показан шрифтом {family} {style}
+	missing	отсутствует
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Линейный градиент
+	Radial gradient	Радиальный градиент
+	Conic gradient	Конический градиент
+	Diamond gradient	Ромбовидный градиент
+	Freeform gradient	Произвольный градиент
+@plural	{n} instance|{n} instances	{n} экземпляр|{n} экземпляра|{n} экземпляров
+@plural	{n} row|{n} rows	{n} строка|{n} строки|{n} строк
+@plural	{n} column|{n} columns	{n} столбец|{n} столбца|{n} столбцов
 	Select art to make a scatter, art or pattern brush.	Выделите рисунок, чтобы создать кисть-распыление, художественную или узорную кисть.
 	Brush Art	Рисунок кисти
 	New Calligraphic Brush	Новая каллиграфическая кисть

@@ -3650,6 +3650,29 @@ theme	Appearance	Vormgeving
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
 	missing from the Brushes panel	ontbreekt in het deelvenster Penselen
+	built in	ingebouwd
+	embedding not allowed	insluiten niet toegestaan
+	embedding for editing	insluiten voor bewerken
+	embedding for preview and print	insluiten voor voorvertoning en afdrukken
+	embedding allowed	insluiten toegestaan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	vervangen: weergegeven in {family} {style} ({detail})
+	missing: shown in {family} {style}	ontbreekt: weergegeven in {family} {style}
+	missing	ontbreekt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineair verloop
+	Radial gradient	Radiaal verloop
+	Conic gradient	Conisch verloop
+	Diamond gradient	Ruitverloop
+	Freeform gradient	Vrijvormverloop
+@plural	{n} instance|{n} instances	{n} exemplaar|{n} exemplaren
+@plural	{n} row|{n} rows	{n} rij|{n} rijen
+@plural	{n} column|{n} columns	{n} kolom|{n} kolommen
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
 	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool

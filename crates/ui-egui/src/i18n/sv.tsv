@@ -2131,6 +2131,29 @@ font-technology	Variable	Variabla
 	Bristle Brush	Borstpensel
 	Pattern Brush	Mönsterpensel
 	missing from the Brushes panel	saknas i panelen Penslar
+	built in	inbyggt
+	embedding not allowed	inbäddning inte tillåten
+	embedding for editing	inbäddning för redigering
+	embedding for preview and print	inbäddning för förhandsvisning och utskrift
+	embedding allowed	inbäddning tillåten
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersatt: visas med {family} {style} ({detail})
+	missing: shown in {family} {style}	saknas: visas med {family} {style}
+	missing	saknas
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linjär gradient
+	Radial gradient	Radiell gradient
+	Conic gradient	Konisk gradient
+	Diamond gradient	Rombgradient
+	Freeform gradient	Fri gradient
+@plural	{n} instance|{n} instances	{n} instans|{n} instanser
+@plural	{n} row|{n} rows	{n} rad|{n} rader
+@plural	{n} column|{n} columns	{n} kolumn|{n} kolumner
 	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
