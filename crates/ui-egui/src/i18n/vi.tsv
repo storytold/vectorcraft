@@ -1012,6 +1012,10 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Dock to Left	Neo sang trái
+	Dock to Right	Neo sang phải
+	Dock Toolbar	Neo thanh công cụ
+	Float Toolbar	Thả nổi thanh công cụ
 	Control Bar Options	Tùy chọn thanh điều khiển
 	Tool Options	Tùy chọn công cụ
 	Object Options	Tùy chọn đối tượng
@@ -3237,6 +3241,9 @@ mark-style	Japanese	Kiểu Nhật
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
 	Color Theme Picker	Bộ chọn bộ màu
 	Click or drag across the art to pick its colors; Shift adds more	Nhấp hoặc kéo qua tác phẩm để lấy màu của nó; Shift để thêm
+	Prominent Colors	Màu nổi bật
+	Save All Colors	Lưu tất cả màu
+	Save Prominent Colors	Lưu màu nổi bật
 	Reset to Default	Đặt lại về mặc định
 	Reset to default	Đặt lại về mặc định
 	Reset to White, Black	Đặt lại về Trắng, Đen
@@ -3848,6 +3855,20 @@ mark-style	Japanese	Kiểu Nhật
 	Spot Color Objects	Đối tượng có màu đặc biệt
 	Pattern Objects	Đối tượng có họa tiết
 	Gradient Objects	Đối tượng có chuyển sắc
+	Font Details	Chi tiết phông chữ
+	Linked Images	Hình ảnh đã liên kết
+	Embedded Images	Hình ảnh đã nhúng
+	Compound Paths	Đường dẫn phức
+	Text Objects	Đối tượng văn bản
+	Placed Documents	Tài liệu đã đặt
+	Symbol Instances	Thực thể ký hiệu
+	Gradient Meshes	Lưới chuyển sắc
+	Blends	Hòa trộn
+	Envelopes	Envelope
+	Intertwine Groups	Nhóm đan xen
+	Opacity Masks	Mặt nạ độ mờ
+	Objects with Effects	Đối tượng có hiệu ứng
+	Pattern Swatches	Mẫu màu họa tiết
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun
@@ -6139,6 +6160,7 @@ axis	Y Axis	Trục Y
 @msg	message must be text	message phải là văn bản
 @msg	allowContinue must be true or false	allowContinue phải là true hoặc false
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
+@msg	Batch cannot play an action with a View menu step	Hàng loạt không thể phát hành động có bước của menu Hiển thị
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
 	Insert Select Path	Chèn chọn đường dẫn
@@ -6953,6 +6975,19 @@ breakText	Glyphs	Glyph
 	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
+	View more	Xem thêm
+	Finish tutorial	Hoàn tất hướng dẫn
+	Next Up	Tiếp theo
+	You finished the last tutorial in this skill.	Bạn đã hoàn tất hướng dẫn cuối cùng của kỹ năng này.
+	Back to skills	Quay lại kỹ năng
+	Open Tutorial Sample	Mở tệp mẫu của hướng dẫn
+	Finish Tutorial	Hoàn tất hướng dẫn
+	Next Tutorial	Hướng dẫn tiếp theo
+	Back to Skills	Quay lại kỹ năng
+@msg	tutorial `{id}` has no practice sample	hướng dẫn `{id}` không có tệp mẫu thực hành
+@msg	open the practice sample of `{id}` first (see learn.openSample)	hãy mở tệp mẫu thực hành của `{id}` trước (xem learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	hãy hoàn tất `{id}` trước (xem learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` là hướng dẫn cuối cùng trong kỹ năng của nó
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn

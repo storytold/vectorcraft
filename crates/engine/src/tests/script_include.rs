@@ -374,6 +374,48 @@ fn script_eval_file_returns_last_value_and_shares_globals() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `$.fileName` names the file the code reading it is in: a function `$.evalFile` gave names its
+/// file after the file has returned, through nested files, and code an included file inserted names
+/// that file. Code that `eval` compiled names the file being run.
+#[test]
+fn script_file_name_names_the_file_of_the_code_that_reads_it() {
+    let base = folder("filename");
+    write(&base.join("main/inc.jsxinc"), "function fromInclude() { return $.fileName; }\nvar includedTop = $.fileName;");
+    write(
+        &base.join("main/sub/outer.jsx"),
+        "function fromOuter() { return $.fileName; }\nvar before = $.fileName;\n$.evalFile('inner.jsx');\nvar after = $.fileName;\nfromInner();",
+    );
+    write(&base.join("main/sub/inner.jsx"), "function fromInner() { return $.fileName; }\n$.fileName;");
+    let r = run(
+        &base,
+        "#include \"inc.jsxinc\"\nvar nested = $.evalFile('sub/outer.jsx');\n\
+         vc.log([fromInclude(), includedTop, before, after, nested, fromOuter(), fromInner(), $.fileName, eval('$.fileName')]);",
+    )
+    .unwrap();
+    let names: Vec<String> = r["log"][0].as_array().unwrap().iter().map(|v| v.as_str().unwrap().replace('\\', "/")).collect();
+    let ends = [
+        "main/inc.jsxinc",
+        "main/inc.jsxinc",
+        "sub/outer.jsx",
+        "sub/outer.jsx",
+        "sub/inner.jsx",
+        "sub/outer.jsx",
+        "sub/inner.jsx",
+        "main/main.jsx",
+        "main/main.jsx",
+    ];
+    assert_eq!(names.len(), ends.len(), "{names:?}");
+    for (name, end) in names.iter().zip(ends) {
+        assert!(name.ends_with(end), "{name} ends with {end}: {names:?}");
+    }
+    // A script given as text has no name, and neither have the functions it defines.
+    let r = Session::new()
+        .execute("script.run", &json!({"source": "function f() { return $.fileName; }\nvc.log([f(), $.fileName]);", "name": "t.js"}))
+        .unwrap();
+    assert_eq!(r["log"], json!([["", ""]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn script_eval_file_outside_scope_refused() {
     let base = folder("evaloutside");

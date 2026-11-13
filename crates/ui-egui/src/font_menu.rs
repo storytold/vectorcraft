@@ -383,7 +383,7 @@ pub fn font_menu(
             |ui| {
                 // Wider than a narrow field, so the filters keep their rows and long names show.
                 ui.set_min_width(menu_width(ui, state, look));
-                header(ui, state_id, state, current, look)
+                header(ui, vectorcraft_text::FontDb::global(), state_id, state, current, look)
             },
             look.row,
             |h| h.rows.len(),
@@ -970,6 +970,8 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
 
 /// What the menu's header hands its rows.
 struct Listed<'s> {
+    /// The fonts listed: [`vectorcraft_text::FontDb::global`] outside the unit tests.
+    db: &'s vectorcraft_text::FontDb,
     st: &'s mut MenuState,
     /// The rows listed.
     rows: Arc<[Row]>,
@@ -985,14 +987,28 @@ struct Listed<'s> {
 /// [`craft_ui::combo::Menu::show_rows_with_header`] lays them out.
 #[cfg(test)]
 fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let h = header(ui, state_id, st, current, look);
+    list_of(ui, vectorcraft_text::FontDb::global(), state_id, st, current, sample, look).inner
+}
+
+/// [`list`] of the families in `db`, with the rows' scroll area as laid out.
+#[cfg(test)]
+fn list_of(
+    ui: &mut Ui,
+    db: &vectorcraft_text::FontDb,
+    state_id: egui::Id,
+    st: &mut MenuState,
+    current: &str,
+    sample: Option<&str>,
+    look: MenuLook,
+) -> egui::scroll_area::ScrollAreaOutput<Option<FontPick>> {
+    let h = header(ui, db, state_id, st, current, look);
     let total = h.rows.len();
-    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look)).inner
+    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look))
 }
 
 /// The top of the open menu, which stays in place: the search field, the filters, and the rows
-/// they list.
-fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
+/// of `db` they list.
+fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
     let t = Tokens::get(ui.ctx());
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     // Each time the menu opens: no query, the current family highlighted and in view (the
@@ -1025,7 +1041,6 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
     let refilter = filters(ui, st, &t);
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-    let db = vectorcraft_text::FontDb::global();
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
     // as it was before any preview.
     let current = db.canonical(&st.current, "").0;
@@ -1092,7 +1107,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     // The scroll bar beside the rows, not over them: a floating one covered the stars at their
     // right ends, so a favourite was hard to click (#2277).
     ui.spacing_mut().scroll = widgets::list_scroll_style();
-    Listed { st, rows, current: current.to_string(), enter, keyed, opening }
+    Listed { db, st, rows, current: current.to_string(), enter, keyed, opening }
 }
 
 /// One of the filters' chips.
@@ -1166,28 +1181,29 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
 /// [`WINDOW_SHARE`] of the window. The menu is never narrower than its field.
 fn menu_width(ui: &Ui, st: &MenuState, look: MenuLook) -> f32 {
     let sample = if look.samples { SAMPLE_W } else { 0.0 };
-    let names = name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+    let names = name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
     let row = DISCLOSURE + names + NAME_GAP + sample + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
     // Rounding in the chips' widths must not wrap the widest row.
     let filters = if st.filters > 0.0 { st.filters.ceil() + 1.0 } else { 0.0 };
     filters.max(row).min(ui.ctx().content_rect().width() * WINDOW_SHARE)
 }
 
-/// The width of the widest name the menu lists after the disclosure triangle: the family names as
-/// Show Font Names in English shows them, and the style names among `rows` after their indent.
-fn name_width(ui: &Ui, english: bool, rows: &[Row]) -> f32 {
+/// The width of the widest name the menu lists after the disclosure triangle: the family names of
+/// `db` as Show Font Names in English shows them, and the style names among `rows` after their
+/// indent.
+fn name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool, rows: &[Row]) -> f32 {
     let font = egui::FontId::proportional(NAME_SIZE);
     let measure = |name: &str| ui.painter().layout_no_wrap(name.to_string(), font.clone(), Color32::WHITE).size().x;
     let styles = rows.iter().filter_map(Row::style).map(|s| STYLE_INDENT + measure(s)).fold(0.0, f32::max);
-    family_name_width(ui, english).max(styles)
+    family_name_width(ui, db, english).max(styles)
 }
 
-/// What the widest family name was measured for: the font list's generation, Show Font Names in
-/// English, and the number of fonts the interface draws with, which grows as faces for other
-/// scripts are added to it.
-fn family_name_key(ui: &Ui, english: bool) -> (u64, bool, usize) {
+/// What the widest family name was measured for: the font database and its generation, Show Font
+/// Names in English, and the number of fonts the interface draws with, which grows as faces for
+/// other scripts are added to it.
+fn family_name_key(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> (u64, u64, bool, usize) {
     let faces = ui.ctx().fonts(|f| f.definitions().font_data.len());
-    (vectorcraft_text::FontDb::global().generation(), english, faces)
+    (db.id(), db.generation(), english, faces)
 }
 
 /// The id under which the widest family name's width is kept with its [`family_name_key`].
@@ -1195,16 +1211,15 @@ fn family_name_id() -> egui::Id {
     egui::Id::unique("font-menu-name-width")
 }
 
-/// The width of the widest family name the menu lists, labeled as Show Font Names in English
-/// (`english`) labels it; worked out again only when its [`family_name_key`] changes.
-fn family_name_width(ui: &Ui, english: bool) -> f32 {
-    let key = family_name_key(ui, english);
-    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, bool, usize), f32)>(family_name_id()))
+/// The width of the widest family name the menu lists from `db`, labeled as Show Font Names in
+/// English (`english`) labels it; worked out again only when its [`family_name_key`] changes.
+fn family_name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> f32 {
+    let key = family_name_key(ui, db, english);
+    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, u64, bool, usize), f32)>(family_name_id()))
         && k == key
     {
         return w;
     }
-    let db = vectorcraft_text::FontDb::global();
     let w = widest_label(ui, db.menu_family_list().iter().map(|f| db.family_display_name(f, english)).collect());
     ui.data_mut(|d| d.insert_temp(family_name_id(), (key, w)));
     w
@@ -1269,14 +1284,13 @@ fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
 /// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
 /// the search field and filters (#555).
 fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let Listed { st, rows, current, enter, keyed, opening } = h;
+    let Listed { db, st, rows, current, enter, keyed, opening } = h;
     let current = current.as_str();
     let row_h = look.row;
     let t = Tokens::get(ui.ctx());
     let ink = sample_ink(look.on_white, t.text);
-    let db = vectorcraft_text::FontDb::global();
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
-    let widest = name_width(ui, look.english_names, &rows);
+    let widest = name_width(ui, db, look.english_names, &rows);
     if rows.is_empty() {
         // A filter or a font rescan can remove the row whose font was previewed.
         // Do not leave that font applied while the list has no candidate to highlight.

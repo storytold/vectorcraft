@@ -478,6 +478,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "recolor.pickTheme",
     "recolor.randomize",
     "recolor.reduce",
+    "recolor.weigh",
     "select.add",
     "select.all",
     "select.allOnArtboard",
