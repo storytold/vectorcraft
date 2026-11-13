@@ -2483,6 +2483,8 @@ antiAlias	Sharp	날카롭게
 	Normal	표준
 	Note:	참고:
 	Nothing matches the Show filter.	표시 필터와 일치하는 항목이 없습니다.
+	Show DCS Transparency Interactions	DCS 투명도 상호 작용 표시
+	Transparent, or overlaps transparent objects: check its separations	투명하거나 투명한 개체와 겹칩니다: 분판을 확인하세요
 	Nothing to print	인쇄할 항목 없음
 	Nudge	미세 이동
 	Nudge in Perspective	원근 미세 이동

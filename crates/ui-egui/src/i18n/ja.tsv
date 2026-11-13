@@ -2493,6 +2493,8 @@ antiAlias	Sharp	シャープ
 	Normal	通常
 	Note:	メモ:
 	Nothing matches the Show filter.	表示フィルターに一致する項目がありません。
+	Show DCS Transparency Interactions	DCS の透明の相互作用を表示
+	Transparent, or overlaps transparent objects: check its separations	透明、または透明なオブジェクトと重なっています：分版を確認してください
 	Nothing to print	プリントするものがありません
 	Nudge	微調整
 	Nudge in Perspective	遠近で微調整

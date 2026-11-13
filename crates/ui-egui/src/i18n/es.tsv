@@ -2276,6 +2276,8 @@ font-technology	Variable	Variables
 	Normal Screen Mode	Modo de pantalla normal
 	Note:	Nota:
 	Nothing matches the Show filter.	Nada coincide con el filtro Mostrar.
+	Show DCS Transparency Interactions	Mostrar interacciones de transparencia DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparente o superpuesto a objetos transparentes: compruebe sus separaciones
 	Nothing to print	No hay nada para imprimir
 	Nudge	Desplazar
 	Nudge in Perspective	Desplazar en perspectiva
