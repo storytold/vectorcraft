@@ -26,3 +26,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-color = { workspace = true }
+# A face built in code from the bundled Source Sans 3 (no font file is committed).
+vectorcraft-text = { workspace = true, features = ["test-fonts"] }
