@@ -784,27 +784,78 @@ fn by_note(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Whether `note` holds `query`: anywhere, and in any letter case unless `case_sensitive`. With
-/// `whole_word`, the text right before and right after it is not a letter, a digit or `_`.
+/// `whole_word`, the match starts and ends on whole characters of `note`, and the characters of
+/// `note` right before and right after it are not a letter, a digit or `_`.
+///
+/// Letter case is compared one character at a time ([`fold_case`]), so a final Σ still matches σ,
+/// and each folded character keeps the byte offset of the character of `note` it comes from.
 fn note_matches(note: &str, query: &str, case_sensitive: bool, whole_word: bool) -> bool {
     if note.is_empty() || query.is_empty() {
         return false;
     }
-    let (note, query) = if case_sensitive { (note.to_string(), query.to_string()) } else { (note.to_lowercase(), query.to_lowercase()) };
-    if !whole_word {
-        return note.contains(&query);
-    }
+    let fold = |text: &str| -> Vec<(char, usize)> {
+        let mut out = Vec::with_capacity(text.len());
+        for (at, c) in text.char_indices() {
+            if case_sensitive {
+                out.push((c, at));
+            } else {
+                out.extend(fold_case(c).map(|f| (f, at)));
+            }
+        }
+        out
+    };
+    let folded = fold(note);
+    let query: Vec<char> = fold(query).into_iter().map(|(c, _)| c).collect();
     let word = |c: char| c.is_alphanumeric() || c == '_';
-    let mut from = 0;
-    while let Some(at) = note.get(from..).and_then(|rest| rest.find(&query)).map(|i| from + i) {
-        let before = note[..at].chars().next_back();
-        let after = note[at + query.len()..].chars().next();
-        if !before.is_some_and(word) && !after.is_some_and(word) {
+    // Whether the match of `query` that starts at `folded[i]` counts.
+    let accept = |i: usize| {
+        if !whole_word {
             return true;
         }
-        // Matches may overlap: look again from the next character.
-        from = at + note[at..].chars().next().map_or(1, char::len_utf8);
+        let (start, last) = (folded[i].1, folded[i + query.len() - 1].1);
+        let starts_whole = i == 0 || folded[i - 1].1 != start;
+        let ends_whole = folded.get(i + query.len()).is_none_or(|(_, at)| *at != last);
+        if !starts_whole || !ends_whole {
+            return false;
+        }
+        let end = last + note[last..].chars().next().map_or(0, char::len_utf8);
+        !note[..start].chars().next_back().is_some_and(word) && !note[end..].chars().next().is_some_and(word)
+    };
+    // Knuth-Morris-Pratt, so a long note takes time in proportion to its length, and every place
+    // the query occurs is tried, also places that overlap. `fail[k]` is the length of the longest
+    // proper prefix of `query[..=k]` that is also its suffix.
+    let mut fail = vec![0; query.len()];
+    let mut k = 0;
+    for i in 1..query.len() {
+        while k > 0 && query[i] != query[k] {
+            k = fail[k - 1];
+        }
+        if query[i] == query[k] {
+            k += 1;
+        }
+        fail[i] = k;
+    }
+    let mut k = 0;
+    for (j, (c, _)) in folded.iter().enumerate() {
+        while k > 0 && *c != query[k] {
+            k = fail[k - 1];
+        }
+        if *c == query[k] {
+            k += 1;
+        }
+        if k == query.len() {
+            if accept(j + 1 - k) {
+                return true;
+            }
+            k = fail[k - 1];
+        }
     }
     false
+}
+
+/// `c` in lowercase for a comparison that ignores letter case, with the final sigma ς read as σ.
+fn fold_case(c: char) -> impl Iterator<Item = char> {
+    c.to_lowercase().map(|l| if l == 'ς' { 'σ' } else { l })
 }
 
 /// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though

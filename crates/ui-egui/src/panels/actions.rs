@@ -5863,9 +5863,22 @@ mod tests {
         assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "Cancel inserts nothing");
 
         open(&ctx, &mut app);
+        // A field of another type (set through ui.dialog.set) is an error, and the dialog stays.
+        for (key, value) in [("note", json!(5)), ("caseSensitive", json!("yes")), ("wholeWord", json!(1))] {
+            if let Some(d) = app.ui.dialog.as_mut() {
+                d.fields.insert("note".into(), json!("Badge"));
+                d.fields.insert("caseSensitive".into(), json!(false));
+                d.fields.insert("wholeWord".into(), json!(false));
+                d.fields.insert(key.into(), value.clone());
+            }
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "`{key}`: {value} is an error");
+            assert_eq!(open_kind(&app), Some(crate::dialogs::action_select_object::KIND), "`{key}`: the dialog stays open");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "`{key}`: nothing is inserted");
+        }
         if let Some(d) = app.ui.dialog.as_mut() {
             d.fields.insert("note".into(), json!("Badge"));
             d.fields.insert("caseSensitive".into(), json!(true));
+            d.fields.insert("wholeWord".into(), json!(false));
         }
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(open_kind(&app), None, "OK closes Set Selection");

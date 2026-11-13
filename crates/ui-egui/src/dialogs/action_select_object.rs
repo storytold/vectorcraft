@@ -50,8 +50,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut params = json!({"note": d.str("note"), "caseSensitive": d.bool("caseSensitive"), "wholeWord": d.bool("wholeWord")});
-    for key in ["set", "action", "step"] {
+    // The fields go as they are, so a field of another type is an error rather than a default.
+    let mut params = json!({});
+    for key in ["note", "caseSensitive", "wholeWord", "set", "action", "step"] {
         if let Some(value) = d.fields.get(key) {
             params[key] = value.clone();
         }

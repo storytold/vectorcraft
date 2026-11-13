@@ -269,6 +269,26 @@ fn select_by_note_whole_word_matches_overlapping_places_and_other_scripts() {
     assert!(!matches(&mut s, "", json!({"note": "a"})));
 }
 
+/// Letter case is compared one character at a time: a final Σ, whose lowercase is ς, matches Σ
+/// and σ. Whole Word looks at the characters of the note itself, so a letter whose lowercase
+/// takes two characters (İ) neither ends a word early nor matches half of itself.
+#[test]
+fn select_by_note_compares_letter_case_per_character() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0);
+    let matches = |s: &mut Session, text: &str, p: Value| {
+        note(s, a, text);
+        by_note(s, p).is_ok()
+    };
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "Σ"})));
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "σ"})));
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "ος", "wholeWord": true})));
+    assert!(!matches(&mut s, "ΟΣ", json!({"note": "σ", "caseSensitive": true})));
+    assert!(!matches(&mut s, "İx", json!({"note": "i", "wholeWord": true})));
+    assert!(matches(&mut s, "İ x", json!({"note": "İ", "wholeWord": true})));
+    assert!(!matches(&mut s, "İ x", json!({"note": "i", "wholeWord": true})));
+}
+
 /// Select by Note leaves out hidden and locked objects, selects a group whose note matches without
 /// its members and a member whose note matches on its own, keeps to the isolated group, and leaves
 /// the selection as it was when it finds nothing. Bad params are errors that change nothing.
