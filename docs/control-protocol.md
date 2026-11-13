@@ -948,7 +948,7 @@ events take `pressure` (0..1, default 1): it is the Liquify intensity while Use 
 
 Freehand Tool Options: double-clicking the Pencil, Paintbrush, Smooth, Blob Brush or Eraser tool
 (`tool.options {tool: "pencil"}`) opens a `freehandOptions` dialog. Its fields are `tool` and the options the tool
-keeps: `fidelity` (screen pixels for the Pencil and Paintbrush, the same at any zoom; pt for Smooth and Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
+keeps: `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, the same at any zoom; pt for the Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
 Paintbrush, Blob Brush; on by default for the Pencil and Paintbrush and off for the Blob Brush, and while it is off
 the path a stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush;
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`
