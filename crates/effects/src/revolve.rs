@@ -29,6 +29,15 @@ pub fn is_revolve(id: &str) -> bool {
 /// thousands of faces took gigabytes; past this the source path is drawn.
 const MAX_PAINT_COPIES: usize = 256 << 20;
 
+/// The bytes of an object's paint copies so far: those of its surfaces' faces, and those of the parts
+/// of its graphics, each within [`MAX_PAINT_COPIES`] of its own. Graphics past their budget are left
+/// out without taking room the surfaces need.
+#[derive(Default)]
+struct Copies {
+    surfaces: usize,
+    graphics: usize,
+}
+
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
 pub(crate) const MAX_OVERLAP_TESTS: usize = 1 << 22;
@@ -145,11 +154,12 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
         let options = shared_options(&shapes, options_of(id, p))?;
         let mut copies = 0;
         shapes.iter().try_for_each(|s| check_surface(&s.path, b, options, surface_item(&s.items), &mut copies))?;
-        match graphics_member(&shapes, b, options).and_then(|k| shapes.get(k)) {
-            Some(s) => check_graphics(doc, id, &s.path, b, options, p)?,
-            // With no member to carry them, the graphics' art must still fit its limits.
-            None => {
-                if let Some(doc) = doc.filter(|_| id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty()) {
+        // Without graphics, or without the document they draw from, no member is measured for them.
+        if let Some(doc) = doc.filter(|_| id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty()) {
+            match graphics_member(&shapes, b, options).and_then(|k| shapes.get(k)) {
+                Some(s) => check_graphics(Some(doc), id, &s.path, b, options, p, &mut 0)?,
+                // With no member to carry them, the graphics' art must still fit its limits.
+                None => {
                     crate::solids::graphics::validate_symbols(doc, p)?;
                     crate::solids::graphics::validate_surface_symbols(doc, p)?;
                 }
@@ -166,22 +176,28 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
     let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
     let paints = solid_paints(n);
     check_surface(&path, b, options_of(id, p), surface_item(&paints), &mut 0)?;
-    check_graphics(doc, id, &path, b, options_of(id, p), p)?;
+    check_graphics(doc, id, &path, b, options_of(id, p), p, &mut 0)?;
     check_shadow(p, [&path], b, options_of(id, p))
 }
 
 /// An error when the graphics in Revolve (`id`) parameters `p`, with the symbols of `doc`, are past
 /// their limits on the surface of `path` about the axis of `b`: their art, or the parts they draw
-/// on its faces ([`crate::solids::graphics::surface_parts`]). Without `doc` nothing is drawn, and
-/// nothing is checked.
-fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, options: Revolve, p: &Value) -> Result<(), String> {
+/// on its faces ([`crate::solids::graphics::surface_parts`]), whose paint copies count after
+/// `copies`, the bytes of the copies of the object's graphics so far ([`Copies`]). The parts'
+/// copies are added to `copies` when they fit, as drawing adds them. Without `doc` nothing is
+/// drawn, and nothing is checked.
+fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, options: Revolve, p: &Value, copies: &mut usize) -> Result<(), String> {
     let graphics = crate::solids::mapped_graphics(p);
     let Some(doc) = doc.filter(|_| id == REVOLVE && !graphics.is_empty()) else { return Ok(()) };
     crate::solids::graphics::validate_symbols(doc, p)?;
     crate::solids::graphics::validate_surface_symbols(doc, p)?;
     let faces = vectorcraft_three_d::revolve(path, b, options)?;
-    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c)) {
-        Some(_) => Ok(()),
+    let mut used = *copies;
+    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c), &mut used) {
+        Some(_) => {
+            *copies = used;
+            Ok(())
+        }
         None => Err("The graphics are too complex for this surface: simplify the symbols' art or reduce Segments".into()),
     }
 }
@@ -232,7 +248,7 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
     }
     let ctx = GeomContext::of(n);
     let path = geometry(&path, &n.appearance.effects, &ctx);
-    let mut copies = 0;
+    let (mut copies, mut graphic_copies) = (0, 0);
     for (i, item) in n.appearance.items.iter().enumerate() {
         let effects = item.effects();
         let at = if i == target { Some(index) } else { effects.iter().position(|e| e.visible && is_revolve(&e.id)) };
@@ -245,8 +261,11 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
         let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
         let b = path.bounds().ok_or(EMPTY)?;
         check_surface(&path, b, options, crate::paints(item).then_some(item), &mut copies)?;
+        // The graphics of every item add their paints' copies to the graphics' budget, as they
+        // are drawn; only the edited item's graphics are refused here.
+        let graphics = check_graphics(doc, kind, &path, b, options, &params, &mut graphic_copies);
         if i == target {
-            check_graphics(doc, kind, &path, b, options, &params)?;
+            graphics?;
         }
         check_shadow(&params, [&path], b, options)?;
     }
@@ -352,7 +371,7 @@ fn group_shadow(id: NodeId, fx: &Effect, shapes: &[Profile], b: Rect, options: R
 }
 
 /// One object's surface of revolution about the axis of `b`, and each face's depth. `copies` counts
-/// the bytes of the paint copies of every surface of the object. Revolve (Classic) draws every face
+/// the bytes of the paint copies of every surface and graphic of the object. Revolve (Classic) draws every face
 /// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
 /// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
 /// a face with a part of a graphic is a group of the face and that part.
@@ -368,14 +387,14 @@ fn surface(
     opacity: f32,
     blend: vectorcraft_doc::color::BlendMode,
     expand: bool,
-    copies: &mut usize,
+    copies: &mut Copies,
 ) -> Option<(Vec<f64>, Node)> {
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
     if fx.id == CLASSIC_REVOLVE {
         let facets = vectorcraft_three_d::revolve_facets(path, b, options).ok()?;
-        *copies = copies.saturating_add(paint_copies(facets.len(), &paint));
-        if *copies > MAX_PAINT_COPIES {
+        copies.surfaces = copies.surfaces.saturating_add(paint_copies(facets.len(), &paint));
+        if copies.surfaces > MAX_PAINT_COPIES {
             return None;
         }
         let depths = facets.iter().map(|f| f.depth).collect();
@@ -384,15 +403,26 @@ fn surface(
     }
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
-    *copies = copies.saturating_add(paint_copies(faces.len(), &paint));
-    if *copies > MAX_PAINT_COPIES {
+    copies.surfaces = copies.surfaces.saturating_add(paint_copies(faces.len(), &paint));
+    if copies.surfaces > MAX_PAINT_COPIES {
         return None;
     }
     let graphics = crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params));
     let shade = |face: &vectorcraft_three_d::Face, c: Color| graphic_paint(face, c, colored);
-    // Graphics past the limits are left out, and the surface draws without them.
-    let mut parts =
-        if graphics.is_empty() { vec![] } else { crate::solids::graphics::surface_parts(doc, n.id, &graphics, &faces, &shade).unwrap_or_default() };
+    // Graphics past the limits are left out, and the surface draws without them and their paints'
+    // copies.
+    let mut used = copies.graphics;
+    let mut parts = if graphics.is_empty() {
+        vec![]
+    } else {
+        match crate::solids::graphics::surface_parts(doc, n.id, &graphics, &faces, &shade, &mut used) {
+            Some(parts) => {
+                copies.graphics = used;
+                parts
+            }
+            None => vec![],
+        }
+    };
     let drawn = parts.iter().any(|p| !p.is_empty());
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
@@ -499,7 +529,7 @@ fn object_surface(
     fx: &Effect,
     item: &AppearanceItem,
     expand: bool,
-    copies: &mut usize,
+    copies: &mut Copies,
 ) -> Option<Node> {
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
@@ -688,7 +718,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
     let mut children = vec![];
-    let mut copies = 0;
+    let mut copies = Copies::default();
     let mut remaining = n.appearance.effects.clone();
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let fx = n.appearance.effects.get(index)?;
@@ -873,11 +903,13 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let b = union_bounds(&shapes)?;
     let options = shared_options(&shapes, fx_options(fx)).ok()?;
     let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-    let mut copies = 0;
+    let mut copies = Copies::default();
     let mut surfaces = vec![];
     let mut opaque = true;
-    // The graphics go once, on the side of the member with the longest profile.
-    let longest = graphics_member(&shapes, b, options);
+    // The graphics go once, on the side of the member with the longest profile. Without graphics
+    // no member is measured for them.
+    let mapped = fx.id == REVOLVE && !crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params)).is_empty();
+    let longest = if mapped { graphics_member(&shapes, b, options) } else { None };
     for (k, s) in shapes.iter().enumerate() {
         let Some(item) = surface_item(&s.items) else { continue };
         // The opacity and blending of the member and the groups it is in apply through its scopes.

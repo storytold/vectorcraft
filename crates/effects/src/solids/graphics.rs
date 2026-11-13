@@ -65,6 +65,10 @@ const SURFACE_REACH: f64 = 1e8;
 /// at every face it crosses. Past it no graphic is drawn on that surface.
 const MAX_SURFACE_POINTS: usize = 2_000_000;
 
+/// The most points of Revolve's graphics cut at its faces together, counted before each cut whether
+/// or not it keeps any of them. Past it no graphic is drawn on that surface.
+const MAX_SURFACE_CUTS: usize = 32 * MAX_SURFACE_POINTS;
+
 /// The width of the stroke of the same paint around each opaque part of a graphic on Revolve's
 /// side, which covers the seams between the parts on neighboring faces.
 const SURFACE_SEAM: f64 = 0.3;
@@ -518,6 +522,8 @@ pub(super) fn face_art(
 /// One area of a graphic placed on Revolve's unrolled side surface, cut into straight pieces.
 struct Unrolled {
     polygons: Vec<Vec<Point>>,
+    /// The bounds of each of `polygons`.
+    boxes: Vec<Rect>,
     bounds: Rect,
     rule: FillRule,
     paint: Paint,
@@ -543,8 +549,19 @@ fn unrolled(doc: &Document, graphics: &[MappedGraphic]) -> Option<Vec<Unrolled>>
             let placed = place * piece.path.to_bezpath();
             let mut polygons = straight_pieces(&placed, &mut points)?;
             polygons.retain(|p| p.len() >= 3 && p.iter().all(|q| q.is_finite()));
-            let Some(bounds) = polygons.iter().flatten().map(|p| Rect::from_points(*p, *p)).reduce(|a, b| a.union(b)) else { continue };
-            pieces.push(Unrolled { polygons, bounds, rule: piece.rule, paint: piece.paint, opacity: piece.opacity, blend: piece.blend, place });
+            let boxes: Vec<Rect> =
+                polygons.iter().filter_map(|polygon| polygon.iter().map(|p| Rect::from_points(*p, *p)).reduce(|a, b| a.union(b))).collect();
+            let Some(bounds) = boxes.iter().copied().reduce(|a, b| a.union(b)) else { continue };
+            pieces.push(Unrolled {
+                polygons,
+                boxes,
+                bounds,
+                rule: piece.rule,
+                paint: piece.paint,
+                opacity: piece.opacity,
+                blend: piece.blend,
+                place,
+            });
         }
     }
     Some(pieces)
@@ -553,8 +570,8 @@ fn unrolled(doc: &Document, graphics: &[MappedGraphic]) -> Option<Vec<Unrolled>>
 /// The contours of `path` cut into straight pieces within [`SURFACE_TOLERANCE`], adding the points
 /// made to `points`. Each curve is cut on its own and the count is checked before the next one, so
 /// the work stops at the first curve past [`MAX_ELEMENTS`] points: `None` then, and for a path with
-/// a coordinate farther than [`SURFACE_REACH`] from the origin, which bounds the pieces of one
-/// curve.
+/// a coordinate of a line or a curve farther than [`SURFACE_REACH`] from the origin, which bounds
+/// the pieces of one curve and the arithmetic of the cuts at the faces.
 fn straight_pieces(path: &BezPath, points: &mut usize) -> Option<Vec<Vec<Point>>> {
     let near = |p: &Point| p.x.abs() <= SURFACE_REACH && p.y.abs() <= SURFACE_REACH;
     let mut polygons: Vec<Vec<Point>> = vec![];
@@ -565,6 +582,7 @@ fn straight_pieces(path: &BezPath, points: &mut usize) -> Option<Vec<Vec<Point>>
             return None;
         }
         match *el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) if !near(&p) => return None,
             PathEl::MoveTo(p) => {
                 polygons.push(std::mem::take(&mut current));
                 current.push(p);
@@ -616,14 +634,17 @@ pub(crate) fn validate_surface_symbols(doc: &Document, p: &Value) -> Result<(), 
 /// `shade` gives the paint of a solid color on a face, as the surface under it is shaded; the
 /// colors of gradients and patterns are multiplied by the face's light. A graphic whose symbol
 /// `doc` does not have, or that is past the limits of its art, draws nothing. `None` past
-/// [`MAX_ELEMENTS`] points together before they are cut at the faces, or [`MAX_SURFACE_POINTS`]
-/// after: commands refuse such graphics, and a loaded file draws the surface without them.
+/// [`MAX_ELEMENTS`] points together before they are cut at the faces, [`MAX_SURFACE_POINTS`]
+/// after, [`MAX_SURFACE_CUTS`] points cut, or when the copies of their paints in the parts take
+/// `copies`, the bytes of the copies of the object's graphics so far, past Revolve's budget for
+/// them: commands refuse such graphics, and a loaded file draws the surface without them.
 pub(crate) fn surface_parts(
     doc: Option<&Document>,
     id: NodeId,
     graphics: &[MappedGraphic],
     faces: &[vectorcraft_three_d::Face],
     shade: &dyn Fn(&vectorcraft_three_d::Face, vectorcraft_doc::color::Color) -> Paint,
+    copies: &mut usize,
 ) -> Option<Vec<Vec<Arc<Node>>>> {
     let mut out: Vec<Vec<Arc<Node>>> = vec![vec![]; faces.len()];
     let Some(doc) = doc else { return Some(out) };
@@ -640,6 +661,7 @@ pub(crate) fn surface_parts(
     }
     let mut seen = vec![usize::MAX; pieces.len()];
     let mut drawn = 0usize;
+    let mut cut_points = 0usize;
     let mut triangle_id = 0usize;
     for (face, parts) in faces.iter().zip(out.iter_mut()) {
         let Some(cell) = face.surface.as_ref().filter(|c| c.outward && !face.cap) else { continue };
@@ -695,7 +717,15 @@ pub(crate) fn surface_parts(
             for k in near {
                 let Some(piece) = pieces.get(k) else { continue };
                 let mut path = BezPath::new();
-                for polygon in &piece.polygons {
+                // Each contour is cut only where its own bounds reach the triangle.
+                for (polygon, b) in piece.polygons.iter().zip(&piece.boxes) {
+                    if b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1 {
+                        continue;
+                    }
+                    cut_points = cut_points.saturating_add(polygon.len());
+                    if cut_points > MAX_SURFACE_CUTS {
+                        return None;
+                    }
                     let cut = clip_to(polygon, &window);
                     let Some((first, rest)) = cut.split_first() else { continue };
                     path.move_to(map * *first);
@@ -725,6 +755,11 @@ pub(crate) fn surface_parts(
                 if path.elements().is_empty() {
                     continue;
                 }
+                // Each part copies its paint into its fill, and into the stroke over its seams when
+                // it takes one.
+                if !crate::revolve::paint_copies_add(copies, 1 + usize::from(takes_seam(piece)), &piece.paint) {
+                    return None;
+                }
                 parts.push(Arc::new(surface_piece(id, piece, (path, rule), map, face, shade)));
             }
         }
@@ -744,14 +779,24 @@ fn surface_piece(
 ) -> Node {
     let gradient_map = map * piece.place;
     // Under several lights a face's light varies across it in each channel: a solid color draws
-    // as the face's own lit art in that color, clipped to the part.
+    // as the face's own lit art in that color, clipped to the part. An opaque part also draws that
+    // art clipped to a band of the seam stroke's width around its edges, as the other parts take
+    // a stroke over their seams.
     if let (Some(c), Some(light)) = (piece.paint.color().filter(|_| matches!(piece.paint, Paint::Solid { .. })), face.rgb_gradient) {
-        let lit = crate::lighting::rgb_gradient_art(id, &face.path(), &Paint::solid(c), light);
-        let mut clip = Node::path(id, PathData::from_bezpath(&path), Appearance::default());
-        if let NodeKind::Path { rule: r, .. } = &mut clip.kind {
-            *r = rule;
+        let lit = Arc::new(crate::lighting::rgb_gradient_art(id, &face.path(), &Paint::solid(c), light));
+        let clipped = |area: &BezPath, rule: FillRule| {
+            let mut clip = Node::path(id, PathData::from_bezpath(area), Appearance::default());
+            if let NodeKind::Path { rule: r, .. } = &mut clip.kind {
+                *r = rule;
+            }
+            Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), lit.clone()], clip: true })
+        };
+        let mut group = clipped(&path, rule);
+        if takes_seam(piece) {
+            let style = vectorcraft_geom::kurbo::Stroke::new(SURFACE_SEAM).with_join(vectorcraft_geom::kurbo::Join::Round);
+            let band = vectorcraft_geom::kurbo::stroke(path.iter(), &style, &vectorcraft_geom::kurbo::StrokeOpts::default(), SURFACE_TOLERANCE);
+            group = Node::group(id, vec![Arc::new(group), Arc::new(clipped(&band, FillRule::NonZero))]);
         }
-        let mut group = Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(lit)], clip: true });
         group.opacity = piece.opacity;
         group.blend = piece.blend;
         return group;
@@ -777,9 +822,8 @@ fn surface_piece(
         }
     }
     // Parts on neighboring faces meet edge to edge: an opaque part takes a narrow stroke of its
-    // paint over the seam, as the faces do. A transparent one would show the overlap.
-    if piece.opacity >= 1.0
-        && piece.blend == BlendMode::Normal
+    // paint over the seam, as the faces do.
+    if takes_seam(piece)
         && let Some(AppearanceItem::Fill(f)) = appearance.items.first()
     {
         let mut seam = vectorcraft_doc::StrokeLayer::new(f.paint.clone(), SURFACE_SEAM);
@@ -791,6 +835,20 @@ fn surface_piece(
         *r = rule;
     }
     node
+}
+
+/// Does each part of `piece` take a stroke of its paint over its seams? Only an opaque part does:
+/// the overlap of a transparent one, of one whose gradient has a stop or a freeform point that is
+/// not fully opaque, or of a pattern, whose tile may hold transparent art, would show.
+fn takes_seam(piece: &Unrolled) -> bool {
+    let clear = match &piece.paint {
+        Paint::Gradient(g) => {
+            g.gradient.stops.iter().any(|s| s.opacity < 1.0) || g.freeform.as_ref().is_some_and(|f| f.points.iter().any(|p| p.opacity < 1.0))
+        }
+        Paint::Pattern { .. } => true,
+        _ => false,
+    };
+    piece.opacity >= 1.0 && piece.blend == BlendMode::Normal && !clear
 }
 
 /// A region far larger than the face on the side of the line through `a` and `b` that `toward` is

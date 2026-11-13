@@ -983,14 +983,17 @@ fn revolve_faces(
     // that faces the viewer before the rotation, and at most the angle that faces the viewer
     // straight on: 90° with the axis on the profile's left, 270° with it on the right. A sweep
     // with no part facing the viewer has its middle at half the sweep. A full turn is cut at the
-    // back, half a turn from the middle each way.
+    // back, at the edge between two steps nearest half a turn from the middle: each step is placed
+    // by its own middle, within half a turn of the surface's middle, so the steps meet edge to
+    // edge on either side of the cut.
     let middle = surface_middle(sweep, o.edge);
     let full = o.angle >= 360.0;
     let surface_angle = |j: usize| {
         let (from, to) = (sweep * j as f64 / steps as f64, sweep * (j + 1) as f64 / steps as f64);
+        let half = (to - from) / 2.0;
         let mut start = middle - from;
         if full {
-            start = (start + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+            start = (start - half + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI + half;
         }
         [start, start - (to - from)]
     };

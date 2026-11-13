@@ -319,7 +319,8 @@ public page's example of a label on a bottle describes.
 - Clicking a thumbnail maps that graphic onto the front of the 3D effect of each selected object
   (`threeD.mapGraphic`), in one undo step. A graphic larger than the object starts scaled down to fit inside it.
 - Below the thumbnails the tab lists the graphics mapped onto the first selected object. The selected one shows
-  its Face (Front or Back; Plane has only a front), X and Y (the offset of its center from the center of the
+  its Face (Front or Back; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics go
+  on its side), X and Y (the offset of its center from the center of the
   object's bounds, in the face's plane), Scale (a percentage of the symbol's size) and Rotation
   (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
 - While the tab is open, a blue handle sits on the center of each mapped graphic whose face is turned toward the
@@ -349,11 +350,13 @@ These rules are VectorCraft's own:
   viewer). On a compound profile the graphics go on its longest contour. Each face
   of the side draws the part of the graphic that falls on it, shaded as the face is shaded, so the graphic narrows
   toward the silhouette and is not drawn where the side's outside faces away or past the ends of the sweep; nearer
-  faces drawn after it cover it. A full turn cuts the graphic at the back, and the end caps take no graphic; a part
+  faces drawn after it cover it. A full turn cuts the graphic at the back, on the edge between two segments nearest
+  half a turn from the middle, and the end caps take no graphic; a part
   that runs past the end of the profile reaches the curved rim of the cap and stops there. On a group or layer the
   graphics go once, on the side of the member with the longest profile. Curves
   are cut into straight pieces within 0.05 pt before they are mapped, and an opaque part takes a 0.3 pt stroke of
-  its paint over the seams between faces. A graphic larger than the half of the side seen from the front starts
+  its paint over the seams between faces; a part filled with a pattern, or whose gradient has a transparent stop
+  or point, takes none. A graphic larger than the half of the side seen from the front starts
   scaled to fit it. The panel shows no handle for a Revolve's graphics; X and Y move them. Expand Appearance keeps
   every face of a surface with graphics.
 - The symbol's fills and strokes are drawn as filled areas, a stroke as its outline, and their gradients and
@@ -365,7 +368,9 @@ These rules are VectorCraft's own:
   cut into 8 cubic pieces before it is mapped. The part of a graphic at or behind the eye is left out.
 - An object takes up to 64 graphics. One graphic draws up to 4,096 fills and strokes, and the graphics of one 3D
   effect draw up to 400,000 path elements together (on Revolve, 400,000 points after the curves are cut, and up to
-  2,000,000 once they are cut at the faces). Commands refuse a graphic past either limit. A loaded file
+  2,000,000 once they are cut at the faces, with up to 64,000,000 points cut together, and the copies of their
+  paints in the parts take up to 256 MiB per object, apart from those of the surfaces). Commands refuse a graphic
+  past either limit. A loaded file
   draws the object without a graphic past the first limit, and without all of its graphics past the second.
 - A hollow Extrude & Bevel has no caps, so its graphics are not drawn until Cap is turned on again, and
   `threeD.mapGraphic` refuses to map a new one onto it. Changing the type to Inflate drops the graphics, and

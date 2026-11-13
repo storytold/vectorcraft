@@ -728,3 +728,39 @@ fn curves_are_cut_one_at_a_time_and_the_work_stops_at_the_limit() {
         assert!(points <= 1, "{scale}: {points}");
     }
 }
+
+#[test]
+fn a_line_that_reaches_farther_than_any_surface_is_not_cut() {
+    let triangle = |far: f64| {
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((far, 0.0));
+        b.line_to((0.0, 1.0));
+        b.close_path();
+        b
+    };
+    assert!(straight_pieces(&triangle(1e7), &mut 0).is_some());
+    for far in [1e12, 1e300] {
+        assert!(straight_pieces(&triangle(far), &mut 0).is_none(), "{far}");
+        assert!(straight_pieces(&(Affine::translate((far, 0.0)) * triangle(1.0)), &mut 0).is_none(), "{far}");
+    }
+}
+
+#[test]
+fn only_an_opaque_part_on_revolve_takes_a_seam_stroke() {
+    let piece = |paint: Paint, opacity: f32, blend: BlendMode| Unrolled {
+        polygons: vec![],
+        boxes: vec![],
+        bounds: Rect::ZERO,
+        rule: FillRule::NonZero,
+        paint,
+        opacity,
+        blend,
+        place: Affine::IDENTITY,
+    };
+    assert!(takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 0.5, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Multiply)));
+    // A pattern's tile may hold transparent art, which the overlap would show.
+    assert!(!takes_seam(&piece(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 1.0, BlendMode::Normal)));
+}

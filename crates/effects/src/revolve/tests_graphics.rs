@@ -261,6 +261,22 @@ fn under_several_lights_a_graphic_takes_each_faces_own_lit_art() {
         count
     };
     assert!(lit(&mapped) > lit(&plain), "{} {}", lit(&mapped), lit(&plain));
+    // An opaque part also draws its lit art clipped to the band of its seam stroke; a translucent
+    // part, whose overlap would show, does not.
+    let mut d = d.clone();
+    let mut clear = bar(Rect::new(0.0, 0.0, 10.0, 20.0), Color::rgb(1.0, 0.0, 0.0));
+    if let Some(AppearanceItem::Fill(f)) = clear.appearance.items.first_mut() {
+        f.opacity = 0.5;
+    }
+    d.symbols.push(Symbol { dynamic: false, name: "Clear".into(), art: Arc::new(clear) });
+    let clips = |n: &Node| {
+        let mut count = 0;
+        revolve_art_in(Some(&d), n).unwrap().walk(&mut |c| count += usize::from(matches!(c.kind, NodeKind::Group { clip: true, .. })));
+        count
+    };
+    let translucent = revolved(&CYLINDER, json!({"shade": true, "lights": lights, "graphics": [{"symbol": "Clear"}]}));
+    let (base, opaque, translucent) = (clips(&plain), clips(&mapped), clips(&translucent));
+    assert!(translucent > base && opaque - base == 2 * (translucent - base), "{base} {opaque} {translucent}");
 }
 
 #[test]
@@ -390,4 +406,171 @@ fn a_group_with_no_member_to_carry_graphics_still_checks_their_art() {
     let e = validate_in(Some(&d), &group, REVOLVE, &json!({"graphics": [{"symbol": "Dots", "scale": 10_000.0}]})).unwrap_err();
     assert!(e.contains("too complex"), "{e}");
     assert!(validate_in(Some(&d), &group, REVOLVE, &json!({"graphics": [{"symbol": "Red"}]})).is_ok());
+}
+
+#[test]
+fn a_full_turn_draws_a_graphic_on_either_side_of_the_cut_at_the_back() {
+    let mut d = document();
+    d.symbols.push(Symbol { dynamic: false, name: "Thin".into(), art: Arc::new(bar(Rect::new(0.0, 0.0, 2.0, 20.0), Color::rgb(1.0, 0.0, 0.0))) });
+    // Half a turn around a radius of 50 is about 157 to each side of the middle: turned to face
+    // the viewer, a graphic just inside either end is drawn.
+    for x in [155.0, -155.0] {
+        let n = revolved(&CYLINDER, json!({"rotationY": 180.0, "graphics": [{"symbol": "Thin", "x": x}]}));
+        assert!(!parts(&revolve_art_in(Some(&d), &n).unwrap(), false).is_empty(), "x {x}");
+    }
+}
+
+/// A gray cylinder of radius 50 whose side is 200 edges along the profile, from y 0 to 200.
+fn ribbed() -> Vec<(f64, f64)> {
+    let mut points = vec![(0.0, 0.0)];
+    points.extend((0..=200).map(|k| (50.0, f64::from(k))));
+    points.push((0.0, 200.0));
+    points
+}
+
+/// A symbol `name` of one red path whose contours are `contours`, each a polygon through its
+/// points.
+fn contours_symbol(name: &str, contours: &[Vec<Point>]) -> Symbol {
+    let mut b = BezPath::new();
+    for contour in contours {
+        b.move_to(contour[0]);
+        contour[1..].iter().for_each(|p| b.line_to(*p));
+        b.close_path();
+    }
+    let art = Node::path(NodeId(0), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    Symbol { dynamic: false, name: name.into(), art: Arc::new(art) }
+}
+
+#[test]
+fn contours_away_from_a_face_are_not_cut_at_it() {
+    // 2,000 small squares in two clusters on the back, at opposite corners of the side: the path's
+    // bounds reach across every face, but no square reaches a face that is drawn.
+    let squares: Vec<Vec<Point>> = (0..2000)
+        .map(|i| {
+            let (x, y) = if i < 1000 { (0.0, 0.0) } else { (290.0, 190.0) };
+            let (x, y) = (x + f64::from(i % 10) * 0.1, y + f64::from(i % 1000 / 10) * 0.1);
+            vec![Point::new(x, y), Point::new(x + 0.05, y), Point::new(x + 0.05, y + 0.05), Point::new(x, y + 0.05)]
+        })
+        .collect();
+    let mut d = document();
+    d.symbols.push(contours_symbol("Clusters", &squares));
+    let n = revolved(&ribbed(), json!({}));
+    let p = json!({"graphics": [{"symbol": "Clusters"}]});
+    assert_eq!(validate_revolve_in(Some(&d), &n, &p), Ok(()));
+}
+
+#[test]
+fn a_contour_that_reaches_every_face_and_draws_on_none_is_refused() {
+    // One contour of 10,000 points: a thin frame around the whole side, past its ends and on the
+    // back, so it is cut at every face and keeps nothing.
+    let edge = |from: Point, to: Point| (0..2500).map(move |k| from.lerp(to, f64::from(k) / 2500.0));
+    let (outer, inner) = ([(0.0, 0.0), (400.0, 0.0), (400.0, 400.0), (0.0, 400.0)], [(1.0, 1.0), (1.0, 399.0), (399.0, 399.0), (399.0, 1.0)]);
+    let ring = |corners: [(f64, f64); 4]| (0..4).flat_map(move |k| edge(corners[k].into(), corners[(k + 1) % 4].into())).collect::<Vec<Point>>();
+    let mut frame = ring(outer);
+    frame.extend(ring(inner));
+    let mut d = document();
+    d.symbols.push(contours_symbol("Frame", &[frame]));
+    let n = revolved(&ribbed(), json!({}));
+    let e = validate_revolve_in(Some(&d), &n, &json!({"graphics": [{"symbol": "Frame"}]})).unwrap_err();
+    assert!(e.contains("too complex for this surface"), "{e}");
+    assert!(parts(&revolve_art_in(Some(&d), &n).unwrap(), false).is_empty());
+}
+
+/// A red linear gradient of `stops` stops, each with `opacity`.
+fn ramp(stops: usize, opacity: f32) -> Paint {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = (0..stops)
+        .map(|i| {
+            let mut stop = GradientStop::new(i as f32 / stops as f32, Color::rgb(1.0, 0.0, 0.0));
+            stop.opacity = opacity;
+            stop
+        })
+        .collect();
+    Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))
+}
+
+#[test]
+fn the_copies_of_a_graphics_paint_have_a_budget_of_their_own() {
+    let mut d = document();
+    for (name, opacity) in [("Ramp", 1.0), ("Clear ramp", 0.5)] {
+        let art =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 10.0)), Appearance::basic(ramp(4096, opacity), Paint::None, 0.0));
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let p = json!({"graphics": [{"symbol": "Ramp"}]});
+    let n = revolved(&CYLINDER, json!({}));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("a path") };
+    let faces = vectorcraft_three_d::revolve(path, path.bounds().unwrap(), options_of(REVOLVE, &p)).unwrap();
+    let parts_of = |symbol: &str, copies: &mut usize| {
+        let graphics = crate::solids::mapped_graphics(&json!({"graphics": [{"symbol": symbol}]}));
+        crate::solids::graphics::surface_parts(Some(&d), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c), copies).map(|p| p.concat().len())
+    };
+    // Each opaque part copies the paint into its fill and its seam stroke; a part with
+    // transparent stops takes no seam stroke and copies it once.
+    let (opaque, clear) = (paint_bytes(&ramp(4096, 1.0)), paint_bytes(&ramp(4096, 0.5)));
+    let mut used = 0;
+    let count = parts_of("Ramp", &mut used).unwrap();
+    assert!(count >= 2, "the graphic draws on several faces");
+    assert_eq!(used, 2 * count * opaque);
+    let mut used = 0;
+    assert_eq!(parts_of("Clear ramp", &mut used), Some(count));
+    assert_eq!(used, count * clear);
+    // Past the budget the graphic is refused.
+    assert_eq!(parts_of("Ramp", &mut (MAX_PAINT_COPIES - opaque)), None);
+    // A surface whose own gradient takes nearly the whole budget for surfaces still takes the
+    // graphic, on the object, on one fill of two and on a member of a group.
+    let stop = paint_bytes(&ramp(2, 1.0)) - paint_bytes(&ramp(1, 1.0));
+    let base = paint_bytes(&ramp(1, 1.0)) - stop;
+    let gray = Paint::solid(Color::rgb(0.5, 0.5, 0.5));
+    let full = ramp(((MAX_PAINT_COPIES - paint_copies(faces.len(), &gray)) / (faces.len() * 4) - base) / stop, 1.0);
+    assert!(MAX_PAINT_COPIES - paint_copies(faces.len(), &gray) - paint_copies(faces.len(), &full) < opaque);
+    let mut object = n.clone();
+    if let Some(AppearanceItem::Fill(f)) = object.appearance.items.first_mut() {
+        f.paint = ramp(((MAX_PAINT_COPIES - opaque) / (faces.len() * 4) - base) / stop, 1.0);
+    }
+    assert_eq!(validate_revolve_in(Some(&d), &object, &p), Ok(()));
+    let fill = |paint: Paint, params: Value| {
+        let mut fill = FillLayer::new(paint);
+        fill.effects.push(crate::new_effect(REVOLVE, &params).unwrap());
+        AppearanceItem::Fill(fill)
+    };
+    let mut two = n.clone();
+    two.appearance = Appearance { items: vec![fill(gray.clone(), p.clone()), fill(full.clone(), json!({}))], ..Default::default() }.into();
+    assert_eq!(crate::solids::validate_three_d_at_in(Some(&d), &two, REVOLVE, &json!({}), (Some(1), 0)), Ok(()));
+    let mut member = n.clone();
+    member.appearance.effects.clear();
+    let mut second = member.clone();
+    if let Some(AppearanceItem::Fill(f)) = second.appearance.items.first_mut() {
+        f.paint = full;
+    }
+    let mut group = Node::group(NodeId(9), vec![Arc::new(member), Arc::new(second)]);
+    group.appearance.effects = n.appearance.effects.clone();
+    assert_eq!(validate_in(Some(&d), &group, REVOLVE, &p), Ok(()));
+}
+
+/// Whether each part of `art` filled with a gradient has a stroke over its seams.
+fn gradient_seams(art: &Node) -> Vec<bool> {
+    let mut out = vec![];
+    art.walk(&mut |n| {
+        let items = &n.appearance.items;
+        let red = |p: &Paint| matches!(p, Paint::Gradient(_)) && shade_of(p, false).is_some();
+        if n.path_data().is_some() && matches!(items.first(), Some(AppearanceItem::Fill(f)) if red(&f.paint)) {
+            out.push(items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))));
+        }
+    });
+    out
+}
+
+#[test]
+fn a_gradient_with_transparent_stops_takes_no_stroke_over_its_seams() {
+    let mut d = document();
+    for (name, opacity) in [("Opaque", 1.0), ("Clear", 0.5)] {
+        let art = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 10.0)), Appearance::basic(ramp(2, opacity), Paint::None, 0.0));
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    let seams = |symbol: &str| gradient_seams(&revolve_art_in(Some(&d), &revolved(&CYLINDER, json!({"graphics": [{"symbol": symbol}]}))).unwrap());
+    let opaque = seams("Opaque");
+    assert!(!opaque.is_empty() && opaque.iter().all(|s| *s), "{opaque:?}");
+    let clear = seams("Clear");
+    assert!(!clear.is_empty() && clear.iter().all(|s| !*s), "{clear:?}");
 }
