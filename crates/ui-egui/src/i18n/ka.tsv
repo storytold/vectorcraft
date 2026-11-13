@@ -7263,7 +7263,9 @@ font-script	Japanese	იაპონური
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ ხსნის {_1} ფაილებს და არა `{_2}`-ს
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` არის `{_2}` სახის პლაგინი და არა იმპორტის პლაგინი
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` არის `{_2}` სახის პლაგინი და არა ექსპორტის პლაგინი
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer"}"}}-ით
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer": "{_2}"}}-ით
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` ექსპორტის პლაგინია: მოახდინეთ ექსპორტი document.export {{"format": "{_2}"}}-ით
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ცოცხალი ეფექტია: გამოიყენეთ ის effect.apply {{"effect": "{_2}"}}-ით
 @msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
 @msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ფაილი აღემატება {MAX_INPUT_BYTES} ბაიტს, რომელსაც იმპორტის პლაგინი კითხულობს

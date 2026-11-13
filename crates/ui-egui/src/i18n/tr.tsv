@@ -7110,7 +7110,9 @@ breakText	Glyphs	Glifler
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer": "{_2}"}} ile açın
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` bir dışa aktarma eklentisidir: document.export {{"format": "{_2}"}} ile dışa aktarın
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` canlı bir efekttir: effect.apply {{"effect": "{_2}"}} ile uygulayın
 @msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
 @msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük
