@@ -4981,6 +4981,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`select` must be true or false	`select` には true または false を指定してください
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` と `maxAnchors` は整数にしてください
 @msg	`{key}` must be a number not below 0	`{key}` には 0 以上の数値を指定してください
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` には 0 以上の数値を 4 つ指定してください: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` は [x, y, width, height] の形式で指定してください: 有限の数値 4 つで、幅と高さは負の値にできません
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` が `{max_key}` より大きくなっています
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	次のうち少なくとも 1 つを指定してください: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

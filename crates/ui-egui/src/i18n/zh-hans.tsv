@@ -4667,6 +4667,7 @@ imageTrace	Outline	轮廓
 @msg	`select` must be true or false	`select` 必须是 true 或 false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必须是整数
 @msg	`{key}` must be a number not below 0	`{key}` 必须是不小于 0 的数字
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 必须是四个不小于 0 的数字：[tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` 必须是 [x, y, width, height]：四个有限数字，宽度和高度不能为负
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` 大于 `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	请至少提供以下其中之一：`name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

@@ -5263,6 +5263,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` han de ser quatre nombres no inferiors a 0: [tl, tr, br, bl]
 @msg	`{key}` must be a number, not {v}	`{key}` ha de ser un nombre, no {v}
 @msg	`{key}` must be a string	`{key}` ha de ser una cadena
 @msg	`{key}` must be a profile name or null	`{key}` ha de ser un nom de perfil o null

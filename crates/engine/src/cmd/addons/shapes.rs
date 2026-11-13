@@ -9,6 +9,8 @@
 #[cfg(test)]
 mod tests;
 
+use std::ops::RangeInclusive;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, shapes};
@@ -16,8 +18,24 @@ use vectorcraft_tools::addons::box3d::CustomShape;
 
 use super::super::create::insert_look;
 use super::super::{
-    CommandSpec, Result, Session, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_selection, str_param, targets,
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_selection, number_or, str_param,
+    targets,
 };
+
+/// The sides of a polygon and the points of a star: whole numbers in this range.
+const COUNTS: RangeInclusive<f64> = 3.0..=1000.0;
+/// `rounded` and `randomized` of a polygon or star.
+const ROUNDING: RangeInclusive<f64> = -10.0..=10.0;
+/// A star's inner radius as a fraction of its outer radius.
+const SPOKE_RATIO: RangeInclusive<f64> = 0.01..=1.0;
+/// A spiral's `turns`.
+const TURNS: RangeInclusive<f64> = 0.01..=1024.0;
+/// A spiral's `divergence`.
+const DIVERGENCE: RangeInclusive<f64> = 0.0..=1000.0;
+/// A spiral's `innerRadius`, as a fraction of its radius.
+const INNER_RADIUS: RangeInclusive<f64> = 0.0..=0.999;
+/// The `arcMode` names; `slice` and `open` are also read as `pie` and `arc`.
+const ARC_MODES: [&str; 4] = ["whole", "pie", "chord", "arc"];
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -26,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangle",
             [],
             None,
-            "{x, y, width, height, radius?: pt, radii?: [tl,tr,br,bl], startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top-left corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height: pt, 0 or more, radius?: pt, 0 or more, radii?: [tl,tr,br,bl], each 0 or more, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top-left corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rectangle
         ),
@@ -35,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height, startAngle?, endAngle?: degrees (counter-clockwise from 3 o'clock, as object.setLiveShape's pieStart and pieEnd; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height: pt, 0 or more, startAngle?, endAngle?: degrees (counter-clockwise from 3 o'clock, as object.setLiveShape's pieStart and pieEnd; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             ellipse
         ),
@@ -44,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polygon",
             [],
             None,
-            "{cx, cy, radius, sides=6, rounded=0, randomized=0, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a corner straight up)} → {id}",
+            "{cx, cy, radius: pt, 0 or more, sides=6: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a corner straight up)} → {id}",
             has_doc,
             polygon
         ),
@@ -53,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Star",
             [],
             None,
-            "{cx, cy, radius1, radius2?, points=5, rounded=0, randomized=0, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top point; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a point straight up)} → {id}",
+            "{cx, cy, radius1: pt, 0 or more, radius2?: pt, 0.01 to 1 times radius1 (default half of it), points=5: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top point; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a point straight up)} → {id}",
             has_doc,
             star
         ),
@@ -62,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Spiral",
             [],
             None,
-            "{cx, cy, radius, turns=3, divergence=1, innerRadius=0, clockwise=true} → {id}",
+            "{cx, cy, radius: pt, 0 or more, turns=3: 0.01 to 1024, divergence=1: 0 to 1000, innerRadius=0: 0 to 0.999 of radius, clockwise=true} → {id}",
             has_doc,
             spiral
         ),
@@ -71,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Box",
             [],
             None,
-            "{x, y, width, height, angleX=30 (degrees about the level axis: positive tips the top away from you), angleY=30 (degrees about the upright axis: positive turns the right side away from you), angleZ=0 (degrees clockwise in the page), parallelX=false, parallelY=true, parallelZ=false} → {id}",
+            "{x, y, width, height: pt, 0 or more, angleX=30 (degrees about the level axis: positive tips the top away from you), angleY=30 (degrees about the upright axis: positive turns the right side away from you), angleZ=0 (degrees clockwise in the page), parallelX=false, parallelY=true, parallelZ=false} → {id}",
             has_doc,
             box3d
         ),
@@ -80,33 +98,96 @@ pub fn specs() -> Vec<CommandSpec> {
             "Configure Shape",
             [],
             None,
-            "{ids?, radius?, radii?: [tl,tr,br,bl], startAngle?, endAngle?: degrees (as addon.shapes.rectangle, ellipse, polygon and star take them: an ellipse's counter-clockwise from 3 o'clock, the others' clockwise along the outline), arcMode?: whole|pie|chord|arc, sides?, isStar?, spokeRatio?, rounded?, randomized?, turns?, divergence?, innerRadius?, angleX?, angleY?: degrees (as addon.shapes.box3d: positive tips the top, or turns the right side, away from you), angleZ?: degrees clockwise in the page, parallelX?, parallelY?, parallelZ?, reset?: bool} → {updated}",
+            "{ids?, radius?: pt, 0 or more (fitted to half each rectangle's shorter side), radii?: [tl,tr,br,bl], each 0 or more, startAngle?, endAngle?: degrees (as addon.shapes.rectangle, ellipse, polygon and star take them: an ellipse's counter-clockwise from 3 o'clock, the others' clockwise along the outline), arcMode?: whole|pie|chord|arc, sides?: a whole number 3 to 1000, isStar?, spokeRatio?: 0.01 to 1, rounded?, randomized?: -10 to 10, turns?: 0.01 to 1024, divergence?: 0 to 1000, innerRadius?: 0 to 0.999, angleX?, angleY?: degrees (as addon.shapes.box3d: positive tips the top, or turns the right side, away from you), angleZ?: degrees clockwise in the page, parallelX?, parallelY?, parallelZ?, reset?: bool} → {updated}",
             has_selection,
             configure
         ),
     ]
 }
 
-fn parse_arc_params(p: &Value) -> ((f64, f64), shapes::EllipseMode) {
+/// The number `p` gives for `key`, or `default` when `p` leaves it out or gives null. A number
+/// outside `range` is an error that names `key` and the range.
+fn ranged(p: &Value, key: &str, default: f64, range: &RangeInclusive<f64>, cmd: &str) -> Result<f64> {
+    let x = number_or(p, key, default, cmd)?;
+    if !range.contains(&x) {
+        let (min, max) = (range.start(), range.end());
+        return Err(bad(cmd, format!("`{key}` must be between {min} and {max} (got {x})")));
+    }
+    Ok(x)
+}
+
+/// The number of sides or points `p` gives for `key`, or `default` when `p` leaves it out or gives
+/// null. A fraction or a number outside [`COUNTS`] is an error.
+fn count(p: &Value, key: &str, default: u32, cmd: &str) -> Result<u32> {
+    let x = number_or(p, key, f64::from(default), cmd)?;
+    if x.fract() != 0.0 || !COUNTS.contains(&x) {
+        let (min, max) = (COUNTS.start(), COUNTS.end());
+        return Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})")));
+    }
+    Ok(x as u32)
+}
+
+/// The size `p` gives for `key`: a number that is not negative.
+fn size(p: &Value, key: &str, cmd: &str) -> Result<f64> {
+    not_negative(f64_req(p, key, cmd)?, key, cmd)
+}
+
+/// The size `p` gives for `key`, or `default` when `p` leaves it out or gives null.
+fn size_or(p: &Value, key: &str, default: f64, cmd: &str) -> Result<f64> {
+    not_negative(number_or(p, key, default, cmd)?, key, cmd)
+}
+
+fn not_negative(x: f64, key: &str, cmd: &str) -> Result<f64> {
+    if x < 0.0 {
+        return Err(bad(cmd, format!("`{key}` must be a number not below 0")));
+    }
+    Ok(x)
+}
+
+/// The four corner radii `p` gives as `radii` ([tl, tr, br, bl]), or `None` when `p` leaves it out
+/// or gives null. Anything but four numbers that are not negative is an error.
+fn radii_param(p: &Value, cmd: &str) -> Result<Option<[f64; 4]>> {
+    let key = "radii";
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => {
+            let four = v.as_array().filter(|a| a.len() == 4).and_then(|a| {
+                let mut out = [0.0; 4];
+                for (slot, item) in out.iter_mut().zip(a) {
+                    *slot = item.as_f64().filter(|r| *r >= 0.0)?;
+                }
+                Some(out)
+            });
+            four.map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be four numbers not below 0: [tl, tr, br, bl]")))
+        }
+    }
+}
+
+/// The mode `p` gives as `arcMode`, or `None` when `p` leaves it out or gives null. Any other
+/// value than one of [`ARC_MODES`] (or `slice` or `open`) is an error.
+fn arc_mode(p: &Value, cmd: &str) -> Result<Option<shapes::EllipseMode>> {
+    let key = "arcMode";
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_str().and_then(parse_mode).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be one of {}", ARC_MODES.join(", ")))),
+    }
+}
+
+fn parse_arc_params(p: &Value, cmd: &str) -> Result<((f64, f64), shapes::EllipseMode)> {
     let start = f64_or(p, "startAngle", 0.0);
     let end = f64_or(p, "endAngle", 360.0);
-    let mode = match str_param(p, "arcMode") {
-        Some("pie" | "slice") => shapes::EllipseMode::Slice,
-        Some("chord") => shapes::EllipseMode::Chord,
-        Some("arc" | "open") => shapes::EllipseMode::Arc,
-        _ => shapes::EllipseMode::Whole,
-    };
+    let mode = arc_mode(p, cmd)?.unwrap_or(shapes::EllipseMode::Whole);
     let span = (end - start).rem_euclid(360.0);
     let pie = if mode == shapes::EllipseMode::Whole && (span < 1e-6 || (span - 360.0).abs() < 1e-6) { (0.0, 360.0) } else { (start, end) };
-    (pie, mode)
+    Ok((pie, mode))
 }
 
 fn rect_of(p: &Value, c: &str) -> Result<Rect> {
     let x = f64_req(p, "x", c)?;
     let y = f64_req(p, "y", c)?;
-    let w = f64_req(p, "width", c)?;
-    let h = f64_req(p, "height", c)?;
-    Ok(Rect::new(x, y, x + w.abs(), y + h.abs()).abs())
+    let w = size(p, "width", c)?;
+    let h = size(p, "height", c)?;
+    Ok(Rect::new(x, y, x + w, y + h))
 }
 
 fn rect_xf(r: Rect, rot: f64) -> Affine {
@@ -141,18 +222,9 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     let c = "addon.shapes.rectangle";
     check_numbers(p, &["radius", "startAngle", "endAngle", "rotation"], c)?;
     let r = rect_of(p, c)?;
-    let radius = f64_or(p, "radius", 0.0).max(0.0);
-    let mut radii = [radius; 4];
-    if let Some(arr) = p.get("radii").and_then(Value::as_array)
-        && arr.len() == 4
-    {
-        for (i, item) in arr.iter().enumerate() {
-            if let Some(val) = item.as_f64().filter(|n| n.is_finite()) {
-                radii[i] = val.max(0.0);
-            }
-        }
-    }
-    let (pie, arc_mode) = parse_arc_params(p);
+    let radius = size_or(p, "radius", 0.0, c)?;
+    let radii = radii_param(p, c)?.unwrap_or([radius; 4]);
+    let (pie, arc_mode) = parse_arc_params(p, c)?;
     let xf = rect_xf(r, f64_or(p, "rotation", 0.0));
     let live = LiveShape::Rectangle { w: r.width(), h: r.height(), radii, kinds: Default::default(), radii_relative: false, xf };
     let cs = CustomShape::Rectangle { w: r.width(), h: r.height(), radii, kinds: Default::default(), radii_relative: false, xf, pie, arc_mode };
@@ -164,7 +236,7 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let c = "addon.shapes.ellipse";
     check_numbers(p, &["startAngle", "endAngle", "rotation"], c)?;
     let r = rect_of(p, c)?;
-    let (pie, arc_mode) = parse_arc_params(p);
+    let (pie, arc_mode) = parse_arc_params(p, c)?;
     let xf = rect_xf(r, f64_or(p, "rotation", 0.0));
     let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie, xf };
     let cs = CustomShape::Ellipse { w: r.width(), h: r.height(), pie, arc_mode, xf };
@@ -174,13 +246,13 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
 fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let c = "addon.shapes.polygon";
     let center = Point::new(f64_req(p, "cx", c)?, f64_req(p, "cy", c)?);
-    let r = f64_req(p, "radius", c)?.abs();
+    let r = size(p, "radius", c)?;
     check_numbers(p, &["sides", "rotation", "rounded", "randomized", "startAngle", "endAngle"], c)?;
-    let sides = (f64_or(p, "sides", 6.0).round() as i64).clamp(3, 1000) as u32;
+    let sides = count(p, "sides", 6, c)?;
     let rot = f64_or(p, "rotation", 0.0);
-    let rounded = f64_or(p, "rounded", 0.0).clamp(-10.0, 10.0);
-    let randomized = f64_or(p, "randomized", 0.0).clamp(-10.0, 10.0);
-    let (pie, arc_mode) = parse_arc_params(p);
+    let rounded = ranged(p, "rounded", 0.0, &ROUNDING, c)?;
+    let randomized = ranged(p, "randomized", 0.0, &ROUNDING, c)?;
+    let (pie, arc_mode) = parse_arc_params(p, c)?;
     let xf = Affine::translate(center.to_vec2()) * vectorcraft_geom::rotate_deg(rot);
     let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![], radii_relative: false };
     let cs = CustomShape::Polygon {
@@ -202,16 +274,17 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
 fn star(s: &mut Session, p: &Value) -> Result<Value> {
     let c = "addon.shapes.star";
     let center = Point::new(f64_req(p, "cx", c)?, f64_req(p, "cy", c)?);
-    let r1 = f64_req(p, "radius1", c)?.abs();
+    let r1 = size(p, "radius1", c)?;
     check_numbers(p, &["radius2", "points", "rotation", "rounded", "randomized", "startAngle", "endAngle"], c)?;
-    let r2 = f64_or(p, "radius2", r1 / 2.0).abs();
-    let points = (f64_or(p, "points", 5.0).round() as i64).clamp(3, 1000) as u32;
+    // The inner radius is a fraction of the outer one, in `SPOKE_RATIO`.
+    let r2 = ranged(p, "radius2", r1 / 2.0, &(r1 * SPOKE_RATIO.start()..=r1 * SPOKE_RATIO.end()), c)?;
+    let points = count(p, "points", 5, c)?;
     let rot = f64_or(p, "rotation", 0.0);
-    let rounded = f64_or(p, "rounded", 0.0).clamp(-10.0, 10.0);
-    let randomized = f64_or(p, "randomized", 0.0).clamp(-10.0, 10.0);
-    let (pie, arc_mode) = parse_arc_params(p);
+    let rounded = ranged(p, "rounded", 0.0, &ROUNDING, c)?;
+    let randomized = ranged(p, "randomized", 0.0, &ROUNDING, c)?;
+    let (pie, arc_mode) = parse_arc_params(p, c)?;
     let xf = Affine::translate(center.to_vec2()) * vectorcraft_geom::rotate_deg(rot);
-    let ratio = if r1 > 1e-9 { (r2 / r1).clamp(0.01, 1.0) } else { 0.5 };
+    let ratio = if r1 > 1e-9 { (r2 / r1).clamp(*SPOKE_RATIO.start(), *SPOKE_RATIO.end()) } else { 0.5 };
     let cs = CustomShape::Polygon {
         radius: r1,
         sides: points,
@@ -231,12 +304,12 @@ fn star(s: &mut Session, p: &Value) -> Result<Value> {
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
     let c = "addon.shapes.spiral";
     let center = Point::new(f64_req(p, "cx", c)?, f64_req(p, "cy", c)?);
-    let r = f64_req(p, "radius", c)?.abs();
+    let r = size(p, "radius", c)?;
     check_numbers(p, &["turns", "divergence", "innerRadius"], c)?;
     check_switches(p, &["clockwise"], c)?;
-    let turns = f64_or(p, "turns", 3.0).clamp(0.01, 1024.0);
-    let divergence = f64_or(p, "divergence", 1.0).clamp(0.0, 1000.0);
-    let inner_radius = f64_or(p, "innerRadius", 0.0).clamp(0.0, 0.999);
+    let turns = ranged(p, "turns", 3.0, &TURNS, c)?;
+    let divergence = ranged(p, "divergence", 1.0, &DIVERGENCE, c)?;
+    let inner_radius = ranged(p, "innerRadius", 0.0, &INNER_RADIUS, c)?;
     let clockwise = bool_or(p, "clockwise", true);
     let cs = CustomShape::Spiral { center, radius: r, turns, divergence, inner_radius, clockwise };
     insert_custom(s, "Spiral", None, cs)
@@ -299,22 +372,52 @@ fn configure(s: &mut Session, p: &Value) -> Result<Value> {
         c,
     )?;
     check_switches(p, &["isStar", "parallelX", "parallelY", "parallelZ", "reset"], c)?;
+    check_configure(p, c)?;
     let ids = targets(s, p)?;
     let reset = bool_or(p, "reset", false);
     let spiral_hint = p.get("turns").is_some() || p.get("divergence").is_some() || p.get("innerRadius").is_some();
+    // The shapes the params change, worked out first so that a call that changes nothing records
+    // no undo step.
+    let changes: Vec<(NodeId, CustomShape)> = {
+        let doc = &s.doc()?.doc;
+        ids.into_iter()
+            .filter_map(|id| {
+                let n = doc.node(id)?;
+                let before = CustomShape::read_for_update(n, spiral_hint)?;
+                let mut cs = before.clone();
+                let stored = CustomShape::read(n).is_some();
+                (apply_shape_params(&mut cs, p, reset) && (cs != before || !stored)).then_some((id, cs))
+            })
+            .collect()
+    };
+    if changes.is_empty() {
+        return Ok(json!({ "updated": 0 }));
+    }
     let updated = s.edit("Live Shape", |d, _| {
         let mut count = 0usize;
-        for id in ids {
-            let Some(n) = d.node_mut(id) else { continue };
-            let Some(mut cs) = CustomShape::read_for_update(n, spiral_hint) else { continue };
-            if apply_shape_params(&mut cs, p, reset) {
-                cs.write_to_node(n);
-                count += 1;
-            }
+        for (id, cs) in &changes {
+            let Some(n) = d.node_mut(*id) else { continue };
+            cs.write_to_node(n);
+            count += 1;
         }
         Ok(count)
     })?;
     Ok(json!({ "updated": updated }))
+}
+
+/// Error unless every bounded value `p` gives is in its range, before any shape changes.
+fn check_configure(p: &Value, c: &str) -> Result<()> {
+    size_or(p, "radius", 0.0, c)?;
+    radii_param(p, c)?;
+    arc_mode(p, c)?;
+    count(p, "sides", 6, c)?;
+    ranged(p, "spokeRatio", 0.5, &SPOKE_RATIO, c)?;
+    ranged(p, "rounded", 0.0, &ROUNDING, c)?;
+    ranged(p, "randomized", 0.0, &ROUNDING, c)?;
+    ranged(p, "turns", 3.0, &TURNS, c)?;
+    ranged(p, "divergence", 1.0, &DIVERGENCE, c)?;
+    ranged(p, "innerRadius", 0.0, &INNER_RADIUS, c)?;
+    Ok(())
 }
 
 fn num_param(p: &Value, k: &str) -> Option<f64> {
@@ -331,8 +434,8 @@ fn apply_arc_params(p: &Value, pie: &mut (f64, f64), arc_mode: &mut shapes::Elli
         pie.1 = a1.rem_euclid(360.0);
         changed = true;
     }
-    if let Some(m) = str_param(p, "arcMode") {
-        *arc_mode = parse_mode(m);
+    if let Some(m) = str_param(p, "arcMode").and_then(parse_mode) {
+        *arc_mode = m;
         if *arc_mode == shapes::EllipseMode::Whole {
             *pie = (0.0, 360.0);
         } else if (pie.1 - pie.0).abs() < 1e-6 || ((pie.1 - pie.0).abs() - 360.0).abs() < 1e-6 {
@@ -351,19 +454,14 @@ fn apply_rect_params(p: &Value, reset: bool, max_r: f64, radii: &mut [f64; 4], p
         *arc_mode = shapes::EllipseMode::Whole;
         changed = true;
     }
+    // A radius larger than half the rectangle's shorter side is fitted to that size.
     if let Some(r) = num_param(p, "radius") {
         *radii = [r.clamp(0.0, max_r); 4];
         changed = true;
     }
-    if let Some(arr) = p.get("radii").and_then(Value::as_array)
-        && arr.len() == 4
-    {
-        for (i, v) in arr.iter().enumerate() {
-            if let Some(r) = v.as_f64().filter(|x| x.is_finite()) {
-                radii[i] = r.clamp(0.0, max_r);
-                changed = true;
-            }
-        }
+    if let Ok(Some(four)) = radii_param(p, "addon.shapes.configure") {
+        *radii = four.map(|r| r.clamp(0.0, max_r));
+        changed = true;
     }
     changed | apply_arc_params(p, pie, arc_mode)
 }
@@ -378,8 +476,9 @@ fn apply_poly_params(p: &Value, reset: bool, sides: &mut u32, spoke_ratio: &mut 
         }
         changed = true;
     }
-    if let Some(n_sides) = p.get("sides").and_then(Value::as_u64) {
-        *sides = (n_sides as u32).clamp(3, 1000);
+    // `check_configure` has refused values outside their ranges.
+    if let Some(n_sides) = num_param(p, "sides") {
+        *sides = n_sides as u32;
         changed = true;
     }
     if let Some(star) = p.get("isStar").and_then(Value::as_bool) {
@@ -387,15 +486,15 @@ fn apply_poly_params(p: &Value, reset: bool, sides: &mut u32, spoke_ratio: &mut 
         changed = true;
     }
     if let Some(sr) = num_param(p, "spokeRatio") {
-        *spoke_ratio = Some(sr.clamp(0.01, 1.0));
+        *spoke_ratio = Some(sr);
         changed = true;
     }
     if let Some(rnd) = num_param(p, "rounded") {
-        *rounded = rnd.clamp(-10.0, 10.0);
+        *rounded = rnd;
         changed = true;
     }
     if let Some(rand) = num_param(p, "randomized") {
-        *randomized = rand.clamp(-10.0, 10.0);
+        *randomized = rand;
         changed = true;
     }
     changed
@@ -429,15 +528,15 @@ fn apply_shape_params(cs: &mut CustomShape, p: &Value, reset: bool) -> bool {
                 changed = true;
             }
             if let Some(t) = num_param(p, "turns") {
-                *turns = t.clamp(0.01, 1024.0);
+                *turns = t;
                 changed = true;
             }
             if let Some(div) = num_param(p, "divergence") {
-                *divergence = div.clamp(0.0, 1000.0);
+                *divergence = div;
                 changed = true;
             }
             if let Some(ir) = num_param(p, "innerRadius") {
-                *inner_radius = ir.clamp(0.0, 0.999);
+                *inner_radius = ir;
                 changed = true;
             }
             changed
@@ -470,11 +569,12 @@ fn apply_shape_params(cs: &mut CustomShape, p: &Value, reset: bool) -> bool {
     }
 }
 
-fn parse_mode(m: &str) -> shapes::EllipseMode {
+fn parse_mode(m: &str) -> Option<shapes::EllipseMode> {
     match m {
-        "pie" | "slice" => shapes::EllipseMode::Slice,
-        "chord" => shapes::EllipseMode::Chord,
-        "arc" | "open" => shapes::EllipseMode::Arc,
-        _ => shapes::EllipseMode::Whole,
+        "whole" => Some(shapes::EllipseMode::Whole),
+        "pie" | "slice" => Some(shapes::EllipseMode::Slice),
+        "chord" => Some(shapes::EllipseMode::Chord),
+        "arc" | "open" => Some(shapes::EllipseMode::Arc),
+        _ => None,
     }
 }

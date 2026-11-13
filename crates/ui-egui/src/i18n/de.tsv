@@ -4381,6 +4381,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`select` must be true or false	`select` muss true oder false sein
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` und `maxAnchors` müssen ganze Zahlen sein
 @msg	`{key}` must be a number not below 0	`{key}` muss eine Zahl nicht kleiner als 0 sein
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` muss aus vier Zahlen nicht kleiner als 0 bestehen: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` muss [x, y, width, height] sein: vier endliche Zahlen, Breite und Höhe nicht negativ
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` ist größer als `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	geben Sie mindestens einen der Parameter `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors` an
