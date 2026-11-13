@@ -166,18 +166,34 @@ fn subtract_intervals(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
     out
 }
 
-/// `a` ∩ `b`.
+/// `a` ∩ `b` (both sorted left to right, each interval starting no earlier than the one before it
+/// ends, as [`union_intervals`] and [`band_intervals`] give them), left to right. It walks both
+/// lists once, stepping past whichever current interval ends first (both
+/// when they end together), so it looks at no more than `a.len() + b.len()` pairs.
 fn intersect_intervals(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
     let mut out = vec![];
-    for &(s, e) in a {
-        for &(c, d) in b {
-            let (x, y) = (s.max(c), e.min(d));
-            if y > x {
-                out.push((x, y));
-            }
+    let (mut i, mut j) = (0, 0);
+    while let (Some(&(s, e)), Some(&(c, d))) = (a.get(i), b.get(j)) {
+        #[cfg(test)]
+        INTERSECT_PAIRS.set(INTERSECT_PAIRS.get() + 1);
+        let (x, y) = (s.max(c), e.min(d));
+        if y > x {
+            out.push((x, y));
+        }
+        // Ends that are equal, or not numbers, step past both, so the walk always ends.
+        match e.partial_cmp(&d) {
+            Some(std::cmp::Ordering::Less) => i += 1,
+            Some(std::cmp::Ordering::Greater) => j += 1,
+            _ => (i, j) = (i + 1, j + 1),
         }
     }
     out
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many pairs of intervals [`intersect_intervals`] looked at on this thread.
+    static INTERSECT_PAIRS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The most pairs of edges [`slant_boundaries`] compares for one band.
@@ -921,6 +937,80 @@ fn an_inset_wider_than_a_shaped_frame_leaves_no_room() {
         let cells = Region::cells(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[]);
         assert!(cells[0].spans(40.0, 60.0).is_empty() && cells[0].span(40.0, 60.0).is_none(), "inset {inset}");
     }
+}
+
+/// `a` ∩ `b` by comparing every interval of `a` with every interval of `b`: the result
+/// [`intersect_intervals`] is checked against.
+#[cfg(test)]
+fn intersect_every_pair(a: &[(f64, f64)], b: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    a.iter().flat_map(|&(s, e)| b.iter().map(move |&(c, d)| (s.max(c), e.min(d)))).filter(|(x, y)| y > x).collect()
+}
+
+/// The intersection of two lists of intervals, each sorted with no two overlapping, is the one
+/// every pair of their intervals gives, in the same order, left to right and of positive width, for
+/// every pair of such lists whose ends are among the points 0 to 6: empty lists, intervals that
+/// only touch (in one list or across the two), that end together, that hold one another and that
+/// overlap several others.
+#[cfg(test)]
+#[test]
+fn intervals_intersect_as_every_pair_of_them_does() {
+    // Every list is a shorter list with one more interval after its last.
+    let mut lists: Vec<Vec<(f64, f64)>> = vec![vec![]];
+    let mut k = 0;
+    while let Some(list) = lists.get(k).cloned() {
+        let from = list.last().map_or(0, |l: &(f64, f64)| l.1 as u8);
+        for s in from..6 {
+            for e in s + 1..=6 {
+                let mut next = list.clone();
+                next.push((f64::from(s), f64::from(e)));
+                lists.push(next);
+            }
+        }
+        k += 1;
+    }
+    assert_eq!(lists.len(), 233);
+    for a in &lists {
+        for b in &lists {
+            let got = intersect_intervals(a, b);
+            assert_eq!(got, intersect_every_pair(a, b), "{a:?} ∩ {b:?}");
+            assert!(got.iter().all(|(x, y)| y > x) && got.windows(2).all(|w| w[0].1 <= w[1].0), "{got:?}");
+        }
+    }
+}
+
+/// Intersecting two unions of 3,000 and 2,000 intervals that interleave looks at no more than
+/// 5,000 pairs of intervals, not every one of the 6,000,000 pairs.
+#[cfg(test)]
+#[test]
+fn intersecting_intervals_looks_at_each_interval_once() {
+    let a: Vec<(f64, f64)> = (0..3000).map(|i| f64::from(i) * 4.0).map(|x| (x, x + 3.0)).collect();
+    let b: Vec<(f64, f64)> = (0..2000).map(|i| f64::from(i) * 6.0).map(|x| (x + 1.0, x + 5.0)).collect();
+    INTERSECT_PAIRS.set(0);
+    let got = intersect_intervals(&a, &b);
+    assert!(INTERSECT_PAIRS.get() <= a.len() + b.len(), "{} pairs", INTERSECT_PAIRS.get());
+    assert_eq!(got, intersect_every_pair(&a, &b));
+    assert!(!got.is_empty());
+}
+
+/// A line in area type with an Invert Wrap comb of 500 teeth and an offset keeps a span inside
+/// each tooth, left to right, through every piece of its band, and intersecting the spans with each
+/// piece looks at each span once.
+#[cfg(test)]
+#[test]
+fn a_line_inside_an_invert_wrap_comb_keeps_a_span_in_each_tooth() {
+    let frame = Rect::new(0.0, 0.0, 1000.0, 100.0).to_path(0.1);
+    let teeth: Vec<Vec<(f64, f64)>> =
+        (0..500).map(|k| f64::from(k) * 2.0).map(|x| vec![(x, 0.0), (x + 1.0, 0.0), (x + 1.0, 100.0), (x, 100.0)]).collect();
+    let teeth: Vec<&[(f64, f64)]> = teeth.iter().map(Vec::as_slice).collect();
+    let path = PathData::from_bezpath(&closed(&teeth));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 0.25, invert: true } };
+    let cells = Region::cells(&frame, &LayoutOptions::default(), &[wrap]);
+    INTERSECT_PAIRS.set(0);
+    let got = cells[0].spans(40.0, 60.0);
+    let want: Vec<(f64, f64)> = (0..500).map(|k| f64::from(k) * 2.0).map(|x| ((x - 0.25).max(0.0), x + 1.25)).collect();
+    assert_spans(&got, &want);
+    // At most 64 pieces, each looking at no more than the spans so far and the tooth spans.
+    assert!(INTERSECT_PAIRS.get() <= 64 * (500 + 500), "{} pairs", INTERSECT_PAIRS.get());
 }
 
 /// Along the line, text keeps the inset beside a wrap object, around it and, with Invert Wrap,
