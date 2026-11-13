@@ -7172,6 +7172,12 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
 @msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
 @msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`angle` must be from -180 to 180 degrees	`angle` は -180～180 度の範囲で指定してください
+@msg	`roundness` must be from 0 to 100%	`roundness` は 0～100% の範囲で指定してください
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` は 0.01～100 pt の範囲で指定してください
+@msg	style must be "pencil" or "brush"	style は "pencil" または "brush" を指定してください
+@msg	extend end must be "start" or "end"	extend の端は "start" または "end" を指定してください
+@msg	connect end must be "start" or "end"	connect の端は "start" または "end" を指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
 	Weed Box and Lines…	カス取り枠とライン…
 	Weed Box and Lines	カス取り枠とライン

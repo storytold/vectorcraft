@@ -7429,6 +7429,12 @@ breakText	Glyphs	Γλύφοι
 @msg	No bridge of this width fits across the selected art	Καμία γέφυρα αυτού του πλάτους δεν χωράει στο επιλεγμένο γραφικό
 @msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
 @msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	Το `angle` πρέπει να είναι από -180 έως 180 μοίρες
+@msg	`roundness` must be from 0 to 100%	Το `roundness` πρέπει να είναι από 0 έως 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	Το `fidelity` πρέπει να είναι από 0.01 έως 100 pt
+@msg	style must be "pencil" or "brush"	Το style πρέπει να είναι "pencil" ή "brush"
+@msg	extend end must be "start" or "end"	Το άκρο του extend πρέπει να είναι "start" ή "end"
+@msg	connect end must be "start" or "end"	Το άκρο του connect πρέπει να είναι "start" ή "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων…
 	Weed Box and Lines	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων

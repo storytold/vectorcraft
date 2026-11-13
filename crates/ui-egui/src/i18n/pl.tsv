@@ -7333,6 +7333,12 @@ breakText	Glyphs	Glify
 @msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
 @msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
 @msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musi mieścić się w zakresie od -180 do 180 stopni
+@msg	`roundness` must be from 0 to 100%	`roundness` musi mieścić się w zakresie od 0 do 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` musi mieścić się w zakresie od 0.01 do 100 pt
+@msg	style must be "pencil" or "brush"	style musi mieć wartość "pencil" lub "brush"
+@msg	extend end must be "start" or "end"	koniec extend musi mieć wartość "start" lub "end"
+@msg	connect end must be "start" or "end"	koniec connect musi mieć wartość "start" lub "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Ramka i linie do wybierania…
 	Weed Box and Lines	Ramka i linie do wybierania

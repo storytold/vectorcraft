@@ -159,12 +159,20 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
-    let brush = str_param(p, "style") == Some("brush");
+    let brush = match p.get("style").filter(|v| !v.is_null()).map(Value::as_str) {
+        None | Some(Some("pencil")) => false,
+        Some(Some("brush")) => true,
+        Some(_) => return Err(bad(C, "style must be \"pencil\" or \"brush\"")),
+    };
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
         let id = object_param(ext, "id", C)?.ok_or_else(|| bad(C, "extend needs id"))?;
-        let at_start = str_param(ext, "end") == Some("start");
+        let at_start = match ext.get("end").filter(|v| !v.is_null()).map(Value::as_str) {
+            None | Some(Some("end")) => false,
+            Some(Some("start")) => true,
+            Some(_) => return Err(bad(C, "extend end must be \"start\" or \"end\"")),
+        };
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
         let si = pd.subpaths.iter().rposition(|s| !s.closed && !s.anchors.is_empty()).ok_or_else(|| bad(C, "path has no open end"))?;
         let mut sp = pd.subpaths[si].clone();
@@ -391,12 +399,23 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "size must be positive"));
     }
     let angle = number_or(p, "angle", 0.0, C)?;
-    let roundness = number_or(p, "roundness", 100.0, C)?;
-    if !angle.is_finite() || !roundness.is_finite() {
-        return Err(bad(C, "angle and roundness must be finite"));
+    if !(-180.0..=180.0).contains(&angle) {
+        return Err(bad(C, "`angle` must be from -180 to 180 degrees"));
     }
-    let angle = angle.clamp(-180.0, 180.0);
-    let roundness = roundness.clamp(0.0, 100.0);
+    let roundness = number_or(p, "roundness", 100.0, C)?;
+    if !(0.0..=100.0).contains(&roundness) {
+        return Err(bad(C, "`roundness` must be from 0 to 100%"));
+    }
+    // With `fidelity` (pt), the brush follows the stroke fitted by [`fit_freehand`], as a Pencil
+    // stroke is fitted. Without it, or when the fitted stroke has no length (a short stroke back to
+    // its start), the brush follows every point.
+    let fidelity = match p.get("fidelity") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(number_or(p, "fidelity", 0.0, C)?),
+    };
+    if fidelity.is_some_and(|f| !(vectorcraft_tools::draw2::MIN_FIDELITY..=100.0).contains(&f)) {
+        return Err(bad(C, "`fidelity` must be from 0.01 to 100 pt"));
+    }
     let tip = vectorcraft_tools::draw2::blob_tip(angle, roundness);
     let squash = tip.inverse();
     // Width profiles use distance along the spine, so measure pressure on the same squashed
@@ -418,13 +437,6 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     let mapped_pts: Vec<Point> = mapped_samples.into_iter().map(|s| s.pt).collect();
     // The widest the brush gets: the area merges look in.
     let reach = pressure.as_ref().map_or(size, |(_, v)| size + v);
-    // With `fidelity` (pt), the brush follows the stroke fitted by [`fit_freehand`], as a Pencil
-    // stroke is fitted. Without it, or when the fitted stroke has no length (a short stroke back to
-    // its start), the brush follows every point.
-    let fidelity = match p.get("fidelity") {
-        None | Some(Value::Null) => None,
-        Some(_) => Some(number_or(p, "fidelity", 0.0, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0)),
-    };
     let spine = |tol: Option<f64>| {
         let path = match tol {
             Some(tol) => PathData::single(fit_freehand(&pts, tol, false)),

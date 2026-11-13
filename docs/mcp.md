@@ -3111,7 +3111,10 @@ already walks Image Trace. Short agent entry points:
   divided by the zoom (0.0313 to 640) and kept within that range, so a stroke is fitted at the same tolerance on screen
   at every zoom. A stroke
   that continues a path (`extend`) closes it when it ends within four times the Fidelity of the path's other end, at
-  least 6 pt and at most 400 pt. The Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt.
+  least 6 pt and at most 400 pt. The Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt, and is
+  not used when left out or null. `path.blob` rejects a `fidelity` outside 0.01 to 100 pt, an `angle` outside -180° to
+  180° and a `roundness` outside 0% to 100% with an error such as `` `angle` must be from -180 to 180 degrees ``; the
+  document does not change and no undo step is recorded. These ranges are VectorCraft's own values.
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
   (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
@@ -5166,6 +5169,11 @@ These commands refuse a string, a number or another value that is not true or fa
 `fill` in `path.freehand` (and in `brush.freehand`); `closed` and the `corner` of a point in `path.curvature`; `corner`
 in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSelected`, `mergeOnlySelection` and
 `merge` in `path.blob`. A null is read as a key left out.
+
+`path.freehand` (and `brush.freehand`, which runs it) refuses a `style` other than "pencil" or "brush" with
+`style must be "pencil" or "brush"`, and an `end` of `extend` other than "start" or "end" with
+`extend end must be "start" or "end"`; the document does not change and no undo step is recorded. Left out or null,
+`style` is "pencil" and the `end` of `extend` is "end".
 
 A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool but the selection tools (Command on
 macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,

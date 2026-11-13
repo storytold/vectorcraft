@@ -7315,6 +7315,12 @@ breakText	Glyphs	字形
 @msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必须介于 -180 到 180 度之间
+@msg	`roundness` must be from 0 to 100%	`roundness` 必须介于 0 到 100% 之间
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 必须介于 0.01 到 100 pt 之间
+@msg	style must be "pencil" or "brush"	style 必须为 "pencil" 或 "brush"
+@msg	extend end must be "start" or "end"	extend 的端点必须为 "start" 或 "end"
+@msg	connect end must be "start" or "end"	connect 的端点必须为 "start" 或 "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
 	Weed Box and Lines…	除废框和除废线…
 	Weed Box and Lines	除废框和除废线

@@ -7476,6 +7476,12 @@ breakText	Glyphs	Glyfy
 @msg	No bridge of this width fits across the selected art	Přes vybranou kresbu se nevejde žádný můstek této šířky
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` musí být od -180 do 180 stupňů
+@msg	`roundness` must be from 0 to 100%	`roundness` musí být od 0 do 100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` musí být od 0.01 do 100 pt
+@msg	style must be "pencil" or "brush"	style musí být "pencil" nebo "brush"
+@msg	extend end must be "start" or "end"	konec extend musí být "start" nebo "end"
+@msg	connect end must be "start" or "end"	konec connect musí být "start" nebo "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rámeček a linie pro vybírání…
 	Weed Box and Lines	Rámeček a linie pro vybírání
