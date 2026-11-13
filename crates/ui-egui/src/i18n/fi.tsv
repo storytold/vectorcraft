@@ -1609,6 +1609,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-asetukset…
 	Tate-chu-yoko Settings	Tate-chu-yoko-asetukset
+	Warichu	Warichu
+	Warichu Settings…	Warichu-asetukset…
+	Warichu Settings	Warichu-asetukset
+	Lines:	Rivit:
+	Line Gap:	Riviväli:
 	Composite Fonts…	Yhdistelmäfontit…
 	Composite Fonts	Yhdistelmäfontit
 	Export Composite Fonts	Vie yhdistelmäfontit
@@ -3815,6 +3820,11 @@ theme	Appearance	Ulkoasu
 	Primary	Ensisijainen
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
+	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
+	Canvas display profile:	Kankaan näyttöprofiili:
+	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.
+	No usable display profile was found: the canvas is drawn in sRGB.	Käyttökelpoista näyttöprofiilia ei löytynyt: kangas piirretään sRGB-tilassa.
 	Render Threads (-1 = Automatic)	Renderöintisäikeet (-1 = automaattinen)
 	Reset Preferences	Palauta asetukset
 	Export Preferences…	Vie asetukset…
@@ -5239,6 +5249,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Hylättiin {n} palautettu asiakirja|Hylättiin {n} palautettua asiakirjaa
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Palautettiin {n} asiakirja: tallenna se säilyttääksesi sen|Palautettiin {n} asiakirjaa: tallenna ne säilyttääksesi ne
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Avattiin, {n} huomautus: {first}|Avattiin, {n} huomautusta: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Avattiin, {n} huomautus: {first}|{notice}. Avattiin, {n} huomautusta: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Tallennettiin {path}, {n} huomautus: {first}|Tallennettiin {path}, {n} huomautusta: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Upotettiin {n} kuva; {missing} puuttuu: linkitä ne ensin uudelleen|Upotettiin {n} kuvaa; {missing} puuttuu: linkitä ne ensin uudelleen
 @msgplural	Embedded {n} image|Embedded {n} images	Upotettiin {n} kuva|Upotettiin {n} kuvaa
@@ -6890,6 +6901,8 @@ anchor	Points:	Pisteet:
 	Anchor Inspector	Ankkuripisteiden tarkastelu
 	Add Points at Crossings	Lisää pisteet risteyskohtiin
 	Split at Crossings	Jaa risteyskohdista
+	Trim at Crossings Tool	Risteyskohdista katkaisun työkalu
+	Trim at Crossings	Katkaise risteyskohdista
 	Extend Path	Jatka polkua
 	Measure & Inspect	Mittaa ja tarkastele
 	Set Anchor	Aseta ankkuripiste

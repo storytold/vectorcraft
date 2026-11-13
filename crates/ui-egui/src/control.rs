@@ -270,6 +270,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // The display profile the canvas is drawn through, or why none (Preferences ›
+        // Performance › Use Monitor Profile for Canvas).
+        "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
         // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
         // each one's document index, view number (Window › New Window) and rect. Canvas
         // coordinates map to the current window's pane, inside its rulers and scroll bars

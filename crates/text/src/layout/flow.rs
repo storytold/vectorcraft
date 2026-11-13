@@ -288,8 +288,10 @@ fn prepare_paragraph<'a, 'text>(
             wakan.splice(0..0, vec![0.0; marker]);
         }
     }
-    // …and Auto Leading: characters whose leading is Auto take this paragraph's share of their size.
-    let auto_leading = |style: &CharStyle| style.leading.unwrap_or_else(|| para.justification.auto_leading_for(style.size));
+    // …and Auto Leading: characters whose leading is Auto take this paragraph's share of their size
+    // (a warichu character, of the size of the line its block sits in).
+    let auto_leading =
+        |style: &CharStyle| style.leading.unwrap_or_else(|| para.justification.auto_leading_for(super::warichu::line_size(style, cx.vertical)));
     if para.justification.auto_leading != vectorcraft_doc::JustificationOptions::default().auto_leading {
         for glyph in sg.iter_mut().filter(|glyph| glyph.inline.is_none()) {
             glyph.leading = auto_leading(cx.style_at(glyph.byte));
@@ -776,12 +778,24 @@ fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: us
     visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
 }
 
+// Are `a` and `b` glyphs of the same warichu block? Right to left, the bidi order can draw a
+// block's first glyph after the others, so the glyph drawn second need not continue the block.
+fn same_warichu_block(a: &SGlyph, b: &SGlyph) -> bool {
+    a.wari.zip(b.wari).is_some_and(|(first, second)| first.start == second.start)
+}
+
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
-// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko block or a shaped
-// cluster.
-fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
+// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko or warichu block or a
+// shaped cluster.
+pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
     gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
-        a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+        a.byte != b.byte
+            && !a.is_space()
+            && !b.is_space()
+            && !b.continues_block()
+            && !same_warichu_block(a, b)
+            && a.ch != '\t'
+            && (is_cjk(a.ch) || is_cjk(b.ch))
     }) && !in_pair(glyph, index, after, sg)
 }
 
@@ -807,16 +821,16 @@ fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -
 }
 
 // Single Word Justification's Full Justify spreads a line's leftover room over the gaps between
-// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell), a shaped
-// cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
+// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell) or a
+// warichu block (set as one piece), a shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
 // together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
 // hyphen counts too: it follows the line's last visible glyph.
-fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+pub(super) fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
     if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
-        Some((a, b)) => a.byte != b.byte && !b.continues_tcy(),
+        Some((a, b)) => a.byte != b.byte && !b.continues_block() && !same_warichu_block(a, b),
         None => hyphen,
     }
 }
@@ -1059,6 +1073,42 @@ fn tab_glyph<'p>(
     ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
 }
 
+/// Emit `glyph` of a line placed by `transform` at `origin` with `advance` along the line, its
+/// Insert Aki before it `aki` and the glyph scaling a justified line adds to it `scale`. A warichu
+/// glyph is drawn at its place in its block instead: the block starts where the first of its glyphs
+/// drawn on the line is placed (`blocks` holds the byte naming each block of the line and where it
+/// starts, kept when the bidi order draws another block's glyphs between two of its own), and the
+/// glyph sits on the baseline of its block line, measured from where Character Alignment sets the
+/// block on the line (`origin`), with its own advance for the caret, selection and hit testing.
+fn emit_line_glyph(
+    cx: &mut Ctx<'_>,
+    glyph: &SGlyph,
+    (transform, origin, advance): (Affine, Point, f64),
+    blocks: &mut Vec<(usize, f64)>,
+    line_index: usize,
+    (aki, scale): (f64, f64),
+) {
+    let Some(w) = glyph.wari else {
+        cx.emit(glyph, transform, origin, 0.0, advance, line_index);
+        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
+        let own_shift = cx.own_width_shift(glyph, aki);
+        if let Some(out) = cx.out.glyphs.last_mut() {
+            out.scale = scale;
+            out.width_start += own_shift;
+        }
+        return;
+    };
+    let start = match blocks.iter().find(|(byte, _)| *byte == w.start) {
+        Some(&(_, at)) => at,
+        None => {
+            blocks.push((w.start, origin.x));
+            origin.x
+        }
+    };
+    let at = Point::new(start + w.along, origin.y + w.across);
+    cx.emit(glyph, Affine::translate(at.to_vec2()), at, 0.0, w.advance, line_index);
+}
+
 /// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
 /// baseline (tabs as [`tab_glyph`] sets them), its hyphen, and the line's record, then the pen
 /// moved on past it.
@@ -1090,6 +1140,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     // The glyphs drawn for the list marker, and the index of its tab's glyph, when the line starts the paragraph.
     let mut marker_glyphs: Option<Range<usize>> = None;
     let mut marker_tab = 0;
+    // The warichu blocks drawn on the line: the byte that names each and where it starts.
+    let mut wari_blocks: Vec<(usize, f64)> = Vec::new();
     for (order_index, &offset) in order.iter().enumerate() {
         let glyph_index = index + offset;
         let Some(glyph) = sg.get(glyph_index) else { continue };
@@ -1141,13 +1193,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 marker_tab = at;
             }
         }
-        cx.emit(glyph, transform, Point::new(x, y), 0.0, advance, line_index);
-        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
-        let own_shift = cx.own_width_shift(glyph, aki);
-        if let Some(out) = cx.out.glyphs.last_mut() {
-            out.scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
-            out.width_start += own_shift;
-        }
+        let glyph_scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
+        emit_line_glyph(cx, glyph, (transform, Point::new(x, y), advance), &mut wari_blocks, line_index, (aki, glyph_scale));
         if !leader.is_empty() {
             // The leader belongs to the tab's glyph: the gap stays one character for the
             // caret, selection and hit testing.

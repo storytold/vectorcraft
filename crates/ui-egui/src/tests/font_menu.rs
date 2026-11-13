@@ -1031,8 +1031,15 @@ fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: Men
     for _ in 0..if tokens.is_some() { 15 } else { 5 } {
         frame(vec![]);
     }
-    crate::font_menu::wait_for_samples(&ctx);
-    let shapes = frame(vec![]);
+    // A frame starts only a few samples, and none while several are rendering: draw until a frame
+    // leaves none rendering, so that frame drew every shown row's sample.
+    let mut shapes = frame(vec![]);
+    let mut frames = 0;
+    while crate::font_menu::wait_for_samples(&ctx) {
+        frames += 1;
+        assert!(frames < 1000, "the menu's samples are still rendering after {frames} frames");
+        shapes = frame(vec![]);
+    }
     let mut texts = vec![];
     let mut samples = vec![];
     let mut tints = vec![];

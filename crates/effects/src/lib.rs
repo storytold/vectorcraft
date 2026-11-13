@@ -69,7 +69,7 @@ pub use adjust::{
     is_channel,
 };
 pub use bake::{StrokeArt, bake_appearance, bake_document, bake_type_appearance, expand_art, expand_leaf, fresh_ids, needs_bake};
-pub use clip::clip_outline;
+pub use clip::{WarpSeams, clip_outline, knockout_silhouette, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
     is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,

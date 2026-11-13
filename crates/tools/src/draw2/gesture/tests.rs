@@ -1581,6 +1581,35 @@ fn paintbrush_alt_with_only_two_anchor_line_selected_draws_a_closed_stroke() {
     assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
 }
 
+/// A selected two-anchor curve can be smoothed, so Alt Paintbrush smooths it with the Smooth cursor,
+/// as it does a segment along a line that runs past its end and turns back; a two-anchor line whose
+/// handles lie along it between its ends cannot, so Alt still draws the closed stroke.
+#[test]
+fn paintbrush_alt_with_a_two_anchor_curve_selected_smooths() {
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let cases = [((340.0, 250.0), (360.0, 350.0), true), ((450.0, 300.0), (250.0, 300.0), true), ((330.0, 300.0), (370.0, 300.0), false)];
+    for (h1, h2, smooths) in cases {
+        let (mut d, _) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+            vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+            vectorcraft_geom::PathEl::CurveTo(Point::new(h1.0, h1.1), Point::new(h2.0, h2.1), Point::new(400.0, 300.0)),
+        ]));
+        d.insert(Some(layer), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut selected = Selection::default();
+        selected.set([id]);
+        let cx = cx(&d, &selected, &p);
+        let mut t = GestureTool::new("paintbrush");
+        let want = if smooths { Cursor::Smooth } else { Cursor::PaintbrushClose };
+        assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), want, "handles {h1:?} {h2:?}");
+        let acts = drag_held(&mut t, &cx, &[(300.0, 300.0), (350.0, 300.0), (400.0, 300.0)], alt);
+        let smoothed = matches!(acts.last().and_then(|a| a.first()), Some(Action::Exec(c, _)) if c == "path.smoothRegion");
+        assert_eq!(smoothed, smooths, "handles {h1:?} {h2:?}: {acts:?}");
+    }
+}
+
 /// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
 /// a selected open path it continues the path from that end to the pointer.
 #[test]
@@ -2140,6 +2169,254 @@ fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
     let [Overlay::Path { dashed: true, .. }, Overlay::Path { path, width, dashed: false, .. }] = &o[..] else { panic!("{o:?}") };
     assert_eq!(*width, 1.0);
     assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
+}
+
+/// A drag of `n` points (2 to 10 pt apart) that circles round and crosses itself many times,
+/// pressed at `pressure(i)` at point `i`, left down.
+fn long_area_drag(t: &mut GestureTool, cx: &ToolContext, n: usize, pressure: impl Fn(usize) -> f32) {
+    for i in 0..n {
+        let s = i as f64;
+        let r = 150.0 + 100.0 * (s * 0.0071).sin();
+        let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+        let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
+        t.pointer(cx, &PointerEvent { pressure: pressure(i), ..PointerEvent::new(kind, x, y) });
+    }
+    assert_eq!(t.points.len(), n, "every point is a sample");
+}
+
+/// The work the last `overlays` did on the area's outline, and whether it left some for later.
+fn area_work(t: &GestureTool) -> (area::AreaWork, bool) {
+    let Some(a) = t.area.take() else { panic!("no outline") };
+    let w = (a.work, a.pending(&t.points));
+    t.area.set(Some(a));
+    assert_eq!(w.1, t.overlays_pending());
+    w
+}
+
+/// The most work one `overlays` call can do past [`area::WORK_PER_CALL`]: the one step it is in
+/// when it reaches it: a segment of the drag listed in, or checked near, up to 129 × 9 squares of
+/// up to 128 segments each, and those segments checked once each.
+const AREA_STEP: usize = 2 * (129 * 9 * 129 + 256);
+
+/// Call `overlays` until the outline covers the whole drag, checking each call's work; the
+/// number of calls it took.
+fn drain_area(t: &GestureTool, cx: &ToolContext) -> usize {
+    let mut calls = 0;
+    loop {
+        t.overlays(cx);
+        calls += 1;
+        let (w, pending) = area_work(t);
+        assert!(w.points <= area::POINTS_PER_CALL, "{w:?}");
+        assert!(w.outlined <= 2 * area::POINTS_PER_CALL + 2 * (area::PIECE_SEGMENTS + 1), "{w:?}");
+        assert!(w.work <= area::WORK_PER_CALL + AREA_STEP, "{w:?}");
+        assert!(w.joined <= area::JOIN_PIECES_PER_CALL + area::BLOCK_PIECES, "{w:?}");
+        if !pending {
+            return calls;
+        }
+        assert!(calls < 10_000, "the outline never covers the drag");
+    }
+}
+
+/// The Blob Brush's and the Eraser's outline of a long drag does a bounded amount of work per
+/// frame: each call takes at most `POINTS_PER_CALL` new points, outlines a bounded number of them
+/// and checks outlines for a bounded amount of work, leaving the rest for later calls
+/// (`overlays_pending`), which finish it with the pointer still. A call after that does nothing
+/// until the drag moves, and then only the new step's work. The release sends the whole stroke.
+#[test]
+fn the_blob_brush_and_the_eraser_outline_a_long_drag_a_bounded_amount_per_frame() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    for (id, angle, roundness, pressure) in [
+        ("blobBrush", 0.0, 100.0, false),
+        ("blobBrush", 30.0, 40.0, false),
+        ("eraser", -60.0, 30.0, false),
+        ("blobBrush", 0.0, 100.0, true),
+        ("eraser", 45.0, 50.0, true),
+    ] {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(10));
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        if pressure {
+            t.set_option("sizeMode", &json!("pressure"));
+            t.set_option("sizeVariation", &json!(4));
+        }
+        long_area_drag(&mut t, &cx, 3000, |i| if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 });
+        let calls = drain_area(&t, &cx);
+        assert!(calls > 1, "{id}: a 3,000-point drag takes several frames");
+        // Nothing new: nothing to do, at any zoom (the outline is in document space).
+        for zoom in [1.0, 4.0] {
+            t.overlays(&ToolContext { zoom, ..cx });
+            let (w, pending) = area_work(&t);
+            assert_eq!((w.points, w.outlined, w.work, w.joined, pending), (0, 0, 0, 0, false), "{id}");
+        }
+        // One step more: one point, its piece outlined again, and the outlines near it checked.
+        t.pointer(&cx, &PointerEvent { pressure: if pressure { 0.5 } else { 1.0 }, ..PointerEvent::new(PointerKind::Drag, 520.0, 300.0) });
+        t.overlays(&cx);
+        let (w, _) = area_work(&t);
+        assert_eq!(w.points, 1, "{id}");
+        assert!(w.outlined <= area::PIECE_SEGMENTS + 1, "{id}: {w:?}");
+        if pressure {
+            // 3,000 one-segment pieces: only the joined paths near the step are joined again.
+            assert!(w.joined <= 8 * area::BLOCK_PIECES, "{id}: {w:?}");
+        }
+        drain_area(&t, &cx);
+        let want = t.stroke_json();
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 520.0, 300.0));
+        let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], want, "{id}: the release sends every point");
+        assert_eq!(v["points"].as_array().map(Vec::len), Some(3001), "{id}");
+        assert!(t.area.take().is_none() && !t.overlays_pending(), "{id}: the release drops the outline");
+    }
+}
+
+/// Every flattened point of the paths `o` (the outline shown).
+fn shown_points(o: &[Overlay]) -> Vec<(Point, Point)> {
+    let mut lines = vec![];
+    for o in o {
+        let Overlay::Path { path, .. } = o else { continue };
+        let mut pen = Point::ZERO;
+        let mut start = Point::ZERO;
+        vectorcraft_geom::kurbo::flatten(path.elements().iter().copied(), 0.01, |el| match el {
+            vectorcraft_geom::PathEl::MoveTo(p) => (pen, start) = (p, p),
+            vectorcraft_geom::PathEl::LineTo(p) => {
+                lines.push((pen, p));
+                pen = p;
+            }
+            vectorcraft_geom::PathEl::ClosePath => {
+                lines.push((pen, start));
+                pen = start;
+            }
+            _ => {}
+        });
+    }
+    lines
+}
+
+fn distance_to_line(q: Point, (a, b): (Point, Point)) -> f64 {
+    let d = b - a;
+    let t = if d.hypot2() > 0.0 { ((q - a).dot(d) / d.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+    q.distance(a + d * t)
+}
+
+/// Once a long drag's outline is finished it is the outline of the whole area its tip covers, as
+/// `blob_area` and `eraser_area` give it: no line inside the area (where pieces of the drag
+/// overlap or it crosses itself), and no gap along its edge.
+#[test]
+fn the_outline_of_a_long_drag_is_the_edge_of_the_whole_area() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    for (id, angle, roundness) in [("blobBrush", 0.0, 100.0), ("eraser", 30.0, 40.0)] {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(12));
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        long_area_drag(&mut t, &cx, 700, |_| 1.0);
+        drain_area(&t, &cx);
+        let shown = shown_points(&t.overlays(&cx));
+        let tip = if id == "blobBrush" { blob_tip(angle, roundness) } else { eraser_tip(angle, roundness) };
+        let squash = tip.inverse();
+        let round: Vec<Point> = t.points.iter().map(|p| squash * *p).collect();
+        // Nothing shows inside the area: every point shown is about the tip's radius from the drag.
+        for &(a, _) in &shown {
+            let q = squash * a;
+            let inner = round.windows(2).map(|w| distance_to_line(q, (w[0], w[1]))).fold(f64::INFINITY, f64::min);
+            assert!(inner > 6.0 * 0.9, "{id}: a line {inner} from the drag, inside the area, at {a:?}");
+        }
+        // The whole edge shows.
+        let exact = if id == "blobBrush" {
+            super::super::blob_area(&t.points, 12.0, angle, roundness)
+        } else {
+            super::super::eraser_area(&t.points, 12.0, angle, roundness)
+        };
+        let edge = shown_points(&[Overlay::Path { path: exact.to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false }]);
+        for &(a, _) in &edge {
+            let gap = shown.iter().map(|l| distance_to_line(a, *l)).fold(f64::INFINITY, f64::min);
+            assert!(gap < 0.6, "{id}: the edge at {a:?} is {gap} from the outline shown");
+        }
+    }
+}
+
+/// A drag with a very long step (a jump of 20,000 pt with a 1 pt tip) still finishes its outline
+/// a bounded amount at a time, and the outline reaches both ends of the jump.
+#[test]
+fn a_long_jump_in_a_blob_brush_drag_is_outlined_a_bounded_amount_at_a_time() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("blobBrush");
+    t.set_option("size", &json!(1));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+    for i in 1..400 {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, f64::from(i) * 2.0, 0.0));
+    }
+    // Over and back across the first steps, then out 20,000 pt and back over the same line.
+    for x in [20_000.0, 400.0, 20_000.0, 10.0] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, 0.3));
+    }
+    drain_area(&t, &cx);
+    let o = t.overlays(&cx);
+    let b = o
+        .iter()
+        .filter_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::Shape::bounding_box(path)) } else { None })
+        .reduce(|a, b| a.union(b));
+    let Some(b) = b else { panic!("{o:?}") };
+    assert!((b.x0 + 0.5).abs() < 0.01 && (b.x1 - 20_000.5).abs() < 0.01, "{b:?}");
+}
+
+/// A drag of many long steps (60 times the tip's size) lists each step in a bounded number of the
+/// grid's squares, so the grid does not grow with the steps' length.
+#[test]
+fn long_steps_of_a_drag_are_listed_in_a_bounded_number_of_squares() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("eraser");
+    t.set_option("size", &json!(1));
+    t.set_option("roundness", &json!(50));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+    for i in 1..=2000 {
+        let x = if i % 2 == 0 { 0.0 } else { 60.0 };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, f64::from(i) * 0.05));
+    }
+    assert_eq!(t.points.len(), 2001);
+    drain_area(&t, &cx);
+    let Some(a) = t.area.take() else { panic!("no outline") };
+    assert!(a.listed() <= 2000 * 3 * (32 + 1) && a.listed() <= area::LISTINGS, "{}", a.listed());
+}
+
+/// Escape, the release and leaving the tool drop the outline built so far; the next drag starts
+/// a new one, and its length label counts that drag alone.
+#[test]
+fn escape_and_leaving_the_tool_drop_the_drag_outline() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { measurement_labels: true, ..cx(&d, &s, &p) };
+    for id in ["blobBrush", "eraser"] {
+        let mut t = GestureTool::new(id);
+        t.set_option("roundness", &json!(50));
+        long_area_drag(&mut t, &cx, 1000, |_| 1.0);
+        t.overlays(&cx);
+        assert!(t.overlays_pending(), "{id}: a 1,000-point drag takes more than one frame");
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        assert!(t.area.take().is_none() && !t.overlays_pending(), "{id}: Escape drops it");
+        long_area_drag(&mut t, &cx, 1000, |_| 1.0);
+        t.overlays(&cx);
+        t.deactivate(&cx);
+        assert!(t.area.take().is_none() && !t.overlays_pending(), "{id}: leaving the tool drops it");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0));
+        let o = t.overlays(&cx);
+        let want = format!("L: {}", cx.len(100.0));
+        assert_eq!(o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)), id == "blobBrush", "{id}: {o:?}");
+    }
 }
 
 /// #4977: the Blob Brush and the Eraser show their tip at the pointer before a press and while

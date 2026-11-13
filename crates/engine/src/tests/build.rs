@@ -4134,7 +4134,10 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         sorted.sort();
         assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
         let n = node(&s, g);
-        assert_eq!(names(&n), order, "{method}");
+        // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
+        // group of the field's color, above the black one.
+        let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
+        assert_eq!(names(&n), want, "{method}");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
         let groups = n.children().unwrap();
@@ -4148,8 +4151,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), 3, "{method}");
-        for (sub, name) in subs.iter().zip(&order) {
+        assert_eq!(subs.len(), want.len(), "{method}");
+        for (sub, name) in subs.iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");

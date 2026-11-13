@@ -762,8 +762,7 @@ outline, so these commands do not store a stroke paint or weight for a series th
 designs keep their own paint. A row that had no
 paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
-even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
-not store a series' paint.
+even when it is hidden, and store a stroke set on a band.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
@@ -788,6 +787,21 @@ The other commands given a series group's id edit the group itself, and the grap
 `transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+
+The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
+of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
+made, placed or edited with `paint.editGradient`, `paint.setGradientGeom`, `paint.freeform.addPoint`,
+`paint.freeform.setPoint`, `paint.freeform.deletePoint`, `paint.freeform.addLine` or `paint.freeform.splitLine`; and a
+color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit.colors.adjustBalance`,
+`edit.colors.saturate`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`,
+`edit.colors.blendFrontToBack`, `edit.colors.blendHorizontally`, `edit.colors.blendVertically`, `recolor.apply`,
+`addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
+commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
+leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
+them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
+placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
+profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -3015,7 +3029,10 @@ already walks Image Trace. Short agent entry points:
   is unused, and offers Remove Strokes or Cancel when one of them is in use.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?, newName?}`, `brush.delete {name} | {names}`,
-  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. `brush.new`,
+  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. A document or brush
+  library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
+  numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
+  brush. `brush.new`,
   `brush.duplicate` and `brush.options` trim the white space around the name they are given. A blank `name` gives
   the type's default name ("New Calligraphic Brush" for a calligraphic brush), and a blank `newName` gives
   "`<name>` copy" in `brush.duplicate` and keeps the name in `brush.options`. A Hue Shift `colorization` given to
@@ -5297,6 +5314,13 @@ box is; without `from`, that box is the selection's bounds measured in the turne
 number is an error. Without `angle`, `from` is a box on the page, as before. The Free Transform tool's Perspective Distort and Free Distort send the selection's turned box
 this way, so after a rotation they start from the corners the canvas shows.
 
+After the warp, each warped object's bounding box stands at the angle the warp turns the object's own x axis to at
+the object's center, as measured before the warp. This covers the objects inside a warped group, compound path or clip
+group, each at its own center, and the art of a linked opacity mask; an unlinked mask's art keeps its angle. A warp
+that mirrors the object keeps the angle nearer the old one, and an object whose x axis the warp collapses keeps its
+angle. `object.resetBoundingBox` squares the boxes to the page again. Corners that equal the corners of the box being
+warped (`from`, or the selection's bounds) change nothing and add no undo step. This angle rule is VectorCraft's own.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"from":[-100,0,0,100],"angle":90,"corners":[[0,100],[0,0],[120,-20],[100,100]]}}}
 ```
@@ -5816,6 +5840,21 @@ colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
+
+`monitorProfileDisplay` (Preferences › Performance › Use Monitor Profile for Canvas, on by default; desktop app)
+converts the canvas from sRGB into the ICC profile of the display that shows most of the main window, as the last
+step before it is drawn: the art, the artboards' paper and the transparency grid. On Windows the profile is the
+display's default profile for its standard color mode; on X11 it is colord's profile for the RandR output, then the
+output's `_ICC_PROFILE` property when colord has no usable profile, then the screen's when only one output is active. A display with Windows Advanced
+Color on (HDR or Automatic Color Management) and macOS windows are converted by the system, and nothing is converted
+again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
+the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
+Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
+first and then converted. The art is converted before it is drawn over the converted paper, so the blend of a
+translucent object or an antialiased edge with the paper can differ slightly from a conversion of the blended color.
+`ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
+osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
+`pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
 
 `ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl with a mouse wheel's whole notches scrolls the canvas sideways
 instead of zooming while `zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel
@@ -7180,7 +7219,8 @@ swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Fr
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
-stops of a gradient with a stop above opacity 0, at a tint above 0, leaving out fills and strokes at an opacity of 0,
+stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a
+stop above opacity 0 over a stretch of some width), at a tint above 0, leaving out fills and strokes at an opacity of 0,
 and every grayscale image colorized with one, by
 the same rules as `patternObjects`, with the spot colors it uses; a process
 color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
@@ -7972,7 +8012,8 @@ CMYK one. Settings saved before these options load with their defaults.
 Every object keeps the angle of its own axes (counter-clockwise degrees; `document.inspect` reports it as a node's
 `rotation`, and the selection's shared angle as `selectionRotation`, 0 when the selected objects differ). Transforms
 turn it with the object while its path geometry is still baked, so after a rotation the bounding box and its handles
-stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
+stay square to it, as in the reference app. `object.distort` turns it as the warp turns the object at its center
+(see Free Distort on a turned bounding box). `object.rotate {angle, absolute: true}` turns the selection to an angle
 (the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
 point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
 square to the page. `object.resetBoundingBox` squares the box again without moving the art. It also squares every
@@ -8526,6 +8567,44 @@ dialog open.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
+```
+
+## Warichu
+
+`text.setFormat` and `text.setRangeStyle {warichu?, warichuLines?, warichuGap?, warichuScale?, warichuAlign?}` set the
+Character panel menu's Warichu and Warichu Settings of the characters (the menu items show with Show East Asian
+Options). Warichu characters are set at `warichuScale` percent of their size (10 to 100, default 50) and stacked on
+`warichuLines` lines (a whole number from 1 to 6, default 2) inside their line: one above the other in horizontal type
+and side by side across the column in vertical type, the first line above or to the right. `warichuGap` is the space
+between the lines in points (0 to 100, default 0, document points as `baselineShift`). The stack is centered across the
+line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size.
+A stretch of warichu characters is one block that takes the settings of its first character; a character with other
+settings, another size or the other kind of leading (Auto or a number) starts a new one, and a tab, a forced line break or a tate-chu-yoko character ends it. In
+vertical type a character marked `tateChuYoko` as well is set as tate-chu-yoko at its own size, and two or three digits
+marked `warichu` are stacked with their block instead of being set across the column. In horizontal type each line's
+characters are set in their bidi order, so right-to-left text reads from the right. The Insert Aki before the block's
+first character and after its last is space before and after the block. The text is split between the lines where
+their lengths come nearest an even share, after a space or a CJK character when there are enough such places, and
+between any two characters otherwise; a block has no more lines than characters. The block is as long as its longest
+line and is not broken across lines: a block longer than its line stays whole and runs past the line's end, as No Break
+text does. `warichuAlign` sets each line along the block: `"left"`, `"center"` or `"right"` (top, center or bottom in
+vertical type), `"justifyLeft"`, `"justifyCenter"` or `"justifyRight"` (every line but the last spread to the block's
+length, the last set left, centered or right) or `"justifyAll"`. `"auto"`, the default, sets the lines as
+`"justifyLeft"` does. These rules, the ranges and the defaults are VectorCraft's own; the public page
+<https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html> describes the Lines, Line Gap, Scale and
+Alignment settings. Type on a path sets warichu characters at their own size along the path. The canvas and every
+export draw the stacked lines; SVG, PDF and the `.ai` writers write type with warichu as outlines, as they do ruby.
+None of the settings turns `warichu` on. All are saved only when they differ from the defaults, and character styles
+carry them (`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` refuse a value outside the range). A value
+outside its range is refused with `` `warichuLines` must be a whole number from 1 to 6 `` or
+`` `warichuScale` must be from 10 to 100 ``, naming the key, and an unknown alignment with the list of the values. One
+undo step; a `text.setFormat` call that changes nothing records none. `ui.warichuSettings` opens the Warichu Settings dialog on the
+values the selected characters share, a blank field where they differ; OK sends the values that changed and leaves a
+blank field's value alone. OK with a field that is not a number returns `Lines must be a number`,
+`Line Gap must be a number` or `Scale must be a number` and keeps the dialog open.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":2,"end":8,"warichu":true,"warichuLines":2,"warichuScale":50,"warichuAlign":"auto"}}}
 ```
 
 ## Insert Aki
@@ -10491,9 +10570,9 @@ type and evening out horizontal scales are not there yet.
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
 (`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
-and in seven tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
-`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor` and
-`sharedEdge`.
+and in eight tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
+`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
+`sharedEdge` and `trimAtCrossings`.
 None has a shortcut. Each edit is one undo step, and an edit that changes nothing makes no step.
 
 Tools:
@@ -10542,6 +10621,12 @@ Tools:
   different in length, or at over 120° at an end, are left alone. Options (`tool.setOption`, or the panel, kept with the
   preferences): `diameter` (0.25 to 200 pt, 20), `tolerance` (how near two anchors count as coincident, 0 to 3 pt,
   0.002) and `together` (Keep Shared Points Together).
+- **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
+  on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
+  screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
+  gone 3 screen pixels from the press, the gesture stays a drag even when it ends near the press. An Alt-drag draws a
+  freehand line and runs it with `points` on release; a line of more than 65,536 points is dropped. Nothing changes
+  while dragging, and Escape during a drag removes nothing. The tool has no options.
 
 Commands:
 
@@ -10573,7 +10658,9 @@ Commands:
   straight segment (`straight`) or with both ends made smooth (`smooth`).
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
-  path per piece. Paths that meet at a shared anchor don't cross there; at most 10,000 segments at once.
+  path per piece. Segments that meet at an anchor they share, or with only segments of no length between them, don't
+  cross there, and they cross where they meet again elsewhere. With `selfCrossings`, a curved segment that loops over
+  itself crosses itself. At most 10,000 segments at once.
 - `addon.pathtools.divideDashes {dash?, gap?, fit?, removeGaps?}` cuts the selected paths into separate open paths
   along the curve, each `dash` long (0.01 to 1,000,000 pt, 10 by default) with `gap` between them (0 to 1,000,000 pt,
   0 by default: the pieces touch), every piece keeping the path's appearance, as one undo step. The gap pieces are left
@@ -10625,6 +10712,28 @@ Commands:
   one that `addon.pathtools.slideAnchor`, `extend` or `setAnchor` moves go with it, in the same undo step; an Extend Path
   that adds an anchor leaves the old end, and what shares it, where they are. Nothing else in the app changes. It is the
   `together` option of tool `sharedEdge`, off by default. → `{enabled}`.
+- `addon.pathtools.trim {at, tolerance?}`, `{rect}` or `{points}` removes stretches of paths. A stretch runs between two
+  neighboring places where the path is crossed, by another path or by itself, or from such a place to an open end.
+  `at` ([x, y]) removes the stretch at that point of the nearest path within `tolerance` (0 to 100 pt, default 3; of
+  paths equally near, the one on top), and a point where two stretches meet is on the one that starts there. `rect`
+  ([x, y, width, height]) removes every stretch the rectangle touches. `points` (2 to 100,000 points) removes every
+  stretch the line through them crosses. Exactly one of the three is given, with coordinates within ±10,000,000 pt.
+  Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
+  guides and clipping paths are not trimmed and do not count as crossing, the members of a compound clipping path
+  included; type, images and symbol instances take no part. In isolation mode only paths inside the isolated object
+  are trimmed, and paths outside it still count as crossing. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
+  stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
+  the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
+  removed, and a live shape becomes a plain path. No anchor is added where a stretch that stays meets another. The
+  pieces of a selected path are selected, and anchors and segments direct-selected on a trimmed path are deselected;
+  the rest of the selection stays as it was. One undo step, none when nothing is removed. Only a path that `at`,
+  `rect` or `points` reaches is searched for crossings. The command is refused when such a path has more than 10,000
+  segments, when more than 200,000 segments of other paths lie in its box, when the number of paths `rect` or `points`
+  reaches times the number of paths that take part is more than 50,000,000, when the paths it trims make more than about
+  60,000,000 pairs of segments to compare in all, when the curves are too tangled to find where they cross, or when
+  checking `points` against the paths would take more than 60,000,000 comparisons. These rules are VectorCraft's own.
+  → `{ids, removed}`: the paths left of those trimmed, and the stretches removed.
 - `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?}` draws a parametric
   shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon` (default), `star`, `ring`, `arrow`,
   `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height` are 0.01 to 16,384 pt (100);

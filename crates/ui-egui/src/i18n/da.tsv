@@ -1542,6 +1542,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Indstillinger for Warichu…
+	Warichu Settings	Indstillinger for Warichu
+	Lines:	Linjer:
+	Line Gap:	Linjeafstand:
 	Composite Fonts…	Sammensatte skrifttyper…
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
@@ -3608,6 +3613,11 @@ theme	Appearance	Udseende
 	Primary	Primær
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
+	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
+	Canvas display profile:	Canvassets skærmprofil:
+	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.
+	No usable display profile was found: the canvas is drawn in sRGB.	Der blev ikke fundet nogen brugbar skærmprofil: canvasset tegnes i sRGB.
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
 	Export Preferences…	Eksportér præferencer…
@@ -4833,6 +4843,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Åbnede med {n} note: {first}|{notice}. Åbnede med {n} noter: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
 @msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
@@ -6319,6 +6330,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankerpunktinspektør
 	Add Points at Crossings	Tilføj punkter ved krydsninger
 	Split at Crossings	Opdel ved krydsninger
+	Trim at Crossings Tool	Værktøj til trimning ved krydsninger
+	Trim at Crossings	Trim ved krydsninger
 	Extend Path	Forlæng sti
 	Measure & Inspect	Mål og undersøg
 	Set Anchor	Angiv ankerpunkt
