@@ -301,7 +301,7 @@ fn ok_makes_the_picked_color_the_color_guides_base() {
 
 /// #1692: Tab goes through one color model's fields before the next: H, S, B, then R, G, B, the
 /// hex field, then L, a, b, then C, M, Y, K. Each Lab or CMYK field is level with the field on
-/// its left.
+/// its left. #6445: the picker opens with the keyboard in the hex field.
 #[test]
 fn tab_goes_through_one_color_models_fields_before_the_next() {
     let mut app = app();
@@ -309,13 +309,23 @@ fn tab_goes_through_one_color_models_fields_before_the_next() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    // The picker opens with the keyboard in H. The loop presses Tab until K has the keyboard
-    // and records each stop. A stop is `None` when no text field has the keyboard, as at a
-    // channel's radio button.
+    let shift_tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT };
+    // The picker opens with the keyboard in the hex field (#6445). The loop presses Shift+Tab
+    // back to H, recording each stop, then presses Tab until K has the keyboard and records each
+    // stop. A stop is `None` when no text field has the keyboard, as at a channel's radio button.
     let mut texts = vec![];
     for _ in 0..3 {
         texts = frame_in(&ctx, &mut app, vec![]);
     }
+    assert_eq!(focused_field(&ctx, &texts).map(|(label, _)| label), Some("#".to_string()));
+    let mut back: Vec<Option<(String, Rect)>> = vec![];
+    while back.len() < 30 && back.last().and_then(|s| s.as_ref()).is_none_or(|(label, _)| label != "H") {
+        texts = frame_in(&ctx, &mut app, vec![shift_tab.clone()]);
+        back.push(focused_field(&ctx, &texts));
+    }
+    let back_names: Vec<Option<&str>> = back.iter().map(|s| s.as_ref().map(|(label, _)| label.as_str())).collect();
+    let back_fields: Vec<&str> = back_names.iter().flatten().copied().collect();
+    assert_eq!(&back_fields[back_fields.len().saturating_sub(6)..], ["B", "G", "R", "B", "S", "H"], "{back_names:?}");
     let mut stops = vec![focused_field(&ctx, &texts)];
     while stops.len() < 40 && stops.last().and_then(|s| s.as_ref()).is_none_or(|(label, _)| label != "K") {
         texts = frame_in(&ctx, &mut app, vec![tab.clone()]);
@@ -616,7 +626,19 @@ fn inline_ok_commits_typed_input_and_cancel_restores_the_preview() {
         app.run("ui.colorPicker", json!({"color": "#ff0000"})).unwrap();
         let drawn = settled(&ctx, &mut app, screen());
         let undo = app.session.doc().unwrap().history.undo.len();
-        // The first numeric field has selected text, just as in the other form dialogs.
+        // #6445: the hex field has the keyboard on open; Shift+Tab reaches H, whose text is
+        // selected on focus just as in the other form dialogs.
+        let shift_tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT };
+        for _ in 0..20 {
+            let at_h = {
+                let drawn = draw(&ctx, &mut app, screen(), vec![]);
+                focused_field(&ctx, &drawn.texts).is_some_and(|(label, _)| label == "H")
+            };
+            if at_h {
+                break;
+            }
+            draw(&ctx, &mut app, screen(), vec![shift_tab.clone()]);
+        }
         draw(&ctx, &mut app, screen(), vec![egui::Event::Text("120".into())]);
         if enter {
             draw(&ctx, &mut app, screen(), vec![key(egui::Key::Enter)]);

@@ -1,6 +1,6 @@
 use super::labels::{label_field, name_field, take_previous_label};
 use super::numeric::{STEP_DECIMALS, STEPS, field_text, round_to, step_to_multiple};
-use super::text::{after_shift_enter, select_all, select_all_on_focus, shift_enter_keeps_focus};
+use super::text::{after_shift_enter, focus_field, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -530,8 +530,10 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     ui.label(egui::RichText::new("#").size(15.0).color(t.text));
+    // A dialog can arm this field to take the opening focus instead of the first field (#6445).
+    let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
-    hex_text(ui, id, hex, |ui, buf, editing| {
+    let out = hex_text(ui, id, hex, |ui, buf, editing| {
         let resp = egui::Frame::NONE
             .fill(t.input)
             .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
@@ -555,7 +557,11 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
             })
             .inner;
         name_field(label_field(resp, label), name)
-    })
+    });
+    if armed {
+        focus_field(ui, id, hex);
+    }
+    out
 }
 
 /// The most characters a hex field's text box holds: six digits and a `#`.

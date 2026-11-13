@@ -1073,6 +1073,9 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
                 frame(app, vec![]);
             }
             let texts = frame(app, vec![]);
+            // The Color Picker opens with the # field already focused (#6445), where a click only
+            // moves the caret; Tab moves the keyboard away so the click selects the digits again.
+            frame(app, vec![key(egui::Key::Tab)]);
             let at = texts.iter().find(|(t, _)| t == hex).unwrap_or_else(|| panic!("{name}: no # field shows {hex}")).1;
             frame(app, vec![egui::Event::PointerMoved(at), button(at, true)]);
             frame(app, vec![button(at, false)]);
