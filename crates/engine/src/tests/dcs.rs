@@ -633,6 +633,86 @@ fn a_saved_document_reads_the_plates_again_and_prints_the_spot_ink() {
 }
 
 #[test]
+fn a_saved_document_reads_the_plates_again_with_the_low_resolution_eps_proxy() {
+    let dir = temp_dir("saved-proxy");
+    // Plates wider than a preview, so the saved document keeps a preview of the image.
+    let wide = |gray: u8| {
+        let hex = format!("{gray:02x}").repeat(300);
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n20 10 scale\n300 1 8 [300 0 0 -1 0 1] <{hex}> image\nshowpage\n%%Trailer\n%%EOF\n"
+        )
+    };
+    let file = single_file(&[("Cyan", wide(0)), ("PANTONE 185 C", wide(128))], "%%CMYKCustomColor: 0 .91 .76 0 (PANTONE 185 C)\n");
+    let path = write(&dir, "pic.eps", &file);
+    let saved = dir.join("doc.vectorcraft").to_string_lossy().into_owned();
+    let mut s = session();
+    s.execute("file.place", &json!({ "path": path })).unwrap();
+    s.execute("document.save", &json!({ "path": saved })).unwrap();
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "lowResProxyEps", "value": true})).unwrap();
+    s.execute("document.open", &json!({ "path": saved })).unwrap();
+    let list = s.execute("links.list", &json!({})).unwrap();
+    assert_eq!(list["links"][0]["format"], "DCS", "{list}");
+    let id = NodeId(list["links"][0]["id"].as_u64().unwrap());
+    let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { not_an_image() };
+    assert!(s.doc().unwrap().doc.images[&im.key].separated().is_some(), "the plates, read from the file again");
+}
+
+#[test]
+fn a_dcs_header_is_found_at_the_start_of_a_file_or_behind_a_binary_eps_header() {
+    use crate::cmd::place::dcs::{HEAD_BYTES, head_is_dcs, is_dcs};
+    // A whole file, as `is_dcs` reads it.
+    let whole = |b: &[u8]| {
+        let is = head_is_dcs(b, b.len() as u64);
+        assert_eq!(is, Some(is_dcs(b)));
+        is
+    };
+    let ps = two_plates();
+    assert_eq!(whole(&ps), Some(true));
+    assert_eq!(whole(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n"), Some(false));
+    let binary = |start: u32| {
+        let mut b = vec![0xC5, 0xD0, 0xD3, 0xC6];
+        b.extend(start.to_le_bytes());
+        b.extend((ps.len() as u32).to_le_bytes());
+        b.resize(start as usize, 0);
+        b.extend(&ps);
+        b
+    };
+    assert_eq!(whole(&binary(30)), Some(true));
+    // A binary header whose PostScript or TIFF preview ends past the end of the file names none.
+    let mut cut = binary(30);
+    cut[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(whole(&cut), Some(false));
+    let mut tiff = binary(30);
+    tiff[20..24].copy_from_slice(&30u32.to_le_bytes());
+    tiff[24..28].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(whole(&tiff), Some(false));
+    // A file longer than the bytes read, its PostScript running past them: its header is read from
+    // the part there is, unless the header puts the PostScript or the preview past the file's end.
+    let mut big = binary(30);
+    big.resize(HEAD_BYTES, b' ');
+    big[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(true));
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20) - 1), Some(false));
+    big[20..24].copy_from_slice(&30u32.to_le_bytes());
+    big[24..28].copy_from_slice(&(65u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(false));
+    // PostScript that starts past the bytes read: the whole file is needed.
+    let far = binary(HEAD_BYTES as u32 + 10);
+    assert_eq!(head_is_dcs(&far[..HEAD_BYTES], far.len() as u64), None);
+    // A header that goes on past the bytes read may name its plates further on.
+    let mut long = b"%!PS-Adobe-3.0 EPSF-3.0\n".to_vec();
+    while long.len() < HEAD_BYTES {
+        long.extend(format!("%%Title: {}\n", "x".repeat(190)).as_bytes());
+    }
+    long.truncate(HEAD_BYTES);
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), None);
+    // One that ended within them names none.
+    long[30..45].copy_from_slice(b"\n%%EndComments\n");
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), Some(false));
+}
+
+#[test]
 fn dcs_transparency_marks_transparent_and_overlapped_dcs_images() {
     let dir = temp_dir("transparency");
     let path = write(&dir, "pic.eps", &two_plates());
