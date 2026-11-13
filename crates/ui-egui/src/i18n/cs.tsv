@@ -6728,6 +6728,22 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+	Notched Ribbon	Vroubkovaná stuha
+	Double Line	Dvojitá čára
+	Wave	Vlna
+	Teardrop	Slza
+	Striped Ribbon	Pruhovaná stuha
+	Fine Nib	Jemný hrot
+	Broad Nib	Široký hrot
+	Chisel	Dláto
+	Round Pen	Kulaté pero
+	Pressure Pen	Tlakové pero
+	Beads	Korálky
+	Dash Dot	Čárka-tečka
+	Scallops	Feston
+	Stars	Hvězdy
+	Triangles	Trojúhelníky
+	Sparkles	Jiskry
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

@@ -6671,6 +6671,22 @@ axis	Y Axis	Eje Y
 	Graphite Pencil	Lápiz de grafito
 	Wax Crayon	Cera de colores
 	Charcoal Dust	Polvo de carboncillo
+	Notched Ribbon	Cinta dentada
+	Double Line	Línea doble
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Cinta a rayas
+	Fine Nib	Plumilla fina
+	Broad Nib	Plumilla ancha
+	Chisel	Cincel
+	Round Pen	Pluma redonda
+	Pressure Pen	Pluma de presión
+	Beads	Cuentas
+	Dash Dot	Raya y punto
+	Scallops	Festones
+	Stars	Estrellas
+	Triangles	Triángulos
+	Sparkles	Destellos
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

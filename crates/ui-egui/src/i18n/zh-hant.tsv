@@ -6373,6 +6373,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口緞帶
+	Double Line	雙線
+	Wave	波浪
+	Teardrop	淚滴
+	Striped Ribbon	條紋緞帶
+	Fine Nib	細筆尖
+	Broad Nib	寬筆尖
+	Chisel	鑿形
+	Round Pen	圓頭筆
+	Pressure Pen	壓感筆
+	Beads	珠串
+	Dash Dot	點劃線
+	Scallops	扇貝邊
+	Stars	星形
+	Triangles	三角形
+	Sparkles	閃光
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）

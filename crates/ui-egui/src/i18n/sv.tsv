@@ -6709,6 +6709,22 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+	Notched Ribbon	Hackat band
+	Double Line	Dubbellinje
+	Wave	Våg
+	Teardrop	Droppe
+	Striped Ribbon	Randigt band
+	Fine Nib	Fin spets
+	Broad Nib	Bred spets
+	Chisel	Mejsel
+	Round Pen	Rund penna
+	Pressure Pen	Tryckpenna
+	Beads	Pärlor
+	Dash Dot	Streck-punkt
+	Scallops	Bågkant
+	Stars	Stjärnor
+	Triangles	Trianglar
+	Sparkles	Gnistor
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

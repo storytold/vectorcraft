@@ -6339,6 +6339,22 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+	Notched Ribbon	Лента с насечками
+	Double Line	Двойная линия
+	Wave	Волна
+	Teardrop	Капля
+	Striped Ribbon	Полосатая лента
+	Fine Nib	Тонкое перо
+	Broad Nib	Широкое перо
+	Chisel	Стамеска
+	Round Pen	Круглое перо
+	Pressure Pen	Перо с нажимом
+	Beads	Бусины
+	Dash Dot	Штрихпунктир
+	Scallops	Фестоны
+	Stars	Звёзды
+	Triangles	Треугольники
+	Sparkles	Искры
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)

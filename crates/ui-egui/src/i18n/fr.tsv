@@ -6723,6 +6723,22 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+	Notched Ribbon	Ruban cranté
+	Double Line	Double ligne
+	Wave	Vague
+	Teardrop	Goutte
+	Striped Ribbon	Ruban rayé
+	Fine Nib	Plume fine
+	Broad Nib	Plume large
+	Chisel	Ciseau
+	Round Pen	Plume ronde
+	Pressure Pen	Plume à pression
+	Beads	Perles
+	Dash Dot	Tiret-point
+	Scallops	Festons
+	Stars	Étoiles
+	Triangles	Triangles
+	Sparkles	Étincelles
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

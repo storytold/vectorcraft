@@ -6320,6 +6320,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

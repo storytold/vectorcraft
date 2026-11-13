@@ -6354,6 +6354,22 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+	Notched Ribbon	Nastro dentellato
+	Double Line	Doppia linea
+	Wave	Onda
+	Teardrop	Goccia
+	Striped Ribbon	Nastro a righe
+	Fine Nib	Pennino fine
+	Broad Nib	Pennino largo
+	Chisel	Scalpello
+	Round Pen	Penna tonda
+	Pressure Pen	Penna a pressione
+	Beads	Perline
+	Dash Dot	Tratto-punto
+	Scallops	Smerlo
+	Stars	Stelle
+	Triangles	Triangoli
+	Sparkles	Scintille
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
