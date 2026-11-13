@@ -83,6 +83,27 @@
 @msg	Script file path exceeds 32,767 characters	Het pad van het scriptbestand is langer dan 32.767 tekens
 @msg	Script folder mask takes too many steps to match	Het masker van de scriptmap vraagt te veel stappen om te vergelijken
 @msg	the script opened more file data than one run may open (32 MiB)	het script heeft meer bestandsgegevens geopend dan één uitvoering mag openen (32 MiB)
+@msg	Script file access denied: {path}	Toegang tot het scriptbestand geweigerd: {path}
+@msg	Script file access to the app's own folders is not allowed	Scriptbestanden mogen geen toegang krijgen tot de eigen mappen van de app
+@msg	Script file cannot encode the text	Het scriptbestand kan de tekst niet coderen
+@msg	Script file could not be written	Het scriptbestand kon niet worden geschreven
+@msg	Script file dialogs need a person to answer them	Dialoogvensters voor scriptbestanden moeten door een persoon worden beantwoord
+@msg	Script file is not open for writing	Het scriptbestand is niet geopend voor schrijven
+@msg	Script file name is already in use	De naam van het scriptbestand is al in gebruik
+@msg	Script file name must be a name without a folder	De naam van het scriptbestand moet een naam zonder map zijn
+@msg	Script file permission can be kept only for a script run from a file	Toestemming voor scriptbestanden kan alleen worden bewaard voor een script dat vanuit een bestand wordt uitgevoerd
+@msg	Script file permission could not be saved	De toestemming voor het scriptbestand kon niet worden opgeslagen
+@msg	Script folder is not empty	De scriptmap is niet leeg
+@msg	Script files cannot make aliases	Scriptbestanden kunnen geen aliassen maken
+@msg	Script file hidden setting cannot be changed	De instelling Verborgen van het scriptbestand kan niet worden gewijzigd
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: een bestandsdialoogvenster kan niet worden geopend binnen een callback van een ingebouwde functie, een getter, een conversie of een bestand dat door $.evalFile wordt uitgevoerd; roep het aan vanuit de eigen code van het script
+@msg	the script wrote more file data than one run may write (32 MiB)	het script heeft meer bestandsgegevens geschreven dan één uitvoering mag schrijven (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` voor het bestandsdialoogvenster van een script moet een van deze waarden zijn: once, always, deny, stop
+@msg	choose a file or folder first, or deny	kies eerst een bestand of map, of weiger
+@msg	the script file permissions could not be saved: {e}	de toestemmingen voor scriptbestanden konden niet worden opgeslagen: {e}
+@msg	this script's file access can be allowed only once	de bestandstoegang van dit script kan maar één keer worden toegestaan
+@msg	Only the person at the keyboard can allow a script's file access	Alleen de persoon aan het toetsenbord kan de bestandstoegang van een script toestaan
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Een script krijgt maximaal 2.048 bestanden: de bestanden die daarna zijn gekozen, zijn weggelaten
 @msg	File.seek: takes a position and a mode	File.seek: verwacht een positie en een modus
 @msg	vc.run: give a command id, as a string	vc.run: geef een opdracht-id, als string
 @msg	vc.run: takes a command id and an object of parameters	vc.run: verwacht een opdracht-id en een object met parameters
