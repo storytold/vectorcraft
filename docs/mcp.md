@@ -547,7 +547,11 @@ change nothing; an omitted or null `id` keeps the default. Commands that need an
 `text.createInPath`) refuse a value that is not a non-negative integer with "`id` must be a whole number", naming the
 key, and report a key left out or null as missing. The optional `group` of `livePaint.fill` and `parent` of
 `node.move` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
-`group` is left out or null, and reports a missing group only when both are left out. A command that leaves out an object selected inside a
+`group` is left out or null, and reports a missing group only when both are left out. A command that needs a number
+(`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
+`object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
+`` `x` must be a number, not "40" ``, naming the key and showing the value as given, and reports a key left out or null
+as `` missing number `x` ``; it changes nothing either way. A command that leaves out an object selected inside a
 selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
 `ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
 that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
@@ -3592,7 +3596,8 @@ For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `reco
 with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
-end). Without one, or with a value that is not a number, it answers `` missing number `intensity` `` and changes nothing.
+end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
+`"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
 The `edit.colors.*` commands, `edit.colors.overprintBlack` and `addon.color.filter` answer a `fill`, `stroke`,
 `includeImages`, `includePatterns`, `convert`, `remove`, `includeCmyBlacks` or `includeSpotBlacks` that is not true or
 false with `` `fill` must be true or false ``, naming the key, a `percentage` that is not a number with
