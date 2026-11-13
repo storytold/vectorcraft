@@ -21,8 +21,7 @@ Ordinary File > Save offers Save As when its own location refuses writes with a 
 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
-| Formats opened or placed | ~30 | 31 | missing: FreeHand, CorelDRAW, DWG, PS |
-| Formats opened or placed | ~30 | 31 | missing: FreeHand, DWG, PICT, PS |
+| Formats opened or placed | ~30 | 31 | missing: FreeHand, DWG, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 18 | missing: DWG; extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
