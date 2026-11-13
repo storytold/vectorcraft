@@ -644,7 +644,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => self.image(im, xy),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im), xy),
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {

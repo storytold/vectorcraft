@@ -682,12 +682,13 @@ fn as_art_opts(
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
             let mut image = Node::new(n.id, n.kind.clone());
-            // Its pixels draw as the image's do: colorized by a grayscale image's fill color, and
-            // smoothed or not.
+            // Its pixels draw as the image's do: colorized by a grayscale image's fill color,
+            // smoothed or not, and with its color mask's masked pixels.
             {
                 let mut e = image.extras_mut();
                 e.colorize = n.extras().colorize.clone();
                 e.pixelated = n.extras().pixelated;
+                e.color_mask = n.extras().color_mask.clone();
             }
             let clipped = || {
                 let mut clip = Node::path(n.id, frame.clone(), Appearance::default());

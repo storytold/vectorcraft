@@ -701,7 +701,9 @@ fn colorized_images(d: &Document, ids: &[NodeId], paint: &Paint) -> std::result:
             out.push(*id);
             continue;
         }
-        let Some(gray) = d.image_blob(im).and_then(|b| b.gray_source()) else { continue };
+        // A color-masked image is colorized as it shows: its masked pixels, which have an alpha
+        // channel.
+        let Some(gray) = d.image_blob(&d.shown_image(n, im)).and_then(|b| b.gray_source()) else { continue };
         match paint {
             // Without a color, `none` goes to the image's fill item.
             Paint::None => continue,
@@ -758,11 +760,17 @@ pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::R
     if was_ok { check_colorized(d) } else { Ok(()) }
 }
 
-/// How the pixels of `n` are gray, when `n` is a grayscale or 1-bit image colorized with a color
-/// that [`colorizes_transparency`] refuses. Such an image can't have an alpha channel.
+/// Is `n` an image colorized with a color that [`colorizes_transparency`] refuses? When its pixels
+/// are grayscale or 1-bit, they can't have an alpha channel.
+pub(super) fn colorized_with_process(d: &Document, n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_)) && n.extras().colorize.as_deref().is_some_and(|paint| !colorizes_transparency(d, paint))
+}
+
+/// How the pixels `n` shows are gray, when `n` is a grayscale or 1-bit image colorized with a
+/// color that [`colorizes_transparency`] refuses ([`colorized_with_process`]).
 pub(super) fn gray_colorized_with_process(d: &Document, n: &Node) -> Option<GraySource> {
-    let (NodeKind::Image(im), Some(paint)) = (&n.kind, n.extras().colorize.as_deref()) else { return None };
-    if colorizes_transparency(d, paint) { None } else { d.image_blob(im).and_then(|b| b.gray_source()) }
+    let NodeKind::Image(im) = &n.kind else { return None };
+    if colorized_with_process(d, n) { d.image_blob(&d.shown_image(n, im)).and_then(|b| b.gray_source()) } else { None }
 }
 
 /// Is `e` the refusal of [`check_colorized`]?

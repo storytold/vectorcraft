@@ -811,6 +811,10 @@ font-technology	Variable	Biến thiên
 	Corner Color	Màu góc
 	Contiguous	Liền kề
 	Each Channel	Từng kênh
+	Color Mask…	Mặt nạ màu…
+	Color Mask	Mặt nạ màu
+	Remove Color Mask	Xóa mặt nạ màu
+	Apply Color Mask	Áp dụng mặt nạ màu
 	Edit Path	Sửa đường dẫn
 	Crop Marks	Dấu cắt xén
 	Crop To	Cắt xén đến
@@ -5202,6 +5206,10 @@ theme	Appearance	Giao diện
 @msg	a CMYK image has no transparency to set	ảnh CMYK không có độ trong suốt để đặt
 @msg	every pixel matches the background: no image would be left	mọi điểm ảnh đều khớp với nền: sẽ không còn lại ảnh nào
 @msg	an image of {w} × {h} pixels is too large to change	ảnh {w} × {h} điểm ảnh quá lớn nên không thể thay đổi
+@msg	select an image with a color mask	hãy chọn ảnh có mặt nạ màu
+@msg	the color mask's settings are out of range	cài đặt của mặt nạ màu nằm ngoài phạm vi cho phép
+@msg	a CMYK image can't take a color mask	ảnh CMYK không thể có mặt nạ màu
+@msg	the mask would hide every pixel	mặt nạ sẽ ẩn mọi điểm ảnh
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại

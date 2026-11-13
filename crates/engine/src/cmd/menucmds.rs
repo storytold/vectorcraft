@@ -1053,6 +1053,11 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     bare.blend = Default::default();
     bare.appearance = Appearance::default().into();
     bare.visible = true;
+    // The image's own pixels are cut, not the masked ones a color mask shows: the mask is made
+    // again for the cut pixels after the edit.
+    if let Some(e) = bare.extras_if_any() {
+        e.color_mask = None;
+    }
     let tmp = isolated_doc(&st.doc, vec![bare]);
     let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
     let (png, w, h, warning) =
