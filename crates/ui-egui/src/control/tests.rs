@@ -308,7 +308,8 @@ fn a_url_naming_another_host_stays_without_a_read_root() {
 /// Under a read root, a recorded step loses a relative path outside it under a key that names a file
 /// or a folder as its command reads it (also inside a `command.batch` step), and a `file:` URL outside
 /// it under any key. A web link, a choice or a switch whose name ends like a path key's, and a key
-/// that names part of the document in its command, keep their values.
+/// that names part of the document in its command, keep their values; the same key in a command that
+/// doesn't take it as a param names a file.
 #[test]
 fn recorded_steps_filter_only_unreadable_locations() {
     use vectorcraft_engine::cmd::ParamsPlace;
@@ -321,6 +322,7 @@ fn recorded_steps_filter_only_unreadable_locations() {
         ("object.slice.options", json!({"url": "file:///elsewhere/a.html"})),
         ("object.path.simplify", json!({"wholePaths": "elsewhere/a", "alignToPath": "elsewhere/b", "linksFolder": "elsewhere/c"})),
         ("document.exportPresets.save", json!({"settings": {"folders": "item/format", "formats": [{"folder": "elsewhere/png"}]}})),
+        ("text.createInPath", json!({"path": "elsewhere/shape"})),
         ("object.setLiveShape", json!({"path": "elsewhere/shape"})),
         ("command.batch", json!({"commands": [{"command": "document.save", "params": {"path": "elsewhere/b.svg"}}]})),
     ];
@@ -342,6 +344,7 @@ fn recorded_steps_filter_only_unreadable_locations() {
         json!({"wholePaths": "elsewhere/a", "alignToPath": "elsewhere/b", "linksFolder": "elsewhere/c"}),
         json!({"settings": {"folders": "item/format", "formats": [{}]}}),
         json!({"path": "elsewhere/shape"}),
+        json!({}),
         json!({"commands": [{"command": "document.save", "params": {}}]}),
     ];
     assert_eq!(filtered, want);
