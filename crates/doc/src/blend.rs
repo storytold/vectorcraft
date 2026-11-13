@@ -1205,6 +1205,13 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 // Spine
 // =====================================================================================
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Spine::new`] has run on this thread, for tests that count how often a path
+    /// is flattened.
+    pub(crate) static SPINES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
 /// arc length at each of its anchors.
 pub struct Spine {
@@ -1223,6 +1230,8 @@ impl Spine {
     /// arc lengths, and the arc length at each anchor. `None` when `path` has no subpath, or when
     /// the first one flattens to fewer than two points (so it has no length to walk).
     pub fn new(path: &PathData) -> Option<Self> {
+        #[cfg(test)]
+        SPINES_BUILT.with(|n| n.set(n.get() + 1));
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();
         let mut cum: Vec<f64> = Vec::new();
