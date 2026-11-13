@@ -37,6 +37,21 @@ fn effect_image(doc: &Document) -> image::RgbaImage {
     image::load_from_memory(&flat.images[&im.key].bytes).unwrap().to_rgba8()
 }
 
+/// Like Illustrator: the presets are Screen 72, Medium 150 and High 300 ppi, and Other takes any
+/// value from 1 to 2400.
+#[test]
+fn resolution_presets_are_screen_72_medium_150_and_high_300_and_other_is_free() {
+    let mut s = session();
+    for (given, ppi) in
+        [(json!("screen"), 72.0), (json!("Medium"), 150.0), (json!("high"), 300.0), (json!(200), 200.0), (json!(1), 1.0), (json!(2400), 2400.0)]
+    {
+        let r = s.execute(C, &json!({"resolution": given})).unwrap();
+        assert_eq!(r["resolution"].as_f64(), Some(ppi), "{given}");
+        assert_eq!(s.doc().unwrap().doc.raster_ppi(), ppi, "{given}");
+    }
+    assert!(s.execute(C, &json!({"resolution": 2401})).is_err());
+}
+
 #[test]
 fn settings_report_change_in_one_step_and_reject_junk() {
     let mut s = session();

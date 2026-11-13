@@ -153,3 +153,37 @@ fn pdf_1_3_files_are_encrypted_with_40_bit_rc4_and_can_be_linearised() {
         s.execute("document.open", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf), "name": "old.pdf", "password": "nope"})).is_err()
     );
 }
+
+/// Pixel width of the widest image in the PDF (export options `p`) of a rectangle with a drop shadow, in a
+/// document at `ppi` Raster Effects resolution.
+fn widest_image_at(ppi: u32, p: Value) -> u32 {
+    let mut s = Session::new();
+    let run = |s: &mut Session, id: &str, p: Value| s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"));
+    run(&mut s, "file.new", json!({"width": 200, "height": 200, "rasterEffectsPpi": ppi}));
+    let id = run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}))["id"].clone();
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "ids": [id]}));
+    let (bytes, _) = export(&mut s, p);
+    let mut widest = 0;
+    vectorcraft_pdf::import(&bytes).unwrap().walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            widest = widest.max(im.width);
+        }
+    });
+    widest
+}
+
+/// A plain PDF takes its effect images at the document's Raster Effects resolution. PDF 1.3 and
+/// PDF/X-1a files are flattened first, and the flattener preset (High Resolution by default) sets
+/// the resolution of what it rasterizes, so the document's value does not change those images.
+#[test]
+fn pdf_1_3_and_pdfx_effect_images_come_from_the_flattener_preset_not_the_documents_resolution() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let plain: Vec<u32> = [72, 150, 300].map(|ppi| widest_image_at(ppi, json!({}))).into();
+    assert!(plain[0] < plain[1] && plain[1] < plain[2], "plain PDF follows the document: {plain:?}");
+    for p in [json!({"compatibility": "1.3"}), json!({"standard": "pdfX1a"})] {
+        let flat: Vec<u32> = [72, 150, 300].map(|ppi| widest_image_at(ppi, p.clone())).into();
+        assert!(flat[0] == flat[1] && flat[1] == flat[2], "{p}: {flat:?}");
+        // The default High Resolution preset is finer than any of the three presets.
+        assert!(flat[0] > plain[2], "{p}: {flat:?} against {plain:?}");
+    }
+}

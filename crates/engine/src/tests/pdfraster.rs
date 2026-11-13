@@ -229,3 +229,36 @@ fn pdf_resolution_cap_stays_quiet_when_small_effect_meets_requested_ppi() {
     assert!(String::from_utf8_lossy(&r.bytes).contains("/Subtype/Image"));
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
+
+/// Pixel width of the widest image in the PDF of `d`.
+fn widest_pdf_image(d: &Document) -> u32 {
+    let bytes = crate::export_pdf(d, &Default::default()).unwrap();
+    let back = vectorcraft_pdf::import(&bytes).unwrap();
+    let mut widest = 0;
+    back.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            widest = widest.max(im.width);
+        }
+    });
+    widest
+}
+
+/// Like Illustrator, the PDF takes its effect images at exactly the document's Raster Effects
+/// resolution (Screen 72, Medium 150, High 300 ppi), with no hidden minimum.
+#[test]
+fn pdf_effect_images_follow_the_documents_raster_effects_resolution() {
+    let mut d = Document::new(200.0, 200.0);
+    assert_eq!(d.raster_effects_ppi, 72.0);
+    let r = rect(&mut d, Rect::new(50.0, 50.0, 150.0, 150.0), Color::rgb(0.2, 0.4, 0.8));
+    add(&mut d, with(r, shadow()));
+    let at_72 = widest_pdf_image(&d);
+    for ppi in [150.0, 300.0] {
+        d.raster_effects_ppi = ppi;
+        let width = widest_pdf_image(&d);
+        let expected = at_72 as f64 * ppi / 72.0;
+        // The image size is rounded up to whole pixels at each resolution.
+        assert!((width as f64 - expected).abs() <= 6.0, "{ppi} ppi: {width} px, expected about {expected:.0}");
+    }
+    // 100 pt of art alone would be 208 px at 150 ppi: the 72 ppi image is far below that.
+    assert!(at_72 < 150, "{at_72} px at 72 ppi");
+}
