@@ -1481,8 +1481,8 @@ fn open_at_start(sp: &mut SubPath, ka: &mut [usize]) {
 
 /// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
 /// on, splitting segments where none is. `None`, leaving `path` as it was, when the subpath has no
-/// length to spread along, or when an arc length it would split at is not finite (a path so large
-/// its length overflows).
+/// length to spread along, when its length is not finite (a path so large its length overflows),
+/// or when an arc length it would split at is not finite.
 fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
     spread_anchors_with(path, k, |_| {})
 }
@@ -1491,7 +1491,7 @@ fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
 fn spread_anchors_with(path: &mut PathData, k: usize, mut work: impl FnMut(SpreadWork)) -> Option<Vec<usize>> {
     let sp = path.subpaths.first_mut()?;
     let lengths = SpreadLengths::new(sp, &mut work);
-    let total = lengths.total()?;
+    let total = lengths.total().filter(|t| t.is_finite())?;
     let targets = (1..k.saturating_sub(1)).map(|i| total * i as f64 / (k - 1) as f64);
     let mut out = vec![0usize];
     out.extend(anchors_at_lengths(sp, lengths, targets, &mut work)?);
@@ -2278,16 +2278,19 @@ mod tests {
     }
 
     /// A spine so large that its length overflows spreads no keys, and is left as it was, rather
-    /// than getting an anchor split at a parameter that is not a number.
+    /// than getting an anchor split at a parameter that is not a number. Two keys, which split
+    /// nothing, get no anchors either.
     #[test]
     fn spreading_keys_along_a_spine_whose_length_overflows_changes_nothing() {
         let p = Point::new;
         for closed in [false, true] {
-            let spine = PathData::single(SubPath::polyline(&[p(-1e308, 0.0), p(0.0, 0.0), p(1e308, 0.0)], closed));
-            let mut path = spine.clone();
-            assert_eq!(spread_anchors(&mut path, 3), None);
-            assert_eq!(path, spine);
-            assert!(path.subpaths[0].anchors.iter().all(|a| a.p.x.is_finite() && a.h_in.x.is_finite() && a.h_out.x.is_finite()));
+            for k in [2, 3, 5] {
+                let spine = PathData::single(SubPath::polyline(&[p(-1e308, 0.0), p(0.0, 0.0), p(1e308, 0.0)], closed));
+                let mut path = spine.clone();
+                assert_eq!(spread_anchors(&mut path, k), None, "closed {closed}, {k} keys");
+                assert_eq!(path, spine);
+                assert!(path.subpaths[0].anchors.iter().all(|a| a.p.x.is_finite() && a.h_in.x.is_finite() && a.h_out.x.is_finite()));
+            }
         }
     }
 
