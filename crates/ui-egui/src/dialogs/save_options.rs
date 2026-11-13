@@ -336,6 +336,13 @@ fn elide_before_tail(ui: &egui::Ui, text: &str, tail: usize, font: &egui::FontId
     "…".into()
 }
 
+/// The legacy .ai artboard picker mirrors its actions and thumbnail flow in Hebrew.
+/// File names and numeric range syntax remain unchanged and are never reordered.
+fn artboard_picker_layout(language: &str, wrap: bool) -> egui::Layout {
+    let layout = if language == "he" { egui::Layout::right_to_left(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Min) };
+    layout.with_main_wrap(wrap)
+}
+
 /// Legacy `.ai`: the artboards to save, as thumbnails to check; each is saved as a file of its own.
 fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     const TILE: egui::Vec2 = egui::vec2(116.0, 84.0);
@@ -352,7 +359,7 @@ fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
         .wrap(),
     );
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    ui.with_layout(artboard_picker_layout(crate::i18n::current().code(), false), |ui| {
         if ui.small_button(tl!("Select All")).clicked() {
             boards.iter_mut().for_each(|b| *b = true);
         }
@@ -371,7 +378,7 @@ fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     let files = board_files(app, d, &boards);
     let stem = std::path::Path::new(d.str("path").trim()).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     egui::ScrollArea::vertical().max_height(330.0).show(ui, |ui| {
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true), |ui| {
+        ui.with_layout(artboard_picker_layout(crate::i18n::current().code(), true), |ui| {
             ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
             for (i, name) in names.iter().enumerate() {
                 let on = boards.get(i).copied().unwrap_or(false);
@@ -656,6 +663,39 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         Some(mode) if own_dialog(f) => io::ask_format_options(app, mode, f, &path),
         Some(mode) => io::save(app, mode, &json!({ "path": path, "format": f.id, "options": options }), false),
         None => Err(format!("`{}` is no save command", d.str("__action"))),
+    }
+}
+
+#[cfg(test)]
+mod rtl_picker_tests {
+    use super::*;
+
+    #[test]
+    fn hebrew_save_as_artboard_picker_mirrors_actions_and_tiles() {
+        use egui::Direction;
+        for (language, direction) in [("he", Direction::RightToLeft), ("en", Direction::LeftToRight), ("fr", Direction::LeftToRight)] {
+            let actions = artboard_picker_layout(language, false);
+            let tiles = artboard_picker_layout(language, true);
+            assert_eq!(actions.main_dir, direction, "{language} action order");
+            assert_eq!(tiles.main_dir, direction, "{language} thumbnail order");
+            assert!(!actions.main_wrap);
+            assert!(tiles.main_wrap);
+
+            let ctx = egui::Context::default();
+            let mut centers = [f32::NAN; 2];
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 300.0))), ..Default::default() };
+            let mut result = ctx.run_ui(raw, |ui| {
+                ui.set_width(500.0);
+                ui.with_layout(tiles, |ui| {
+                    centers[0] = ui.label("Artboard 1").rect.center().x;
+                    centers[1] = ui.label("Artboard 2").rect.center().x;
+                });
+            });
+            result.textures_delta.clear();
+            let [first, second] = centers;
+            assert!(if language == "he" { first > second } else { first < second }, "{language}: first artboard at {first}, second at {second}");
+        }
     }
 }
 

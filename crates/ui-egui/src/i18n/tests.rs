@@ -4,6 +4,209 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
+fn hebrew_locale_file_flow_and_plural_categories() {
+    let he = Lang::from_code("he").expect("Hebrew is registered");
+    assert_eq!(he.name(), "עברית");
+    assert!(!he.complete_menus(), "the first catalog is intentionally partial");
+    for tag in ["he", "he-IL", "he_IL.UTF-8", "HE-il", "he-Hebr-IL"] {
+        assert_eq!(lang_from_tag(tag), Some(he), "{tag}");
+    }
+    assert_eq!(Lang::from_pref("he"), he);
+    for (english, expected) in [
+        ("File", "קובץ"),
+        ("Open…", "פתיחה…"),
+        ("Save", "שמירה"),
+        ("Save As…", "שמירה בשם…"),
+        ("Close", "סגירה"),
+        ("Edit", "עריכה"),
+        ("Undo", "ביטול פעולה"),
+        ("Redo", "ביצוע חוזר"),
+        ("Export As SVG…", "ייצוא כ־SVG…"),
+    ] {
+        assert_eq!(tr(he, english), expected);
+    }
+    assert_eq!(tr(he, "untranslated VectorCraft sentinel"), "untranslated VectorCraft sentinel");
+    assert_eq!([0, 1, 2, 3, 10, 20, 21].map(he.0.plural), [2, 0, 1, 2, 2, 2, 2]);
+    for (n, expected) in [(0, "0 קבצים"), (1, "1 קובץ"), (2, "2 קבצים"), (21, "21 קבצים")] {
+        assert_eq!(trn(he, n, "{n} file", "{n} files"), expected);
+    }
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 80, "expected a useful initial file/edit catalog");
+}
+
+#[test]
+fn hebrew_top_level_menus_are_source_linked_and_translated() {
+    let he = Lang::from_code("he").expect("Hebrew registered");
+    let titles: Vec<_> = crate::menus::menu_tree().into_iter().map(|(title, _)| title).filter(|title| *title != "VectorCraft").collect();
+    assert_eq!(titles.len(), 9, "native source menu tree changed");
+    for english in titles {
+        assert_ne!(tr(he, english), english, "untranslated top-level menu: {english}");
+        assert_eq!(tr(Lang::EN, english), english, "English menus must remain unchanged");
+    }
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 208, "the seven additional menu titles must be registered");
+}
+
+#[test]
+fn hebrew_new_document_dialog_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/new_document.rs");
+    for english in [
+        "RECENT",
+        "SAVED",
+        "BLANK DOCUMENT PRESETS",
+        "Presets you save with the Save Preset button appear here.",
+        "Documents you create appear here.",
+        "PRESET DETAILS",
+        "Document Name",
+        "Save Preset",
+        "Width",
+        "Units",
+        "Height",
+        "Orientation",
+        "Artboards",
+        "Bleed",
+        "Background Contents",
+        "Create",
+        "Save Document Preset",
+        "Preset Name",
+        "Cancel",
+        "More Settings",
+        "Number of Artboards:",
+        "Change to Right-to-Left Layout",
+        "Spacing:",
+        "Columns:",
+        "Done",
+        "Portrait",
+        "Landscape",
+        "Advanced Options",
+        "Color Mode",
+        "Raster Effects",
+        "Preview Mode",
+    ] {
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "new document control untranslated: {english}");
+    }
+    assert_eq!(tr(he, "Save Preset"), "שמירת הגדרה קבועה");
+    assert_eq!(tr(he, "Number of Artboards:"), "מספר משטחי יצירה:");
+    assert_eq!(tr(he, "Change to Right-to-Left Layout"), "מעבר לפריסה מימין לשמאל");
+    assert_eq!(tr(he, "File"), "קובץ", "existing File menu translation preserved");
+    let (_, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn hebrew_save_options_dialog_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/save_options.rs");
+    for english in [
+        "Save a Copy",
+        "Save as Template",
+        "Save As",
+        "Legacy .ai Options",
+        "{format} Options",
+        "Save each artboard to a separate file",
+        "Include Linked Files",
+        "Embed ICC Profiles",
+        "Create PDF-Compatible File",
+        "Use Compression",
+        "Include Editing Data for Other Apps",
+        "All",
+        "Range:",
+        "File Name:",
+        "Format:",
+        "A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.",
+        "Select All",
+        "Clear",
+        "{count} of {total} artboards",
+        "Check an artboard to save.",
+        "Version:",
+        "PDF-compatible",
+        "Legacy (version 7)",
+        "Transparent Images:",
+        "Flatten",
+        "Omit",
+        "Hidden Objects:",
+        "Hidden Layer",
+        "Make Visible",
+        "Text:",
+        "Editable",
+        "Outlines",
+        "VectorCraft {release} and later (version {n})",
+    ] {
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "save dialog label untranslated: {english}");
+    }
+    assert_eq!(tr(he, "Save As"), "שמירה בשם");
+    assert_eq!(tr(he, "File Name:"), "שם הקובץ:");
+    assert_eq!(tr(he, "Include Linked Files"), "הכללת קבצים מקושרים");
+    assert!(tr(he, "{format} Options").contains("{format}"));
+    let artboards = tr(he, "{count} of {total} artboards");
+    assert!(artboards.contains("{count}") && artboards.contains("{total}"));
+    let release = tr(he, "VectorCraft {release} and later (version {n})");
+    assert!(release.contains("{release}") && release.contains("{n}"));
+    let (_, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+/// Native Save PDF and PDF-security controls must be readable in Hebrew, while
+/// preserving their original English source identifiers and the fallback path.
+#[test]
+fn hebrew_save_pdf_options_and_security_controls_are_localized() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let source = include_str!("../dialogs/save_pdf.rs");
+    for english in [
+        "Save PDF",
+        "New PDF Preset",
+        "Edit PDF Preset",
+        "Preset name:",
+        "Standard:",
+        "Compatibility:",
+        "Preset:",
+        "Save Preset…",
+        "Save these settings as a preset",
+        "Save as preset:",
+        "Options",
+        "Preserve editing capabilities",
+        "Embed page thumbnails",
+        "Optimize for fast web view",
+        "View PDF after saving",
+        "Create PDF layers from layers and sublayers",
+        "Include non-printing layers",
+        "Description",
+        "Compression:",
+        "Quality:",
+        "Color images",
+        "Grayscale images",
+        "Monochrome images",
+        "Compress text and line art",
+        "Document open password",
+        "Require a password to open the document",
+        "Open password:",
+        "Permissions",
+        "Restrict printing, editing and other tasks",
+        "Permissions password:",
+        "Printing allowed:",
+        "Changes allowed:",
+        "Enable copying of text, images and other content",
+        "Enable text access for screen readers",
+        "Files of a PDF standard can't be password-protected.",
+    ] {
+        assert!(source.contains(&format!(r#"tl!("{english}")"#)), "source key missing: {english}");
+        assert_ne!(tr(he, english), english, "Save PDF control untranslated: {english}");
+    }
+    assert_eq!(tr(he, "Save PDF"), "שמירת PDF");
+    assert_eq!(tr(he, "Permissions"), "הרשאות");
+    assert_eq!(tr(he, "Document open password"), "סיסמה לפתיחת המסמך");
+    assert_eq!(tr(Lang::EN, "Save PDF"), "Save PDF");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 175, "new PDF rows absent");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
@@ -4278,4 +4481,450 @@ fn every_catalog_names_the_digits_menus_numeral_systems() {
         }
     }
     assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
+}
+
+/// Source-linked Hebrew labels for real Native Save Changes, Export As, and Import PDF dialogs.
+#[test]
+fn hebrew_native_save_export_import_dialogs_are_localized() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    for (filename, labels) in [
+        (
+            "../dialogs/save_changes.rs",
+            &["Do you want to save the changes you made to “{name}”?", "Your changes will be lost if you don't save them."][..],
+        ),
+        (
+            "../dialogs/export_as.rs",
+            &[
+                "Export As",
+                "Use Artboards",
+                "The plug-in writes the whole document.",
+                "One page per artboard.",
+                "One file per artboard: <name>-<artboard>.{ext}",
+                "The bounds of the visible art.",
+            ][..],
+        ),
+        (
+            "../dialogs/import_pdf.rs",
+            &[
+                "Place PDF",
+                "Import PDF",
+                "“{file}” is protected by a password.",
+                "First Page",
+                "Previous Page",
+                "of {count}",
+                "Next Page",
+                "Last Page",
+                "Crop To",
+                "Pages",
+                "e.g. 1-3, 5",
+                "Password",
+            ][..],
+        ),
+    ] {
+        let source = match filename {
+            "../dialogs/save_changes.rs" => include_str!("../dialogs/save_changes.rs"),
+            "../dialogs/export_as.rs" => include_str!("../dialogs/export_as.rs"),
+            _ => include_str!("../dialogs/import_pdf.rs"),
+        };
+        for english in labels {
+            assert!(source.contains(&format!(r#"tl!("{english}")"#)), "{filename}: missing source key {english}");
+            assert_ne!(tr(he, english), *english, "untranslated: {english}");
+            assert_eq!(tr(Lang::EN, english), *english, "English changed: {english}");
+        }
+    }
+    for english in ["Don't Save", "Export…"] {
+        let source = if english == "Don't Save" { include_str!("../dialogs/save_changes.rs") } else { include_str!("../dialogs/export_as.rs") };
+        assert!(source.contains(&format!(r#"Some("{english}")"#)));
+        assert_ne!(tr(he, english), english);
+    }
+    for key in [
+        "Do you want to save the changes you made to “{name}”?",
+        "One file per artboard: <name>-<artboard>.{ext}",
+        "“{file}” is protected by a password.",
+        "of {count}",
+    ] {
+        assert_eq!(placeholders(key), placeholders(tr(he, key)));
+    }
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rows.len() >= 201, "new Hebrew catalog rows absent");
+}
+
+/// The vector editing UI must show native Hebrew for common artboard, path, layer,
+/// fill, stroke and clipping controls, while preserving source command identifiers.
+#[test]
+fn hebrew_vector_artboard_path_and_color_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "invalid Hebrew VectorCraft TSV: {errors:?}");
+    assert_eq!(rows.len(), 681, "source-bound Hebrew catalog row count changed");
+    for key in [
+        "Artboard Tool",
+        "Artboard Options…",
+        "Anchor Point",
+        "Anchor Points",
+        "Delete Anchor Point",
+        "Direct Selection Tool",
+        "Clipping Mask",
+        "Clipping Masks",
+        "Compound Path",
+        "Convert To Outlines",
+        "Brush Libraries",
+        "Color Picker",
+        "Color Management",
+        "Crop Image",
+        "Delete Layer",
+        "Duplicate Artboard",
+        "Ellipse Tool",
+        "Fill & Stroke",
+        "Free Transform Tool",
+        "Gradient Tool",
+        "Group Selection Tool",
+        "Hide Guides",
+        "Make Live Paint",
+    ] {
+        let translated = tr(he, key);
+        assert_ne!(translated, key, "untranslated vector control: {key:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)), "{key:?}: no Hebrew letters");
+        assert_eq!(tr(Lang::EN, key), key, "source command text must remain English");
+    }
+    assert_eq!(tr(he, "Clipping Mask"), "מסכת חיתוך");
+    assert_eq!(tr(he, "Artboard Tool"), "כלי משטח יצירה");
+    assert_eq!(tr(he, "Color Picker"), "בורר צבע");
+    assert_eq!(tr(he, "Untranslated native path sentinel"), "Untranslated native path sentinel");
+}
+
+/// Font, character/paragraph and alignment panels are visible in Hebrew;
+/// original command IDs, file names and English tool names are untouched.
+#[test]
+fn hebrew_typography_font_path_and_alignment_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 917, "current source catalog count");
+    for source in [
+        "Font",
+        "Font Family",
+        "Font Size",
+        "Fonts in Document",
+        "Glyphs",
+        "Kerning",
+        "Leading",
+        "Tracking",
+        "Character Style",
+        "Paragraph Styles",
+        "Type Tool",
+        "Type on a Path",
+        "Type on a Path Options…",
+        "Align to Artboard",
+        "Align to Key Object",
+        "Show Hidden Characters",
+        "Text Wrap Options…",
+        "Stroke Weight",
+        "Snap to Grid",
+        "Pathfinder",
+        "Layer Options…",
+        "Show Rulers",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "untranslated native source key {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "English source changed");
+    }
+    assert_eq!(tr(he, "Font Size"), "גודל גופן");
+    assert_eq!(tr(he, "Type on a Path"), "טקסט על נתיב");
+    assert_eq!(tr(he, "Kerning"), "צימוד אותיות");
+    assert_eq!(tr(he, "Untranslated customer font name"), "Untranslated customer font name");
+}
+
+/// File/package/export and print dialogs must expose Hebrew source labels
+/// without modifying file paths, user data, English commands or plural rules.
+#[test]
+fn hebrew_document_export_print_and_missing_states_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 1209, "Hebrew source catalog record count");
+    for source in [
+        "Document Setup",
+        "Export Selection",
+        "Export PDF",
+        "Export for Screens",
+        "Export Assets",
+        "Open Document",
+        "Linked File Not Found",
+        "No document open",
+        "No fonts are available.",
+        "Missing Fonts",
+        "Package",
+        "Package created",
+        "Print Preview",
+        "Print Presets…",
+        "Printer Setup…",
+        "Save Document",
+        "Save PDF Preset",
+        "Save Recovery Data",
+        "Open Location after Export",
+        "Embed ICC Profile",
+        "New Layer…",
+        "Replace Font",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "native source UI still English: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "source English changed");
+    }
+    assert_eq!(tr(he, "Linked File Not Found"), "לא נמצא הקובץ המקושר");
+    assert_eq!(tr(he, "Print Preview"), "תצוגה מקדימה להדפסה");
+    assert_eq!(tr(he, "Package created"), "האריזה נוצרה");
+    assert_eq!(tr(he, "User library file name"), "User library file name");
+}
+
+/// Shape, transform, opacity and swatch controls must be presented in Hebrew
+/// while preserving original command names, English fallback and user data.
+#[test]
+fn hebrew_shape_transform_and_color_panels_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 1386, "Hebrew catalog source records");
+    for source in [
+        "Arrange",
+        "Blend Tool",
+        "Blending Mode",
+        "Curvature Tool",
+        "Distribute Objects:",
+        "Divide",
+        "Envelope Distort",
+        "Expand Appearance",
+        "Intersect",
+        "Merge Layers",
+        "Pathfinders:",
+        "Rotate View",
+        "Scale Strokes & Effects",
+        "Shape Builder",
+        "Shear Tool",
+        "Simplify…",
+        "Subtract",
+        "Transform Each…",
+        "Transform Panel",
+        "Ungroup",
+        "Unite",
+        "Color wheel",
+        "Opacity Mask",
+        "Recolor Artwork",
+        "Swatches",
+        "Transparency Grid",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "missing Hebrew visible UI: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "source English must be immutable");
+    }
+    assert_eq!(tr(he, "Shape Builder"), "בונה צורות");
+    assert_eq!(tr(he, "Opacity Mask"), "מסכת אטימות");
+    assert_eq!(tr(he, "Unite"), "איחוד");
+    assert_eq!(tr(he, "User-authored shape name"), "User-authored shape name");
+}
+
+/// Image tracing, perspective, artboard and history operations are visible in
+/// Hebrew without changing file paths, dynamic labels or source English IDs.
+#[test]
+fn hebrew_image_trace_perspective_and_artboard_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 1386, "current source-linked Hebrew rows");
+    for source in [
+        "Image Trace",
+        "Image Trace Presets",
+        "Pen Tool",
+        "Pencil Tool",
+        "Perspective Grid",
+        "Perspective Grid Tool",
+        "Perspective Grid Presets…",
+        "Zoom to Selection",
+        "Zoom with Mouse Wheel",
+        "Select an image to trace",
+        "Select by Link Status…",
+        "Asset Export Settings",
+        "Close Path",
+        "History Options…",
+        "New Document from State",
+        "Lock Guides",
+        "Show Rulers (⌘R)",
+        "Undo {name}",
+        "Redo {name}",
+        "Artboard {n} of {total}",
+        "Show {kind} Brushes",
+        "Show Perspective Grid",
+        "Document Health Check",
+        "File SHA-256: {hash}",
+        "Unlock Selected",
+        "Hide VectorCraft",
+        "Selection Tools",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "untranslated native source label: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "original English must stay unchanged");
+    }
+    assert_eq!(tr(he, "Image Trace"), "מעקב תמונה");
+    assert_eq!(tr(he, "Pen Tool"), "כלי עט");
+    assert_eq!(tr(he, "Perspective Grid"), "רשת פרספקטיבה");
+    assert_eq!(tr(he, "Locked"), "נעול");
+    assert_eq!(tr(he, "User canvas object name"), "User canvas object name");
+}
+
+#[test]
+fn hebrew_parallel_round3_selection_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Align to Pixel Grid", "יישור לרשת הפיקסלים"),
+        ("Clear Selection", "ניקוי הבחירה"),
+        ("Deselect", "ביטול הבחירה"),
+        ("Isolate Selected Object", "בידוד האובייקט שנבחר"),
+        ("Isolate Selected Group", "בידוד הקבוצה שנבחרה"),
+        ("Copy Selected Style", "העתקת הסגנון שנבחר"),
+        ("Connect Selected End Points", "חיבור נקודות הקצה שנבחרו"),
+        ("Flip Along Horizontal Axis", "היפוך לאורך הציר האופקי"),
+        ("Flip Along Vertical Axis", "היפוך לאורך הציר האנכי"),
+        ("Free Transform", "שינוי צורה חופשי"),
+    ] {
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
+    }
+}
+
+#[test]
+fn hebrew_parallel_round3_typography_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Add Fonts", "הוספת גופנים"),
+        ("Baseline Shift", "הסטת קו בסיס"),
+        ("Font Family:", "משפחת גופנים:"),
+        ("Font Style:", "סגנון גופן:"),
+        ("Find Font", "חיפוש גופן"),
+        ("First Line Indent:", "כניסת שורה ראשונה:"),
+        ("Break Text into Lines", "פיצול טקסט לשורות"),
+        ("Break Text into Words", "פיצול טקסט למילים"),
+        ("Character Color", "צבע תו"),
+        (
+            "Left-to-Right Paragraph Direction",
+            "כיוון פסקה משמאל לימין",
+        ),
+    ] {
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
+    }
+}
+
+#[test]
+fn hebrew_parallel_round3_files_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        (
+            "Export All Open Documents as PDF",
+            "ייצוא כל המסמכים הפתוחים ל־PDF",
+        ),
+        (
+            "Export All Open Documents as SVG",
+            "ייצוא כל המסמכים הפתוחים ל־SVG",
+        ),
+        ("Go to Artboard", "מעבר למשטח עבודה"),
+        (
+            "Couldn't save recovery data: {e}",
+            "לא ניתן לשמור נתוני שחזור: \u{2068}{e}\u{2069}",
+        ),
+        ("Cancel Export", "ביטול הייצוא"),
+        ("No artboards match.", "לא נמצאו משטחי עבודה תואמים."),
+        ("No importer plug-ins installed", "לא מותקנים תוספים לייבוא"),
+        ("Next Document", "המסמך הבא"),
+        ("Next Artboard", "משטח העבודה הבא"),
+        ("Find Linked Files", "איתור קבצים מקושרים"),
+    ] {
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
+    }
+}
+
+#[test]
+fn hebrew_parallel_round5_view_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Hide Gradient Annotator", "הסתרת סימוני מעבר הצבע"),
+        ("Hide Print Tiling", "הסתרת חלוקת ההדפסה לאריחים"),
+        ("Hide Slices", "הסתרת פרוסות"),
+        ("Hide Template", "הסתרת התבנית"),
+        ("Hide Thumbnail", "הסתרת תמונה ממוזערת"),
+        ("Hide Thumbnails", "הסתרת תמונות ממוזערות"),
+        ("Hide Video Rulers", "הסתרת סרגלי וידאו"),
+        ("More Align options", "אפשרויות יישור נוספות"),
+        ("Reset Rotate View", "איפוס סיבוב התצוגה"),
+        ("Rearrange All Artboards", "סידור מחדש של כל משטחי העבודה"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
+    }
+}
+
+#[test]
+fn hebrew_parallel_round5_color_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Apply Fill to Stroke", "החלת המילוי על קו המתאר"),
+        ("Apply Stroke to Fill", "החלת קו המתאר על המילוי"),
+        ("Apply Last Color", "החלת הצבע האחרון"),
+        ("Apply Last Gradient", "החלת מעבר הצבע האחרון"),
+        ("Enable Opacity Mask", "הפעלת מסכת אטימות"),
+        ("Disable Opacity Mask", "השבתת מסכת אטימות"),
+        ("Make Opacity Mask", "יצירת מסכת אטימות"),
+        ("Copy Color Value (Hex)", "העתקת ערך צבע (HEX)"),
+        ("Fill Tint", "גוון מילוי"),
+        ("Auto Color", "צביעה אוטומטית"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
+    }
+}
+
+#[test]
+fn hebrew_parallel_round5_files_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Default Printer", "מדפסת ברירת המחדל"),
+        ("Include Artboard Fill", "הכללת מילוי משטח העבודה"),
+        (
+            "Include Document Thumbnails",
+            "הכללת תמונות ממוזערות של המסמך",
+        ),
+        ("Import Shortcut Set", "ייבוא ערכת קיצורי מקשים"),
+        (
+            "Open a document to preview its pages",
+            "פתחו מסמך כדי להציג תצוגה מקדימה של עמודיו",
+        ),
+        (
+            "Open a document to see its history.",
+            "פתחו מסמך כדי להציג את ההיסטוריה שלו.",
+        ),
+        (
+            "Open a document to see its swatches.",
+            "פתחו מסמך כדי להציג את דוגמיות הצבע שלו.",
+        ),
+        (
+            "Open a document to see its graphic styles.",
+            "פתחו מסמך כדי להציג את הסגנונות הגרפיים שלו.",
+        ),
+        ("Export Type:", "סוג ייצוא:"),
+        ("All printer's marks", "כל סימני הדפוס"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
+    }
 }

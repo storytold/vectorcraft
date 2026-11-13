@@ -243,6 +243,34 @@ fn a_document_reopens_at_its_saved_view() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// The Native open/save path must not lose Hebrew characters or the LTR filename suffix.
+/// The file is written to disk and reopened, rather than only testing a path formatter.
+#[test]
+fn native_save_and_reopen_preserves_hebrew_mixed_direction_filename() {
+    let d = dir("hebrew-filename");
+    let file_name = "פרויקט-עיצוב_Studio-42.vectorcraft";
+    let path_buf = d.join(file_name);
+    let path = path_buf.to_string_lossy().into_owned();
+    let mut app = app();
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    rect(&mut app);
+    let original_nodes = objects(&app);
+    app.run("file.saveAs", json!({"path": path.clone()})).unwrap();
+    assert!(path_buf.is_file(), "Native Save As must write the Hebrew filename");
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
+    assert!(!app.session.active().unwrap().is_dirty());
+    let before = std::fs::read(&path_buf).unwrap();
+    assert!(!before.is_empty(), "saved document must have nonempty bytes");
+
+    app.run("file.close", json!({})).unwrap();
+    io::open_path(&mut app, &path).unwrap();
+    assert_eq!(objects(&app), original_nodes, "reopened document retains its artwork");
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
+    assert!(!app.session.active().unwrap().is_dirty());
+    assert_eq!(std::fs::read(&path_buf).unwrap(), before, "reopening must not rewrite the file");
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn a_saved_ai_file_reopens_on_the_artboard_active_when_saved() {
     let d = dir("ai-artboard");

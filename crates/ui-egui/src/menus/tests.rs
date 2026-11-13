@@ -90,6 +90,40 @@ fn the_bar_starts_at_file() {
 }
 
 #[test]
+fn hebrew_in_window_menu_titles_mirror_while_english_stays_ltr() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let mut positions = |language: crate::i18n::Lang| {
+        crate::i18n::set_current(language);
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            menu_bar(&mut app, ui);
+        });
+        fn texts(s: &egui::Shape, found: &mut Vec<(String, f32)>) {
+            match s {
+                egui::Shape::Text(t) => found.push((t.galley.text().to_string(), t.pos.x)),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, found)),
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut found));
+        out.textures_delta.clear();
+        found
+    };
+    let en = positions(crate::i18n::Lang::EN);
+    let x = |labels: &[(String, f32)], name: &str| -> f32 {
+        labels.iter().find(|(s, _)| s == name).unwrap_or_else(|| panic!("missing menu title {name}: {labels:?}")).1
+    };
+    assert!(x(&en, "File") < x(&en, "Help"), "English menu order must stay LTR");
+    let he = positions(crate::i18n::Lang::from_code("he").unwrap());
+    assert!(x(&he, "קובץ") > x(&he, "עזרה"), "Hebrew File menu must appear to the right of Help");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+}
+
+#[test]
 fn hovering_another_title_switches_the_open_menu() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let ctx = egui::Context::default();
