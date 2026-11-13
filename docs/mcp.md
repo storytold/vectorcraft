@@ -6647,7 +6647,8 @@ swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Fr
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
-stops of a gradient with a stop above opacity 0, at a tint above 0, and every grayscale image colorized with one, by
+stops of a gradient with a stop above opacity 0, at a tint above 0, leaving out fills and strokes at an opacity of 0,
+and every grayscale image colorized with one, by
 the same rules as `patternObjects`, with the spot colors it uses; a process
 color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
