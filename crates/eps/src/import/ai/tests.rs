@@ -4387,6 +4387,16 @@ fn legacy_line_breaking_and_japanese_layout_rules_are_warned_once() {
     assert_eq!(art_texts(&r.doc)[0].plain_text(), "Hi");
 }
 
+/// `TG`, `Xu` and `Tu` with missing or non-numeric operands set nothing, so they give no warning.
+#[test]
+fn legacy_line_breaking_and_japanese_layout_rules_with_bad_operands_are_not_warned() {
+    for attrs in ["TG", "(a) TG", "1 120 150 Xu", "0 1 (a) 150 Xu", "Tu", "0 1 120 (a) Tu"] {
+        let r = legacy_read(&point_type(attrs, "a"));
+        assert!(r.warnings.is_empty(), "{attrs}: {:?}", r.warnings);
+        assert_eq!(art_texts(&r.doc)[0].plain_text(), "a", "{attrs}");
+    }
+}
+
 /// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
 /// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
 /// `text.setFormat` takes.

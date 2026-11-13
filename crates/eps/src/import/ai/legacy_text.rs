@@ -751,9 +751,10 @@ impl Reader<'_> {
                     _ => {}
                 }
             }
-            // `linebreak TG` and `prop cjkLayout cjkRoman cjkCjk Xu` (`Tu` the same, §22.6).
-            "TG" => st.line_breaking = true,
-            "Xu" | "Tu" => st.japanese_layout = true,
+            // `linebreak TG` and `prop cjkLayout cjkRoman cjkCjk Xu` (`Tu` the same, §22.6). Either
+            // one is set only when its operands are numbers.
+            "TG" => st.line_breaking |= n0.is_some(),
+            "Xu" | "Tu" => st.japanese_layout |= nums::<4>(vals).is_some(),
             _ => {}
         }
     }
