@@ -100,7 +100,10 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
-                    if let Err(e) = symbol_synced {
+                    // Pattern editing: the tile art can't paint its own pattern.
+                    let tile_ok =
+                        if st.doc.pattern_edit.is_some() { cmd::patterncmds::refuse_tile_painting_itself(&before, &st.doc) } else { Ok(()) };
+                    if let Err(e) = symbol_synced.and(tile_ok) {
                         Err(e)
                     } else if st.doc.too_deep(Some(&before)) {
                         // Deeper trees overflow the stack of what walks them.
