@@ -5448,6 +5448,7 @@ lighting	Light	Lumière
 @msg	unknown parameter `{path}`; it takes: {keys}	paramètre inconnu `{path}` ; il accepte : {keys}
 @msg	missing `{path}`	`{path}` manquant
 @msg	`{path}` must be {expected}, not {got}	`{path}` doit être {expected}, pas {got}
+@msg	`{path}` is nested too deeply	`{path}` est imbriqué trop profondément
 	1 Layer	1 calque
 	1 bit	1 bit
 	16 Colors	16 couleurs

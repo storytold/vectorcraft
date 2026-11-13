@@ -5349,6 +5349,7 @@ lighting	Light	Ljus
 @msg	unknown parameter `{path}`; it takes: {keys}	okänd parameter `{path}`; den tar: {keys}
 @msg	missing `{path}`	`{path}` saknas
 @msg	`{path}` must be {expected}, not {got}	`{path}` måste vara {expected}, inte {got}
+@msg	`{path}` is nested too deeply	`{path}` är för djupt kapslat
 	1 Layer	1 lager
 	1 bit	1 bit
 	16 Colors	16 färger

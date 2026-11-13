@@ -5717,6 +5717,7 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{path}`; it takes: {keys}	nieznany parametr `{path}`; przyjmuje: {keys}
 @msg	missing `{path}`	brak `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` musi być {expected}, a nie {got}
+@msg	`{path}` is nested too deeply	`{path}` jest zagnieżdżone zbyt głęboko
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP

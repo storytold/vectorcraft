@@ -5537,6 +5537,7 @@ lighting	Light	ライト
 @msg	unknown parameter `{path}`; it takes: {keys}	`{path}` は不明なパラメーターです。使えるパラメーター: {keys}
 @msg	missing `{path}`	`{path}` が指定されていません
 @msg	`{path}` must be {expected}, not {got}	`{path}` は {expected} にしてください ({got} は使えません)
+@msg	`{path}` is nested too deeply	`{path}` の入れ子が深すぎます
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG、JPEG、WebP、TIFF、BMP のいずれの画像でもありません

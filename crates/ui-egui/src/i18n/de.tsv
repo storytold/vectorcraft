@@ -5453,6 +5453,7 @@ lighting	Light	Licht
 @msg	unknown parameter `{path}`; it takes: {keys}	unbekannter Parameter `{path}`; akzeptiert werden: {keys}
 @msg	missing `{path}`	`{path}` fehlt
 @msg	`{path}` must be {expected}, not {got}	`{path}` muss {expected} sein, nicht {got}
+@msg	`{path}` is nested too deeply	`{path}` ist zu tief verschachtelt
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: kein PNG-, JPEG-, WebP-, TIFF- oder BMP-Bild

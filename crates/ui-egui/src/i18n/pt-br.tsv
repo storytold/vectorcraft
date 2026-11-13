@@ -4672,6 +4672,7 @@ axis	Both	Ambos
 @msg	unknown parameter `{path}`; it takes: {keys}	parâmetro desconhecido `{path}`; aceita: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` deve ser {expected}, não {got}
+@msg	`{path}` is nested too deeply	`{path}` está aninhado com profundidade excessiva
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
 	Drawer menu	Menu da gaveta
 	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles

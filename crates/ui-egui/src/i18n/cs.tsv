@@ -5878,6 +5878,7 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{path}`; it takes: {keys}	neznámý parametr `{path}`; přijímá: {keys}
 @msg	missing `{path}`	chybí `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` musí být {expected}, nikoli {got}
+@msg	`{path}` is nested too deeply	`{path}` je vnořený příliš hluboko
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: není obraz PNG, JPEG, WebP, TIFF ani BMP

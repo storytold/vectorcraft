@@ -5583,6 +5583,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
 @msg	missing `{path}`	未提供 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 巢狀層級過深
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像

@@ -8228,6 +8228,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
 @msg	missing `{path}`	लापता `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
+@msg	`{path}` is nested too deeply	`{path}` बहुत गहराई तक नेस्ट किया गया है
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)

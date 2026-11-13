@@ -5456,6 +5456,7 @@ lighting	Light	광원
 @msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
 @msg	missing `{path}`	`{path}`이(가) 없습니다
 @msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
+@msg	`{path}` is nested too deeply	`{path}`이(가) 너무 깊게 중첩되어 있습니다
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다

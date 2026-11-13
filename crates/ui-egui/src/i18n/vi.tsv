@@ -5389,6 +5389,7 @@ theme	Appearance	Giao diện
 @msg	unknown parameter `{path}`; it takes: {keys}	tham số không xác định `{path}`; nhận: {keys}
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
+@msg	`{path}` is nested too deeply	`{path}` lồng nhau quá sâu
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
 @msg	Preferences imported.	Đã nhập tùy chọn.
 @msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
