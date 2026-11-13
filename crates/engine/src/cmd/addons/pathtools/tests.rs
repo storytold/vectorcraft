@@ -385,8 +385,13 @@ fn an_anchor_edit_makes_it_a_plain_path_and_transforms_keep_it_editable() {
     s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 6})).unwrap();
     assert_eq!((path(&s, id).anchor_count(), steps(&s)), (12, n + 1));
     assert!((shape_of(&s, id).unwrap().rotation + 30.0).abs() < 1e-6, "the turn stays");
-    // Stretched across its own axes (it is turned): skewed, so no longer.
+    // Stretched along its turned bounding box: still the shape, wider along its own axis.
     s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.width - 300.0).abs() < 1e-6 && (r.height - 200.0).abs() < 1e-6 && (r.rotation + 30.0).abs() < 1e-6, "{r:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Stretched across the page's axes (it is turned): skewed, so no longer.
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140], "basis": "page"})).unwrap();
     assert_eq!(shape_of(&s, id), None);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(shape_of(&s, id).is_some(), "undo brings it back");
