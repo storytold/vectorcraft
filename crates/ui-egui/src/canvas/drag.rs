@@ -405,7 +405,9 @@ fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool
     }
 }
 
-/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error. When an
+/// edit the tool committed or ran no longer fits in the action being recorded, the edit stays and
+/// the status bar names the limit ([`crate::panels::actions::after_journaled_edit`]).
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
@@ -426,6 +428,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     }
                 }
             }
+            crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
     }

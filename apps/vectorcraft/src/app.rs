@@ -108,7 +108,34 @@ impl eframe::App for App {
         self.app.start_pending_update();
         #[cfg(target_os = "macos")]
         super::mac_cursor::release();
+        #[cfg(not(any(target_os = "macos", windows)))]
+        hide_before_teardown(self.winit_window.as_deref());
         end_before_teardown(self.frames);
+    }
+}
+
+/// The main window as [`hide_before_teardown`] sees it.
+#[cfg(not(any(target_os = "macos", windows)))]
+pub(crate) trait QuittingWindow {
+    fn hide(&self);
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+impl QuittingWindow for winit::window::Window {
+    fn hide(&self) {
+        self.set_visible(false);
+    }
+}
+
+/// On Linux and the BSDs, hide the main window before eframe drops the app. Dropping the app waits
+/// up to [`vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT`] for the clipboard handles to let go, and
+/// the window would stay on screen for that time. The window is hidden, not closed: the Wayland
+/// clipboard reads text on the window's connection. winit hides X11 windows (XWayland included) and
+/// cannot hide a Wayland window.
+#[cfg(not(any(target_os = "macos", windows)))]
+pub(crate) fn hide_before_teardown<W: QuittingWindow + ?Sized>(window: Option<&W>) {
+    if let Some(window) = window {
+        window.hide();
     }
 }
 

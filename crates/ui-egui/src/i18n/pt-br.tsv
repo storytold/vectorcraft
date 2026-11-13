@@ -573,6 +573,8 @@ antiAlias	Sharp	Nítido
 	Convert to Artboards	Converter em Mesas de Trabalho
 	Convert to CMYK	Converter para CMYK
 	Convert to Grayscale	Converter para Escala de Cinza
+	Convert to Indexed Color	Converter para Cores Indexadas
+	Convert to Indexed Color…	Converter para Cores Indexadas…
 	Convert to RGB	Converter para RGB
 	Convert to Shape	Converter em Forma
 	Convert to sRGB	Converter para sRGB
@@ -1410,6 +1412,8 @@ antiAlias	Sharp	Nítido
 	Objects on Path Tool	Ferramenta Objetos no Caminho
 	Attach Objects on Path	Anexar Objetos ao Caminho
 	Expand Objects on Path	Expandir Objetos no Caminho
+	Detach	Desanexar
+	Detach Object from Path	Desanexar Objeto do Caminho
 	Release Live Paint	Liberar Pintura ao Vivo
 	Release Repeat	Liberar Repetição
 	Release Slice	Liberar Fatia
@@ -3808,6 +3812,9 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Não foi possível inserir {name}: o documento em que foi solto foi fechado
 @msg	Couldn't place {name}: the document it was placed in was closed	Não foi possível inserir {name}: o documento em que estava sendo inserido foi fechado
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Não foi possível inserir {name}: o documento em que foi solto foi revertido
+@msg	Couldn't place {name}: the document it was placed in was reverted	Não foi possível inserir {name}: o documento em que estava sendo inserido foi revertido
+@msg	Couldn't paste: the document it was pasted in was reverted	Não foi possível colar: o documento em que estava sendo colado foi revertido
 @msg	Couldn't read {name}: {e}	Não foi possível ler {name}: {e}
 @msg	Couldn't save recovery data: {e}	Não foi possível salvar os dados de recuperação: {e}
 @msg	Create Outlines: select text objects	Criar contornos: selecione objetos de texto
@@ -4224,6 +4231,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	os traçados contêm coordenadas inválidas
 @msg	paths: give at least one file	paths: informe pelo menos um arquivo
 @msg	replace: the object to replace was changed or deleted	replace: o objeto a ser substituído foi alterado ou excluído
+@msg	the document it was prepared for is no longer active	o documento para o qual foi preparado não está mais ativo
 @msg	pattern missing	padrão ausente
 @msg	patterns nested too deeply are filled with mid-grey	padrões aninhados com profundidade excessiva são preenchidos com cinza médio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve ser maior que 0 e no máximo 6400, não {p}
@@ -4259,6 +4267,7 @@ axis	Both	Ambos
 @msg	select a repeat	selecione uma repetição
 @msg	select an Intertwine group	selecione um grupo entrelaçado
 @msg	select an Objects on Path group	selecione um grupo de objetos no caminho
+@msg	choose the object to detach with its Select/Move widget	escolha o objeto a desanexar com o controle Selecionar/Mover dele
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	um caminho dentro de um caminho composto, mesclagem, envelope, repetição ou grupo entrelaçado não pode receber objetos
 @msg	a clipping path can't take objects	um caminho de recorte não pode receber objetos
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objetos dentro de uma mesclagem, envelope, repetição ou grupo entrelaçado não podem ser anexados a um caminho
@@ -5637,6 +5646,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto Contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tom em sentido horário
+	Hue Counterclockwise	Tom em sentido anti-horário
 	Relative Colorimetric	Colorimétrico Relativo
 	Absolute Colorimetric	Colorimétrico Absoluto
 	Exact	Exato
@@ -6222,7 +6233,7 @@ axis	Y Axis	Eixo Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a preenchimentos em gradiente (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a preenchimentos em gradiente (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve ser true ou false
-@msg	`method` must be classic or perceptual	`method` deve ser classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` deve ser classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` deve ser pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve ser um número inteiro de 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a gradientes lineares, radiais, cônicos e em losango
@@ -6465,6 +6476,7 @@ axis	Y Axis	Eixo Y
 	Continue	Continuar
 	Continue Action	Continuar Ação
 	Delete Action Step	Excluir Etapa da Ação
+	Move Action Step	Mover Etapa da Ação
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pressione Reproduzir Seleção Atual no painel Ações.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	nenhuma ação está aguardando em uma parada
@@ -6636,6 +6648,22 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+	Notched Ribbon	Fita Entalhada
+	Double Line	Linha Dupla
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Fita Listrada
+	Fine Nib	Pena Fina
+	Broad Nib	Pena Larga
+	Chisel	Cinzel
+	Round Pen	Pena Redonda
+	Pressure Pen	Pena de Pressão
+	Beads	Contas
+	Dash Dot	Traço-Ponto
+	Scallops	Festões
+	Stars	Estrelas
+	Triangles	Triângulos
+	Sparkles	Brilhos
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

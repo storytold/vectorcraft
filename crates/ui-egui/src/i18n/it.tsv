@@ -629,6 +629,8 @@ font-technology	Variable	Variabili
 	Convert to Artboards	Converti in tavole da disegno
 	Convert to CMYK	Converti in CMYK
 	Convert to Grayscale	Converti in scala di grigi
+	Convert to Indexed Color	Converti in colore indicizzato
+	Convert to Indexed Color…	Converti in colore indicizzato…
 	Convert To Outlines	Converti in contorni
 	Convert To Point Type	Converti in testo per punti
 	Convert to RGB	Converti in RGB
@@ -1623,6 +1625,8 @@ file-filter	Templates	Modelli
 	Objects on Path Tool	Strumento Oggetti su tracciato
 	Attach Objects on Path	Aggancia oggetti al tracciato
 	Expand Objects on Path	Espandi oggetti su tracciato
+	Detach	Sgancia
+	Detach Object from Path	Sgancia oggetto dal tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -4391,6 +4395,9 @@ axis	Both	Entrambi
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato chiuso
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossibile inserire {name}: il documento in cui veniva inserito è stato chiuso
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato ripristinato
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossibile inserire {name}: il documento in cui veniva inserito è stato ripristinato
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossibile incollare: il documento in cui si incollava è stato ripristinato
 @msg	Couldn't read {name}: {e}	Impossibile leggere {name}: {e}
 @msg	Couldn't save recovery data: {e}	Impossibile salvare i dati di recupero: {e}
 @msg	Create Outlines: select text objects	Crea contorni: seleziona oggetti di testo
@@ -4820,6 +4827,7 @@ axis	Both	Entrambi
 @msg	paths contain invalid coordinates	i tracciati contengono coordinate non valide
 @msg	paths: give at least one file	paths: specifica almeno un file
 @msg	replace: the object to replace was changed or deleted	replace: l’oggetto da sostituire è stato modificato o eliminato
+@msg	the document it was prepared for is no longer active	il documento per cui è stato preparato non è più attivo
 @msg	pattern missing	motivo mancante
 @msg	patterns nested too deeply are filled with mid-grey	i motivi annidati troppo in profondità vengono riempiti di grigio medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve essere maggiore di 0 e al massimo 6400, non {p}
@@ -4855,6 +4863,7 @@ axis	Both	Entrambi
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
+@msg	choose the object to detach with its Select/Move widget	scegli l’oggetto da sganciare con il suo controllo Seleziona/Sposta
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracciato all'interno di un tracciato composto, una fusione, un involucro, una ripetizione o un gruppo intrecciato non può ricevere oggetti
 @msg	a clipping path can't take objects	un tracciato di ritaglio non può ricevere oggetti
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	gli oggetti all'interno di una fusione, un involucro, una ripetizione o un gruppo intrecciato non possono essere agganciati a un tracciato
@@ -5933,7 +5942,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` si applica ai riempimenti sfumati (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
-@msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+	Hue Clockwise	Tonalità in senso orario
+	Hue Counterclockwise	Tonalità in senso antiorario
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` deve essere classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
@@ -6176,6 +6187,7 @@ axis	Y Axis	Asse Y
 	Continue	Continua
 	Continue Action	Continua azione
 	Delete Action Step	Elimina passaggio dell’azione
+	Move Action Step	Sposta passaggio dell’azione
 	Press Play Current Selection in the Actions panel to go on.	Per continuare, premi Esegui selezione corrente nel pannello Azioni.
 	Stop: {message}	Interruzione: {message}
 @msg	no action is waiting at a stop	nessuna azione è in attesa a un'interruzione
@@ -6347,6 +6359,22 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+	Notched Ribbon	Nastro dentellato
+	Double Line	Doppia linea
+	Wave	Onda
+	Teardrop	Goccia
+	Striped Ribbon	Nastro a righe
+	Fine Nib	Pennino fine
+	Broad Nib	Pennino largo
+	Chisel	Scalpello
+	Round Pen	Penna tonda
+	Pressure Pen	Penna a pressione
+	Beads	Perline
+	Dash Dot	Tratto-punto
+	Scallops	Smerlo
+	Stars	Stelle
+	Triangles	Triangoli
+	Sparkles	Scintille
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)

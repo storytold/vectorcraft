@@ -591,6 +591,8 @@ font-technology	Variable	可變
 	Convert to Artboards	轉換為工作區域
 	Convert to CMYK	轉換為 CMYK
 	Convert to Grayscale	轉換為灰階
+	Convert to Indexed Color	轉換為索引色彩
+	Convert to Indexed Color…	轉換為索引色彩…
 	Convert To Outlines	轉換為外框
 	Convert To Point Type	轉換為點狀文字
 	Convert to RGB	轉換為 RGB
@@ -1588,6 +1590,8 @@ file-filter	Templates	範本
 	Objects on Path Tool	路徑上的物件工具
 	Attach Objects on Path	附加路徑上的物件
 	Expand Objects on Path	展開路徑上的物件
+	Detach	分離
+	Detach Object from Path	將物件從路徑分離
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -2021,6 +2025,7 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	choose the object to detach with its Select/Move widget	請用物件的「選取/移動」控制項選取要分離的物件
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
 @msg	a clipping path can't take objects	剪裁路徑無法附加物件
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑
@@ -2611,10 +2616,14 @@ file-filter	Templates	範本
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
 @msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
+@msg	Couldn't place {name}: the document it was dropped on was reverted	無法置入 {name}：放置它的文件已回復
+@msg	Couldn't place {name}: the document it was placed in was reverted	無法置入 {name}：要置入的文件已回復
+@msg	Couldn't paste: the document it was pasted in was reverted	無法貼上：要貼上的文件已回復
 @msg	no files to place	沒有要置入的檔案
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
 @msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
+@msg	the document it was prepared for is no longer active	為其準備的文件已不再處於使用中
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
@@ -5952,7 +5961,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
-@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+	Hue Clockwise	色相順時針
+	Hue Counterclockwise	色相逆時針
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必須是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
@@ -6195,6 +6206,7 @@ axis	Y Axis	Y 軸
 	Continue	繼續
 	Continue Action	繼續動作
 	Delete Action Step	刪除動作步驟
+	Move Action Step	移動動作步驟
 	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	沒有動作在停止處等待
@@ -6366,6 +6378,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口緞帶
+	Double Line	雙線
+	Wave	波浪
+	Teardrop	淚滴
+	Striped Ribbon	條紋緞帶
+	Fine Nib	細筆尖
+	Broad Nib	寬筆尖
+	Chisel	鑿形
+	Round Pen	圓頭筆
+	Pressure Pen	壓感筆
+	Beads	珠串
+	Dash Dot	點劃線
+	Scallops	扇貝邊
+	Stars	星形
+	Triangles	三角形
+	Sparkles	閃光
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
