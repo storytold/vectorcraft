@@ -1021,6 +1021,7 @@ font-technology	Variable	Variabla
 	Enable text access for screen readers	Ge skärmläsare åtkomst till text
 	Enable Touch Gestures	Aktivera pekgester
 	Switch Selection and Drawing Modes	Växla mellan markerings- och ritläge
+	Select Last Selection Tool	Välj det senaste markeringsverktyget
 	Enable Touch Workspace	Aktivera arbetslayout för pekskärm
 	Encoding	Kodning
 	Encoding:	Kodning:

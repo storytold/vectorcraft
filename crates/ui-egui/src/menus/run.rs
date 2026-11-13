@@ -677,13 +677,15 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
-            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => {
-                app.select_tool(&t);
-                Ok(json!({"tool": app.session.tool_id()}))
-            }
+            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => app.try_select_tool(&t).map(|()| json!({"tool": app.session.tool_id()})),
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        "tool.selectLastSelection" => {
+            let id = app.session.last_selection_tool();
+            let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
+            switched.map(|()| json!({"tool": app.session.tool_id()}))
+        }
         crate::touch::TOGGLE_MODE => Ok(crate::touch::toggle_mode(app)),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),

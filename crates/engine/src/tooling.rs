@@ -120,6 +120,12 @@ impl Session {
         self.tool.id()
     }
 
+    /// The selection tool chosen last (Selection, Direct Selection or Group Selection), which
+    /// `tool.selectLastSelection` chooses: the Selection tool until one is chosen.
+    pub fn last_selection_tool(&self) -> &'static str {
+        self.last_selection_tool.unwrap_or("selection")
+    }
+
     /// How many times switching or closing documents, or replacing the active one (File › Revert),
     /// has started the tool afresh, also inside a `command.batch` or `action.batch`. A frontend
     /// compares it before and after a command.

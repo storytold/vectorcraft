@@ -1013,6 +1013,7 @@ font-technology	Variable	Değişken
 	Enable text access for screen readers	Ekran okuyucular için metin erişimini etkinleştirin
 	Enable Touch Gestures	Dokunma Hareketlerini Etkinleştir
 	Switch Selection and Drawing Modes	Seçim ve Çizim Modları Arasında Geçiş Yap
+	Select Last Selection Tool	Son Kullanılan Seçim Aracını Seç
 	Enable Touch Workspace	Dokunmatik Çalışma Alanını Etkinleştir
 	Encoding	Kodlama
 	Encoding:	Kodlama:

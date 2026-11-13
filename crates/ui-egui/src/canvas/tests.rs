@@ -1051,6 +1051,37 @@ fn switch_selection_and_drawing_modes_command() {
     }
 }
 
+/// Select Last Selection Tool: the Selection tool before any selection tool is chosen, then the
+/// one of Selection, Direct Selection and Group Selection chosen last; Magic Wand and Lasso don't
+/// count. Running it again keeps that tool, and it changes no art, selection or undo history.
+#[test]
+fn select_last_selection_tool_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let last = |app: &mut VectorcraftApp| app.run("tool.selectLastSelection", json!({})).unwrap();
+    let state = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        (st.doc.clone(), st.selection.clone(), st.history.undo.len())
+    };
+    app.select_tool("pen");
+    let before = state(&app);
+    assert_eq!((last(&mut app), app.session.tool_id()), (json!({"tool": "selection"}), "selection"), "none chosen yet: Selection");
+    for id in ["directSelection", "groupSelection", "selection"] {
+        app.select_tool(id);
+        app.select_tool("pen");
+        assert_eq!(last(&mut app), json!({"tool": id}), "{id}");
+    }
+    app.select_tool("directSelection");
+    for other in ["magicWand", "lasso", "rectangle", "hand"] {
+        app.select_tool(other);
+    }
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "Magic Wand and Lasso are not remembered");
+    assert_eq!(last(&mut app), json!({"tool": "directSelection"}), "again: the same tool, no cycling");
+    assert!(state(&app) == before, "no art, selection or undo step changes");
+}
+
 /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
 /// labels are interface text.
 #[test]

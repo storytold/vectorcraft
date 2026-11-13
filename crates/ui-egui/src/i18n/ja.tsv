@@ -1642,6 +1642,7 @@ antiAlias	Sharp	シャープ
 	Enable Rubber Band for	ラバーバンドを有効にする対象
 	Enable Touch Gestures	タッチジェスチャーを有効にする
 	Switch Selection and Drawing Modes	選択モードと描画モードを切り替え
+	Select Last Selection Tool	最後に使用した選択ツールに切り替え
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする

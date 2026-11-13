@@ -1486,6 +1486,7 @@ antiAlias	Sharp	Nítid
 	Enable text access for screen readers	Activa l’accés al text per als lectors de pantalla
 	Enable Touch Gestures	Activa els gestos tàctils
 	Switch Selection and Drawing Modes	Canvia entre els modes de selecció i de dibuix
+	Select Last Selection Tool	Tria l'última eina de selecció
 	Enable Touch Workspace	Activa l’espai de treball tàctil
 	Encoding	Codificació
 	Encoding and writing the file…	S’està codificant i escrivint el fitxer…

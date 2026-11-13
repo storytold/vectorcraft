@@ -3096,3 +3096,27 @@ fn artboard_navigation_commands_can_be_given_keys() {
     frame(&mut app, press(Key::PageUp));
     assert_eq!(at(&app), 1, "Page Up goes to the previous artboard");
 }
+
+/// Ctrl+` (Windows and Linux) chooses the selection tool chosen last; macOS gives the command no
+/// default key. Edit › Keyboard Shortcuts lists it, and a chord the user assigns runs it.
+#[test]
+fn ctrl_backtick_chooses_the_last_selection_tool() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let mac = crate::keymap::platform().is_mac();
+    let list = app.run("shortcuts.list", json!({ "query": "tool.selectLastSelection" })).unwrap();
+    let listed = list.as_array().unwrap().iter().find(|e| e["id"] == "tool.selectLastSelection").cloned();
+    let listed = listed.unwrap_or_else(|| panic!("listed: {list}"));
+    assert_eq!(listed["label"], "Select Last Selection Tool");
+    assert_eq!(listed["default"], if mac { json!(null) } else { json!("Cmd+~") });
+    app.select_tool("directSelection");
+    app.select_tool("pen");
+    frame(&mut app, press(Key::Backtick, cmd()));
+    assert_eq!(app.session.tool_id(), if mac { "pen" } else { "directSelection" });
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool.selectLastSelection", "Alt+~");
+    app.select_tool("groupSelection");
+    app.select_tool("rectangle");
+    frame(&mut app, press(Key::Backtick, Modifiers::ALT));
+    assert_eq!(app.session.tool_id(), "groupSelection", "the user's chord");
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}

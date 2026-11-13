@@ -1040,6 +1040,7 @@ font-technology	Variable	Вариативные
 	Enable text access for screen readers	Разрешить доступ к тексту для программ чтения с экрана
 	Enable Touch Gestures	Включить сенсорные жесты
 	Switch Selection and Drawing Modes	Переключить режимы выделения и рисования
+	Select Last Selection Tool	Выбрать последний инструмент выделения
 	Enable Touch Workspace	Включить сенсорную рабочую среду
 	Encoding	Кодировка
 	Encoding:	Кодировка:

@@ -1045,6 +1045,7 @@ font-technology	Variable	Варіативні
 	Enable text access for screen readers	Дозволити доступ до тексту для програм читання з екрану
 	Enable Touch Gestures	Увімкнути сенсорні жести
 	Switch Selection and Drawing Modes	Перемкнути режими виділення та малювання
+	Select Last Selection Tool	Вибрати останній інструмент виділення
 	Enable Touch Workspace	Включити сенсорне робоче середовище
 	Encoding	Кодування
 	Encoding:	Кодування:

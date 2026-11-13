@@ -152,12 +152,23 @@ pub fn sync(ui: &UiState) {
     crate::custom_toolbars::sync(ui);
 }
 
-/// Registry default shortcut of a command (engine or UI command).
+/// Registry default shortcut of a command (engine or UI command) on [`crate::keymap::platform`].
 pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
+    default_command_shortcut_on(id, crate::keymap::platform())
+}
+
+/// Registry default shortcut of a command on platform `p`.
+fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return c.shortcut;
     }
-    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.2).filter(|s| !s.is_empty())
+    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| ui_command_default(c.0, c.2, p)).filter(|s| !s.is_empty())
+}
+
+/// The default shortcut `sc` of UI command `id` on platform `p` (empty for none). Select Last
+/// Selection Tool has none on macOS, which takes Cmd+` to switch between an app's windows.
+pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft_keymap::Platform) -> &'static str {
+    if id == "tool.selectLastSelection" && p.is_mac() { "" } else { sc }
 }
 
 /// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
@@ -184,15 +195,21 @@ pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
     ("openType", "Cmd+Alt+Shift+T"),
 ];
 
-/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
+/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id) on
+/// [`crate::keymap::platform`].
 pub fn default_of(key: &str) -> Option<&'static str> {
+    default_on(key, crate::keymap::platform())
+}
+
+/// Default shortcut of an entry key on platform `p`.
+pub(crate) fn default_on(key: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(t) = key.strip_prefix("tool:") {
         return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
     }
-    if let Some(p) = key.strip_prefix("panel:") {
-        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == p).map(|(_, sc)| *sc);
+    if let Some(panel) = key.strip_prefix("panel:") {
+        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == panel).map(|(_, sc)| *sc);
     }
-    default_command_shortcut(key)
+    default_command_shortcut_on(key, p)
 }
 
 /// Effective shortcut of an entry key, honouring the user's overrides.

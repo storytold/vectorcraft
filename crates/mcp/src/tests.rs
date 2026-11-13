@@ -1797,6 +1797,30 @@ fn e_during_a_marquee_gesture_selects_only_the_objects_inside() {
     assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool.select", "{r}");
 }
 
+/// `run_command tool.selectLastSelection` headless: the Selection tool before any selection tool
+/// is chosen, then the selection tool chosen last; Magic Wand doesn't count. `list_commands`
+/// lists it as a command the headless backend runs.
+#[test]
+fn select_last_selection_tool_runs_headless() {
+    let mut s = server();
+    let mut id = 0;
+    let mut run = |s: &mut Server, command: &str, params: Value| {
+        id += 1;
+        let r = call(s, id, "run_command", json!({"command": command, "params": params}));
+        assert_eq!(r["isError"], false, "{command}: {r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()
+    };
+    run(&mut s, "tool.select", json!({"tool": "pen"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "selection"}));
+    run(&mut s, "tool.select", json!({"tool": "groupSelection"}));
+    run(&mut s, "tool.select", json!({"tool": "magicWand"}));
+    assert_eq!(run(&mut s, "tool.selectLastSelection", json!({})), json!({"tool": "groupSelection"}));
+    let r = call(&mut s, 99, "list_commands", json!({"filter": "selectLastSelection"}));
+    let v: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    let listed = v["commands"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned().unwrap_or_default();
+    assert_eq!((listed["host"].clone(), listed["label"].clone()), (json!(true), json!("Select Last Selection Tool")), "{v}");
+}
+
 /// `press_key {key: "c"}` and `{key: "f"}` while an arc is being dragged go to the Arc tool, and
 /// the release draws one arc. With nothing dragged, C is a shortcut again.
 #[test]

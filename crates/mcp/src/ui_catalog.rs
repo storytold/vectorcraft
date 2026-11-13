@@ -772,6 +772,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
     (
+        "tool.selectLastSelection",
+        "Select Last Selection Tool",
+        "Cmd+~",
+        "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "",
