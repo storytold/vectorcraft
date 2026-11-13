@@ -8733,6 +8733,18 @@ theme	Appearance	अपीयरेंस
 	Show where this tool is	दिखाएँ कि यह टूल कहाँ है
 @msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
 @msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
+	View more	और देखें
+	Finish tutorial	ट्यूटोरियल पूरा करें
+	Next Up	आगे
+	You finished the last tutorial in this skill.	आपने इस कौशल का अंतिम ट्यूटोरियल पूरा कर लिया है।
+	Back to skills	कौशल पर वापस जाएँ
+	Open Tutorial Sample	ट्यूटोरियल का नमूना खोलें
+	Finish Tutorial	ट्यूटोरियल पूरा करें
+	Next Tutorial	अगला ट्यूटोरियल
+@msg	tutorial `{id}` has no practice sample	ट्यूटोरियल `{id}` का कोई अभ्यास नमूना नहीं है
+@msg	open the practice sample of `{id}` first (see learn.openSample)	पहले `{id}` का अभ्यास नमूना खोलें (learn.openSample देखें)
+@msg	finish `{id}` first (see learn.finish)	पहले `{id}` पूरा करें (learn.finish देखें)
+@msg	`{id}` is the last tutorial in its skill	`{id}` अपने कौशल का अंतिम ट्यूटोरियल है
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें

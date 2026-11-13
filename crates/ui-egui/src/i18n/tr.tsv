@@ -7296,6 +7296,18 @@ breakText	Glyphs	Glifler
 	Show where this tool is	Bu aracın nerede olduğunu göster
 @msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
+	View more	Daha fazlasını gör
+	Finish tutorial	Öğreticiyi bitir
+	Next Up	Sıradaki
+	You finished the last tutorial in this skill.	Bu becerinin son öğreticisini bitirdiniz.
+	Back to skills	Becerilere dön
+	Open Tutorial Sample	Öğretici Örneğini Aç
+	Finish Tutorial	Öğreticiyi Bitir
+	Next Tutorial	Sonraki Öğretici
+@msg	tutorial `{id}` has no practice sample	`{id}` öğreticisinin alıştırma örneği yok
+@msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	önce `{id}` öğreticisini bitirin (bkz. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}`, becerisinin son öğreticisidir
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile

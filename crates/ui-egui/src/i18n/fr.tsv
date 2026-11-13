@@ -7335,6 +7335,18 @@ breakText	Glyphs	Glyphes
 	Show where this tool is	Afficher l'emplacement de cet outil
 @msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
+	View more	Voir plus
+	Finish tutorial	Terminer le tutoriel
+	Next Up	À suivre
+	You finished the last tutorial in this skill.	Vous avez terminé le dernier tutoriel de cette compétence.
+	Back to skills	Retour aux compétences
+	Open Tutorial Sample	Ouvrir le fichier d’exercice du tutoriel
+	Finish Tutorial	Terminer le tutoriel
+	Next Tutorial	Tutoriel suivant
+@msg	tutorial `{id}` has no practice sample	le tutoriel `{id}` n’a pas de fichier d’exercice
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	terminez d’abord `{id}` (voir learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` est le dernier tutoriel de sa compétence
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés

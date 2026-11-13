@@ -7340,6 +7340,18 @@ breakText	Glyphs	Glyfy
 	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+	View more	Zobrazit více
+	Finish tutorial	Dokončit výukový kurz
+	Next Up	Další
+	You finished the last tutorial in this skill.	Dokončili jste poslední výukový kurz této dovednosti.
+	Back to skills	Zpět na dovednosti
+	Open Tutorial Sample	Otevřít ukázku výukového kurzu
+	Finish Tutorial	Dokončit výukový kurz
+	Next Tutorial	Další výukový kurz
+@msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
+@msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty

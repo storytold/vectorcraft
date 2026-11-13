@@ -6760,6 +6760,18 @@ breakText	Glyphs	Glyffer
 	Show where this tool is	Vis, hvor dette værktøj er
 @msg	missing `tutorial` (see learn.list)	`tutorial` mangler (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ukendt vejledning `{id}` (se learn.list)
+	View more	Vis mere
+	Finish tutorial	Afslut vejledning
+	Next Up	Næste
+	You finished the last tutorial in this skill.	Du har afsluttet den sidste vejledning i denne færdighed.
+	Back to skills	Tilbage til færdigheder
+	Open Tutorial Sample	Åbn eksempel til vejledning
+	Finish Tutorial	Afslut vejledning
+	Next Tutorial	Næste vejledning
+@msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` er den sidste vejledning i sin færdighed
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter

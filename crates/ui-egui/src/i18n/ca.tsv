@@ -7321,6 +7321,18 @@ breakText	Glyphs	Glifs
 	Show where this tool is	Mostra on és aquesta eina
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+	View more	Mostra’n més
+	Finish tutorial	Acaba el tutorial
+	Next Up	A continuació
+	You finished the last tutorial in this skill.	Heu acabat l’últim tutorial d’aquesta habilitat.
+	Back to skills	Torna a les habilitats
+	Open Tutorial Sample	Obre la mostra del tutorial
+	Finish Tutorial	Acaba el tutorial
+	Next Tutorial	Tutorial següent
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` és l’últim tutorial de la seva habilitat
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats

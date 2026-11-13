@@ -7429,6 +7429,18 @@ shape	Open	Открытый
 	Show where this tool is	Показать, где находится этот инструмент
 @msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
+	View more	Подробнее
+	Finish tutorial	Завершить урок
+	Next Up	Далее
+	You finished the last tutorial in this skill.	Вы завершили последний урок этого навыка.
+	Back to skills	Назад к навыкам
+	Open Tutorial Sample	Открыть пример урока
+	Finish Tutorial	Завершить урок
+	Next Tutorial	Следующий урок
+@msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
+@msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` является последним уроком своего навыка
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты

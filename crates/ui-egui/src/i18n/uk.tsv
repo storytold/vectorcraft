@@ -6949,6 +6949,18 @@ breakText	Glyphs	Гліфи
 	Show where this tool is	Показати, де розташований цей інструмент
 @msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
+	View more	Докладніше
+	Finish tutorial	Завершити урок
+	Next Up	Далі
+	You finished the last tutorial in this skill.	Ви завершили останній урок цієї навички.
+	Back to skills	Назад до навичок
+	Open Tutorial Sample	Відкрити приклад уроку
+	Finish Tutorial	Завершити урок
+	Next Tutorial	Наступний урок
+@msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
+@msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
