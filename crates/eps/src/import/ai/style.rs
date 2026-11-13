@@ -780,6 +780,8 @@ struct OnePaint {
     fill_unread: bool,
     /// Its last stroke paint is a pattern (`P`) or may be a gradient (`Bg`).
     stroke_unread: bool,
+    /// Inside a gradient instance (`flag Bb` … `BB`): whether it paints the stroke (flag 1).
+    instance: Option<bool>,
 }
 
 impl OnePaint {
@@ -788,8 +790,15 @@ impl OnePaint {
             "Xd" => self.xd |= vals.iter().filter_map(V::num).count() >= 2,
             "p" => self.fill_unread = true,
             "P" => self.stroke_unread = true,
-            // Read as either one's, since its operands don't say which it paints.
-            "Bg" => (self.fill_unread, self.stroke_unread) = (true, true),
+            // The flag of the instance it is in says which one it paints, as an object's does
+            // (`Instance::begin` in `paint.rs`); outside one it is read as either one's.
+            "Bb" => self.instance = Some(vals.iter().filter_map(V::num).next_back() == Some(1.0)),
+            "BB" => self.instance = None,
+            "Bg" => match self.instance {
+                Some(true) => self.stroke_unread = true,
+                Some(false) => self.fill_unread = true,
+                None => (self.fill_unread, self.stroke_unread) = (true, true),
+            },
             // A color replaces what came before it; one that isn't read leaves none.
             "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
                 (self.fill_unread, self.paint.fill) = (false, None);

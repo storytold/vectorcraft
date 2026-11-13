@@ -1541,6 +1541,9 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     }
     let solid_stroke = one("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n0 1 1 0 K\n1 0 Xd\n");
     assert!(matches!(solid_stroke, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
+    // A gradient instance's flag says which one it paints: a stroke gradient leaves a solid fill read.
+    let fill_and_stroke_gradient = one("0 0 1 0 k\n1 Bb\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 1 Xd\n");
+    assert!(matches!(fill_and_stroke_gradient, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Fill(_)])));
     // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a gradient stroke after a solid one, a paint
     // turned on with no color.
     for paint in [
@@ -1548,7 +1551,7 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
         "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n1 0 Xd\n".to_string(),
-        "0 R\n0 1 1 0 K\nBb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n".to_string(),
+        "0 R\n0 1 1 0 K\n1 Bb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n".to_string(),
         "0 0 1 0 k\n1 1 Xd\n".to_string(),
     ] {
         assert_eq!(one(&paint), Some(Err(())), "{paint}");
