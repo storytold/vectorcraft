@@ -901,3 +901,91 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
     assert!(matches!(tile(&app), Color::Cmyk { .. }));
 }
+
+/// One headless frame of the panel menu; returns its painted labels.
+fn menu_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// Click the panel menu's item `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let labels = menu_frame(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label} in the menu"));
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    menu_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+    menu_frame(app, ctx, vec![button(false)]);
+}
+
+/// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
+/// checked by default, applied colors still join the list while the row is hidden, and the Color
+/// panel keeps its own row and setting.
+#[test]
+fn show_recent_colors_hides_and_shows_the_swatches_row() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = context();
+    let menu_ctx = context();
+    // The first recent chip, if the panel draws one (the second frame's answer counts, since egui
+    // also answers for a widget the frame before drew).
+    let chip = |app: &mut VectorcraftApp| {
+        let mut chip = None;
+        for _ in 0..2 {
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
+                show(app, ui);
+                chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect);
+            });
+            out.textures_delta.clear();
+        }
+        chip
+    };
+    assert!(chip(&mut app).is_some(), "the row shows by default");
+    click_menu_item(&mut app, &menu_ctx, "✓ Show Recent Colors");
+    assert!(!app.ui.swatches_show_recent_colors);
+    assert!(chip(&mut app).is_none(), "unchecked, the row is hidden");
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(app.session.recent_colors.first().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "colors still join the list");
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["recentColors"], true, "the Color panel keeps its setting");
+    click_menu_item(&mut app, &menu_ctx, "Show Recent Colors");
+    assert!(chip(&mut app).is_some(), "checking the item shows the row again");
+    // The app keeps it with the preferences; a saved value that isn't true or false reads as on.
+    let saved = |v: Value| {
+        let mut prefs = serde_json::to_value(crate::UiState::default()).unwrap();
+        prefs["swatches_show_recent_colors"] = v;
+        serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
+    };
+    assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}
+
+/// In a panel made taller the swatch list fills the space above the panel's footer instead of
+/// scrolling inside 150 or 200 pt (#1638); outside a sized panel it keeps those heights.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    for i in 0..60 {
+        app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
+    }
+    let ctx = context();
+    set_pstate(&ctx, "swatch-view", View::SmallList);
+    // The clip rect of the first swatch row's name: the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 760.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| show(&mut app, ui));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Tone 00")).map(|c| c.clip_rect);
+        }
+        clip.expect("the first new swatch's row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
+}

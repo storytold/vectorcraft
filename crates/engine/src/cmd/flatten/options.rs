@@ -155,7 +155,8 @@ impl FlattenOptions {
     /// the paint ([`vectorcraft_doc::ImageBlob::takes_colorize`]) never counts: it draws uncolorized.
     pub(crate) fn counts_colorize(&self, d: &Document, n: &Node) -> bool {
         let NodeKind::Image(im) = &n.kind else { return true };
-        let blob = d.image_blob(im);
+        let shown = d.shown_image(n, im);
+        let blob = d.image_blob(&shown);
         if blob.is_some_and(|b| !b.takes_colorize()) {
             return false;
         }

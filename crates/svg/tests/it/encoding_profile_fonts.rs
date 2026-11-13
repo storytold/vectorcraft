@@ -321,7 +321,7 @@ fn font_licences_are_respected() {
     let size = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf").len();
     assert!(fonts[0].2.len() + 64 >= size, "embedded whole: {} of {size} bytes", fonts[0].2.len());
     assert!(o.warnings.iter().any(|w| w.contains("Sealed Sans 3") && w.contains("doesn't allow embedding")), "{:?}", o.warnings);
-    assert!(o.warnings.iter().any(|w| w.contains("Wholed Sans 3") && w.contains("whole")), "{:?}", o.warnings);
+    assert!(o.setting_notes.iter().any(|w| w.contains("Wholed Sans 3") && w.contains("whole")), "{:?}", o.setting_notes);
 }
 
 proptest::proptest! {

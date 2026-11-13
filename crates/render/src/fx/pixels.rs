@@ -1,4 +1,4 @@
-use super::bounds::{apply_carrying, item_effects};
+use super::bounds::{apply_carrying, item_effects, item_raster};
 use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, ItemGeom, KeptImage, Made, Reads, feather_outline};
 #[cfg(test)]
 use super::raster::RASTERIZED;
@@ -677,7 +677,7 @@ impl Renderer {
             });
             let item = carried.as_ref().and_then(Option::as_ref).unwrap_or(item);
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
-            let rfx = effects::raster_effects(item_effects(item));
+            let rfx = effects::raster_effects(&item_raster(n, item));
             if rfx.is_empty() {
                 self.paint_item(ctx, f, n, item, ig, rule, ib);
                 continue;

@@ -911,6 +911,10 @@ font-technology	Variable	Változó
 	Corner Color	Sarokszín
 	Contiguous	Összefüggő
 	Each Channel	Minden csatorna
+	Color Mask…	Színmaszk…
+	Color Mask	Színmaszk
+	Remove Color Mask	Színmaszk eltávolítása
+	Apply Color Mask	Színmaszk alkalmazása
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -2106,6 +2110,7 @@ file-filter	Templates	Sablonok
 	Include Hidden Layers	Rejtett rétegek hozzáadása
 	Include Linked Files	Csatolt fájlok hozzáadása
 	Include Metadata	Metaadatok hozzáadása
+	Include Variable Data	Változóadatok hozzáadása
 	Include non-printing layers	Nem nyomtatandó rétegek hozzáadása
 	Write pages longer than 200 in at full size in points	200 in-nél hosszabb oldalak írása teljes méretben, pontban
 	Include SVG Code	SVG-kód hozzáadása
@@ -2983,6 +2988,7 @@ file-filter	Templates	Sablonok
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
+	missing from the Brushes panel	hiányzik az Ecsetek panelről
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -3169,6 +3175,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	Insert Aki Left	Aki beszúrása balra
+	Insert Aki Right	Aki beszúrása jobbra
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -3435,9 +3443,15 @@ mark-style	Japanese	Japán
 	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
 	Reset Profiles	Profilok visszaállítása
+	Arrowheads	Nyílhegyek
+	Edit Arrowheads	Nyílhegyek szerkesztése
+	Edit Arrowheads…	Nyílhegyek szerkesztése…
+	Reload Arrowheads	Nyílhegyek újratöltése
 	Reset Rotate View	Nézetforgatás visszaállítása
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
+	Color Theme Picker	Színtéma-választó
+	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
 	Reset to default	Alapérték visszaállítása
 	Reset to Default	Alapérték visszaállítása
 	Reset to Defaults	Alapértékek visszaállítása
@@ -3511,6 +3525,7 @@ mark-style	Japanese	Japán
 	Roman Baseline	Latin alapvonal
 	Roman Hanging Punctuation	Latin függő írásjelek
 	Korean Line Break Anywhere	Koreai sortörés bárhol
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
 	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
@@ -3928,6 +3943,7 @@ mark-style	Japanese	Japán
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
 	Show Recent Colors	Legutóbbi színek megjelenítése
+	Toggle RGB Percent	RGB százalékos megjelenítésének váltása
 	Show Original Path	Eredeti útvonal megjelenítése
 	Open this dialog with these settings next time	Legközelebb ez a párbeszédablak nyíljon meg ezekkel a beállításokkal
 	Auto-Simplify	Automatikus egyszerűsítés
@@ -5008,6 +5024,85 @@ imageTrace	Outline	Körvonal
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
+@msg	Script file access denied	A parancsfájl elérése megtagadva
+@msg	Script file exceeds 8 MiB	A parancsfájl nagyobb 8 MiB-nál
+@msg	Script file is not open	A parancsfájl nincs megnyitva
+@msg	Script file cannot be decoded	A parancsfájl nem dekódolható
+@msg	Script file is not a regular file	A parancsfájl nem normál fájl
+@msg	Script file does not exist	A parancsfájl nem létezik
+@msg	Script file could not be read	A parancsfájlt nem sikerült beolvasni
+@msg	Script folder has more than 2,048 entries	A parancsfájlmappában 2048-nál több bejegyzés van
+@msg	Script file open mode must be r, w, e or a	A parancsfájl megnyitási módja r, w, e vagy a lehet
+@msg	Script file writing is not available	A parancsfájlok írása nem érhető el
+@msg	Script file dialogs are not available	A parancsfájlok fájlpárbeszédpanelei nem érhetők el
+@msg	Script files cannot be opened in another application	A parancsfájlok nem nyithatók meg másik alkalmazásban
+@msg	Script file access is unavailable on the web	A parancsfájlok elérése a weben nem érhető el
+@msg	Script has 256 files open	A parancsfájlnak 256 megnyitott fájlja van
+@msg	Script file path exceeds 32,767 characters	A parancsfájl elérési útja hosszabb 32 767 karakternél
+@msg	Script folder mask takes too many steps to match	A parancsfájlmappa maszkjának illesztése túl sok lépést igényel
+@msg	the script opened more file data than one run may open (32 MiB)	a parancsfájl több fájladatot nyitott meg, mint amennyit egy futás megnyithat (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: egy pozíciót és egy módot vár
+@msg	vc.run: give a command id, as a string	vc.run: adjon meg egy parancsazonosítót karakterláncként
+@msg	vc.run: takes a command id and an object of parameters	vc.run: egy parancsazonosítót és egy paraméterobjektumot vár
+@msg	vc.run: the parameters must be an object	vc.run: a paramétereknek objektumnak kell lenniük
+@msg	vc.run: the result{place} is too large for a script	vc.run: az eredmény{place} túl nagy egy parancsfájlhoz
+@msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
+@msg	{name}: {e} (thrown)	{name}: {e} (kivétel)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (korlát)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: {line}. sor, {column}. oszlop: {e} (korlát)
+@msg	{name}: {e} (limit)	{name}: {e} (korlát)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (szintaktikai hiba)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: {line}. sor, {column}. oszlop: {e} (szintaktikai hiba)
+@msg	{name}: {e} (syntax)	{name}: {e} (szintaktikai hiba)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (leállítva)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: {line}. sor, {column}. oszlop: {e} (leállítva)
+@msg	{name}: {e} (stopped)	{name}: {e} (leállítva)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (belső hiba)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: {line}. sor, {column}. oszlop: {e} (belső hiba)
+@msg	{name}: {e} (internal)	{name}: {e} (belső hiba)
+@msg	{e} (these files stay written: {paths})	{e} (ezek a fájlok írva maradnak: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: adjon meg egy nevet karakterláncként
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: adjon meg egy területi beállítást, például "en" vagy "de_DE", vagy null értéket a felületéhez
+@msg	$.localize: give true or false	$.localize: adjon meg true vagy false értéket
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: csak a 512, amely bekapcsolja a honosítást, vagy a 0 állítható be
+@msg	$.flags: give a number	$.flags: adjon meg egy számot
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: a parancsfájlok itt csak UTF-8 kódolást olvasnak és írnak
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: adja meg egy kódolás nevét karakterláncként
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: a memória-gyorsítótár mérete nem állítható be
+@msg	$.setenv: give a value, as a string	$.setenv: adjon meg egy értéket karakterláncként
+@msg	$.setenv: only {_1} can be set	$.setenv: csak ezek állíthatók be: {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: egy érték legfeljebb {MAX_ENV_BYTES} betűből, számjegyből és _ . - @ jelből áll
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: adjon meg 0 és {MAX_SLEEP_MS} közötti ezredmásodperc-számot
+@msg	$.sleep: give a number of milliseconds	$.sleep: adjon meg egy ezredmásodperc-számot
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: egy futás nem várakozhat beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
+@msg	$.bp: scripts here have no debugger	$.bp: a parancsfájlokhoz itt nincs hibakereső
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: a parancsfájlok még nem tudnak párbeszédpanelt megjeleníteni
+@msg	{name}: give a message	{name}: adjon meg egy üzenetet
+@msg	{name}: give the text the field starts with	{name}: adja meg a szöveget, amellyel a mező kezdődik
+@msg	{name}: the message is longer than 16 KiB	{name}: az üzenet hosszabb 16 KiB-nál
+@msg	{name}: the title is longer than 256 bytes	{name}: a cím hosszabb 256 bájtnál
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: a szöveg, amellyel a mező kezdődik, hosszabb 16 KiB-nál
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
+@msg	vc.document{place} is too large for a script	a vc.document{place} túl nagy egy parancsfájlhoz
+@msg	vc.log: the log of this run is full	vc.log: ennek a futásnak a naplója megtelt
+@msg	this function's script run has ended	ennek a függvénynek a parancsfájl-futása véget ért
+@msg	the script made more host calls than one run may make	a parancsfájl több gazdahívást végzett, mint amennyit egy futás végezhet
+@msg	the script passed more data to and from commands than one run may pass	a parancsfájl több adatot adott át a parancsoknak és a parancsoktól, mint amennyit egy futás átadhat
+@msg	the script added more objects and data to the documents than one run may add	a parancsfájl több objektumot és adatot adott a dokumentumokhoz, mint amennyit egy futás hozzáadhat
+@msg	{what}: the object is not a File or a Folder	{what}: az objektum nem File és nem Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: a darabszámnak véges számnak kell lennie, 0 vagy több
+@msg	File.seek: the position must be a finite number	File.seek: a pozíciónak véges számnak kell lennie
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: a mód csak 0, 1 vagy 2 lehet
+@msg	script file is compiled: {value}	a parancsfájl le van fordítva: {value}
+@msg	`name` must be the name of a script engine	a `name` értékének egy parancsfájlmotor nevének kell lennie
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	a fő parancsfájlmotor minden futáshoz új, és sosem marad meg, ezért nem dobható el
+@msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
@@ -5448,6 +5543,10 @@ imageTrace	Outline	Körvonal
 @msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
 @msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
 @msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
+@msg	select an image with a color mask	jelölj ki egy színmaszkos képet
+@msg	the color mask's settings are out of range	a színmaszk beállításai a tartományon kívül esnek
+@msg	a CMYK image can't take a color mask	CMYK képre nem tehető színmaszk
+@msg	the mask would hide every pixel	a maszk minden képpontot elrejtene
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)
@@ -5621,6 +5720,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
+@msg	panels can't be shown in Presentation Mode	bemutató módban a panelek nem jeleníthetők meg
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
 @msg	Preferences imported.	A beállítások importálva.
 @msg	not a preferences file: {e}	nem beállításfájl: {e}
@@ -5769,6 +5869,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
 @msg	missing `{path}`	hiányzik: `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
+@msg	`{path}` is nested too deeply	`{path}` túl mélyen van egymásba ágyazva
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
@@ -6108,6 +6209,110 @@ axis	Y Axis	Y tengely
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	a `name` 1-64 nyomtatható karakter legyen
+@msg	`version`, `description` or `author` is too long	a `version`, a `description` vagy az `author` túl hosszú
+@msg	`warnings` must be a list of strings	a `warnings` karakterláncok listája legyen
+@msg	`{k}` must be one of {_1}	`{k}`: ezek egyike kell: {_1}
+@msg	`{k}` must be {what}	`{k}`: {what} kell
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
+@msg	can't encode the input	a bemenet nem kódolható
+@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
+@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	export `{name}`: {e}	`{name}` modulexport: {e}
+@msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	érvénytelen azonosító: {_1}; 1-64 karaktert használj ezekből: A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	érvénytelen paraméternév: {k}
+@msg	manifest is not UTF-8	a leíró nem UTF-8 kódolású
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	a leíró túl hosszú (korlát: {MAX_MANIFEST_BYTES} bájt)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	a leíró mérete {_1} bájt (korlát: {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	a modul mérete {_1} bájt (korlát: {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	jóváhagyás szükséges: ezt kéri: {0}, amit a felhasználó a külön telepítéskor ad meg
+@msg	not JSON: {e}	nem JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	nem WebAssembly bináris (hiányzik a \0asm fejléc)
+@msg	parameter `{k}`: {what}	`{k}` paraméter: {what}
+@msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
+@msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
+@msg	the module must export its linear memory as `memory`	a modulnak `memory` néven kell exportálnia a lineáris memóriáját
+@msg	the objects to change are no longer in the document	a módosítandó objektumok már nincsenek a dokumentumban
+@msg	the runtime panicked	a futtatókörnyezet összeomlott
+@msg	unexpected host trap	váratlan megszakítás (trap) a gazdaprogramban
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	a vc_abi_version {v} értéket adott vissza; ez a gazdaprogram a(z) {ABI_VERSION}. verziót valósítja meg
+@msg	vc_alloc returned 0 (out of memory)	a vc_alloc 0-t adott vissza (elfogyott a memória)
+@msg	vc_alloc returned a block outside memory	a vc_alloc a memórián kívüli blokkot adott vissza
+@msg	vc_run returned error code {packed}	a vc_run {packed} hibakódot adott vissza
+@msg	{_1} is not a file	nem fájl: {_1}
+@msg	{_1} is {_2} bytes (limit {_3})	{_1}: {_2} bájt (korlát: {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektum (korlát: {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what}: a memórián kívülre mutat
+@msg	`angle` must be a number	`angle`: szám kell
+@msg	`aspect` must be from 0.01 to 100	`aspect`: 0.01 és 100 közötti érték kell
+@msg	`cap` must be "butt", "round" or "square"	`cap`: "butt", "round" vagy "square" kell
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule`: "nonzero" vagy "evenodd" kell
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl`: legfeljebb {MAX_HELP_URL} bájtos https:// cím kell
+@msg	`help` must be 1-{MAX_HELP} printable characters	a `help` 1-{MAX_HELP} nyomtatható karakter legyen
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id`: 1-{MAX_EFFECT_ID} bájtos effektusazonosító kell
+@msg	`id` must be the id of an input object	`id`: egy bemeneti objektum azonosítója kell
+@msg	`join` must be "miter", "round" or "bevel"	`join`: "miter", "round" vagy "bevel" kell
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	a `label` és a `group` 1-{MAX_LABEL} nyomtatható karakter legyen
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	a `maxLength` 1-{MAX_TEXT} legyen, és az alapértelmezett érték ne legyen hosszabb
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	a `minItems` és a `maxItems` 0-{MAX_LIST} legyen, a `maxItems` legalább 1, és az alapértelmezett érték ennyi elemből álljon
+@msg	`name` must be a string	`name`: karakterlánc kell
+@msg	`opacity` must be a number	`opacity`: szám kell
+@msg	`type` must be "path" or "compound"	`type`: "path" vagy "compound" kell
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	a `unit` 1-{MAX_UNIT} nyomtatható karakter legyen
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	a `visibleWhen` 1-{MAX_CONDITION_VALUES} értéket adjon meg ehhez: `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	a `visibleWhen` ezt nevezi meg: `{other}`, de ez nem az ennél korábban megadott paraméterek egyike
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	a `visibleWhen` legfeljebb {MAX_CONDITIONS} paramétert nevezhet meg
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	a `visibleWhen` a(z) `{other}` értékeit veszi át, egy jelölőnégyzetét vagy egy választásét
+@msg	`visible` must be true or false	`visible`: true vagy false kell
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}`: {_1} és {_2} közötti szám kell
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}`: legfeljebb {MAX_ITEMS} elemű tömb kell
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	a szín alapértelmezett értéke színobjektum vagy hexadecimális karakterlánc legyen, például "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	színobjektum vagy hexadecimális karakterlánc, például "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	a szabad formájú színátmenet legfeljebb {MAX_ITEMS} pontot és vonalat tartalmaz
+@msg	a freeform gradient line names a point it doesn't have	a szabad formájú színátmenet egyik vonala olyan pontot nevez meg, amely nincs benne
+@msg	a gradient needs 1-{MAX_ITEMS} stops	a színátmenethez 1-{MAX_ITEMS} színátmenet-pont kell
+@msg	a list of numbers	számok listája
+@msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
+@msg	a new object needs a `path`	az új objektumhoz `path` kell
+@msg	a number	szám
+@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
+@msg	a read-only object was left out	kimaradt egy írásvédett objektum
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a string	karakterlánc
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
+@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
+@msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
+@msg	an object must be a JSON object	az objektum JSON-objektum legyen
+@msg	bad range	érvénytelen tartomány
+@msg	choices must be 1-64 non-empty, printable strings	a választási lehetőségek 1-64 nem üres, nyomtatható karakterlánc legyenek
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	tartományon kívüli koordináta (korlát: ±{MAX_COORD} pt)
+@msg	default is not one of the options	az alapértelmezett érték nem a lehetőségek egyike
+@msg	each piece needs a `path`	minden darabhoz `path` kell
+@msg	is listed twice	kétszer szerepel
+@msg	pattern transform out of range	tartományon kívüli mintázat-transzformáció
+@msg	read-only field '{field}' changed	megváltozott a(z) '{field}' írásvédett mező
+@msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
+@msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
+@msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	the output	a kimenet
+@msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
+@msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
+@msg	true or false	true vagy false
+@msg	unknown key `{k}`; the keys here are {_1}	ismeretlen kulcs: `{k}`; az itt használható kulcsok: {_1}
+@msg	{_1} is listed twice	{_1} kétszer szerepel
+@msg	{_1} is not the id of an input object	{_1} nem egy bemeneti objektum azonosítója
+@msg	{_1} is read-only	{_1} írásvédett
+@msg	{what} must be from {lo} to {hi}	{what}: {lo} és {hi} közötti érték kell
+@msg	a color component	színösszetevő
+@msg	a plate	nyomólemez
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}
@@ -6210,6 +6415,16 @@ axis	Y Axis	Y tengely
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
+	Select Object…	Objektum kijelölése…
+	Select Object	Objektum kijelölése
+	Set Selection	Kijelölés beállítása
+	Case Sensitive	Kis- és nagybetűk megkülönböztetése
+	Whole Word	Teljes szó
+	Select Object: {note}	Objektum kijelölése: {note}
+	Select by Note	Kijelölés megjegyzés szerint
+@msg	the note is empty	a megjegyzés üres
+@msg	the note is longer than 1,024 bytes	a megjegyzés hosszabb 1024 bájtnál
+@msg	no object that can be selected has a note matching “{query}”	egyetlen kijelölhető objektum megjegyzése sem egyezik ezzel: „{query}”
 	Menu Item:	Menüelem:
 	No menu item matches.	Egy menüelem sem egyezik.
 	Several menu items match. Choose one from the list.	Több menüelem is egyezik. Válasszon egyet a listából.
@@ -6996,6 +7211,8 @@ breakText	Glyphs	Glifák
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Rövid gyakorlati oktatóanyagok az alapvető eszközökhöz, készségek szerint csoportosítva. Válasszon egy készséget az oktatóanyagai megtekintéséhez.
 	List Tutorials	Oktatóanyagok listázása
 	Show Tutorial	Oktatóanyag megjelenítése
+	Show Tool Location	Eszköz helyének megjelenítése
+	Show where this tool is	Megmutatja, hol van ez az eszköz
 @msg	missing `tutorial` (see learn.list)	hiányzik: `tutorial` (lásd: learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ismeretlen oktatóanyag: `{id}` (lásd: learn.list)
 

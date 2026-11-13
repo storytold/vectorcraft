@@ -15,6 +15,7 @@ pub(super) struct SysFallback {
 /// The most characters searched for in the font files themselves between two scans of the font
 /// folders. Real text has a few uncovered characters; a document of thousands of distinct
 /// private-use code points would reread the whole catalog for each.
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) const MAX_FILE_SEARCHES: u32 = 1024;
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows

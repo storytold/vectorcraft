@@ -1011,6 +1011,10 @@ antiAlias	Sharp	Nítid
 	Corner Color	Color de les cantonades
 	Contiguous	Contigu
 	Each Channel	Cada canal
+	Color Mask…	Màscara de color…
+	Color Mask	Màscara de color
+	Remove Color Mask	Elimina la màscara de color
+	Apply Color Mask	Aplica la màscara de color
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -2110,6 +2114,7 @@ digits	Malayalam	Malaiàlam
 	Include Hidden Layers	Inclou les capes ocultes
 	Include Linked Files	Inclou els fitxers enllaçats
 	Include Metadata	Inclou les metadades
+	Include Variable Data	Inclou les dades de variables
 	Include non-printing layers	Inclou les capes no imprimibles
 	Write pages longer than 200 in at full size in points	Escriu les pàgines de més de 200 in a mida real, en punts
 	Include Objects On Canvas	Inclou els objectes del llenç
@@ -3089,6 +3094,7 @@ digits	Malayalam	Malaiàlam
 	Pattern	Motiu
 	Pattern Borders	Vores de motiu
 	Pattern Brush	Pinzell de motiu
+	missing from the Brushes panel	absent del tauler Pinzells
 	Pattern Brush Options	Opcions del pinzell de motiu
 	Pattern Editing	Edició de motius
 	Pattern Options	Opcions del motiu
@@ -3303,6 +3309,8 @@ digits	Malayalam	Malaiàlam
 	Proof Setup	Configuració de prova
 	Properties	Propietats
 	Proportional Metrics	Mètriques proporcionals
+	Insert Aki Left	Insereix aki a l'esquerra
+	Insert Aki Right	Insereix aki a la dreta
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -3588,9 +3596,15 @@ digits	Malayalam	Malaiàlam
 	No settings found	No s'ha trobat cap paràmetre
 	Reset Printing and Proofing	Restableix impressió i prova
 	Reset Profiles	Restableix els perfils
+	Arrowheads	Puntes de fletxa
+	Edit Arrowheads	Edita les puntes de fletxa
+	Edit Arrowheads…	Edita les puntes de fletxa…
+	Reload Arrowheads	Torna a carregar les puntes de fletxa
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
+	Color Theme Picker	Selector de tema de colors
+	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
 	Reset to Default	Restableix el valor predeterminat
 	Reset to default	Restableix el valor predeterminat
 	Reset to Defaults	Restableix els valors predeterminats
@@ -3669,6 +3683,7 @@ digits	Malayalam	Malaiàlam
 	Roman Baseline	Línia de base romana
 	Roman Hanging Punctuation	Puntuació penjant romana
 	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
 	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
@@ -4026,6 +4041,16 @@ digits	Malayalam	Malaiàlam
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
+	Select Object…	Selecciona un objecte…
+	Select Object	Selecciona un objecte
+	Set Selection	Defineix la selecció
+	Case Sensitive	Distingeix majúscules i minúscules
+	Whole Word	Paraula sencera
+	Select Object: {note}	Selecciona un objecte: {note}
+	Select by Note	Selecciona per nota
+@msg	the note is empty	la nota és buida
+@msg	the note is longer than 1,024 bytes	la nota té més de 1.024 bytes
+@msg	no object that can be selected has a note matching “{query}”	cap objecte que es pugui seleccionar té una nota que coincideixi amb “{query}”
 	Menu Item:	Element de menú:
 	No menu item matches.	Cap element de menú no coincideix.
 	Several menu items match. Choose one from the list.	Coincideixen diversos elements de menú. Trieu-ne un de la llista.
@@ -4166,6 +4191,7 @@ digits	Malayalam	Malaiàlam
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
 	Show Recent Colors	Mostra els colors recents
+	Toggle RGB Percent	Commuta RGB en percentatge
 	Show Original Path	Mostra el traçat original
 	Show Package	Mostra el paquet
 	Show Panel	Mostra el panell
@@ -5366,6 +5392,85 @@ digits	Malayalam	Malaiàlam
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
+@msg	Script file access denied	S'ha denegat l'accés al fitxer de l'script
+@msg	Script file exceeds 8 MiB	El fitxer de l'script supera els 8 MiB
+@msg	Script file is not open	El fitxer de l'script no està obert
+@msg	Script file cannot be decoded	No es pot descodificar el fitxer de l'script
+@msg	Script file is not a regular file	El fitxer de l'script no és un fitxer normal
+@msg	Script file does not exist	El fitxer de l'script no existeix
+@msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
+@msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
+@msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
+@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
+@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
+@msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
+@msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
+@msg	Script has 256 files open	L'script té 256 fitxers oberts
+@msg	Script file path exceeds 32,767 characters	El camí del fitxer de l'script supera els 32.767 caràcters
+@msg	Script folder mask takes too many steps to match	La màscara de carpeta de l'script requereix massa passos per coincidir
+@msg	the script opened more file data than one run may open (32 MiB)	l'script ha obert més dades de fitxer de les que pot obrir una execució (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: rep una posició i un mode
+@msg	vc.run: give a command id, as a string	vc.run: indiqueu un id d'ordre, com a cadena
+@msg	vc.run: takes a command id and an object of parameters	vc.run: rep un id d'ordre i un objecte de paràmetres
+@msg	vc.run: the parameters must be an object	vc.run: els paràmetres han de ser un objecte
+@msg	vc.run: the result{place} is too large for a script	vc.run: el resultat{place} és massa gran per a un script
+@msg	$.evalFile requires a file path	$.evalFile requereix un camí de fitxer
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el temps d'espera ha de ser un nombre finit de mil·lisegons, 0 o més
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: rep un camí de fitxer i un temps d'espera
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línia {line}, columna {column} de {file}: {e} (llançat)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línia {line}, columna {column}: {e} (llançat)
+@msg	{name}: {e} (thrown)	{name}: {e} (llançat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: línia {line}, columna {column} de {file}: {e} (límit)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: línia {line}, columna {column}: {e} (límit)
+@msg	{name}: {e} (limit)	{name}: {e} (límit)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: línia {line}, columna {column} de {file}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: línia {line}, columna {column}: {e} (error de sintaxi)
+@msg	{name}: {e} (syntax)	{name}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: línia {line}, columna {column} de {file}: {e} (aturat)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: línia {line}, columna {column}: {e} (aturat)
+@msg	{name}: {e} (stopped)	{name}: {e} (aturat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: línia {line}, columna {column} de {file}: {e} (error intern)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: línia {line}, columna {column}: {e} (error intern)
+@msg	{name}: {e} (internal)	{name}: {e} (error intern)
+@msg	{e} (these files stay written: {paths})	{e} (aquests fitxers continuen escrits: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indiqueu un nom, com a cadena
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indiqueu una configuració regional com "en" o "de_DE", o null per a la de la interfície
+@msg	$.localize: give true or false	$.localize: indiqueu true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: només es pot establir 512, que activa la localització, o 0
+@msg	$.flags: give a number	$.flags: indiqueu un nombre
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: aquí els scripts només llegeixen i escriuen UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indiqueu el nom d'una codificació, com a cadena
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: no es pot establir la mida de la memòria cau
+@msg	$.setenv: give a value, as a string	$.setenv: indiqueu un valor, com a cadena
+@msg	$.setenv: only {_1} can be set	$.setenv: només es poden establir {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valor té com a màxim {MAX_ENV_BYTES} lletres, xifres i _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indiqueu un nombre de mil·lisegons de 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indiqueu un nombre de mil·lisegons
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: una execució no pot esperar dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-la des del codi propi de l'script
+@msg	$.bp: scripts here have no debugger	$.bp: aquí els scripts no tenen depurador
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: els scripts encara no poden mostrar un quadre de diàleg
+@msg	{name}: give a message	{name}: indiqueu un missatge
+@msg	{name}: give the text the field starts with	{name}: indiqueu el text amb què comença el camp
+@msg	{name}: the message is longer than 16 KiB	{name}: el missatge ocupa més de 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: el títol ocupa més de 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: el text amb què comença el camp ocupa més de 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
+@msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
+@msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
+@msg	the script made more host calls than one run may make	l'script ha fet més crides a l'amfitrió de les que pot fer una execució
+@msg	the script passed more data to and from commands than one run may pass	l'script ha passat més dades a les ordres i des de les ordres de les que pot passar una execució
+@msg	the script added more objects and data to the documents than one run may add	l'script ha afegit als documents més objectes i dades dels que pot afegir una execució
+@msg	{what}: the object is not a File or a Folder	{what}: l'objecte no és un File ni un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: el recompte ha de ser un nombre finit, 0 o més
+@msg	File.seek: the position must be a finite number	File.seek: la posició ha de ser un nombre finit
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: el mode ha de ser 0, 1 o 2
+@msg	script file is compiled: {value}	el fitxer de l'script està compilat: {value}
+@msg	`name` must be the name of a script engine	`name` ha de ser el nom d'un motor d'scripts
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor d'scripts principal és nou a cada execució i no es conserva mai, per tant no es pot descartar
+@msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
@@ -5866,6 +5971,10 @@ digits	Malayalam	Malaiàlam
 @msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
 @msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
 @msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
+@msg	select an image with a color mask	selecciona una imatge amb una màscara de color
+@msg	the color mask's settings are out of range	la configuració de la màscara de color és fora de l’interval
+@msg	a CMYK image can't take a color mask	una imatge CMYK no pot tenir una màscara de color
+@msg	the mask would hide every pixel	la màscara amagaria tots els píxels
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
@@ -6087,6 +6196,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
@@ -6095,6 +6205,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` està imbricat massa profundament
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	Preferences imported.	S’han importat les preferències.
 @msg	not a preferences file: {e}	no és un fitxer de preferències: {e}
@@ -6193,6 +6304,110 @@ digits	Malayalam	Malaiàlam
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles
+@msg	`version`, `description` or `author` is too long	`version`, `description` o `author` és massa llarg
+@msg	`warnings` must be a list of strings	`warnings` ha de ser una llista de cadenes
+@msg	`{k}` must be one of {_1}	`{k}` ha de ser un de {_1}
+@msg	`{k}` must be {what}	`{k}` ha de ser {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un exportador declara d’1 a {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	com a màxim {MAX_UNGROUPED} paràmetres fora de grups: doneu un `group` als altres
+@msg	can't encode the input	no es pot codificar l’entrada
+@msg	expected {"dataBase64"}	s’esperava {"dataBase64"}
+@msg	expected {"objects"}	s’esperava {"objects"}
+@msg	export `{name}`: {e}	exportació del mòdul `{name}`: {e}
+@msg	extension {e} is listed twice	l’extensió {e} apareix dues vegades
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensió {e}: feu servir 1-16 lletres minúscules i dígits, sense el punt
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID no vàlid {_1}: feu servir 1-64 caràcters d’A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	nom de paràmetre no vàlid {k}
+@msg	manifest is not UTF-8	el manifest no és UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	el manifest és massa llarg (límit {MAX_MANIFEST_BYTES} bytes)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	el manifest té {_1} bytes (límit {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
+@msg	not JSON: {e}	no és JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
+@msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
+@msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
+@msg	the runtime panicked	l’entorn d’execució ha fallat
+@msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ha retornat {v}; aquest amfitrió implementa la versió {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc ha retornat 0 (sense memòria)
+@msg	vc_alloc returned a block outside memory	vc_alloc ha retornat un bloc fora de la memòria
+@msg	vc_run returned error code {packed}	vc_run ha retornat el codi d’error {packed}
+@msg	{_1} is not a file	{_1} no és un fitxer
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} té {_2} bytes (límit {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objectes (límit {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} apunta fora de la memòria
+@msg	`angle` must be a number	`angle` ha de ser un nombre
+@msg	`aspect` must be from 0.01 to 100	`aspect` ha d’estar entre 0.01 i 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` ha de ser "butt", "round" o "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` ha de ser "nonzero" o "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` ha de ser una adreça https:// de {MAX_HELP_URL} bytes com a màxim
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` ha de tenir 1-{MAX_HELP} caràcters imprimibles
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` ha de ser un id d’efecte d’1-{MAX_EFFECT_ID} bytes
+@msg	`id` must be the id of an input object	`id` ha de ser l’id d’un objecte d’entrada
+@msg	`join` must be "miter", "round" or "bevel"	`join` ha de ser "miter", "round" o "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` i `group` han de tenir 1-{MAX_LABEL} caràcters imprimibles
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` ha de ser 1-{MAX_TEXT}, i el valor predeterminat no pot ser més llarg
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` han de ser 0-{MAX_LIST}, `maxItems` com a mínim 1, i el valor predeterminat ha de tenir aquesta quantitat
+@msg	`name` must be a string	`name` ha de ser una cadena
+@msg	`opacity` must be a number	`opacity` ha de ser un nombre
+@msg	`type` must be "path" or "compound"	`type` ha de ser "path" o "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` ha de tenir 1-{MAX_UNIT} caràcters imprimibles
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` ha d’indicar d’1 a {MAX_CONDITION_VALUES} valors per a `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anomena `{other}`, que no és un paràmetre declarat abans d’aquest
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anomena com a màxim {MAX_CONDITIONS} paràmetres
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` pren els valors de `{other}`, d’una casella de selecció o d’una opció
+@msg	`visible` must be true or false	`visible` ha de ser true o false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` ha de ser un nombre de {_1} a {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` ha de ser una matriu de {MAX_ITEMS} entrades com a màxim
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	un color predeterminat ha de ser un objecte de color o una cadena hexadecimal com ara "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	un objecte de color o una cadena hexadecimal com ara "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	un degradat de forma lliure conté com a màxim {MAX_ITEMS} punts i línies
+@msg	a freeform gradient line names a point it doesn't have	una línia del degradat de forma lliure anomena un punt que el degradat no té
+@msg	a gradient needs 1-{MAX_ITEMS} stops	un degradat necessita 1-{MAX_ITEMS} parades
+@msg	a list of numbers	una llista de nombres
+@msg	a list of {min_items} to {max_items} numbers	una llista de {min_items} a {max_items} nombres
+@msg	a new object needs a `path`	un objecte nou necessita un `path`
+@msg	a number	un nombre
+@msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
+@msg	a read-only object was left out	s’ha omès un objecte de només lectura
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {"id"} sol o tal com s’ha rebut
+@msg	a string	una cadena
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un traç ha de ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	un efecte ha de ser {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
+@msg	an effect on a stroke returns only `strokes`	un efecte en un traç només retorna `strokes`
+@msg	an object must be a JSON object	un objecte ha de ser un objecte JSON
+@msg	bad range	interval no vàlid
+@msg	choices must be 1-64 non-empty, printable strings	les opcions han de ser 1-64 cadenes imprimibles no buides
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	coordenada fora de l’interval (límit ±{MAX_COORD} pt)
+@msg	default is not one of the options	el valor predeterminat no és cap de les opcions
+@msg	each piece needs a `path`	cada peça necessita un `path`
+@msg	is listed twice	apareix dues vegades
+@msg	pattern transform out of range	transformació del motiu fora de l’interval
+@msg	read-only field '{field}' changed	ha canviat el camp de només lectura '{field}'
+@msg	stops must be in order of `offset`	les parades han d’estar en ordre d’`offset`
+@msg	the document has no pattern {pattern}	el document no té el motiu {pattern}
+@msg	the document has no swatch {n}	el document no té la mostra {n}
+@msg	the output	la sortida
+@msg	the path has no anchor points	el traçat no té punts d’ancoratge
+@msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
+@msg	true or false	true o false
+@msg	unknown key `{k}`; the keys here are {_1}	clau desconeguda `{k}`; les claus aquí són {_1}
+@msg	{_1} is listed twice	{_1} apareix dues vegades
+@msg	{_1} is not the id of an input object	{_1} no és l’id d’un objecte d’entrada
+@msg	{_1} is read-only	{_1} és de només lectura
+@msg	{what} must be from {lo} to {hi}	{what} ha d’estar entre {lo} i {hi}
+@msg	a color component	un component de color
+@msg	a plate	una planxa
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
@@ -6993,6 +7208,8 @@ breakText	Glyphs	Glifs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
 	List Tutorials	Llista els tutorials
 	Show Tutorial	Mostra el tutorial
+	Show Tool Location	Mostra la ubicació de l'eina
+	Show where this tool is	Mostra on és aquesta eina
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
 

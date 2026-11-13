@@ -56,3 +56,21 @@ fn permissions_without_a_password_warn_and_a_password_applies_them() {
     let bytes = vectorcraft_format::base64_decode(locked["dataBase64"].as_str().unwrap()).unwrap();
     assert!(String::from_utf8_lossy(&bytes).contains("/Encrypt"));
 }
+
+/// The writer notes the permissions it didn't apply before the export notes the type it drew in
+/// the fallback font: the reply gives what the file loses first, through both commands.
+#[test]
+fn the_fallback_font_note_comes_before_the_permissions_note() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    s.execute("text.create", &json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    for r in [
+        s.execute("document.exportPdf", &json!({"security": {"printing": "none"}})).unwrap(),
+        s.execute("document.export", &json!({"format": "pdf", "security": {"printing": "none"}})).unwrap(),
+    ] {
+        let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        let at = |s: &str| warnings.iter().position(|w| w.contains(s));
+        let (font, permissions) = (at("Nonexistent Sans Probe"), at("permissions need a password"));
+        assert!(font.is_some() && permissions.is_some() && font < permissions, "{warnings:?}");
+    }
+}

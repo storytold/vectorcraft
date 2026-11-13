@@ -793,8 +793,9 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
             assert_eq!(labels, ["Move", "Shape Builder"]);
         }),
-        // The proof views redraw every document (a new revision); they are left off, as the
-        // other tests of the process-wide proof view expect.
+        // The proof views apply the merge first by command id (`WAIT_FOR_TOOL_EDIT`), also when
+        // the view does not change and no document gets a new revision. They are left off, as
+        // the other tests of the process-wide proof view expect.
         ("Separations Preview", |s, _, _| {
             s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
         }),
@@ -806,6 +807,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
         ("Proof Setup", |s, _, _| {
             s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a proof view that changes", |s, _, _| {
+            let _v = crate::tests_colormgmt::DefaultView::new();
+            s.execute("view.proofColors", &json!({"on": true})).unwrap();
+            let on = s.doc().unwrap().revision;
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+            assert!(s.doc().unwrap().revision > on, "the view changes and the documents get new revisions");
         }),
         ("a preference", |s, _, _| {
             let every = s.prefs.gridline_every;
