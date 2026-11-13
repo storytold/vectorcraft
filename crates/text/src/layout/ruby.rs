@@ -377,5 +377,6 @@ fn ruby_glyph(g: &PositionedGlyph, m: Affine, run: usize, byte: usize, line: usi
         carets: Vec::new(),
         width: 0.0,
         width_start: 0.0,
+        warichu: None,
     }
 }

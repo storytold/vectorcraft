@@ -244,7 +244,9 @@ impl Ctx<'_> {
         if self.vertical {
             tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
-                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right, warichu: st.warichu }
+                // Type on a path sets warichu characters as they are, its digits included.
+                let warichu = st.warichu && !self.on_path;
+                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right, warichu }
             });
             // An upright glyph advances down the column by its vertical advance (the font's vertical
             // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
@@ -619,6 +621,7 @@ impl Ctx<'_> {
             },
             width,
             width_start,
+            warichu: g.wari.map(|w| w.start),
         });
     }
 

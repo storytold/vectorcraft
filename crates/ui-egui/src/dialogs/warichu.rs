@@ -127,12 +127,15 @@ fn number(d: &Dialog, key: &str, name: &str) -> Result<Option<f64>, String> {
 /// `text.setFormat` parameters: the fields that differ from the values the dialog opened with.
 /// Lines is rounded to a whole number and kept within 1..6, Line Gap is in points (a length typed
 /// with its unit, "1 mm", is converted) and kept within 0..100, and Scale is kept within 10..100.
-/// A blank field is left alone; a field that is not a number is an error.
+/// A blank field is left alone; a field that is not a number is an error. A number is compared
+/// with the value the dialog opened with before it is rounded or kept within its range, so OK
+/// leaves a value outside the range (Line Gap on a scaled object) as it is when it was not edited.
 fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
     let initial = d.fields.get(INITIAL).and_then(Value::as_object);
     let unchanged = |key: &str, v: &Value| initial.and_then(|m| m.get(key)) == Some(v);
+    let opened_with = |key: &str, v: f64| initial.and_then(|m| m.get(key)).and_then(Value::as_f64) == Some(v);
     let mut p = Map::new();
-    if let Some(n) = number(d, "warichuLines", "Lines")? {
+    if let Some(n) = number(d, "warichuLines", "Lines")?.filter(|&n| !opened_with("warichuLines", n)) {
         let n = n.round().clamp(f64::from(*WARICHU_LINES.start()), f64::from(*WARICHU_LINES.end()));
         // Within 1..6 after the clamp, so the cast keeps the value.
         let v = json!(n as u8);
@@ -147,14 +150,14 @@ fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
         Some(Value::String(s)) => Some(vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).ok_or("Line Gap must be a number")?),
         Some(_) => return Err("Line Gap must be a number".into()),
     };
-    if let Some(v) = gap.map(|v| json!(v.clamp(0.0, MAX_WARICHU_GAP)))
-        && initial.and_then(|m| m.get("warichuGap")).and_then(Value::as_f64) != v.as_f64()
+    if let Some(v) = gap.filter(|&v| !opened_with("warichuGap", v)).map(|v| v.clamp(0.0, MAX_WARICHU_GAP))
+        && !opened_with("warichuGap", v)
     {
-        p.insert("warichuGap".into(), v);
+        p.insert("warichuGap".into(), json!(v));
     }
-    if let Some(n) = number(d, "warichuScale", "Scale")? {
+    if let Some(n) = number(d, "warichuScale", "Scale")?.filter(|&n| !opened_with("warichuScale", n)) {
         let v = n.clamp(*WARICHU_SCALE.start(), *WARICHU_SCALE.end());
-        if initial.and_then(|m| m.get("warichuScale")).and_then(Value::as_f64) != Some(v) {
+        if !opened_with("warichuScale", v) {
             p.insert("warichuScale".into(), json!(v));
         }
     }
@@ -239,6 +242,19 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.warichuSettings", json!({})).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// A value it opened with outside its range (Line Gap of 200 pt on an object scaled by 2) is
+    /// left alone when OK is pressed without editing it; an edited one is kept within the range.
+    #[test]
+    fn warichu_settings_dialog_leaves_an_unedited_value_outside_its_range() {
+        let opened = json!({"warichuLines": 9, "warichuGap": 200.0, "warichuScale": 5.0});
+        let mut fields = opened.clone();
+        fields[INITIAL] = opened;
+        let mut d = Dialog::new(KIND, fields);
+        assert_eq!(params(&d), Ok(Map::new()));
+        d.fields.insert("warichuGap".into(), json!(150.0));
+        assert_eq!(params(&d).unwrap().get("warichuGap"), Some(&json!(MAX_WARICHU_GAP)));
     }
 
     /// Characters that differ open a blank field; OK leaves that value alone and sets the others.

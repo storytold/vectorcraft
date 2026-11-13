@@ -1,7 +1,7 @@
 //! Warichu (Character panel menu › Warichu and Warichu Settings): marked characters set smaller
 //! and stacked on lines inside their line. Bundled fonts: in vertical type `§` stands upright like
 //! CJK.
-use super::{area, db, point, style};
+use super::{area, db, point, serif, style};
 use crate::*;
 use kurbo::Shape;
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun, WarichuAlign};
@@ -411,4 +411,125 @@ fn shrink_text_to_fit_scales_the_warichu_line_gap() {
     assert_eq!(s.runs[1].style.warichu_gap, 5.0);
     let l = layout(db(), &s);
     assert!((l.glyphs[4].origin.y - l.glyphs[2].origin.y - (5.0 + 5.0)).abs() < 1e-6);
+}
+
+/// Two blocks whose characters the bidi order draws in turn (Latin, then Hebrew in the first;
+/// Hebrew, then Latin in the second) each keep where they start: both lines of a block start there.
+#[test]
+fn blocks_the_bidi_order_interleaves_keep_their_places() {
+    let mut t = with_block("", marked(20.0));
+    t.runs = vec![
+        TextRun::new("ab", style(20.0)),
+        TextRun::new("cא", marked(20.0)),
+        TextRun::new("בd", CharStyle { warichu_lines: 3, ..marked(20.0) }),
+        TextRun::new("z", style(20.0)),
+    ];
+    let l = layout(db(), &t);
+    let at = |byte: usize| l.glyphs.iter().find(|g| g.byte == byte).unwrap().origin;
+    let (c, alef, bet, d, z) = (at(2), at(3), at(5), at(7), at(8));
+    assert!(alef.y > c.y && d.y > bet.y, "two lines each: {c:?} {alef:?} {bet:?} {d:?}");
+    assert!((alef.x - c.x).abs() < 1e-9, "the first block's lines start together: {c:?} {alef:?}");
+    assert!((d.x - bet.x).abs() < 1e-9, "the second block's lines start together: {bet:?} {d:?}");
+    assert!(c.x < bet.x && bet.x < z.x, "{c:?} {bet:?} {z:?}");
+}
+
+/// A click on a block's lower line goes to that line's characters, not to the character of the
+/// upper line at the same place along the block.
+#[test]
+fn a_click_on_a_block_line_goes_to_its_own_characters() {
+    let l = layout(db(), &with_block("cdef", marked(20.0)));
+    let (c, d, e, f) = (&l.glyphs[2], &l.glyphs[3], &l.glyphs[4], &l.glyphs[5]);
+    let near = |g: &PositionedGlyph, share: f64| Point::new(g.origin.x + g.advance * share, g.origin.y - 2.0);
+    assert_eq!(hit_byte(&l, near(e, 0.25)), 4);
+    assert_eq!(hit_byte(&l, near(f, 0.75)), 6);
+    assert_eq!(hit_byte(&l, near(c, 0.25)), 2);
+    assert_eq!(hit_byte(&l, near(d, 0.75)), 4);
+    // Without a point across the line, the nearest stop along it, as before.
+    assert_eq!(byte_in_line(&l, 0, l.glyphs[0].origin.x), 0);
+}
+
+/// Digits marked Warichu in vertical type on a path stand across the column as digits without the
+/// mark do: type on a path does not stack warichu.
+#[test]
+fn vertical_type_on_a_path_keeps_its_digits_across_the_column() {
+    let on_path = |st: CharStyle| {
+        let mut t = point("", style(20.0));
+        t.xf = Affine::IDENTITY;
+        t.vertical = true;
+        t.runs = vec![TextRun::new("12", st)];
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (0.0, 400.0)).to_path(0.1)), start: 0.0, end: None };
+        let l = layout(db(), &t);
+        (ink(&l, 0), ink(&l, 1))
+    };
+    assert_eq!(on_path(marked(20.0)), on_path(style(20.0)));
+}
+
+/// A block whose characters come from fonts of different heights gives its line the tallest ascent
+/// and the deepest descent among them, whichever font comes first.
+#[test]
+fn a_block_of_several_fonts_keeps_the_tallest_of_them() {
+    let fonts = ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"];
+    let st = |family: &str, warichu: bool| CharStyle { font_family: family.into(), warichu, ..style(20.0) };
+    let line = |runs: Vec<TextRun>| {
+        let mut t = point("", style(20.0));
+        t.xf = Affine::IDENTITY;
+        t.runs = runs;
+        let l = layout(db(), &t);
+        (l.lines[0].ascent, l.lines[0].descent)
+    };
+    let plain: Vec<(f64, f64)> = fonts.iter().map(|f| line(vec![TextRun::new("x", st(f, false))])).collect();
+    // The two fonts whose ascents differ most.
+    let mut pair = (0, 0);
+    for i in 0..fonts.len() {
+        for j in 0..fonts.len() {
+            if plain[i].0 - plain[j].0 > plain[pair.0].0 - plain[pair.1].0 {
+                pair = (i, j);
+            }
+        }
+    }
+    let (tall, short) = (fonts[pair.0], fonts[pair.1]);
+    assert!(plain[pair.0].0 - plain[pair.1].0 > 0.1, "the bundled fonts differ in height: {plain:?}");
+    let first_short = line(vec![TextRun::new("c", st(short, true)), TextRun::new("d", st(tall, true))]);
+    let first_tall = line(vec![TextRun::new("c", st(tall, true)), TextRun::new("d", st(short, true))]);
+    assert!((first_short.0 - first_tall.0).abs() < 1e-6 && (first_short.1 - first_tall.1).abs() < 1e-6, "{first_short:?} {first_tall:?}");
+    let deepest = plain[pair.0].1.max(plain[pair.1].1);
+    assert!(first_short.0 >= plain[pair.0].0 - 1e-6 && first_short.1 >= deepest - 1e-6, "{first_short:?} {plain:?}");
+}
+
+/// Warichu Settings on characters not marked Warichu leave their shaping alone: "fi" keeps its
+/// ligature when only the f has other settings.
+#[test]
+fn warichu_settings_without_the_mark_keep_a_ligature() {
+    let fi = |f: CharStyle| {
+        let mut t = point("", serif(20.0));
+        t.runs = vec![TextRun::new("f", f), TextRun::new("i", serif(20.0))];
+        layout(db(), &t)
+    };
+    let glyphs = |l: &TextLayout| l.glyphs.iter().map(|g| (g.gid, g.len)).collect::<Vec<_>>();
+    let plain = fi(serif(20.0));
+    assert!(plain.glyphs.iter().any(|g| g.len == 2), "the bundled serif joins f and i: {:?}", glyphs(&plain));
+    let settings = CharStyle { warichu_lines: 3, warichu_gap: 2.0, warichu_scale: 70.0, warichu_align: WarichuAlign::Center, ..serif(20.0) };
+    assert_eq!(glyphs(&fi(settings)), glyphs(&plain));
+}
+
+/// Insert Kashidas leaves a warichu block alone: a justified line lengthens its other Arabic words
+/// with kashidas, and the block keeps the length its lines set.
+#[test]
+fn kashidas_leave_a_warichu_block_alone() {
+    use crate::test_fonts::{TATWEEL_FAMILY, tatweel_font};
+    use vectorcraft_doc::text::Kashida;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(tatweel_font().expect("the test font builds"));
+    let face = db.face(TATWEEL_FAMILY, "Regular").expect("the test face");
+    let arabic = |warichu: bool| CharStyle { font_family: TATWEEL_FAMILY.into(), warichu, ..style(20.0) };
+    let (before, block) = ("تبد تبد ", "بتب");
+    let mut t = area("", arabic(false), Rect::new(0.0, 0.0, 300.0, 400.0), Justify::JustifyAll);
+    t.para.kashida = Kashida::Medium;
+    t.runs = vec![TextRun::new(before, arabic(false)), TextRun::new(block, arabic(true)), TextRun::new(" تبد", arabic(false))];
+    let l = layout(&db, &t);
+    let tatweel = face.glyph_for('\u{0640}');
+    let kashidas: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0 && g.gid == tatweel).map(|g| g.byte).collect();
+    assert!(!kashidas.is_empty(), "the words around the block take kashidas");
+    let inside = before.len()..before.len() + block.len();
+    assert!(kashidas.iter().all(|b| !inside.contains(b)), "{kashidas:?} {inside:?}");
 }

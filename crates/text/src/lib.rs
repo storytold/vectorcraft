@@ -180,6 +180,10 @@ pub struct PositionedGlyph {
     /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
     /// before the pen without the font's vertical metrics.
     pub width_start: f64,
+    /// A glyph of a warichu block: the byte offset of the block's first character, which names the
+    /// block. The block's lines share its line of text, so hit testing takes the block line nearest
+    /// the point before the nearest caret stop along it. `None` for any other glyph.
+    pub warichu: Option<usize>,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -631,11 +635,18 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
     }) else {
         return 0;
     };
-    byte_in_line(layout, li, p.x)
+    byte_near(layout, li, p.x, Some(p.y))
 }
 
 /// Byte offset nearest to `x` on line `li`.
 pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
+    byte_near(layout, li, x, None)
+}
+
+/// Byte offset nearest to `x` on line `li`; with `y` (text space, as `x`), a warichu block's caret
+/// stops count only on the block line whose baseline is nearest `y`, since the block's lines share
+/// one line of text.
+fn byte_near(layout: &TextLayout, li: usize, x: f64, y: Option<f64>) -> usize {
     let Some(line) = layout.lines.get(li) else { return 0 };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     // A cluster drawn with several adjacent glyphs (a Devanagari pre-base matra and its consonant,
@@ -653,11 +664,39 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
             _ => clusters.push((left, right, g)),
         }
     }
+    // Each warichu block's distance from `y` to the nearest baseline of its lines.
+    let mut rows: Vec<(usize, f64)> = Vec::new();
+    if let Some(y) = y {
+        for g in glyphs {
+            let Some(block) = g.warichu else { continue };
+            let d = (layout.logical_point(g.origin).y - y).abs();
+            match rows.iter_mut().find(|(b, _)| *b == block) {
+                Some((_, best)) => *best = best.min(d),
+                None => rows.push((block, d)),
+            }
+        }
+    }
+    let on_row = |g: &PositionedGlyph| match (g.warichu, y) {
+        (Some(block), Some(y)) => {
+            let d = (layout.logical_point(g.origin).y - y).abs();
+            rows.iter().find(|(b, _)| *b == block).is_none_or(|(_, best)| d <= best + 1e-9)
+        }
+        _ => true,
+    };
+    // A stop of the block line taken wins over a stop of the text around the block at the same
+    // place: at the block's start the text before it ends where both of its lines start.
     let nearest = clusters
         .iter()
-        .flat_map(|&(left, right, g)| g.stops_along(right - left).map(move |(b, d)| (if g.rtl { right - d } else { left + d }, b)))
-        .min_by(|a, b| (a.0 - x).abs().total_cmp(&(b.0 - x).abs()));
-    nearest.map_or(line.start, |(_, byte)| byte)
+        .filter(|(_, _, g)| on_row(g))
+        .flat_map(|&(left, right, g)| {
+            let row = y.is_some() && g.warichu.is_some();
+            g.stops_along(right - left).map(move |(b, d)| (if g.rtl { right - d } else { left + d }, b, row))
+        })
+        .min_by(|a, b| {
+            let (da, db) = ((a.0 - x).abs(), (b.0 - x).abs());
+            if a.2 != b.2 && (da - db).abs() <= 1e-9 { b.2.cmp(&a.2) } else { da.total_cmp(&db) }
+        });
+    nearest.map_or(line.start, |(_, byte, _)| byte)
 }
 
 /// Caret byte at the end of line `li`: a soft-wrapped line ends before its trailing space so the

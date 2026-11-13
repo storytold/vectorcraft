@@ -962,14 +962,15 @@ fn tab_glyph<'p>(
 /// Emit `glyph` of a line placed by `transform` at `origin` with `advance` along the line, its
 /// Insert Aki before it `aki` and the glyph scaling a justified line adds to it `scale`. A warichu
 /// glyph is drawn at its place in its block instead: the block starts where the first of its glyphs
-/// drawn on the line is placed (`block` holds the byte naming that block and where it starts), and
-/// the glyph sits on the baseline of its block line, measured from where Character Alignment sets
-/// the block on the line (`origin`), with its own advance for the caret, selection and hit testing.
+/// drawn on the line is placed (`blocks` holds the byte naming each block of the line and where it
+/// starts, kept when the bidi order draws another block's glyphs between two of its own), and the
+/// glyph sits on the baseline of its block line, measured from where Character Alignment sets the
+/// block on the line (`origin`), with its own advance for the caret, selection and hit testing.
 fn emit_line_glyph(
     cx: &mut Ctx<'_>,
     glyph: &SGlyph,
     (transform, origin, advance): (Affine, Point, f64),
-    block: &mut Option<(usize, f64)>,
+    blocks: &mut Vec<(usize, f64)>,
     line_index: usize,
     (aki, scale): (f64, f64),
 ) {
@@ -983,10 +984,10 @@ fn emit_line_glyph(
         }
         return;
     };
-    let start = match *block {
-        Some((byte, at)) if byte == w.start => at,
-        _ => {
-            *block = Some((w.start, origin.x));
+    let start = match blocks.iter().find(|(byte, _)| *byte == w.start) {
+        Some(&(_, at)) => at,
+        None => {
+            blocks.push((w.start, origin.x));
             origin.x
         }
     };
@@ -1025,8 +1026,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     // The glyphs drawn for the list marker, and the index of its tab's glyph, when the line starts the paragraph.
     let mut marker_glyphs: Option<Range<usize>> = None;
     let mut marker_tab = 0;
-    // The warichu block being drawn: the byte that names it and where it starts on the line.
-    let mut wari_block: Option<(usize, f64)> = None;
+    // The warichu blocks drawn on the line: the byte that names each and where it starts.
+    let mut wari_blocks: Vec<(usize, f64)> = Vec::new();
     for (order_index, &offset) in order.iter().enumerate() {
         let glyph_index = index + offset;
         let Some(glyph) = sg.get(glyph_index) else { continue };
@@ -1081,7 +1082,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             }
         }
         let glyph_scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
-        emit_line_glyph(cx, glyph, (transform, Point::new(x, y), advance), &mut wari_block, line_index, (aki, glyph_scale));
+        emit_line_glyph(cx, glyph, (transform, Point::new(x, y), advance), &mut wari_blocks, line_index, (aki, glyph_scale));
         if !leader.is_empty() {
             // The leader belongs to the tab's glyph: the gap stays one character for the
             // caret, selection and hit testing.

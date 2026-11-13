@@ -75,7 +75,7 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], whole: bool, style: impl Fn(&SGlyp
 
 /// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
 /// Tate-chu-yoko, its Tate-chu-yoko Settings Up/Down and Left/Right in points, and whether it is
-/// marked Warichu.
+/// set as warichu (marked Warichu, and not on a path).
 pub(super) struct TcyStyle {
     pub size: f64,
     pub marked: bool,

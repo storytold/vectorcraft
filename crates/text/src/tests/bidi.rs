@@ -168,6 +168,7 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 carets: Vec::new(),
                 width: advance,
                 width_start: 0.0,
+                warichu: None,
             });
             x += advance;
         }

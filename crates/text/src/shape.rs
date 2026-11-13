@@ -971,7 +971,7 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets.
 /// The space before a line's first character ([`space_before`]) and Insert Aki ([`aki`]) come
 /// from the cluster's first character, so they do not split a ligature or a letter from its marks
-/// either.
+/// either. Warichu Settings count only on characters marked Warichu ([`warichu_alike`]).
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     // Exhaustive, like `shapes_alike`: compare borrowed fields without copying feature lists.
     let CharStyle {
@@ -1016,11 +1016,12 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         tcy_up_down,
         tcy_left_right,
         standard_vertical_roman,
-        warichu,
-        warichu_lines,
-        warichu_gap,
-        warichu_scale,
-        warichu_align,
+        // Compared by `warichu_alike`.
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -1068,16 +1069,24 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && kashidas == &b.kashidas
         && proportional_metrics == &b.proportional_metrics
         && tate_chu_yoko == &b.tate_chu_yoko
-        && warichu == &b.warichu
-        && warichu_lines == &b.warichu_lines
-        && warichu_gap == &b.warichu_gap
-        && warichu_scale == &b.warichu_scale
-        && warichu_align == &b.warichu_align
+        && warichu_alike(a, b)
         && digits == &b.digits
         && font_height_reference == &b.font_height_reference
         && no_break == &b.no_break
         && language == &b.language
         && glyph_alternate == &b.glyph_alternate
+}
+
+/// Do characters in styles `a` and `b` set warichu alike: neither marked Warichu, whatever their
+/// Warichu Settings (which then take no part in setting them), or both marked with the same
+/// Warichu Settings?
+pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
+    a.warichu == b.warichu
+        && (!a.warichu
+            || (a.warichu_lines == b.warichu_lines
+                && a.warichu_gap == b.warichu_gap
+                && a.warichu_scale == b.warichu_scale
+                && a.warichu_align == b.warichu_align))
 }
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
@@ -1135,12 +1144,13 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         tcy_left_right: _,
         standard_vertical_roman: _,
         // A warichu block is shaped apart from the text around it and from a block with other
-        // settings: its characters are set at their own size and stacked by its settings.
-        warichu,
-        warichu_lines,
-        warichu_gap,
-        warichu_scale,
-        warichu_align,
+        // settings: its characters are set at their own size and stacked by its settings
+        // ([`warichu_alike`]).
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -1148,11 +1158,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         glyph_alternate,
     } = a;
     *font_family == b.font_family
-        && *warichu == b.warichu
-        && *warichu_lines == b.warichu_lines
-        && *warichu_gap == b.warichu_gap
-        && *warichu_scale == b.warichu_scale
-        && *warichu_align == b.warichu_align
+        && warichu_alike(a, b)
         && *font_style == b.font_style
         && *font_version == b.font_version
         && *font_axes == b.font_axes

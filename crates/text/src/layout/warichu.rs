@@ -182,7 +182,10 @@ fn place_block(g: &mut [SGlyph], s: &WariStyle, (vertical, whole): (bool, bool))
     let Some(first) = g.first() else { return };
     let start = first.byte;
     let ic = first.face.ideographic_centre();
-    let (ascent, descent) = (first.ascent, first.descent);
+    // The block's tallest ascent and deepest descent: its glyphs may come from several faces (runs
+    // in other fonts, the classes of a composite font, a fallback face).
+    let ascent = g.iter().map(|gl| gl.ascent).fold(first.ascent, f64::max);
+    let descent = g.iter().map(|gl| gl.descent).fold(first.descent, f64::max);
     let clusters = clusters(g);
     // Each glyph's advance without its Insert Aki.
     let own = |gl: &SGlyph| gl.adv - gl.aki;
