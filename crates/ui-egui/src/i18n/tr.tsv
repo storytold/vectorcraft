@@ -3394,6 +3394,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Kitaplık Grubunu Yeniden Adlandır
 	Delete Library Group	Kütüphane Grubunu Sil
 	Move Library Item to Group	Kitaplık Öğesini Gruba Taşı
+	Rename Library Item	Kitaplık Öğesini Yeniden Adlandır
+	Add to Character Styles	Karakter Stillerine Ekle
 	Library	Kütüphane
 	Rename Library	Kitaplığı Yeniden Adlandır
 	Show Library	Kitaplığı Göster
@@ -3967,6 +3969,7 @@ axis	Both	Her İkisi
 	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
+@msg	the library has another item of that kind named `{name}`	kitaplıkta zaten bu türden `{name}` adlı başka bir öğe var
 @msg	select some type first	önce bir tür seçin
 @msg	kerning must be a number, "auto", or "optical"	kerning bir sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok

@@ -3555,6 +3555,8 @@ theme	Appearance	Izgled
 	Rename Library Group	Preimenuj grupu biblioteke
 	Delete Library Group	Izbriši grupu biblioteke
 	Move Library Item to Group	Premjesti stavku biblioteke u grupu
+	Rename Library Item	Preimenuj stavku biblioteke
+	Add to Character Styles	Dodaj u stilove znakova
 	Rename Library	Preimenuj biblioteku
 	Show Library	Prikaži biblioteku
 	Use Library Item	Koristi stavku biblioteke
@@ -4421,6 +4423,7 @@ imageTrace	Outline	Obris
 @plural	{n} step|{n} steps	{n} korak|{n} koraka|{n} koraka
 @plural	{n} stroke|{n} strokes	{n} potez|{n} poteza|{n} poteza
 @msg	no library `{id}`	nema biblioteke `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteka već ima drugu stavku te vrste s imenom `{name}`
 @msg	select some type first	prvo odaberite tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning mora biti broj, „auto” ili „optical”
 @msg	the selection has no gradient fill	odabir nema ispunu gradijentom

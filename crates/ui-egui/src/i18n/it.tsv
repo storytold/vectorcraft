@@ -3628,6 +3628,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Rinomina gruppo di libreria
 	Delete Library Group	Elimina gruppo di libreria
 	Move Library Item to Group	Sposta elemento della libreria nel gruppo
+	Rename Library Item	Rinomina elemento della libreria
+	Add to Character Styles	Aggiungi agli stili carattere
 	Library	Libreria
 	Rename Library	Rinomina libreria
 	Show Library	Mostra libreria
@@ -4223,6 +4225,7 @@ axis	Both	Entrambi
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	nessuna libreria `{id}`
+@msg	the library has another item of that kind named `{name}`	la libreria ha già un altro elemento di questo tipo chiamato `{name}`
 @msg	select some type first	seleziona prima del testo
 @msg	kerning must be a number, "auto", or "optical"	kerning deve essere un numero, «auto» o «optical»
 @msg	the selection has no gradient fill	la selezione non ha una sfumatura di riempimento

@@ -3621,6 +3621,8 @@ effect	Points	Точки
 	Rename Library Group	Перейменувати групу бібліотеки
 	Delete Library Group	Видалити групу бібліотеки
 	Move Library Item to Group	Перемістити елемент бібліотеки в групу
+	Rename Library Item	Перейменувати елемент бібліотеки
+	Add to Character Styles	Додати до стилів символів
 	Library	Бібліотека
 	Rename Library	Перейменувати бібліотеку
 	Show Library	Показати бібліотеку
@@ -4207,6 +4209,7 @@ axis	Both	Обидві
 	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
+@msg	the library has another item of that kind named `{name}`	у бібліотеці вже є інший елемент цього виду з назвою `{name}`
 @msg	select some type first	спочатку виділіть текст
 @msg	kerning must be a number, "auto", or "optical"	kerning має бути числом, «auto» або «optical»
 @msg	the selection has no gradient fill	виділення не має градієнтної заливки

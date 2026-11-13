@@ -3444,6 +3444,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Rename Library Group	重命名库组
 	Delete Library Group	删除库组
 	Move Library Item to Group	将库项目移到组
+	Rename Library Item	重命名库项目
+	Add to Character Styles	添加到字符样式
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
@@ -4200,6 +4202,7 @@ imageTrace	Outline	轮廓
 @msg	the layer to flatten into is hidden	要拼合到的图层已隐藏
 @msg	there are no objects to release	没有可释放的对象
 @msg	no library `{id}`	没有库 `{id}`
+@msg	the library has another item of that kind named `{name}`	库中已有另一个同类项目名为 `{name}`
 @msg	{path}: not a file	{path}：不是文件
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	无法写入 .{ext} 图像

@@ -3353,6 +3353,8 @@ mark-style	Japanese	일본식
 	Rename Library Group	라이브러리 그룹 이름 바꾸기
 	Delete Library Group	라이브러리 그룹 삭제
 	Move Library Item to Group	라이브러리 항목을 그룹으로 이동
+	Rename Library Item	라이브러리 항목 이름 바꾸기
+	Add to Character Styles	문자 스타일에 추가
 	Library	라이브러리
 	Rename Library	라이브러리 이름 바꾸기
 	Show Library	라이브러리 표시
@@ -4423,6 +4425,7 @@ theme	Appearance	외관
 @msg	the layer to flatten into is hidden	병합 대상 레이어가 숨겨져 있습니다
 @msg	there are no objects to release	해제할 개체가 없습니다
 @msg	no library `{id}`	`{id}` 라이브러리가 없습니다
+@msg	the library has another item of that kind named `{name}`	라이브러리에 같은 종류의 다른 항목 `{name}`이(가) 이미 있습니다
 @msg	{path}: not a file	{path}: 파일이 아닙니다
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 이미지는 쓸 수 없습니다
