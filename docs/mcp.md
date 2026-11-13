@@ -3706,7 +3706,9 @@ colorize color of an image it applies to and the pixels of other images: at most
 image, spread evenly, and 1,048,576 pixels of at most 64 images in all, leaving out pixels less than half opaque and
 images it can't decode; each image is decoded once for all its picks. In a clip group, or under an opacity mask that
 clips, it reads only what shows inside the clipping path or the mask art, and a blend, envelope or repeat that a
-marquee touches is read whole. Hidden or fully transparent objects and fill or stroke items are left out, and locked
+marquee touches is read whole. The symbol instances read place at most 16,000,000 objects in all, as on the canvas,
+and an instance whose art would pass that is left out. The pixels read inside clip groups are tested against at most
+4,000,000 clipping-path elements in all; the picks of an image inside clip groups that would pass that are left out. Hidden or fully transparent objects and fill or stroke items are left out, and locked
 objects are read. As VectorCraft's own rule, each object read weighs the same, shared among its colors (an image's
 among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
 its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
