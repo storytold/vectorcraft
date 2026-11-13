@@ -209,6 +209,19 @@ pub(crate) fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
     runs
 }
 
+/// [`solid_paints`] with, for each paint, the item of `n` it copies: the item a live-effect plug-in
+/// before the paint's own 3D effect is told it sits on. The paints of a type's first run copy no
+/// item of `n` and have none.
+pub(crate) fn solid_paint_sources(n: &Node) -> (Vec<Option<&AppearanceItem>>, Vec<AppearanceItem>) {
+    let own: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+    if own.is_empty() {
+        let paints = solid_paints(n);
+        return (vec![None; paints.len()], paints);
+    }
+    let paints = own.iter().map(|i| (*i).clone()).collect();
+    (own.into_iter().map(Some).collect(), paints)
+}
+
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
     let view = view_options(p);
     match id {
@@ -1771,7 +1784,7 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
-    let paints = solid_paints(n);
+    let (sources, paints) = solid_paint_sources(n);
     let mut children = vec![];
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
@@ -1789,9 +1802,9 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
         crate::raster::follow_paints(&mut paints, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
-        for item in &paints {
+        for (source, item) in sources.into_iter().zip(&paints) {
             if let Some((index, fx)) = solid(item.effects()) {
-                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
+                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(source.unwrap_or(item)));
                 let (shadow, surfaces) = art_for(doc, n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
                 let later: Vec<Effect> = item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
                 let with_later = |mut art: Arc<Node>| {
@@ -2086,16 +2099,16 @@ fn meshes_within(doc: Option<&Document>, n: &Node, total: &mut usize, limit: usi
     } else {
         let (path, rule) = object_profile(n, label)?;
         let ctx = GeomContext::of(n);
-        let paints = solid_paints(n);
+        let (sources, paints) = solid_paint_sources(n);
         if let Some((index, fx)) = solid(&n.appearance.effects) {
             let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
             meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }], total, limit)?
         } else {
             let path = geometry(&path, &n.appearance.effects, &ctx);
             let mut out = vec![];
-            for item in &paints {
+            for (source, item) in sources.into_iter().zip(&paints) {
                 if let Some((index, fx)) = solid(item.effects()) {
-                    let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+                    let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(source.unwrap_or(item)));
                     out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }], total, limit)?);
                 }
             }
