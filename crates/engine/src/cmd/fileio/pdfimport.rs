@@ -192,7 +192,7 @@ pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Docu
 }
 
 /// [`page_document`] of `opened`, the PDF `bytes` already read.
-fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+pub fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
     vectorcraft_pdf::import_opened(bytes, opened, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
 }
 

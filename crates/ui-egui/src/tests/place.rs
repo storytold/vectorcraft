@@ -133,12 +133,14 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     laid_out(&mut app, &ctx);
     let center = app.view().unwrap().center;
     let uid = app.session.active().unwrap().uid;
-    for name in ["a.svg", "a.svgz", "a.pdf", "a.ai", "a.eps", "a.vectorcraft", "a.drawcraft", "a.vctemplate", "a.dxf", "a.emf"] {
+    for name in ["a.svg", "a.svgz", "a.ai", "a.eps", "a.vectorcraft", "a.drawcraft", "a.vctemplate", "a.dxf", "a.emf"] {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
     }
-    for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
+    for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt", "a.pdf"] {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, at: center, embed: false }), "{name}");
     }
+    let empty_app = VectorcraftApp::new(Session::new(), Default::default());
+    assert_eq!(empty_app.drop_target("a.pdf", None, false), DropTarget::Open, "a.pdf opens when no document is active");
 }
 
 /// Swatch libraries and color books, graphic style libraries, Libraries panel files, presets,

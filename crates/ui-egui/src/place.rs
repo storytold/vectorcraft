@@ -54,6 +54,14 @@ pub fn is_document(name: &str) -> bool {
     fileio::format_for_name(name).is_some_and(|f| f.read && !f.raster)
 }
 
+pub fn is_pdf(name: &str) -> bool {
+    fileio::format_for_name(name).is_some_and(|f| f.id == "pdf") || name.rsplit('.').next().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+}
+
+pub fn has_pages_spec(p: &Value) -> bool {
+    p.get("pages").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty())
+}
+
 /// The app's Place state (not saved with the preferences).
 #[derive(Default)]
 pub struct PlaceState {
@@ -141,22 +149,30 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
         open_dialog(app, files);
         return Ok(Value::Null);
     }
+    let mut p = p.clone();
+    let name_or_path = p.get("path").and_then(Value::as_str).or_else(|| p.get("name").and_then(Value::as_str)).unwrap_or("");
+    let no_page = p.get("page").is_none_or(Value::is_null);
+    let no_pages = p.get("pages").is_none_or(Value::is_null);
+    if is_pdf(name_or_path) && no_page && no_pages {
+        p["pages"] = json!("all");
+    }
+
     // A PDF with several pages or a password asks for the page, box and password first.
-    if crate::dialogs::import_pdf::offer_place(app, p) {
+    if crate::dialogs::import_pdf::offer_place(app, &p) {
         return Ok(Value::Null);
     }
     // A DXF drawing asks for its import options.
-    if crate::dialogs::dxf_import::offer_place(app, p) {
+    if crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
-    let mut p = p.clone();
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
-        && let Some(v) = app.view()
+        && let Some(v) = app.active_drop_canvas().map(|(_, _, v)| v).or_else(|| app.view())
     {
         p["at"] = json!([v.center.x, v.center.y]);
     }
+    let multi_page = has_pages_spec(&p);
     match read {
-        Read::ForUser { dropped } if crate::placing::available(app) => {
+        Read::ForUser { dropped } if !multi_page && crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);
             if let Err(e) = &r {
                 app.status(e.clone());
@@ -440,6 +456,13 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 // ---------- drops ----------
 
 impl VectorcraftApp {
+    pub(crate) fn active_drop_canvas(&self) -> Option<(&vectorcraft_engine::DocState, egui::Rect, &crate::state::View)> {
+        let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else {
+            return None;
+        };
+        Some((st, rect, v))
+    }
+
     /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
@@ -447,12 +470,17 @@ impl VectorcraftApp {
     /// plug-in, a shortcut set, a script or a file only an importer plug-in reads opens wherever it
     /// is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
-        let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
+        let Some((st, rect, v)) = self.active_drop_canvas() else {
+            return DropTarget::Open;
+        };
+        let pdf = is_pdf(name);
         let at = match pos {
-            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
-            Some(p) if !rect.contains(p) => return DropTarget::Open,
+            _ if !pdf && (io::opens_as(name).is_some() || fileio::opens_with_importer(name)) => {
+                return DropTarget::Open;
+            }
+            Some(p) if !pdf && !rect.contains(p) => return DropTarget::Open,
             Some(p) => crate::canvas::Xf::at(rect, v, self.canvas_ui_zoom).to_doc(p),
-            None if is_document(name) => return DropTarget::Open,
+            None if !pdf && is_document(name) => return DropTarget::Open,
             None => v.center,
         };
         DropTarget::Place(DropAt { doc: st.uid, at, embed: shift })
@@ -492,6 +520,9 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
+                if is_pdf(&name) {
+                    p["pages"] = json!("all");
+                }
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
             DropTarget::Open => match path.as_deref() {

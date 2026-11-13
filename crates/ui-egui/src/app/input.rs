@@ -54,7 +54,10 @@ impl VectorcraftApp {
                 Ok(bytes) => {
                     // A backend may give bytes without a path or extension. Sniff their format
                     // before deciding: an SVG opens as a document, a raster image is placed.
-                    let target = if path.is_none() && fileio::detect(&name, &bytes).is_none_or(|f| !f.raster) {
+                    let is_pdf = fileio::detect(&name, &bytes).is_some_and(|f| f.id == "pdf")
+                        || name.rsplit('.').next().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+
+                    let target = if path.is_none() && !is_pdf && fileio::detect(&name, &bytes).is_none_or(|f| !f.raster) {
                         place::DropTarget::Open
                     } else {
                         self.drop_target(&name, pos, shift)
