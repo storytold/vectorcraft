@@ -1859,8 +1859,8 @@ fn appearance_commands_given_a_series_group_edit_its_marks() {
     s.execute("edit.undo", &json!({})).unwrap();
 
     let (rect, blue) = blue_style(&mut s, "Blue", false);
-    let was = spec(&s, id).series_paints;
     s.execute("object.setProps", &json!({"ids": [group.0], "opacity": 50})).unwrap();
+    let was = spec(&s, id).series_paints;
     s.execute("appearance.transfer", &json!({"source": rect.0, "target": group.0, "copy": true})).unwrap();
     assert!(series_0_group(&s, id).1);
     assert_eq!(s.doc().unwrap().doc.node(group).unwrap().opacity, 1.0, "the appearance replaces the group's own opacity");
@@ -2082,10 +2082,10 @@ fn a_graphic_style_applied_to_a_series_group_styles_its_marks() {
     let (mut s, id, marks) = stored_red_stroke();
     let (group, _) = series_0_group(&s, id);
     let (_, blue) = blue_style(&mut s, "Blue", false);
-    let was = spec(&s, id).series_paints;
     let own = json!({"ids": [group.0], "opacity": 50, "blend": "multiply", "isolate": true, "knockout": "on", "item": null});
     s.execute("transparency.set", &own).unwrap();
     s.execute("effect.apply", &json!({"ids": [group.0], "effect": "distort.twist"})).unwrap();
+    let was = spec(&s, id).series_paints;
     let g = s.doc().unwrap().doc.node(group).unwrap().clone();
     assert!(g.isolate && g.knockout != Default::default() && g.blend != vectorcraft_color::BlendMode::Normal);
     s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [group.0]})).unwrap();
@@ -2160,6 +2160,82 @@ fn redefining_a_graphic_style_keeps_an_edited_mark_of_a_linked_series_group() {
     assert_eq!((&first.appearance, first.extras().graphic_style), (&edited, None), "the edited mark keeps its look, unlinked");
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().appearance.fill_paint() == green));
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().extras().graphic_style == Some(style.id)));
+}
+
+/// Series `index`'s group: its object opacity and blend mode, and those of each path directly inside it.
+fn group_transparency(s: &Session, id: NodeId, index: u32) -> ((f32, BlendMode), Vec<(f32, BlendMode)>) {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let g = series(&n, index);
+    ((g.opacity, g.blend), g.children().unwrap().iter().map(|m| (m.opacity, m.blend)).collect())
+}
+
+/// An object opacity and blend mode set on a selected series group are kept by the graph for the group: the series group
+/// has them after the graph is drawn again, through save and open, its paths and the other series stay opaque and
+/// Normal, setting them again records no step, 100% and Normal forget them, and undo takes them back.
+#[test]
+fn an_opacity_and_blend_mode_on_a_series_group_survive_regeneration() {
+    let (mut s, id, _, _) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 40, "blend": "multiply"})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.group_opacity, kept.group_blend), (Some(0.4), Some(BlendMode::Multiply)));
+    assert_eq!((kept.opacity, kept.blend), (None, None), "the paths keep their own");
+    let restored: GraphSpec = serde_json::from_value(serde_json::to_value(spec(&s, id)).unwrap()).unwrap();
+    assert_eq!(restored, spec(&s, id));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    let normal = (1.0, BlendMode::Normal);
+    let (own, paths) = group_transparency(&s, id, 0);
+    assert_eq!(own, (0.4, BlendMode::Multiply));
+    assert!(!paths.is_empty() && paths.iter().all(|t| *t == normal), "{paths:?}");
+    let (own, paths) = group_transparency(&s, id, 1);
+    assert_eq!(own, normal);
+    assert!(paths.iter().all(|t| *t == normal), "{paths:?}");
+
+    let (group, _) = series_0_group(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 40, "blend": "multiply"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the values the group and the graph have already");
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 100, "blend": "normal"})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.group_opacity, kept.group_blend), (None, None));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"rows": [[2, 2], [3, 4]]})).unwrap();
+    assert_eq!(group_transparency(&s, id, 0).0, normal);
+    for _ in 0..4 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(spec(&s, id).series_paints.is_empty(), "undo takes back the edit and what the graph stored");
+}
+
+/// Commands that clear a series group's own opacity and blend mode also remove what the graph keeps for it: Clear
+/// Appearance on the group, a graphic style applied to it and Move Appearance onto it.
+#[test]
+fn clearing_a_series_groups_opacity_forgets_what_the_graph_keeps() {
+    let kept = |s: &Session, id: NodeId| {
+        let slot = spec(s, id).series_paints[0].clone();
+        (slot.group_opacity, slot.group_blend)
+    };
+    let faded = (Some(0.5), Some(BlendMode::Screen));
+    let (mut s, id, _, _) = column_marks();
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let (group, _) = series_0_group(&s, id);
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 50, "blend": "screen"})).unwrap();
+    assert_eq!(kept(&s, id), faded);
+    let commands = [
+        ("appearance.clear", json!({"ids": [group.0]})),
+        ("graphicStyle.apply", json!({"name": "Blue", "ids": [group.0]})),
+        ("appearance.transfer", json!({"source": rect.0, "target": group.0, "copy": true})),
+    ];
+    for (cmd, params) in commands {
+        s.execute(cmd, &params).unwrap();
+        assert_eq!(kept(&s, id), (None, None), "{cmd}");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+        assert_eq!(group_transparency(&s, id, 0).0, (1.0, BlendMode::Normal), "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(kept(&s, id), faded, "{cmd}");
+    }
 }
 
 /// Default Fill and Stroke on a series mark stores a white fill and a 1 pt black stroke, both opaque, on the graph.

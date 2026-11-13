@@ -363,6 +363,13 @@ pub struct SeriesPaint {
     /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend: Option<vectorcraft_color::BlendMode>,
+    /// Object opacity (0..1) of the series group itself, taken from the opacity set on the group. Absent: fully opaque.
+    /// Graph labels keep none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_opacity: Option<f32>,
+    /// Object blend mode of the series group itself, as [`Self::group_opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_blend: Option<vectorcraft_color::BlendMode>,
 }
 
 /// The object rows one kind of graph label keeps ([`LabelStyles::values_rows`]): the paint, weight, opacity and blend mode

@@ -477,7 +477,8 @@ pub(crate) fn stood_for(own: &[NodeId], ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Clear Appearance on each series group a command gave a whole new appearance through its paths, so the group's own
-/// opacity, blend mode, isolation, knockout, effects and style link do not stay on top of it.
+/// opacity, blend mode, isolation, knockout, effects and style link do not stay on top of it. The graph stops keeping the
+/// groups' opacity and blend mode.
 pub(crate) fn clear_stood_for(d: &mut Document, groups: &[NodeId]) {
     for id in groups {
         if let Some(n) = d.node_mut(*id) {
@@ -486,6 +487,7 @@ pub(crate) fn clear_stood_for(d: &mut Document, groups: &[NodeId]) {
             n.extras_mut().graphic_style = None;
         }
     }
+    super::graph::capture_series_object_opacity(d, groups);
 }
 
 /// [`whole_targets`] of `cmd`, which needs at least one.

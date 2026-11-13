@@ -6,7 +6,7 @@ use super::labels::{
     recolour_text, runs, shadow_of,
 };
 use super::markers::{MARKER_BUDGET, marker_cost, marker_designs};
-use super::series::{series_marks, with_series_opacity};
+use super::series::{series_marks, with_series_group_opacity, with_series_opacity};
 use super::{
     Arc, BezPath, Color, Document, GraphKind, GraphSpec, Justify, Node, NodeKind, Paint, PathData, Point, Rect, TickLength, ValueAxisSide, shapes,
 };
@@ -1006,7 +1006,7 @@ impl<'a> Plot<'a> {
                 }
             }
             let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
-            let grp = self.b.series(&name, s, with_series_opacity(g, s, items));
+            let grp = with_series_group_opacity(g, s, self.b.series(&name, s, with_series_opacity(g, s, items)));
             self.b.out.push(grp);
         }
         self.b.out.append(&mut self.on_top);
