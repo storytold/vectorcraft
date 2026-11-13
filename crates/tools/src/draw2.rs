@@ -34,6 +34,11 @@ pub const MIN_FIDELITY: f64 = 0.01;
 /// Fidelity at the highest zoom (64000 %), whose screen pixels the tools send in points (#5729).
 pub const MIN_FIT_TOLERANCE: f64 = MIN_FIDELITY / 640.0;
 
+/// The coarsest tolerance (points) `path.freehand` fits a Pencil or Paintbrush stroke at: the highest
+/// Fidelity the tools and their Tool Options take (100 px) at the lowest zoom (3.13 %), about 3195 pt.
+/// A change to either range changes this bound with it.
+pub const MAX_FIT_TOLERANCE: f64 = 100.0 / 0.0313;
+
 /// The lowest Fidelity (points) the Smooth tool takes.
 pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
 

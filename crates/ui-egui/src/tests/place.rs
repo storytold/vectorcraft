@@ -111,7 +111,7 @@ fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);
     let uid = app.session.active().unwrap().uid;
     for name in ["a.png", "a.svg", "a.ai", "a.vectorcraft"] {
-        assert_eq!(app.drop_target(name, Some(pos), true), DropTarget::Place(DropAt { doc: uid, at: want, embed: true }), "{name}");
+        assert_eq!(app.drop_target(name, Some(pos), true), DropTarget::Place(DropAt { doc: uid, reverts: 0, at: want, embed: true }), "{name}");
         assert_eq!(app.drop_target(name, Some(Pos2::new(300.0, rect.top() - 10.0)), false), DropTarget::Open, "{name} on the tab bar");
     }
 }
@@ -129,7 +129,7 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
     }
     for name in ["a.png", "a.jpg", "a.tiff", "a.webp", "a.txt"] {
-        assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, at: center, embed: false }), "{name}");
+        assert_eq!(app.drop_target(name, None, false), DropTarget::Place(DropAt { doc: uid, reverts: 0, at: center, embed: false }), "{name}");
     }
 }
 

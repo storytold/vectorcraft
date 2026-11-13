@@ -47,6 +47,7 @@ mod dashalign;
 mod dcs;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;

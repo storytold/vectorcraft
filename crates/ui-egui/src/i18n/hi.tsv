@@ -444,6 +444,22 @@ antiAlias	Sharp	शार्प
 	Graphite Pencil	ग्रेफाइट पेंसिल
 	Wax Crayon	मोम क्रेयॉन
 	Charcoal Dust	चारकोल धूल
+	Notched Ribbon	नोकदार रिबन
+	Double Line	दोहरी लाइन
+	Wave	लहर
+	Teardrop	आंसू की बूंद
+	Striped Ribbon	धारीदार रिबन
+	Fine Nib	बारीक निब
+	Broad Nib	चौड़ी निब
+	Chisel	छेनी
+	Round Pen	गोल पेन
+	Pressure Pen	प्रेशर पेन
+	Beads	मोती
+	Dash Dot	डैश डॉट
+	Scallops	स्कैलप
+	Stars	तारे
+	Triangles	त्रिभुज
+	Sparkles	चमक
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -1020,6 +1036,8 @@ antiAlias	Sharp	शार्प
 	Convert to destination (preserve numbers)	गंतव्य में कनवर्ट करें (संख्या संरक्षित करें)
 	Convert to Global	ग्लोबल में कनवर्ट करें
 	Convert to Grayscale	ग्रेस्केल में बदलें
+	Convert to Indexed Color	अनुक्रमित रंग में बदलें
+	Convert to Indexed Color…	अनुक्रमित रंग में बदलें…
 	Convert To Outlines	कन्वर्ट करने के लिए रूपरेखा
 	Convert to Parametric Shape	पैरामीट्रिक शेप में कन्वर्ट करें
 	Convert To Point Type	पॉइंट टाइप में कनवर्ट करें
@@ -1710,6 +1728,8 @@ antiAlias	Sharp	शार्प
 	Expand Live Paint	लाइव पेंट एक्सपैंड करें
 	Expand Object	ऑब्जेक्ट का विस्तार
 	Expand Objects on Path	पाथ पर ऑब्जेक्ट्स एक्सपैंड करें
+	Detach	अलग करें
+	Detach Object from Path	पाथ से ऑब्जेक्ट अलग करें
 	Expand Options	ऑप्शन्स एक्सपैंड करें
 	Expand Panels	पैनलों का विस्तार
 	Expand Repeat	रिपीट एक्सपैंड करें
@@ -3410,6 +3430,8 @@ antiAlias	Sharp	शार्प
 	per slice	प्रति स्लाइस
 	Percent:	प्रतिशत:
 	Perceptual	परसेप्चुअल
+	Hue Clockwise	ह्यू घड़ी की दिशा में
+	Hue Counterclockwise	ह्यू घड़ी की विपरीत दिशा में
 	Perceptual Scales	अवधारणात्मक स्केल
 	Performance	प्रदर्शन
 	Permissions	अनुमतियां
@@ -3478,6 +3500,7 @@ antiAlias	Sharp	शार्प
 	Continue	जारी रखें
 	Continue Action	एक्शन जारी रखें
 	Delete Action Step	एक्शन का चरण हटाएं
+	Move Action Step	एक्शन का चरण खिसकाएं
 	Press Play Current Selection in the Actions panel to go on.	आगे बढ़ने के लिए एक्शन्स पैनल में वर्तमान सिलेक्शन प्ले करें दबाएँ।
 	Stop: {message}	स्टॉप: {message}
 @msg	no action is waiting at a stop	कोई एक्शन स्टॉप पर प्रतीक्षा नहीं कर रहा है
@@ -6075,7 +6098,7 @@ antiAlias	Sharp	शार्प
 @msg	`length` must be a number of at most 1000000 pt either way	`length` को 1000000 pt में से एक होना चाहिए।
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
 @msg	`line` must be true or false	`line` को true या false होना चाहिए
-@msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise या hue-counterclockwise होना चाहिए
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat या reflect होना चाहिए
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 से {MAX_REPEATS} तक की पूर्ण संख्या होनी चाहिए
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` रैखिक, रेडियल, शंक्वाकार और डायमंड ग्रेडिएंट्स पर लागू होता है
@@ -6638,6 +6661,9 @@ antiAlias	Sharp	शार्प
 @msg	Couldn't place {name}: {e}	नहीं रह सकता {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	नहीं था {name}: यह डॉक्यूमेंट बंद हो गया था
 @msg	Couldn't place {name}: the document it was placed in was closed	नहीं था {name}: यह डॉक्यूमेंट बंद किया गया था
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} प्लेस नहीं कर सका: जिस डॉक्यूमेंट पर इसे छोड़ा गया था, उसे मूल स्थिति में लाया गया
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} प्लेस नहीं कर सका: जिस डॉक्यूमेंट में इसे प्लेस किया जा रहा था, उसे मूल स्थिति में लाया गया
+@msg	Couldn't paste: the document it was pasted in was reverted	पेस्ट नहीं कर सका: जिस डॉक्यूमेंट में पेस्ट किया जा रहा था, उसे मूल स्थिति में लाया गया
 @msg	Couldn't read {name}: {e}	नहीं पढ़ सकता {name}: {e}
 @msg	Couldn't save recovery data: {e}	रिकवरी डेटा सेव नहीं किया जा सका: {e}
 @msg	counterPer `{c}`: item or file	counterPer `{c}`: item या file
@@ -7676,6 +7702,7 @@ antiAlias	Sharp	शार्प
 @msg	Replace Spine: select a blend and a path	Spine: एक मिश्रण और एक पाथ चुनें
 @msg	replace: select the one object to replace	प्रतिस्थापित करने के लिए एक ऑब्जेक्ट सिलेक्ट करें
 @msg	replace: the object to replace was changed or deleted	प्रतिस्थापित करने के लिए ऑब्जेक्ट को बदल दिया गया था या हटा दिया गया
+@msg	the document it was prepared for is no longer active	जिस डॉक्यूमेंट के लिए इसे तैयार किया गया था, वह अब सक्रिय नहीं है
 @msg	Reset {_1}	रीसेट करें {_1}
 @msg	resolution must be a number or screen|medium|high	resolution: रिज़ॉल्यूशन एक नंबर या स्क्रीन होना चाहिए
 @msg	resolution must be between 1 and 2400 ppi	resolution: रिज़ॉल्यूशन 1 और 2400 ppi के बीच होना चाहिए
@@ -7759,6 +7786,7 @@ antiAlias	Sharp	शार्प
 @msg	select an object with a freeform gradient	एक फ्रीफॉर्म ग्रेडिएंट के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an object with an opacity mask	एक opacity मास्क के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an Objects on Path group	पाथ समूह पर एक ऑब्जेक्ट चुनें
+@msg	choose the object to detach with its Select/Move widget	अलग करने वाले ऑब्जेक्ट को उसके चुनें/ले जाएँ विजेट से चुनें
 @msg	select area type	एरिया टाइप सिलेक्ट करें
 @msg	select area type (text in a frame)	एरिया टाइप (फ़्रेम में टेक्स्ट) सिलेक्ट करें
 @msg	select area type and closed paths (at least one area type object)	एरिया टाइप और बंद पाथ सिलेक्ट करें (कम से कम एक एरिया टाइप ऑब्जेक्ट)
@@ -7949,7 +7977,9 @@ antiAlias	Sharp	शार्प
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	ग्राफ़िक्स समतल फ़ेस पर लगते हैं: एक्सट्रूड या समतल ऑब्जेक्ट प्रकार का उपयोग करें
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं
+@msg	Revolve maps graphics onto its side: map them onto the front	रिवॉल्व ग्राफ़िक्स को अपनी बगल वाली सतह पर लगाता है: उन्हें सामने वाले फ़ेस पर लगाएँ
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	ग्राफ़िक्स इस सतह के लिए बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ या सेगमेंट कम करें
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
 @msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
 @msg	The graphics are too complex: simplify the symbols' art	ग्राफ़िक्स बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ

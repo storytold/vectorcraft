@@ -34,7 +34,7 @@ mod ruby;
 mod shaped;
 mod vertical;
 
-pub(crate) use bidi::{is_rtl, para_bidi};
+pub(crate) use bidi::{is_rtl, para_bidi, starts_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};

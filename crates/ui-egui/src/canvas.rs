@@ -67,8 +67,10 @@ pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
+#[cfg(test)]
+pub(crate) use task_bar::chip_paints;
 use task_bar::task_bar;
-pub(crate) use task_bar::{has_colors, task_bar_rect};
+pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 pub use tool_overlays::{HiddenChars, SpellingMarks};
@@ -1264,6 +1266,10 @@ fn selection_visuals(
     } else {
         vec![]
     };
+    // The tool shows the rest of its overlays on the next frame.
+    if app.session.tool_overlays_pending() {
+        painter.ctx().request_repaint();
+    }
     // Gap Options' Preview shows the gaps it finds.
     overlays.extend(crate::dialogs::live_paint_gaps::overlays(app));
     if app.ui.view.edges && !revolve_edit {

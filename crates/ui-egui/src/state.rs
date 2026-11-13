@@ -621,11 +621,16 @@ pub struct UiState {
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
-    /// The id of the action New Action made for the recording in progress
-    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
-    /// adds a new action, as after Begin Recording.
+    /// The id of the action the recording in progress records into, the one New Action made or the
+    /// one selected when Begin Recording started it ([`crate::panels::actions::Action::id`]): Stop
+    /// gives it the recorded steps. None when Stop adds a new action, as after Begin Recording with
+    /// no action selected.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// Where in the action [`UiState::recording_into`] names Stop puts the recorded steps: before
+    /// the step at this index, or None after its last step.
+    #[serde(skip)]
+    pub recording_at: Option<usize>,
     /// The length of the action set file that Stop Playing/Recording would leave without the steps
     /// recorded so far, once measured; None until then, and again after an app command, which may
     /// change the sets.
@@ -636,6 +641,10 @@ pub struct UiState {
     /// ([`vectorcraft_engine::Journal::rewrites`]).
     #[serde(skip)]
     pub recording_tail: Option<(u64, usize, usize, usize)>,
+    /// The journal as the recording in progress last checked it against the limits of an action
+    /// set file: (its rewrites, its length) ([`crate::panels::actions::after_journaled_edit`]).
+    #[serde(skip)]
+    pub recording_checked: Option<(u64, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -1164,8 +1173,10 @@ impl Default for UiState {
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
+            recording_at: None,
             recording_base: None,
             recording_tail: None,
+            recording_checked: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),

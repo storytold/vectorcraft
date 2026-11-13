@@ -349,12 +349,12 @@ fn pure_blue_is_out_of_gamut_in_rgb() {
     let ctx = egui::Context::default();
     app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
     frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
-    let (of, fix) = pstate::<Option<(Color, Option<Color>)>>(&ctx, "color-gamut").expect("RGB mode checks the gamut");
+    let (of, _, fix) = pstate::<Option<GamutFix>>(&ctx, "color-gamut").expect("RGB mode checks the gamut");
     assert_eq!(of.to_hex(), "#0000ff");
     assert!(fix.is_some_and(|f| !f.out_of_gamut()));
     app.run("paint.setFill", json!({"color": "#808080"})).unwrap();
     frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
-    assert_eq!(pstate::<Option<(Color, Option<Color>)>>(&ctx, "color-gamut").unwrap().1, None);
+    assert_eq!(pstate::<Option<GamutFix>>(&ctx, "color-gamut").unwrap().2, None);
 }
 
 #[test]
