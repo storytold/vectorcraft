@@ -6912,7 +6912,11 @@ visible type that fits its frame or path, on the layers `printLayers` picks, on 
 that print, and the type in the symbols, patterns, scatter brushes, opacity masks and placed documents of the art that
 prints. The warnings also give the ids of the area type and type on a path that print and whose text doesn't fit
 (objects of the document only, not type in the art of symbols, patterns, brushes, opacity masks or placed documents;
-see [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)).
+see [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)). The warnings of `file.print`
+and `print.preview` list what the job leaves out of the document or prints differently first (art outside the
+imageable area, type in a fallback font, transparency flattened for PostScript). The notes on the options follow: an
+option not applied or applied another way, such as halftone screens, a fixed flatness or copies per sheet that don't
+fit. Each kind keeps the order it is given in.
 
 ```json
 {"name":"run_command","arguments":{"command":"print.setup","params":{"settings":{"media":"a4","scaling":"fit","marks":{"trim":true}}}}}
