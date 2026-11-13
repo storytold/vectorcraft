@@ -43,5 +43,8 @@ fn an_opened_font_file_joins_the_session() {
     let e = io::open_bytes(&mut app, "Openfont.woff2", &woff2, None).unwrap_err();
     assert!(e.contains("WOFF"), "{e}");
     assert_eq!(io::open_bytes(&mut app, "notes.otf", b"not a font", None).unwrap_err(), "not a font file");
+    // A file over the limit is refused before it is encoded (untouched zeroed pages: no memory used).
+    let huge = vec![0u8; (256 << 20) + 1];
+    assert_eq!(io::open_bytes(&mut app, "huge.ttf", &huge, None).unwrap_err(), "larger than 256 MB");
     assert_eq!(app.session.documents().len(), docs);
 }

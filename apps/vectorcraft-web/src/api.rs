@@ -165,6 +165,13 @@ fn font_files(fonts: &JsValue) -> Result<Vec<Value>, String> {
     let (mut out, mut total) = (Vec::new(), 0u64);
     for (i, font) in list.iter().enumerate() {
         let get = |key: &str| js_sys::Reflect::get(&font, &key.into()).unwrap_or(JsValue::UNDEFINED);
+        // A name given must be a string, as `text.addFonts` requires: refused, not dropped.
+        let name = get("name");
+        let name = if name.is_undefined() || name.is_null() {
+            None
+        } else {
+            Some(name.as_string().ok_or_else(|| format!("addFonts: font {i}'s name must be its file name, a string"))?)
+        };
         // Read by `byteLength` and `new Uint8Array(bytes)`, not checked with `dyn_ref`: that is
         // `instanceof`, which refuses the arrays of a page that embeds the app in an iframe, made in
         // that page's window.
@@ -183,7 +190,7 @@ fn font_files(fonts: &JsValue) -> Result<Vec<Value>, String> {
         }
         let bytes = js_sys::Uint8Array::new(&bytes);
         let mut file = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes.to_vec())});
-        if let Some(name) = get("name").as_string() {
+        if let Some(name) = name {
             file["name"] = json!(name);
         }
         out.push(file);

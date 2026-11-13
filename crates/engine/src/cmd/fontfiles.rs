@@ -57,8 +57,9 @@ const NOT_A_FILE: &str = "not a file";
 const NOT_A_FONT: &str = "not a font file";
 /// Why a web font wasn't added: its tables are compressed, and nothing here unpacks them yet.
 const WEB_FONT: &str = "a WOFF or WOFF2 web font, which can't be added yet: add its .ttf or .otf file";
-#[cfg(not(target_arch = "wasm32"))]
-const TOO_LARGE: &str = "larger than 256 MB";
+/// Why a font file over [`MAX_FONT_FILE`] is refused (also by File › Open and a drop, before the
+/// bytes are encoded for `text.addFonts`).
+pub const TOO_LARGE: &str = "larger than 256 MB";
 #[cfg(not(target_arch = "wasm32"))]
 const TOO_MUCH: &str = "the files come to more than 1 GB: add fewer at a time";
 #[cfg(not(target_arch = "wasm32"))]
