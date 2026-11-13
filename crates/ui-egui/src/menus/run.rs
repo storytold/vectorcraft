@@ -929,6 +929,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
+        "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
@@ -979,6 +980,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
         crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
         crate::panels::actions::INSERT_SELECT_PATH => crate::panels::actions::insert_select_path(app, p),
+        crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
         "ui.batchDialog" => {

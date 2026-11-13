@@ -2074,6 +2074,7 @@ file-filter	Templates	模板
 	Art Brush	艺术画笔
 	Bristle Brush	鬃毛画笔
 	Pattern Brush	图案画笔
+	missing from the Brushes panel	“画笔”面板中没有
 	Select art to make a scatter, art or pattern brush.	选择图稿以创建散布画笔、艺术画笔或图案画笔。
 	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
@@ -2521,6 +2522,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在后方插入空白
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
@@ -2793,6 +2796,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
+	Color Theme Picker	色彩主题拾取器
+	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -3165,6 +3170,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Note	显示注解
 	Show Options	显示选项
 	Show Recent Colors	显示最近使用的颜色
+	Toggle RGB Percent	切换 RGB 百分比显示
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -4702,6 +4708,85 @@ imageTrace	Outline	轮廓
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Script file access denied	脚本文件访问被拒绝
+@msg	Script file exceeds 8 MiB	脚本文件超过 8 MiB
+@msg	Script file is not open	脚本文件未打开
+@msg	Script file cannot be decoded	无法解码脚本文件
+@msg	Script file is not a regular file	脚本文件不是常规文件
+@msg	Script file does not exist	脚本文件不存在
+@msg	Script file could not be read	无法读取脚本文件
+@msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
+@msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
+@msg	Script file writing is not available	脚本文件写入不可用
+@msg	Script file dialogs are not available	脚本文件对话框不可用
+@msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
+@msg	Script file access is unavailable on the web	网页版无法访问脚本文件
+@msg	Script has 256 files open	脚本已打开 256 个文件
+@msg	Script file path exceeds 32,767 characters	脚本文件路径超过 32,767 个字符
+@msg	Script folder mask takes too many steps to match	脚本文件夹掩码匹配所需步骤过多
+@msg	the script opened more file data than one run may open (32 MiB)	脚本打开的文件数据超过了单次运行可打开的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一个位置和一个模式
+@msg	vc.run: give a command id, as a string	vc.run：请以字符串形式提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一个命令 ID 和一个参数对象
+@msg	vc.run: the parameters must be an object	vc.run：参数必须是对象
+@msg	vc.run: the result{place} is too large for a script	vc.run：结果{place}对脚本来说过大
+@msg	$.evalFile requires a file path	$.evalFile 需要文件路径
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：超时必须是 0 或更大的有限毫秒数
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一个文件路径和一个超时值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: {e} (thrown)	{name}：{e}（抛出）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: {e} (syntax)	{name}：{e}（语法错误）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: {e} (internal)	{name}：{e}（内部错误）
+@msg	{e} (these files stay written: {paths})	{e}（这些文件保持已写入状态：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：请以字符串形式提供名称
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：请提供 "en" 或 "de_DE" 之类的区域设置，或用 null 表示界面的区域设置
+@msg	$.localize: give true or false	$.localize：请提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能设置 512（开启本地化）或 0
+@msg	$.flags: give a number	$.flags：请提供一个数字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此处脚本只读写 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：请以字符串形式提供编码名称
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：无法设置内存缓存大小
+@msg	$.setenv: give a value, as a string	$.setenv：请以字符串形式提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能设置 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 个字母、数字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：请提供 0 到 {MAX_SLEEP_MS} 之间的毫秒数
+@msg	$.sleep: give a number of milliseconds	$.sleep：请提供毫秒数
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：运行不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中等待；请从脚本自身的代码中调用
+@msg	$.bp: scripts here have no debugger	$.bp：此处脚本没有调试器
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：脚本目前还不能显示对话框
+@msg	{name}: give a message	{name}：请提供消息
+@msg	{name}: give the text the field starts with	{name}：请提供字段的初始文本
+@msg	{name}: the message is longer than 16 KiB	{name}：消息超过 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：标题超过 256 字节
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：字段的初始文本超过 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：对话框不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中打开；请从脚本自身的代码中调用
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一个回答是给 {_1} 的，而不是给 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已没有此对话框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}对脚本来说过大
+@msg	vc.log: the log of this run is full	vc.log：本次运行的日志已满
+@msg	this function's script run has ended	此函数的脚本运行已结束
+@msg	the script made more host calls than one run may make	脚本进行的主机调用超过了一次运行允许的数量
+@msg	the script passed more data to and from commands than one run may pass	脚本与命令之间传递的数据超过了一次运行允许的数量
+@msg	the script added more objects and data to the documents than one run may add	脚本向文档添加的对象和数据超过了一次运行允许的数量
+@msg	{what}: the object is not a File or a Folder	{what}：该对象既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：数量必须是 0 或更大的有限数
+@msg	File.seek: the position must be a finite number	File.seek：位置必须是有限数
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必须是 0, 1 或 2
+@msg	script file is compiled: {value}	脚本文件已编译：{value}
+@msg	`name` must be the name of a script engine	`name` 必须是脚本引擎的名称
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主脚本引擎在每次运行时都是新的，从不保留，因此无法丢弃
+@msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
@@ -5666,6 +5751,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
 @msg	missing `{path}`	缺少 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 嵌套过深
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整
@@ -6183,6 +6269,16 @@ axis	Y Axis	Y 轴
 @msg	the path is hidden or locked, or cannot be selected here	该路径已隐藏或锁定，或无法在此处选择
 @msg	object {value} is not the stored path: it changed, or the document is another one	对象 {value} 不是存储的路径：它已更改，或这是另一个文档
 @msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必须为 "v1:" 加 16 位小写十六进制数字
+	Select Object…	选择对象…
+	Select Object	选择对象
+	Set Selection	设置选区
+	Case Sensitive	区分大小写
+	Whole Word	全字匹配
+	Select Object: {note}	选择对象：{note}
+	Select by Note	按注释选择
+@msg	the note is empty	注释为空
+@msg	the note is longer than 1,024 bytes	注释超过 1,024 字节
+@msg	no object that can be selected has a note matching “{query}”	没有可选对象的注释与“{query}”匹配
 	Menu Item:	菜单项：
 	No menu item matches.	没有匹配的菜单项。
 	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。

@@ -2984,6 +2984,7 @@ file-filter	Templates	Sablonok
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
+	missing from the Brushes panel	hiányzik az Ecsetek panelről
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -3170,6 +3171,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	Insert Aki Left	Aki beszúrása balra
+	Insert Aki Right	Aki beszúrása jobbra
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -3443,6 +3446,8 @@ mark-style	Japanese	Japán
 	Reset Rotate View	Nézetforgatás visszaállítása
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
+	Color Theme Picker	Színtéma-választó
+	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
 	Reset to default	Alapérték visszaállítása
 	Reset to Default	Alapérték visszaállítása
 	Reset to Defaults	Alapértékek visszaállítása
@@ -3934,6 +3939,7 @@ mark-style	Japanese	Japán
 	Show Note	Megjegyzés megjelenítése
 	Show Options	Beállítások megjelenítése
 	Show Recent Colors	Legutóbbi színek megjelenítése
+	Toggle RGB Percent	RGB százalékos megjelenítésének váltása
 	Show Original Path	Eredeti útvonal megjelenítése
 	Open this dialog with these settings next time	Legközelebb ez a párbeszédablak nyíljon meg ezekkel a beállításokkal
 	Auto-Simplify	Automatikus egyszerűsítés
@@ -5014,6 +5020,85 @@ imageTrace	Outline	Körvonal
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	egy sikertelen parancs olyan visszavonási lépéseket módosított, amelyeket nem lehetett visszaállítani, ezért a parancsfájl leállt
 @msg	a recovery copy could not be written, so the script was not run	a helyreállítási másolatot nem sikerült kiírni, ezért a parancsfájl nem futott le
+@msg	Script file access denied	A parancsfájl elérése megtagadva
+@msg	Script file exceeds 8 MiB	A parancsfájl nagyobb 8 MiB-nál
+@msg	Script file is not open	A parancsfájl nincs megnyitva
+@msg	Script file cannot be decoded	A parancsfájl nem dekódolható
+@msg	Script file is not a regular file	A parancsfájl nem normál fájl
+@msg	Script file does not exist	A parancsfájl nem létezik
+@msg	Script file could not be read	A parancsfájlt nem sikerült beolvasni
+@msg	Script folder has more than 2,048 entries	A parancsfájlmappában 2048-nál több bejegyzés van
+@msg	Script file open mode must be r, w, e or a	A parancsfájl megnyitási módja r, w, e vagy a lehet
+@msg	Script file writing is not available	A parancsfájlok írása nem érhető el
+@msg	Script file dialogs are not available	A parancsfájlok fájlpárbeszédpanelei nem érhetők el
+@msg	Script files cannot be opened in another application	A parancsfájlok nem nyithatók meg másik alkalmazásban
+@msg	Script file access is unavailable on the web	A parancsfájlok elérése a weben nem érhető el
+@msg	Script has 256 files open	A parancsfájlnak 256 megnyitott fájlja van
+@msg	Script file path exceeds 32,767 characters	A parancsfájl elérési útja hosszabb 32 767 karakternél
+@msg	Script folder mask takes too many steps to match	A parancsfájlmappa maszkjának illesztése túl sok lépést igényel
+@msg	the script opened more file data than one run may open (32 MiB)	a parancsfájl több fájladatot nyitott meg, mint amennyit egy futás megnyithat (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: egy pozíciót és egy módot vár
+@msg	vc.run: give a command id, as a string	vc.run: adjon meg egy parancsazonosítót karakterláncként
+@msg	vc.run: takes a command id and an object of parameters	vc.run: egy parancsazonosítót és egy paraméterobjektumot vár
+@msg	vc.run: the parameters must be an object	vc.run: a paramétereknek objektumnak kell lenniük
+@msg	vc.run: the result{place} is too large for a script	vc.run: az eredmény{place} túl nagy egy parancsfájlhoz
+@msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
+@msg	{name}: {e} (thrown)	{name}: {e} (kivétel)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (korlát)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: {line}. sor, {column}. oszlop: {e} (korlát)
+@msg	{name}: {e} (limit)	{name}: {e} (korlát)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (szintaktikai hiba)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: {line}. sor, {column}. oszlop: {e} (szintaktikai hiba)
+@msg	{name}: {e} (syntax)	{name}: {e} (szintaktikai hiba)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (leállítva)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: {line}. sor, {column}. oszlop: {e} (leállítva)
+@msg	{name}: {e} (stopped)	{name}: {e} (leállítva)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (belső hiba)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: {line}. sor, {column}. oszlop: {e} (belső hiba)
+@msg	{name}: {e} (internal)	{name}: {e} (belső hiba)
+@msg	{e} (these files stay written: {paths})	{e} (ezek a fájlok írva maradnak: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: adjon meg egy nevet karakterláncként
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: adjon meg egy területi beállítást, például "en" vagy "de_DE", vagy null értéket a felületéhez
+@msg	$.localize: give true or false	$.localize: adjon meg true vagy false értéket
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: csak a 512, amely bekapcsolja a honosítást, vagy a 0 állítható be
+@msg	$.flags: give a number	$.flags: adjon meg egy számot
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: a parancsfájlok itt csak UTF-8 kódolást olvasnak és írnak
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: adja meg egy kódolás nevét karakterláncként
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: a memória-gyorsítótár mérete nem állítható be
+@msg	$.setenv: give a value, as a string	$.setenv: adjon meg egy értéket karakterláncként
+@msg	$.setenv: only {_1} can be set	$.setenv: csak ezek állíthatók be: {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: egy érték legfeljebb {MAX_ENV_BYTES} betűből, számjegyből és _ . - @ jelből áll
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: adjon meg 0 és {MAX_SLEEP_MS} közötti ezredmásodperc-számot
+@msg	$.sleep: give a number of milliseconds	$.sleep: adjon meg egy ezredmásodperc-számot
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: egy futás nem várakozhat beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
+@msg	$.bp: scripts here have no debugger	$.bp: a parancsfájlokhoz itt nincs hibakereső
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: a parancsfájlok még nem tudnak párbeszédpanelt megjeleníteni
+@msg	{name}: give a message	{name}: adjon meg egy üzenetet
+@msg	{name}: give the text the field starts with	{name}: adja meg a szöveget, amellyel a mező kezdődik
+@msg	{name}: the message is longer than 16 KiB	{name}: az üzenet hosszabb 16 KiB-nál
+@msg	{name}: the title is longer than 256 bytes	{name}: a cím hosszabb 256 bájtnál
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: a szöveg, amellyel a mező kezdődik, hosszabb 16 KiB-nál
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
+@msg	vc.document{place} is too large for a script	a vc.document{place} túl nagy egy parancsfájlhoz
+@msg	vc.log: the log of this run is full	vc.log: ennek a futásnak a naplója megtelt
+@msg	this function's script run has ended	ennek a függvénynek a parancsfájl-futása véget ért
+@msg	the script made more host calls than one run may make	a parancsfájl több gazdahívást végzett, mint amennyit egy futás végezhet
+@msg	the script passed more data to and from commands than one run may pass	a parancsfájl több adatot adott át a parancsoknak és a parancsoktól, mint amennyit egy futás átadhat
+@msg	the script added more objects and data to the documents than one run may add	a parancsfájl több objektumot és adatot adott a dokumentumokhoz, mint amennyit egy futás hozzáadhat
+@msg	{what}: the object is not a File or a Folder	{what}: az objektum nem File és nem Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: a darabszámnak véges számnak kell lennie, 0 vagy több
+@msg	File.seek: the position must be a finite number	File.seek: a pozíciónak véges számnak kell lennie
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: a mód csak 0, 1 vagy 2 lehet
+@msg	script file is compiled: {value}	a parancsfájl le van fordítva: {value}
+@msg	`name` must be the name of a script engine	a `name` értékének egy parancsfájlmotor nevének kell lennie
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	a fő parancsfájlmotor minden futáshoz új, és sosem marad meg, ezért nem dobható el
+@msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
@@ -5776,6 +5861,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
 @msg	missing `{path}`	hiányzik: `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
+@msg	`{path}` is nested too deeply	`{path}` túl mélyen van egymásba ágyazva
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
@@ -6328,6 +6414,16 @@ axis	Y Axis	Y tengely
 @msg	the path is hidden or locked, or cannot be selected here	az útvonal rejtett vagy zárolt, vagy itt nem jelölhető ki
 @msg	object {value} is not the stored path: it changed, or the document is another one	a(z) {value} objektum nem a tárolt útvonal: megváltozott, vagy ez egy másik dokumentum
 @msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	a `fingerprint` értéke "v1:" és 16 kisbetűs hexadecimális számjegy kell legyen
+	Select Object…	Objektum kijelölése…
+	Select Object	Objektum kijelölése
+	Set Selection	Kijelölés beállítása
+	Case Sensitive	Kis- és nagybetűk megkülönböztetése
+	Whole Word	Teljes szó
+	Select Object: {note}	Objektum kijelölése: {note}
+	Select by Note	Kijelölés megjegyzés szerint
+@msg	the note is empty	a megjegyzés üres
+@msg	the note is longer than 1,024 bytes	a megjegyzés hosszabb 1024 bájtnál
+@msg	no object that can be selected has a note matching “{query}”	egyetlen kijelölhető objektum megjegyzése sem egyezik ezzel: „{query}”
 	Menu Item:	Menüelem:
 	No menu item matches.	Egy menüelem sem egyezik.
 	Several menu items match. Choose one from the list.	Több menüelem is egyezik. Válasszon egyet a listából.

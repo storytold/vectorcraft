@@ -1558,6 +1558,8 @@ lighting	Light	Svjetlo
 	Leading	Prored
 	No Break	Bez preloma
 	Proportional Metrics	Proporcionalna metrika
+	Insert Aki Left	Umetni aki lijevo
+	Insert Aki Right	Umetni aki desno
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -1577,6 +1579,7 @@ digits	Malayalam	Malajalam
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
 	Show Recent Colors	Prikaži nedavne boje
+	Toggle RGB Percent	Uključi/isključi RGB u postocima
 	Color Panel Options	Opcije panela boja
 	Small Caps	Mala velika slova
 	Small Caps (on the roadmap)	Mala velika slova (u planu)
@@ -2838,6 +2841,8 @@ digits	Malayalam	Malajalam
 	Randomly change saturation and brightness	Nasumično promijeni zasićenje i svjetlinu
 	Recolor this row	Ponovo oboji ovaj red
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
+	Color Theme Picker	Birač teme boja
+	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
 	Separate colors into rows	Razdvoji boje u redove
 	Unlink harmony colors	Prekini vezu boja harmonije
 	1 Color Job	Posao s 1 bojom
@@ -3322,6 +3327,7 @@ theme	Appearance	Izgled
 	Art Brush	Umjetnička četkica
 	Bristle Brush	Četkica s čekinjama
 	Pattern Brush	Četkica uzorka
+	missing from the Brushes panel	nedostaje u panelu Četkice
 	Select art to make a scatter, art or pattern brush.	Odaberite crtež da napravite raspršenu, umjetničku četkicu ili četkicu uzorka.
 	Brush Art	Crtež četkice
 	New Symbol	Novi simbol
@@ -6025,6 +6031,16 @@ axis	Y Axis	Y osa
 @msg	the path is hidden or locked, or cannot be selected here	putanja je skrivena ili zaključana, ili se ovdje ne može odabrati
 @msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} nije sačuvana putanja: promijenjena je ili je dokument drugi
 @msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` mora biti "v1:" i 16 malih heksadecimalnih cifara
+	Select Object…	Odaberi objekt…
+	Select Object	Odaberi objekt
+	Set Selection	Postavi odabir
+	Case Sensitive	Razlikuj velika i mala slova
+	Whole Word	Cijela riječ
+	Select Object: {note}	Odaberi objekt: {note}
+	Select by Note	Odaberi po napomeni
+@msg	the note is empty	napomena je prazna
+@msg	the note is longer than 1,024 bytes	napomena je duža od 1.024 bajta
+@msg	no object that can be selected has a note matching “{query}”	nijedan objekt koji se može odabrati nema napomenu koja odgovara „{query}”
 	Menu Item:	Stavka menija:
 	No menu item matches.	Nijedna stavka menija ne odgovara.
 	Several menu items match. Choose one from the list.	Odgovara više stavki menija. Izaberite jednu sa liste.

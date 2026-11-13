@@ -2670,7 +2670,8 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
 }
 
 /// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
-/// controls while it has room, and the Distribute buttons for two or more selected artboards. A
+/// controls while it has room, and the Distribute buttons for two or more selected artboards with
+/// Align to Artboard and three or more with Align to Selection. A
 /// click aligns the selected artboards as the Align panel's button does. The group is left out
 /// while the panel menu has it off.
 #[test]
@@ -2699,7 +2700,10 @@ fn the_control_bar_aligns_the_selected_artboards_with_the_artboard_tool() {
     assert!(button(&mut app, "Vertical Align Top").is_some(), "one artboard: the Align buttons");
     assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "one artboard: no Distribute buttons");
     app.session.set_tool_option("selected", &json!([1, 0]));
-    assert!(button(&mut app, "Horizontal Distribute Left").is_some(), "two artboards: the Distribute buttons");
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "two artboards, Align to Selection: no Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Artboard;
+    assert!(button(&mut app, "Horizontal Distribute Left").is_some(), "two artboards, Align to Artboard: the Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Selection;
     let r = button(&mut app, "Vertical Align Top").expect("Vertical Align Top");
     let press =
         |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };

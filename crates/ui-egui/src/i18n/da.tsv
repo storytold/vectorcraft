@@ -1494,6 +1494,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	Insert Aki Left	Indsæt aki til venstre
+	Insert Aki Right	Indsæt aki til højre
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -1513,6 +1515,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Markér et tekstobjekt for at redigere dets tegnattributter.
 	Show Options	Vis indstillinger
 	Show Recent Colors	Vis seneste farver
+	Toggle RGB Percent	Skift RGB i procent
 	Small Caps	Kapitæler
 	Small Caps (on the roadmap)	Kapitæler (på vejkortet)
 	Standard Vertical Roman Alignment	Standard lodret romersk justering
@@ -2658,6 +2661,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Ændr mætning og lysstyrke tilfældigt
 	Recolor this row	Omfarv denne række
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
+	Color Theme Picker	Farvetemavælger
+	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
 	Separate colors into rows	Opdel farver i rækker
 	Unlink harmony colors	Fjern sammenkædning af harmonifarver
 	1 Color Job	1-farvejob
@@ -3107,6 +3112,7 @@ theme	Appearance	Udseende
 	Art Brush	Grafikpensel
 	Bristle Brush	Børstepensel
 	Pattern Brush	Mønsterpensel
+	missing from the Brushes panel	mangler i panelet Pensler
 	Select art to make a scatter, art or pattern brush.	Markér grafik for at oprette en spredningspensel, grafikpensel eller mønsterpensel.
 	Brush Art	Penselgrafik
 	New Symbol	Nyt symbol
@@ -6000,6 +6006,16 @@ axis	Y Axis	Y-akse
 @msg	the path is hidden or locked, or cannot be selected here	kurven er skjult eller låst, eller kan ikke markeres her
 @msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} er ikke den gemte kurve: den er ændret, eller dokumentet er et andet
 @msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` skal være "v1:" og 16 hexadecimale cifre med små bogstaver
+	Select Object…	Markér objekt…
+	Select Object	Markér objekt
+	Set Selection	Angiv markering
+	Case Sensitive	Forskel på store og små bogstaver
+	Whole Word	Helt ord
+	Select Object: {note}	Markér objekt: {note}
+	Select by Note	Markér efter note
+@msg	the note is empty	noten er tom
+@msg	the note is longer than 1,024 bytes	noten er længere end 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	intet objekt, der kan markeres, har en note, der matcher »{query}«
 	Menu Item:	Menupunkt:
 	No menu item matches.	Intet menupunkt passer.
 	Several menu items match. Choose one from the list.	Flere menupunkter passer. Vælg et fra listen.

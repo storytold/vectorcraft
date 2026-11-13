@@ -1243,13 +1243,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPanel",
         "Color Panel Options",
         "",
-        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool, recentColors?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), Show Options (true) or Hide Options (false), and check (true) or uncheck (false) Show Recent Colors, which shows or hides the panel's Recent Colors row (applied colors still join the list while it is hidden; the Swatches panel keeps its row); all three are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options, ui.color_show_recent_colors) → {mode (null: none picked yet), options, recentColors, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
+        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool, recentColors?: bool, rgbPercent?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), Show Options (true) or Hide Options (false), check (true) or uncheck (false) Show Recent Colors, which shows or hides the panel's Recent Colors row (applied colors still join the list while it is hidden; the Swatches panel keeps its row), and show the RGB mode's R, G and B in percent (true) or from 0 to 255 (false), as a double-click right of an RGB field switches them (the color does not change; Web Safe RGB and the hex field stay in 0 to 255); all four are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options, ui.color_show_recent_colors, ui.color_rgb_percent) → {mode (null: none picked yet), options, recentColors, rgbPercent, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
+    ),
+    (
+        "ui.colorRgbPercent",
+        "Toggle RGB Percent",
+        "",
+        "{} switch the Color panel's R, G and B between percent and 0 to 255, as a double-click right of an RGB field does (ui.colorPanel {rgbPercent}); the color does not change, and the choice is kept with the preferences; a parameter is an error and changes nothing → true when they show in percent",
     ),
     (
         "ui.savePdfDialog",
         "Save PDF Dialog",
         "",
-        "{path?, preset?, range?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks)",
+        "{path?, preset?, range?, useArtboards?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks); useArtboards: false: one page of the visible art's bounds, with no Artboards section",
     ),
     (
         "file.exportAs",
@@ -1439,6 +1445,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Insert Select Path",
         "",
         "{set?: index, action?: index, step?: index} insert a Select Path step for the path selected in the active document, without changing the selection: the step `select.storedPath {id, fingerprint}` stores the path's id and a fingerprint of its kind, fill rule and anchors, and playback selects only that path while it is still there unchanged and can be selected, else the step is an error. The selection must be one whole path or compound path that can be selected: not anchors or segments alone, several objects, a group, type or another kind of object, a guide, a member of a compound path, or a hidden or locked object. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. No document, a selection that is not such a path, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Select Path runs this, for the selected step or action or the recording in progress → {set, action, step}, or {recording: true}",
+    ),
+    (
+        crate::panels::actions::INSERT_SELECT_OBJECT,
+        "Select Object",
+        "",
+        "{set?: index, action?: index, step?: index, note, caseSensitive?: bool, wholeWord?: bool} insert a Select Object step, without running it: playback runs select.byNote {note, caseSensitive, wholeWord}, which selects the objects whose Attributes note matches note, and a playback that finds no such object stops there with an error. note loses its leading and trailing spaces and must then be 1 to 1,024 bytes; caseSensitive and wholeWord default to false. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. A missing or empty note, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Select Object… (dialog `actionSelectObject`, Set Selection, with note, caseSensitive, wholeWord, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
     ),
     (
         crate::panels::actions::CONTINUE_PLAYBACK,

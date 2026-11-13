@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; grayscale makes a gray PNG, and bitmap a 1-bit TIFF or, where it has transparency, a black-and-white gray PNG with alpha; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -729,7 +729,9 @@ fn cmyk_raster(
 /// The image Object › Rasterize makes of some art, before it goes in a document
 /// ([`rasterize_art`]).
 pub(crate) struct Rasterized {
-    /// A PNG, or a CMYK image of the art's inks ([`cmyk_raster`]).
+    /// A PNG (greyscale for the Grayscale colour model), a 1-bit TIFF or greyscale PNG for Bitmap
+    /// ([`vectorcraft_render::Rendered::to_bilevel`]), or a CMYK image of the art's inks
+    /// ([`cmyk_raster`]).
     blob: vectorcraft_doc::ImageBlob,
     /// A CMYK image's transparency, a greyscale PNG: it becomes the image's opacity mask.
     alpha: Option<Vec<u8>>,
@@ -769,7 +771,8 @@ impl Rasterized {
 /// Object › Rasterize's image of `nodes` (drawn also where hidden) with the params `p` of command
 /// `cmd`, each defaulting to `doc`'s raster effects settings: over the bounds of what the art draws
 /// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels. With `inks`,
-/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs.
+/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs,
+/// greyscale for the Grayscale and Bitmap colour models (an opaque Bitmap image is a 1-bit TIFF).
 pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str, inks: bool) -> Result<Rasterized> {
     check_numbers(p, &["ppi"], cmd)?;
     let ppi = f64_or(p, "ppi", doc.raster_effects_ppi);
@@ -836,10 +839,17 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
     let tmp = isolated_doc(doc, nodes);
     let opts = raster.render_options(RasterFormat::Png);
     let (img, warning) = render_pixels(&tmp, region, scale, &opts, look.color_model)?;
-    let (blob, alpha) = if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && look.color_model == RasterColorModel::Document {
-        cmyk_raster(&tmp, region, scale, &opts, &img)?
-    } else {
-        (vectorcraft_doc::ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?), None)
+    let png =
+        |bytes: std::result::Result<Vec<u8>, String>| bytes.map(|b| vectorcraft_doc::ImageBlob::new("image/png", b)).map_err(EngineError::Other);
+    let (blob, alpha) = match look.color_model {
+        RasterColorModel::Document if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => cmyk_raster(&tmp, region, scale, &opts, &img)?,
+        RasterColorModel::Document => (png(img.to_png())?, None),
+        // Grayscale images, as the colour models say (#6969).
+        RasterColorModel::Grayscale => (png(img.to_gray_png())?, None),
+        RasterColorModel::Bitmap => {
+            let (mime, bytes) = img.to_bilevel(ppi).map_err(EngineError::Other)?;
+            (vectorcraft_doc::ImageBlob::new(mime, bytes), None)
+        }
     };
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     Ok(Rasterized { blob, alpha, width: img.width, height: img.height, xf, clip, warning })
