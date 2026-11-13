@@ -1,6 +1,6 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 4, "name",
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 5, "name",
 //! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
 //! with `{"message", "allowContinue"}`. A Select Object step is the command `select.byNote` with
@@ -10,9 +10,9 @@
 //! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
 //! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
 //! excluded steps, sets with stops use version 3 so older builds refuse them rather than fail at a
-//! stop, and sets with Select Object or Select Path steps use version 4 so older builds refuse them
-//! rather than fail at that step. Other sets use version 1, and earlier version 1 to 3 files still
-//! work.
+//! stop, sets with Select Object steps use version 4 and sets with Select Path steps use version 5 so
+//! older builds refuse them rather than fail at that step. Other sets use version 1, and earlier
+//! version 1 to 4 files still work.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
 //! `actionSet.read`).
 
@@ -173,11 +173,12 @@ pub fn write_set(set: &ActionSet) -> String {
     let has_select_object = steps().any(|(command, params)| !select_objects_in(command, params).is_empty());
     let has_select_path = steps().any(|(command, params)| !select_paths_in(command, params).is_empty());
     let has_stop = steps().any(|(command, params)| !stops_in(command, params).is_empty());
-    let version = match (has_select_object || has_select_path, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
-        (true, ..) => 4,
-        (false, true, _) => 3,
-        (false, false, true) => 2,
-        (false, false, false) => 1,
+    let version = match (has_select_path, has_select_object, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        (true, ..) => 5,
+        (false, true, ..) => 4,
+        (false, false, true, _) => 3,
+        (false, false, false, true) => 2,
+        (false, false, false, false) => 1,
     };
     let file = SetFile { format: ACTIONS_EXT.into(), version, name: set.name.clone(), actions };
     serde_json::to_string_pretty(&file).unwrap_or_default()
@@ -192,7 +193,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1..=4) {
+    if !matches!(f.version, 1..=5) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {

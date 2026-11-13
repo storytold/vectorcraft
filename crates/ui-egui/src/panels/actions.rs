@@ -3184,7 +3184,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 5, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 6, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -4693,19 +4693,22 @@ mod tests {
         let (mut app, _, _) = app_with_two_rectangles();
         app.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0, "step": 0})).unwrap();
         let saved = files::write_set(&app.ui.action_sets[0]);
-        assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(4), "older builds must refuse a Select Path step");
+        assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(5), "older builds must refuse a Select Path step");
         let loaded = files::read_set(&saved, "Test").unwrap();
         assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
         let step = app.ui.action_sets[0].actions[0].steps[1].clone();
         let nested = json!({"commands": [{"command": SELECT_PATH_STEP, "params": step.1}]});
         let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
-        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(4), "a step in a recorded batch counts");
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(5), "a step in a recorded batch counts");
+        let mut both = app.ui.action_sets[0].clone();
+        both.actions[0].steps.push((SELECT_OBJECT_STEP.into(), json!({"note": "a", "caseSensitive": false, "wholeWord": false})));
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&both)).unwrap()["version"], json!(5), "with a Select Object step too");
         for params in
             [json!({"id": 3}), json!({"id": -1, "fingerprint": step.1["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)]
         {
             let bad = json!({"command": SELECT_PATH_STEP, "params": params});
             for s in [bad.clone(), json!({"command": "command.batch", "params": {"commands": [bad]}})] {
-                let file = json!({"format": "vcactions", "version": 4, "name": "Bad", "actions": [{"name": "A", "steps": [s]}]});
+                let file = json!({"format": "vcactions", "version": 5, "name": "Bad", "actions": [{"name": "A", "steps": [s]}]});
                 assert_eq!(files::read_set(&file.to_string(), "Test").unwrap_err(), "not an action set file", "{s}");
             }
         }
@@ -5786,7 +5789,7 @@ mod tests {
                 json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
             assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
         }
-        let later = json!({"format": "vcactions", "version": 5, "name": "New", "actions": []});
+        let later = json!({"format": "vcactions", "version": 6, "name": "New", "actions": []});
         assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
         for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
             let stop = json!({"command": "action.stop", "params": params});
