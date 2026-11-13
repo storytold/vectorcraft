@@ -282,6 +282,41 @@ fn kept_on(slot: &vectorcraft_doc::SeriesPaint, fill: bool, on: Option<Rect>) ->
     Some(Paint::Gradient(g))
 }
 
+/// Whether `a` and `b` are the same paint, a gradient's vector, focal point and freeform points each within 1e-6 pt (the
+/// rounding a move or a placement on another box leaves).
+fn same_paint_placed(a: &Paint, b: &Paint) -> bool {
+    let (Paint::Gradient(a), Paint::Gradient(b)) = (a, b) else { return a == b };
+    let near = |p: vectorcraft_geom::Point, q: vectorcraft_geom::Point| (p - q).hypot() <= 1e-6;
+    let mut a = (**a).clone();
+    match (&mut a.geom, &b.geom) {
+        (Some(ag), Some(bg)) => {
+            let focal = match (ag.focal, bg.focal) {
+                (Some(p), Some(q)) => near(p, q),
+                (p, q) => p.is_none() && q.is_none(),
+            };
+            if !(near(ag.start, bg.start) && near(ag.end, bg.end) && focal) {
+                return false;
+            }
+            (ag.start, ag.end, ag.focal) = (bg.start, bg.end, bg.focal);
+        }
+        (None, None) => {}
+        _ => return false,
+    }
+    match (&mut a.freeform, &b.freeform) {
+        (Some(af), Some(bf)) => {
+            if af.points.len() != bf.points.len() || !af.points.iter().zip(&bf.points).all(|(p, q)| near(p.at, q.at)) {
+                return false;
+            }
+            for (p, q) in af.points.iter_mut().zip(&bf.points) {
+                p.at = q.at;
+            }
+        }
+        (None, None) => {}
+        _ => return false,
+    }
+    a == **b
+}
+
 /// The box a gradient on `node`'s fill (`width` None) or on its stroke of `width` is placed on: the geometric bounds, grown
 /// by half the weight for a stroke. None for a box with no width or no height, which a gradient's place cannot be kept
 /// relative to.
@@ -361,7 +396,7 @@ fn store_series_paints(doc: &mut Document, captures: Vec<Capture>) -> bool {
         }
         let Some(slot) = spec.series_paints.get_mut(index) else { continue };
         // A mark that shows the kept gradient as it was drawn leaves the kept gradient as it is.
-        let drawn = kept_on(slot, fill, from).is_some_and(|kept| kept == paint);
+        let drawn = kept_on(slot, fill, from).is_some_and(|kept| same_paint_placed(&kept, &paint));
         let (paint, unit) = unit_box_paint(paint, from);
         if fill {
             if !drawn {

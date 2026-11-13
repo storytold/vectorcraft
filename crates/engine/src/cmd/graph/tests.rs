@@ -2702,6 +2702,19 @@ fn rewriting_a_series_marks_drawn_gradient_stroke_records_no_undo_step() {
         assert!(s.doc().unwrap().doc == was, "writing mark {:?} changed the document", mark.id);
         assert_eq!(s.doc().unwrap().history.undo.len(), undo);
     }
+    // A mark moved with its gradient shows the kept gradient on its moved box, up to rounding.
+    let kept = spec(&s, id).series_paints[0].clone();
+    for (i, mark) in series_parts(&s, id, 0).into_iter().filter(|m| matches!(m.appearance.stroke_paint(), Paint::Gradient(_))).enumerate() {
+        s.execute("select.set", &json!({"ids": [mark.id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 13.37 + i as f64 * 0.731, "dy": -7.19})).unwrap();
+        let moved = s.doc().unwrap().doc.node(mark.id).unwrap().geometric_bounds().unwrap();
+        assert!((moved.x0 - mark.geometric_bounds().unwrap().x0 - 13.37 - i as f64 * 0.731).abs() < 1e-9, "mark {:?} did not move", mark.id);
+        let undo = s.doc().unwrap().history.undo.len();
+        let row = top_row(&s, mark.id, false);
+        s.execute("appearance.setItem", &json!({"ids": [mark.id.0], "index": row, "weight": mark.appearance.stroke_width()})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0], kept, "writing moved mark {:?} changed the kept stroke", mark.id);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
 }
 
 /// A gradient placed on a line series' stroke is kept relative to the line's stroke box, and with Draw Filled Lines the
