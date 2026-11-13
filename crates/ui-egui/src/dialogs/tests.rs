@@ -428,6 +428,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.colorGuideOptions", json!({})),
         ("ui.colorBalanceDialog", json!({})),
         ("ui.saturateDialog", json!({})),
+        ("ui.indexedColorDialog", json!({})),
         ("ui.saveSwatchLibrary", json!({})),
         ("ui.flattenTransparencyDialog", json!({})),
         ("ui.expandDialog", json!({})),

@@ -906,6 +906,8 @@ antiAlias	Sharp	Nítid
 	Convert to destination (preserve numbers)	Converteix al destí (conserva els números)
 	Convert to Global	Converteix en global
 	Convert to Grayscale	Converteix a escala de grisos
+	Convert to Indexed Color	Converteix a color indexat
+	Convert to Indexed Color…	Converteix a color indexat…
 	Convert To Outlines	Converteix en contorns
 	Convert To Point Type	Converteix en text de punt
 	Convert to RGB	Converteix a RGB
@@ -3144,6 +3146,8 @@ digits	Malayalam	Malaiàlam
 	per slice	per tall
 	Percent:	Percentatge:
 	Perceptual	Perceptual
+	Hue Clockwise	To en sentit horari
+	Hue Counterclockwise	To en sentit antihorari
 	Perceptual Scales	Escales perceptuals
 	Performance	Rendiment
 	Permissions	Permisos
@@ -3401,6 +3405,11 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
+	Canvas display profile:	Perfil de pantalla del llenç:
+	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No s’ha trobat cap perfil de pantalla utilitzable: el llenç es dibuixa en sRGB.
 	Rearrange	Reorganitza
 	Select All Artboards	Selecciona tots els taulers
 	Switch Orientation	Canvia l’orientació
@@ -3928,6 +3937,22 @@ digits	Malayalam	Malaiàlam
 	Graphite Pencil	Llapis de grafit
 	Wax Crayon	Cera de colors
 	Charcoal Dust	Pols de carbó
+	Notched Ribbon	Cinta dentada
+	Double Line	Línia doble
+	Wave	Ona
+	Teardrop	Llàgrima
+	Striped Ribbon	Cinta ratllada
+	Fine Nib	Plomí fi
+	Broad Nib	Plomí ample
+	Chisel	Escarpra
+	Round Pen	Ploma rodona
+	Pressure Pen	Ploma de pressió
+	Beads	Perles
+	Dash Dot	Ratlla i punt
+	Scallops	Festons
+	Stars	Estrelles
+	Triangles	Triangles
+	Sparkles	Espurnes
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4054,6 +4079,7 @@ digits	Malayalam	Malaiàlam
 	Continue	Continua
 	Continue Action	Continua l’acció
 	Delete Action Step	Suprimeix el pas de l’acció
+	Move Action Step	Mou el pas de l’acció
 	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
 	Stop: {message}	Aturada: {message}
 @msg	no action is waiting at a stop	cap acció no espera en una aturada
@@ -5196,7 +5222,7 @@ digits	Malayalam	Malaiàlam
 @msg	`ids` must be an array of object ids, not {v}	`ids` ha de ser una matriu d’identificadors d’objecte, no {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
-@msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` ha de ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
@@ -5523,6 +5549,9 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No s’ha pogut col·locar {name}: el document on es va deixar anar s’ha revertit
+@msg	Couldn't place {name}: the document it was placed in was reverted	No s’ha pogut col·locar {name}: el document on es va col·locar s’ha revertit
+@msg	Couldn't paste: the document it was pasted in was reverted	No s’ha pogut enganxar: el document on s’enganxava s’ha revertit
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}

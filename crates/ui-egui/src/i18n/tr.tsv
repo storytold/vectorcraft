@@ -608,6 +608,8 @@ font-technology	Variable	Değişken
 	Convert to Artboards	Çalışma Yüzeylerine Dönüştür
 	Convert to CMYK	CMYK'ye dönüştür
 	Convert to Grayscale	Gri Tonlamaya Dönüştür
+	Convert to Indexed Color	Dizinlenmiş Renge Dönüştür
+	Convert to Indexed Color…	Dizinlenmiş Renge Dönüştür…
 	Convert To Outlines	Anahatlara Dönüştür
 	Convert To Point Type	Nokta Türüne Dönüştür
 	Convert to RGB	RGB'ye dönüştür
@@ -2507,6 +2509,11 @@ digits	Malayalam	Malayalam
 	Rating:	Değerlendirme:
 	Real World:	Gerçek Dünya:
 	Real-time Drawing and Editing	Gerçek Zamanlı Çizim ve Düzenleme
+	Use Monitor Profile for Canvas	Tuval için Monitör Profilini Kullan
+	The canvas is drawn in sRGB.	Tuval sRGB olarak çizilir.
+	Canvas display profile:	Tuvalin ekran profili:
+	The system matches the window to the display's colors.	Sistem pencereyi ekranın renklerine uyarlar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kullanılabilir ekran profili bulunamadı: tuval sRGB olarak çizilir.
 	Rearrange All Artboards	Tüm Çalışma Yüzeylerini Yeniden Düzenleme
 	Rearrange	Yeniden Düzenle
 	Select All Artboards	Tüm Çalışma Yüzeylerini Seç
@@ -4129,6 +4136,9 @@ axis	Both	Her İkisi
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} yerleştirilemedi: bırakıldığı belge kapatıldı
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} yerleştirilemedi: yerleştirildiği belge kapatıldı
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} yerleştirilemedi: bırakıldığı belge geri döndürüldü
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} yerleştirilemedi: yerleştirildiği belge geri döndürüldü
+@msg	Couldn't paste: the document it was pasted in was reverted	Yapıştırılamadı: yapıştırıldığı belge geri döndürüldü
 @msg	Couldn't read {name}: {e}	{name} okunamadı: {e}
 @msg	Couldn't save recovery data: {e}	Kurtarma verileri kaydedilemedi: {e}
 @msg	Create Outlines: select text objects	Anahatlar Oluştur: metin nesnelerini seçin
@@ -5470,6 +5480,8 @@ lighting	Light	Işık
 	Pen	Kalem
 	Pentagram	Pentagram
 	Perceptual	algısal
+	Hue Clockwise	Renk tonu saat yönünde
+	Hue Counterclockwise	Renk tonu saat yönünün tersine
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6267,7 +6279,7 @@ axis	Y Axis	Y ekseni
 	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
-@msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise veya hue-counterclockwise olmalıdır
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
@@ -6510,6 +6522,7 @@ axis	Y Axis	Y ekseni
 	Continue	Devam Et
 	Continue Action	Eyleme Devam Et
 	Delete Action Step	Eylem Adımını Sil
+	Move Action Step	Eylem Adımını Taşı
 	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
 	Stop: {message}	Durak: {message}
 @msg	no action is waiting at a stop	durakta bekleyen eylem yok
@@ -6681,6 +6694,22 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+	Notched Ribbon	Çentikli Şerit
+	Double Line	Çift Çizgi
+	Wave	Dalga
+	Teardrop	Gözyaşı
+	Striped Ribbon	Çizgili Şerit
+	Fine Nib	İnce Uç
+	Broad Nib	Geniş Uç
+	Chisel	Keski
+	Round Pen	Yuvarlak Kalem
+	Pressure Pen	Basınçlı Kalem
+	Beads	Boncuklar
+	Dash Dot	Çizgi Nokta
+	Scallops	Fistolar
+	Stars	Yıldızlar
+	Triangles	Üçgenler
+	Sparkles	Parıltılar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

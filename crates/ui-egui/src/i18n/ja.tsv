@@ -182,6 +182,8 @@ digits	Malayalam	マラヤーラム数字
 	Blend Vertically	上下にブレンド
 	Convert to CMYK	CMYK に変換
 	Convert to Grayscale	グレースケールに変換
+	Convert to Indexed Color	インデックスカラーに変換
+	Convert to Indexed Color…	インデックスカラーに変換…
 	Convert to RGB	RGB に変換
 	Invert Colors	カラー反転
 	Overprint Black…	オーバープリントブラック…
@@ -2791,6 +2793,11 @@ mark-style	Japanese	日本式
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
+	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
+	Canvas display profile:	キャンバスのディスプレイプロファイル:
+	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
+	No usable display profile was found: the canvas is drawn in sRGB.	使用できるディスプレイプロファイルが見つかりません。キャンバスは sRGB で描画されます。
 	Rearrange All Artboards	すべてのアートボードを再配置
 	Rearrange	再配置
 	Select All Artboards	すべてのアートボードを選択
@@ -5182,6 +5189,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} を配置できませんでした: 配置先のドキュメントは閉じられています
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} を配置できませんでした: ドロップ先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} を配置できませんでした: 配置先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't paste: the document it was pasted in was reverted	貼り付けられませんでした: 貼り付け先のドキュメントは保存済みの状態に戻されました
 @msg	no files to place	配置するファイルがありません
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
@@ -6003,7 +6013,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
-@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+	Hue Clockwise	時計回りの色相
+	Hue Counterclockwise	反時計回りの色相
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` には classic、perceptual、hue-clockwise または hue-counterclockwise を指定してください
 @msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます
@@ -6246,6 +6258,7 @@ axis	Y Axis	Y 軸
 	Continue	続行
 	Continue Action	アクションを続行
 	Delete Action Step	アクションステップを削除
+	Move Action Step	アクションステップを移動
 	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
 	Stop: {message}	停止: {message}
 @msg	no action is waiting at a stop	停止で待機中のアクションはありません
@@ -6417,6 +6430,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+	Notched Ribbon	ノッチリボン
+	Double Line	二重線
+	Wave	波
+	Teardrop	しずく
+	Striped Ribbon	ストライプリボン
+	Fine Nib	細いペン先
+	Broad Nib	太いペン先
+	Chisel	平ノミ
+	Round Pen	丸ペン
+	Pressure Pen	筆圧ペン
+	Beads	ビーズ
+	Dash Dot	一点鎖線
+	Scallops	スカラップ
+	Stars	星
+	Triangles	三角形
+	Sparkles	きらめき
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

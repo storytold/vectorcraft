@@ -721,6 +721,8 @@ font-technology	Variable	Biến thiên
 	Convert to Artboards	Chuyển thành bảng vẽ
 	Convert to CMYK	Chuyển sang CMYK
 	Convert to Grayscale	Chuyển sang thang xám
+	Convert to Indexed Color	Chuyển sang màu chỉ mục
+	Convert to Indexed Color…	Chuyển sang màu chỉ mục…
 	Convert To Outlines	Chuyển thành đường bao
 	Convert To Point Type	Chuyển sang chữ điểm
 	Convert to RGB	Chuyển sang RGB
@@ -3049,6 +3051,11 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Use Monitor Profile for Canvas	Dùng hồ sơ màn hình cho vùng vẽ
+	The canvas is drawn in sRGB.	Vùng vẽ được hiển thị ở sRGB.
+	Canvas display profile:	Hồ sơ màn hình của vùng vẽ:
+	The system matches the window to the display's colors.	Hệ thống điều chỉnh cửa sổ theo màu của màn hình.
+	No usable display profile was found: the canvas is drawn in sRGB.	Không tìm thấy hồ sơ màn hình dùng được: vùng vẽ được hiển thị ở sRGB.
 	Rearrange	Sắp xếp lại
 	Select All Artboards	Chọn tất cả các bảng vẽ
 	Switch Orientation	Chuyển hướng
@@ -4805,6 +4812,9 @@ theme	Appearance	Giao diện
 @msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Không thể đặt {name}: tài liệu mà nó được thả vào đã được hoàn về
+@msg	Couldn't place {name}: the document it was placed in was reverted	Không thể đặt {name}: tài liệu mà nó được đặt vào đã được hoàn về
+@msg	Couldn't paste: the document it was pasted in was reverted	Không thể dán: tài liệu mà nó được dán vào đã được hoàn về
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}
@@ -5918,7 +5928,9 @@ axis	Y Axis	Trục Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` áp dụng cho vùng tô chuyển sắc (paint.setFill)
 @msg	`dither` must be true or false	`dither` phải là true hoặc false
 	Perceptual	Theo cảm nhận
-@msg	`method` must be classic or perceptual	`method` phải là classic hoặc perceptual
+	Hue Clockwise	Sắc độ theo chiều kim đồng hồ
+	Hue Counterclockwise	Sắc độ ngược chiều kim đồng hồ
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` phải là classic, perceptual, hue-clockwise hoặc hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` phải là pad, repeat hoặc reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` phải là số nguyên từ 1 đến {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` áp dụng cho chuyển sắc tuyến tính, tỏa tròn, hình nón và hình thoi
@@ -6161,6 +6173,7 @@ axis	Y Axis	Trục Y
 	Continue	Tiếp tục
 	Continue Action	Tiếp tục hành động
 	Delete Action Step	Xóa bước hành động
+	Move Action Step	Di chuyển bước hành động
 	Press Play Current Selection in the Actions panel to go on.	Để tiếp tục, nhấn Phát vùng chọn hiện tại trong bảng Hành động.
 	Stop: {message}	Điểm dừng: {message}
 @msg	no action is waiting at a stop	không có hành động nào đang chờ ở điểm dừng
@@ -6332,6 +6345,22 @@ axis	Y Axis	Trục Y
 	Graphite Pencil	Bút chì than chì
 	Wax Crayon	Bút sáp màu
 	Charcoal Dust	Bụi than
+	Notched Ribbon	Dải băng khía
+	Double Line	Đường đôi
+	Wave	Sóng
+	Teardrop	Giọt lệ
+	Striped Ribbon	Dải băng sọc
+	Fine Nib	Ngòi mảnh
+	Broad Nib	Ngòi rộng
+	Chisel	Đục
+	Round Pen	Bút tròn
+	Pressure Pen	Bút áp lực
+	Beads	Hạt cườm
+	Dash Dot	Gạch chấm
+	Scallops	Viền vỏ sò
+	Stars	Ngôi sao
+	Triangles	Tam giác
+	Sparkles	Lấp lánh
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)

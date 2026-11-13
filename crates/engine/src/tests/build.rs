@@ -840,7 +840,7 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
+    let dir = vectorcraft_testkit::TempDir::new("shape-builder-merge-first");
     for (what, then) in next {
         let mut s = session();
         if what == "Select All Instances" {

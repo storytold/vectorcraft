@@ -588,6 +588,8 @@ font-technology	Variable	Μεταβλητές
 	Convert to Artboards	Μετατροπή σε πίνακες σχεδίασης
 	Convert to CMYK	Μετατροπή σε CMYK
 	Convert to Grayscale	Μετατροπή σε κλίμακα του γκρι
+	Convert to Indexed Color	Μετατροπή σε χρώματα με ευρετήριο
+	Convert to Indexed Color…	Μετατροπή σε χρώματα με ευρετήριο…
 	Convert To Outlines	Μετατροπή σε περιγράμματα
 	Convert To Point Type	Μετατροπή σε κείμενο σημείου
 	Convert to RGB	Μετατροπή σε RGB
@@ -2421,6 +2423,9 @@ axis	Both	Και τα δύο
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο έκλεισε
 @msg	Couldn't place {name}: the document it was placed in was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο έκλεισε
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't place {name}: the document it was placed in was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't paste: the document it was pasted in was reverted	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση επανήλθε στην αποθηκευμένη έκδοση
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
@@ -2748,6 +2753,8 @@ lighting	Light	Φως
 	Oval	Οβάλ
 	Pen	Πένα (Pen Tool)
 	Perceptual	Αντιληπτικό
+	Hue Clockwise	Απόχρωση δεξιόστροφα
+	Hue Counterclockwise	Απόχρωση αριστερόστροφα
 	Pixel	Εικονοστοιχείο
 	Points:	Σημεία:
 	Preserve	Διατήρηση
@@ -3435,6 +3442,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rating:	Αξιολόγηση:
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
+	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
+	Canvas display profile:	Προφίλ οθόνης καμβά:
+	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
+	No usable display profile was found: the canvas is drawn in sRGB.	Δεν βρέθηκε κατάλληλο προφίλ οθόνης: ο καμβάς σχεδιάζεται σε sRGB.
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
 	Rearrange	Αναδιάταξη
 	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
@@ -6263,7 +6275,7 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
-@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	Το `method` πρέπει να είναι classic, perceptual, hue-clockwise ή hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
@@ -6506,6 +6518,7 @@ axis	Y Axis	Άξονας Y
 	Continue	Συνέχεια
 	Continue Action	Συνέχεια ενέργειας
 	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Move Action Step	Μετακίνηση βήματος ενέργειας
 	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
 	Stop: {message}	Διακοπή: {message}
 @msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
@@ -6677,6 +6690,22 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+	Notched Ribbon	Οδοντωτή κορδέλα
+	Double Line	Διπλή γραμμή
+	Wave	Κύμα
+	Teardrop	Δάκρυ
+	Striped Ribbon	Ριγέ κορδέλα
+	Fine Nib	Λεπτή πένα
+	Broad Nib	Φαρδιά πένα
+	Chisel	Σμίλη
+	Round Pen	Στρογγυλή πένα
+	Pressure Pen	Πένα πίεσης
+	Beads	Χάντρες
+	Dash Dot	Παύλα-τελεία
+	Scallops	Φεστόνια
+	Stars	Αστέρια
+	Triangles	Τρίγωνα
+	Sparkles	Σπίθες
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

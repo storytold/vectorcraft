@@ -96,6 +96,8 @@
 	Blend Vertically	Blend vertikal
 	Convert to CMYK	Konversi ke CMYK
 	Convert to Grayscale	Konversi ke skala kelabu
+	Convert to Indexed Color	Konversi ke warna terindeks
+	Convert to Indexed Color…	Konversi ke warna terindeks…
 	Convert to RGB	Konversi ke RGB
 	Invert Colors	Balikkan warna
 	Overprint Black…	Overprint hitam…
@@ -3606,6 +3608,11 @@ theme	Appearance	Tampilan
 	Primary	Utama
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
+	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
+	Canvas display profile:	Profil layar kanvas:
+	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Tidak ditemukan profil layar yang dapat digunakan: kanvas digambar dalam sRGB.
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
 	Export Preferences…	Ekspor preferensi…
@@ -4246,6 +4253,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah ditutup
 @msg	Couldn't place {name}: the document it was placed in was closed	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah ditutup
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah dikembalikan
+@msg	Couldn't place {name}: the document it was placed in was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah dikembalikan
+@msg	Couldn't paste: the document it was pasted in was reverted	Tidak dapat menempel: dokumen tempatnya ditempel sudah dikembalikan
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks
@@ -5177,6 +5187,8 @@ imageTrace	Outline	Kontur
 	Vivid	Cerah
 	Spectrum	Spektrum
 	Perceptual	Perseptual
+	Hue Clockwise	Rona searah jarum jam
+	Hue Counterclockwise	Rona berlawanan arah jarum jam
 	Relative Colorimetric	Kolorimetrik relatif
 	Absolute Colorimetric	Kolorimetrik absolut
 	Exact	Eksak
@@ -5991,7 +6003,7 @@ axis	Y Axis	Sumbu Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` berlaku untuk isian gradien (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` berlaku untuk isian gradien (paint.setFill)
 @msg	`dither` must be true or false	`dither` harus true atau false
-@msg	`method` must be classic or perceptual	`method` harus classic atau perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` harus classic, perceptual, hue-clockwise atau hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instal “{name}”, yang meminta anggaran komputasi besar?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Setiap kali dijalankan, plug-in ini bisa memakan waktu hingga {minutes} menit dan melakukan {times} kali pekerjaan yang diizinkan untuk plug-in lain. Plug-in ini berjalan di latar belakang, dan Anda dapat membatalkannya.
@@ -6032,6 +6044,7 @@ axis	Y Axis	Sumbu Y
 	Continue	Lanjutkan
 	Continue Action	Lanjutkan tindakan
 	Delete Action Step	Hapus langkah tindakan
+	Move Action Step	Pindahkan langkah tindakan
 	Press Play Current Selection in the Actions panel to go on.	Untuk melanjutkan, tekan Putar seleksi saat ini di panel Tindakan.
 	Stop: {message}	Henti: {message}
 @msg	no action is waiting at a stop	tidak ada tindakan yang menunggu di titik henti
@@ -6192,6 +6205,22 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+	Notched Ribbon	Pita bertakik
+	Double Line	Garis ganda
+	Wave	Gelombang
+	Teardrop	Tetesan
+	Striped Ribbon	Pita bergaris
+	Fine Nib	Mata pena halus
+	Broad Nib	Mata pena lebar
+	Chisel	Pahat
+	Round Pen	Pena bulat
+	Pressure Pen	Pena tekanan
+	Beads	Manik-manik
+	Dash Dot	Garis titik
+	Scallops	Lekuk kerang
+	Stars	Bintang
+	Triangles	Segitiga
+	Sparkles	Kilauan
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala

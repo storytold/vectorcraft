@@ -634,7 +634,9 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    // So do the raster effects of its fills and strokes.
+    // So do the raster effects of it and of its fills and strokes, by the Transform effects that
+    // moved it.
+    carry.hide_skipped(&mut m.appearance.effects);
     vectorcraft_render::effects::follow_items(&mut m);
     m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
@@ -662,7 +664,8 @@ pub(crate) fn fill_shape(
     if carry.moves(&one) {
         carry.apply(&mut one);
     }
-    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    let mut moved = one.items.pop().unwrap_or_else(|| item.clone());
+    carry.hide_skipped(moved.effects_mut());
     Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
@@ -1388,8 +1391,9 @@ fn band_edges(lo: f64, hi: f64, n: usize, runs: Option<(f64, usize)>) -> Vec<f64
 fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32))> {
     let at = |t: f64| (t, g.sample_keep_model(t as f32));
     let mut v = vec![at(t0)];
-    // A Perceptual gradient curves between its stops: the mesh takes a column at each of the stops
-    // its expansion adds, so the linear mix between columns follows that curve.
+    // A Perceptual gradient, or one mixed around the hue wheel, curves between its stops: the mesh
+    // takes a column at each of the stops its expansion adds, so the linear mix between columns
+    // follows that curve.
     if !g.method.is_classic() {
         v.extend(g.expanded().map(|(o, ..)| f64::from(o)).filter(|o| *o > t0 && *o < t1).map(at));
     }

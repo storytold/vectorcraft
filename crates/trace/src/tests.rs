@@ -1330,6 +1330,115 @@ fn a_blend_of_two_colours_is_no_sliver_of_a_third() {
     assert!(b.y0 > 89.0 && b.y1 < 110.0, "{b:?}");
 }
 
+/// A light disc of radius 32 at (55, 60) on a dark ground, its edge blurred into a ramp 10 px
+/// wide, and elsewhere a patch of the tone halfway between the two, so that the palette holds
+/// that tone. Returns the picture and whether a color is that tone.
+fn blurred_disc_and_halfway_patch() -> (Raster, impl Fn([u8; 3]) -> bool) {
+    const DARK: [f64; 3] = [20.0, 25.0, 35.0];
+    const LIGHT: [f64; 3] = [225.0, 195.0, 160.0];
+    let mid = [0, 1, 2].map(|k| (DARK[k] + LIGHT[k]) / 2.0);
+    let img = Raster::from_fn(160, 120, |x, y| {
+        let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let c = if (112.0..152.0).contains(&px) && (40.0..80.0).contains(&py) {
+            mid
+        } else {
+            let t = ((32.0 - Point::new(px, py).distance(Point::new(55.0, 60.0))) / 10.0 + 0.5).clamp(0.0, 1.0);
+            [0, 1, 2].map(|k| DARK[k] + t * (LIGHT[k] - DARK[k]))
+        };
+        let c = |k: usize| c[k].round() as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    (img, move |c: [u8; 3]| (0..3).all(|k| (f64::from(c[k]) - mid[k]).abs() <= 12.0))
+}
+
+#[test]
+fn a_blurred_edge_is_no_ring_of_a_tone_between_its_sides() {
+    let (img, is_mid) = blurred_disc_and_halfway_patch();
+    let res = trace(&img, &sixteen_colors());
+    let mids: Vec<&TracedPath> = res.paths.iter().filter(|p| is_mid(p.color)).collect();
+    assert_eq!(mids.len(), 1, "the patch, and no ring around the disc: {:?}", res.paths.iter().map(|p| p.color).collect::<Vec<_>>());
+    let b = mids[0].path.bounds().unwrap();
+    assert!(b.x0 > 110.0 && b.y0 > 38.0 && b.y1 < 82.0, "{b:?}");
+    // The disc's edge lies halfway along the ramp.
+    let light = res.paths.iter().find(|p| p.color[0] > 180).unwrap();
+    let off = along(&light.path).iter().map(|p| (p.distance(Point::new(55.0, 60.0)) - 32.0).abs()).fold(0.0, f64::max);
+    assert!(off < 1.0, "{off} px off the middle of the ramp");
+}
+
+#[test]
+fn grayscale_settles_a_tinted_blurred_edge_by_its_lightness() {
+    // The same blurred disc and halfway patch in grays, and tinted green at the same lightness
+    // (every pixel moved by the same color, which keeps its luma): Grayscale reads lightness
+    // alone, so both make the same grays in the same places.
+    let lightness = |x: u32, y: u32| {
+        let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        if (112.0..152.0).contains(&px) && (40.0..80.0).contains(&py) {
+            130
+        } else {
+            let t = ((32.0 - Point::new(px, py).distance(Point::new(55.0, 60.0))) / 10.0 + 0.5).clamp(0.0, 1.0);
+            (40.0 + 180.0 * t).round() as u8
+        }
+    };
+    let gray = Raster::from_fn(160, 120, |x, y| {
+        let v = lightness(x, y);
+        [v, v, v, 255]
+    });
+    let tinted = Raster::from_fn(160, 120, |x, y| {
+        let v = lightness(x, y);
+        [v - 40, v + 28, v - 40, 255]
+    });
+    let lumas = |img: &Raster| img.rgba.as_chunks::<4>().0.iter().map(|&p| crate::quantize::luma(p)).collect::<Vec<_>>();
+    assert_eq!(lumas(&tinted), lumas(&gray));
+    let params = TraceParams { mode: Mode::Grayscale, colors: 8, ..TraceParams::default() };
+    assert_eq!(quantize(&tinted, &params), quantize(&gray, &params));
+}
+
+#[test]
+fn grayscale_settles_a_blurred_edge_between_its_own_two_grays() {
+    // A dark gray and a light gray meet in a ramp 12 px wide, and a black band runs across the top.
+    // In grays every blend lies between black and the light gray as well as between the two grays
+    // (to within rounding): the ramp's pixels just below the band take the nearer of the two grays,
+    // the grays on either side of them.
+    for (dark, light) in [(40u8, 200u8), (50, 200), (30, 170), (60, 230), (45, 215)] {
+        let img = Raster::from_fn(160, 60, |x, y| {
+            let v = if y < 8 {
+                0
+            } else {
+                let t = ((f64::from(x) + 0.5 - 74.0) / 12.0).clamp(0.0, 1.0);
+                (f64::from(dark) + f64::from(light - dark) * t).round() as u8
+            };
+            [v, v, v, 255]
+        });
+        let params = TraceParams { mode: Mode::Grayscale, colors: 8, ..TraceParams::default() };
+        let q = quantize(&img, &params);
+        let middle = u16::from(dark) + u16::from(light);
+        for y in 10..16 {
+            for x in 74..86 {
+                let v = img.rgba[(y * 160 + x) * 4];
+                let g = q.palette[usize::from(q.labels[y * 160 + x])][0];
+                assert_eq!(2 * u16::from(g) < middle, 2 * u16::from(v) < middle, "{dark} to {light}, ({x}, {y}): {v} took gray {g}");
+                assert!(g >= dark, "{dark} to {light}, ({x}, {y}): {v} took gray {g}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_photo_presets_keep_the_tones_of_a_blurred_edge() {
+    // The photo presets ask for more colors than the limited-color presets and keep the middle of
+    // the ramp in the halfway tone: only a blend pixel with the colors on both sides within 2 px of
+    // it takes a side.
+    let (img, is_mid) = blurred_disc_and_halfway_patch();
+    for name in ["High Fidelity Photo", "Low Fidelity Photo"] {
+        let q = quantize(&img, &preset(name).unwrap());
+        let middle = (0..160 * 120)
+            .filter(|&i| (Point::new((i % 160) as f64 + 0.5, (i / 160) as f64 + 0.5).distance(Point::new(55.0, 60.0)) - 32.0).abs() < 1.0)
+            .filter(|&i| q.palette.get(usize::from(q.labels[i])).is_some_and(|&c| is_mid(c)))
+            .count();
+        assert!(middle > 100, "{name}: {middle} pixels of the halfway tone in the middle of the ramp");
+    }
+}
+
 #[test]
 fn hairlines_keep_their_colour_in_color_mode() {
     // Black lines one pixel wide on white: every black pixel is on an edge, none is a blend.
