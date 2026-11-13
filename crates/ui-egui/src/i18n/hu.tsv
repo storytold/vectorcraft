@@ -4860,6 +4860,9 @@ imageTrace	Outline	Körvonal
 @msg	`{keep}` is not a side of this axis	`{keep}` nem ennek a tengelynek az oldala
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`: `auto` vagy nyelvkód kell, például `en` vagy `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}`: #rrggbb szín kell
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`: #rrggbb szín vagy rétegszín neve kell
+@msg	unknown Live Paint option `{key}`	ismeretlen élő festés beállítás: `{key}`
+@msg	unknown Shape Builder option `{key}`	ismeretlen alakzatépítő beállítás: `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`: #rrggbb szín kell
 @msg	`{key}` must be a number	`{key}`: szám kell
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}

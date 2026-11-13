@@ -6081,6 +6081,9 @@ imageTrace	Outline	კონტური
 @msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor ვერ გადააჯგუფებს ტრასირებას აქტიური Pathfinder ეფექტით: გააფართოვეთ byColor-ის გარეშე
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` ბიბლიოთეკის პანელი არ არის (იხ. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` უნდა იყოს #rrggbb ფერი
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` უნდა იყოს #rrggbb ფერი ან ფენის ფერის სახელი
+@msg	unknown Live Paint option `{key}`	ცოცხალი შეღებვის უცნობი პარამეტრი `{key}`
+@msg	unknown Shape Builder option `{key}`	ფიგურების კონსტრუქტორის უცნობი პარამეტრი `{key}`
 @msg	a key object sits on that point	ამ წერტილზე საკვანძო ობიექტი მდებარეობს
 @msg	a linked image can't become a gradient mesh: embed it first	დაკავშირებული გამოსახულება გრადიენტულ ბადედ ვერ გადაიქცევა: ჯერ ჩააშენეთ ის
 @msg	a mask has more than one art block	ნიღაბს ერთზე მეტი ნახატის ბლოკი აქვს

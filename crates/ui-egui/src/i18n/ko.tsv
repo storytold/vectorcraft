@@ -4517,6 +4517,9 @@ theme	Appearance	외관
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	웹에서는 경로로 설치할 수 없습니다. 모듈을 `dataBase64`로 전달하세요
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`은(는) `auto` 또는 `en`, `zh-hant` 같은 언어 코드여야 합니다
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`은(는) #rrggbb 색상이나 레이어 색상 이름이어야 합니다
+@msg	unknown Live Paint option `{key}`	알 수 없는 라이브 페인트 옵션 `{key}`
+@msg	unknown Shape Builder option `{key}`	알 수 없는 모양 빌더 옵션 `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
 @msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다

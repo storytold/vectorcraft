@@ -2508,6 +2508,9 @@ axis	Both	Και τα δύο
 @msg	`{keep}` is not a side of this axis	Το `{keep}` δεν είναι πλευρά αυτού του άξονα
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	Το `{key}` πρέπει να είναι `auto` ή κωδικός γλώσσας όπως `en` ή `zh-hant`
 @msg	`{key}` must be a #rrggbb color	Το `{key}` πρέπει να είναι χρώμα #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
+@msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
+@msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}

@@ -4651,6 +4651,9 @@ imageTrace	Outline	Ääriviiva
 @msg	`{keep}` is not a side of this axis	`{keep}` ei ole tämän akselin puoli
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` on oltava `auto` tai kielikoodi, kuten `en` tai `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` on oltava #rrggbb-väri
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` on oltava #rrggbb-väri tai tason värin nimi
+@msg	unknown Live Paint option `{key}`	tuntematon elävän maalauksen valinta `{key}`
+@msg	unknown Shape Builder option `{key}`	tuntematon muodonmuodostimen valinta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` on oltava #rrggbb-väri
 @msg	`{key}` must be a number	`{key}` on oltava luku
 @msg	`{key}` must be a number, not {v}	`{key}` on oltava luku, ei {v}

@@ -5945,6 +5945,9 @@ theme	Appearance	Görünüm
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Kaydet {_1} yazar, {_2} değil: yazmak için file.saveAsTemplate kullanın
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` bir kütüphane paneli değil (bkz. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` bir #rrggbb rengi olmalıdır
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` bir #rrggbb rengi ya da katman rengi adı olmalıdır
+@msg	unknown Live Paint option `{key}`	bilinmeyen Canlı Boyama seçeneği `{key}`
+@msg	unknown Shape Builder option `{key}`	bilinmeyen Şekil Oluşturucu seçeneği `{key}`
 @msg	a key object sits on that point	bu noktanın üzerinde bir anahtar nesne bulunuyor
 @msg	a linked image can't become a gradient mesh: embed it first	bağlantılı bir görüntü degrade ağına dönüştürülemez: önce görüntüyü gömün
 @msg	a mask has more than one art block	bir maskede birden fazla çizim bloğu var

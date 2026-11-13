@@ -5894,6 +5894,9 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` को `auto` या `en` या `zh-hant` जैसे भाषा कोड होना चाहिए।
 @msg	`{key}` must be 0..{max}	`{key}` होना चाहिए 0.{max}
 @msg	`{key}` must be a #rrggbb color	`{key}` एक #rrggbb रंग होना चाहिए
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` एक #rrggbb रंग या लेयर रंग का नाम होना चाहिए
+@msg	unknown Live Paint option `{key}`	अज्ञात लाइव पेंट ऑप्शन `{key}`
+@msg	unknown Shape Builder option `{key}`	अज्ञात शेप बिल्डर ऑप्शन `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` एक #rrggbb रंग होना चाहिए
 @msg	`{key}` must be a non-negative integer	`{key}` को एक गैर-नकारात्मक पूर्णांक होना चाहिए
 @msg	`{key}` must be a number	`{key}` एक संख्या होना चाहिए

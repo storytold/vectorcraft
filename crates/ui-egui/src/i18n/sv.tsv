@@ -4338,6 +4338,9 @@ axis	Both	Båda
 @msg	`{keep}` is not a side of this axis	`{keep}` är inte en sida av den här axeln
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` måste vara `auto` eller en språkkod som `en` eller `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` måste vara en färg i formatet #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` måste vara en färg i formatet #rrggbb eller namnet på en lagerfärg
+@msg	unknown Live Paint option `{key}`	okänt alternativ för direktmålning `{key}`
+@msg	unknown Shape Builder option `{key}`	okänt alternativ för formbyggaren `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` måste vara en färg i formatet #rrggbb
 @msg	`{key}` must be a number	`{key}` måste vara ett tal
 @msg	`{key}` must be a number, not {v}	`{key}` måste vara ett tal, inte {v}

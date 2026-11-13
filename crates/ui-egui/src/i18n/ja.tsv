@@ -4590,6 +4590,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	Web 版ではファイルパスからはインストールできないため、モジュールは `dataBase64` で渡してください
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` は `auto` か、`en` や `zh-hant` などの言語コードにしてください
 @msg	`{key}` must be a #rrggbb color	`{key}` は #rrggbb 形式のカラーにしてください
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` は #rrggbb 形式のカラーかレイヤーカラー名にしてください
+@msg	unknown Live Paint option `{key}`	不明なライブペイントオプション `{key}`
+@msg	unknown Shape Builder option `{key}`	不明なシェイプ形成ツールオプション `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
 @msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください

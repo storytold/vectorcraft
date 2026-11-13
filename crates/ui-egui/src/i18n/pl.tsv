@@ -4561,6 +4561,9 @@ imageTrace	Outline	Kontur
 @msg	`{keep}` is not a side of this axis	`{keep}` nie jest stroną tej osi
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` musi mieć wartość `auto` lub kod języka, np. `en` albo `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` musi być kolorem #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musi być kolorem #rrggbb lub nazwą koloru warstwy
+@msg	unknown Live Paint option `{key}`	nieznana opcja aktywnego malowania `{key}`
+@msg	unknown Shape Builder option `{key}`	nieznana opcja kreatora kształtów `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musi być kolorem #rrggbb
 @msg	`{key}` must be a number	`{key}` musi być liczbą
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}

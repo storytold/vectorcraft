@@ -35,11 +35,11 @@ mod map;
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
 #[cfg(test)]
 use live_paint::LpHover;
-use live_paint::lp_color;
 pub use live_paint::{
     LP_BUCKET_EDGE_FRACTION, LP_BUCKET_WIDTH, LP_BUCKET_WIDTH_RANGE, LP_FILL_CHUNK_POINTS, LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE,
     LivePaintBucketTool, LivePaintSelectionTool,
 };
+use live_paint::{check_live_paint_options, lp_color, lp_rgb_color};
 pub use lookup::{
     EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, builder_members, drawn_outlines, edge_near, edges, face_at, faces,
     is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for,
@@ -775,6 +775,39 @@ impl Tool for ShapeBuilderTool {
         self.cache.clear();
         self.cache.gap = self.gap();
     }
+}
+
+/// Why `tool.setOption` cannot give the builder-family tool `tool` the options `values`, checked
+/// before any of them is set. For `shapeBuilder`: an option the tool does not have, a switch that
+/// is not true or false, a `pickColorFrom` other than `artwork` or `swatches`, a `selection` other
+/// than `freeform` or `straightLine`, a `highlightColor` that is not an RGB color without an alpha
+/// part and a `gapLength` that is not a finite number are errors. A finite gap length out of 0 to
+/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. The Live Paint tools are checked
+/// by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the tools'
+/// `set_option` instead, which skips a value it cannot read.
+pub fn check_builder_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if tool != "shapeBuilder" {
+        return check_live_paint_options(tool, values);
+    }
+    let one_of = |key: &str, v: &Value, names: &[&str]| {
+        (!v.as_str().is_some_and(|s| names.contains(&s))).then(|| format!("`{key}` must be one of {}", names.join(", ")))
+    };
+    for (key, v) in values {
+        let error = match key.as_str() {
+            "openFilledAsClosed" | "cursorSwatchPreview" | "highlightFill" | "gapDetection" | "clickStrokeSplitsPath" | "highlightStroke" => {
+                (!v.is_boolean()).then(|| format!("`{key}` must be true or false"))
+            }
+            "pickColorFrom" => one_of(key, v, &["artwork", "swatches"]),
+            "selection" => one_of(key, v, &["freeform", "straightLine"]),
+            "gapLength" => (!v.as_f64().is_some_and(f64::is_finite)).then(|| format!("`{key}` must be a number")),
+            "highlightColor" => (!lp_rgb_color(v)).then(|| format!("`{key}` must be a #rrggbb color or a layer color name")),
+            _ => Some(format!("unknown Shape Builder option `{key}`")),
+        };
+        if let Some(e) = error {
+            return Err(e);
+        }
+    }
+    Ok(())
 }
 
 /// Create a builder-family tool by id (None = not one of ours).

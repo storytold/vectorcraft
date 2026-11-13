@@ -6457,6 +6457,9 @@ swatch	Bright Violet	Felviolet
 
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Opslaan schrijft {_1}, niet {_2}: gebruik file.saveAsTemplate om het te schrijven
 @msg	`{key}` must be a #rrggbb color	`{key}` moet een #rrggbb-kleur zijn
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` moet een #rrggbb-kleur of de naam van een laagkleur zijn
+@msg	unknown Live Paint option `{key}`	onbekende Live Paint-optie `{key}`
+@msg	unknown Shape Builder option `{key}`	onbekende Vormopbouw-optie `{key}`
 @msg	a key object sits on that point	op dat punt ligt een sleutelobject
 @msg	a linked image can't become a gradient mesh: embed it first	een gekoppelde afbeelding kan geen verloopraster worden: sluit deze eerst in
 @msg	a mask has more than one art block	een masker heeft meer dan één illustratieblok
