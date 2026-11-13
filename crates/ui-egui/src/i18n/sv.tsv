@@ -2848,6 +2848,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
 	Color Theme Picker	Färgtemaväljare
 	Click or drag across the art to pick its colors; Shift adds more	Klicka eller dra över teckningen för att hämta dess färger; Skift lägger till fler
+	Prominent Colors	Framträdande färger
+	Save All Colors	Spara alla färger
+	Save Prominent Colors	Spara framträdande färger
 	Reset to Default	Återställ till standard
 	Reset to White, Black	Återställ till vitt, svart
 	Reset with Mesh	Återställ med nät
@@ -3505,6 +3508,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Byt namn på biblioteksgrupp
 	Delete Library Group	Radera biblioteksgrupp
 	Move Library Item to Group	Flytta biblioteksobjekt till grupp
+	Rename Library Item	Byt namn på biblioteksobjekt
+	Add to Character Styles	Lägg till i teckenstilar
 	Library	Bibliotek
 	Rename Library	Byt namn på bibliotek
 	Show Library	Visa bibliotek
@@ -4078,6 +4083,7 @@ axis	Both	Båda
 	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteket har redan ett annat objekt av den sorten med namnet `{name}`
 @msg	select some type first	markera någon text först
 @msg	kerning must be a number, "auto", or "optical"	kerning måste vara ett tal, ”auto” eller ”optical”
 @msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
@@ -6512,6 +6518,7 @@ axis	Y Axis	Y-axel
 @msg	message must be text	message måste vara text
 @msg	allowContinue must be true or false	allowContinue måste vara true eller false
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
+@msg	Batch cannot play an action with a View menu step	Batch kan inte spela upp en åtgärd med ett steg från menyn Visa
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
 	Insert Select Path	Infoga markering av bana
@@ -8780,6 +8787,19 @@ digits	Hindi	Hindi
 	Show where this tool is	Visa var det här verktyget finns
 @msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+	View more	Visa mer
+	Finish tutorial	Slutför självstudien
+	Next Up	Nästa
+	You finished the last tutorial in this skill.	Du har slutfört den sista självstudien i den här färdigheten.
+	Back to skills	Tillbaka till färdigheter
+	Open Tutorial Sample	Öppna övningsexempel för självstudie
+	Finish Tutorial	Slutför självstudie
+	Next Tutorial	Nästa självstudie
+	Back to Skills	Tillbaka till färdigheter
+@msg	tutorial `{id}` has no practice sample	självstudien `{id}` har inget övningsexempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	slutför först `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` är den sista självstudien i sin färdighet
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter

@@ -2879,6 +2879,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Color Theme Picker	Farbthema-Auswahl
 	Click or drag across the art to pick its colors; Shift adds more	Klicken oder ziehen Sie über die Grafik, um ihre Farben aufzunehmen; Umschalt fügt weitere hinzu
+	Prominent Colors	Hervorstechende Farben
+	Save All Colors	Alle Farben speichern
+	Save Prominent Colors	Hervorstechende Farben speichern
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
 	Reset with Mesh	Mit Gitter zurücksetzen
@@ -4091,6 +4094,7 @@ theme	Appearance	Erscheinungsbild
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
+@msg	the library has another item of that kind named `{name}`	die Bibliothek hat bereits ein anderes Element dieser Art namens `{name}`
 @msg	select some type first	wählen Sie zuerst Text aus
 @msg	kerning must be a number, "auto", or "optical"	kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
@@ -5124,6 +5128,8 @@ theme	Appearance	Erscheinungsbild
 	Rename Library Group	Bibliotheksgruppe umbenennen
 	Delete Library Group	Bibliotheksgruppe löschen
 	Move Library Item to Group	Bibliothekselement in Gruppe verschieben
+	Rename Library Item	Bibliothekselement umbenennen
+	Add to Character Styles	Zu Zeichenformaten hinzufügen
 	Import Library	Bibliothek importieren
 	Export Library	Bibliothek exportieren
 	New Group	Neue Gruppe
@@ -6122,6 +6128,7 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+@msg	Batch cannot play an action with a View menu step	Die Stapelverarbeitung kann keine Aktion mit einem Schritt aus dem Menü Ansicht abspielen
 	Insert Menu Item…	Menübefehl einfügen…
 	Insert Menu Item	Menübefehl einfügen
 	Insert Select Path	Pfadauswahl einfügen
@@ -6936,6 +6943,19 @@ breakText	Glyphs	Glyphen
 	Show where this tool is	Zeigen, wo sich dieses Werkzeug befindet
 @msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
+	View more	Mehr anzeigen
+	Finish tutorial	Lernprogramm abschließen
+	Next Up	Als Nächstes
+	You finished the last tutorial in this skill.	Sie haben das letzte Lernprogramm dieser Fertigkeit abgeschlossen.
+	Back to skills	Zurück zu den Fertigkeiten
+	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
+	Finish Tutorial	Lernprogramm abschließen
+	Next Tutorial	Nächstes Lernprogramm
+	Back to Skills	Zurück zu den Fertigkeiten
+@msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
+@msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	schließen Sie zuerst `{id}` ab (siehe learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` ist das letzte Lernprogramm seiner Fertigkeit
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren

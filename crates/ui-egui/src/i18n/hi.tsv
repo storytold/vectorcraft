@@ -754,7 +754,7 @@ antiAlias	Sharp	शार्प
 	Changed since the last check.	आखिरी चेक के बाद से बदल गया।
 	Changed since the last Refresh.	आखिरी रिफ्रेश के बाद से बदल गया।
 	Changes allowed:	परिवर्तन की अनुमति:
-	Changes made since it was last saved will be lost.	क्योंकि यह पिछले बचाया गया था परिवर्तन खो दिया जाएगा।
+	Changes made since it was last saved will be lost.	पिछली बार सेव करने के बाद किए गए बदलाव खो जाएँगे।
 	Changes the reference app's preferences	संदर्भ ऐप की वरीयताओं को बदलता है
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	ये सेटिंग्स बदलने से एक्सपोर्ट, फ़्लैटन या एक्सपैंड किए गए रास्टर इफ़ेक्ट्स का रूप बदलता है।
 	Channel	चैनल
@@ -776,7 +776,7 @@ antiAlias	Sharp	शार्प
 	Character:	कैरेक्टर:
 	Charcoal	चारकोल
 	Charcoal…	चारकोल…
-	Check an artboard to save.	बचाने के लिए एक आर्टबोर्ड की जाँच करें।
+	Check an artboard to save.	सेव करने के लिए किसी आर्टबोर्ड पर चेक लगाएँ।
 	Check Document	डॉक्यूमेंट की जाँच करें
 	Check for Updates…	अपडेट जाँचें…
 	Check Links	चेक लिंक
@@ -818,9 +818,9 @@ antiAlias	Sharp	शार्प
 	Click or drag	क्लिक करें या खींचें
 	Click the art with the Gradient tool to add or select points.	पॉइंट जोड़ने या सिलेक्ट करने के लिए ग्रेडिएंट टूल से आर्टवर्क पर क्लिक करें।
 	Click the first point	पहले बिंदु पर क्लिक करें
-	Click the ramp or a type button to apply a gradient.	एक ग्रेडिएंट लगाने के लिए रैंप या एक प्रकार का बटन पर क्लिक करें।
+	Click the ramp or a type button to apply a gradient.	ग्रेडिएंट लगाने के लिए रैंप या किसी प्रकार बटन पर क्लिक करें।
 	Click to add a tab stop, drag to move it, drag it off the ruler to delete it	टैब स्टॉप जोड़ने के लिए क्लिक करें, खिसकाने के लिए ड्रैग करें, हटाने के लिए रूलर से बाहर ड्रैग करें
-	Click to apply to the selected type	सिलेक्टेड प्रकार पर लागू करने के लिए क्लिक करें
+	Click to apply to the selected type	सिलेक्टेड टाइप पर लागू करने के लिए क्लिक करें
 	Click to choose a swatch, Shift-click to mix a colour	स्वॉच चुनने के लिए क्लिक करें, रंग मिलाने के लिए Shift-क्लिक करें
 	Click to edit	संपादित करने के लिए क्लिक करें
 	Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it	मास्क एडिट करने के लिए क्लिक करें; केवल मास्क देखने के लिए Alt-क्लिक करें; उसे अक्षम या सक्षम करने के लिए Shift-क्लिक करें
@@ -858,7 +858,7 @@ antiAlias	Sharp	शार्प
 	Close paths when ends are within:	जब समाप्त होता है तो बंद पाथ भीतर होते हैं:
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड खुली रहती हैं।
 	Closed	बंद
-	Closing bracket with no opening one	कोई ओपन करने के साथ समापन ब्रैकेट
+	Closing bracket with no opening one	बंद करने वाला ब्रैकेट, जिसका कोई खोलने वाला ब्रैकेट नहीं है
 	Clumped	गुच्छेदार
 	Cmd	Cmd
 	CMYK	CMYK
@@ -1069,7 +1069,7 @@ antiAlias	Sharp	शार्प
 	Couldn't {} {name}: {e}	{name} को {} नहीं किया जा सका: {e}
 	Couldn't copy to the system clipboard: {e}	सिस्टम क्लिपबोर्ड को कॉपी नहीं कर सका: {e}
 	Couldn't paste from the clipboard: {e}	क्लिपबोर्ड से पेस्ट नहीं कर सका: {e}
-	Couldn't save recovery data: {e}	वसूली डेटा नहीं बचा सकता: {e}
+	Couldn't save recovery data: {e}	रिकवरी डेटा सेव नहीं किया जा सका: {e}
 	Count	गिनती
 	Count:	गिनती:
 	Cove	कोव
@@ -1119,7 +1119,7 @@ antiAlias	Sharp	शार्प
 	CRLF (Windows)	CRLF (Windows)
 	Croatian	क्रोएशियाई
 	Crop	क्रॉप करें
-	Crop Image	फसल की इमेज
+	Crop Image	इमेज क्रॉप करें
 	Image Tools	इमेज टूल
 	Remove Background…	पृष्ठभूमि हटाएँ…
 	Remove Background	पृष्ठभूमि हटाएँ
@@ -1134,7 +1134,7 @@ antiAlias	Sharp	शार्प
 	Remove Color Mask	रंग मास्क हटाएँ
 	Apply Color Mask	रंग मास्क लागू करें
 	Crop Marks	क्रॉप मार्क
-	Crop To	करने के लिए फसल
+	Crop To	इसके अनुसार क्रॉप करें
 	Cross	क्रॉस
 	Crosshatch	क्रॉसहैच
 	Crosshatch…	क्रॉसहैच…
@@ -1326,7 +1326,7 @@ antiAlias	Sharp	शार्प
 	Diffusion	डिफ़्यूज़न
 	Digits	अंक
 	Dim Copies to:	प्रतियाँ इतनी मंद करें:
-	Dim Images to:	करने के लिए इमेज:
+	Dim Images to:	इमेज इतनी मंद करें:
 	Dimension	आयाम
 	Dimension Lines	आयाम लाइन
 	Dimension Text	आयाम टेक्स्ट
@@ -1343,7 +1343,7 @@ antiAlias	Sharp	शार्प
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
-	Discard Empty Type	डिस्कर्ड खाली प्रकार
+	Discard Empty Type	खाली टाइप हटाएँ
 	Discard Recovered Documents	रिकवर किए डॉक्यूमेंट डिस्कार्ड करें
 	Discard White Overprint in Output	आउटपुट में अलार्म व्हाइट ओवरप्रिंट
 	Discord	Discord
@@ -1410,7 +1410,7 @@ antiAlias	Sharp	शार्प
 	Document Raster Effects Settings…	डॉक्यूमेंट रास्टर इफ़ेक्ट्स सेटिंग्स…
 	Document Setup	डॉक्यूमेंट सेटअप
 	Document Setup…	डॉक्यूमेंट सेटअप…
-	Document Swatches	डॉक्यूमेंट Swatch
+	Document Swatches	डॉक्यूमेंट स्वॉचेस
 	Document Title:	डॉक्यूमेंट शीर्षक:
 	Document Tools	डॉक्यूमेंट टूल
 	Documents you create appear here.	डॉक्यूमेंट जो आप यहाँ दिखाई देते हैं।
@@ -1536,7 +1536,7 @@ antiAlias	Sharp	शार्प
 	Ease In Out	बाहर में आसानी
 	Ease Out	ईज़ आउट
 	Ease Out In	ईज़ आउट इन
-	East Asian Type	पूर्वी एशियाई प्रकार
+	East Asian Type	पूर्वी एशियाई टाइप
 	Edge	किनारा
 	Edge Brightness	किनारे की ब्राइटनेस
 	Edge Fidelity	किनारे की सटीकता
@@ -1841,7 +1841,7 @@ antiAlias	Sharp	शार्प
 	Fill Grid	ग्रिड भरें
 	Fill Line	लाइन भरें
 	Fill new strokes	नए स्ट्रोक भरें
-	Fill New Type Objects With Placeholder Text	प्लेसहोल्डर टेक्स्ट के साथ नए प्रकार के ऑब्जेक्ट भरें
+	Fill New Type Objects With Placeholder Text	नए टाइप ऑब्जेक्ट्स में प्लेसहोल्डर टेक्स्ट भरें
 	Fill Pattern	पैटर्न भरें
 	Fill Rule	नियम भरें
 	Fill with Placeholder Text	प्लेसहोल्डर टेक्स्ट से भरें
@@ -2217,8 +2217,8 @@ antiAlias	Sharp	शार्प
 	High Fidelity Photo	उच्च निष्ठा फोटो
 	High Performance (discrete)	उच्च निष्पादन (डिस्क्रीट)
 	High Quality Print	उच्च गुणवत्ता वाले प्रिंट
-	High resolution	उच्च संकल्प
-	High Resolution	उच्च संकल्प
+	High resolution	उच्च रिज़ॉल्यूशन
+	High Resolution	उच्च रिज़ॉल्यूशन
 	Highlight	हाइलाइट
 	Highlight Alternate Glyphs	हाइलाइट अल्टरनेटर ग्लिफ़
 	Highlight anchors on mouse over	माउस ओवर पर हाइलाइट एंकर
@@ -2427,11 +2427,11 @@ antiAlias	Sharp	शार्प
 	Justification	जस्टिफ़िकेशन
 	Justification…	जस्टिफ़िकेशन…
 	Justify	जस्टिफ़ाई करें
-	Justify all lines	सभी लाइनों को जस्ट करें
+	Justify all lines	सभी लाइनें जस्टिफ़ाई करें
 	Justify Vertically	वर्टिकल दिशा में जस्टिफ़ाई करें
-	Justify with last line aligned center	अंतिम पंक्ति संरेखित केंद्र के साथ Justify
+	Justify with last line aligned center	आखिरी लाइन बीच में अलाइन करके जस्टिफ़ाई करें
 	Justify with last line aligned left	आखिरी लाइन बाएँ अलाइन करके जस्टिफ़ाई करें
-	Justify with last line aligned right	अंतिम पंक्ति के साथ Justify सही गठबंधन
+	Justify with last line aligned right	आखिरी लाइन दाएँ अलाइन करके जस्टिफ़ाई करें
 	Kaku #2	काकू #2
 	Kaku #3	काकू #3
 	Kannada	कन्नड़
@@ -2445,7 +2445,7 @@ antiAlias	Sharp	शार्प
 	Keep Plain Text	प्लेन टेक्स्ट रखें
 	Keep selected	सिलेक्ट करें
 	Keep Shared Points Together	साझा अंक एक साथ रखें
-	Keep the pasted color as a new swatch with a numbered name.	पेस्ट किए गए रंग को एक नए swatch के रूप में रखें।
+	Keep the pasted color as a new swatch with a numbered name.	पेस्ट किए गए रंग को क्रमांकित नाम वाले नए स्वॉच के रूप में रखें।
 	Keep this row's colors (exclude)	इस पंक्ति के रंग (बाहर) रखें
 	Keep visible surfaces only when expanding	विस्तार करते समय केवल दृश्यमान सतहों को रखें
 	Keep:	ध्यान रखें:
@@ -2597,7 +2597,7 @@ antiAlias	Sharp	शार्प
 	Lines +/−	पंक्तियाँ +/−
 	Lines added	जोड़ी गई पंक्तियाँ
 	Lines deleted	हटाई गई पंक्तियाँ
-	Lines: clicks add points joined by a line	लाइन्स: क्लिक्स ऐड पॉइंट्स एक लाइन से जुड़ गए
+	Lines: clicks add points joined by a line	लाइन्स: क्लिक से पॉइंट जुड़ते हैं, जिन्हें एक लाइन जोड़ती है
 	Link	लिंक करें
 	Link Block Series	लिंक ब्लॉक श्रृंखला
 	Link harmony colors	लिंक सद्भाव रंग
@@ -2679,8 +2679,8 @@ antiAlias	Sharp	शार्प
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
-	Low Resolution	कम संकल्प
-	Low resolution (150 ppi)	कम संकल्प (150 ppi)
+	Low Resolution	कम रिज़ॉल्यूशन
+	Low resolution (150 ppi)	कम रिज़ॉल्यूशन (150 ppi)
 	lowercase	लोअरकेस
 	Luminosity	ल्यूमिनोसिटी
 	LZW Compression	LZW संपीड़न
@@ -2692,7 +2692,7 @@ antiAlias	Sharp	शार्प
 	Magic Wand Tool	मैजिक वैंड टूल
 	Maintain Envelope Shape	लिफाफे आकार को बनाए रखें
 	Make	बनाएँ
-	Make a theme on Create and save it.	Create पर थीम बनाकर सेव करें।
+	Make a theme on Create and save it.	बनाएँ टैब पर थीम बनाकर उसे सेव करें।
 	Make all bleed settings the same	सभी ब्लीड सेटिंग्स एक जैसी करें
 	Make and Expand	बनाएँ और एक्सपैंड करें
 	Make Blend	ब्लेंड बनाएँ
@@ -2765,7 +2765,7 @@ antiAlias	Sharp	शार्प
 	Medium Gray	मध्यम ग्रे
 	Medium Light	मध्यम प्रकाश
 	Medium Lines	मध्यम रेखाएँ
-	Medium Resolution	मध्यम संकल्प
+	Medium Resolution	मध्यम रिज़ॉल्यूशन
 	Medium Strokes	मध्यम स्ट्रोक
 	Medium Thumbnail View	मध्यम थंबनेल
 	Medium Thumbnails	मध्यम थंबनेल
@@ -2873,6 +2873,8 @@ antiAlias	Sharp	शार्प
 	Move in Perspective	पर्सपेक्टिव में मूव करें
 	Move Library Group	लाइब्रेरी ग्रुप मूव करें
 	Move Library Item to Group	लाइब्रेरी आइटम को ग्रुप में मूव करें
+	Rename Library Item	लाइब्रेरी आइटम का नाम बदलें
+	Add to Character Styles	कैरेक्टर स्टाइल्स में जोड़ें
 	Move Locked and Hidden Artwork with Artboard	आर्टबोर्ड के साथ लॉक्ड और छिपा हुआ आर्टवर्क मूव करें
 	Move Mesh Point	मेश पॉइंट मूव करें
 	Move Mesh Points	मेश पॉइंट मूव करें
@@ -3040,8 +3042,8 @@ antiAlias	Sharp	शार्प
 	No options	कोई ऑप्शन्स
 	No printer settings to open here	यहाँ ओपन करने के लिए कोई प्रिंटर सेटिंग नहीं
 	No results	कोई परिणाम नहीं
-	No saved themes	कोई बचाया विषयों
-	No saved views (View → New View…)	कोई बचाया दृष्टिकोण (देखें → नया दृश्य)
+	No saved themes	कोई सेव की गई थीम नहीं
+	No saved views (View → New View…)	कोई सेव किया गया व्यू नहीं (व्यू → नया दृश्य…)
 	No selection	कोई सिलेक्शन नहीं
 	No Selection	कोई सिलेक्शन नहीं
 	No Slices	कोई स्लाइस नहीं
@@ -3337,7 +3339,7 @@ antiAlias	Sharp	शार्प
 	Paragraph:	पैराग्राफ़:
 	Parametric Shape	पैरामीट्रिक आकार
 	Parametric Shape Tool	पैरामीट्रिक आकार टूल
-	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). प्रतीक: Lucide (ISC) + VectorCraft.
+	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft का हिस्सा। MIT OR Apache-2.0. फ़ॉन्ट: Source Sans 3, Inter, JetBrains Mono (OFL). आइकन: Lucide (ISC) + VectorCraft.
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft का हिस्सा। MIT OR Apache-2.0। फ़ॉन्ट: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL)। आइकन: Lucide (ISC) + VectorCraft।
 	Password	पासवर्ड
 	Paste	पेस्ट करें
@@ -3375,7 +3377,7 @@ antiAlias	Sharp	शार्प
 	Pattern Editing	पैटर्न संपादन
 	Pattern Options	पैटर्न ऑप्शन्स
 	Pattern options are available in pattern editing mode.	पैटर्न ऑप्शन्स पैटर्न संपादन मोड में उपलब्ध हैं।
-	Pattern Swatches	पैटर्न Swatches
+	Pattern Swatches	पैटर्न स्वॉचेस
 	Pattern Type	पैटर्न प्रकार
 	Patterns	पैटर्न्स
 	Pause For	इतने समय रुकें
@@ -3446,7 +3448,7 @@ antiAlias	Sharp	शार्प
 	Place	प्लेस करें
 	Place DXF	DXF रखें
 	Place from Library	लाइब्रेरी
-	Place onto a new locked, dimmed template layer below the current layer	वर्तमान लेयर के नीचे एक नए बंद, dimmed टेम्पलेट लेयर पर रखें
+	Place onto a new locked, dimmed template layer below the current layer	वर्तमान लेयर के नीचे एक नए लॉक्ड, डिम किए गए टेम्पलेट लेयर पर रखें
 	Place PDF	PDF रखें
 	Place Symbol Instance	सिंबल इंस्टेंस प्लेस करें
 	Place the pages with the placement again	पृष्ठों को फिर से प्लेसमेंट के साथ रखें
@@ -3479,6 +3481,7 @@ antiAlias	Sharp	शार्प
 @msg	message must be text	message टेक्स्ट होना चाहिए
 @msg	allowContinue must be true or false	allowContinue true या false होना चाहिए
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
+@msg	Batch cannot play an action with a View menu step	बैच व्यू मेनू के चरण वाला एक्शन नहीं चला सकता
 	Insert Menu Item…	मेनू आइटम जोड़ें…
 	Insert Menu Item	मेनू आइटम जोड़ें
 	Insert Select Path	सिलेक्ट पाथ जोड़ें
@@ -3522,7 +3525,7 @@ antiAlias	Sharp	शार्प
 	Points	पॉइंट्स
 	Points per segment	प्रति खंड अंक
 	Points:	पॉइंट्स:
-	Points: clicks add free points	अंक: क्लिक मुफ्त अंक जोड़ते हैं
+	Points: clicks add free points	पॉइंट्स: क्लिक से अलग-अलग पॉइंट जुड़ते हैं
 	Polar Grid	ध्रुवीय ग्रिड
 	Polar Grid Tool	ध्रुवीय ग्रिड टूल
 	Polar Grid Tool Options	ध्रुवीय ग्रिड टूल ऑप्शन्स
@@ -3944,8 +3947,8 @@ antiAlias	Sharp	शार्प
 	Reset Preferences	प्रेफ़रेंसेज़ रीसेट करें
 	Export Preferences…	प्रेफ़रेंसेज़ निर्यात करें…
 	Import Preferences…	प्रेफ़रेंसेज़ आयात करें…
-	Save the applied preferences to a JSON file	लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सहेजें
-	Apply the preferences in a file Export Preferences saved	प्रेफ़रेंसेज़ निर्यात करें से सहेजी गई फ़ाइल की प्रेफ़रेंसेज़ लागू करें
+	Save the applied preferences to a JSON file	लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सेव करें
+	Apply the preferences in a file Export Preferences saved	प्रेफ़रेंसेज़ निर्यात करें से सेव की गई फ़ाइल की प्रेफ़रेंसेज़ लागू करें
 	Export Preferences	प्रेफ़रेंसेज़ निर्यात करें
 	Import Preferences	प्रेफ़रेंसेज़ आयात करें
 	Search Preferences	प्रेफ़रेंसेज़ में खोजें
@@ -3964,6 +3967,9 @@ antiAlias	Sharp	शार्प
 	Reset the rows to the artwork's colors	आर्टवर्क के रंग के लिए पंक्तियों को रीसेट करें
 	Color Theme Picker	रंग थीम पिकर
 	Click or drag across the art to pick its colors; Shift adds more	आर्टवर्क के रंग लेने के लिए उस पर क्लिक करें या खींचें; Shift और जोड़ता है
+	Prominent Colors	प्रमुख रंग
+	Save All Colors	सभी रंग सेव करें
+	Save Prominent Colors	प्रमुख रंग सेव करें
 	Reset to default	डिफ़ॉल्ट पर रीसेट करें
 	Reset to Default	डिफ़ॉल्ट पर रीसेट करें
 	Reset to Defaults	डिफ़ॉल्ट पर रीसेट करें
@@ -3992,7 +3998,7 @@ antiAlias	Sharp	शार्प
 	Resize panel window	पैनल विंडो का साइज़ बदलें
 	Resize panels	पैनलों का साइज़ बदलें
 	Resize Slice	स्लाइस का आकार
-	Resize Type Area	प्रकार क्षेत्र का आकार
+	Resize Type Area	टाइप एरिया का आकार बदलें
 	Resolution:	रिज़ॉल्यूशन:
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
@@ -4235,7 +4241,7 @@ antiAlias	Sharp	शार्प
 	Saved View 8	सेव्ड व्यू 8
 	Saved View 9	सेव्ड व्यू 9
 	Saved Views	सेव किया गया दृश्य
-	Saves the current bars, toolbar and panel layout.	वर्तमान बार, टूलबार और पैनल लेआउट को बचाता है।
+	Saves the current bars, toolbar and panel layout.	वर्तमान बार, टूलबार और पैनल लेआउट को सेव करता है।
 	Saving	सेव किया जा रहा है
 	Saving {}	बचत {}
 	Saving Poster.vectorcraft	बचत Poster.vectorcraft
@@ -4350,7 +4356,7 @@ antiAlias	Sharp	शार्प
 	Select styled art and click New Graphic Style.	स्टाइलबद्ध कला सिलेक्ट करें और नई ग्राफिक स्टाइल क्लिक करें।
 	Select text	टेक्स्ट चुनें
 	Select Text by Font	फ़ॉन्ट द्वारा टेक्स्ट सिलेक्ट करें
-	Select text or click into text with the Type tool to insert glyphs	टेक्स्ट सिलेक्ट करें या glyphs डालने के लिए टाइप टूल के साथ टेक्स्ट में क्लिक करें
+	Select text or click into text with the Type tool to insert glyphs	टेक्स्ट सिलेक्ट करें या ग्लिफ़ डालने के लिए टाइप टूल से टेक्स्ट में क्लिक करें
 	Select text to set its OpenType features.	अपनी OpenType सुविधाओं को सेट करने के लिए टेक्स्ट सिलेक्ट करें।
 	Select the art (and, on top of it, the mask object)	कला सिलेक्ट करें (और इसके शीर्ष पर, मास्क ऑब्जेक्ट)
 	Select Tool	टूल सिलेक्ट करें
@@ -4364,7 +4370,7 @@ antiAlias	Sharp	शार्प
 	Selected Styles Only (0)	केवल सिलेक्टेड स्टाइल्स (0)
 	Selected Swatches	सिलेक्टेड स्वॉचेस
 	Selected Swatches Only	केवल सिलेक्टेड स्वॉचेस
-	Selected Swatches Only (0)	केवल सिलेक्टेड Swatches (0)
+	Selected Swatches Only (0)	केवल सिलेक्टेड स्वॉचेस (0)
 	Selected Symbols Only	केवल सिलेक्टेड सिंबल
 	Selected: {n}, Total number of files to export: {m}	सिलेक्टेड: {n}, निर्यात करने के लिए फ़ाइलों की कुल संख्या: {m}
 	Selection	सिलेक्शन
@@ -4498,7 +4504,7 @@ antiAlias	Sharp	शार्प
 	Show all open documents	सभी खुला डॉक्यूमेंट दिखाएं
 	Show all plates	सभी प्लेटें दिखाएं
 	Show All Plates	सभी प्लेटें दिखाएं
-	Show All Swatches	सभी Swatches दिखाएँ
+	Show All Swatches	सभी स्वॉचेस दिखाएँ
 	Show and print from the Lab definition; PDF files carry it as the ink's alternate color.	लैब परिभाषा से शो और प्रिंट करें; PDF फ़ाइलें इसे स्याही के वैकल्पिक रंग के रूप में ले जाती हैं।
 	Show and separate through the working CMYK space, as in older documents.	पुराने डॉक्यूमेंट्स के रूप में कार्य CMYK अंतरिक्ष के माध्यम से दिखाएँ और अलग करें।
 	Show Artboards	आर्टबोर्ड्स दिखाएँ
@@ -4545,7 +4551,7 @@ antiAlias	Sharp	शार्प
 	Show Original Path	मूल पाथ दिखाएं
 	Show Package	पैकेज करें दिखाएँ
 	Show Panel	शो पैनल
-	Show Pattern Swatches	पैटर्न Swatches दिखाएँ
+	Show Pattern Swatches	पैटर्न स्वॉचेस दिखाएँ
 	Show Perspective Grid	पर्सपेक्टिव ग्रिड दिखाएँ
 	Show Pixel Grid (Above 600% Zoom)	प्रदर्शन पिक्सेल ग्रिड (600% ज़ूम ऊपर)
 	Show Presets	प्रीसेट्स दिखाएँ
@@ -4869,7 +4875,7 @@ antiAlias	Sharp	शार्प
 	Swatch Conflicts	स्वॉच विरोध
 	Swatch exchange files keep solid colors only.	स्वॉच एक्सचेंज फ़ाइलों में केवल सॉलिड रंग रहते हैं।
 	Swatch Libraries	स्वॉच लाइब्रेरीज़
-	Swatch Libraries Menu	घड़ी लाइब्रेरीों मेनू
+	Swatch Libraries Menu	स्वॉच लाइब्रेरीज़ मेनू
 	Swatch Library	स्वॉच लाइब्रेरी
 	Swatch Name:	स्वॉच का नाम:
 	Swatch Options	स्वॉच ऑप्शन्स
@@ -4955,7 +4961,7 @@ antiAlias	Sharp	शार्प
 	Temperature/Tint	तापमान / तापमान
 	Temperature/Tint…	तापमान / टिंट…
 	Template	टेम्पलेट
-	Template literal not closed	टेम्पलेट साक्षर नहीं बंद
+	Template literal not closed	टेम्पलेट लिटरल बंद नहीं हुआ
 	Templates	टेम्पलेट्स
 	Templates Folder	टेम्पलेट्स फ़ोल्डर
 	Tetrad	टेट्राड
@@ -5187,10 +5193,10 @@ antiAlias	Sharp	शार्प
 	Center on Bottom	नीचे केंद्रित करें
 	Type on a Path Tool	पाथ पर टाइप टूल
 	Type Optimized	टाइप ऑप्टिमाइज़
-	Type Orientation	प्रकार अभिविन्यास
+	Type Orientation	टाइप ओरिएंटेशन
 	Type stays text, and every stroke is a line with its lineweight and dashes.	टाइप टेक्स्ट बना रहता है। हर स्ट्रोक अपने लाइनवेट और डैश वाली लाइन बनता है।
 	Type Tool	टाइप टूल
-	Type Tools	प्रकार टूल
+	Type Tools	टाइप टूल्स
 	Type:	प्रकार:
 	Type…	टाइप…
 	Typing	टाइपिंग
@@ -5205,7 +5211,7 @@ antiAlias	Sharp	शार्प
 	Undo {name}	{name} पूर्ववत करें
 	Unembed	एम्बेड हटाएँ
 	Unembed…	एम्बेड हटाएँ…
-	Unembedded to {}	Unembed to {}
+	Unembedded to {}	एम्बेड हटाकर {} में रखा गया
 	Ungroup	समूह तोड़ें
 	Ungroup Color Group	रंग समूह का ग्रूपिंग हटाएँ
 	Unicode	यूनिकोड
@@ -5261,8 +5267,8 @@ antiAlias	Sharp	शार्प
 	Use Default	डिफ़ॉल्ट का उपयोग करें
 	Use document bleed settings	डॉक्यूमेंट की ब्लीड सेटिंग्स उपयोग करें
 	Use Document Raster Effects Resolution	डॉक्यूमेंट के रास्टर इफ़ेक्ट्स का रिज़ॉल्यूशन उपयोग करें
-	Use Even-Odd Fill Rule	यहां तक कि-Odd भरण नियम का उपयोग करें
-	Use Japanese Crop Marks	जापानी फसल मार्क्स का प्रयोग करें
+	Use Even-Odd Fill Rule	ईवन-ऑड फ़िल नियम का उपयोग करें
+	Use Japanese Crop Marks	जापानी क्रॉप मार्क्स का उपयोग करें
 	Use Library Item	लाइब्रेरी आइटम का उपयोग करें
 	Use Low Resolution Proxy for Linked EPS	लिंक्ड ईपीएस के लिए कम रिज़ॉल्यूशन प्रॉक्सी का उपयोग करें
 	Use Non-Zero Winding Fill Rule	गैर-ज़ीरो विंडिंग फिल नियम का उपयोग करें
@@ -5274,7 +5280,7 @@ antiAlias	Sharp	शार्प
 	Use Square for Previews	प्रीव्यू के लिए स्क्वायर का उपयोग करें
 	Use System Defaults for Edit Original	सिस्टम डिफ़ॉल्ट का उपयोग करने के लिए संपादित करें मूल
 	Use Text for Previews	प्रीव्यू के लिए टेक्स्ट का उपयोग करें
-	Use the document's swatch: pasted colors take its color.	डॉक्यूमेंट की घड़ी का उपयोग करें: पेस्ट किए गए रंग अपना रंग लेते हैं।
+	Use the document's swatch: pasted colors take its color.	डॉक्यूमेंट का स्वॉच इस्तेमाल करें: पेस्ट किए गए रंग उसका रंग ले लेते हैं।
 	Use the Selected Text's Font	सिलेक्टेड टेक्स्ट के फ़ॉन्ट का उपयोग करें
 	Use Typographer's Quotes	टाइपोग्राफ़िक उद्धरण चिह्न उपयोग करें
 	User Brush Library 1	उपयोगकर्ता ब्रश लाइब्रेरी 1
@@ -5351,7 +5357,7 @@ antiAlias	Sharp	शार्प
 	VectorCraft on getartcraft.com	getartcraft.com पर VectorCraft
 	VectorCraft on GitHub	GitHub पर VectorCraft
 	VectorCraft read this script without running it.	VectorCraft ने इस स्क्रिप्ट को रन किए बिना पढ़ा।
-	VectorCraft Swatches (.vcswatches)	वेक्टर क्रेफ्ट Swatches (.vcswatches)
+	VectorCraft Swatches (.vcswatches)	VectorCraft स्वॉचेस (.vcswatches)
 	VectorCraft Updates	वेक्टर क्रेफ्ट अपडेट
 	Vectors	वेक्टर
 	Version	संस्करण
@@ -5475,7 +5481,7 @@ antiAlias	Sharp	शार्प
 	Yes	हाँ
 	Yonroku-ban	योनरोकु-बान
 	Your browser downloads the files (several as one .zip).	आपका ब्राउज़र फ़ाइलों को डाउनलोड करता है (एक ज़िप के रूप में कई)।
-	Your changes will be lost if you don't save them.	यदि आप उन्हें नहीं बचाते हैं तो आपका परिवर्तन खो जाएगा।
+	Your changes will be lost if you don't save them.	अगर आप अपने बदलाव सेव नहीं करते हैं, तो वे खो जाएँगे।
 	Zero-Opacity Objects	शून्य-ऑपेसिटी ऑब्जेक्ट
 	Zig Zag…	ज़िग ज़ैग…
 	Zoom	ज़ूम
@@ -5687,8 +5693,8 @@ antiAlias	Sharp	शार्प
 @msg	{_1} is not a file	{_1} एक फ़ाइल नहीं है
 @msg	{_1} is reserved by the system	{_1} सिस्टम द्वारा आरक्षित है
 @msg	{_1} isn't a path	{_1} एक पाथ नहीं है
-@msg	{_1} MB of document, at most {_2} MB	{_1} MB of document, at most {_2} MB
-@msg	{_1} MB of images, at most {_2} MB	{_1} MB of images, at most {_2} MB
+@msg	{_1} MB of document, at most {_2} MB	डॉक्यूमेंट के {_1} MB, अधिकतम {_2} MB
+@msg	{_1} MB of images, at most {_2} MB	इमेज के {_1} MB, अधिकतम {_2} MB
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} ऑब्जेक्ट्स (सीमा {MAX_OBJECTS})
 @msg	{_1} options: {e}	{_1} ऑप्शन्स: {e}
 @msg	{_1} paints nothing to rasterize	{_1} कुछ भी नहीं पेंट करता है
@@ -5698,7 +5704,7 @@ antiAlias	Sharp	शार्प
 @msg	{_1}: belongs to another account	{_1}: किसी अन्य खाते से संबंधित है
 @msg	{_1}: not a folder of its own	{_1}: अपने खुद के फ़ोल्डर नहीं
 @msg	{_1}: not a plain file	{_1}: एक सादे फ़ाइल नहीं
-@msg	{_1}: not saved, so not closed	{_1}: बचाया नहीं गया, इसलिए बंद नहीं हुआ
+@msg	{_1}: not saved, so not closed	{_1}: सेव नहीं हुआ, इसलिए बंद नहीं हुआ
 @msg	{_1}: they came in as the page's art	{_1}: वे पृष्ठ की कला के रूप में आए
 @msg	{at}: {msg}	{at}: {msg}
 @msg	{bpp}-bit bitmaps can't be read	{bpp}-bit bitmaps पढ़ा नहीं जा सकता
@@ -5749,7 +5755,7 @@ antiAlias	Sharp	शार्प
 @msg	{kind} images can't be opened (see document.formats)	{kind} इमेज ओपन नहीं हो सकतीं (document.formats देखें)
 @msg	{label} currently requires a path, compound path, type, group, blend or symbol instance. Expand other objects first.	{label} के लिए वर्तमान में एक पाथ, यौगिक पाथ, टाइप, समूह, ब्लेंड या सिंबल इंस्टेंस आवश्यक है। पहले अन्य ऑब्जेक्ट को एक्सपैंड करें।
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} इमेज से ठोस नहीं बना सकता: पहले ऑब्जेक्ट › इमेज ट्रेस › बनाएँ से उसे ट्रेस करें।
-@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक आर्टबोर्ड के साथ फिर से खुलती है। सभी आर्टबोर्ड रखने के लिए संपादन क्षमताओं को संरक्षित करना विकल्प चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
 @msg	{label} must be at most {max} characters	{label} में अधिकतम {max} वर्ण होने चाहिए
@@ -5776,7 +5782,7 @@ antiAlias	Sharp	शार्प
 @msg	{name}: CRC or size mismatch	{name}: CRC or size mismatch
 @msg	{name}: no local header	{name}: कोई स्थानीय हैडर नहीं
 @msg	{name}: no such recovery entry	{name}: ऐसी कोई वसूली प्रविष्टि नहीं
-@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: केवल इस Affinity फ़ाइल के एम्बेडेड प्रीव्यू को पढ़ा जा सकता है; फ़ाइल का उपयोग करें > इसे अपनी चेतावनी के साथ देखने के लिए ओपन करें, या SVG या PDF को Affinity से पहले निर्यात करें।
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: इस Affinity फ़ाइल का केवल एम्बेडेड प्रीव्यू पढ़ा जा सका; इसे इसकी चेतावनी के साथ देखने के लिए फ़ाइल › ओपन का उपयोग करें, या प्लेस करने से पहले Affinity से SVG या PDF निर्यात करें
 @msg	{native}; its embedded preview can't be read either ({e})	{native}; इसका एम्बेड किया प्रीव्यू भी पढ़ा नहीं जा सका ({e})
 @msg	{note}) ({more}	{note} ({more})
 @msg	{path} can't be found: relink it first	{path} पाया नहीं जा सकता: इसे पहली बार फिर से लिंक करें
@@ -5786,7 +5792,7 @@ antiAlias	Sharp	शार्प
 @msg	{path}: not a file	{path}: एक फ़ाइल नहीं
 @msg	{status} ({e})	{status} ({e})
 @msg	{std} files are CMYK, and the file would have colours in {_1}	{std} फ़ाइलें CMYK हैं, और फ़ाइल में {_1} में रंग होंगे।
-@msg	{std} files embed their fonts, and the file would have one that isn't	{std} फ़ाइलें अपने फ़ॉन्ट एम्बेड करती हैं, और फ़ाइल में एक ऐसा होता है जो नहीं है।
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std} फ़ाइलें अपने फ़ॉन्ट एम्बेड करती हैं, और इस फ़ाइल में एक ऐसा फ़ॉन्ट होता जो एम्बेड नहीं है
 @msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	यह डॉक्यूमेंट {target} से पढ़ा गया था और पढ़ते समय कुछ चीज़ें छूट गईं ({what}): उसी फ़ाइल पर लिखने से वे स्थायी रूप से खो जाएँगी। दूसरी फ़ाइल लिखें या फिर भी बदलने के लिए acknowledgeLoss: true दें
 @msg	{tool} isn't in a toolbar group of several tools	{tool} कई टूल्स के टूलबार समूह में नहीं है
 @msg	{ty} brushes need selected art (or params.{k})	{ty} ब्रश के लिए सिलेक्टेड आर्टवर्क (या params.{k}) चाहिए
@@ -5802,7 +5808,7 @@ antiAlias	Sharp	शार्प
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect": "{_2}"}} के साथ लागू करें
 @msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format": "{_2}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
-@msg	`{_1}` is no save command	`{_1}` कोई बचत आदेश नहीं है
+@msg	`{_1}` is no save command	`{_1}` कोई सेव कमांड नहीं है
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` पिछली text.findFontFiles सर्च में मिली फ़ॉन्ट फ़ाइल नहीं है
 @msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` पैकेज द्वारा ओवरराइट किया जाएगा: एक अलग फ़ोल्डर या नाम चुनें
 @msg	`{_1}`: {msg}	`{_1}`: {msg}
@@ -5811,7 +5817,7 @@ antiAlias	Sharp	शार्प
 @msg	`{f}` belongs to a VectorCraft that is running	`{f}` एक VectorCraft से संबंधित है जो चल रहा है
 @msg	`{f}` is the copy of a document open now	`{f}` एक डॉक्यूमेंट की प्रतिलिपि है जो अब खुला है
 @msg	`{file}` has no art to place	`{file}` के पास कोई कला नहीं है
-@msg	`{file}` is over {_1} MB	`{file}` is over {_1} MB
+@msg	`{file}` is over {_1} MB	`{file}` {_1} MB से बड़ी है
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` एक VectorCraft डॉक्यूमेंट नहीं है, एक PDF या एक PDF-compatible.ai फ़ाइल
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` एक लाइब्रेरी पैनल नहीं है (देखें window.swatchLibrary)
 @msg	`{id}` has no envelope dialog	`{id}` में कोई लिफाफा संवाद नहीं है
@@ -5827,7 +5833,7 @@ antiAlias	Sharp	शार्प
 @msg	`{k}` must be {what}, not {v}	`{k}` होना चाहिए {what}, नहीं {v}
 @msg	`{k}` must be a byte offset	`{k}` को एक बाइट ऑफ़सेट होना चाहिए
 @msg	`{k}` must be a number	`{k}` एक संख्या होना चाहिए
-@msg	`{k}` must be a number of points	`{k}` को कई अंक होना चाहिए
+@msg	`{k}` must be a number of points	`{k}` पॉइंट में एक संख्या होनी चाहिए
 @msg	`{k}` must be a string	`{k}` एक स्ट्रिंग होना चाहिए
 @msg	`{k}` must be a whole number	`{k}` एक पूर्ण संख्या होना चाहिए
 @msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` होना चाहिए {lo} से {hi} {key} के लिए
@@ -5872,7 +5878,7 @@ antiAlias	Sharp	शार्प
 @msg	`{n}` can't be deleted	`{n}` को हटाया नहीं जा सकता
 @msg	`{n}` can't be merged	`{n}` को विलय नहीं किया जा सकता है
 @msg	`{n}` can't be moved	`{n}` को स्थानांतरित नहीं किया जा सकता है
-@msg	`{n}` is not a colour swatch	`{n}` एक रंग की घड़ी नहीं है
+@msg	`{n}` is not a colour swatch	`{n}` रंग स्वॉच नहीं है
 @msg	`{n}` isn't a solid colour	`{n}` एक ठोस रंग नहीं है
 @msg	`{n}`: colour groups hold solid colours only	`{n}`: रंग समूहों में केवल ठोस रंग होते हैं
 @msg	`{name}` can't be deleted	`{name}` को हटाया नहीं जा सकता है
@@ -5895,21 +5901,21 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` एक अंतर्निहित वर्कस्पेस है; एक और नाम चुनें
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` एक प्रक्रिया रंग है: टिंट वैश्विक और स्पॉट रंगों पर लागू होते हैं
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` एक स्थिर सिंबल है: अपने सिंबल प्रकार को पहले गतिशील करने के लिए सेट करें
-@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	प्रतीक इंस्टेंस में चयनित पथ, संयोजित पथ या पाठ का केवल भराव, स्ट्रोक, अपारदर्शिता और ब्लेंड बदला जा सकता है
-@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (केवल एक टिंट swatch केवल एक नया नाम लेता है)
+@msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	सिंबल इंस्टेंस में सिलेक्ट किए गए पाथ, कंपाउंड पाथ या टाइप का केवल फ़िल, स्ट्रोक, ओपेसिटी और ब्लेंड बदला जा सकता है
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (टिंट स्वॉच केवल नया नाम लेता है)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` वर्किंग स्पेस है: पहले edit.colorSettings से दूसरा चुनें
 @msg	`{name}` is built in and stays	`{name}` बनाया गया है और रहता है
 @msg	`{name}` is no recovery entry name	`{name}` कोई वसूली प्रविष्टि नाम नहीं है
-@msg	`{name}` isn't a colour swatch	`{name}` is not a color swatch
-@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` अपने खुद के प्रकार (रंग, ग्रेडिएंट या पैटर्न) का एक रंग लेता है।
+@msg	`{name}` isn't a colour swatch	`{name}` रंग स्वॉच नहीं है
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` अपने ही प्रकार का पेंट लेता है (रंग, ग्रेडिएंट या पैटर्न)
 @msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: न्यूनतम इच्छा से अधिक नहीं होना चाहिए, न ही इच्छा अधिकतम
 @msg	`{other}` doesn't trace an image	`{other}` एक इमेज का पता नहीं लगा
 @msg	`{path}` must be a bool or an object of bools	`{path}` एक bool होना चाहिए या एक ऑब्जेक्ट होना चाहिए।
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` एक रंग नहीं है (#rrggbb या एक पूर्व निर्धारित नाम)
 @msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: चरण के संदर्भ मूल्य के {_1} MB से अधिक में प्रतिलिपि बनाते हैं
 @msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` एक अक्ष टैग नहीं है: एक टैग चार वर्ण हैं, जैसे कि "wght"
-@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: चरण {i} के परिणाम में ऐसा कोई मूल्य नहीं है (एक साक्षर $ के लिए $$ लिखना)
-@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: इस से पहले कोई स्टेप {i} नहीं है (स्टेप 0 से गिनते हैं; $$ को साक्षर $ के लिए लिखें)
+@msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: चरण {i} के परिणाम में ऐसा कोई मान नहीं है (शाब्दिक $ के लिए $$ लिखें)
+@msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: इससे पहले कोई चरण {i} नहीं है (चरण 0 से गिने जाते हैं; शाब्दिक $ के लिए $$ लिखें)
 @msg	`{to}` is empty or already used	`{to}` खाली है या पहले से ही इस्तेमाल किया जाता है
 @msg	`{to}` is not an available name	`{to}` उपलब्ध नहीं है
 @msg	`{tool}` isn't a freehand tool	`{tool}` एक फ्रीहैंड टूल नहीं है
@@ -6003,7 +6009,7 @@ antiAlias	Sharp	शार्प
 @msg	`gap` must be from 0 to 6 pt	`gap` 0 से 6 तक होना चाहिए।
 @msg	`gid` must be a glyph id, not {v}	`gid` एक glyph id होना चाहिए, नहीं {v}
 @msg	`globalAdjust` must be an object	`globalAdjust` एक ऑब्जेक्ट होना चाहिए
-@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` एक चरित्र से संबंधित है, एक चरित्र स्टाइल के लिए नहीं (text.setGlyphAlternate इसे सेट)
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` एक कैरेक्टर का होता है, कैरेक्टर स्टाइल का नहीं (इसे text.setGlyphAlternate सेट करता है)
 @msg	`gradient` must be an object	`gradient` एक ऑब्जेक्ट होना चाहिए
 @msg	`groupColors` must be an array	`groupColors` को ऐरे होना चाहिए
 @msg	`guide` must be a guide index (guide.list)	`guide` एक गाइड सूचकांक (guide.list) होना चाहिए।
@@ -6077,7 +6083,7 @@ antiAlias	Sharp	शार्प
 @msg	`path` must be a path object	`path` एक पाथ ऑब्जेक्ट होना चाहिए
 @msg	`pathfinder` must be an object	`pathfinder` एक ऑब्जेक्ट होना चाहिए
 @msg	`pivot` must be a whole number from 0 to 8	`pivot` 0 से 8 तक पूरी संख्या होना चाहिए
-@msg	`points` must be a list of [x, y] points	`points` को [x, y] अंक की एक सूची होना चाहिए
+@msg	`points` must be a list of [x, y] points	`points` को [x, y] पॉइंट की सूची होना चाहिए
 @msg	`points` must be a list of point indexes	`points` को पॉइंट इंडेक्स की सूची होना चाहिए
 @msg	`points` must be an array of point indices	`points` को पॉइंट इंडेक्स की ऐरे होना चाहिए
 @msg	`points` must be point indexes	`points` में पॉइंट इंडेक्स होने चाहिए
@@ -6100,14 +6106,14 @@ antiAlias	Sharp	शार्प
 @msg	`select` must be true or false	`select` को true या false होना चाहिए
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` श्रृंखला सूचकांकों की एक गैर-खाली सूची है
 @msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` को `type` या `valueAxis` की आवश्यकता होती है
-@msg	`shift` must be a number of points	`shift` को कई अंक होना चाहिए
+@msg	`shift` must be a number of points	`shift` पॉइंट में एक संख्या होनी चाहिए
 @msg	`showCenter` must be true or false	`showCenter` को true या false होना चाहिए
 @msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` को "fullJustify", "alignLeft", "alignCenter" या "alignRight" होना चाहिए।
 @msg	`size` is a percentage of the base text's size, 1 to 100	`size` आधार टेक्स्ट के आकार का एक प्रतिशत है, 1 से 100
 @msg	`source` and `target` are the same object	`source` और `target` एक ही ऑब्जेक्ट है
 @msg	`source` must be `folder` or `datasets`	`source` होना चाहिए `folder` या `datasets` होना चाहिए
 @msg	`spacing` must be a number	`spacing` होना चाहिए
-@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` को कई अंक, 0 या उससे अधिक, या "auto" होना चाहिए।
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` पॉइंट में 0 या उससे बड़ी संख्या, या "auto" होनी चाहिए
 @msg	`start` must be a finite number	`start` को परिमित संख्या होना चाहिए
 @msg	`starts` must be an array of anchor indices (or nulls)	`starts` को एंकर इंडेक्स (या null) की ऐरे होना चाहिए
 @msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` को लिंक, एम्बेडेड, लापता या संशोधित किया जाना चाहिए, या उनमें से एक सूची
@@ -6125,7 +6131,7 @@ antiAlias	Sharp	शार्प
 @msg	`t` must be from 0 to 1	`t` 0 से 1 तक होना चाहिए
 @msg	`target` must be "object" or "contents", not {v}	`target` को "object" या "contents" होना चाहिए, नहीं {v}
 @msg	`tint` applies to global and spot colours	`tint` वैश्विक और स्पॉट रंगों पर लागू होता है
-@msg	`tint` goes with a global or spot `swatch`	`tint` एक वैश्विक या स्थान `swatch` के साथ चला जाता है
+@msg	`tint` goes with a global or spot `swatch`	`tint` किसी ग्लोबल या स्पॉट `swatch` के साथ दिया जाता है
 @msg	`tint` must be a number (%)	`tint` एक नंबर होना चाहिए (%)
 @msg	`tint` needs a global or spot colour	`tint` को वैश्विक या स्पॉट रंग की आवश्यकता होती है
 @msg	`to` is already threaded	`to` पहले से ही पिरोया है
@@ -6175,7 +6181,7 @@ antiAlias	Sharp	शार्प
 @msg	a document needs at least one layer	डॉक्यूमेंट की कम से कम एक लेयर की आवश्यकता होती है
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	एक DXF ड्राइंग का एक मूल होता है: हर आर्टबोर्ड के लिए एक ड्राइंग के लिए useArtboards: true दें
 @msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	एक feConvolveMatrix फिल्टर का आदेश {x} ×{y} है, जो कर्नेल-आकार की बहुप्लाई usvg को ओवरफ्लो करता है।
-@msg	a freeform gradient keeps at least one point	एक freeform ग्रेडिएंट कम से कम एक बिंदु रखता है
+@msg	a freeform gradient keeps at least one point	फ़्रीफ़ॉर्म ग्रेडिएंट में कम से कम एक पॉइंट रहता है
 @msg	a gradient needs at least two stops	कम से कम दो स्टॉप की आवश्यकता होती है
 @msg	a gradient preset is already called {n}	gradient preset पहले से ही कहा जाता है {n}
 @msg	a graph has at most {_1} series, so it transposes with at most that many categories	एक ग्राफ में सबसे {_1} श्रृंखला है, इसलिए यह उस कई श्रेणियों के साथ ट्रांसपोजित होता है।
@@ -6189,7 +6195,7 @@ antiAlias	Sharp	शार्प
 @msg	a layer's form can't be read	एक लेयर का रूप नहीं पढ़ा जा सकता है
 @msg	a layer's form has no box	एक लेयर के रूप में कोई बॉक्स नहीं है
 @msg	a layer's form has no dictionary	एक लेयर के रूप में कोई शब्दकोश नहीं है
-@msg	a legend draws at most {MAX_CHIPS} swatches	एक किंवदंती सबसे {MAX_CHIPS} swatches पर आकर्षित होती है
+@msg	a legend draws at most {MAX_CHIPS} swatches	लेजेंड अधिकतम {MAX_CHIPS} स्वॉच बनाता है
 @msg	a linked image can't become a gradient mesh: embed it first	एक संबद्ध इमेज एक ग्रेडिएंट जाल नहीं बन सकती है: इसे पहले एम्बेड करें
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	जब डॉक्यूमेंट तैयार हो जाता है, तो यह `heavy` नहीं हो सकता है।
 @msg	a mask has more than one art block	एक मास्क एक से अधिक कला ब्लॉक है
@@ -6207,7 +6213,7 @@ antiAlias	Sharp	शार्प
 @msg	a page tree kid isn't a reference	एक पृष्ठ पेड़ बच्चा एक संदर्भ नहीं है
 @msg	a page tree node has no kids	पृष्ठ पेड़ नोड में कोई बच्चे नहीं है
 @msg	a page's placement is not finite	एक पृष्ठ का प्लेसमेंट परिमित नहीं है
-@msg	a path has too many points	एक पाथ में बहुत अधिक अंक होते हैं
+@msg	a path has too many points	पाथ में बहुत अधिक पॉइंट हैं
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	एक जटिल पाथ के अंदर एक पाथ, मिश्रण, लिफ़ाफ़ाफ़ा, दोहराने या इंटरट्विन समूह ऑब्जेक्ट नहीं ले सकता है
 @msg	a pattern layer doesn't end what it starts	एक पैटर्न लेयर अंत नहीं है कि यह क्या शुरू होता है
 @msg	a pattern layer's colors hold something else	एक पैटर्न लेयर के रंग कुछ और पकड़ते हैं
@@ -6232,16 +6238,16 @@ antiAlias	Sharp	शार्प
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	एक प्रोफ़ाइल एक रिवॉल्व इफ़ेक्ट का समर्थन करता है। इसके बजाय मौजूदा इफ़ेक्ट के ऑप्शन्स को संपादित करें।
 @msg	a row can't go into itself	एक पंक्ति अपने आप में नहीं जा सकती
 @msg	a series goes on the left or the right value axis	एक श्रृंखला बाएं या दाएं मूल्य अक्ष पर जाती है
-@msg	a slice size must be a positive number of points	एक स्लाइस आकार अंक की एक सकारात्मक संख्या होना चाहिए
-@msg	a spine keeps at least two points	रीढ़ की हड्डी कम से कम दो अंक रखती है
+@msg	a slice size must be a positive number of points	स्लाइस का आकार पॉइंट में एक धनात्मक संख्या होनी चाहिए
+@msg	a spine keeps at least two points	स्पाइन में कम से कम दो पॉइंट रहते हैं
 @msg	a start must be an anchor index ≥ 0 or null	प्रारंभ में एक एंकर इंडेक्स होना चाहिए ≥ 0 या null
 @msg	a stream runs past the end	एक स्ट्रीम अंत तक चलता है
 @msg	a stream's length is wrong	धारा की लंबाई गलत है
 @msg	a stream's length isn't a number	एक धारा की लंबाई नहीं है
 @msg	a style named `{name}` already exists	`{name}` नामक एक स्टाइल पहले से मौजूद है
 @msg	a style named `{to}` already exists	`{to}` नामक एक स्टाइल पहले से मौजूद है
-@msg	a swatch needs a colour, gradient or pattern	एक swatch एक रंग, ग्रेडिएंट या पैटर्न की जरूरत है
-@msg	a swatch or color group named `{n}` exists	`{n}` नामक एक swatch या रंग समूह मौजूद है
+@msg	a swatch needs a colour, gradient or pattern	स्वॉच को रंग, ग्रेडिएंट या पैटर्न चाहिए
+@msg	a swatch or color group named `{n}` exists	`{n}` नाम का स्वॉच या रंग समूह पहले से मौजूद है
 @msg	a symbol can't hold an instance of itself	एक सिंबल खुद का एक उदाहरण नहीं पकड़ सकता है
 @msg	a symbol named `{n}` already exists	पहले से ही `{n}` नाम का सिंबल मौजूद है
 @msg	a theme has 1 to {THEME_SIZE} colours	थीम में 1 से {THEME_SIZE} रंग होते हैं
@@ -6303,10 +6309,10 @@ antiAlias	Sharp	शार्प
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art या type
 @msg	appearance must be flat|center|edge	appearance को flat|center|edge होना चाहिए
 @msg	apply is "fill" or "stroke", not `{other}`	apply "fill" या "stroke" है, नहीं `{other}`
-@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area: क्षेत्र 3 से 100000 [x, y] अंक के एक बंद बहुभुज होना चाहिए
-@msg	area type {_1} is named twice	क्षेत्र के प्रकार {_1} को दो बार नाम दिया गया है
-@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	फ्रेम में क्षेत्र प्रकार फ़ॉन्ट की एक पंक्ति के लिए बहुत कम है, यह लंबा फ्रेम ({_1}) में दिखाता है: उनका प्रकार अन्यथा नहीं दिखाई देगा
-@msg	area type needs a path that encloses an area	क्षेत्र के प्रकार को एक पाथ की आवश्यकता होती है जो एक क्षेत्र को घेरता है
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area: क्षेत्र 3 से 100000 [x, y] पॉइंट का एक बंद बहुभुज होना चाहिए
+@msg	area type {_1} is named twice	एरिया टाइप {_1} का नाम दो बार दिया गया है
+@msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	अपने फ़ॉन्ट की एक लाइन के लिए बहुत छोटे फ़्रेम वाले एरिया टाइप को लंबे फ़्रेम दिए गए ({_1}): वरना उनका टाइप नहीं दिखता
+@msg	area type needs a path that encloses an area	एरिया टाइप को ऐसा पाथ चाहिए जो किसी क्षेत्र को घेरता हो
 @msg	arrowAlign must be extend|tip, got {o}	arrowAlign होना चाहिए thetip, get {o}
 @msg	arrowScale must be [start, end]	arrowScale होना चाहिए [शुरू, अंत]
 @msg	artboard {0} does not exist	आर्टबोर्ड {0} मौजूद नहीं है
@@ -6461,7 +6467,7 @@ antiAlias	Sharp	शार्प
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" जैसा रंग नहीं है
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: अधिकतम {MAX_TABLE} रंग
 @msg	colour groups can't go into colour groups	रंग समूह रंग समूहों में नहीं जा सकते हैं
-@msg	colour, mode and spot apply to solid-colour swatches only	रंग, मोड और स्पॉट केवल ठोस रंग की घड़ी पर लागू होते हैं
+@msg	colour, mode and spot apply to solid-colour swatches only	रंग, मोड और स्पॉट केवल ठोस रंग वाले स्वॉच पर लागू होते हैं
 @msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	कॉलम {column}: `{cell}` ग्राफ़ डेटा फ़ाइल का `%` कॉलम है, जिसे पढ़ा नहीं जाता
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	कॉलम {column}: `{cell}` नाम `{name}`, जो एक {_1} चर है
 @msg	column {column}: `{cell}` names no variable	कॉलम {column}: `{cell}` नाम कोई चर नहीं
@@ -6478,7 +6484,7 @@ antiAlias	Sharp	शार्प
 @msg	composer must be "singleLine" or "everyLine"	composer: संगीतकार "singleLine" या "everyLine" होना चाहिए।
 @msg	compound {_1} must contain exactly one open path to join	यौगिक {_1} में शामिल होने के लिए बिल्कुल एक खुला रास्ता होना चाहिए
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
-@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	मिश्रित आकार पाथ, यौगिक पाथ, समूह, मिश्रित आकार, प्रकार, मिश्रण और लिफाफे लेते हैं
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
 @msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect: कनेक्ट एक विस्तारित के अलावा एक पाथ की जरूरत है
@@ -6503,8 +6509,8 @@ antiAlias	Sharp	शार्प
 @msg	Ran {name}	{name} चलाई गई
 @msg	The script was stopped and its changes were undone	स्क्रिप्ट रोकी गई और उसके बदलाव पूर्ववत किए गए
 @msg	a script is running: stop it or wait for it to finish	एक स्क्रिप्ट चल रही है: उसे रोकें या पूरा होने की प्रतीक्षा करें
-@msg	this is a compiled script, which cannot be run; use its source text	यह कंपाइल की हुई स्क्रिप्ट है, जिसे चलाया नहीं जा सकता; इसका स्रोत पाठ इस्तेमाल करें
-@msg	the script is not UTF-8 text	स्क्रिप्ट UTF-8 पाठ नहीं है
+@msg	this is a compiled script, which cannot be run; use its source text	यह कंपाइल की हुई स्क्रिप्ट है, जिसे चलाया नहीं जा सकता; इसका सोर्स टेक्स्ट इस्तेमाल करें
+@msg	the script is not UTF-8 text	स्क्रिप्ट UTF-8 टेक्स्ट नहीं है
 @msg	the script is too large to run	स्क्रिप्ट चलाने के लिए बहुत बड़ी है
 @msg	a drag or an undo group is open; finish it before running a script	कोई ड्रैग या पूर्ववत समूह खुला है; स्क्रिप्ट चलाने से पहले उसे पूरा करें
 @msg	the script left a document that cannot be kept	स्क्रिप्ट ने ऐसा दस्तावेज़ छोड़ा है जिसे रखा नहीं जा सकता
@@ -6528,7 +6534,7 @@ antiAlias	Sharp	शार्प
 @msg	Script files cannot be opened in another application	स्क्रिप्ट फ़ाइलें किसी अन्य ऐप्लिकेशन में नहीं खोली जा सकतीं
 @msg	Script file access is unavailable on the web	वेब पर स्क्रिप्ट फ़ाइल पहुँच उपलब्ध नहीं है
 @msg	Script has 256 files open	स्क्रिप्ट ने 256 फ़ाइलें खोल रखी हैं
-@msg	Script file path exceeds 32,767 characters	स्क्रिप्ट फ़ाइल का पथ 32,767 वर्णों से अधिक है
+@msg	Script file path exceeds 32,767 characters	स्क्रिप्ट फ़ाइल का पाथ 32,767 वर्णों से अधिक है
 @msg	Script folder mask takes too many steps to match	स्क्रिप्ट फ़ोल्डर मास्क के मिलान में बहुत अधिक चरण लगते हैं
 @msg	the script opened more file data than one run may open (32 MiB)	स्क्रिप्ट ने एक रन में खोले जा सकने वाले फ़ाइल डेटा से अधिक डेटा खोला (32 MiB)
 @msg	File.seek: takes a position and a mode	File.seek: एक स्थिति और एक मोड लेता है
@@ -6536,9 +6542,9 @@ antiAlias	Sharp	शार्प
 @msg	vc.run: takes a command id and an object of parameters	vc.run: एक कमांड id और पैरामीटर का एक ऑब्जेक्ट लेता है
 @msg	vc.run: the parameters must be an object	vc.run: पैरामीटर एक ऑब्जेक्ट होने चाहिए
 @msg	vc.run: the result{place} is too large for a script	vc.run: परिणाम{place} स्क्रिप्ट के लिए बहुत बड़ा है
-@msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पथ आवश्यक है
+@msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पाथ आवश्यक है
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: टाइमआउट मिलीसेकंड की एक सीमित संख्या होनी चाहिए, 0 या अधिक
-@msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पथ और एक टाइमआउट लेता है
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पाथ और एक टाइमआउट लेता है
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: {e} (thrown)	{name}: {e} (थ्रो किया गया)
@@ -6601,7 +6607,7 @@ antiAlias	Sharp	शार्प
 @msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus को unknown, copyrighted या publicDomain होना चाहिए
 @msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl को URL होना चाहिए (स्पेस नहीं, अधिकतम 2048 अक्षर)
 @msg	Corners edits the corners of a path	कॉर्नर एक पाथ के कोनों को संपादित करता है
-@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners: कोनों 4 [x, y] अंक (TL, TR, BR, BL) होना चाहिए
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners में 4 [x, y] पॉइंट (TL, TR, BR, BL) होने चाहिए
 @msg	could not decode image: {0}	इमेज को डीकोड नहीं कर सकता: {0}
 @msg	Couldn't copy to the system clipboard: {e}	सिस्टम क्लिपबोर्ड को कॉपी नहीं कर सका: {e}
 @msg	Couldn't open {name}: {e}	नहीं खोल सकता {name}: {e}
@@ -6611,19 +6617,19 @@ antiAlias	Sharp	शार्प
 @msg	Couldn't place {name}: the document it was dropped on was closed	नहीं था {name}: यह डॉक्यूमेंट बंद हो गया था
 @msg	Couldn't place {name}: the document it was placed in was closed	नहीं था {name}: यह डॉक्यूमेंट बंद किया गया था
 @msg	Couldn't read {name}: {e}	नहीं पढ़ सकता {name}: {e}
-@msg	Couldn't save recovery data: {e}	वसूली डेटा नहीं बचा सकता: {e}
+@msg	Couldn't save recovery data: {e}	रिकवरी डेटा सेव नहीं किया जा सका: {e}
 @msg	counterPer `{c}`: item or file	counterPer `{c}`: item या file
 @msg	Create from Guides: the document has no artboard	गाइड से बनाएँ: डॉक्यूमेंट में कोई आर्टबोर्ड नहीं है
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	गाइड से बनाएँ: गाइड {MAX_PIECES} स्लाइस से अधिक बनाते हैं
 @msg	Create from Selection: the selection has no area	सिलेक्शन से बनाएँ: सिलेक्शन में कोई क्षेत्र नहीं है
 @msg	Create needs fills, strokes or both	जरूरतों को पूरा करने, स्ट्रोक या दोनों की जरूरत है
 @msg	Create Outlines: select text objects	आउटलाइन बनाएं: टेक्स्ट ऑब्जेक्ट चुनें
-@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	फसल `{_1}`: केवल PDF पृष्ठों में कला, ट्रिम, ब्लीड और मीडिया बॉक्स हैं; "crop" या "bounding" का उपयोग करें
-@msg	crop rectangle doesn't overlap the image	फसल आयत इमेज को ओवरलैप नहीं करता है
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	क्रॉप `{_1}`: केवल PDF पेजों में आर्ट, ट्रिम, ब्लीड और मीडिया बॉक्स होते हैं; "crop" या "bounding" का उपयोग करें
+@msg	crop rectangle doesn't overlap the image	क्रॉप आयत इमेज को ओवरलैप नहीं करता
 @msg	cross-reference and object streams aren't supported	क्रॉस-रिफरेंस और ऑब्जेक्ट स्ट्रीम्स का समर्थन नहीं किया जाता है
 @msg	CSS options: {e}	सीएसएस ऑप्शन्स: {e}
 @msg	CSV has a header but no data rows	CSV एक हेडर है लेकिन कोई डेटा पंक्ति नहीं है
-@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV ने NUL बाइट्स को रखा: इसे UTF-8 या UTF-16 के रूप में बाइट-ऑर्डर मार्क के साथ बचाओ
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV में NUL बाइट्स हैं: इसे UTF-8 के रूप में, या बाइट-ऑर्डर मार्क के साथ UTF-16 के रूप में सेव करें
 @msg	CSV is empty	CSV खाली है
 @msg	CSV is larger than {MAX_CSV_BYTES} bytes	CSV {MAX_CSV_BYTES} bytes से बड़ा है
 @msg	CSV is not UTF-16	CSV UTF-16 नहीं है
@@ -6792,12 +6798,12 @@ antiAlias	Sharp	शार्प
 @msg	give a fraction `t` from 0 to 1	0 से 1 तक एक अंश `t` देना
 @msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	एक मोड या आर / जी / बी, सी / एम / वाई / के, ग्रे या टिंट समायोजन देते हैं
 @msg	give a name, or paint the active proxy with a saved preset	एक सेव किए गए प्रीसेट के साथ सक्रिय प्रॉक्सी को नाम देना, या पेंट करना
-@msg	give a name, or select a stroke with a saved profile	एक नाम देना, या एक बचाया प्रोफ़ाइल के साथ एक स्ट्रोक का सिलेक्शन
+@msg	give a name, or select a stroke with a saved profile	कोई नाम दें, या सेव की गई प्रोफ़ाइल वाला स्ट्रोक सिलेक्ट करें
 @msg	give a pattern name or select an object painted with a pattern	एक पैटर्न का नाम देना या एक पैटर्न के साथ चित्रित एक ऑब्जेक्ट का सिलेक्शन करना
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	इनमें से कम से कम एक दें: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	give at least one of clip, invert, disabled, linked	कम से कम एक क्लिप, उलटा, विकलांग, लिंक्ड देना
 @msg	give both `start` and `end` [x, y] (or neither)	`start` और `end` दोनों [x, y] दें (या दोनों न दें)
-@msg	give color, none, swatch or gradient	रंग, कोई नहीं, घड़ी या ग्रेडिएंट देना
+@msg	give color, none, swatch or gradient	color, none, swatch या gradient दें
 @msg	give corners of the path: anchors between two straight sides	पाथ के कोने: दो सीधे पक्षों के बीच एंकर
 @msg	give corners of the path: anchors where its sides meet at an angle	पाथ के कोने: एंकर जहां इसके पक्ष एक कोण पर मिलते हैं
 @msg	give dataBase64	dataBase64 दें
@@ -6838,7 +6844,7 @@ antiAlias	Sharp	शार्प
 @msg	give the settings to change, e.g. {"formats"}]}	सेटिंग्स को बदलने के लिए, उदाहरण के लिए {"formats"}]}
 @msg	give the style a name	स्टाइल को एक नाम दें
 @msg	give two or more style `names`	दो या अधिक स्टाइल `names`
-@msg	give two or more swatches	दो या अधिक swatch
+@msg	give two or more swatches	दो या अधिक स्वॉच दें
 @msg	give x, y, or a handle's length or angle	x, y, या एक हैंडल की लंबाई या कोण देना
 @msg	Global Edit is off	ग्लोबल एडिट बंद है
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	ग्लोबल एडिट पाथ, मिश्रित पाथ, सिंबल उदाहरणों और उनके समूहों पर काम करता है
@@ -6881,7 +6887,7 @@ antiAlias	Sharp	शार्प
 @msg	Image Trace finished, but its document was closed	इमेज ट्रेस समाप्त हो गया, लेकिन इसका डॉक्यूमेंट बंद हो गया।
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	इमेज ट्रेस समाप्त हो गया, लेकिन इस बीच इमेज या इसकी सेटिंग्स बदल गई: इसे फिर से ट्रेस करें
 @msg	Image Trace: the traced image is missing	इमेज ट्रेस: ज्ञात इमेज गायब है
-@msg	image would be too large; lower the resolution	इमेज बहुत बड़ी होगी; संकल्प को कम करें
+@msg	image would be too large; lower the resolution	इमेज बहुत बड़ी होगी; रिज़ॉल्यूशन कम करें
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client या server
 @msg	Imported {what}: {_1}	आयात {what}: {_1}
 @msg	Imported library {name}	आयातित लाइब्रेरी {name}
@@ -6965,7 +6971,7 @@ antiAlias	Sharp	शार्प
 @msg	its page has text, and its layers have no text objects to put it in	इसके पृष्ठ में टेक्स्ट है, और इसकी लेयर्स में कोई टेक्स्ट ऑब्जेक्ट नहीं है जिसे इसमें डाल दिया जाता है
 @msg	its preview was placed instead, at screen resolution	इसके बजाय इसके प्रीव्यू को स्क्रीन रिज़ॉल्यूशन पर रखा गया था।
 @msg	its section ending with `%{end}` doesn't end	इसका खंड `%{end}` के साथ समाप्त नहीं होता है
-@msg	its type is to come in as outlines, which only its page has	इसके प्रकार को रूपरेखा के रूप में जाना जाता है, जो केवल इसके पेज में है
+@msg	its type is to come in as outlines, which only its page has	इसका टाइप आउटलाइन के रूप में आना है, जो केवल इसके पेज में हैं
 @msg	its Windows metafile preview was opened instead, which may simplify the art	इसके बजाय विंडोज मेटाफ़ाइल प्रीव्यू ओपन किया गया था, जो कला को सरल बना सकता है
 @msg	its zlib compression is damaged	इसके zlib संपीड़न क्षतिग्रस्त है
 @msg	its Zstandard compression is damaged	इसके Zstandard संपीड़न क्षतिग्रस्त है
@@ -7002,9 +7008,9 @@ antiAlias	Sharp	शार्प
 @msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf या crlf
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	लिंक किए गए चित्रों से पता चलता है कि फ़ाइल में सेव किए जाने वाले निम्न-रिज़ॉल्यूशन प्रीव्यू को उनकी फ़ाइलों को मिलने तक: लिंक पैनल में उन्हें फिर से लिंक करें
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	फ़ाइल में कोई प्रीव्यू के साथ जुड़े चित्र एक प्लेसहोल्डर दिखाते हैं जब तक कि उनकी फ़ाइलें नहीं मिलती: उन्हें लिंक पैनल में फिर से लिंक करें
-@msg	linked type areas past VectorCraft's limits were left out	संबंधित प्रकार के क्षेत्र अतीत VectorCraft की सीमाओं को छोड़ दिया गया था
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft की सीमाओं से आगे के लिंक्ड टाइप एरिया छोड़ दिए गए
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	लाइव पेंट मर्ज: जोड़ने के लिए एक लाइव पेंट समूह और पाथ सिलेक्ट करें
-@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	लाइव पेंट पाथ और यौगिक पाथ लेता है: प्रकार, इमेज और अन्य ऑब्जेक्ट्स को पहले पाथ में परिवर्तित करें
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	लाइव पेंट पाथ और कंपाउंड पाथ लेता है: पहले टाइप, इमेज और अन्य ऑब्जेक्ट्स को पाथ में बदलें
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
 @msg	loading profiles from disk isn't available in the browser	डिस्क से लोडिंग प्रोफ़ाइल ब्राउज़र में उपलब्ध नहीं है
@@ -7043,7 +7049,7 @@ antiAlias	Sharp	शार्प
 @msg	missing `group`	लापता `group`
 @msg	missing `id`	लापता `id`
 @msg	missing `id` (see plugin.list)	अनुपलब्ध `id` (plugin.list देखें)
-@msg	missing `id`: give one, or select one type object	लापता `id`: एक देना, या एक प्रकार का ऑब्जेक्ट चुनें
+@msg	missing `id`: give one, or select one type object	लापता `id`: एक दें, या एक टाइप ऑब्जेक्ट सिलेक्ट करें
 @msg	missing `index` (a point index, or null to clear)	लापता `index` (a बिंदु सूचकांक, या स्पष्ट करने के लिए null)
 @msg	missing `index` (a stop index, or null to clear)	लापता `index` (a स्टॉप इंडेक्स, या स्पष्ट करने के लिए null)
 @msg	missing `index` (an item index or null)	लापता `index` (एक आइटम सूचकांक या null)
@@ -7142,7 +7148,7 @@ antiAlias	Sharp	शार्प
 @msg	nineSlice must be true or false	nineSlice को true या false होना चाहिए
 @msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides को [left, top, right, bottom] होना चाहिए, हर मान -16..16, और left + right < 1 तथा top + bottom < 1
 @msg	no action set is current	कोई कार्रवाई सेट चालू नहीं है
-@msg	no action set to save	बचाने के लिए कोई कार्रवाई सेट नहीं
+@msg	no action set to save	सेव करने के लिए कोई एक्शन सेट नहीं
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
@@ -7173,7 +7179,7 @@ antiAlias	Sharp	शार्प
 @msg	no changes since the last save	आखिरी सेव के बाद से कोई बदलाव नहीं
 @msg	no character at byte {start}	byte {start} पर कोई चरित्र नहीं
 @msg	no character style `{name}`	कोई कैरेक्टर स्टाइल `{name}`
-@msg	no clock to keep a heartbeat by	दिल की धड़कन को दूर रखने के लिए कोई घड़ी नहीं
+@msg	no clock to keep a heartbeat by	हार्टबीट का समय रखने के लिए कोई घड़ी नहीं
 @msg	no color group `{name}` in the document (see swatch.list)	डॉक्यूमेंट में कोई रंग समूह `{name}` (देखें swatch.list)
 @msg	no colour	कोई रंग नहीं
 @msg	no colour group `{g}`	कोई रंग समूह `{g}`
@@ -7215,7 +7221,7 @@ antiAlias	Sharp	शार्प
 @msg	no free recovery area	कोई मुफ्त वसूली क्षेत्र
 @msg	no gradient preset `{name}` (see gradient.presets.list)	कोई gradient preset `{name}` (view gradient.presets.list)
 @msg	no gradient stop or freeform point is selected	कोई क्रमिक स्टॉप या फ्रीफॉर्म पॉइंट नहीं चुना जाता है
-@msg	no gradient swatch `{name}`	कोई gradient swatch `{name}`
+@msg	no gradient swatch `{name}`	कोई ग्रेडिएंट स्वॉच `{name}` नहीं
 @msg	no graphic style `{n}`	कोई ग्राफिक स्टाइल `{n}`
 @msg	no graphic style `{n}` in `{_1}`	`{_1}` में कोई ग्राफिक स्टाइल `{n}` नहीं
 @msg	no graphic style `{name}`	कोई ग्राफिक स्टाइल `{name}`
@@ -7235,6 +7241,7 @@ antiAlias	Sharp	शार्प
 @msg	no layer {id} (see layer.list)	कोई लेयर {id} (layer.list देखें)
 @msg	no layers to export	निर्यात करने के लिए कोई लेयरें नहीं
 @msg	no library `{id}`	नहीं लाइब्रेरी `{id}`
+@msg	the library has another item of that kind named `{name}`	लाइब्रेरी में इस प्रकार का एक और आइटम `{name}` नाम से पहले से है
 @msg	no library `{key}`	नहीं लाइब्रेरी `{key}`
 @msg	no library `{key}` (see {list})	कोई लाइब्रेरी `{key}` ({list} देखें)
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
@@ -7250,9 +7257,9 @@ antiAlias	Sharp	शार्प
 @msg	No paragraph breaks to remove	हटाने के लिए कोई पैराग्राफ ब्रेक नहीं
 @msg	no parent layer	कोई अभिभावक लेयर नहीं
 @msg	no Pathfinder operation applied yet	अभी तक कोई पाथफाइंडर ऑपरेशन लागू नहीं है
-@msg	no pattern `{name}`	कोई पैटर्न नहीं `{name}`
+@msg	no pattern `{name}`	कोई पैटर्न `{name}` नहीं
 @msg	no pattern named `{choice}`	`{choice}` नाम का कोई पैटर्न नहीं
-@msg	no pattern swatch `{name}`	कोई पैटर्न नहीं `{name}`
+@msg	no pattern swatch `{name}`	कोई पैटर्न स्वॉच `{name}` नहीं
 @msg	no PDF preset named `{n}`	कोई PDF प्रीसेट नहीं है जिसका नाम `{n}` है
 @msg	no perspective grid preset named `{b}` (see perspective.presets.list)	`{b}` नाम का कोई पर्सपेक्टिव ग्रिड प्रीसेट नहीं है (perspective.presets.list देखें)
 @msg	no perspective grid preset named `{n}`	कोई पर्सपेक्टिव ग्रिड प्रीसेट जिसका नाम `{n}` है
@@ -7278,32 +7285,32 @@ antiAlias	Sharp	शार्प
 @msg	no recovery copy `{f}` (see file.recovery.list)	कोई पुनर्प्राप्ति प्रतिलिपि `{f}` (file.recovery.list देखें)
 @msg	no revert command	कोई रिवर्स कमांड नहीं
 @msg	no rows	कोई पंक्ति नहीं
-@msg	no saved export preset `{name}`	कोई बचाया निर्यात पूर्व निर्धारित `{name}`
+@msg	no saved export preset `{name}`	कोई सेव किया गया निर्यात प्रीसेट `{name}` नहीं
 @msg	no saved export presets to export (name built-in ones in `names`)	एक्सपोर्ट करने के लिए सेव किए हुए एक्सपोर्ट प्रीसेट नहीं हैं (अंतर्निहित प्रीसेट के नाम `names` में दें)
-@msg	no saved gradient preset called {name}	कोई बचाया ग्रेडिएंट पूर्व निर्धारित {name} कहा जाता है
-@msg	no saved gradient presets	कोई बचाया ग्रेडिएंट presets
-@msg	no saved PDF preset named `{name}`	कोई बचाया PDF preset नामित `{name}`
+@msg	no saved gradient preset called {name}	{name} नाम का कोई सेव किया गया ग्रेडिएंट प्रीसेट नहीं
+@msg	no saved gradient presets	कोई सेव किया गया ग्रेडिएंट प्रीसेट नहीं
+@msg	no saved PDF preset named `{name}`	`{name}` नाम का कोई सेव किया गया PDF प्रीसेट नहीं
 @msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	`{name}` नामक कोई सेव्ड PDF प्रीसेट नहीं (बिल्ट-इन प्रीसेट केवल पढ़ा जाता है: उनमें से एक नया प्रारंभ करें)
-@msg	no saved preset called `{name}`	कोई बचाया प्रीसेट `{name}` कहा जाता है
+@msg	no saved preset called `{name}`	`{name}` नाम का कोई सेव किया गया प्रीसेट नहीं
 @msg	no saved preset named `{name}`	`{name}` नामक सेव्ड प्रीसेट
-@msg	no saved preset named `{name}` to rename	नाम बदलने के लिए `{name}` नाम की कोई बचत पूर्व निर्धारित नहीं है
-@msg	no saved presets	कोई बचाया प्रीसेट नहीं
+@msg	no saved preset named `{name}` to rename	नाम बदलने के लिए `{name}` नाम का कोई सेव किया गया प्रीसेट नहीं है
+@msg	no saved presets	कोई सेव किया गया प्रीसेट नहीं
 @msg	no saved presets to export (name [Default] in `names` to export it)	एक्सपोर्ट करने के लिए सेव किए हुए प्रीसेट नहीं हैं ([Default] एक्सपोर्ट करने के लिए उसका नाम `names` में दें)
 @msg	no saved presets to export (name built-in ones in `names`)	एक्सपोर्ट करने के लिए सेव किए हुए प्रीसेट नहीं हैं (अंतर्निहित प्रीसेट के नाम `names` में दें)
 @msg	no saved print preset named `{name}`	`{name}` नामक कोई सेव्ड प्रिंट प्रीसेट नहीं
 @msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	`{name}` ({DEFAULT_PRESET} नामक कोई सेव्ड प्रिंट प्रीसेट संरक्षित नहीं है: इससे एक नया प्रारंभ करें)
-@msg	no saved profile called {name}	कोई बचाया प्रोफ़ाइल {name} कहा जाता है
-@msg	no saved profiles	कोई बचाया प्रोफ़ाइल नहीं
-@msg	no saved selection `{name}`	कोई बचाया सिलेक्शन `{name}`
-@msg	no saved selection recalled	कोई बचाया सिलेक्शन याद नहीं
-@msg	no saved selections	कोई बचाया सिलेक्शन नहीं
-@msg	No saved selections (Select → Save Selection…)	कोई बचाया सिलेक्शन नहीं (चुनें → सिलेक्शन सेव करें)
-@msg	no saved theme called {name} (see colorTheme.list)	कोई बचाया थीम जिसे {name} कहा जाता है (colorTheme.list देखें)
-@msg	no saved themes	कोई बचाया विषयों
-@msg	no saved views	कोई बचाया दृष्टिकोण
-@msg	No saved views (View → New View…)	कोई बचाया दृष्टिकोण (देखें → नया दृश्य)
+@msg	no saved profile called {name}	{name} नाम की कोई सेव की गई प्रोफ़ाइल नहीं
+@msg	no saved profiles	कोई सेव की गई प्रोफ़ाइल नहीं
+@msg	no saved selection `{name}`	कोई सेव किया गया सिलेक्शन `{name}` नहीं
+@msg	no saved selection recalled	कोई सेव किया गया सिलेक्शन वापस नहीं लाया गया
+@msg	no saved selections	कोई सेव किया गया सिलेक्शन नहीं
+@msg	No saved selections (Select → Save Selection…)	कोई सेव किया गया सिलेक्शन नहीं (सिलेक्ट → सिलेक्शन सेव करें…)
+@msg	no saved theme called {name} (see colorTheme.list)	{name} नाम की कोई सेव की गई थीम नहीं (colorTheme.list देखें)
+@msg	no saved themes	कोई सेव की गई थीम नहीं
+@msg	no saved views	कोई सेव किया गया व्यू नहीं
+@msg	No saved views (View → New View…)	कोई सेव किया गया व्यू नहीं (व्यू → नया दृश्य…)
 @msg	no segment {segment} on line {line}	कोई खंड {segment} लाइन {line} पर
-@msg	no selected slice in the image: select slices, or save all of them	इमेज में कोई सिलेक्टेड स्लाइस नहीं: स्लाइस सिलेक्ट करें, या उनमें से सभी को बचाओ
+@msg	no selected slice in the image: select slices, or save all of them	इमेज में कोई सिलेक्टेड स्लाइस नहीं: स्लाइस सिलेक्ट करें, या सभी स्लाइस सेव करें
 @msg	no selection bounds	कोई सिलेक्शन सीमा नहीं
 @msg	no series {i}	कोई श्रृंखला {i}
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	कोई समान ऑब्जेक्ट नहीं पाया (घूर्णित या परिलक्षित प्रतियां मिलान नहीं की जाती हैं); वैश्विक संपादन ऑप्शन्स बदलें और फिर से प्रयास करें
@@ -7333,7 +7340,7 @@ antiAlias	Sharp	शार्प
 @msg	no such recent file	ऐसी कोई हाल की फ़ाइल नहीं
 @msg	no such recent font	ऐसा नहीं हाल ही में फ़ॉन्ट
 @msg	no such rows	ऐसी कोई पंक्ति नहीं
-@msg	no such saved selection	इस तरह के बचाया सिलेक्शन नहीं
+@msg	no such saved selection	ऐसा कोई सेव किया गया सिलेक्शन नहीं
 @msg	no such segment	ऐसा कोई खंड नहीं
 @msg	no such spine point	ऐसी कोई रीढ़ की हड्डी नहीं
 @msg	no such spine segment	ऐसा कोई खंड नहीं
@@ -7341,17 +7348,17 @@ antiAlias	Sharp	शार्प
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं
-@msg	no swatch `{keep}`	नहीं `{keep}`
-@msg	no swatch `{n}`	कोई swatch `{n}`
-@msg	no swatch `{n}` (swatches and colour groups move separately)	कोई swatch `{n}` (swatches और रंग समूहों अलग से स्थानांतरित)
-@msg	no swatch `{name}`	कोई swatch `{name}`
-@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	कोई swatch लाइब्रेरी `{key}` (देखें swatch.library.list; "{DOCUMENT_SWATCHES}": डॉक्यूमेंट का swatches)
-@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	कोई swatch लाइब्रेरी `{key}` (देखें swatch.library.list; "document": डॉक्यूमेंट के swatches)
-@msg	no swatch library `{key}` (see swatch.library.list)	कोई swatch लाइब्रेरी `{key}` (swatch.library.list देखें)
-@msg	no swatch library `{l}` (see swatch.library.list)	कोई swatch लाइब्रेरी `{l}` (देखें swatch.library.list)
-@msg	no swatch named `{n}`	`{n}` नाम का कोई swatch
-@msg	no swatch or colour group `{n}`	कोई swatch या रंग समूह `{n}`
-@msg	no swatch or colour group `{n}` in `{_1}`	कोई swatch या रंग समूह `{n}` में `{_1}`
+@msg	no swatch `{keep}`	कोई स्वॉच `{keep}` नहीं
+@msg	no swatch `{n}`	कोई स्वॉच `{n}` नहीं
+@msg	no swatch `{n}` (swatches and colour groups move separately)	कोई स्वॉच `{n}` नहीं (स्वॉच और रंग समूह अलग-अलग मूव होते हैं)
+@msg	no swatch `{name}`	कोई स्वॉच `{name}` नहीं
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	कोई स्वॉच लाइब्रेरी `{key}` नहीं (swatch.library.list देखें; "{DOCUMENT_SWATCHES}": डॉक्यूमेंट के स्वॉच)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	कोई स्वॉच लाइब्रेरी `{key}` नहीं (swatch.library.list देखें; "document": डॉक्यूमेंट के स्वॉच)
+@msg	no swatch library `{key}` (see swatch.library.list)	कोई स्वॉच लाइब्रेरी `{key}` नहीं (swatch.library.list देखें)
+@msg	no swatch library `{l}` (see swatch.library.list)	कोई स्वॉच लाइब्रेरी `{l}` नहीं (swatch.library.list देखें)
+@msg	no swatch named `{n}`	`{n}` नाम का कोई स्वॉच नहीं
+@msg	no swatch or colour group `{n}`	कोई स्वॉच या रंग समूह `{n}` नहीं
+@msg	no swatch or colour group `{n}` in `{_1}`	`{_1}` में कोई स्वॉच या रंग समूह `{n}` नहीं
 @msg	no symbol `{n}`	कोई सिंबल `{n}`
 @msg	no symbol `{n}` in `{_1}`	`{_1}` में कोई सिंबल `{n}`
 @msg	no symbol instances selected	सिलेक्टेड कोई सिंबल उदाहरण नहीं
@@ -7365,7 +7372,7 @@ antiAlias	Sharp	शार्प
 @msg	no toolbar named `{name}`	कोई टूलबार जिसका नाम `{name}` है
 @msg	no tracing preset `{preset}` (see imageTrace.presets)	कोई अनुरेखण पूर्व निर्धारित `{preset}` (imageTrace.presets देखें)
 @msg	no user library folder here	यहां कोई उपयोगकर्ता लाइब्रेरी फ़ोल्डर नहीं
-@msg	no user library folder here (save with a path, or without one to get the data)	यहां कोई उपयोगकर्ता लाइब्रेरी फ़ोल्डर नहीं (एक पाथ के साथ या बिना किसी डेटा को प्राप्त करने के लिए)
+@msg	no user library folder here (save with a path, or without one to get the data)	यहाँ कोई यूज़र लाइब्रेरी फ़ोल्डर नहीं है (पाथ के साथ सेव करें, या डेटा पाने के लिए बिना पाथ के)
 @msg	no user workspace `{from}`	कोई उपयोगकर्ता वर्कस्पेस `{from}`
 @msg	no variable named `{from}`	कोई चर नाम `{from}`
 @msg	no variable named `{name}`	कोई चर नाम `{name}`
@@ -7422,7 +7429,7 @@ antiAlias	Sharp	शार्प
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
 @msg	not an RTF file: it doesn't start with {\\rtf	RTF फ़ाइल नहीं: यह {\rtf के साथ शुरू नहीं होता है
-@msg	not area type (text in a frame) outside perspective	नहीं क्षेत्र के प्रकार (एक फ्रेम में टेक्स्ट) बाहर पर्सपेक्टिव
+@msg	not area type (text in a frame) outside perspective	पर्सपेक्टिव के बाहर का एरिया टाइप (फ़्रेम में टेक्स्ट) नहीं है
 @msg	not editing an opacity mask	एक opacity मास्क संपादित न करें
 @msg	not found	नहीं मिला
 @msg	not in pattern editing mode	पैटर्न संपादन मोड में नहीं
@@ -7437,7 +7444,7 @@ antiAlias	Sharp	शार्प
 @msg	nothing to bind	बाध्य करने के लिए कुछ नहीं
 @msg	nothing to change	बदलने के लिए कुछ भी नहीं
 @msg	nothing to change: give dx, dy, hScale, vScale or rotation	कुछ भी बदलने के लिए: देना dx, dy, hScale, vScale या रोटेशन
-@msg	nothing to crop	फसल के लिए कुछ नहीं
+@msg	nothing to crop	क्रॉप करने के लिए कुछ नहीं
 @msg	nothing to distort	विकृत करने के लिए कुछ भी नहीं
 @msg	nothing to export	निर्यात करने के लिए कुछ नहीं
 @msg	nothing to export: the document has no visible art	निर्यात करने के लिए कुछ भी नहीं: डॉक्यूमेंट में कोई दृश्य कला नहीं है
@@ -7448,7 +7455,7 @@ antiAlias	Sharp	शार्प
 @msg	nothing to print: every artboard picked is blank	मुद्रित करने के लिए कुछ भी नहीं: हर आर्टबोर्ड चुना खाली है
 @msg	nothing to print: the document has no art that prints	प्रिंट करने के लिए कुछ भी नहीं: डॉक्यूमेंट में कोई कला नहीं है जो प्रिंट करता है
 @msg	nothing to redo	फिर से करने के लिए कुछ नहीं
-@msg	nothing to save: the document has no visible art	बचाने के लिए कुछ नहीं: डॉक्यूमेंट में कोई दृश्य कला नहीं है
+@msg	nothing to save: the document has no visible art	सेव करने के लिए कुछ नहीं: डॉक्यूमेंट में कोई दिखने वाला आर्टवर्क नहीं है
 @msg	Nothing to split at the cursor	कर्सर पर विभाजन करने के लिए कुछ भी नहीं
 @msg	nothing to undo	पूर्ववत करने के लिए कुछ नहीं
 @msg	nothing to warp	कुछ भी नहीं
@@ -7490,11 +7497,11 @@ antiAlias	Sharp	शार्प
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
 @msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
-@msg	only groups, layers, type and images have a Contents (Characters) row	केवल समूहों, लेयर्स, प्रकार और इमेज में एक सामग्री (Character) पंक्ति है
+@msg	only groups, layers, type and images have a Contents (Characters) row	केवल समूहों, लेयर्स, टाइप और इमेज में सामग्री (कैरेक्टर्स) पंक्ति होती है
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	केवल http, https और Mailto URL ब्राउज़र में खुलते हैं, न कि "{url}"
 @msg	only interior mesh lines can be deleted	केवल आंतरिक जाल लाइनों को हटाया जा सकता है
 @msg	only solid colours can be added (not gradients or patterns)	केवल ठोस रंगों को जोड़ा जा सकता है (ग्रेडिएंट या पैटर्न नहीं)
-@msg	only solid-colour swatches can be spot colours	केवल ठोस रंग की घड़ी स्पॉट रंग हो सकती है
+@msg	only solid-colour swatches can be spot colours	केवल ठोस रंग वाले स्वॉच स्पॉट रंग हो सकते हैं
 @msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	केवल इस Affinity फ़ाइल के एम्बेडेड प्रीव्यू को पढ़ा जा सकता है; फ़ाइल का उपयोग करें > इसे अपनी चेतावनी के साथ देखने के लिए ओपन करें
 @msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	केवल इस Affinity फ़ाइल के एम्बेडेड प्रीव्यू को पढ़ा जा सकता है: फ़ाइल का उपयोग करें > इसे अपनी चेतावनी के साथ देखने के लिए ओपन करें, या पहले Affinity से SVG या PDF निर्यात करें
 @msg	onto must name a floating panel	onto: पर एक फ्लोटिंग पैनल का नाम होना चाहिए
@@ -7531,10 +7538,10 @@ antiAlias	Sharp	शार्प
 @msg	page {page}: `{name}` has {n} {pages}	पेज {page}: `{name}` में {n} {pages} हैं
 @msg	page art conflicts with image data for {key}	{key} के लिए इमेज डेटा के साथ पृष्ठ कला संघर्ष
 @msg	page art conflicts with pattern {name}	पैटर्न {name} के साथ पृष्ठ कला संघर्ष
-@msg	page art conflicts with swatch {name}	Swatch {name} के साथ पृष्ठ कला संघर्ष
+@msg	page art conflicts with swatch {name}	पेज आर्टवर्क स्वॉच {name} से मेल नहीं खाता
 @msg	page art is missing image data for {key}	पृष्ठ कला {key} के लिए इमेज डेटा लापता है
 @msg	page art is missing pattern {name}	पृष्ठ कला लापता पैटर्न {name} है
-@msg	page art is missing swatch {name}	पृष्ठ कला लापता है swatch {name}
+@msg	page art is missing swatch {name}	पेज आर्टवर्क में स्वॉच {name} नहीं है
 @msg	page must be a whole number from 1	page: पृष्ठ 1 से एक पूरी संख्या होना चाहिए
 @msg	page size {w} × {h}	{w} × {h}
 @msg	page thumbnail: {e}	पेज थंबनेल: {e}
@@ -7572,7 +7579,7 @@ antiAlias	Sharp	शार्प
 @msg	pdfs `{m}`: single or multiple	pdfs `{m}`: एकल या एकाधिक
 @msg	percent must be above 0 and at most 6400, not {p}	percent: प्रतिशत 0 से अधिक होना चाहिए और अधिक 6400 पर, नहीं {p}
 @msg	Persistent libraries not found: {files}	Persistent लाइब्रेरीों नहीं मिला: {files}
-@msg	pick a colour, gradient or pattern to save as a swatch	एक swatch के रूप में बचाने के लिए एक रंग, ग्रेडिएंट या पैटर्न चुनें
+@msg	pick a colour, gradient or pattern to save as a swatch	स्वॉच के रूप में सेव करने के लिए रंग, ग्रेडिएंट या पैटर्न चुनें
 @msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom को "artwork" या "swatches" होना चाहिए, {v} नहीं
 @msg	pins and moved must be non-empty lists of the same length	पिन और ले जाने के लिए समान लंबाई की गैर-खाली सूची होनी चाहिए
 @msg	pins must be [[x,y]…]	pins: पिन होना चाहिए [[x,y]...]
@@ -7641,15 +7648,15 @@ antiAlias	Sharp	शार्प
 @msg	release a layer or a group	एक लेयर या एक समूह को छोड़ दें
 @msg	Release Guides: no guides	रिलीज़ गाइड: कोई गाइड नहीं
 @msg	Release: no layer to put the rectangle in	रिलीज: आयत को डालने के लिए कोई लेयर नहीं
-@msg	Reload the page to go on (changes not saved yet may be lost).	पेज को फिर से लोड करने के लिए (बदलने की अभी तक नहीं बचा जा सकता)।
+@msg	Reload the page to go on (changes not saved yet may be lost).	जारी रखने के लिए पेज फिर से लोड करें (जो बदलाव अभी सेव नहीं हुए, वे खो सकते हैं)।
 @msg	replace keeps the replaced object's place and transform: drop template, at and rect	प्रतिस्थापित ऑब्जेक्ट के स्थान को बनाए रखता है और बदल देता है: ड्रॉप टेम्पलेट, पर और आयतन
 @msg	Replace Spine: select a blend and a path	Spine: एक मिश्रण और एक पाथ चुनें
 @msg	replace: select the one object to replace	प्रतिस्थापित करने के लिए एक ऑब्जेक्ट सिलेक्ट करें
 @msg	replace: the object to replace was changed or deleted	प्रतिस्थापित करने के लिए ऑब्जेक्ट को बदल दिया गया था या हटा दिया गया
 @msg	Reset {_1}	रीसेट करें {_1}
 @msg	resolution must be a number or screen|medium|high	resolution: रिज़ॉल्यूशन एक नंबर या स्क्रीन होना चाहिए
-@msg	resolution must be between 1 and 2400 ppi	resolution: संकल्प 1 और 2400 ppi के बीच होना चाहिए
-@msg	resolutions must be between 1 and 2400 ppi	resolutions: संकल्प 1 और 2400 ppi के बीच होना चाहिए
+@msg	resolution must be between 1 and 2400 ppi	resolution: रिज़ॉल्यूशन 1 और 2400 ppi के बीच होना चाहिए
+@msg	resolutions must be between 1 and 2400 ppi	resolutions: रिज़ॉल्यूशन 1 और 2400 ppi के बीच होना चाहिए
 @msg	result would exceed the canvas (coordinates out of range)	परिणाम कैनवास से अधिक होगा (श्रेणी से बाहर समन्वय)
 @msg	rotation must be a number of degrees	rotation: रोटेशन डिग्री की एक संख्या होना चाहिए
 @msg	rotation must be finite	rotation: रोटेशन को परिमित होना चाहिए
@@ -7673,14 +7680,14 @@ antiAlias	Sharp	शार्प
 @msg	Saving	सेव किया जा रहा है
 @msg	Saving {_1}	बचत {_1}
 @msg	Saving recovery data for {_1}	{_1} के लिए रिकवरी डेटा सेव करना
-@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	पैमाने `{s}`: एक कारक जैसे 2x, चौड़ाई (100w), ऊंचाई (100h) या एक संकल्प (72ppi)
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	पैमाने `{s}`: एक कारक जैसे 2x, चौड़ाई (100w), ऊंचाई (100h) या एक रिज़ॉल्यूशन (72ppi)
 @msg	scale must be a number above 0, at most 64	scale: पैमाने 0 से अधिक होना चाहिए, अधिकांश 64 में
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale: स्केल {_1} से {_2} के लिए एक नंबर होना चाहिए, नहीं {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale: स्केल {_1} से {_2} के लिए एक नंबर होना चाहिए, नहीं {s}
 @msg	Scale must be drawing:real, for example 1:10	स्केल ड्राइंग होना चाहिए:वास्तविक, उदाहरण के लिए 1:10
 @msg	scale must be non-zero	scale: स्केल होना चाहिए गैर-zero
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	स्केल अनुपात 1:1000000 और 1000000:1 के बीच होना चाहिए
-@msg	Scale Text Attributes: selected type has no scale to bake	स्केल टेक्स्ट एट्रिब्यूट्स: सिलेक्टेड प्रकार में बेक करने के लिए कोई स्केल नहीं है
+@msg	Scale Text Attributes: selected type has no scale to bake	स्केल टेक्स्ट एट्रिब्यूट्स: सिलेक्टेड टाइप में बेक करने के लिए कोई स्केल नहीं है
 @msg	scope must be selection or all (got {other})	scope: गुंजाइश का सिलेक्शन होना चाहिए या सभी ({other}) होना चाहिए।
 @msg	scribble is too long	स्क्रिबल बहुत लंबा है
 @msg	searching a folder isn't available on the web	एक फ़ोल्डर खोज वेब पर उपलब्ध नहीं है
@@ -7729,10 +7736,10 @@ antiAlias	Sharp	शार्प
 @msg	select an object with a freeform gradient	एक फ्रीफॉर्म ग्रेडिएंट के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an object with an opacity mask	एक opacity मास्क के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an Objects on Path group	पाथ समूह पर एक ऑब्जेक्ट चुनें
-@msg	select area type	क्षेत्र प्रकार सिलेक्ट करें
-@msg	select area type (text in a frame)	क्षेत्र प्रकार (एक फ्रेम में टेक्स्ट) सिलेक्ट करें
-@msg	select area type and closed paths (at least one area type object)	क्षेत्र प्रकार और बंद पाथ (कम से कम एक क्षेत्र प्रकार ऑब्जेक्ट) सिलेक्ट करें
-@msg	select area type whose first line can fit its frame	क्षेत्र के प्रकार सिलेक्ट करें जिनकी पहली पंक्ति अपने फ्रेम को फिट कर सकती है
+@msg	select area type	एरिया टाइप सिलेक्ट करें
+@msg	select area type (text in a frame)	एरिया टाइप (फ़्रेम में टेक्स्ट) सिलेक्ट करें
+@msg	select area type and closed paths (at least one area type object)	एरिया टाइप और बंद पाथ सिलेक्ट करें (कम से कम एक एरिया टाइप ऑब्जेक्ट)
+@msg	select area type whose first line can fit its frame	ऐसा एरिया टाइप सिलेक्ट करें जिसकी पहली लाइन उसके फ़्रेम में आ सके
 @msg	select artwork (or a colour group) to recolor	फिर से रंग करने के लिए आर्टवर्क (या एक रंग समूह) सिलेक्ट करें
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {locked} और {hidden}
 @msg	Recolor completed; {objects} were left unchanged	रीकलर पूरा हुआ; ये अपरिवर्तित रहे: {objects}
@@ -7748,7 +7755,7 @@ antiAlias	Sharp	शार्प
 @msg	Select dimensions to update	अद्यतन करने के लिए आयाम सिलेक्ट करें
 @msg	select exactly two objects	वास्तव में दो ऑब्जेक्ट चुनें
 @msg	select exactly two path ends to join	वास्तव में दो पाथ में शामिल होने के लिए समाप्त होता है चुनें
-@msg	Select horizontal point or area type whose text fits	क्षैतिज बिंदु या क्षेत्र के प्रकार सिलेक्ट करें जिसका टेक्स्ट फिट बैठता है
+@msg	Select horizontal point or area type whose text fits	ऐसा क्षैतिज पॉइंट टाइप या एरिया टाइप सिलेक्ट करें जिसका टेक्स्ट फ़िट होता है
 @msg	select instances of one symbol	एक सिंबल के उदाहरण चुनें
 @msg	select members of a compound shape	एक मिश्रित आकार के सदस्यों सिलेक्ट करें
 @msg	select objects or give `color`	ऑब्जेक्ट्स सिलेक्ट करें या `color` देना
@@ -7768,13 +7775,13 @@ antiAlias	Sharp	शार्प
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
-@msg	Select point type	बिंदु प्रकार चुनें
+@msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें
 @msg	select segments, or paths, to add points to	खंडों, या पाथ का सिलेक्ट करने के लिए, अंक जोड़ने के लिए
-@msg	select some type first	पहले कुछ प्रकार का सिलेक्शन
+@msg	select some type first	पहले कुछ टाइप सिलेक्ट करें
 @msg	select something to export	निर्यात करने के लिए कुछ का सिलेक्शन
 @msg	select something to export (or turn off selectedOnly)	एक्सपोर्ट करने के लिए कुछ चुनें (या selectedOnly बंद करें)
-@msg	Select text or click into text with the Type tool to insert glyphs	टेक्स्ट सिलेक्ट करें या glyphs डालने के लिए टाइप टूल के साथ टेक्स्ट में क्लिक करें
+@msg	Select text or click into text with the Type tool to insert glyphs	टेक्स्ट सिलेक्ट करें या ग्लिफ़ डालने के लिए टाइप टूल से टेक्स्ट में क्लिक करें
 @msg	select text to redefine the style from	से स्टाइल को फिर से परिभाषित करने के लिए टेक्स्ट सिलेक्ट करें
 @msg	select the art and, on top of it, the mask object	कला सिलेक्ट करें और इसके शीर्ष पर, मास्क ऑब्जेक्ट
 @msg	select the art for the design	डिजाइन के लिए कला का सिलेक्शन
@@ -7798,8 +7805,8 @@ antiAlias	Sharp	शार्प
 @msg	select two or more objects to distribute	वितरित करने के लिए दो या दो से अधिक ऑब्जेक्ट चुनें
 @msg	select two or more objects to intertwine	दो या दो से अधिक ऑब्जेक्ट्स सिलेक्ट करें
 @msg	Select two or more objects, or a group	दो या अधिक ऑब्जेक्ट चुनें, या एक समूह चुनें
-@msg	Select two or more one-line point type objects on one baseline to combine	गठबंधन करने के लिए एक बेसलाइन पर दो या एक से अधिक बिंदु प्रकार की ऑब्जेक्टएं चुनें
-@msg	Select two or more one-line point type objects to join	शामिल होने के लिए दो या दो से अधिक एक लाइन बिंदु प्रकार के ऑब्जेक्ट चुनें
+@msg	Select two or more one-line point type objects on one baseline to combine	मिलाने के लिए एक ही बेसलाइन पर दो या अधिक एक-लाइन पॉइंट टाइप ऑब्जेक्ट सिलेक्ट करें
+@msg	Select two or more one-line point type objects to join	जोड़ने के लिए दो या अधिक एक-लाइन पॉइंट टाइप ऑब्जेक्ट सिलेक्ट करें
 @msg	select two or more slices to combine	गठबंधन करने के लिए दो या दो से अधिक स्लाइस चुनें
 @msg	select type in perspective	पर्सपेक्टिव में टाइप करें
 @msg	select type on a path	एक पाथ पर टाइप करें
@@ -7819,14 +7826,14 @@ antiAlias	Sharp	शार्प
 @msg	Show All Hidden Attributes: nothing is hidden	Show all Hidden Attributes: कुछ भी छिपा नहीं है
 @msg	show must be true or false	show को true या false होना चाहिए
 @msg	Simplify Anchors: the paths have too many anchors to simplify at once	एंकर को सरलीकृत करें: पाथ में एक बार में सरल बनाने के लिए कई एंकर हैं
-@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size: आकार "small", "medium", "large" या 0 से अधिक अंक {_1} तक होना चाहिए
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size: आकार "small", "medium", "large" या पॉइंट में 0 से अधिक और {_1} तक की संख्या होना चाहिए
 @msg	size must be positive	size: आकार सकारात्मक होना चाहिए
 @msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode को "fixed" या "pressure" होना चाहिए, {other} नहीं
 @msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode को "fixed" या "pressure" होना चाहिए, `{other}` नहीं
 @msg	sizeVariation must be 0 or more	sizeVariation को 0 या अधिक होना चाहिए
 @msg	smallCaps must be true or false	smallCaps को true या false होना चाहिए
 @msg	some text is hidden or locked, so its font wasn't replaced	कुछ टेक्स्ट छिपा हुआ है या बंद कर दिया गया है, इसलिए इसका फ़ॉन्ट प्रतिस्थापित नहीं किया गया था
-@msg	sort `{x}`: name, kind or status	टाइप `{x}`: नाम, प्रकार या स्थिति
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name, kind या status होना चाहिए
 @msg	source must be the id of a Shaper Group's original shape	source: स्रोत एक शेपर ग्रुप के मूल आकार का आईडी होना चाहिए
 @msg	source paths are too large for Shaper	स्रोत पाथ शेपर के लिए बहुत बड़े हैं
 @msg	span must be "object" or "selection", got {v}	span: स्पैन को "object" या "selection" होना चाहिए, {v} मिला
@@ -7959,7 +7966,7 @@ antiAlias	Sharp	शार्प
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है
 @msg	the compressed file unpacks to more than {_1} MB	संकुचित फ़ाइल {_1} MB से अधिक के लिए अनपैक
-@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	संकुचित फ़ाइल unpacks से अधिक वेक्टर क्रेफ्ट reads ({_1} MB of document, {_2} MB per image)
+@msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	संपीड़ित फ़ाइल खुलकर उससे बड़ी हो जाती है जितना VectorCraft पढ़ता है (डॉक्यूमेंट के {_1} MB, हर इमेज के {_2} MB)
 @msg	the container of the listed objects is gone	सूचीबद्ध ऑब्जेक्ट्स का कंटेनर चला गया है
 @msg	the copy `{user_id}` can't be read as a library	प्रतिलिपि `{user_id}` को लाइब्रेरी के रूप में नहीं पढ़ा जा सकता है।
 @msg	the copy would leave the canvas	प्रतिलिपि कैनवास को छोड़ देगी
@@ -7971,16 +7978,16 @@ antiAlias	Sharp	शार्प
 @msg	the design is too big to draw in every column of this graph	डिजाइन इस ग्राफ़ के हर स्तंभ में आकर्षित करने के लिए बहुत बड़ा है
 @msg	the dialog it was opened over is no longer open	जिस डायलॉग के ऊपर इसे ओपन किया गया था, वह अब खुला नहीं है
 @msg	the dictionary stack overflowed	शब्दकोश स्टैक अतिप्रवाह
-@msg	the document has never been saved	कभी नहीं बचाया गया है
-@msg	the document has never been saved: give `folder`	डॉक्यूमेंट को कभी बचाया नहीं गया है: `folder` देना
+@msg	the document has never been saved	डॉक्यूमेंट कभी सेव नहीं किया गया है
+@msg	the document has never been saved: give `folder`	डॉक्यूमेंट कभी सेव नहीं किया गया है: `folder` दें
 @msg	the document has no artboard	डॉक्यूमेंट में कोई आर्टबोर्ड नहीं है
 @msg	the document has no artboards	डॉक्यूमेंट में कोई आर्टबोर्ड नहीं है
-@msg	the document has no brushes to save	डॉक्यूमेंट को बचाने के लिए कोई ब्रश नहीं है
+@msg	the document has no brushes to save	डॉक्यूमेंट में सेव करने के लिए कोई ब्रश नहीं है
 @msg	the document has no patterns	डॉक्यूमेंट में कोई पैटर्न नहीं है
 @msg	the document has no slices	डॉक्यूमेंट में कोई स्लाइस नहीं है
 @msg	the document has no symbols	डॉक्यूमेंट में कोई सिंबल नहीं है
 @msg	the document has no symbols to save	डॉक्यूमेंट में सेव करने के लिए कोई सिंबल नहीं है
-@msg	the document is too large to save compressed ({0}): save it with Use Compression off	डॉक्यूमेंट संपीड़ित ({0}) को बचाने के लिए बहुत बड़ा है: इसे बंद संपीड़न का उपयोग करें
+@msg	the document is too large to save compressed ({0}): save it with Use Compression off	डॉक्यूमेंट संपीड़ित करके सेव करने के लिए बहुत बड़ा है ({0}): इसे संपीड़न का उपयोग करें बंद करके सेव करें
 @msg	the drawing has no layout `{_1}` (it has {_2})	ड्राइंग में कोई लेआउट नहीं है `{_1}` (इसमें {_2} है)
 @msg	the drawing is no longer loaded	ड्राइंग अब लोड नहीं है
 @msg	the drawing is too large to open	ड्राइंग ओपन करने के लिए बहुत बड़ा है
@@ -7994,11 +8001,11 @@ antiAlias	Sharp	शार्प
 @msg	the export returned unreadable data	निर्यात अपठनीय डेटा वापस आ गया
 @msg	the export wrote no file	निर्यात ने कोई फ़ाइल नहीं लिखी
 @msg	the file holds no `variableSets` element	फ़ाइल में `variableSets` एलिमेंट नहीं है
-@msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	फ़ाइल केवल एक प्लेसहोल्डर पेज रखती है, इसकी कला नहीं है (यह PDF संगतता के बिना बचाया गया था): इसे फिर से PDF संगतता के साथ सेव करें, या PDF या SVG के रूप में
+@msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	फ़ाइल में केवल एक प्लेसहोल्डर पेज है, उसका आर्टवर्क नहीं (इसे PDF संगतता के बिना सेव किया गया था): इसे PDF संगतता चालू करके फिर से सेव करें, या PDF या SVG के रूप में सेव करें
 @msg	the file is larger than {_1} MB	फ़ाइल {_1} MB से बड़ा है
 @msg	the file is too large	फ़ाइल बहुत बड़ी है
 @msg	the file stopped being read (please report this bug)	फ़ाइल को पढ़ना बंद कर दिया गया (कृपया इस बग की रिपोर्ट करें)
-@msg	the file was read up to an error ({why}): what follows it was left out	फ़ाइल को एक त्रुटि ({why}) तक पढ़ा गया था: इस प्रकार यह छोड़ दिया गया था
+@msg	the file was read up to an error ({why}): what follows it was left out	फ़ाइल एक त्रुटि ({why}) तक पढ़ी गई: उसके बाद का हिस्सा छोड़ दिया गया
 @msg	the file was updated or encrypted already	फ़ाइल को पहले से ही अद्यतन या एन्क्रिप्ट किया गया था
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	फ़ाइल की लेयरें नहीं पढ़ी गईं ({_1}): यह अपने पृष्ठ के रूप में आता है, एक लेयर में
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	फ़ाइल की लेयर्स को इसके संपादन डेटा ({_1}) से नहीं पढ़ा गया था: वे अपने PDF भाग से आते हैं
@@ -8084,7 +8091,7 @@ antiAlias	Sharp	शार्प
 @msg	the operator needs more values than the stack holds	ऑपरेटर को स्टैक की तुलना में अधिक मूल्यों की आवश्यकता होती है
 @msg	the package came back damaged	पैकेज वापस क्षतिग्रस्त हो गया
 @msg	the page has no area	पृष्ठ का कोई क्षेत्र नहीं है
-@msg	the page's type in an unread object's box isn't in its page art	पृष्ठ का प्रकार एक अपठित ऑब्जेक्ट के बॉक्स में नहीं है इसके पृष्ठ कला में
+@msg	the page's type in an unread object's box isn't in its page art	किसी न पढ़े गए ऑब्जेक्ट के बॉक्स में मौजूद पेज का टाइप उसके पेज आर्टवर्क में नहीं है
 @msg	the paint behind the proxy is not a gradient	प्रॉक्सी के पीछे पेंट एक ग्रेडिएंट नहीं है
 @msg	the parent must be a layer or sublayer	माता-पिता को एक लेयर या सबलायर होना चाहिए
 @msg	the path can't be extended	पाथ को बढ़ाया नहीं जा सकता
@@ -8112,7 +8119,7 @@ antiAlias	Sharp	शार्प
 @msg	the Pixar file's header is damaged	पिक्सार फ़ाइल का हेडर क्षतिग्रस्त हो गया है
 @msg	the Pixar file's image data is damaged	Pixar फ़ाइल की इमेज डेटा क्षतिग्रस्त हो गया है
 @msg	The point type has no transform to reset	पॉइंट टाइप में रीसेट करने के लिए कोई परिवर्तन नहीं होता है
-@msg	The point type is aligned that way already	बिंदु प्रकार को पहले से ही संरेखित किया जाता है
+@msg	The point type is aligned that way already	पॉइंट टाइप पहले से ही उसी तरह अलाइन है
 @msg	the pointer is beyond the plane's horizon	सूचक विमान के क्षितिज से परे है
 @msg	the preview image is empty	प्रीव्यू इमेज खाली है
 @msg	the print job has no data	प्रिंट नौकरी के पास कोई डेटा नहीं है
@@ -8120,7 +8127,7 @@ antiAlias	Sharp	शार्प
 @msg	the program ends a dictionary it didn't begin	कार्यक्रम एक शब्दकोश को समाप्त करता है यह शुरू नहीं हुआ था
 @msg	the program goes past one of the reader's limits	कार्यक्रम रीडर की सीमाओं में से एक के पास जाता है
 @msg	the program opens a file, which the reader can't do	कार्यक्रम एक फ़ाइल खोलता है, जिसे टेक्स्टक नहीं कर सकता
-@msg	the program restores a saved state that was already restored	कार्यक्रम एक बचाया राज्य है कि पहले से ही बहाल किया गया था बहाल कर देता है
+@msg	the program restores a saved state that was already restored	प्रोग्राम एक सेव की गई स्थिति को फिर से बहाल करता है, जो पहले ही बहाल हो चुकी थी
 @msg	the program runs too long	कार्यक्रम बहुत लंबे समय तक चलता है
 @msg	the program runs, deletes or renames a file, which the reader can't do	कार्यक्रम एक फ़ाइल को चलाता है, हटाता है या उसका नाम बदलता है, जिसे टेक्स्टक नहीं कर सकता
 @msg	the program uses too much memory	कार्यक्रम बहुत ज्यादा मेमोरी का उपयोग करता है
@@ -8134,7 +8141,7 @@ antiAlias	Sharp	शार्प
 @msg	the rectangle needs a size and must lie on the canvas	आयत एक आकार की जरूरत है और कैनवास पर झूठ होना चाहिए
 @msg	the replacement font is not available	प्रतिस्थापन फ़ॉन्ट उपलब्ध नहीं है
 @msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	RTF फ़ाइल में कई पैराग्राफ या प्रारूपण परिवर्तन होते हैं जो टाइप (अधिकांश {MAX_PARAGRAPHS} पैराग्राफ और {MAX_RUNS} रन पर) होते हैं।
-@msg	the RTF file is too large to place as type (at most {_1} MB)	RTF फ़ाइल बहुत बड़े प्रकार के रूप में जगह है (अधिकांश {_1} MB पर)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	RTF फ़ाइल टाइप के रूप में प्लेस करने के लिए बहुत बड़ी है (अधिकतम {_1} MB)
 @msg	the runtime panicked	रनटाइम क्रैश हो गया
 @msg	the Save PDF dialog didn't open	सेव करें PDF संवाद खुला नहीं था
 @msg	the scale is not a usable number	स्केल एक प्रयोग योग्य संख्या नहीं है
@@ -8181,7 +8188,7 @@ antiAlias	Sharp	शार्प
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	शीर्ष ऑब्जेक्ट एक क्लिपिंग मास्क के रूप में उपयोग करने के लिए एक पाथ, यौगिक पाथ या टेक्स्ट ऑब्जेक्ट होना चाहिए
 @msg	the trace was cancelled	निशान रद्द कर दिया गया था
 @msg	the trailer has no size	ट्रेलर में कोई आकार नहीं है
-@msg	the type object is flattened to nothing	प्रकार ऑब्जेक्ट कुछ भी नहीं करने के लिए flattened है
+@msg	the type object is flattened to nothing	फ़्लैटन करने पर टाइप ऑब्जेक्ट में कुछ नहीं रहता
 @msg	the value of axis `{tag}` must be a number or null	धुरी का मूल्य `{tag}` होना चाहिए एक नंबर या null होना चाहिए
 @msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	परिवर्तनीय लाइब्रेरी {MAX_LIBRARY_DATASETS} डेटा सेट से अधिक घोषित करता है
 @msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	वेरिएबल लाइब्रेरी {MAX_LIBRARY_ENTITIES} संस्थाओं से अधिक की घोषणा करती है।
@@ -8204,12 +8211,12 @@ antiAlias	Sharp	शार्प
 @msg	the Word document is encrypted or protected with a password; save it without one to place it	वर्ड डॉक्यूमेंट को एन्क्रिप्ट किया गया है या पासवर्ड के साथ संरक्षित किया गया है; इसे बिना किसी स्थान के सेव करें
 @msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	वर्ड डॉक्यूमेंट बहुत बड़ा होता है (यह {name} स्ट्रीम {_1} MB से अधिक रखता है)
 @msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	वर्ड डॉक्यूमेंट को फास्ट सेव के साथ आखिरी सेव किया गया था, जो VectorCraft को पढ़ा नहीं जाता है; इसे फिर से फास्ट सेव के साथ सेव करना बंद हो गया
-@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	वर्ड डॉक्यूमेंट को वर्ड 6.0 या वर्ड 95 द्वारा बचाया गया था, जो VectorCraft को पढ़ा नहीं जाता है; इसे वर्ड 97-2003 डॉक्यूमेंट के रूप में सेव करें
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	Word डॉक्यूमेंट Word 6.0 या Word 95 से सेव किया गया था, जिसे VectorCraft नहीं पढ़ता; इसे Word 97-2003 डॉक्यूमेंट के रूप में सेव करें
 @msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	वर्ड डॉक्यूमेंट का टेक्स्ट {MAX_PIECES} टुकड़ों से भी अधिक है, बहुत से जगह
 @msg	the written PDF has no catalog	लिखित PDF में कोई कैटलॉग नहीं है
 @msg	the written PDF has no cross-reference table	लिखित PDF में कोई क्रॉस-रिफरेंस टेबल नहीं है
 @msg	the written PDF's metadata can't be edited	PDF के मेटाडाटा को संपादित नहीं किया जा सकता है
-@msg	there are no colour swatches to draw	आकर्षित करने के लिए कोई रंग नहीं है
+@msg	there are no colour swatches to draw	ड्रॉ करने के लिए कोई रंग स्वॉच नहीं है
 @msg	there are no objects to release	जारी करने के लिए कोई ऑब्जेक्ट नहीं है
 @msg	there are no printer settings to open here	यहां ओपन करने के लिए कोई प्रिंटर सेटिंग नहीं है
 @msg	there is already a design named `{name}`	there: पहले से ही `{name}` नामक एक डिज़ाइन है।
@@ -8221,12 +8228,12 @@ antiAlias	Sharp	शार्प
 @msg	there is no library: create one first	वहाँ कोई लाइब्रेरी नहीं है: पहले एक बनाना
 @msg	these paths are too degenerate for Shaper	इन पाथ को शेपर के लिए बहुत अलग किया जाता है
 @msg	thickness must be from 0.01 to 5000 pt	thickness: मोटाई 0.01 से 5000 तक होना चाहिए
-@msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	इस फ़ाइल को PDF संगतता के बिना बचाया गया था, और इसके संपादन डेटा को पढ़ा नहीं जा सकता ({why})
+@msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	यह फ़ाइल PDF संगतता के बिना सेव की गई थी, और इसका एडिटिंग डेटा पढ़ा नहीं जा सकता ({why})
 @msg	this file's PostScript couldn't be read ({why}): {what}	इस फ़ाइल के पोस्टस्क्रिप्ट को पढ़ा नहीं जा सकता ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	इस फ़ॉर्मैट में एक आर्टबोर्ड रहता है: कई आर्टबोर्ड PDF में या document.exportForScreens से एक्सपोर्ट करें
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	this: यह एक डीडब्ल्यूजी ड्राइंग है, जिसे पढ़ा नहीं जा सकता है: इसे सीएडी ऐप से ASCII DXF के रूप में सेव करें और इसे ओपन करें कि
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	this: यह एक पोस्टस्क्रिप्ट फ़ाइल है (एक .ai एक पुराने फ़ॉर्मैट में या बिना PDF संगतता, या एक ईपीएस फ़ाइल में बचाया), एक PDF नहीं: फ़ाइल> खुला और फ़ाइल> इसे ईपीएस के रूप में पढ़े
-@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	this: यह एक पोस्टस्क्रिप्ट फ़ाइल है (एक .ai एक पुराने फ़ॉर्मैट में या बिना PDF संगतता, या एक ईपीएस फ़ाइल में बचाया), जिसे अभी तक ओपन किया नहीं जा सकता है: इसे PDF, PDF-संगत .ai या SVG के रूप में सेव करें
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	यह एक PostScript फ़ाइल है (पुराने फ़ॉर्मैट में या PDF संगतता के बिना सेव की गई .ai, या EPS फ़ाइल), PDF नहीं: फ़ाइल › ओपन और फ़ाइल › प्लेस इसे EPS के रूप में पढ़ते हैं
+@msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	यह एक PostScript फ़ाइल है (पुराने फ़ॉर्मैट में या PDF संगतता के बिना सेव की गई .ai, या EPS फ़ाइल), जिसे अभी ओपन नहीं किया जा सकता: इसे PDF, PDF-संगत .ai या SVG के रूप में सेव करें
 @msg	this is not a PostScript file	this: यह पोस्टस्क्रिप्ट फ़ाइल नहीं है
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	यह एक फ्लैट रंग का लोगो नहीं है ({_1}% अपने ठोस क्षेत्रों में कुछ फ्लैट रंगों से मेल खाता है), इसलिए फ्लैट लोगो मोड अपने ग्रेडिएंट को पैच में बदल देगा: इसके बजाय कलर मोड का उपयोग करें
 @msg	this kind of brush has no options dialog yet	इस तरह के ब्रश में अभी तक कोई ऑप्शन्स संवाद नहीं है
@@ -8256,10 +8263,10 @@ antiAlias	Sharp	शार्प
 @msg	too many objects selected (at most 20000)	बहुत सारे ऑब्जेक्ट्स सिलेक्टेड (अधिकांश 20000 पर)
 @msg	too many overlapping paths for Shaper	शेपर के लिए कई ओवरलैपिंग पाथ
 @msg	Too many pieces to make at once	बहुत सारे टुकड़े एक बार में बनाने के लिए
-@msg	too many saved clips	कई बचाया क्लिप
-@msg	too many saved graphics states	कई बचाया ग्राफिक्स राज्यों
+@msg	too many saved clips	बहुत अधिक सेव किए गए क्लिप
+@msg	too many saved graphics states	बहुत अधिक सेव की गई ग्राफ़िक्स स्टेट्स
 @msg	too many Shaper edits	बहुत सारे शेपर संपादन
-@msg	Too many type objects to change at once	एक बार में बदलने के लिए कई प्रकार की ऑब्जेक्टएं
+@msg	Too many type objects to change at once	एक साथ बदलने के लिए बहुत अधिक टाइप ऑब्जेक्ट्स
 @msg	tool (a tool id) is required	टूल (एक टूल आईडी) की आवश्यकता होती है
 @msg	tool shortcuts must be a single key (optionally with Shift)	टूल शॉर्टकट एक कुंजी होने चाहिए (वैकल्पिक रूप से Shift के साथ)
 @msg	toolbar (a toolbar's name) must be a string	टूलबार (एक टूलबार का नाम) एक स्ट्रिंग होना चाहिए
@@ -8268,14 +8275,14 @@ antiAlias	Sharp	शार्प
 @msg	Trap: no edges of different colours meet among the selected objects	ट्रैप: विभिन्न रंगों के कोई किनारे सिलेक्टेड ऑब्जेक्ट्स के बीच मिलते हैं
 @msg	Trap: select two or more objects filled with solid colours	ट्रैप: ठोस रंगों से भरे दो या दो से अधिक ऑब्जेक्ट चुनें
 @msg	truncated	छंटनी
-@msg	two saved selections would be named `{_1}`	दो बचाया सिलेक्शन `{_1}` नाम दिया जाएगा
+@msg	two saved selections would be named `{_1}`	दो सेव किए गए सिलेक्शन का नाम `{_1}` होगा
 @msg	type dimension cannot be represented with this text transform	इस टेक्स्ट को बदलने के साथ टाइप आयाम का प्रतिनिधित्व नहीं किया जा सकता है
-@msg	type dimension must be finite	प्रकार आयाम को परिमित होना चाहिए
+@msg	type dimension must be finite	टाइप का आयाम परिमित होना चाहिए
 @msg	type must be static or dynamic, not {v}	type: प्रकार स्थिर या गतिशील होना चाहिए, न कि {v}
-@msg	type objects can't be isolated	प्रकार ऑब्जेक्ट पृथक नहीं किया जा सकता है
+@msg	type objects can't be isolated	टाइप ऑब्जेक्ट्स को आइसोलेट नहीं किया जा सकता
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
-@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	प्रकार जुड़े क्षेत्रों में एक मास्क के रूप में इस्तेमाल किया, रैपराउंड टेक्स्ट या एक मिश्रित पाथ क्लिप नहीं करता है
-@msg	Unembedded to {_1}	Unembed to {_1}
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	लिंक्ड एरिया, रैपअराउंड टेक्स्ट या कंपाउंड पाथ में मास्क के रूप में इस्तेमाल किया गया टाइप क्लिप नहीं करता
+@msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया
 @msg	unexpected host trap	होस्ट में अप्रत्याशित ट्रैप
 @msg	unexpected resources	अप्रत्याशित संसाधन
 @msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (आकार, स्थिति)
@@ -8307,9 +8314,9 @@ antiAlias	Sharp	शार्प
 @msg	unknown effect `{id}`	अज्ञात इफ़ेक्ट `{id}`
 @msg	unknown end {e}	अज्ञात अंत {e}
 @msg	unknown File Info field `{k}`	अज्ञात फ़ाइल जानकारी क्षेत्र `{k}`
-@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	अज्ञात flattenerPreset `{name}` (उच्च संकल्प, मध्यम संकल्प, कम संकल्प या एक बचाया: flattener.presets.list देखें)
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	अज्ञात flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution या कोई सेव किया गया प्रीसेट: flattener.presets.list देखें)
 @msg	unknown format	अज्ञात स्वरूप
-@msg	unknown format `{f}` (Save writes {_1})	अज्ञात फ़ॉर्मैट `{f}` (Save लिखते हैं {_1})
+@msg	unknown format `{f}` (Save writes {_1})	अज्ञात फ़ॉर्मैट `{f}` (सेव {_1} लिखता है)
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	अज्ञात फ़ॉर्मैट `{f}` (vcswatches, gpl, ase या css)
 @msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (बिंदुओं, लाइनों)
 @msg	unknown from {f}	{f} से अज्ञात
@@ -8336,7 +8343,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown model `{other}` (keep, new or document)	अज्ञात मॉडल `{other}` (keep, नया या डॉक्यूमेंट)
 @msg	unknown op {o}	अज्ञात op {o}
 @msg	unknown OpenType feature `{t}`	अज्ञात ओपन टाइप सुविधा `{t}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)	अज्ञात ओपन टाइप सुविधा `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01-ss20, नमक, titl, pnum, lnum, sups, subs, numr, dnom; prefix - बंद करने के लिए)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)	अज्ञात OpenType फ़ीचर `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; बंद करने के लिए आगे - लगाएँ)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges में अज्ञात OpenType फ़ीचर `{t}` (वे टैग जो `features` लेता है)
 @msg	unknown option `{path}.{k}`	अज्ञात ऑप्शन `{path}.{k}`
 @msg	unknown order `{o}`: toggle, front, forward, backward or back	अज्ञात आदेश `{o}`: टॉगल, फ्रंट, फॉरवर्ड, बैकवर्ड या बैक
@@ -8368,7 +8375,7 @@ antiAlias	Sharp	शार्प
 @msg	not a preferences file: no `format`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `format` नहीं है
 @msg	not a preferences file: no `version`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `version` नहीं है
 @msg	not a preferences file: no `prefs`	प्रेफ़रेंसेज़ फ़ाइल नहीं: `prefs` नहीं है
-@msg	the file was saved by a newer version of VectorCraft (version {v})	फ़ाइल VectorCraft के नए संस्करण से सहेजी गई थी (संस्करण {v})
+@msg	the file was saved by a newer version of VectorCraft (version {v})	फ़ाइल VectorCraft के नए संस्करण (संस्करण {v}) से सेव की गई थी
 @msg	the file holds no preferences	फ़ाइल में कोई प्रेफ़रेंस नहीं है
 @msg	`{key}` names a folder, which preferences files leave out	`{key}` एक फ़ोल्डर बताता है, और प्रेफ़रेंसेज़ फ़ाइलों में फ़ोल्डर नहीं होते
 @msg	the file is larger than 1 MB	फ़ाइल 1 MB से बड़ी है
@@ -8376,14 +8383,14 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be an object	`{key}` एक ऑब्जेक्ट होना चाहिए
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` अकेले चलता है, बैच के चरण के रूप में नहीं
 @msg	unknown preset (one of {_1})	अज्ञात प्रीसेट ({_1} में से एक)
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (उच्च, मध्यम, निम्न या एक बचाया: flattener.presets.list देखें)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (high, medium, low या कोई सेव किया गया प्रीसेट: flattener.presets.list देखें)
 @msg	unknown preset `{name}` (see flattener.presets.list)	अज्ञात प्रीसेट `{name}` (देखें flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	अज्ञात प्रीसेट `{name}` (see webExport.presets.list)
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	अज्ञात प्रीसेट `{name}`: एक अंतर्निहित या सेव किए गए प्रीसेट नहीं (imageTrace.presets देखें)
 @msg	unknown profile {id} (see stroke.widthProfile.list)	अज्ञात प्रोफ़ाइल {id} (view stroke.widthProfile.list)
 @msg	unknown proof target `{t}`	अज्ञात प्रमाण लक्ष्य `{t}`
 @msg	unknown quotes key `{k}` (double, single)	अज्ञात उद्धरण कुंजी `{k}` (डबल, सिंगल)
-@msg	unknown resolution `{v}`	अज्ञात संकल्प `{v}`
+@msg	unknown resolution `{v}`	अज्ञात रिज़ॉल्यूशन `{v}`
 @msg	unknown rule `{r}` (see color.harmony)	अज्ञात नियम `{r}` (देखें color.harmony)
 @msg	unknown rule `{rule}` ({_1})	अज्ञात नियम `{rule}` ({_1})
 @msg	unknown setting `{k}`	अज्ञात सेटिंग `{k}`
@@ -8659,7 +8666,7 @@ theme	Appearance	अपीयरेंस
 @msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	सुरक्षित मोड चालू है: जब तक VectorCraft सामान्य रूप से शुरू नहीं होता, प्लग-इन लोड या चलाए नहीं जाते
 @msg	give `id` or `file` (see plugin.safeMode)	`id` या `file` दें (plugin.safeMode देखें)
 @msg	that plug-in isn't disabled (see plugin.safeMode)	वह प्लग-इन अक्षम नहीं है (plugin.safeMode देखें)
-@msg	Couldn't save the disabled plug-ins for the next launch	अगली बार लॉन्च के लिए अक्षम प्लग-इन सहेजे नहीं जा सके
+@msg	Couldn't save the disabled plug-ins for the next launch	अगली बार लॉन्च के लिए अक्षम प्लग-इन सेव नहीं किए जा सके
 @msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	उपस्थिति का विस्तार: सिलेक्शन में किसी प्लग-इन इफ़ेक्ट का सुरक्षित मोड में विस्तार नहीं किया जा सकता
 
 # Align to Pixel Grid
@@ -8734,6 +8741,19 @@ theme	Appearance	अपीयरेंस
 	Show where this tool is	दिखाएँ कि यह टूल कहाँ है
 @msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
 @msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
+	View more	और देखें
+	Finish tutorial	ट्यूटोरियल पूरा करें
+	Next Up	आगे
+	You finished the last tutorial in this skill.	आपने इस कौशल का अंतिम ट्यूटोरियल पूरा कर लिया है।
+	Back to skills	कौशल पर वापस जाएँ
+	Open Tutorial Sample	ट्यूटोरियल का नमूना खोलें
+	Finish Tutorial	ट्यूटोरियल पूरा करें
+	Next Tutorial	अगला ट्यूटोरियल
+	Back to Skills	कौशल पर वापस जाएँ
+@msg	tutorial `{id}` has no practice sample	ट्यूटोरियल `{id}` का कोई अभ्यास नमूना नहीं है
+@msg	open the practice sample of `{id}` first (see learn.openSample)	पहले `{id}` का अभ्यास नमूना खोलें (learn.openSample देखें)
+@msg	finish `{id}` first (see learn.finish)	पहले `{id}` पूरा करें (learn.finish देखें)
+@msg	`{id}` is the last tutorial in its skill	`{id}` अपने कौशल का अंतिम ट्यूटोरियल है
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें

@@ -2446,6 +2446,9 @@ digits	Malayalam	Malaiala
 	Reset the rows to the artwork's colors	Redefinir as linhas para as cores da arte
 	Color Theme Picker	Seletor de Tema de Cores
 	Click or drag across the art to pick its colors; Shift adds more	Clique ou arraste sobre a arte para pegar suas cores; Shift adiciona mais
+	Prominent Colors	Cores Proeminentes
+	Save All Colors	Salvar Todas as Cores
+	Save Prominent Colors	Salvar Cores Proeminentes
 	Reset to Default	Redefinir para o Padrão
 	Reset to White, Black	Redefinir para Branco, Preto
 	Reset with Mesh…	Redefinir com Malha…
@@ -3705,6 +3708,8 @@ font-technology	Variable	Variáveis
 	Rename Library Group	Renomear grupo de biblioteca
 	Delete Library Group	Excluir grupo de biblioteca
 	Move Library Item to Group	Mover item da biblioteca para o grupo
+	Rename Library Item	Renomear item da biblioteca
+	Add to Character Styles	Adicionar aos Estilos de Caractere
 	Library	Biblioteca
 	Rename Library	Renomear biblioteca
 	Show Library	Mostrar biblioteca
@@ -3742,6 +3747,7 @@ axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
 	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	a biblioteca já tem outro item desse tipo chamado `{name}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	kerning must be a number, "auto", or "optical"	O kerning deve ser um número, “auto” ou “optical”
 @msg	the selection has no gradient fill	a seleção não tem gradiente de preenchimento
@@ -6446,6 +6452,7 @@ axis	Y Axis	Eixo Y
 @msg	message must be text	message deve ser texto
 @msg	allowContinue must be true or false	allowContinue deve ser true ou false
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
+@msg	Batch cannot play an action with a View menu step	Lote não pode reproduzir uma ação com uma etapa do menu Exibir
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
 	Insert Select Path	Inserir Seleção de Caminho
@@ -7414,6 +7421,19 @@ swatch	Yellow Green	Verde-amarelado
 	Show where this tool is	Mostrar onde está esta ferramenta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+	View more	Ver mais
+	Finish tutorial	Concluir tutorial
+	Next Up	A seguir
+	You finished the last tutorial in this skill.	Você concluiu o último tutorial desta habilidade.
+	Back to skills	Voltar às habilidades
+	Open Tutorial Sample	Abrir Amostra do Tutorial
+	Finish Tutorial	Concluir Tutorial
+	Next Tutorial	Próximo Tutorial
+	Back to Skills	Voltar às Habilidades
+@msg	tutorial `{id}` has no practice sample	o tutorial `{id}` não tem amostra de prática
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	conclua primeiro `{id}` (veja learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` é o último tutorial da sua habilidade
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados

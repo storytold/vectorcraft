@@ -21,6 +21,9 @@ use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, P
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
 
+/// The next [`FontDb::id`].
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,
     /// read with their subfolders, and font files).
@@ -64,6 +67,7 @@ impl FontDb {
             family_cache: Mutex::new(None),
             menu_cache: Mutex::new(None),
             generation: AtomicU64::new(0),
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             #[cfg(not(target_arch = "wasm32"))]
             sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
             #[cfg(not(target_arch = "wasm32"))]
@@ -126,6 +130,12 @@ impl FontDb {
     /// rescanned): lists built from [`FontDb::family_list`] are current while it doesn't.
     pub fn generation(&self) -> u64 {
         self.generation.load(Ordering::Relaxed)
+    }
+
+    /// A number no other database made in this process has: with [`FontDb::generation`], it tells
+    /// what a list built from a database was built from.
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Family names available (loaded plus installed system fonts), sorted and deduplicated.

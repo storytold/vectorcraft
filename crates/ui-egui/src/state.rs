@@ -424,6 +424,10 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
+    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
+    /// app runs.
+    #[serde(skip)]
+    pub learn_practice: crate::panels::learn::Practice,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -1094,6 +1098,7 @@ impl Default for UiState {
             find_font_in: String::new(),
             learn: Default::default(),
             learn_locate: None,
+            learn_practice: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
