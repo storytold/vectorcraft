@@ -4001,6 +4001,42 @@ file-filter	Templates	템플릿
 	Composite Fonts	합성 글꼴
 	Export Composite Fonts	합성 글꼴 내보내기
 	Import Composite Fonts	합성 글꼴 가져오기
+@msg	each font must be {name, parts}	각 글꼴은 {name, parts} 형식이어야 합니다
+@msg	unknown key `{k}`; a font takes name and parts	알 수 없는 키 `{k}`: 글꼴에는 name과 parts만 쓸 수 있습니다
+@msg	each font needs a name	각 글꼴에는 이름이 필요합니다
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다(1~{COMPOSITE_NAME_MAX}자, 제어 문자 없음)
+@msg	`{name}`: parts must be an object	`{name}`: parts는 객체여야 합니다
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: 알 수 없는 클래스 `{k}`: 클래스는 kanji, kana, punctuation, symbols, roman, numerals입니다
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1}은(는) 객체여야 합니다
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1}에 알 수 없는 키 `{k}`이(가) 있습니다
+@msg	`{name}`: give the kanji part	`{name}`: kanji 부분을 지정하세요
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	문서에는 합성 글꼴을 최대 {COMPOSITE_FONTS_MAX}개까지 둘 수 있습니다
+@msg	two composite fonts are named `{_1}`	이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` is the name of an installed font	`{_1}`은(는) 설치된 글꼴의 이름입니다
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}이(가) 합성 글꼴인 `{font}`(으)로 설정되어 있습니다
+@msg	give fonts: [{name, parts}…]	fonts를 지정하세요: [{name, parts}…]
+@msg	path is empty	path가 비어 있습니다
+@msg	fonts must be a list of composite fonts	fonts는 합성 글꼴 목록이어야 합니다
+@msg	names must be strings	names는 문자열이어야 합니다
+@msg	no composite font named `{n}`	이름이 `{n}`인 합성 글꼴이 없습니다
+@msg	names must be a list of names	names는 이름 목록이어야 합니다
+@msg	no composite fonts to export	내보낼 합성 글꼴이 없습니다
+@msg	not a composite fonts file: {e}	합성 글꼴 파일이 아닙니다: {e}
+@msg	not a composite fonts file: no compositeFonts list	합성 글꼴 파일이 아닙니다: compositeFonts 목록이 없습니다
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	파일에 합성 글꼴이 {COMPOSITE_FONTS_MAX}개보다 많습니다
+@msg	the file is larger than 4 MB	파일이 4MB보다 큽니다
+@msg	dataBase64 is not base64	dataBase64가 base64가 아닙니다
+@msg	give one of path, data or dataBase64	path, data, dataBase64 중 하나를 지정하세요
+@msg	the file holds no composite fonts	파일에 합성 글꼴이 없습니다
+@msg	the file holds two composite fonts named `{_1}`	파일에 이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` can't name a composite font	`{_1}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다
+@msg	{k}: give a font	{k}: 글꼴을 지정하세요
+@msg	{k}: size must be {_1} to {_2}%	{k}: size는 {_1}~{_2}%여야 합니다
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline은 {_1}~{_2}%여야 합니다
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 비율은 {_1}~{_2}%여야 합니다
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 비율을 바꿀 수 있는 것은 kana, roman, numerals뿐입니다
+@msg	{k}: only kana can be scaled at the center	{k}: 가운데를 기준으로 비율을 바꿀 수 있는 것은 kana뿐입니다
+@msg	no composite font	합성 글꼴이 없습니다
 	Delete Font	글꼴 삭제
 	Kanji	한자
 	Kana	가나

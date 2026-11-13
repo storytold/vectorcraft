@@ -3499,6 +3499,42 @@ digits	Malayalam	马拉雅拉姆数字
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
 	Import Composite Fonts	导入复合字体
+@msg	each font must be {name, parts}	每个字体都必须是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知键 `{k}`；字体可用的键为 name 和 parts
+@msg	each font needs a name	每个字体都需要名称
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能用作复合字体的名称（1 到 {COMPOSITE_NAME_MAX} 个字符，不含控制字符）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必须是对象
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知类别 `{k}`；类别为 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必须是对象
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知键 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：请指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一个文档最多保存 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	two composite fonts are named `{_1}`	有两个复合字体都名为 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安装字体的名称
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了复合字体 `{font}`
+@msg	give fonts: [{name, parts}…]	请指定 fonts：[{name, parts}…]
+@msg	path is empty	path 为空
+@msg	fonts must be a list of composite fonts	fonts 必须是复合字体列表
+@msg	names must be strings	names 必须是字符串
+@msg	no composite font named `{n}`	没有名为 `{n}` 的复合字体
+@msg	names must be a list of names	names 必须是名称列表
+@msg	no composite fonts to export	没有可导出的复合字体
+@msg	not a composite fonts file: {e}	不是复合字体文件：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是复合字体文件：没有 compositeFonts 列表
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	文件包含超过 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	the file is larger than 4 MB	文件大于 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	请指定 path、data 或 dataBase64 之一
+@msg	the file holds no composite fonts	文件不含复合字体
+@msg	the file holds two composite fonts named `{_1}`	文件中有两个复合字体都名为 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能用作复合字体的名称
+@msg	{k}: give a font	{k}：请指定字体
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必须为 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必须为 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：缩放必须为 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以缩放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以从中心缩放
+@msg	no composite font	没有复合字体
 	Delete Font	删除字体
 	Kanji	汉字
 	Kana	假名

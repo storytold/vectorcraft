@@ -1550,6 +1550,42 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Fonty złożone
 	Export Composite Fonts	Eksportuj fonty złożone
 	Import Composite Fonts	Importuj fonty złożone
+@msg	each font must be {name, parts}	każdy font musi mieć postać {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	nieznany klucz `{k}`; font przyjmuje name i parts
+@msg	each font needs a name	każdy font musi mieć nazwę
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nie może być nazwą fontu złożonego (od 1 do {COMPOSITE_NAME_MAX} znaków, bez znaków sterujących)
+@msg	`{name}`: parts must be an object	`{name}`: parts musi być obiektem
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: nieznana klasa `{k}`; klasy to kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} musi być obiektem
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: nieznany klucz `{k}` w {_1}
+@msg	`{name}`: give the kanji part	`{name}`: podaj część kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokument może zawierać najwyżej {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	two composite fonts are named `{_1}`	dwa fonty złożone mają nazwę `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` to nazwa zainstalowanego fontu
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} używa `{font}`, który jest fontem złożonym
+@msg	give fonts: [{name, parts}…]	podaj fonts: [{name, parts}…]
+@msg	path is empty	path jest puste
+@msg	fonts must be a list of composite fonts	fonts musi być listą fontów złożonych
+@msg	names must be strings	names muszą być ciągami znaków
+@msg	no composite font named `{n}`	brak fontu złożonego o nazwie `{n}`
+@msg	names must be a list of names	names musi być listą nazw
+@msg	no composite fonts to export	brak fontów złożonych do eksportu
+@msg	not a composite fonts file: {e}	to nie jest plik fontów złożonych: {e}
+@msg	not a composite fonts file: no compositeFonts list	to nie jest plik fontów złożonych: brak listy compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	plik zawiera więcej niż {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	the file is larger than 4 MB	plik jest większy niż 4 MB
+@msg	dataBase64 is not base64	dataBase64 nie jest w formacie base64
+@msg	give one of path, data or dataBase64	podaj path, data lub dataBase64
+@msg	the file holds no composite fonts	plik nie zawiera fontów złożonych
+@msg	the file holds two composite fonts named `{_1}`	plik zawiera dwa fonty złożone o nazwie `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` nie może być nazwą fontu złożonego
+@msg	{k}: give a font	{k}: podaj font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size musi wynosić od {_1} do {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musi wynosić od {_1} do {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skala musi wynosić od {_1} do {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: skalować można tylko kana, roman i numerals
+@msg	{k}: only kana can be scaled at the center	{k}: od środka można skalować tylko kana
+@msg	no composite font	brak fontu złożonego
 	Delete Font	Usuń font
 	Kanji	Kanji
 	Kana	Kana

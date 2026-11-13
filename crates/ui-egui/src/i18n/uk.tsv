@@ -3677,6 +3677,42 @@ effect	Points	Точки
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
 	Import Composite Fonts	Імпорт складених шрифтів
+@msg	each font must be {name, parts}	кожен шрифт має бути у вигляді {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	невідомий ключ `{k}`; шрифт приймає name і parts
+@msg	each font needs a name	кожен шрифт повинен мати назву
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може бути назвою складеного шрифту (від 1 до {COMPOSITE_NAME_MAX} символів, без керівних символів)
+@msg	`{name}`: parts must be an object	`{name}`: parts має бути об’єктом
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: невідомий клас `{k}`; класи: kanji, kana, punctuation, symbols, roman і numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} має бути об’єктом
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: невідомий ключ `{k}` у {_1}
+@msg	`{name}`: give the kanji part	`{name}`: вкажіть частину kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документ містить щонайбільше {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	two composite fonts are named `{_1}`	два складені шрифти мають назву `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` є назвою встановленого шрифту
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} використовує `{font}`, а це складений шрифт
+@msg	give fonts: [{name, parts}…]	вкажіть fonts: [{name, parts}…]
+@msg	path is empty	path порожній
+@msg	fonts must be a list of composite fonts	fonts має бути списком складених шрифтів
+@msg	names must be strings	names мають бути рядками
+@msg	no composite font named `{n}`	немає складеного шрифту з назвою `{n}`
+@msg	names must be a list of names	names має бути списком назв
+@msg	no composite fonts to export	немає складених шрифтів для експорту
+@msg	not a composite fonts file: {e}	це не файл складених шрифтів: {e}
+@msg	not a composite fonts file: no compositeFonts list	це не файл складених шрифтів: немає списку compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	у файлі понад {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	the file is larger than 4 MB	файл більший за 4 МБ
+@msg	dataBase64 is not base64	dataBase64 не у форматі base64
+@msg	give one of path, data or dataBase64	вкажіть path, data або dataBase64
+@msg	the file holds no composite fonts	у файлі немає складених шрифтів
+@msg	the file holds two composite fonts named `{_1}`	у файлі два складені шрифти з назвою `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не може бути назвою складеного шрифту
+@msg	{k}: give a font	{k}: вкажіть шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size має бути від {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline має бути від {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб має бути від {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабувати можна лише kana, roman і numerals
+@msg	{k}: only kana can be scaled at the center	{k}: масштабувати від центру можна лише kana
+@msg	no composite font	немає складеного шрифту
 	Delete Font	Видалити шрифт
 	Kanji	Кандзі
 	Kana	Кана

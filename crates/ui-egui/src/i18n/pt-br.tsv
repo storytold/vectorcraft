@@ -5181,6 +5181,42 @@ axis	Both	Ambos
 	Composite Fonts	Fontes compostas
 	Export Composite Fonts	Exportar fontes compostas
 	Import Composite Fonts	Importar fontes compostas
+@msg	each font must be {name, parts}	cada fonte deve ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	chave desconhecida `{k}`; uma fonte aceita name e parts
+@msg	each font needs a name	cada fonte precisa de um nome
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` não pode nomear uma fonte composta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sem caracteres de controle)
+@msg	`{name}`: parts must be an object	`{name}`: parts deve ser um objeto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe desconhecida `{k}`; as classes são kanji, kana, punctuation, symbols, roman e numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} deve ser um objeto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: chave desconhecida `{k}` em {_1}
+@msg	`{name}`: give the kanji part	`{name}`: informe a parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	um documento contém no máximo {COMPOSITE_FONTS_MAX} fontes compostas
+@msg	two composite fonts are named `{_1}`	duas fontes compostas se chamam `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` é o nome de uma fonte instalada
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, uma fonte composta
+@msg	give fonts: [{name, parts}…]	informe fonts: [{name, parts}…]
+@msg	path is empty	path está vazio
+@msg	fonts must be a list of composite fonts	fonts deve ser uma lista de fontes compostas
+@msg	names must be strings	names deve conter strings
+@msg	no composite font named `{n}`	nenhuma fonte composta chamada `{n}`
+@msg	names must be a list of names	names deve ser uma lista de nomes
+@msg	no composite fonts to export	nenhuma fonte composta para exportar
+@msg	not a composite fonts file: {e}	não é um arquivo de fontes compostas: {e}
+@msg	not a composite fonts file: no compositeFonts list	não é um arquivo de fontes compostas: não há lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	o arquivo contém mais de {COMPOSITE_FONTS_MAX} fontes compostas
+@msg	the file is larger than 4 MB	o arquivo tem mais de 4 MB
+@msg	dataBase64 is not base64	dataBase64 não é base64
+@msg	give one of path, data or dataBase64	informe path, data ou dataBase64
+@msg	the file holds no composite fonts	o arquivo não contém fontes compostas
+@msg	the file holds two composite fonts named `{_1}`	o arquivo contém duas fontes compostas chamadas `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` não pode nomear uma fonte composta
+@msg	{k}: give a font	{k}: informe uma fonte
+@msg	{k}: size must be {_1} to {_2}%	{k}: size deve estar entre {_1} e {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve estar entre {_1} e {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a escala deve estar entre {_1} e {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: só kana, roman e numerals podem ser escalados
+@msg	{k}: only kana can be scaled at the center	{k}: só kana pode ser escalado a partir do centro
+@msg	no composite font	nenhuma fonte composta
 	Delete Font	Excluir fonte
 	Kanji	Kanji
 	Kana	Kana

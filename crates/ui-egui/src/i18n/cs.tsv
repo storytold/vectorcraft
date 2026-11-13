@@ -1638,6 +1638,42 @@ digits	Malayalam	Malajálamské
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
 	Import Composite Fonts	Importovat složená písma
+@msg	each font must be {name, parts}	každé písmo musí být {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	neznámý klíč `{k}`; písmo přijímá name a parts
+@msg	each font needs a name	každé písmo potřebuje název
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nemůže být názvem složeného písma (1 až {COMPOSITE_NAME_MAX} znaků, bez řídicích znaků)
+@msg	`{name}`: parts must be an object	`{name}`: parts musí být objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: neznámá třída `{k}`; třídy jsou kanji, kana, punctuation, symbols, roman a numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} musí být objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: neznámý klíč `{k}` v {_1}
+@msg	`{name}`: give the kanji part	`{name}`: zadejte část kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokument obsahuje nejvýše {COMPOSITE_FONTS_MAX} složených písem
+@msg	two composite fonts are named `{_1}`	dvě složená písma se jmenují `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` je název nainstalovaného písma
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} používá `{font}`, což je složené písmo
+@msg	give fonts: [{name, parts}…]	zadejte fonts: [{name, parts}…]
+@msg	path is empty	path je prázdné
+@msg	fonts must be a list of composite fonts	fonts musí být seznam složených písem
+@msg	names must be strings	names musí být řetězce
+@msg	no composite font named `{n}`	žádné složené písmo s názvem `{n}`
+@msg	names must be a list of names	names musí být seznam názvů
+@msg	no composite fonts to export	žádná složená písma k exportu
+@msg	not a composite fonts file: {e}	nejde o soubor složených písem: {e}
+@msg	not a composite fonts file: no compositeFonts list	nejde o soubor složených písem: chybí seznam compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	soubor obsahuje více než {COMPOSITE_FONTS_MAX} složených písem
+@msg	the file is larger than 4 MB	soubor je větší než 4 MB
+@msg	dataBase64 is not base64	dataBase64 není base64
+@msg	give one of path, data or dataBase64	zadejte path, data nebo dataBase64
+@msg	the file holds no composite fonts	soubor neobsahuje žádná složená písma
+@msg	the file holds two composite fonts named `{_1}`	soubor obsahuje dvě složená písma s názvem `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` nemůže být názvem složeného písma
+@msg	{k}: give a font	{k}: zadejte písmo
+@msg	{k}: size must be {_1} to {_2}%	{k}: size musí být {_1} až {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musí být {_1} až {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: měřítko musí být {_1} až {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: měnit měřítko lze jen u kana, roman a numerals
+@msg	{k}: only kana can be scaled at the center	{k}: měřítko od středu lze měnit jen u kana
+@msg	no composite font	žádné složené písmo
 	Delete Font	Odstranit písmo
 	Kanji	Kandži
 	Kana	Kana

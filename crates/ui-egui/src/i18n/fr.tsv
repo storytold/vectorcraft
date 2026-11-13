@@ -3630,6 +3630,42 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
 	Import Composite Fonts	Importer des polices composites
+@msg	each font must be {name, parts}	chaque police doit être {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police prend name et parts
+@msg	each font needs a name	chaque police doit avoir un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
+@msg	`{name}`: parts must be an object	`{name}` : parts doit être un objet
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}` : classe inconnue `{k}` ; les classes sont kanji, kana, punctuation, symbols, roman et numerals
+@msg	`{name}`: {_1} must be an object	`{name}` : {_1} doit être un objet
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}` : clé inconnue `{k}` dans {_1}
+@msg	`{name}`: give the kanji part	`{name}` : indiquez la partie kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document contient au plus {COMPOSITE_FONTS_MAX} polices composites
+@msg	two composite fonts are named `{_1}`	deux polices composites s’appellent `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
+@msg	give fonts: [{name, parts}…]	indiquez fonts : [{name, parts}…]
+@msg	path is empty	path est vide
+@msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
+@msg	names must be strings	names doit contenir des chaînes
+@msg	no composite font named `{n}`	aucune police composite nommée `{n}`
+@msg	names must be a list of names	names doit être une liste de noms
+@msg	no composite fonts to export	aucune police composite à exporter
+@msg	not a composite fonts file: {e}	ce n’est pas un fichier de polices composites : {e}
+@msg	not a composite fonts file: no compositeFonts list	ce n’est pas un fichier de polices composites : pas de liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	le fichier contient plus de {COMPOSITE_FONTS_MAX} polices composites
+@msg	the file is larger than 4 MB	le fichier dépasse 4 Mo
+@msg	dataBase64 is not base64	dataBase64 n’est pas du base64
+@msg	give one of path, data or dataBase64	indiquez path, data ou dataBase64
+@msg	the file holds no composite fonts	le fichier ne contient aucune police composite
+@msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
+@msg	{k}: give a font	{k} : indiquez une police
+@msg	{k}: size must be {_1} to {_2}%	{k} : size doit être compris entre {_1} et {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k} : baseline doit être compris entre {_1} et {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	{k}: only kana can be scaled at the center	{k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	no composite font	aucune police composite
 	Delete Font	Supprimer la police
 	Kanji	Kanji
 	Kana	Kana
