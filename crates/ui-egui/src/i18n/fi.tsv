@@ -911,6 +911,10 @@
 	Dock Panel	Telakoi paneeli
 	Dock to Top	Telakoi ylös
 	Dock to Bottom	Telakoi alas
+	Dock to Left	Telakoi vasemmalle
+	Dock to Right	Telakoi oikealle
+	Dock Toolbar	Telakoi työkalurivi
+	Float Toolbar	Kelluta työkalurivi
 	Control Bar Options	Ohjauspalkin asetukset
 	Tool Options	Työkalun asetukset
 	Object Options	Objektin asetukset
@@ -1813,6 +1817,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Objektit polulla -työkalu
 	Attach Objects on Path	Kiinnitä objektit polulle
 	Expand Objects on Path	Laajenna objektit polulla
+	Detach	Irrota
+	Detach Object from Path	Irrota objekti polulta
 	Release Live Paint	Vapauta elävä maalaus
 	Release Repeat	Vapauta toisto
 	Release Slice	Vapauta siivu
@@ -2835,6 +2841,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Palauta rivit kuvituksen väreihin
 	Color Theme Picker	Väriteeman valitsin
 	Click or drag across the art to pick its colors; Shift adds more	Napsauta tai vedä kuvituksen yli poimiaksesi sen värit; Vaihto lisää useampia
+	Prominent Colors	Hallitsevat värit
+	Save All Colors	Tallenna kaikki värit
+	Save Prominent Colors	Tallenna hallitsevat värit
 	Separate colors into rows	Erottele värit riveille
 	Unlink harmony colors	Poista harmoniavärien linkitys
 	1 Color Job	1 värin työ
@@ -3936,6 +3945,19 @@ theme	Appearance	Ulkoasu
 	Spot Color Objects	Objektit, joissa on spottivärejä
 	Pattern Objects	Objektit, joissa on kuvioita
 	Gradient Objects	Objektit, joissa on liukuvärejä
+	Font Details	Fonttien tiedot
+	Linked Images	Linkitetyt kuvat
+	Embedded Images	Upotetut kuvat
+	Compound Paths	Yhdistelmäpolut
+	Text Objects	Tekstiobjektit
+	Placed Documents	Sijoitetut asiakirjat
+	Symbol Instances	Symbolien ilmentymät
+	Gradient Meshes	Liukuväriverkot
+	Blends	Sulautukset
+	Envelopes	Vääristyskuoret
+	Intertwine Groups	Lomitusryhmät
+	Opacity Masks	Peittävyysmaskit
+	Objects with Effects	Objektit, joissa on tehosteita
 	Spot Colors	Spottivärit
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
@@ -4962,6 +4984,7 @@ imageTrace	Outline	Ääriviiva
 @msg	paths contain invalid coordinates	polut sisältävät virheellisiä koordinaatteja
 @msg	paths: give at least one file	paths: anna vähintään yksi tiedosto
 @msg	replace: the object to replace was changed or deleted	replace: korvattavaa objektia on muutettu tai se on poistettu
+@msg	the document it was prepared for is no longer active	asiakirja, jota varten se valmisteltiin, ei ole enää aktiivinen
 @msg	pattern missing	kuvio puuttuu
 @msg	patterns nested too deeply are filled with mid-grey	liian syvälle sisäkkäiset kuviot täytetään keskiharmaalla
 @msg	percent must be above 0 and at most 6400, not {p}	percent-arvon on oltava yli 0 ja enintään 6400, ei {p}
@@ -5315,6 +5338,7 @@ imageTrace	Outline	Ääriviiva
 @msg	every numbered name for it is taken in the Fonts folder	kaikki sen numeroidut nimet ovat jo käytössä Fonts-kansiossa
 @msg	every numbered name for {name} is taken in the document's folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä asiakirjan kansiossa
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Linkki on symbolin, kaaviomallin, kuvion tai peittävyysmaskin sisällä, eikä sillä ole paikkaa piirtoalueella
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` on oltava värien taulukko, ei {v}
@@ -5820,7 +5844,9 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiikat sijoitetaan tasaisille pinnoille: käytä objektityyppiä Pursota tai Taso
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
+@msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
 @msg	The graphics are too complex: simplify the symbols' art	Grafiikat ovat liian monimutkaisia: yksinkertaista symbolien kuvitusta
@@ -6028,6 +6054,7 @@ mark-style	Japanese	Japanilainen
 @msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
+@msg	choose the object to detach with its Select/Move widget	valitse irrotettava objekti sen Valitse/Siirrä-säätimellä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja
 @msg	a clipping path can't take objects	leikkauspolkuun ei voi kiinnittää objekteja
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevia objekteja ei voi kiinnittää polulle
@@ -6563,6 +6590,7 @@ axis	Y Axis	Y-akseli
 @msg	message must be text	message on oltava tekstiä
 @msg	allowContinue must be true or false	allowContinue on oltava true tai false
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
+@msg	Batch cannot play an action with a View menu step	Erä ei voi toistaa toimintoa, jossa on Näytä-valikon vaihe
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
 	Insert Select Path	Lisää polun valinta
@@ -6746,6 +6774,13 @@ axis	Y Axis	Y-akseli
 	Area Text	Alueteksti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mittaa teksti merkin rajoista
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pikseliin kohdistuksen asetukset
+	Pixel Snapping Options…	Pikseliin kohdistuksen asetukset…
+	Snap to Pixel While Drawing	Kohdista pikseliin piirrettäessä
+	Snap to Pixel While Moving	Kohdista pikseliin siirrettäessä
+	Snap to Pixel While Scaling	Kohdista pikseliin skaalattaessa
+	These options take effect when View › Snap to Pixel is on.	Nämä asetukset ovat voimassa, kun Näytä › Kohdista pikseliin on käytössä.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Näytä merkkiin kohdistuksen asetukset
 	Hide Snap to Glyph Options	Piilota merkkiin kohdistuksen asetukset
@@ -7378,6 +7413,19 @@ breakText	Glyphs	Merkit
 	Show where this tool is	Näytä, missä tämä työkalu on
 @msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
+	View more	Näytä lisää
+	Finish tutorial	Viimeistele opetusohjelma
+	Next Up	Seuraavaksi
+	You finished the last tutorial in this skill.	Viimeistelit tämän taidon viimeisen opetusohjelman.
+	Back to skills	Takaisin taitoihin
+	Open Tutorial Sample	Avaa opetusohjelman harjoitustiedosto
+	Finish Tutorial	Viimeistele opetusohjelma
+	Next Tutorial	Seuraava opetusohjelma
+	Back to Skills	Takaisin taitoihin
+@msg	tutorial `{id}` has no practice sample	opetusohjelmalla `{id}` ei ole harjoitustiedostoa
+@msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	viimeistele ensin `{id}` (ks. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` on taitonsa viimeinen opetusohjelma
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet

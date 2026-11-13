@@ -32,6 +32,59 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     }
 }
 
+/// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
+/// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
+/// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
+#[test]
+fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let names = |words: &[&str]| english.split(|c: char| !c.is_ascii_alphabetic()).any(|w| words.contains(&w));
+        let banned: [(bool, &[&str]); 6] = [
+            (names(&["save", "saves", "saved", "saving"]), &["बचा", "सहेज"]),
+            (names(&["swatch", "swatches"]), &["घड़ी"]),
+            (names(&["crop"]), &["फसल"]),
+            (names(&["resolution", "resolutions"]), &["संकल्प"]),
+            (names(&["path", "paths"]), &["पथ"]),
+            (true, &["पाठ", "कई अंक"]),
+        ];
+        for (applies, words) in banned {
+            if let Some(word) = words.iter().find(|w| applies && translation.contains(**w)) {
+                wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+            }
+        }
+        if english.contains("number of points") && !(translation.contains("संख्या") && translation.contains("पॉइंट")) {
+            wrong.push(format!("no number in points in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi messages and labels keep the condition, quantity and clauses of their English.
+#[test]
+fn hindi_rows_keep_the_meaning_of_their_english() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    assert_eq!(message(hi, "`shift` must be a number of points"), "`shift` पॉइंट में एक संख्या होनी चाहिए");
+    assert_eq!(
+        message(hi, "`spacing` must be a number of points, 0 or more, or \"auto\""),
+        "`spacing` पॉइंट में 0 या उससे बड़ी संख्या, या \"auto\" होनी चाहिए"
+    );
+    assert_eq!(tr(hi, "Check an artboard to save."), "सेव करने के लिए किसी आर्टबोर्ड पर चेक लगाएँ।");
+    assert_eq!(tr(hi, "Save the applied preferences to a JSON file"), "लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सेव करें");
+    assert_eq!(message(hi, "the script is not UTF-8 text"), "स्क्रिप्ट UTF-8 टेक्स्ट नहीं है");
+    assert_eq!(message(hi, "only solid-colour swatches can be spot colours"), "केवल ठोस रंग वाले स्वॉच स्पॉट रंग हो सकते हैं");
+    assert_eq!(message(hi, "select area type"), "एरिया टाइप सिलेक्ट करें");
+    assert_eq!(message(hi, "12 MB of images, at most 10 MB"), "इमेज के 12 MB, अधिकतम 10 MB");
+    let all =
+        message(hi, "SVG keeps 1 of the document's 3 artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.");
+    assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
+    let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
+    assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+}
+
 /// Locale tags name their language by region or script (in either case, with an encoding or
 /// modifier), and a tag that names no language resolves to none.
 #[test]
@@ -184,6 +237,23 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Objects on Path Options section's Detach button, its undo step and the message for a
+/// Detach with no object chosen.
+#[test]
+fn objects_on_path_detach_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Detach", "Detach Object from Path"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let choose = "choose the object to detach with its Select/Move widget";
+    assert!(message_literals().contains(choose));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, choose), choose, "{code}");
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
@@ -239,24 +309,33 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
-/// The titles of Document Info's Spot Color Objects, Pattern Objects and Gradient Objects
-/// categories, which the panel, its menu and the Objects category's counts show.
+/// Document Info's labels: every category title, which the panel and its menu show, every count
+/// label of the Objects category, and the Document category's fixed row labels (the artboard rows
+/// show artboard names and are left out).
 #[test]
-fn document_info_object_category_titles_are_in_complete_catalogs() {
+fn document_info_labels_are_in_complete_catalogs() {
     let mut session = vectorcraft_engine::Session::new();
     session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+    session.execute("shape.rectangle", &serde_json::json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     let info = session.execute("document.info", &serde_json::json!({})).unwrap();
-    let titles: Vec<&str> = info["sections"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|s| matches!(s["id"].as_str(), Some("spotColors" | "patterns" | "gradients")))
-        .filter_map(|s| s["title"].as_str())
-        .collect();
-    assert_eq!(titles, ["Spot Color Objects", "Pattern Objects", "Gradient Objects"]);
+    let sections = info["sections"].as_array().unwrap();
+    let titles: Vec<&str> = sections.iter().filter_map(|s| s["title"].as_str()).collect();
+    let categories: Vec<&str> = vectorcraft_engine::cmd::CATEGORIES.iter().map(|&(_, title)| title).collect();
+    assert_eq!(titles, categories);
+    let mut labels = categories;
+    labels.extend(vectorcraft_engine::cmd::OBJECT_LABELS.iter().map(|&(_, label)| label));
+    let objects = sections.iter().find(|s| s["id"] == "objects").unwrap()["rows"].as_array().unwrap();
+    assert!(objects.iter().any(|r| r[0] == "Path Length"), "{objects:?}");
+    labels.push("Path Length");
+    let document = sections.iter().find(|s| s["id"] == "document").unwrap()["rows"].as_array().unwrap();
+    let artboards = document.iter().position(|r| r[0] == "Artboards").unwrap();
+    let names = artboards + 1..=artboards + document[artboards][1].as_str().unwrap().parse::<usize>().unwrap();
+    let fixed: Vec<&str> = document.iter().enumerate().filter(|(k, _)| !names.contains(k)).filter_map(|(_, r)| r[0].as_str()).collect();
+    assert_eq!(fixed.len(), 9, "{fixed:?}");
+    labels.extend(fixed);
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
-        for title in &titles {
-            assert!(lang.catalog().plain(title).is_some(), "{} is missing {title}", lang.code);
+        for label in &labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
 }

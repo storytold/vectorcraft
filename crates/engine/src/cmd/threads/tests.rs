@@ -60,6 +60,130 @@ fn a_restyled_empty_frame_keeps_its_style_before_an_unedited_empty_frame() {
     assert_eq!([hyphenates(a, 0), hyphenates(a, 1), hyphenates(b, 0), hyphenates(c, 0)], [false, true, true, true]);
 }
 
+/// Every paragraph's left indent in frame `id`.
+fn left_indents(s: &Session, id: u64) -> Vec<f64> {
+    match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.paragraph_styles().iter().map(|p| p.left_indent).collect(),
+        _ => panic!("not text"),
+    }
+}
+
+/// Area type `height` high holding `text`, threaded into `empties` empty rectangles after it.
+fn tail_thread(text: &str, height: f64, empties: usize) -> (Session, Vec<u64>) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 300})).unwrap();
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 150, "height": height}})).unwrap());
+    let mut ids = vec![a];
+    for k in 0..empties {
+        let x = 200.0 * (k + 1) as f64;
+        ids.push(new_id(s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 150, "height": 60})).unwrap()));
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    (s, ids)
+}
+
+/// Restyling a frame's empty last paragraph (after its final paragraph break) gives that
+/// paragraph the style in the next frame as well, instead of the next frame's old style.
+#[test]
+fn editing_a_frames_empty_last_paragraph_survives_thread_reflow() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "a\n", "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!([text(&s, a), text(&s, b)], ["a\n", ""]);
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![0.0, 30.0], vec![30.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    // The same format again changes nothing and records no undo step.
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![0.0, 0.0], vec![0.0]));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![0.0, 30.0], vec![30.0]));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // A format of the whole frame changes its last paragraph as well.
+    s.execute("text.setFormat", &json!({"ids": [a], "leftIndent": 20})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![20.0, 20.0], vec![20.0]));
+    // Both frames formatted in one command agree.
+    s.execute("text.setFormat", &json!({"ids": [a, b], "leftIndent": 40})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![40.0, 40.0], vec![40.0]));
+}
+
+/// The restyled empty last paragraph keeps its style when the next frame holds text that
+/// continues it, and across an unedited empty frame; a later restyle of a later frame still wins.
+#[test]
+fn a_restyled_empty_last_paragraph_keeps_its_style_against_later_frames() {
+    // One line high: the text added to the next frame stays there.
+    let (mut s, ids) = tail_thread("a\n", 20.0, 1);
+    let (a, b) = (ids[0], ids[1]);
+    s.execute("text.editRange", &json!({"id": b, "start": 0, "end": 0, "insert": "def"})).unwrap();
+    assert_eq!([text(&s, a), text(&s, b)], ["a\n", "def"]);
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!([text(&s, a), text(&s, b)], ["a\n", "def"]);
+    assert_eq!((left_indents(&s, a), left_indents(&s, b)), (vec![0.0, 30.0], vec![30.0]));
+
+    let (mut s, ids) = tail_thread("a\n", 60.0, 2);
+    s.execute("text.setFormat", &json!({"ids": [ids[0]], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!(ids.iter().map(|id| left_indents(&s, *id)).collect::<Vec<_>>(), [vec![0.0, 30.0], vec![30.0], vec![30.0]]);
+    s.execute("text.setFormat", &json!({"ids": [ids[2]], "leftIndent": 10})).unwrap();
+    assert_eq!(ids.iter().map(|id| left_indents(&s, *id)).collect::<Vec<_>>(), [vec![0.0, 10.0], vec![10.0], vec![10.0]]);
+}
+
+/// The restyled last paragraph keeps its style with type on a path on either side of the boundary.
+#[test]
+fn a_restyled_empty_last_paragraph_flows_onto_type_on_a_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 300})).unwrap();
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "a\n", "area": {"width": 150, "height": 60}})).unwrap());
+    let on_path = type_on_a_line(&mut s);
+    s.execute("text.thread.add", &json!({"from": a, "to": on_path})).unwrap();
+    assert_eq!([text(&s, a), text(&s, on_path)], ["a\n", ""]);
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!((left_indents(&s, a), left_indents(&s, on_path)), (vec![0.0, 30.0], vec![30.0]));
+
+    // Type on a path before area type.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 300})).unwrap();
+    let on_path = type_on_a_line(&mut s);
+    s.execute("text.editRange", &json!({"id": on_path, "start": 0, "end": 0, "insert": "a\n"})).unwrap();
+    let b = new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 10, "width": 150, "height": 60})).unwrap());
+    s.execute("text.thread.add", &json!({"from": on_path, "to": b})).unwrap();
+    assert_eq!([text(&s, on_path), text(&s, b)], ["a\n", ""]);
+    s.execute("text.setFormat", &json!({"ids": [on_path], "start": 2, "end": 2, "leftIndent": 30})).unwrap();
+    assert_eq!((left_indents(&s, on_path), left_indents(&s, b)), (vec![0.0, 30.0], vec![30.0]));
+}
+
+/// A restyled empty last paragraph in a numbered list is counted once, and the next frame's
+/// first paragraph does not continue the paragraph before the break.
+#[test]
+fn a_restyled_empty_last_list_paragraph_keeps_the_counts() {
+    let (mut s, ids) = tail_thread("One\nTwo\n", 60.0, 1);
+    let (a, b) = (ids[0], ids[1]);
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number"})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a], "start": 8, "end": 8, "leftIndent": 30})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let frame = |id| match &doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    };
+    let (ta, tb) = (frame(a), frame(b));
+    let shown = [ta.plain_text(), tb.plain_text()].concat();
+    assert_eq!(shown, "One\nTwo\n");
+    let split = ta.paragraph_count() - 1;
+    assert_eq!(ta.para_at(split).left_indent, 30.0, "{:?}", [ta.plain_text(), tb.plain_text()]);
+    assert_eq!(tb.para_at(0).left_indent, 30.0);
+    assert!(tb.para_at(0).list.is_some());
+    assert_eq!(tb.list_count as usize, split, "the paragraphs before the shared one are counted once");
+    assert_eq!(tb.first_para_continues, !ta.plain_text().ends_with('\n'));
+}
+
 #[test]
 fn thread_flows_reflows_on_edit_and_survives_delete() {
     let (mut s, a, b) = setup();

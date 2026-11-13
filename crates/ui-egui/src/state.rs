@@ -424,6 +424,10 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
+    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
+    /// app runs.
+    #[serde(skip)]
+    pub learn_practice: crate::panels::learn::Practice,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -632,6 +636,10 @@ pub struct UiState {
     /// ([`vectorcraft_engine::Journal::rewrites`]).
     #[serde(skip)]
     pub recording_tail: Option<(u64, usize, usize, usize)>,
+    /// The journal as the recording in progress last checked it against the limits of an action
+    /// set file: (its rewrites, its length) ([`crate::panels::actions::after_journaled_edit`]).
+    #[serde(skip)]
+    pub recording_checked: Option<(u64, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -864,7 +872,8 @@ impl FloatingFlyout {
 }
 
 /// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
-/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// own or docks along the window's left or right edge, filled with tools from the All Tools drawer,
+/// and is kept with the workspace it was made in.
 /// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
 /// (`UiState::floating_flyouts`) hold none of them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -877,8 +886,16 @@ pub struct CustomToolbar {
     /// It shows (Window › Toolbars › its name toggles it).
     #[serde(default = "yes")]
     pub shown: bool,
-    /// Top-left corner in screen points.
+    /// Top-left corner in screen points while it floats; while it is docked, where it floated last.
     pub pos: [f32; 2],
+    /// Its place in the stack of toolbars docked along one of the window's edges (0 at the top),
+    /// while it is docked there; none while it floats at `pos`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dock: Option<u32>,
+    /// It docks along the window's right edge, not the left: the edge it is docked at, or while it
+    /// floats the edge it docked at last.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dock_right: bool,
     /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -1089,6 +1106,7 @@ impl Default for UiState {
             find_font_in: String::new(),
             learn: Default::default(),
             learn_locate: None,
+            learn_practice: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
@@ -1152,6 +1170,7 @@ impl Default for UiState {
             recording_into: None,
             recording_base: None,
             recording_tail: None,
+            recording_checked: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),

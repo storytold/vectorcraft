@@ -1588,6 +1588,8 @@ file-filter	Templates	範本
 	Objects on Path Tool	路徑上的物件工具
 	Attach Objects on Path	附加路徑上的物件
 	Expand Objects on Path	展開路徑上的物件
+	Detach	分離
+	Detach Object from Path	將物件從路徑分離
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -2021,6 +2023,7 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	choose the object to detach with its Select/Move widget	請用物件的「選取/移動」控制項選取要分離的物件
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
 @msg	a clipping path can't take objects	剪裁路徑無法附加物件
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑
@@ -2615,6 +2618,7 @@ file-filter	Templates	範本
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
 @msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
+@msg	the document it was prepared for is no longer active	為其準備的文件已不再處於使用中
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
@@ -2675,6 +2679,7 @@ file-filter	Templates	範本
 @msg	every numbered name for it is taken in the Fonts folder	字體資料夾中所有編號名稱都已被使用
 @msg	every numbered name for {name} is taken in the document's folder	文件所在資料夾中 {name} 的所有編號名稱都已被使用
 @msg	No linked files to look for	沒有要尋找的連結檔案
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	此連結位於符號、圖表設計、圖樣或不透明度遮色片中，在畫布上沒有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
@@ -4010,6 +4015,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
+	Prominent Colors	主要顏色
+	Save All Colors	儲存所有顏色
+	Save Prominent Colors	儲存主要顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設
@@ -4560,6 +4568,20 @@ digits	Malayalam	馬來亞拉姆數字
 	Spot Color Objects	使用特別色的物件
 	Pattern Objects	使用圖樣的物件
 	Gradient Objects	使用漸層的物件
+	Font Details	字體詳細資訊
+	Linked Images	已連結的影像
+	Embedded Images	嵌入的影像
+	Compound Paths	複合路徑
+	Text Objects	文字物件
+	Placed Documents	已置入的文件
+	Symbol Instances	符號範例
+	Gradient Meshes	漸層網格
+	Blends	漸變
+	Envelopes	封套
+	Intertwine Groups	交織群組
+	Opacity Masks	不透明度遮色片
+	Objects with Effects	使用效果的物件
+	Pattern Swatches	圖樣色票
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：
@@ -5269,6 +5291,10 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Dock to Left	停駐到左側
+	Dock to Right	停駐到右側
+	Dock Toolbar	停駐工具列
+	Float Toolbar	浮動工具列
 	Control Bar Options	控制列選項
 	Tool Options	工具選項
 	Object Options	物件選項
@@ -5643,7 +5669,10 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必須是 front 或 back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	圖形會對應到平坦的面：請使用「突出」或「平面」物件類型
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
+	Graphics map onto the Plane, Extrude and Revolve object types.	圖形會對應到「平面」、「突出」與「迴轉」物件類型。
+@msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
 @msg	The graphics are too complex: simplify the symbols' art	圖形過於複雜：請簡化符號的圖稿
@@ -6176,6 +6205,7 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message 必須是文字
 @msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
+@msg	Batch cannot play an action with a View menu step	批次無法播放含有檢視選單步驟的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
 	Insert Select Path	插入選取路徑
@@ -6359,6 +6389,13 @@ axis	Y Axis	Y 軸
 	Area Text	區域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	依字符邊界測量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	靠齊像素選項
+	Pixel Snapping Options…	靠齊像素選項…
+	Snap to Pixel While Drawing	繪製時靠齊像素
+	Snap to Pixel While Moving	移動時靠齊像素
+	Snap to Pixel While Scaling	縮放時靠齊像素
+	These options take effect when View › Snap to Pixel is on.	這些選項會在「檢視 › 靠齊像素」開啟時生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
@@ -6987,6 +7024,19 @@ breakText	Glyphs	字符
 	Show where this tool is	顯示此工具的位置
 @msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+	View more	檢視更多
+	Finish tutorial	完成教學課程
+	Next Up	接下來
+	You finished the last tutorial in this skill.	你已完成此技能的最後一個教學課程。
+	Back to skills	返回技能
+	Open Tutorial Sample	開啟教學課程範例
+	Finish Tutorial	完成教學課程
+	Next Tutorial	下一個教學課程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	請先完成 `{id}` (請參閱 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最後一個教學課程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果

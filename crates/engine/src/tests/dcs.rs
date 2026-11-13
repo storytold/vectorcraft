@@ -327,6 +327,31 @@ fn update_link_takes_the_files_clipping_path_into_symbols_too() {
 }
 
 #[test]
+fn update_and_relink_by_id_keep_the_clipping_path_of_a_dcs_image_in_a_symbol() {
+    let dir = temp_dir("symbol-clip-by-id");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    s.execute("symbol.new", &json!({ "name": "Pic", "ids": [r["ids"][0]] })).unwrap();
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").cloned().expect("the symbol's image is listed");
+    let id = row["id"].as_u64().unwrap();
+    assert_eq!(row["format"], "DCS", "{list}");
+    let before = symbol_clip_width(&s, "Pic").expect("the file's clipping path");
+    // The composite now drawn through the left quarter of the page (same length).
+    let text = String::from_utf8(two_plates()).unwrap().replacen("10 0 lineto 10 10 lineto", " 5 0 lineto  5 10 lineto", 1);
+    std::fs::write(&path, text.as_bytes()).unwrap();
+    assert_eq!(s.execute("links.update", &json!({ "ids": [id] })).unwrap()["updated"], json!([id]));
+    let after = symbol_clip_width(&s, "Pic").expect("still clipped");
+    assert!((after - before / 2.0).abs() < 1e-6, "the symbol's clipping path follows the file: {before} → {after}");
+    // Relinked by its id to a plain image: the DCS file's clipping path goes.
+    let png = dir.join("plain.png");
+    image::RgbImage::from_pixel(2, 2, image::Rgb([9, 9, 9])).save(&png).unwrap();
+    s.execute("links.relink", &json!({ "ids": [id], "path": png.to_string_lossy() })).unwrap();
+    assert_eq!(symbol_clip_width(&s, "Pic"), None);
+}
+
+#[test]
 fn a_file_that_lost_its_clipping_path_unclips_the_image() {
     let dir = temp_dir("update-lost-clip");
     let path = write(&dir, "pic.eps", &two_plates());

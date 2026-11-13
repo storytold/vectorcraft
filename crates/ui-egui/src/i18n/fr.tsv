@@ -1586,6 +1586,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Outil Objets sur tracé
 	Attach Objects on Path	Attacher des objets au tracé
 	Expand Objects on Path	Décomposer les objets sur tracé
+	Detach	Détacher
+	Detach Object from Path	Détacher l’objet du tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -2904,6 +2906,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
 	Color Theme Picker	Sélecteur de thème de couleurs
 	Click or drag across the art to pick its colors; Shift adds more	Cliquez ou faites glisser sur l’illustration pour prélever ses couleurs ; Maj en ajoute d’autres
+	Prominent Colors	Couleurs dominantes
+	Save All Colors	Enregistrer toutes les couleurs
+	Save Prominent Colors	Enregistrer les couleurs dominantes
 	Reset to Default	Rétablir les valeurs par défaut
 	Reset to White, Black	Réinitialiser à blanc, noir
 	Reset with Mesh	Réinitialiser avec un filet
@@ -3454,6 +3459,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Objets avec tons directs
 	Pattern Objects	Objets avec motifs
 	Gradient Objects	Objets avec dégradés
+	Font Details	Détails des polices
+	Linked Images	Images liées
+	Embedded Images	Images incorporées
+	Compound Paths	Tracés transparents
+	Text Objects	Objets texte
+	Placed Documents	Documents importés
+	Symbol Instances	Instances de symbole
+	Gradient Meshes	Filets de dégradé
+	Blends	Dégradés de formes
+	Envelopes	Enveloppes
+	Intertwine Groups	Groupes entrelacés
+	Opacity Masks	Masques d’opacité
+	Objects with Effects	Objets avec effets
 	Spot Colors	Tons directs
 	Spot Colors…	Tons directs…
 	Spread:	Étendue :
@@ -4141,6 +4159,10 @@ axis	Both	Les deux
 	Dock Panel	Ancrer le panneau
 	Dock to Top	Ancrer en haut
 	Dock to Bottom	Ancrer en bas
+	Dock to Left	Ancrer à gauche
+	Dock to Right	Ancrer à droite
+	Dock Toolbar	Ancrer la barre d’outils
+	Float Toolbar	Rendre la barre d’outils flottante
 	Control Bar Options	Options de la barre de contrôle
 	Tool Options	Options de l’outil
 	Object Options	Options de l’objet
@@ -4737,6 +4759,7 @@ axis	Both	Les deux
 @msg	paths contain invalid coordinates	les tracés contiennent des coordonnées non valides
 @msg	paths: give at least one file	paths : indiquez au moins un fichier
 @msg	replace: the object to replace was changed or deleted	replace : l’objet à remplacer a été modifié ou supprimé
+@msg	the document it was prepared for is no longer active	le document pour lequel il a été préparé n’est plus actif
 @msg	pattern missing	motif manquant
 @msg	patterns nested too deeply are filled with mid-grey	les motifs imbriqués trop profondément sont remplis de gris moyen
 @msg	percent must be above 0 and at most 6400, not {p}	percent doit être supérieur à 0 et au plus égal à 6400, pas {p}
@@ -4772,6 +4795,7 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	choose the object to detach with its Select/Move widget	choisissez l’objet à détacher avec sa commande Sélectionner/Déplacer
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
 @msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé
@@ -5094,6 +5118,7 @@ axis	Both	Les deux
 @msg	every numbered name for it is taken in the Fonts folder	tous les noms numérotés pour ce fichier sont déjà pris dans le dossier Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5508,7 +5533,9 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Les graphiques s'appliquent sur des faces planes : utilisez le type d'objet Extrusion ou Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s'appliquent aux types d'objet Plan, Extrusion et Révolution
+@msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l'illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n'a qu'une face : appliquez ses graphiques sur la face avant
 @msg	The graphics are too complex: simplify the symbols' art	Les graphiques sont trop complexes : simplifiez l'illustration des symboles
@@ -6528,6 +6555,7 @@ axis	Y Axis	Axe Y
 @msg	message must be text	message doit être du texte
 @msg	allowContinue must be true or false	allowContinue doit valoir true ou false
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
+@msg	Batch cannot play an action with a View menu step	Le traitement par lots ne peut pas exécuter un script comportant une étape du menu Affichage
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
 	Insert Select Path	Insérer une sélection de tracé
@@ -6711,6 +6739,13 @@ axis	Y Axis	Axe Y
 	Area Text	Texte captif
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesurer le texte d’après les limites du glyphe
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Options de magnétisme du pixel
+	Pixel Snapping Options…	Options de magnétisme du pixel…
+	Snap to Pixel While Drawing	Magnétisme du pixel lors du dessin
+	Snap to Pixel While Moving	Magnétisme du pixel lors du déplacement
+	Snap to Pixel While Scaling	Magnétisme du pixel lors de la mise à l’échelle
+	These options take effect when View › Snap to Pixel is on.	Ces options s’appliquent lorsque Affichage › Magnétisme du pixel est activé.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Afficher les options de magnétisme du glyphe
 	Hide Snap to Glyph Options	Masquer les options de magnétisme du glyphe
@@ -7338,6 +7373,19 @@ breakText	Glyphs	Glyphes
 	Show where this tool is	Afficher l'emplacement de cet outil
 @msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
+	View more	Voir plus
+	Finish tutorial	Terminer le tutoriel
+	Next Up	À suivre
+	You finished the last tutorial in this skill.	Vous avez terminé le dernier tutoriel de cette compétence.
+	Back to skills	Retour aux compétences
+	Open Tutorial Sample	Ouvrir le fichier d’exercice du tutoriel
+	Finish Tutorial	Terminer le tutoriel
+	Next Tutorial	Tutoriel suivant
+	Back to Skills	Retour aux compétences
+@msg	tutorial `{id}` has no practice sample	le tutoriel `{id}` n’a pas de fichier d’exercice
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	terminez d’abord `{id}` (voir learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` est le dernier tutoriel de sa compétence
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés
