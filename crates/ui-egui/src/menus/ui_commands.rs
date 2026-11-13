@@ -733,6 +733,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
     ),
     (
+        crate::touch::TOGGLE_MODE,
+        "Switch Selection and Drawing Modes",
+        "",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
+    ),
+    (
         "effect.dialog",
         "Effect…",
         "",
