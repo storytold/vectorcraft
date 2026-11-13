@@ -468,6 +468,27 @@ fn paint_brush(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// Live Paint Selection: the solid arrow with a badge at its lower right saying what a click
+/// selects: a filled square over a face ([`Cursor::LivePaintSelectFace`]), a short line between two
+/// anchor marks over an edge ([`Cursor::LivePaintSelectEdge`]), an x where it selects nothing.
+fn live_paint_select(p: &mut Ink, o: Pos2, part: Cursor) {
+    arrow(p, o, false);
+    let b = o + vec2(12.0, 13.0);
+    match part {
+        Cursor::LivePaintSelectFace => {
+            poly(p, [(0.0, 0.0), (6.0, 0.0), (6.0, 6.0), (0.0, 6.0)].map(|(x, y)| b + vec2(x, y)).to_vec(), INK, INK);
+        }
+        Cursor::LivePaintSelectEdge => {
+            let (a, c) = (b + vec2(0.0, 7.0), b + vec2(7.0, 0.0));
+            strokes(p, &[vec![a, c]]);
+            for m in [a, c] {
+                poly(p, [(-1.5, -1.5), (1.5, -1.5), (1.5, 1.5), (-1.5, 1.5)].map(|(x, y)| m + vec2(x, y)).to_vec(), INK, INK);
+            }
+        }
+        _ => strokes(p, &[vec![b, b + vec2(6.0, 6.0)], vec![b + vec2(6.0, 0.0), b + vec2(0.0, 6.0)]]),
+    }
+}
+
 /// The Hand tool and Space: an open hand (palm and four fingers, thumb to the left), or the same
 /// hand closed while it drags the view. Windows has no system hand that isn't a pointing finger
 /// (winit maps egui's Grab and Grabbing to the four-headed move cursor), so it is drawn like the
@@ -516,7 +537,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 95] = [
+const GLYPHS: [Cursor; 98] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -586,6 +607,9 @@ const GLYPHS: [Cursor; 95] = [
     Cursor::LivePaintBucket,
     Cursor::LivePaintBucketFace,
     Cursor::LivePaintBucketEdge,
+    Cursor::LivePaintSelectFace,
+    Cursor::LivePaintSelectEdge,
+    Cursor::LivePaintSelectOutside,
     Cursor::Measure,
     Cursor::PrintTiling,
     Cursor::SymbolSprayer,
@@ -710,6 +734,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::LivePaintBucket => paint_bucket(ink, p, false),
         Cursor::LivePaintBucketFace => paint_bucket(ink, p, true),
         Cursor::LivePaintBucketEdge => paint_brush(ink, p),
+        Cursor::LivePaintSelectFace | Cursor::LivePaintSelectEdge | Cursor::LivePaintSelectOutside => live_paint_select(ink, p, c),
         Cursor::Hand => hand(ink, p, false),
         Cursor::HandGrab => hand(ink, p, true),
         Cursor::ZoomIn => magnifier(ink, p, false),
