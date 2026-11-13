@@ -2430,6 +2430,8 @@ shape	Open	Açık
 	Proof Setup	Prova Kurulumu
 	Properties	Özellikler
 	Proportional Metrics	Orantılı Metrikler
+	Insert Aki Left	Sola Aki Ekle
+	Insert Aki Right	Sağa Aki Ekle
 	Digits	Rakamlar
 	Arabic	Arapça
 	Hindi	Hintçe
@@ -2698,6 +2700,8 @@ digits	Malayalam	Malayalam
 	Reset Rotate View	Döndürme Görünümünü Sıfırla
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
+	Color Theme Picker	Renk Teması Seçici
+	Click or drag across the art to pick its colors; Shift adds more	Renklerini almak için resme tıklayın veya üzerinde sürükleyin; Shift daha fazlasını ekler
 	Reset to Default	Varsayılana Sıfırla
 	Reset to White, Black	Beyaz, Siyah'a Sıfırla
 	Reset with Mesh	Mesh ile Sıfırla
@@ -3127,6 +3131,7 @@ digits	Malayalam	Malayalam
 	Show Note	Notu Göster
 	Show Options	Seçenekleri Göster
 	Show Recent Colors	Son Renkleri Göster
+	Toggle RGB Percent	RGB Yüzde Gösterimini Değiştir
 	Show Original Path	Orijinal Yolu Göster
 	Color Panel Options	Renk Paneli Seçenekleri
 	Show Package	Paketi Göster
@@ -4001,6 +4006,85 @@ axis	Both	Her İkisi
 @msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	başarısız bir komut geri yüklenemeyen geri alma adımlarını değiştirdi, bu yüzden betik durduruldu
 @msg	a recovery copy could not be written, so the script was not run	kurtarma kopyası yazılamadı, bu nedenle betik çalıştırılmadı
+@msg	Script file access denied	Betik dosyasına erişim reddedildi
+@msg	Script file exceeds 8 MiB	Betik dosyası 8 MiB'yi aşıyor
+@msg	Script file is not open	Betik dosyası açık değil
+@msg	Script file cannot be decoded	Betik dosyasının kodu çözülemiyor
+@msg	Script file is not a regular file	Betik dosyası normal bir dosya değil
+@msg	Script file does not exist	Betik dosyası yok
+@msg	Script file could not be read	Betik dosyası okunamadı
+@msg	Script folder has more than 2,048 entries	Betik klasöründe 2.048'den fazla öğe var
+@msg	Script file open mode must be r, w, e or a	Betik dosyası açma modu r, w, e veya a olmalıdır
+@msg	Script file writing is not available	Betik dosyası yazma kullanılamıyor
+@msg	Script file dialogs are not available	Betik dosyası iletişim kutuları kullanılamıyor
+@msg	Script files cannot be opened in another application	Betik dosyaları başka bir uygulamada açılamaz
+@msg	Script file access is unavailable on the web	Betik dosyası erişimi web'de kullanılamıyor
+@msg	Script has 256 files open	Betiğin 256 açık dosyası var
+@msg	Script file path exceeds 32,767 characters	Betik dosyası yolu 32.767 karakteri aşıyor
+@msg	Script folder mask takes too many steps to match	Betik klasörü maskesinin eşleşmesi çok fazla adım gerektiriyor
+@msg	the script opened more file data than one run may open (32 MiB)	betik, bir çalıştırmanın açabileceğinden fazla dosya verisi açtı (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: bir konum ve bir mod alır
+@msg	vc.run: give a command id, as a string	vc.run: bir komut kimliğini dize olarak verin
+@msg	vc.run: takes a command id and an object of parameters	vc.run: bir komut kimliği ve bir parametre nesnesi alır
+@msg	vc.run: the parameters must be an object	vc.run: parametreler bir nesne olmalıdır
+@msg	vc.run: the result{place} is too large for a script	vc.run: sonuç{place} bir betik için çok büyük
+@msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
+@msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}, satır {line}, sütun {column}: {e} (sınır)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: satır {line}, sütun {column}: {e} (sınır)
+@msg	{name}: {e} (limit)	{name}: {e} (sınır)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}, satır {line}, sütun {column}: {e} (sözdizimi hatası)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: satır {line}, sütun {column}: {e} (sözdizimi hatası)
+@msg	{name}: {e} (syntax)	{name}: {e} (sözdizimi hatası)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}, satır {line}, sütun {column}: {e} (durduruldu)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: satır {line}, sütun {column}: {e} (durduruldu)
+@msg	{name}: {e} (stopped)	{name}: {e} (durduruldu)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}, satır {line}, sütun {column}: {e} (iç hata)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: satır {line}, sütun {column}: {e} (iç hata)
+@msg	{name}: {e} (internal)	{name}: {e} (iç hata)
+@msg	{e} (these files stay written: {paths})	{e} (bu dosyalar yazılmış olarak kalır: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: bir adı dize olarak verin
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: "en" veya "de_DE" gibi bir yerel ayar verin ya da arayüzünki için null verin
+@msg	$.localize: give true or false	$.localize: true veya false verin
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: yalnızca yerelleştirmeyi açan 512 veya 0 ayarlanabilir
+@msg	$.flags: give a number	$.flags: bir sayı verin
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: burada betikler yalnızca UTF-8 okur ve yazar
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: bir kodlamanın adını dize olarak verin
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: bellek önbelleğinin boyutu ayarlanamaz
+@msg	$.setenv: give a value, as a string	$.setenv: bir değeri dize olarak verin
+@msg	$.setenv: only {_1} can be set	$.setenv: yalnızca {_1} ayarlanabilir
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: bir değer en fazla {MAX_ENV_BYTES} harf, rakam ve _ . - @ içerir
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: 0 ile {MAX_SLEEP_MS} arasında bir milisaniye sayısı verin
+@msg	$.sleep: give a number of milliseconds	$.sleep: bir milisaniye sayısı verin
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: bir çalıştırma yerleşik bir işlevin geri çağrısında, bir getter içinde, bir dönüştürmede veya $.evalFile'ın çalıştırdığı bir dosyada bekleyemez; bunu betiğin kendi kodundan çağırın
+@msg	$.bp: scripts here have no debugger	$.bp: burada betiklerin hata ayıklayıcısı yok
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: betikler henüz iletişim kutusu gösteremez
+@msg	{name}: give a message	{name}: bir ileti verin
+@msg	{name}: give the text the field starts with	{name}: alanın başladığı metni verin
+@msg	{name}: the message is longer than 16 KiB	{name}: ileti 16 KiB'den uzun
+@msg	{name}: the title is longer than 256 bytes	{name}: başlık 256 bayttan uzun
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: alanın başladığı metin 16 KiB'den uzun
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: bir iletişim kutusu yerleşik bir işlevin geri çağrısında, bir getter içinde, bir dönüştürmede veya $.evalFile'ın çalıştırdığı bir dosyada açılamaz; bunu betiğin kendi kodundan çağırın
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` içindeki sonraki yanıt {name} için değil, {_1} için
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` içinde bu iletişim kutusu için yanıt kalmadı
+@msg	vc.document{place} is too large for a script	vc.document{place} bir betik için çok büyük
+@msg	vc.log: the log of this run is full	vc.log: bu çalıştırmanın günlüğü dolu
+@msg	this function's script run has ended	bu işlevin betik çalıştırması sona erdi
+@msg	the script made more host calls than one run may make	betik, bir çalıştırmanın yapabileceğinden daha fazla ana bilgisayar çağrısı yaptı
+@msg	the script passed more data to and from commands than one run may pass	betik, komutlara ve komutlardan bir çalıştırmanın aktarabileceğinden daha fazla veri aktardı
+@msg	the script added more objects and data to the documents than one run may add	betik, belgelere bir çalıştırmanın ekleyebileceğinden daha fazla nesne ve veri ekledi
+@msg	{what}: the object is not a File or a Folder	{what}: nesne ne File ne de Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: sayı 0 veya daha büyük, sonlu bir sayı olmalıdır
+@msg	File.seek: the position must be a finite number	File.seek: konum sonlu bir sayı olmalıdır
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: mod 0, 1 veya 2 olmalıdır
+@msg	script file is compiled: {value}	betik dosyası derlenmiş: {value}
+@msg	`name` must be the name of a script engine	`name` bir betik motorunun adı olmalıdır
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	ana betik motoru her çalıştırmada yenidir ve hiç saklanmaz, bu yüzden bırakılamaz
+@msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler
@@ -5916,6 +6000,7 @@ theme	Appearance	Görünüm
 	Long	Uzun
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
+	missing from the Brushes panel	Fırçalar panelinde yok
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.

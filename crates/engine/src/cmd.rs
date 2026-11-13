@@ -5,6 +5,7 @@ mod addons;
 mod apiref;
 pub(crate) mod appearance;
 pub mod arrowheads;
+mod artboardalign;
 mod assets;
 mod attributes;
 pub mod brushlib;
@@ -106,6 +107,7 @@ mod variablecmds;
 pub(crate) mod views;
 pub mod wand;
 pub mod webexport;
+mod wireframe;
 mod xform;
 
 use serde::Serialize;
@@ -310,6 +312,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
@@ -336,6 +339,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
         v.extend(panelcmds::specs());
+        v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
         v.extend(shaper::specs());
         v.extend(brushsym::specs());
@@ -422,8 +426,13 @@ pub(crate) fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
 pub(crate) fn f64_or(p: &Value, key: &str, default: f64) -> f64 {
     p.get(key).and_then(Value::as_f64).unwrap_or(default)
 }
+/// The number `p` gives for `key`. A missing key or null is "missing number `{key}`"; any other
+/// value, such as `"40"`, is "`{key}` must be a number, not {v}", as [`number_or`] words it.
 pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
-    p.get(key).and_then(Value::as_f64).ok_or_else(|| bad(cmd, format!("missing number `{key}`")))
+    match p.get(key) {
+        None | Some(Value::Null) => Err(bad(cmd, format!("missing number `{key}`"))),
+        Some(v) => v.as_f64().ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+    }
 }
 /// The number `p` gives for `key`, or `default` when `p` leaves it out or gives null. Any other
 /// value, such as `"40"`, is an error: "`{key}` must be a number, not {v}".

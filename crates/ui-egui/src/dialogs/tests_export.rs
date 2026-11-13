@@ -190,7 +190,7 @@ fn an_empty_export_as_range_shows_an_example() {
 }
 
 #[test]
-fn svg_continues_in_svg_options_and_pdf_art_is_written_directly() {
+fn svg_continues_in_svg_options() {
     let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "svg", "useArtboards": true})).unwrap();
     confirm(&mut app).unwrap();
@@ -201,12 +201,35 @@ fn svg_continues_in_svg_options_and_pdf_art_is_written_directly() {
     confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert_eq!(names(&written), ["/out/Untitled-1-Artboard-1.svg", "/out/Untitled-1-Artboard-2.svg"]);
-    // Without artboards: one file of the art's bounds, with no options dialog for a PDF.
+}
+
+/// Without Use Artboards, a PDF continues in Save PDF too, without its artboard choice, and the
+/// file is one page of the art's bounds. Its options apply: a drawing 10 m long is written at
+/// full size in points with "Write pages longer than 200 in at full size in points".
+#[test]
+fn pdf_art_continues_in_the_save_pdf_dialog() {
+    let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["path"], "/out/Untitled-1.pdf");
-    let pdf = vectorcraft_pdf::import(&written.borrow()[2].1).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("savePdf"), "the PDF options follow");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("path"), "/out/Untitled-1.pdf");
+    assert!(written.borrow().is_empty());
+    frame(&mut app);
+    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.pdf");
+    let pdf = vectorcraft_pdf::import(&written.borrow()[0].1).unwrap();
+    assert_eq!(pdf.artboards.len(), 1);
     assert_eq!((pdf.artboards[0].rect.width().round(), pdf.artboards[0].rect.height().round()), (30.0, 20.0), "the ellipse's bounds");
+
+    app.run("shape.rectangle", json!({"x": 0, "y": 100, "width": 28_346.46, "height": 50})).unwrap();
+    app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "longPagesInPoints", json!(true));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let bytes = written.borrow()[1].1.clone();
+    assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
+    assert!((28_346.0..28_350.0).contains(&width), "{width}");
 }
 
 #[test]
@@ -330,8 +353,17 @@ fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
         out.textures_delta.clear();
     };
-    // Each format whose options follow the panel (PDF's with Use Artboards: Save PDF).
-    let formats = [("png", false), ("svg", false), ("pdf", true), ("txt", false), ("dxf", false), ("eps", false), ("plugin.test.ui.held", false)];
+    // Each format whose options follow the panel (PDF's: Save PDF, with Use Artboards on or off).
+    let formats = [
+        ("png", false),
+        ("svg", false),
+        ("pdf", true),
+        ("pdf", false),
+        ("txt", false),
+        ("dxf", false),
+        ("eps", false),
+        ("plugin.test.ui.held", false),
+    ];
     for (format, artboards) in formats {
         let (mut app, written) = app(1);
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();

@@ -4,7 +4,8 @@
 
 use kurbo::{Point, Rect, Vec2};
 
-use super::{Gradient, GradientGeom, GradientKind, GradientSpread, GradientStop};
+use super::{Gradient, GradientGeom, GradientKind, GradientMethod, GradientSpread, GradientStop};
+use crate::Color;
 
 /// Most runs of the stops [`Gradient::padded_over`] writes.
 pub const MAX_SPREAD_RUNS: usize = 256;
@@ -33,8 +34,8 @@ pub struct Padded {
     pub first: f64,
     /// How many runs are written, evenly spaced from [`Self::first`] to 1.
     pub runs: usize,
-    /// The area needed more runs than [`MAX_SPREAD_RUNS`] (or than [`MAX_SPREAD_STOPS`] allows),
-    /// or runs past [`MAX_SPREAD_LEVEL`]: the gradient pads past the runs written.
+    /// The area needed more runs than [`MAX_SPREAD_RUNS`] (or more than half the stops allowed,
+    /// two to a run), or runs past [`MAX_SPREAD_LEVEL`]: the gradient pads past the runs written.
     pub capped: bool,
 }
 
@@ -50,7 +51,9 @@ impl Gradient {
         self.padded_within(geom, area, MAX_SPREAD_STOPS)
     }
 
-    /// [`Self::padded_over`] with at most `max_stops` stops (and at least one run).
+    /// [`Self::padded_over`] with at most `max_stops` stops (and at least one run). When the runs
+    /// written need more stops than that, each run leaves out the stops that change its colors
+    /// least ([`fit_run`]), so every run is still written.
     pub fn padded_within(&self, geom: &GradientGeom, area: Rect, max_stops: usize) -> Option<Padded> {
         let kind = self.kind;
         if !self.is_spread() || matches!(kind, GradientKind::Conic | GradientKind::Freeform) || self.stops.is_empty() {
@@ -68,8 +71,8 @@ impl Gradient {
         // smallest 0 when the area holds the rings' center, else on its edge.
         let lo = if centered { inner_level(&period, kind, area).floor() } else { ts.iter().copied().fold(f64::INFINITY, f64::min).floor() };
         let hi = ts.iter().copied().fold(f64::NEG_INFINITY, f64::max).ceil().max(lo + 1.0);
-        let one = whole_run(&self.stops);
-        let most = MAX_SPREAD_RUNS.min(max_stops.min(MAX_SPREAD_STOPS) / one.len().max(1)).max(1);
+        let budget = max_stops.min(MAX_SPREAD_STOPS);
+        let most = MAX_SPREAD_RUNS.min(budget / 2).max(1);
         let capped = hi - lo > most as f64;
         // Capped, the runs kept are the area's innermost ones (radial and diamond), or (linear)
         // those around the vector's start where the area reaches it, else the area's runs nearest
@@ -79,6 +82,7 @@ impl Gradient {
             _ => lo,
         };
         let n = (hi - lo).min(most as f64).max(1.0);
+        let one = fit_run(whole_run(&self.stops), budget / n as usize, self.method);
         // A radial or diamond writes its runs among the levels from 0, which its stops' offsets
         // (single-precision fractions of the outermost level) tell apart only so far out, the
         // nearer the closer its stops lie: past that, the runs end there and the gradient pads.
@@ -112,8 +116,9 @@ impl Gradient {
         self.unrolled_within(MAX_SPREAD_STOPS)
     }
 
-    /// [`Self::unrolled`] with at most `max_stops` stops (and at least one run): past the runs
-    /// that fit, the last one pads.
+    /// [`Self::unrolled`] with at most `max_stops` stops: every run, each run without the stops
+    /// that change its colors least ([`fit_run`]) when the runs need more stops than that. Only with
+    /// fewer than two stops for each run do the runs past those that fit pad with the last one.
     pub fn unrolled_within(&self, max_stops: usize) -> std::borrow::Cow<'_, Gradient> {
         use std::borrow::Cow;
         if !self.is_spread() {
@@ -123,11 +128,27 @@ impl Gradient {
         if self.stops.is_empty() {
             return Cow::Owned(Gradient { spread: GradientSpread::Pad, repeats: 1, ..self.clone() });
         }
-        let one = whole_run(&self.stops);
         let n = self.repeat_count() as usize;
-        let kept = n.min(max_stops.min(MAX_SPREAD_STOPS) / one.len().max(1)).max(1);
+        let budget = max_stops.min(MAX_SPREAD_STOPS);
+        let kept = n.min(budget / 2).max(1);
+        let one = fit_run(whole_run(&self.stops), budget / kept, self.method);
         let stops = self.runs(&one, false, 0.0, kept, n as f64);
         Cow::Owned(Gradient { stops, spread: GradientSpread::Pad, repeats: 1, ..self.clone() })
+    }
+
+    /// The gradient as [`Self::unrolled`] gives it with at most `max_stops` stops (at least two):
+    /// a gradient that repeats or reflects as [`Self::unrolled_within`] gives it, and one that
+    /// pads with more stops than that without the stops that change its colors least
+    /// ([`fit_run`]). Others as they are.
+    pub fn fitted(&self, max_stops: usize) -> std::borrow::Cow<'_, Gradient> {
+        use std::borrow::Cow;
+        if self.is_spread() {
+            return self.unrolled_within(max_stops);
+        }
+        if self.stops.len() <= max_stops.max(2) {
+            return Cow::Borrowed(self);
+        }
+        Cow::Owned(Gradient { stops: fit_run(whole_run(&self.stops), max_stops, self.method), ..self.clone() })
     }
 
     /// One cycle of a gradient that repeats or reflects, which repeated end to end paints it, as
@@ -255,6 +276,91 @@ fn whole_run(stops: &[GradientStop]) -> Vec<GradientStop> {
         }
     }
     out
+}
+
+/// `one` (a run of a gradient's stops, [`whole_run`]) with at most `budget` stops (at least two):
+/// as it is when it fits, else without the stops that change its colors least, left out one at a
+/// time. Leaving out a stop costs how far its color lies from the one that mixing the stops still
+/// on either side of it by `method` gives there, and how far its CMYK inks, opacity, tint or
+/// process plates lie from the line between theirs (a whole unit when its swatch link or color
+/// model differs from either of theirs, and a whole unit more when its midpoint or the one before
+/// it is off center), so the ends, sharp steps, ink changes and shaped spans stay. A stop whose
+/// next stop was left out gets its midpoint centered. The work is the stops times their logarithm.
+fn fit_run(one: Vec<GradientStop>, budget: usize, method: GradientMethod) -> Vec<GradientStop> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let budget = budget.max(2);
+    let n = one.len();
+    if n <= budget {
+        return one;
+    }
+    let mix = |x: &Color, y: &Color, v: f32| match method {
+        GradientMethod::Classic => x.lerp_keep_model(y, v),
+        m => m.mix(x, y, v),
+    };
+    let cost = |a: &GradientStop, s: &GradientStop, b: &GradientStop| -> u32 {
+        let span = b.offset - a.offset;
+        let u = if span > 0.0 { ((s.offset - a.offset) / span).clamp(0.0, 1.0) } else { 0.0 };
+        // Left out, the span from `a` to `b` has a centered midpoint, so it mixes them by `u`.
+        let (want, cs) = (mix(&a.color, &b.color, u).to_rgb(), s.color.to_rgb());
+        let color = (0..3).map(|k| (want[k] - cs[k]).abs()).fold(0.0, f32::max);
+        let opacity = (a.opacity + (b.opacity - a.opacity) * u - s.opacity).abs();
+        // Process inks, which colors that look alike can print differently: off their line, or a
+        // change of color model.
+        let process = match (&a.color, &s.color, &b.color) {
+            (Color::Cmyk { c: c0, m: m0, y: y0, k: k0 }, Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c1, m: m1, y: y1, k: k1 }) => {
+                [(c0, c, c1), (m0, m, m1), (y0, y, y1), (k0, k, k1)].iter().map(|(p, q, r)| (*p + (*r - *p) * u - *q).abs()).fold(0.0, f32::max)
+            }
+            _ if a.color.model() == s.color.model() && s.color.model() == b.color.model() => 0.0,
+            _ => 1.0,
+        };
+        let color = color.max(process);
+        // Separations: a change of swatch link, or of tint or process plates off their line.
+        let ink = if s.swatch != a.swatch || s.swatch != b.swatch {
+            1.0
+        } else {
+            let tint = (a.tint + (b.tint - a.tint) * u - s.tint).abs();
+            let plates = match (a.plates, s.plates, b.plates) {
+                (None, None, None) => 0.0,
+                (Some(pa), Some(ps), Some(pb)) => (0..4).map(|k| (pa[k] + (pb[k] - pa[k]) * u - ps[k]).abs()).fold(0.0, f32::max),
+                _ => 1.0,
+            };
+            tint.max(plates)
+        };
+        // Leaving it out merges two spans, and an off-center midpoint shapes one of them.
+        let shaped = if [a.midpoint, s.midpoint].iter().any(|m| (m - 0.5).abs() > 1e-3) { 1.0 } else { 0.0 };
+        // Non-negative, so the bits order as the numbers do (NaN counts as 0).
+        (color.max(opacity).max(ink) + shaped).max(0.0).to_bits()
+    };
+    // The stops still kept on either side of each stop, and each stop's latest cost entry.
+    let mut prev: Vec<usize> = (0..n).map(|i| i.saturating_sub(1)).collect();
+    let mut next: Vec<usize> = (1..=n).collect();
+    let mut gone = vec![false; n];
+    let mut version = vec![0u32; n];
+    let mut heap: BinaryHeap<Reverse<(u32, usize, u32)>> = (1..n - 1).map(|i| Reverse((cost(&one[i - 1], &one[i], &one[i + 1]), i, 0))).collect();
+    let mut left = n;
+    while left > budget {
+        let Some(Reverse((_, i, v))) = heap.pop() else { break };
+        if gone[i] || v != version[i] {
+            continue;
+        }
+        gone[i] = true;
+        left -= 1;
+        let (a, b) = (prev[i], next[i]);
+        next[a] = b;
+        prev[b] = a;
+        for j in [a, b] {
+            if j != 0 && j != n - 1 {
+                version[j] += 1;
+                heap.push(Reverse((cost(&one[prev[j]], &one[j], &one[next[j]]), j, version[j])));
+            }
+        }
+    }
+    one.into_iter()
+        .enumerate()
+        .filter(|(i, _)| !gone[*i])
+        .map(|(i, s)| if next[i] == i + 1 { s } else { GradientStop { midpoint: 0.5, ..s } })
+        .collect()
 }
 
 /// A run mirrored: the stops in reverse, each midpoint measured from the other side.

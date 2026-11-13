@@ -282,6 +282,27 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
     transform
 }
 
+/// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
+/// the Align buttons, the Align To menu and, while they can space the selected artboards
+/// ([`crate::panels::align::artboards_distribute`]), the Distribute buttons. They align and
+/// distribute the selected artboards
+/// ([`crate::panels::align::run_button`]). Each shows only while the bar has room for it, and none
+/// while the panel menu has the group off.
+fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !group_on(app, "alignDistribute") || app.session.active().is_none() || ui.available_width() < separator_width(ui) + buttons_width(ui, 7) {
+        return;
+    }
+    separator(ui);
+    crate::panels::align::align_buttons(app, ui, BUTTON);
+    if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x {
+        crate::panels::align::align_to_menu(app, ui, BUTTON);
+        if crate::panels::align::artboards_distribute(app) && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) {
+            ui.add_space(GROUP_GAP);
+            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        }
+    }
+}
+
 /// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
 /// the bottom.
 pub const CONTROL_BAR_EDGES: [&str; 2] = ["top", "bottom"];
@@ -516,6 +537,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // of the object controls.
                 let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
                 if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
+                    artboard_align_group(app, ui);
                     return;
                 }
                 if anchors != AnchorControls::None && group_on(app, "anchors") {

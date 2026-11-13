@@ -410,6 +410,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
+            crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
         }
     }
     ime_geometry(app, ui.ctx(), &xf);
@@ -444,14 +445,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
-fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
-    // A press on the canvas while the context menu is open only closes it (a drag too, which egui
-    // alone would leave open); the tool doesn't get it.
+pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
         // The artboard's 3D gizmo owns these gestures while its options are open.
         // Do not let a ring drag also move or deselect the editable source path.
     } else if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
+        // A press on the canvas while the context menu is open only closes it (a drag too, which
+        // egui alone would leave open); neither the tool nor a graphic's handle gets it.
         egui::Popup::close_all(ui.ctx());
+    } else if crate::panels::three_d::graphic_handles_input(app, ui, resp, rect) {
+        // A mapped graphic's handle, shown while the 3D and Materials panel's Materials tab is
+        // open, has the press: the drag moves the graphic, not the object.
     } else {
         handle_input(app, ui, resp, rect);
         // `hover_doc` is the document point under the pointer in the view `handle_input` left. The
