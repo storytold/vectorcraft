@@ -103,6 +103,90 @@ fn plate_files_of_both_versions_are_read() {
 }
 
 #[test]
+fn a_plate_program_drawing_more_than_its_image_is_an_error() {
+    let plate = plate_eps(1, 1, &[0]);
+    // Two image tiles, and an image with a filled square beside it.
+    let tiles = plate.replacen("showpage", "1 1 8 [1 0 0 -1 0 1] <00> image\nshowpage", 1);
+    let art = plate.replacen("20 10 scale", "0 0 moveto 5 0 lineto 5 5 lineto closepath fill\n20 10 scale", 1);
+    for (eps, why) in [(tiles, "more than one image"), (art, "art besides its image")] {
+        let bytes = single_file(&[("Cyan", eps)], "");
+        let err = place(&bytes, &read(&bytes).unwrap(), &mut |_| Err("no files".into())).unwrap_err();
+        assert!(err.contains("the Cyan plate can't be read") && err.contains(why), "{err}");
+    }
+    let bytes = single_file(&[("Cyan", plate)], "");
+    assert!(place(&bytes, &read(&bytes).unwrap(), &mut |_| Err("no files".into())).is_ok(), "one image alone");
+}
+
+#[test]
+fn a_plate_program_clipping_its_image_is_an_error() {
+    let clipped = plate_eps(1, 1, &[0]).replacen("20 10 scale", "newpath 0 0 moveto 5 0 lineto 5 5 lineto closepath clip newpath\n20 10 scale", 1);
+    let bytes = single_file(&[("Cyan", clipped)], "");
+    let err = place(&bytes, &read(&bytes).unwrap(), &mut |_| Err("no files".into())).unwrap_err();
+    assert!(err.contains("the Cyan plate can't be read") && err.contains("clipping path"), "{err}");
+}
+
+#[test]
+fn only_an_image_inside_a_clipping_group_or_layer_is_clipped() {
+    use std::sync::Arc;
+    use vectorcraft_color::Paint;
+    use vectorcraft_doc::NodeId;
+    let clip_path = || {
+        let rect = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0));
+        let mut p = Node::path(NodeId(1), rect, vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut p.kind {
+            *clipping = true;
+        }
+        Arc::new(p)
+    };
+    let image = || {
+        let im = vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 1,
+            height: 1,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        Arc::new(Node::new(NodeId(2), NodeKind::Image(Box::new(im))))
+    };
+    let group = |children: Vec<Arc<Node>>, clip| Node::new(NodeId(3), NodeKind::Group { children, clip });
+    let beside = group(vec![Arc::new(group(vec![clip_path()], true)), image()], false);
+    assert!(!clips_an_image(&beside, false), "a clipping group beside the image");
+    assert!(clips_an_image(&group(vec![clip_path(), image()], true), false), "the image inside the clipping group");
+    assert!(clips_an_image(&group(vec![image()], false), true), "inside a clipping layer");
+}
+
+#[test]
+fn nested_clips_around_the_composite_clip_it_together() {
+    // The left two thirds of the page, then the right three quarters inside it: 5 to 13 pt.
+    let main = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n\
+        gsave newpath 0 0 moveto 13 0 lineto 13 10 lineto 0 10 lineto closepath clip newpath\n\
+        gsave newpath 5 0 moveto 20 0 lineto 20 10 lineto 5 10 lineto closepath clip newpath\n\
+        20 10 scale 2 2 8 [2 0 0 -2 0 2] <808080808080808080808080> false 3 colorimage grestore grestore showpage\n%%EOF\n";
+    let clip = clip_path(main.as_bytes()).expect("a clipping path");
+    let b = clip.geometric_bounds().expect("bounds");
+    assert!((b.x0 - 5.0).abs() < 1e-6 && (b.x1 - 13.0).abs() < 1e-6, "where both clips overlap: {b:?}");
+}
+
+#[test]
+fn plate_file_names_keep_their_spaces() {
+    let two = "%!PS-Adobe-3.0 EPSF-3.0\n%%PlateFile: (Cyan) EPS Local  my  pic .C\n%%EndComments\n";
+    assert_eq!(read(two.as_bytes()).unwrap().plate_files().collect::<Vec<_>>(), ["my  pic .C"]);
+}
+
+#[test]
+fn header_bytes_that_are_not_utf8_are_latin1() {
+    // `Grün` with a raw Latin-1 ü (0xFC), in a plate name and in a custom color's name.
+    let mut two = b"%!PS-Adobe-3.0 EPSF-3.0\n%%CMYKCustomColor: .5 0 1 0 (Gr\xfcn)\n%%PlateFile: (Gr\xfcn) EPS Local a.9\n".to_vec();
+    two.extend(b"%%PlateFile: (Grau \xc3\xa9) EPS Local b.9\n%%EndComments\n");
+    let dcs = read(&two).unwrap();
+    let names: Vec<&str> = dcs.plates.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["Grün", "Grau é"], "a line that is UTF-8 is read as UTF-8");
+    assert_eq!(dcs.equivalents, [("Grün".to_string(), [0.5, 0.0, 1.0, 0.0])]);
+}
+
+#[test]
 fn every_plate_is_read_with_the_clipping_path() {
     // 2 × 2 pixels: cyan solid on the top row, the spot ink at 50% on the first column.
     let bytes = single_file(

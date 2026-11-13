@@ -819,7 +819,8 @@ impl Node {
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
     /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
-    /// stops or a colorized image. Hidden objects show none.
+    /// stops (characters' fills and strokes included) or a colorized image. Hidden objects show
+    /// none.
     pub fn shows_transparency(&self) -> bool {
         self.shows_transparency_with(&|_| true)
     }
@@ -850,6 +851,8 @@ impl Node {
                 .items
                 .iter()
                 .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
+            // Characters' own fills and strokes, which draw with the object.
+            || matches!(&self.kind, NodeKind::Text(t) if t.runs.iter().any(|r| see_through(&r.style.fill) || (r.style.stroke_width > 0.0 && see_through(&r.style.stroke))))
     }
 }
 

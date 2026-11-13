@@ -8,12 +8,15 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use vectorcraft_color::cms::PROCESS_PLATES;
+use vectorcraft_geom::PathData;
 
 use crate::ImageBlob;
 use crate::cmyk::{Inks, MAX_CMYK_PIXELS};
 
 /// Most plates a separated image holds.
 pub const MAX_PLATES: usize = 64;
+/// Most directories a separated image's TIFF holds: its composite and its plates.
+const MAX_DIRECTORIES: usize = MAX_PLATES + 1;
 /// Longest ink name kept (bytes).
 pub const MAX_NAME: usize = 255;
 /// Most ink amounts the plates of one image hold together (512 MB).
@@ -146,12 +149,24 @@ impl Separated {
     /// [`Self::composite`] mixes it. A plate name the image has no plate for, and a spot plate that
     /// prints as process, print nothing.
     pub fn coverage(&self, plate: &str, own: &dyn Fn(&str) -> bool) -> Vec<u8> {
+        self.coverage_as(plate, own, &|p| p.cmyk)
+    }
+
+    /// [`Self::coverage`], a spot plate that prints as process printing as the process inks
+    /// `equivalent` gives it (the document's swatch of its ink, when there is one).
+    pub fn coverage_as(&self, plate: &str, own: &dyn Fn(&str) -> bool, equivalent: &dyn Fn(&InkPlate) -> [f32; 4]) -> Vec<u8> {
         let n = self.data_len();
         if let Some(j) = PROCESS_PLATES.iter().position(|q| *q == plate) {
-            let mixed: Vec<&InkPlate> = self.plates.iter().filter(|p| p.cmyk[j] > 0.0 && (!p.spot() || !own(&p.name))).collect();
+            let mixed: Vec<(&InkPlate, f32)> = self
+                .plates
+                .iter()
+                .filter(|p| !p.spot() || !own(&p.name))
+                .map(|p| (p, if p.spot() { equivalent(p)[j].clamp(0.0, 1.0) } else { p.cmyk[j] }))
+                .filter(|(_, e)| *e > 0.0)
+                .collect();
             return (0..n)
                 .map(|i| {
-                    let clear = mixed.iter().fold(1.0f32, |c, p| c * (1.0 - f32::from(p.data[i]) / 255.0 * p.cmyk[j]));
+                    let clear = mixed.iter().fold(1.0f32, |c, (p, e)| c * (1.0 - f32::from(p.data[i]) / 255.0 * e));
                     ((1.0 - clear) * 255.0).round() as u8
                 })
                 .collect();
@@ -162,10 +177,10 @@ impl Separated {
         }
     }
 
-    /// [`Self::coverage`] as a grayscale PNG, black for solid ink and white for none, as a plate
+    /// [`Self::coverage_as`] as a grayscale PNG, black for solid ink and white for none, as a plate
     /// prints; `None` when it can't be written.
-    pub fn plate_png(&self, plate: &str, own: &dyn Fn(&str) -> bool) -> Option<ImageBlob> {
-        let gray: Vec<u8> = self.coverage(plate, own).into_iter().map(|v| 255 - v).collect();
+    pub fn plate_png(&self, plate: &str, own: &dyn Fn(&str) -> bool, equivalent: &dyn Fn(&InkPlate) -> [f32; 4]) -> Option<ImageBlob> {
+        let gray: Vec<u8> = self.coverage_as(plate, own, equivalent).into_iter().map(|v| 255 - v).collect();
         let img = image::GrayImage::from_raw(self.width, self.height, gray)?;
         let mut png = Vec::new();
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
@@ -199,8 +214,8 @@ fn parse_description(s: &str) -> Option<(String, [f32; 4])> {
 /// Longest plate file name kept (bytes).
 const MAX_FILE_NAME: usize = 4096;
 
-/// The composite's ImageDescription for `files`: the mark, then each file's name in hexadecimal,
-/// its size and its modification time.
+/// The composite's ImageDescription line for `files`: the mark, then each file's name in
+/// hexadecimal, its size and its modification time.
 fn files_description(files: &[PlateFile]) -> String {
     let mut out = String::from(FILES_MARK);
     for f in files.iter().take(MAX_PLATES) {
@@ -209,9 +224,22 @@ fn files_description(files: &[PlateFile]) -> String {
     out
 }
 
+/// How the composite's ImageDescription line holding the clipping path starts.
+const CLIP_MARK: &str = "VectorCraft clip ";
+
+/// Longest clipping path kept (bytes of its JSON).
+const MAX_CLIP: usize = 16 << 20;
+
+/// The composite's ImageDescription line for clipping path `clip`: the mark, then the path's JSON
+/// in hexadecimal; `None` when it is longer than [`MAX_CLIP`].
+fn clip_description(clip: &PathData) -> Option<String> {
+    let json = serde_json::to_string(clip).ok().filter(|j| j.len() <= MAX_CLIP)?;
+    Some(format!("{CLIP_MARK}{}", hex(&json)))
+}
+
 /// The plate files of a composite's ImageDescription; none when it isn't one.
 fn parse_files(s: &str) -> Vec<PlateFile> {
-    let Some(rest) = s.strip_prefix(FILES_MARK) else { return vec![] };
+    let Some(rest) = s.lines().find_map(|l| l.strip_prefix(FILES_MARK)) else { return vec![] };
     let words: Vec<&str> = rest.split(' ').filter(|w| !w.is_empty()).collect();
     let file =
         |w: &[&str]| Some(PlateFile { name: unhex(w.first()?, MAX_FILE_NAME)?, size: w.get(1)?.parse().ok()?, modified: w.get(2)?.parse().ok()? });
@@ -224,6 +252,12 @@ impl ImageBlob {
     /// `files`, the plate files of their own the plates were read from ([`Self::plate_files`]);
     /// `None` when it can't be written.
     pub fn separated_tiff(s: &Separated, ppi: Option<(f64, f64)>, files: &[PlateFile]) -> Option<Self> {
+        Self::separated_tiff_clipped(s, ppi, files, None)
+    }
+
+    /// [`Self::separated_tiff`], noting `clip` too, the clipping path its file draws it through, in
+    /// its pixel space ([`Self::separated_clip`]).
+    pub fn separated_tiff_clipped(s: &Separated, ppi: Option<(f64, f64)>, files: &[PlateFile], clip: Option<&PathData>) -> Option<Self> {
         use tiff::encoder::{Compression, Rational, TiffEncoder, colortype, compression::DeflateLevel};
         use tiff::tags::{ResolutionUnit, Tag};
         let ppi = ppi.filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0));
@@ -237,8 +271,11 @@ impl ImageBlob {
             img.encoder().write_tag(Tag::YResolution, r(y)).ok()?;
             img.encoder().write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch).ok()?;
         }
-        if !files.is_empty() {
-            img.encoder().write_tag(Tag::ImageDescription, files_description(files).as_str()).ok()?;
+        // One line for the plate files, one for the clipping path.
+        let lines: Vec<String> =
+            [(!files.is_empty()).then(|| files_description(files)), clip.and_then(clip_description)].into_iter().flatten().collect();
+        if !lines.is_empty() {
+            img.encoder().write_tag(Tag::ImageDescription, lines.join("\n").as_str()).ok()?;
         }
         img.write_data(&s.composite().data).ok()?;
         for p in &s.plates {
@@ -251,19 +288,26 @@ impl ImageBlob {
         Some(Self::new("image/tiff", out.into_inner()))
     }
 
-    /// Does the image hold plates ([`ImageBlob::separated_tiff`])? Reads only the TIFF's
-    /// directories.
+    /// Does the image hold plates ([`ImageBlob::separated_tiff`]), at most [`MAX_PLATES`] of them?
+    /// One with more, or with more directories than its composite and [`MAX_PLATES`] plates, is the
+    /// CMYK image of its composite only, as [`Self::separated`] refuses it. Reads only the TIFF's
+    /// directories, at most [`MAX_DIRECTORIES`].
     pub fn is_separated(&self) -> bool {
         let Some((_, mut d)) = crate::cmyk::tiff(&self.bytes) else { return false };
+        let (mut plates, mut directories) = (0usize, 1usize);
         while d.more_images() {
-            if d.next_image().is_err() {
+            directories += 1;
+            if directories > MAX_DIRECTORIES || d.next_image().is_err() {
                 return false;
             }
             if d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().is_some_and(|s| s.starts_with(MARK)) {
-                return true;
+                plates += 1;
+                if plates > MAX_PLATES {
+                    return false;
+                }
             }
         }
-        false
+        plates > 0
     }
 
     /// The plate files of their own a separated image was read from, as they were then; none for
@@ -273,9 +317,22 @@ impl ImageBlob {
         d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().as_deref().map(parse_files).unwrap_or_default()
     }
 
+    /// The clipping path a separated image's file draws it through, in its pixel space, as
+    /// [`Self::separated_tiff_clipped`] noted it; `None` for other images. Reads only the TIFF's
+    /// first directory.
+    pub fn separated_clip(&self) -> Option<PathData> {
+        let (_, mut d) = crate::cmyk::tiff(&self.bytes)?;
+        let text = d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok()?;
+        let json = unhex(text.lines().find_map(|l| l.strip_prefix(CLIP_MARK))?, MAX_CLIP)?;
+        serde_json::from_str(&json).ok()
+    }
+
     /// The spot inks a separated image has plates for, each with its CMYK equivalent; none for
     /// other images. Reads only the TIFF's directories.
     pub fn spot_plates(&self) -> Vec<(String, [f32; 4])> {
+        if !self.is_separated() {
+            return vec![];
+        }
         let Some((_, mut d)) = crate::cmyk::tiff(&self.bytes) else { return vec![] };
         let mut inks = vec![];
         while d.more_images() && inks.len() < MAX_PLATES {
@@ -316,7 +373,14 @@ fn read_plates(bytes: &[u8]) -> Option<Separated> {
     let (w, h) = d.dimensions().ok()?;
     let n = usize::try_from(u64::from(w) * u64::from(h)).ok()?;
     let mut plates = vec![];
-    while d.more_images() && plates.len() < MAX_PLATES {
+    // Every plate is read: a file with more than [`MAX_PLATES`] is refused ([`Separated::fits`]),
+    // not cut short, and so is one with more than [`MAX_DIRECTORIES`] directories.
+    let mut directories = 1usize;
+    while d.more_images() {
+        directories += 1;
+        if directories > MAX_DIRECTORIES {
+            return None;
+        }
         d.next_image().ok()?;
         let Some((name, cmyk)) = d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().as_deref().and_then(parse_description) else {
             continue;
@@ -385,6 +449,64 @@ mod tests {
         assert_eq!(b.spot_plates(), [("Spot Orange".to_string(), [0.0, 0.6, 1.0, 0.0])]);
         assert!(ImageBlob::cmyk_tiff(&s.composite()).unwrap().spot_plates().is_empty());
         assert!(!ImageBlob::cmyk_tiff(&s.composite()).unwrap().is_separated());
+    }
+
+    #[test]
+    fn the_tiff_keeps_the_clipping_path_beside_the_plate_files() {
+        let s = two();
+        let clip = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 1.5, 1.0));
+        let files = [PlateFile { name: "a.C".into(), size: 1, modified: 2 }];
+        let b = ImageBlob::separated_tiff_clipped(&s, None, &files, Some(&clip)).unwrap();
+        assert_eq!(b.separated_clip(), Some(clip.clone()));
+        assert_eq!(b.plate_files(), files);
+        let alone = ImageBlob::separated_tiff_clipped(&s, None, &[], Some(&clip)).unwrap();
+        assert_eq!(alone.separated_clip(), Some(clip));
+        assert!(alone.plate_files().is_empty());
+        assert_eq!(ImageBlob::separated_tiff(&s, None, &files).unwrap().separated_clip(), None);
+    }
+
+    #[test]
+    fn a_tiff_with_more_plates_than_are_read_is_refused() {
+        use tiff::encoder::{TiffEncoder, colortype};
+        let tiff = |plates: usize| {
+            let mut out = Cursor::new(Vec::new());
+            let mut enc = TiffEncoder::new(&mut out).unwrap();
+            enc.write_image::<colortype::CMYK8>(1, 1, &[0, 0, 0, 0]).unwrap();
+            for i in 0..plates {
+                let mut img = enc.new_image::<colortype::Gray8>(1, 1).unwrap();
+                img.encoder().write_tag(tiff::tags::Tag::ImageDescription, description(&plate(&format!("S{i}"), [0.0; 4], &[0])).as_str()).unwrap();
+                img.write_data(&[255]).unwrap();
+            }
+            ImageBlob::new("image/tiff", out.into_inner())
+        };
+        assert_eq!(tiff(MAX_PLATES).separated().map(|s| s.plates.len()), Some(MAX_PLATES));
+        let over = tiff(MAX_PLATES + 1);
+        assert!(over.separated().is_none(), "not cut short to the first {MAX_PLATES}");
+        assert!(!over.is_separated() && over.spot_plates().is_empty(), "the CMYK image of its composite only");
+        assert!(tiff(MAX_PLATES).is_separated());
+    }
+
+    #[test]
+    fn a_tiff_with_more_directories_than_a_composite_and_its_plates_is_refused() {
+        use tiff::encoder::{TiffEncoder, colortype};
+        let tiff = |others: usize| {
+            let mut out = Cursor::new(Vec::new());
+            let mut enc = TiffEncoder::new(&mut out).unwrap();
+            enc.write_image::<colortype::CMYK8>(1, 1, &[0, 0, 0, 0]).unwrap();
+            let mut img = enc.new_image::<colortype::Gray8>(1, 1).unwrap();
+            img.encoder().write_tag(tiff::tags::Tag::ImageDescription, description(&plate("S", [0.0; 4], &[0])).as_str()).unwrap();
+            img.write_data(&[255]).unwrap();
+            // Directories that are not plates.
+            for _ in 0..others {
+                enc.write_image::<colortype::Gray8>(1, 1, &[255]).unwrap();
+            }
+            ImageBlob::new("image/tiff", out.into_inner())
+        };
+        let most = tiff(MAX_PLATES - 1);
+        assert!(most.is_separated() && most.separated().is_some());
+        let over = tiff(MAX_PLATES);
+        assert!(!over.is_separated() && over.separated().is_none() && over.spot_plates().is_empty());
+        assert!(read_plates(&over.bytes).is_none(), "read_plates stops at the limit too");
     }
 
     #[test]

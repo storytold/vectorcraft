@@ -31,7 +31,7 @@ use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
 use vectorcraft_doc::{
     Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
 };
-use vectorcraft_geom::{Affine, PathData, Rect, shapes};
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param, switch_or};
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. The images and placed documents inside symbols, graph designs, patterns and opacity masks that show the same content are read again too (by default also those only that art shows); they have no ids to list. One undo step → {updated: [ids], missing: [ids]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. The images and placed documents inside symbols, graph designs, patterns and opacity masks that show the same content are read again too (by default also those only that art shows); they have no ids to list. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
             has_doc,
             update
         ),
@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
             has_doc,
             relink
         ),
@@ -177,9 +177,17 @@ fn linked(n: &Node) -> Option<(&LinkInfo, &str, Option<Shown>)> {
     }
 }
 
-/// Every linked file of `d` with the ids of the objects showing it (for [`crate::link_watch`]).
+/// Every linked file of `d` with the ids of the objects showing it (for [`crate::link_watch`]): an
+/// image placed from a DCS file has its plate files of their own too, beside its file.
 pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
-    groups(d, None).into_iter().filter(|g| !g.ids.is_empty()).map(|g| (g.link.path, ids_json(&g.ids))).collect()
+    let mut out = vec![];
+    for g in groups(d, None).into_iter().filter(|g| !g.ids.is_empty()) {
+        let ids = ids_json(&g.ids);
+        let plates: Vec<String> = g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&g.link.path, &f.name)).collect();
+        out.push((g.link.path, ids.clone()));
+        out.extend(plates.into_iter().map(|p| (p, ids.clone())));
+    }
+    out
 }
 
 /// The linked images and placed documents of `d` by file and content: those in the layers (only `ids` when
@@ -597,12 +605,89 @@ fn clip_shape((frame, room): Clip) -> PathData {
     shapes::rectangle(Rect::new(0.0, 0.0, room.0, room.1)).transformed(frame)
 }
 
+/// What happens to the clip of an object a link update remakes.
+enum ClipTo {
+    /// It stays as it is.
+    Keep,
+    /// It is clipped to this path: the clipping path of the clip group holding just it changes,
+    /// else it goes into a new clip group.
+    Path(PathData),
+    /// It goes into a new clip group of this path, inside the clip group that holds it.
+    Nest(PathData),
+    /// The clipping path of the clip group holding just it goes (a DCS file's clipping path that
+    /// its new file lacks): the group stays as a plain group of it, with its id, name, visibility
+    /// and transparency.
+    Off,
+}
+
+/// The clipping path, with its fill rule, of the clip group holding just object `id` of `d`, when
+/// one holds it.
+fn clip_path_of(d: &Document, id: NodeId) -> Option<(&PathData, FillRule)> {
+    let g = d.node(d.parent_of(id)?)?;
+    match &g.kind {
+        NodeKind::Group { children, clip: true } => match &children[..] {
+            [c, o] if o.id == id => match &c.kind {
+                NodeKind::Path { path, rule, clipping: true, .. } => Some((path, *rule)),
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Do `a` and `b` have the same subpaths, each closed or open alike, and the same anchors, each
+/// within a thousandth of a point?
+fn same_path(a: &PathData, b: &PathData) -> bool {
+    let near = |p: vectorcraft_geom::Point, q: vectorcraft_geom::Point| p.distance(q) < 1e-3;
+    a.anchor_count() == b.anchor_count()
+        && a.subpaths.len() == b.subpaths.len()
+        && a.subpaths.iter().zip(&b.subpaths).all(|(x, y)| x.closed == y.closed)
+        && a.anchors()
+            .zip(b.anchors())
+            .all(|((si, ai, x), (sj, aj, y))| si == sj && ai == aj && near(x.p, y.p) && near(x.h_in, y.h_in) && near(x.h_out, y.h_out))
+}
+
+/// The clip an image placed with `old_xf` takes when it shows `img`, read from a file, placed with
+/// `new_xf`: Placement Options' clip `clip` when they clip it, else the clipping path a DCS file
+/// draws `img` through. When neither clips it, a clip group holding just it whose clipping path
+/// `held` is its old DCS file's (`old_clip`, in the old pixels, under the nonzero rule its clip
+/// groups get) goes.
+fn clip_to(
+    old_xf: Affine,
+    old_clip: Option<&PathData>,
+    clip: Option<Clip>,
+    img: &RasterImage,
+    new_xf: Affine,
+    held: Option<(&PathData, FillRule)>,
+) -> ClipTo {
+    if let Some(clip) = clip {
+        return ClipTo::Path(clip_shape(clip));
+    }
+    // Whether the clip group holding just the image is the old DCS file's: a clipping path whose
+    // fill rule was changed in the document is not.
+    let file_held = match (old_clip, held) {
+        (Some(old), Some((held, rule))) => rule == FillRule::NonZero && same_path(&old.transformed(old_xf), held),
+        _ => false,
+    };
+    match img.clip.as_ref().map(|path| path.transformed(new_xf)) {
+        // A clipping mask made in the document stays, with the file's clip group inside it.
+        Some(path) if held.is_some() && !file_held => ClipTo::Nest(path),
+        Some(path) => ClipTo::Path(path),
+        None if file_held => ClipTo::Off,
+        None => ClipTo::Keep,
+    }
+}
+
+/// The object an object becomes, and what happens to its clip, given the clipping path of the clip
+/// group holding just it ([`ClipTo`]).
+type Remake<'a> = dyn FnMut(&Node, Option<(&PathData, FillRule)>) -> (Node, ClipTo) + 'a;
+
 /// Remakes the linked objects outside the layer tree (in symbols, graph designs, patterns and
 /// opacity masks, where [`Document::node`] finds no ids) that `pick` holds for.
 struct Nested<'a> {
     pick: &'a dyn Fn(&Node) -> bool,
-    /// The object an object becomes, and the clip it takes ([`placed_xf`]).
-    make: &'a mut dyn FnMut(&Node) -> (Node, Option<Clip>),
+    make: &'a mut Remake<'a>,
     /// The next node id for a clip group (taken from the document after the walk).
     next: u64,
 }
@@ -633,12 +718,12 @@ impl Nested<'_> {
         if !(self.pick)(n) {
             return self.update(n, true);
         }
-        let (new, clip) = (self.make)(n);
+        let (new, clip) = (self.make)(n, None);
         let mut new = Arc::new(new);
         self.update(&mut new, true);
         *n = match clip {
-            Some(clip) => Arc::new(self.clip_group(new, clip)),
-            None => new,
+            ClipTo::Path(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
+            ClipTo::Keep | ClipTo::Off => new,
         };
     }
 
@@ -651,6 +736,8 @@ impl Nested<'_> {
             (!Arc::ptr_eq(&art, &m.art)).then_some(art)
         });
         let mut slots: Vec<(usize, Arc<Node>)> = vec![];
+        // The object a clip group that loses its clipping path holds alone.
+        let mut declipped = None;
         if let Some(children) = n.children() {
             // A clip group holding just the object: its clipping path changes.
             let clip_path = match (&n.kind, &children[..]) {
@@ -666,31 +753,44 @@ impl Nested<'_> {
                     }
                     continue;
                 }
-                let (new, clip) = (self.make)(c);
+                let held = clip_path.filter(|_| i == 1).and_then(|p| match &p.kind {
+                    NodeKind::Path { path, rule, .. } => Some((path, *rule)),
+                    _ => None,
+                });
+                let (new, clip) = (self.make)(c, held);
                 let mut new = Arc::new(new);
                 self.update(&mut new, true);
                 match (clip, clip_path) {
-                    (None, _) => slots.push((i, new)),
-                    (Some(clip), Some(path)) if i == 1 => {
+                    (ClipTo::Keep, _) => slots.push((i, new)),
+                    (ClipTo::Path(clip), Some(path)) if i == 1 => {
                         let mut path = Node::clone(path);
                         if let NodeKind::Path { path: p, .. } = &mut path.kind {
-                            *p = clip_shape(clip);
+                            *p = clip;
                         }
                         slots.extend([(0, Arc::new(path)), (1, new)]);
                     }
-                    (Some(clip), _) => {
+                    (ClipTo::Path(clip) | ClipTo::Nest(clip), _) => {
                         let group = self.clip_group(new, clip);
                         slots.push((i, Arc::new(group)));
                     }
+                    (ClipTo::Off, Some(_)) if i == 1 => declipped = Some(new),
+                    (ClipTo::Off, _) => slots.push((i, new)),
                 }
             }
         }
-        if mask.is_none() && slots.is_empty() {
+        if mask.is_none() && slots.is_empty() && declipped.is_none() {
             return;
         }
         let n = Arc::make_mut(n);
         if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
             m.art = art;
+        }
+        // A clip group that stays as a plain group of just the object.
+        if let Some(object) = declipped {
+            if let NodeKind::Group { children, clip } = &mut n.kind {
+                (*children, *clip) = (vec![object], false);
+            }
+            return;
         }
         if let Some(children) = n.children_mut() {
             for (i, c) in slots {
@@ -701,12 +801,12 @@ impl Nested<'_> {
         }
     }
 
-    /// A clip group of `object` clipped to `clip`, as [`clip_image`] makes one in the layers.
-    fn clip_group(&mut self, object: Arc<Node>, clip: Clip) -> Node {
+    /// A clip group of `object` clipped to `clip`, as [`clip_image_to`] makes one in the layers.
+    fn clip_group(&mut self, object: Arc<Node>, clip: PathData) -> Node {
         let (path_id, group_id) = (NodeId(self.next), NodeId(self.next + 1));
         self.next += 2;
         let none = vectorcraft_color::Paint::None;
-        let mut path = Node::path(path_id, clip_shape(clip), Appearance::basic(none.clone(), none, 0.0));
+        let mut path = Node::path(path_id, clip, Appearance::basic(none.clone(), none, 0.0));
         if let NodeKind::Path { clipping, .. } = &mut path.kind {
             *clipping = true;
         }
@@ -734,13 +834,13 @@ fn install_document(
     };
     if let Some(also) = also {
         let pick = |n: &Node| shows(n, also, true);
-        let mut make = |n: &Node| {
+        let mut make = |n: &Node, _: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
-            let mut clip = None;
+            let mut clip = ClipTo::Keep;
             if let NodeKind::PlacedDocument(p) = &mut n.kind {
                 let (xf, c) = placed(p);
                 (p.key, p.width, p.height, p.xf, p.link) = (src.key.clone(), w, h, xf, link.clone());
-                clip = c;
+                clip = c.map_or(ClipTo::Keep, |c| ClipTo::Path(clip_shape(c)));
             }
             (n, clip)
         };
@@ -841,6 +941,11 @@ fn clip_image_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     if set_clip_path(d, id, path.clone()) {
         return Ok(());
     }
+    new_clip_group(d, id, path)
+}
+
+/// Put object `id` of `d` into a new clip group of `path`, where it is.
+fn new_clip_group(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     let image = d.remove(id)?;
     let none = vectorcraft_color::Paint::None;
@@ -876,15 +981,17 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         // Every image picked shows content `also.1`, so one resolution serves them all.
         let old_pt = file_pt(d, also.1);
         let pick = |n: &Node| shows(n, also, false);
-        let mut make = |n: &Node| {
+        // The clipping path the old content's DCS file drew it through.
+        let old_clip = d.images.get(also.1).and_then(ImageBlob::separated_clip);
+        let mut make = |n: &Node, held: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
-            let mut clip = None;
+            let mut clip = ClipTo::Keep;
             if let NodeKind::Image(im) = &mut n.kind {
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
                 let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
+                clip = clip_to(im.xf, old_clip.as_ref(), c, &img, xf, held);
                 (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
-                clip = c;
             }
             (n, clip)
         };
@@ -895,19 +1002,43 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
         let size = |w: u32, h: u32| (w as f64, h as f64);
         let (xf, clip) = placed_xf(im.xf, size(im.width, im.height), file_pt(d, &im.key), size(img.width, img.height), new_pt, o);
+        // Placement Options' clip, else a DCS file's clipping path, read again with its plates.
+        let old_clip = d.images.get(&im.key).and_then(ImageBlob::separated_clip);
+        clips.push((*id, clip_to(im.xf, old_clip.as_ref(), clip, &img, xf, clip_path_of(d, *id))));
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::Image(im) = &mut n.kind
         {
             (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
         }
-        // A DCS file's clipping path, read again with its plates, unless Placement Options clip it.
-        let dcs_clip = img.clip.as_ref().map(|path| path.transformed(xf));
-        clips.extend(clip.map(clip_shape).or(dcs_clip).map(|path| (*id, path)));
     }
     // A DCS file's spot plates print on spot swatches of their inks.
     super::place::dcs::add_spot_swatches(d, &img.blob.spot_plates());
     store_image(d, &img.key, img.blob, true);
-    clips.into_iter().try_for_each(|(id, path)| clip_image_to(d, id, path))
+    clips.into_iter().try_for_each(|(id, clip)| match clip {
+        ClipTo::Keep => Ok(()),
+        ClipTo::Path(path) => clip_image_to(d, id, path),
+        ClipTo::Nest(path) => new_clip_group(d, id, path),
+        ClipTo::Off => unclip(d, id),
+    })
+}
+
+/// Take the clipping path of the clip group holding just object `id` of `d` away: the group stays
+/// as a plain group of the object, with its id, name, visibility and transparency as they were.
+fn unclip(d: &mut Document, id: NodeId) -> Result<()> {
+    let Some((g, clip)) = d.parent_of(id).and_then(|g| match &d.node(g)?.kind {
+        NodeKind::Group { children, clip: true } => match &children[..] {
+            [c, o] if o.id == id && matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some((g, c.id)),
+            _ => None,
+        },
+        _ => None,
+    }) else {
+        return Ok(());
+    };
+    d.remove(clip)?;
+    if let Some(Node { kind: NodeKind::Group { clip, .. }, .. }) = d.node_mut(g) {
+        *clip = false;
+    }
+    Ok(())
 }
 
 /// Groups (of the document saved at `doc_path`) as `{name, path, ids}` rows (those with objects in
@@ -1078,12 +1209,12 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             m.iter().find(|(k, doc, _)| k == key && *doc == document.is_some()).map(|(_, _, new)| new)
         };
         let pick = |n: &Node| new(n).is_some();
-        let mut make = |n: &Node| {
+        let mut make = |n: &Node, _: Option<(&PathData, FillRule)>| {
             let mut out = n.clone();
             if let (Some(link), Some(l)) = (new(n), link_mut(&mut out)) {
                 *l = link.clone();
             }
-            (out, None)
+            (out, ClipTo::Keep)
         };
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
@@ -1348,10 +1479,44 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
         }
     }
     let updated: Vec<u64> = reads.iter().flat_map(|(g, _)| ids_json(&g.ids)).collect();
+    let warnings = spot_swatch_notes(&st.doc, reads.iter().map(|(_, read)| read));
     if !reads.is_empty() {
         s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(g, read)| install_read(d, &g.ids, read, None, Some(&g))))?;
     }
-    Ok(json!({ "updated": updated, "missing": missing }))
+    let mut out = json!({ "updated": updated, "missing": missing });
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    Ok(out)
+}
+
+/// The warnings for the spot plates of the DCS files in `reads` whose ink a swatch of `d` already
+/// names in another color, or as a process color ([`super::place::dcs::swatch_notes`]), or that an
+/// earlier file of `reads` adds as a spot swatch in another color, each once.
+fn spot_swatch_notes<'a>(d: &Document, reads: impl Iterator<Item = &'a Read>) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    // The spot swatches the reads add, in the order they are installed.
+    let mut added: Vec<(String, [f32; 4])> = vec![];
+    for read in reads {
+        let Read::Image((_, img)) = read else { continue };
+        let spots = img.blob.spot_plates();
+        let mut notes = super::place::dcs::swatch_notes(d, &spots);
+        for (name, cmyk) in spots.into_iter().filter(|(name, _)| d.swatch(name).is_none()) {
+            match added.iter().find(|(n, _)| *n == name) {
+                Some((_, first)) if first.iter().zip(cmyk).any(|(a, b)| (a - b).abs() >= 0.005) => {
+                    notes.push(format!("the document's swatch `{name}` is kept: it is a different color"));
+                }
+                Some(_) => {}
+                None => added.push((name, cmyk)),
+            }
+        }
+        for note in notes {
+            if !out.contains(&note) {
+                out.push(note);
+            }
+        }
+    }
+    out
 }
 
 /// Which links `links.relink` points at the new file (the Replace choice of Relink).
@@ -1534,6 +1699,10 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Read before it is copied: a file that can't be shown isn't copied.
         let img = if images.is_empty() { None } else { Some(linked_image(&bytes, Some(&path)).map_err(|e| bad(C, format!("{path}: {e}")))?) };
+        // A copy beside the document would point at plate files it can't find there.
+        if copy_to.is_some() && img.as_ref().is_some_and(|img| !img.blob.plate_files().is_empty()) {
+            return Err(bad(C, format!("{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are")));
+        }
         let mut sources = vec![];
         for ((page, bounding, page_box), ids) in documents {
             sources.push((page, ids, super::place::document::source(&path, &bytes, Some(&path), page, bounding, page_box, C)?));
@@ -1568,12 +1737,16 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let relinked: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
+    let warnings = spot_swatch_notes(&s.doc()?.doc, reads.iter().map(|(_, read)| read));
     if !reads.is_empty() {
         s.edit("Relink", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve, None)))?;
     }
     not_found.sort();
     not_found.dedup();
     let mut out = json!({ "relinked": relinked, "notFound": not_found });
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
     if copy_to.is_some() {
         // The copies are in the document's folder, which the client did not give.
         for pair in copied.iter_mut().chain(kept.iter_mut()) {
@@ -1769,6 +1942,11 @@ fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
             NodeKind::Image(im) if d.images.get(&im.key).is_some_and(ImageBlob::is_separated) => {
                 if let Some(b) = n.geometric_bounds() {
                     images.push((n.id, b, held || own));
+                    // A transparent DCS image is an object with its own transparency for the
+                    // others it overlaps.
+                    if own {
+                        see_through.push(b);
+                    }
                 }
             }
             _ if own => see_through.extend(n.geometric_bounds()),

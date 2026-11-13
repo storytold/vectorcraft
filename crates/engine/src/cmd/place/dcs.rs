@@ -46,13 +46,15 @@ pub(crate) fn read(bytes: &[u8], path: Option<&str>) -> Result<DcsArt> {
     let mut files = vec![];
     let mut file = |name: &str| plate_file(path, name, &mut files);
     let p = vectorcraft_eps::dcs::place(bytes, &dcs, &mut file).map_err(EngineError::Other)?;
-    let blob = ImageBlob::separated_tiff(&p.separated, p.ppi, &files).ok_or_else(|| EngineError::Other("the plates can't be kept".into()))?;
-    // The clipping path in the image's pixel space, where the Links commands put it again.
+    // The clipping path in the image's pixel space, where the Links commands put it again; the
+    // image keeps it, so they know a clip group of that path as the file's.
     let to_pixels = (p.xf.determinant().abs() > 1e-12).then(|| p.xf.inverse());
     let clip = match (&p.clip, to_pixels) {
         (Some(Node { kind: NodeKind::Path { path, .. }, .. }), Some(inv)) => Some(path.transformed(inv)),
         _ => None,
     };
+    let blob = ImageBlob::separated_tiff_clipped(&p.separated, p.ppi, &files, clip.as_ref())
+        .ok_or_else(|| EngineError::Other("the plates can't be kept".into()))?;
     let img = RasterImage { key: blob.content_key(), blob, width: p.separated.width, height: p.separated.height, ppi: p.ppi, clip };
     let spots = p.separated.spots().map(|s| (s.name.clone(), s.cmyk)).collect();
     Ok(DcsArt { img, xf: p.xf, page: p.page, clip: p.clip, spots, warnings: p.warnings })
@@ -73,6 +75,12 @@ fn plate_path(main: Option<&str>, name: &str) -> std::result::Result<(String, St
         return Err(format!("`{name}` is a file of its own, which can only be found next to the DCS file's path"));
     };
     Ok((folder.join(base).to_string_lossy().into_owned(), base.to_string()))
+}
+
+/// The path of the plate file named `name` that the DCS file at `main` (a path as a link keeps
+/// it) was read with ([`plate_path`]); `None` when `main` has no folder.
+pub(crate) fn plate_file_path(main: &str, name: &str) -> Option<String> {
+    plate_path(Some(main), name).ok().map(|(path, _)| path)
 }
 
 /// The plate file a DCS file at `main` names `name` ([`plate_path`]), noted in `files` as it is now.

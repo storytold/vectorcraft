@@ -225,6 +225,70 @@ fn separations_preview_shows_a_dcs_image_through_its_own_plates() {
     assert!(magenta[..3].iter().all(|v| *v < 20), "the Magenta plate alone shows it as solid ink, got {magenta:?}");
 }
 
+/// A document of 40 × 20 pt holding separated image `s` (2 × 1 pixels) at 20 pt a pixel.
+fn separated_doc(s: &vectorcraft_doc::separated::Separated) -> Document {
+    let mut d = Document::new_with_mode(40.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(s, None, &[]).unwrap());
+    let im = ImageObject {
+        key: "pic".into(),
+        width: s.width,
+        height: s.height,
+        xf: Affine::scale(40.0 / f64::from(s.width)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// A DCS spot plate shows in the color of the document's swatch of its ink, as the art on that ink
+/// does, and follows an edit of the swatch.
+#[test]
+fn separations_preview_colors_a_dcs_spot_plate_by_the_documents_swatch() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // The file says the ink is red; the document's swatch of it is cyan.
+    let s = Separated::new(2, 1, vec![InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data: vec![255, 0] }]).unwrap();
+    let mut d = separated_doc(&s);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let all = ["Cyan", "Magenta", "Yellow", "Black", "Ink"];
+    let left = |d: &Document, plates: &[&str]| Renderer::new().render(d, 40, 20, Affine::IDENTITY, &separations(plates)).pixel(10, 10);
+    let p = left(&d, &all);
+    assert!(p[0] < 100 && p[2] > 150, "the swatch's cyan, not the file's red, got {p:?}");
+    // The swatch edited to yellow: the image follows.
+    if let Some(w) = d.swatches.iter_mut().find(|w| w.name == "Ink") {
+        w.paint = Paint::solid(Color::cmyk(0.0, 0.0, 1.0, 0.0));
+    }
+    let p = left(&d, &all);
+    assert!(p[0] > 150 && p[2] < 100, "the edited swatch's yellow, got {p:?}");
+    // A process swatch of the ink's name: the plate shows on the process plates as that swatch.
+    if let Some(w) = d.swatches.iter_mut().find(|w| w.name == "Ink") {
+        (w.paint, w.spot) = (Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), false);
+    }
+    let p = left(&d, &all[..4]);
+    assert!(p[0] < 100 && p[2] > 150, "the process swatch's cyan, got {p:?}");
+}
+
+/// A DCS image drawn reduced (from a smaller mip level) shows the coverage its plate has there,
+/// the mean of the plate pixels each reduced pixel covers.
+#[test]
+fn separations_preview_keeps_a_reduced_dcs_plates_coverage() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // 64 × 64 pixels, the spot ink solid on every other column: 50% coverage.
+    let data: Vec<u8> = (0..64 * 64).map(|i| if i % 2 == 0 { 255 } else { 0 }).collect();
+    let s = Separated::new(64, 64, vec![InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data }]).unwrap();
+    let mut d = Document::new_with_mode(64.0, 64.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(&s, None, &[]).unwrap());
+    let im = ImageObject { key: "pic".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    let opts = RenderOptions { image_mips: true, ..separations(&["Ink"]) };
+    let p = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &opts).pixel(8, 8);
+    assert!(p[..3].iter().all(|v| (100..=160).contains(v)), "half the ink, got {p:?}");
+}
+
 /// Separations Preview showing `plates`, as the canvas draws it.
 fn separations(plates: &[&str]) -> RenderOptions {
     let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };

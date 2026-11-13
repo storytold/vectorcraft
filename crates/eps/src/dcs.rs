@@ -67,7 +67,7 @@ pub fn read(bytes: &[u8]) -> Option<Dcs> {
     // The comment a `%%+` line continues.
     let mut last = String::new();
     for raw in ps.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()).take(MAX_HEADER_LINES) {
-        let line = String::from_utf8_lossy(raw);
+        let line = header_line(raw);
         let line = line.trim_end();
         if line.starts_with("%%EndComments") || !line.starts_with('%') {
             break;
@@ -120,6 +120,20 @@ pub fn read(bytes: &[u8]) -> Option<Dcs> {
 /// Most header lines looked at for the DCS comments.
 const MAX_HEADER_LINES: usize = 10_000;
 
+/// Header line `raw` as text: UTF-8 when it is, else Latin-1 (each byte one character), as the
+/// octal escapes of names are read.
+fn header_line(raw: &[u8]) -> std::borrow::Cow<'_, str> {
+    match std::str::from_utf8(raw) {
+        Ok(s) => std::borrow::Cow::Borrowed(s),
+        Err(_) => std::borrow::Cow::Owned(raw.iter().copied().map(char::from).collect()),
+    }
+}
+
+/// `s` without its first word and the whitespace around that word.
+fn after_word(s: &str) -> &str {
+    s.trim_start().split_once(char::is_whitespace).map_or("", |(_, rest)| rest.trim_start())
+}
+
 /// A `%%PlateFile:` comment's plate: `(name) EPS #offset size` or `(name) EPS Local file`; `None`
 /// for other locations, which only a print server reads.
 fn plate_file(v: &str) -> Option<PlateRef> {
@@ -135,8 +149,9 @@ fn plate_file(v: &str) -> Option<PlateRef> {
     if !location.eq_ignore_ascii_case("Local") {
         return None;
     }
-    let file = rest.split_whitespace().skip(2).collect::<Vec<_>>().join(" ");
-    (!file.is_empty()).then_some(PlateRef { name, at: PlateAt::File(file) })
+    // The file name as it is written, its spaces kept.
+    let file = after_word(after_word(rest));
+    (!file.is_empty()).then(|| PlateRef { name, at: PlateAt::File(file.to_string()) })
 }
 
 /// A plate's name as it is kept: a process ink's in its usual case ("cyan" is "Cyan"); `None` when
@@ -378,21 +393,44 @@ fn resample(img: &PlateImage, w: u32, h: u32, onto: Affine) -> Vec<u8> {
     out
 }
 
-/// The first image plate program `eps` draws, as ink amounts (how dark each pixel is: 255 less its
-/// luma), and where it prints on its page.
+/// Is an image under `n` (itself included) drawn through a clipping path: inside a clipping group
+/// or layer, or `inside` one already?
+fn clips_an_image(n: &Node, inside: bool) -> bool {
+    let inside = inside || matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
+    match &n.kind {
+        NodeKind::Image(_) => inside,
+        _ => n.children().is_some_and(|ch| ch.iter().any(|c| clips_an_image(c, inside))),
+    }
+}
+
+/// The image plate program `eps` draws, as ink amounts (how dark each pixel is: 255 less its
+/// luma), and where it prints on its page; an error when it draws more than one image, or art
+/// besides it.
 fn plate_image(eps: &[u8]) -> Result<PlateImage, String> {
     let r = crate::import_with(eps, false)?;
     if r.preview {
         return Err(r.warnings.first().cloned().unwrap_or_else(|| "its PostScript can't be read".into()));
     }
-    let mut found = None;
-    r.document.walk(|n| {
-        if found.is_none()
-            && let NodeKind::Image(im) = &n.kind
-        {
-            found = Some((im.key.clone(), im.xf, im.width, im.height));
+    // A plate is one image: one that draws more (several images, or art) would lose ink.
+    let (mut found, mut images, mut art) = (None, 0usize, false);
+    r.document.walk(|n| match &n.kind {
+        NodeKind::Image(im) => {
+            images += 1;
+            found.get_or_insert((im.key.clone(), im.xf, im.width, im.height));
         }
+        NodeKind::Path { clipping: true, .. } | NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::RulerGuide { .. } => {}
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+            art |= n.visible && n.appearance.items.iter().any(|i| i.visible() && !matches!(i.paint(), vectorcraft_color::Paint::None))
+        }
+        _ => art |= n.visible,
     });
+    if images > 1 || (art && images == 1) {
+        return Err(if images > 1 { "it draws more than one image".into() } else { "it draws art besides its image".into() });
+    }
+    // Ink outside a clipping path would print: a plate whose image is clipped is refused.
+    if images == 1 && r.document.layers.iter().any(|l| clips_an_image(l, false)) {
+        return Err("it draws its image through a clipping path".into());
+    }
     let (key, xf, iw, ih) = found.ok_or("it draws no image")?;
     let blob = r.document.images.get(&key).ok_or("it draws no image")?;
     let (width, height, data) = blob.coverage().ok_or("its image is too large to read")?;
@@ -407,13 +445,20 @@ fn clip_path(main: &[u8]) -> Option<Node> {
     first_clip(&r.document)
 }
 
-/// The clipping path of the innermost clipping group of `d` that holds an image.
+/// The clipping path the first image of `d` is drawn through: the clipping path of the innermost
+/// clipping group that holds an image, cut to the clipping paths of the clipping groups around it.
 fn first_clip(d: &Document) -> Option<Node> {
-    fn find(n: &Node) -> Option<Node> {
+    /// The clipping paths around the innermost clipping group under `n` that holds an image,
+    /// outermost first.
+    fn find(n: &Node) -> Option<Vec<Node>> {
         let NodeKind::Group { children, clip } = &n.kind else {
             return n.children().and_then(|ch| ch.iter().find_map(|c| find(c)));
         };
-        if let Some(inner) = children.iter().find_map(|c| find(c)) {
+        let first = children.first().filter(|f| *clip && matches!(f.kind, NodeKind::Path { clipping: true, .. }));
+        if let Some(mut inner) = children.iter().find_map(|c| find(c)) {
+            if let Some(f) = first {
+                inner.insert(0, (**f).clone());
+            }
             return Some(inner);
         }
         let holds_image = || {
@@ -421,10 +466,25 @@ fn first_clip(d: &Document) -> Option<Node> {
             n.walk(&mut |c: &Node| any |= matches!(c.kind, NodeKind::Image(_)));
             any
         };
-        let first = children.first()?;
-        (*clip && matches!(first.kind, NodeKind::Path { clipping: true, .. }) && holds_image()).then(|| (**first).clone())
+        first.filter(|_| holds_image()).map(|f| vec![(**f).clone()])
     }
-    d.layers.iter().find_map(|l| find(l))
+    let mut clips = d.layers.iter().find_map(|l| find(l))?;
+    let mut innermost = clips.pop()?;
+    // The clipping paths together clip to where they overlap.
+    for outer in clips.iter().rev() {
+        if let (NodeKind::Path { path: o, rule: or, .. }, NodeKind::Path { path, rule, .. }) = (&outer.kind, &mut innermost.kind) {
+            *path = vectorcraft_pathops::boolean(path, *rule, o, *or, vectorcraft_pathops::BoolOp::Intersect);
+            *rule = vectorcraft_geom::FillRule::NonZero;
+        }
+    }
+    // An even-odd clipping path is kept as the same area under the nonzero rule, the rule of the
+    // clip groups the Links commands make and match again.
+    if let NodeKind::Path { path, rule: rule @ vectorcraft_geom::FillRule::EvenOdd, .. } = &mut innermost.kind
+        && let Ok(nonzero) = vectorcraft_pathops::try_boolean_n(&[(&*path, vectorcraft_geom::FillRule::EvenOdd)], |inside| !inside.is_empty())
+    {
+        (*path, *rule) = (nonzero, vectorcraft_geom::FillRule::NonZero);
+    }
+    Some(innermost)
 }
 
 #[cfg(test)]

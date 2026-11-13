@@ -139,9 +139,18 @@ impl<'a> Separator<'a> {
             plates(self.doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
         };
         let own = |name: &str| spots.contains(name);
+        // A spot plate printing as process prints as the document's swatch of its ink does, when
+        // there is one; else as the process equivalent its file gives.
+        let equivalent = |p: &vectorcraft_doc::separated::InkPlate| match self.doc.swatch(&p.name).and_then(|w| Some((w.paint.color()?, w.spot))) {
+            Some((c, spot)) => {
+                let c = self.doc.linked_color(c, spot);
+                cms::PROCESS_PLATES.map(|q| self.ink(q, &c, None))
+            }
+            None => p.cmyk,
+        };
         for blob in d.images.values_mut() {
             if let Some(s) = blob.separated() {
-                if let Some(gray) = s.plate_png(plate, &own) {
+                if let Some(gray) = s.plate_png(plate, &own, &equivalent) {
                     *blob = gray;
                 }
                 continue;
