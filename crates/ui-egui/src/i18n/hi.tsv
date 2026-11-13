@@ -7383,6 +7383,7 @@ antiAlias	Sharp	शार्प
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
+@msg	not a PICT file	PICT फ़ाइल नहीं है
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` को 1 से 255 #rrggbb रंगों की ऐरे होना चाहिए
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}

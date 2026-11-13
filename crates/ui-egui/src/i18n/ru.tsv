@@ -4748,6 +4748,7 @@ axis	Both	Оба
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
 @msg	not an HP-GL file	не является файлом HP-GL
+@msg	not a PICT file	не является файлом PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` должен быть массивом из 1–255 цветов #rrggbb
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора

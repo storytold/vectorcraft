@@ -4636,6 +4636,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not an HP-GL file	keine HP-GL-Datei
+@msg	not a PICT file	keine PICT-Datei
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus

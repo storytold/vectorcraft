@@ -5019,6 +5019,7 @@ imageTrace	Outline	Obrys
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not an HP-GL file	nejde o soubor HP-GL
+@msg	not a PICT file	nejde o soubor PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musí být pole 1 až 255 barev #rrggbb
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
