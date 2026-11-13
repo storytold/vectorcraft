@@ -3278,6 +3278,14 @@ fn close_path_places_the_first_anchors_handles() {
     s.execute("path.close", &json!({"id": id.0, "in": [60.0, 140.0], "out": [120.0, 60.0]})).unwrap();
     let b = path(&s, id).subpaths[0].anchors[0];
     assert_eq!((b.h_in, b.h_out, b.kind), (Point::new(60.0, 140.0), Point::new(120.0, 60.0), AnchorKind::Corner));
+    // `at` moves the anchor, its handles with it, before `in` is placed.
+    s.execute("edit.undo", &json!({})).unwrap();
+    refuses_with(&mut s, "path.close", &json!({"id": id.0, "at": "120, 90"}), "`at` must be [x, y]");
+    s.execute("path.close", &json!({"id": id.0, "at": [120.0, 90.0], "in": [60.0, 140.0]})).unwrap();
+    let b = path(&s, id).subpaths[0].anchors[0];
+    assert_eq!((b.p, b.h_in, b.h_out), (Point::new(120.0, 90.0), Point::new(60.0, 140.0), Point::new(170.0, 90.0)), "{b:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors[0], a, "one undo step");
 }
 
 #[test]
