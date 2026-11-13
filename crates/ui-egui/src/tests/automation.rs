@@ -500,6 +500,30 @@ fn ui_inspect_checks_a_folder_preference_as_written() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` names the file selected in JavaScript Files by its file name alone when it is
+/// outside the read root, and keeps one inside it; the person sees the whole path.
+#[test]
+fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-javascript-files");
+    let (inside, outside) = (s(base.join("in/menu.js")), s(base.join("outside/menu.js")));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for f in [&inside, &outside] {
+        app.run("svgInteractivity.addFile", json!({ "file": f })).unwrap();
+    }
+    let kind = crate::dialogs::javascript_files::KIND;
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": outside})));
+    let selected = |v: &Value| v["ui"]["dialog"]["fields"]["selected"].clone();
+    assert_eq!(selected(&crate::control::inspect(&app, &egui::Context::default())), json!(outside), "the person's");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), "menu.js", "{r}");
+    assert!(!r.to_string().contains(&json!(outside).to_string().trim_matches('"').to_string()), "{r}");
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": inside})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), json!(inside), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("selected")), Some(inside), "the dialog is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.inspect` checks a folder preference as the app uses it, trimmed, as well: with the working
 /// folder as the read root, a path outside it with a space before it reads as a name in the working
 /// folder, and is still left out, because the app trims it and uses the path outside.

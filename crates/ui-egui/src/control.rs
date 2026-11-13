@@ -251,7 +251,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     // the layout.
     if let Some(fields) = ui.as_object_mut() {
         fields.remove("floating_panels");
-        leave_out_unreadable_paths(fields);
+        leave_out_unreadable_paths(app, fields);
     }
     json!({
         "scriptRunning": app.session.script_running(),
@@ -1091,8 +1091,10 @@ fn leave_out_unreadable_values(v: &mut Value) {
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
-/// in recorded actions' steps outside the read root. The UI state itself is not changed.
-fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
+/// in recorded actions' steps outside the read root. The file selected in an open JavaScript Files
+/// dialog is named as `svgInteractivity.info` names the active document's linked files. The UI state
+/// itself is not changed.
+fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
     }
@@ -1114,6 +1116,14 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
         && let Some(Value::Object(fields)) = dialog.get_mut("fields")
     {
         leave_out_unreadable_folders(fields);
+    }
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::javascript_files::KIND)
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+        && let Some(Value::String(selected)) = fields.get_mut("selected")
+        && let Some(st) = app.session.active()
+    {
+        *selected = vectorcraft_engine::cmd::links::shown_script(st, selected).into_owned();
     }
 }
 
