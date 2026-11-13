@@ -610,11 +610,12 @@ fn an_effect_parameter_without_a_default_is_held_to_its_type() {
     use crate::cmd::params::undefaulted_type;
     use vectorcraft_render::effects::effect_catalog;
     // Read by checks of their own: a stored texture or a texture to load, an SVG filter, a Warp's
-    // map and the style of Crop Marks.
+    // map, the style of Crop Marks and a custom bevel's name and points.
     let own_check = |effect: &str, key: &str| match key {
         "textureImage" | "name" | "xml" => true,
         "version" => effect.starts_with("warp."),
         "style" => effect == "cropMarks",
+        "bevelName" | "bevelProfile" => matches!(effect, "threeD.extrude" | "threeD.classicExtrude"),
         _ => false,
     };
     let mut unlisted = vec![];

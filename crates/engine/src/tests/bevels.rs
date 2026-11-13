@@ -276,6 +276,23 @@ fn a_document_keeps_its_custom_bevels_without_the_bevels_file() {
 }
 
 #[test]
+fn both_extrudes_take_a_custom_bevels_points_and_refuse_a_name_that_is_not_a_string() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let notch = json!([[0, 0], [0.2, 0.6], [0.7, 0.4], [1, 1]]);
+    for effect in [effects::EXTRUDE, effects::CLASSIC_EXTRUDE] {
+        let id = rect(&mut s, 100);
+        let apply = |name: Value| json!({"effect": effect, "ids": [id.0], "item": null, "params": {"bevel": "custom", "bevelName": name, "bevelProfile": notch}});
+        let before = s.doc().unwrap().doc.clone();
+        let e = s.execute("effect.apply", &apply(json!(3))).unwrap_err().to_string();
+        assert!(e.contains("bevelName must be a string"), "{effect}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before, "{effect}");
+        s.execute("effect.apply", &apply(json!("Notch"))).unwrap();
+        assert_eq!((&params(&s, id)[effects::BEVEL_PROFILE], &params(&s, id)[effects::BEVEL_NAME]), (&notch, &json!("Notch")), "{effect}");
+    }
+}
+
+#[test]
 fn without_a_bevels_file_editing_is_refused_and_none_are_listed() {
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();

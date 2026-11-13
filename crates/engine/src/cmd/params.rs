@@ -360,8 +360,8 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
 /// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
-/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
-/// own; they aren't listed.
+/// filter's `name` and `xml`, a Warp's `version`, the `style` of Crop Marks and an Extrude &
+/// Bevel's custom `bevelName` and `bevelProfile` have checks of their own; they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
