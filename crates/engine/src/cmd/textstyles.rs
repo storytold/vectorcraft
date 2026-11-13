@@ -395,16 +395,27 @@ fn font_change(before: &CharStyle, mut st: CharStyle, attrs: &Map<String, Value>
 /// Change text in layers, symbols, graph designs, pattern tiles, saved pattern tiles restored by
 /// Cancel, and brush art, including opacity masks in those trees.
 pub(crate) fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+    each_node_with_text_mut(d, &mut |n| match &mut n.kind {
+        NodeKind::Text(t) => f(t),
+        _ => Ok(()),
+    })
+}
+
+/// Change the nodes [`each_text_mut`] reaches: each type object and each node holding one, and each
+/// graph keeping paragraph attributes for its labels, with or without labels drawn.
+pub(crate) fn each_node_with_text_mut(d: &mut Document, f: &mut impl FnMut(&mut Node) -> Result<()>) -> Result<()> {
     fn has_text(n: &Node) -> bool {
         matches!(n.kind, NodeKind::Text(_))
+            || n.extras().graph.as_deref().is_some_and(|g| {
+                let l = &g.label_styles;
+                l.values_para.is_some() || l.categories_para.is_some() || l.legend_para.is_some()
+            })
             || n.extras().mask.as_ref().is_some_and(|mask| has_text(&mask.art))
             || n.children().is_some_and(|children| children.iter().any(|child| has_text(child)))
     }
 
-    fn visit(n: &mut Node, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
-        if let NodeKind::Text(t) = &mut n.kind {
-            f(t)?;
-        }
+    fn visit(n: &mut Node, f: &mut impl FnMut(&mut Node) -> Result<()>) -> Result<()> {
+        f(n)?;
         if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut())
             && has_text(&mask.art)
         {

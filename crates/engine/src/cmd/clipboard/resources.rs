@@ -687,6 +687,15 @@ impl Relink {
             self.name(Res::Image, &mut cm.key);
             self.name(Res::Image, &mut cm.from);
         }
+        // A graph draws its labels again from the paragraph attributes it keeps for them.
+        if let Some(spec) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            let l = &mut spec.label_styles;
+            for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
+                if let Some(to) = pa.kinsoku_set.as_deref().and_then(|set| self.kinsoku.get(set)) {
+                    pa.kinsoku_set = to.clone();
+                }
+            }
+        }
         match &mut n.kind {
             NodeKind::Text(t) => {
                 for r in &mut t.runs {
@@ -1292,6 +1301,15 @@ impl Clipboard {
             vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
                 if let NodeKind::Text(t) = &m.kind {
                     t.para_styles().filter_map(|p| p.kinsoku_set.as_deref()).for_each(&mut note);
+                }
+                // The paragraph attributes a graph keeps for its labels.
+                if let Some(spec) = m.extras().graph.as_deref() {
+                    let l = &spec.label_styles;
+                    [&l.values_para, &l.categories_para, &l.legend_para]
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|p| p.kinsoku_set.as_deref())
+                        .for_each(&mut note);
                 }
             });
         };

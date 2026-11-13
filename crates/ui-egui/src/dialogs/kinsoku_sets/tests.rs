@@ -146,6 +146,37 @@ fn based_on_follows_a_renamed_set() {
     assert_eq!((d.str("name"), d.str("cannotStart")), ("Kinsoku Set 1".to_string(), "ゞ".to_string()));
 }
 
+/// OK takes the fields as they are set (`ui.dialog.set`) even when no frame was drawn since. Once
+/// `selected` picks another set, the fields no longer describe it: OK leaves that set as it is,
+/// and the next frame fills the fields from it.
+#[test]
+fn ok_takes_fields_set_without_a_frame() {
+    let mut app = app();
+    let doc = json!([{"name": "Doc Set", "cannotStart": "ゝ"}, {"name": "Other", "cannotStart": "ー"}]);
+    app.run("type.kinsokuSets.set", json!({ "sets": doc })).unwrap();
+    open(&mut app).unwrap();
+    let d = dialog(&mut app);
+    d.fields.insert("name".into(), json!("Scripted"));
+    d.fields.insert("cannotStart".into(), json!("ゞ"));
+    super::super::confirm(&mut app).unwrap();
+    let sets = doc_sets(&app);
+    assert_eq!((sets[0].name.as_str(), sets[0].cannot_start.clone()), ("Scripted", vec!['ゞ']));
+
+    let before = steps(&app);
+    open(&mut app).unwrap();
+    let d = dialog(&mut app);
+    d.fields.insert("selected".into(), json!(1));
+    d.fields.insert("cannotStart".into(), json!("ゝ"));
+    let pending = app.ui.dialog.clone().unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(steps(&app), before, "the fields of the set shown before do not go into the one picked");
+    assert_eq!(doc_sets(&app)[1].name, "Other");
+    app.ui.dialog = Some(pending);
+    frame(&mut app);
+    let d = dialog(&mut app);
+    assert_eq!((d.str("name"), d.str("cannotStart")), ("Other".to_string(), "ー".to_string()));
+}
+
 /// Add takes a code point as U+XXXX, u+xxxx or bare hexadecimal, and never a control or space
 /// character or a value that is no character.
 #[test]

@@ -1047,6 +1047,13 @@ fn a_custom_set_hangs_its_own_hanging_punctuation() {
     crate::shape::keep_inseparable_sequences(text, &mut g, &joined.inseparable);
     let rules = breaking::KinsokuRules::Custom(&joined);
     assert_eq!(break_line(text, &g, 0, 30.0, &[], 0.0, None, Burasagari::Standard, rules, PushOutOnly, false, false, &[]).0, 3);
+    // A hanging character drawn with two glyphs does not hang: the line's geometry hangs only one
+    // glyph, so the other would stay past the measure. 三 goes to the next line with it.
+    let text = "一二三、四";
+    let mut g = full_width(text);
+    g[3].adv = 5.0;
+    g.insert(3, g[3].clone());
+    assert_eq!(break_line(text, &g, 0, 30.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, PushOutOnly, false, false, &[]).0, 2);
     let g = full_width("、!");
     assert!(breaking::hangs(&g[1], breaking::KinsokuRules::Custom(&bang)) && !breaking::hangs(&g[0], breaking::KinsokuRules::Custom(&bang)));
 }

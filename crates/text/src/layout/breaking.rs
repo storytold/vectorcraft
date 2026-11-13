@@ -465,8 +465,9 @@ pub(super) fn break_line<'k>(
             Some(line_end_credit(g, line_end, cluster_end)).filter(|&c| c > 0.0 && may_end_after(g, cluster_end, kinsoku)).unwrap_or(0.0);
         if j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS {
             // It ends the line with the spaces after it, when it hangs alone: not with the rest of a
-            // No Break run or an inseparable sequence it starts.
-            let alone = g.get(j + 1..cluster_end).unwrap_or_default().iter().all(|h| h.byte == gl.byte);
+            // No Break run or an inseparable sequence it starts, and only as one glyph, the one the
+            // line's geometry hangs.
+            let alone = cluster_end == j + 1;
             if burasagari != Burasagari::None && alone && hangs(gl, kinsoku) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
                 let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {

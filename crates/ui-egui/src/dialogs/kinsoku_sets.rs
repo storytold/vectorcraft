@@ -9,7 +9,9 @@
 //! document as `from`), `selected` (the index of the one picked), `name`, `cannotStart`,
 //! `cannotEnd`, `hanging` and `inseparable` (its name and categories as typed, the inseparable
 //! sequences separated by spaces), `base` (what New starts from), `code` (the code point Add
-//! adds) and `into` (the category it adds to).
+//! adds), `into` (the category it adds to) and `shown` (the set the name and category fields
+//! were filled from). When `sets` or `selected` is changed so the picked set is no longer `shown`,
+//! the fields are filled from the picked set again and what was typed in them is dropped.
 //!
 //! Behavior reference: the help page
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html>.
@@ -92,6 +94,12 @@ fn show_selected(d: &mut Dialog) {
         };
         d.fields.insert(key.into(), json!(text));
     }
+    d.fields.insert("shown".into(), Value::Object(set));
+}
+
+/// Do the name and category fields describe the set picked, `set`?
+fn shows(d: &Dialog, set: &Map<String, Value>) -> bool {
+    d.fields.get("shown").and_then(Value::as_object) == Some(set)
 }
 
 /// The set picked with the name and categories as typed: space characters are left out of the
@@ -142,6 +150,9 @@ fn bases(list: &[Map<String, Value>]) -> Vec<(String, String)> {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mut list = sets(d);
     let i = selected(d, list.len());
+    if list.get(i).is_some_and(|set| !shows(d, set)) {
+        show_selected(d);
+    }
     let mut act = None;
     let mut picked = None;
     let names: Vec<String> = list.iter().map(|s| name_of(s).to_string()).collect();
@@ -216,6 +227,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             let now = name_of(set).to_string();
             d.fields.insert("base".into(), json!(now));
         }
+        d.fields.insert("shown".into(), Value::Object(set.clone()));
     }
     put_sets(d, &list);
     if let Some(a) = act
@@ -269,6 +281,7 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), Stri
             d.fields.insert("code".into(), json!(""));
             if let Some(set) = list.get_mut(i) {
                 take_fields(d, set);
+                d.fields.insert("shown".into(), Value::Object(set.clone()));
             }
             put_sets(d, &list);
         }
@@ -277,7 +290,16 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), Stri
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let r = app.run(COMMAND, json!({ "sets": sets(d) }));
+    // The fields as typed, also when they were set (`ui.dialog.set`) with no frame drawn since,
+    // while they still describe the set picked.
+    let mut list = sets(d);
+    let i = selected(d, list.len());
+    if let Some(set) = list.get_mut(i)
+        && shows(d, set)
+    {
+        take_fields(d, set);
+    }
+    let r = app.run(COMMAND, json!({ "sets": list }));
     // A name two sets share, a reserved name or a category too long keeps the dialog open to be
     // changed.
     if r.is_ok() {

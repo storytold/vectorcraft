@@ -8339,8 +8339,8 @@ paragraph and paragraph style using an edited set takes its new characters and n
 take Hard. An unknown key, a name used twice, a `from` the document has no set of and a sequence of one character fail
 the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
 
-`type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`) and paragraph styles (`styles`) use
-each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
+`type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`), paragraph styles (`styles`) and graphs
+(`graphs`, in the paragraph attributes a graph keeps for its labels) use each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
 built-in or custom set starts with: Hard and Soft list the characters they keep off a line's start and end, the East
 Asian comma and full stop as hanging punctuation and the Bunri-Kinshi pairs; None lists nothing.
 

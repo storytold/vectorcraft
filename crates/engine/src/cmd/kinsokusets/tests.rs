@@ -300,6 +300,80 @@ fn pasted_type_brings_its_kinsoku_sets() {
     assert_eq!(style_set(&s), Value::Null);
 }
 
+/// The Kinsoku Sets a graph keeps for its labels (value axis, categories, legend), and those its
+/// labels are drawn with now.
+fn graph_label_sets(s: &Session, id: u64) -> (Vec<String>, Vec<String>) {
+    let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap().clone();
+    let l = n.extras().graph.as_deref().unwrap().label_styles.clone();
+    let kept = [l.values_para, l.categories_para, l.legend_para].into_iter().flatten().map(|p| p.kinsoku_name().to_string()).collect();
+    let mut drawn = vec![];
+    n.walk(&mut |m| {
+        if let NodeKind::Text(t) = &m.kind {
+            drawn.push(t.para_at(0).kinsoku_name().to_string());
+        }
+    });
+    (kept, drawn)
+}
+
+/// A graph's labels keep a custom set as type does. Pasted into a document whose set of that name
+/// has other characters, they take the copy the paste adds, also once the graph is drawn again.
+/// Editing a set gives the graph's kept attributes the new characters, and deleting it gives them
+/// Hard.
+#[test]
+fn graph_labels_keep_their_custom_set() {
+    let mut s = session();
+    s.execute("type.kinsokuSets.set", &json!({"sets": [tight()]})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let id = s.execute("graph.create", &json!({"type": "column", "x": 10, "y": 10, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kinsoku": "Tight"})).unwrap();
+    let (kept, drawn) = graph_label_sets(&s, id);
+    assert_eq!(kept, ["Tight"; 3]);
+    assert!(!drawn.is_empty() && drawn.iter().all(|k| k == "Tight"), "{drawn:?}");
+    s.execute("edit.copy", &json!({})).unwrap();
+
+    // Pasted where the set of that name has other characters: the labels take the added copy.
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": "TIGHT", "cannotStart": "ー"}]})).unwrap();
+    let pasted = s.execute("edit.paste", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    assert_eq!(names(&s), ["TIGHT", "Tight 2"]);
+    s.execute("graph.setData", &json!({"id": pasted, "csv": csv})).unwrap();
+    let (kept, drawn) = graph_label_sets(&s, pasted);
+    assert_eq!(kept, ["Tight 2"; 3]);
+    assert!(drawn.iter().all(|k| k == "Tight 2"), "the labels drawn again keep the copy: {drawn:?}");
+
+    // A second copy becomes a symbol's art.
+    let in_symbol = s.execute("edit.paste", &json!({})).unwrap()["ids"][0].clone();
+    s.execute("symbol.new", &json!({"name": "Chart", "ids": [in_symbol]})).unwrap();
+    let symbol_starts = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Chart").unwrap().art.walk(&mut |n| {
+            if let Some(g) = n.extras().graph.as_deref() {
+                out.push(g.label_styles.values_para.as_ref().unwrap().kinsoku_set.as_deref().unwrap().cannot_start.clone());
+            }
+        });
+        out
+    };
+    assert_eq!(symbol_starts(&s).len(), 1);
+    let listed = s.execute("type.kinsokuSets.list", &json!({})).unwrap();
+    assert_eq!((listed["sets"][1]["name"].clone(), listed["sets"][1]["graphs"].clone()), (json!("Tight 2"), json!(2)), "{listed}");
+    assert_eq!(listed["sets"][0]["graphs"], 0);
+
+    // Edited, then deleted: the kept attributes follow the set, so the labels drawn again do too.
+    let edited = json!({"name": "Tight 2", "cannotStart": "ー"});
+    s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": "TIGHT", "cannotStart": "ー"}, edited]})).unwrap();
+    let l = &s.doc().unwrap().doc.node(NodeId(pasted)).unwrap().extras().graph.as_deref().unwrap().label_styles;
+    assert_eq!(l.values_para.as_ref().unwrap().kinsoku_set.as_deref().unwrap().cannot_start, ['ー']);
+    assert_eq!(symbol_starts(&s), [vec!['ー']], "a graph in a symbol's art too");
+    s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": "TIGHT", "cannotStart": "ー"}]})).unwrap();
+    s.execute("graph.setData", &json!({"id": pasted, "csv": csv})).unwrap();
+    let (kept, drawn) = graph_label_sets(&s, pasted);
+    assert_eq!(kept, ["Hard"; 3]);
+    assert!(drawn.iter().all(|k| k == "Hard"), "{drawn:?}");
+}
+
 /// New Set's starting point: Hard and Soft give their characters, None gives an empty set, and a
 /// custom set (any case) gives its own; an unknown base fails.
 #[test]

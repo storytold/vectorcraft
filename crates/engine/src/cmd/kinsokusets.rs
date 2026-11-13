@@ -13,10 +13,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::graph::LabelStyles;
 use vectorcraft_doc::text::{KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX};
-use vectorcraft_doc::{Document, Kinsoku, KinsokuSet, NodeKind, ParaStyle};
+use vectorcraft_doc::{Document, Kinsoku, KinsokuSet, Node, NodeKind, ParaStyle};
 
-use super::textstyles::each_text_mut;
+use super::textstyles::each_node_with_text_mut;
 use super::typecmd::refresh_bounds;
 use super::{CommandSpec, Result, Session, bad, cmd, has_doc};
 
@@ -33,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Kinsoku Sets",
             [],
             None,
-            "{} the active document's custom Kinsoku Shori sets, and the paragraphs and paragraph styles using each → {sets: [{name, cannotStart: characters, cannotEnd: characters, hanging: characters, inseparable: [sequence], paragraphs, styles}]}",
+            "{} the active document's custom Kinsoku Shori sets, and the paragraphs, paragraph styles and graphs (in the paragraph attributes they keep for their labels) using each → {sets: [{name, cannotStart: characters, cannotEnd: characters, hanging: characters, inseparable: [sequence], paragraphs, styles, graphs}]}",
             has_doc,
             list
         ),
@@ -58,25 +59,31 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// Call `f` with every paragraph of the type in `d`'s layers (opacity masks included), symbols,
-/// graph designs, pattern tiles and brush art, as [`each_text_mut`] reaches them.
-fn each_paragraph(d: &Document, f: &mut impl FnMut(&ParaStyle)) {
+/// Call `f` with every node in `d`'s layers (opacity masks included), symbols, graph designs,
+/// pattern tiles and brush art, the trees [`each_node_with_text_mut`] reaches.
+fn each_node(d: &Document, f: &mut impl FnMut(&Node)) {
     let brushes = vectorcraft_brush::library(d);
     let trees = d.layers.iter().map(|l| &**l).chain(d.symbols.iter().map(|s| &*s.art)).chain(d.graph_designs.iter().map(|g| &*g.art));
     let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
     let trees = trees.chain(patterns.flat_map(|p| p.art.iter().map(|a| &**a))).chain(brushes.iter().flat_map(|b| b.art()));
     for tree in trees {
-        vectorcraft_doc::swatches::walk_with_masks(tree, &mut |node| {
-            if let NodeKind::Text(t) = &node.kind {
-                (0..t.paragraph_count()).for_each(|i| f(t.para_at(i)));
-            }
-        });
+        vectorcraft_doc::swatches::walk_with_masks(tree, &mut |n| f(n));
     }
 }
 
-/// How many paragraphs and paragraph styles use each set of the document, by lowercased name.
-fn uses(s: &Session) -> Result<HashMap<String, (usize, usize)>> {
-    let mut n: HashMap<String, (usize, usize)> = HashMap::new();
+/// Call `f` with every paragraph of the type [`each_node`] reaches.
+fn each_paragraph(d: &Document, f: &mut impl FnMut(&ParaStyle)) {
+    each_node(d, &mut |node| {
+        if let NodeKind::Text(t) = &node.kind {
+            (0..t.paragraph_count()).for_each(|i| f(t.para_at(i)));
+        }
+    });
+}
+
+/// How many paragraphs, paragraph styles and graphs (in the paragraph attributes they keep for
+/// their labels) use each set of the document, by lowercased name.
+fn uses(s: &Session) -> Result<HashMap<String, (usize, usize, usize)>> {
+    let mut n: HashMap<String, (usize, usize, usize)> = HashMap::new();
     let d = &s.doc()?.doc;
     each_paragraph(d, &mut |p| {
         if let Some(set) = &p.kinsoku_set {
@@ -88,6 +95,16 @@ fn uses(s: &Session) -> Result<HashMap<String, (usize, usize)>> {
             n.entry(name.to_lowercase()).or_default().1 += 1;
         }
     }
+    each_node(d, &mut |node| {
+        let Some(g) = node.extras().graph.as_deref() else { return };
+        let mut l = g.label_styles.clone();
+        let mut names: Vec<String> = label_paras(&mut l).filter_map(|p| p.kinsoku_set.as_ref().map(|k| k.name.to_lowercase())).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
+            n.entry(name).or_default().2 += 1;
+        }
+    });
     Ok(n)
 }
 
@@ -99,11 +116,12 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
         .kinsoku_sets
         .iter()
         .map(|set| {
-            let (paragraphs, styles) = uses.get(&set.name.to_lowercase()).copied().unwrap_or_default();
+            let (paragraphs, styles, graphs) = uses.get(&set.name.to_lowercase()).copied().unwrap_or_default();
             let mut v = json!(set);
             if let Some(o) = v.as_object_mut() {
                 o.insert("paragraphs".into(), json!(paragraphs));
                 o.insert("styles".into(), json!(styles));
+                o.insert("graphs".into(), json!(graphs));
             }
             v
         })
@@ -226,6 +244,11 @@ fn replace(s: &mut Session, after: Vec<KinsokuSet>, renamed: HashMap<String, usi
     };
     let mut texts_change = false;
     each_paragraph(&s.doc()?.doc, &mut |p| texts_change |= !texts_change && fix(&mut p.clone()));
+    // A graph draws its labels again from the paragraph attributes it keeps for them.
+    let fix_labels = |l: &mut LabelStyles| label_paras(l).fold(false, |changed, p| fix(p) | changed);
+    each_node(&s.doc()?.doc, &mut |n| {
+        texts_change |= !texts_change && n.extras().graph.as_deref().is_some_and(|g| fix_labels(&mut g.label_styles.clone()));
+    });
     let style_attrs = |attrs: &Map<String, Value>| -> Option<Map<String, Value>> {
         let old: KinsokuSet = serde_json::from_value(attrs.get("kinsoku_set")?.clone()).ok()?;
         let new = next(&old)?;
@@ -253,17 +276,28 @@ fn replace(s: &mut Session, after: Vec<KinsokuSet>, renamed: HashMap<String, usi
                 st.attrs = m;
             }
         }
-        each_text_mut(d, &mut |t| {
-            let mut changed = false;
-            for p in t.para_styles_mut() {
-                changed |= fix(p);
+        each_node_with_text_mut(d, &mut |n| {
+            if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+                fix_labels(&mut g.label_styles);
             }
-            if changed {
-                refresh_bounds(t);
+            if let NodeKind::Text(t) = &mut n.kind {
+                let mut changed = false;
+                for p in t.para_styles_mut() {
+                    changed |= fix(p);
+                }
+                if changed {
+                    refresh_bounds(t);
+                }
             }
             Ok(())
         })
     })
+}
+
+/// The paragraph attributes graph label styles `l` keep: the value axis, the categories and the
+/// legend.
+fn label_paras(l: &mut LabelStyles) -> impl Iterator<Item = &mut ParaStyle> {
+    [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten()
 }
 
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
