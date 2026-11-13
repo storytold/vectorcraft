@@ -1992,6 +1992,8 @@ antiAlias	Sharp	シャープ
 	Objects on Path Tool	パス上のオブジェクトツール
 	Attach Objects on Path	パス上のオブジェクトをアタッチ
 	Expand Objects on Path	パス上のオブジェクトを拡張
+	Detach	切り離し
+	Detach Object from Path	オブジェクトをパスから切り離し
 	Release Live Paint	ライブペイントを解除
 	Release Repeat	リピートを解除
 	Release Slice	スライスを解除
@@ -4577,6 +4579,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a repeat	リピートを選択してください
 @msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select an Objects on Path group	パス上のオブジェクトグループを選択してください
+@msg	choose the object to detach with its Select/Move widget	切り離すオブジェクトを選択/移動ウィジェットで選んでください
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合パス、ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のパスにはオブジェクトをアタッチできません
 @msg	a clipping path can't take objects	クリッピングパスにはオブジェクトをアタッチできません
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のオブジェクトはパスにアタッチできません
@@ -5183,6 +5186,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
 @msg	replace: the object to replace was changed or deleted	replace: 置き換えるオブジェクトは変更または削除されています
+@msg	the document it was prepared for is no longer active	準備したときのドキュメントがもうアクティブではありません
 @msg	Couldn't place {name}: {e}	{name} を配置できませんでした: {e}
 @msg	no print service	プリントサービスがありません
 @msg	the print job has no data	プリントジョブにデータがありません
@@ -5246,6 +5250,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5618,7 +5623,10 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
+	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
 @msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください
@@ -6428,6 +6436,13 @@ axis	Y Axis	Y 軸
 	Area Text	エリア内文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	文字を字形の境界で測定
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	ピクセルにスナップのオプション
+	Pixel Snapping Options…	ピクセルにスナップのオプション…
+	Snap to Pixel While Drawing	描画時にピクセルにスナップ
+	Snap to Pixel While Moving	移動時にピクセルにスナップ
+	Snap to Pixel While Scaling	拡大・縮小時にピクセルにスナップ
+	These options take effect when View › Snap to Pixel is on.	これらのオプションは、表示 › ピクセルにスナップがオンのときに有効になります。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す

@@ -1813,6 +1813,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Alat objekti na putanji
 	Attach Objects on Path	Priloži objekte na putanju
 	Expand Objects on Path	Proširi objekte na putanji
+	Detach	Odvoji
+	Detach Object from Path	Odvoji objekat s putanje
 	Release Live Paint	Oslobodi živo bojenje
 	Release Repeat	Oslobodi ponavljanje
 	Release Slice	Oslobodi isječak
@@ -4909,6 +4911,7 @@ imageTrace	Outline	Obris
 @msg	paths contain invalid coordinates	putanje sadrže nevažeće koordinate
 @msg	paths: give at least one file	paths: navedite barem jednu datoteku
 @msg	replace: the object to replace was changed or deleted	replace: objekat za zamjenu je promijenjen ili izbrisan
+@msg	the document it was prepared for is no longer active	dokument za koji je pripremljeno više nije aktivan
 @msg	pattern missing	uzorak nedostaje
 @msg	patterns nested too deeply are filled with mid-grey	previše duboko ugniježđeni uzorci ispunjavaju se srednje sivom
 @msg	percent must be above 0 and at most 6400, not {p}	percent mora biti iznad 0 i najviše 6400, a ne {p}
@@ -4944,6 +4947,7 @@ imageTrace	Outline	Obris
 @msg	select a repeat	odaberite ponavljanje
 @msg	select an Intertwine group	odaberite Intertwine grupu
 @msg	select an Objects on Path group	odaberite grupu objekata na putanji
+@msg	choose the object to detach with its Select/Move widget	odaberite objekat koji želite odvojiti njegovom ručicom Odaberi/Pomjeri
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	putanja unutar složene putanje, stapanja, omotnice, ponavljanja ili Intertwine grupe ne može primiti objekte
 @msg	a clipping path can't take objects	putanja isijecanja ne može primiti objekte
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekti unutar stapanja, omotnice, ponavljanja ili Intertwine grupe ne mogu se priložiti putanji
@@ -6242,6 +6246,12 @@ axis	Y Axis	Y osa
 	Area Text	Tekst u oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
+	Pixel Snapping Options	Opcije prianjanja uz piksel
+	Pixel Snapping Options…	Opcije prianjanja uz piksel…
+	Snap to Pixel While Drawing	Prilijepi uz piksel pri crtanju
+	Snap to Pixel While Moving	Prilijepi uz piksel pri pomjeranju
+	Snap to Pixel While Scaling	Prilijepi uz piksel pri skaliranju
+	These options take effect when View › Snap to Pixel is on.	Ove opcije djeluju kada je uključeno Prikaz › Prilijepi uz piksel.
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif

@@ -18,8 +18,8 @@ use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint,
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer};
 use vectorcraft_doc::live::GradientMesh;
 use vectorcraft_doc::pattern::{PatternDef, place_art};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling};
-use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, Vec2, shapes};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling, TextObject};
+use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, SubPath, Vec2, shapes};
 
 use super::dimension::EndedLink;
 use super::edit::selected_roots;
@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Options",
             [],
             None,
-            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
+            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands (in type, on the outline Object makes of a character), which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
             has_selection,
             |s, _| {
                 let roots = selected_roots(s)?;
@@ -197,7 +197,7 @@ impl Expandable {
             // Once one is found, the next path is not measured.
             e.gradient = e.gradient
                 || match &c.kind {
-                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                    NodeKind::Text(t) => text_gradient_expands(d, t),
                     _ => shape && gradient_expands(d, c),
                 };
             e.fill |= e.gradient;
@@ -245,6 +245,34 @@ fn gradient_expands(d: &Document, l: &Node) -> bool {
                 && piece_gradient_expands(d, c));
     });
     any
+}
+
+/// Whether type `t` has a gradient fill that Fill expands once Object has outlined it: one of the
+/// paths `type.createOutlines` makes of its glyphs, ruby glyphs and underline and strikethrough
+/// bars, each painted as its run, has one ([`gradient_expands`] on that path's own box). Inline
+/// graphics and color glyphs become other art. Leaves the document as it is and stops at the
+/// first such path.
+fn text_gradient_expands(d: &Document, t: &TextObject) -> bool {
+    if !t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))) {
+        return false;
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let expands = |run: usize, outline: &BezPath| {
+        let style = t.runs.get(run).map(|r| &r.style);
+        if !matches!(style.map_or_else(|| t.first_style().fill, |s| s.fill.clone()), Paint::Gradient(_)) {
+            return false;
+        }
+        let path = PathData::from_bezpath(outline).transformed(t.xf);
+        if path.is_empty() {
+            return false;
+        }
+        let appearance = style.map_or_else(|| t.first_style().appearance(), |s| s.appearance());
+        gradient_expands(d, &Node::path(NodeId(u64::MAX), path, appearance))
+    };
+    let inline = |gi: usize| lay.inlines.iter().find(|i| i.glyph == gi).is_some_and(|i| t.runs.get(i.run).is_some_and(|r| r.inline.is_some()));
+    lay.glyphs.iter().enumerate().any(|(gi, g)| !inline(gi) && g.image.is_none() && g.colour.is_none() && expands(g.run, &g.outline))
+        || lay.ruby.iter().any(|g| expands(g.run, &g.outline))
+        || vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t).iter().any(|(run, bar)| expands(*run, bar))
 }
 
 /// [`gradient_expands`] for a path that no live-effect plug-in paints ([`expand_piece_fills`]).

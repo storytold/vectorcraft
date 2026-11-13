@@ -2003,6 +2003,8 @@ file-filter	Templates	Sablonok
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
+	Detach	Leválasztás
+	Detach Object from Path	Objektum leválasztása az útvonalról
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -5171,6 +5173,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -5477,6 +5480,7 @@ imageTrace	Outline	Körvonal
 @msg	paths contain invalid coordinates	az útvonalakban érvénytelen koordináták vannak
 @msg	paths: give at least one file	paths: legalább egy fájlt adj meg
 @msg	replace: the object to replace was changed or deleted	replace: a cserélendő objektumot módosították vagy törölték
+@msg	the document it was prepared for is no longer active	az a dokumentum, amelyhez előkészítették, már nem aktív
 @msg	pattern missing	hiányzik a mintázat
 @msg	patterns nested too deeply are filled with mid-grey	a túl mélyen egymásba ágyazott mintázatok helyén középszürke kitöltés áll
 @msg	PDF settings are not an object	a PDF-beállítások nem objektumot alkotnak
@@ -5559,6 +5563,7 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	choose the object to detach with its Select/Move widget	válaszd ki a leválasztandó objektumot a Kijelölés/Mozgatás vezérlőjével
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
 @msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz
@@ -5941,7 +5946,9 @@ imageTrace	Outline	Körvonal
 @msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	A grafikák sík lapokra kerülnek: használja a Kihúzás vagy a Sík objektumtípust
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
+@msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
 @msg	The graphics are too complex: simplify the symbols' art	A grafikák túl összetettek: egyszerűsítse a szimbólumok rajzát
@@ -6720,6 +6727,13 @@ axis	Y Axis	Y tengely
 	Area Text	Területszöveg
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pixelhez illesztés beállításai
+	Pixel Snapping Options…	Pixelhez illesztés beállításai…
+	Snap to Pixel While Drawing	Illesztés pixelhez rajzoláskor
+	Snap to Pixel While Moving	Illesztés pixelhez mozgatáskor
+	Snap to Pixel While Scaling	Illesztés pixelhez méretezéskor
+	These options take effect when View › Snap to Pixel is on.	Ezek a beállítások akkor érvényesek, ha a Nézet › Illesztés pixelhez be van kapcsolva.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése

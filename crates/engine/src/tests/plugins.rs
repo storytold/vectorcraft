@@ -796,30 +796,269 @@ fn expanding_a_pattern_fill_keeps_each_piece_s_own_paint() {
     assert_eq!(patterns, 0, "the tiles are objects");
 }
 
-/// Two painted effects on one fill, the first returning a piece with two fills: the second replaces
-/// the first of them and the other fill stays over it.
+/// A path's bounds and the paints of its fills and strokes, each stroke with its weight.
+type PaintedPath = (Option<vectorcraft_geom::Rect>, Vec<(Paint, Option<f64>)>);
+
+/// The paths of `id`'s reshaped art that paint, in paint order, each with the fills and strokes of
+/// it that paint.
+fn painted_paths(s: &Session, id: NodeId) -> Vec<PaintedPath> {
+    let st = s.doc().unwrap();
+    let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+    let mut paths = vec![];
+    art.walk(&mut |n| {
+        if let Some(p) = n.path_data() {
+            let items: Vec<_> = n
+                .appearance
+                .items
+                .iter()
+                .map(|i| match i {
+                    vectorcraft_doc::AppearanceItem::Fill(f) => (f.paint.clone(), None),
+                    vectorcraft_doc::AppearanceItem::Stroke(st) => (st.paint.clone(), Some(st.width)),
+                })
+                .filter(|(paint, _)| !paint.is_none())
+                .collect();
+            if !items.is_empty() {
+                paths.push((p.bounds(), items));
+            }
+        }
+    });
+    paths
+}
+
+fn paint(hex: &str) -> Paint {
+    Paint::solid(Color::from_hex(hex).unwrap())
+}
+
+/// Two painted effects on one fill, the first returning a piece with two fills: the second runs on
+/// each of them, told which fill it is on. On the second fill it returns a blue square at 80 pt; on
+/// the first it returns a result that is refused, which leaves only that fill, red, on the square at
+/// 40 pt.
 #[test]
-fn a_second_painted_effect_on_a_fill_keeps_the_piece_s_other_fills() {
+fn a_later_painted_effect_runs_on_every_fill_a_piece_returns() {
     let mut s = session();
     let id = rect(&mut s, 10.0, "#ff0000");
     let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
-    let one = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}]}).to_string();
+    let blue = json!({"objects": [{"path": square_at(80.0), "fills": [solid("#0000ff")]}]}).to_string();
     install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &two));
-    install_wat(&mut s, &tpl::returning(&painting("test.engine.onefill", true), &one));
+    install_wat(&mut s, &tpl::when_given(&painting("test.engine.onsecond", true), tpl::Given::Params, r#""item":{"fill":1}"#, &blue));
     let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
     run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twofills", "item": fill}));
-    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.onefill", "item": fill}));
-    assert_eq!(drawn(&s).pixel(50, 50), GREEN, "the other fill paints over the replaced one");
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.onsecond", "item": fill}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50)), (RED, BLUE), "the first fill as it was, the second moved and blue");
+    let (a, b) = (square_at(40.0).bounds(), square_at(80.0).bounds());
+    assert_eq!(painted_paths(&s, id), [(a, vec![(paint("#ff0000"), None)]), (b, vec![(paint("#0000ff"), None)])]);
+    // The same result for both fills: each is replaced.
+    let one = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.onsecond", true), &one));
+    assert_eq!(painted_paths(&s, id), [(a, vec![(paint("#0000ff"), None)]), (a, vec![(paint("#0000ff"), None)])]);
+}
+
+/// On a stroke, a later painted effect runs on each stroke the first returns, with its own weight
+/// and place among them, and keeps their order.
+#[test]
+fn a_later_painted_effect_runs_on_every_stroke_a_piece_returns() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "paint.setStroke", json!({"ids": [id.0], "color": "#000000"}));
+    let two = json!({"objects": [{"path": square_at(40.0), "strokes": [{"paint": solid("#ff0000"), "width": 2}, {"paint": solid("#00ff00"), "width": 6}]}]})
+        .to_string();
+    let blue = json!({"objects": [{"path": square_at(80.0), "strokes": [{"paint": solid("#0000ff"), "width": 4}]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twostrokes", true), &two));
+    install_wat(&mut s, &tpl::when_given(&painting("test.engine.onsecondstroke", true), tpl::Given::Params, r#""item":{"stroke":1}"#, &blue));
+    let stroke = node(&s, id).appearance.items.iter().position(|i| !i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.twostrokes", "plugin.test.engine.onsecondstroke"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": stroke}));
+    }
+    let stroked: Vec<_> = painted_paths(&s, id).into_iter().filter(|(_, items)| items.iter().any(|(_, w)| w.is_some())).collect();
+    let (a, b) = (square_at(40.0).bounds(), square_at(80.0).bounds());
+    assert_eq!(stroked, [(a, vec![(paint("#ff0000"), Some(2.0))]), (b, vec![(paint("#0000ff"), Some(4.0))])]);
+}
+
+/// A third painted effect runs on every fill the second returned, for each fill the first returned.
+#[test]
+fn a_third_painted_effect_visits_every_fill_from_the_second() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let first = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let second = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff"), solid("#00ffff")]}]}).to_string();
+    let third = json!({"objects": [{"path": square_at(80.0), "fills": [solid("#ffff00")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.third.a", true), &first));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.third.b", true), &second));
+    install_wat(&mut s, &tpl::when_given(&painting("test.engine.third.c", true), tpl::Given::Params, r#""item":{"fill":1}"#, &third));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["a", "b", "c"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": format!("plugin.test.engine.third.{effect}"), "item": fill}));
+    }
+    let (a, b) = (square_at(40.0).bounds(), square_at(80.0).bounds());
+    let pair = [(a, vec![(paint("#0000ff"), None)]), (b, vec![(paint("#ffff00"), None)])];
+    assert_eq!(painted_paths(&s, id), [pair.clone(), pair].concat());
+}
+
+/// A later live effect that changes geometry only runs on each fill a painted effect returned, told
+/// which fill it is on: on the second it moves the square to 80 pt, and the first stays at 40 pt.
+#[test]
+fn a_later_geometry_effect_uses_each_generated_fill_s_context() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let moved = json!({"objects": [{"path": square_at(80.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.geomfills", true), &two));
+    install_wat(&mut s, &tpl::when_given(&painting("test.engine.geomsecond", false), tpl::Given::Params, r#""item":{"fill":1}"#, &moved));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.geomfills", "plugin.test.engine.geomsecond"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": fill}));
+    }
+    let (a, b) = (square_at(40.0).bounds(), square_at(80.0).bounds());
+    assert_eq!(painted_paths(&s, id), [(a, vec![(paint("#ff0000"), None)]), (b, vec![(paint("#00ff00"), None)])]);
+}
+
+/// A later Outline Stroke effect runs on each stroke a painted effect returned, with that stroke's
+/// weight: the 2 pt stroke's outline is 22 pt wide and the 6 pt stroke's 26 pt, in their order.
+#[test]
+fn a_later_outline_stroke_uses_each_generated_stroke_s_weight() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "paint.setStroke", json!({"ids": [id.0], "color": "#000000"}));
+    let two = json!({"objects": [{"path": square_at(40.0), "strokes": [{"paint": solid("#ff0000"), "width": 2}, {"paint": solid("#00ff00"), "width": 6}]}]})
+        .to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.outlinestrokes", true), &two));
+    let stroke = node(&s, id).appearance.items.iter().position(|i| !i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.outlinestrokes", "item": stroke}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "path.outlineStroke", "params": {}, "item": stroke}));
     let st = s.doc().unwrap();
     let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
-    let mut paints = vec![];
+    // Each outline is a compound path (the ring around the square): its width and its strokes.
+    let mut outlines = vec![];
     art.walk(&mut |n| {
-        if n.path_data().is_some() {
-            paints.push(n.appearance.items.iter().filter(|i| i.is_fill()).map(|i| i.paint().clone()).collect::<Vec<_>>());
+        if let vectorcraft_doc::NodeKind::Compound { children, .. } = &n.kind {
+            let bounds = children.iter().filter_map(|c| c.path_data().and_then(PathData::bounds)).reduce(|a, b| a.union(b));
+            let strokes: Vec<_> = n
+                .appearance
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    vectorcraft_doc::AppearanceItem::Stroke(st) => Some((st.paint.clone(), st.width)),
+                    vectorcraft_doc::AppearanceItem::Fill(_) => None,
+                })
+                .collect();
+            outlines.push((bounds.map(|b| (b.width() * 1000.0).round() / 1000.0), strokes));
         }
     });
-    let fill = |hex: &str| Paint::solid(Color::from_hex(hex).unwrap());
-    assert!(paints.contains(&vec![fill("#0000ff"), fill("#00ff00")]), "{paints:?}");
+    assert_eq!(
+        outlines,
+        [(Some(22.0), vec![(paint("#ff0000"), 2.0)]), (Some(26.0), vec![(paint("#00ff00"), 6.0)])],
+        "each stroke is outlined at its own weight"
+    );
+}
+
+/// A later painted effect's runs on the fills a piece returned share the effects' budget: each run
+/// that fits gives all its pieces, and once the budget is spent the remaining fills stay together
+/// on the piece's path, with none of their run's pieces.
+#[test]
+fn painted_fills_share_the_budget_without_partial_results() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let fills = vec![solid("#ff0000"); vectorcraft_plugins::objects::MAX_ITEMS];
+    let first = json!({"objects": [{"path": square_at(40.0), "fills": fills}]}).to_string();
+    let tiny = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.1, 0.0), Point::new(0.0, 0.1)], true));
+    let many = json!({"objects": vec![json!({"path": tiny}); 400]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.budget.fills", true), &first));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.budget.many", true), &many));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.budget.fills", "plugin.test.engine.budget.many"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": fill}));
+    }
+    let paths = painted_paths(&s, id);
+    let tinies = paths.iter().filter(|(b, _)| *b == tiny.bounds()).count();
+    let kept: Vec<_> = paths.iter().filter(|(b, _)| *b == square_at(40.0).bounds()).collect();
+    assert_eq!(kept.len(), 1, "the fills left out stay together");
+    let ran = vectorcraft_plugins::objects::MAX_ITEMS - kept[0].1.len();
+    assert!(ran > 1 && !kept[0].1.is_empty(), "{ran} runs gave their pieces");
+    assert_eq!(tinies, ran * 400, "every run that fit gave all its pieces");
+    assert!(paths.len() <= vectorcraft_plugins::objects::MAX_OBJECTS, "{} paths", paths.len());
+}
+
+/// A later painted effect runs on each of 256 fills a painted effect returned on an 8,000-anchor
+/// path, although 256 copies of that path would pass the effects' budget, when what it returns
+/// fits.
+#[test]
+fn a_later_painted_effect_runs_on_many_fills_of_a_large_piece_when_its_results_fit() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let zigzag: Vec<Point> = (0..8_000).map(|i| Point::new(40.0 + f64::from(i) * 20.0 / 8_000.0, if i % 2 == 0 { 40.0 } else { 60.0 })).collect();
+    let large = PathData::single(SubPath::polyline(&zigzag, true));
+    let fills = vec![solid("#ff0000"); vectorcraft_plugins::objects::MAX_ITEMS];
+    let first = json!({"objects": [{"path": large, "fills": fills}]}).to_string();
+    let tiny = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.1, 0.0), Point::new(0.0, 0.1)], true));
+    let small = json!({"objects": [{"path": tiny}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.large.fills", true), &first));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.large.small", true), &small));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.large.fills", "plugin.test.engine.large.small"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": fill}));
+    }
+    let paths = painted_paths(&s, id);
+    let tinies = paths.iter().filter(|(b, _)| *b == tiny.bounds()).count();
+    assert_eq!(tinies, vectorcraft_plugins::objects::MAX_ITEMS, "every fill's run");
+    assert!(paths.iter().all(|(b, _)| *b != large.bounds()), "no fill left on the large path");
+}
+
+/// An open path of `curves` tall curves, each drawn with about 5,200 lines.
+fn tall_curves(curves: u32) -> PathData {
+    let h = 3_000_000.0;
+    let anchors = (0..=curves)
+        .map(|i| {
+            let x = 40.0 + f64::from(i);
+            vectorcraft_geom::Anchor::with_handles(Point::new(x, 0.0), Point::new(x, -h), Point::new(x, h))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, false))
+}
+
+/// A later painted effect's run on the first of two fills a painted effect returned on a path that
+/// takes most of the effects' budget gives its result when it and the second fill's result fit
+/// together, although the result and another copy of the path would not.
+#[test]
+fn a_later_painted_run_counts_the_results_after_it_before_keeping_room_for_its_input() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let (large, result) = (tall_curves(1_000), tall_curves(600));
+    let tiny = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.1, 0.0), Point::new(0.0, 0.1)], true));
+    let two = json!({"objects": [{"path": large, "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let on_first = json!({"objects": [{"path": result}]}).to_string();
+    let on_second = json!({"objects": [{"path": tiny}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.tall.fills", true), &two));
+    let second = painting("test.engine.tall.each", true);
+    install_wat(&mut s, &tpl::when_given_else(&second, tpl::Given::Params, r#""item":{"fill":0}"#, &on_first, &on_second));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.tall.fills", "plugin.test.engine.tall.each"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": fill}));
+    }
+    let want = [(result.bounds(), vec![(paint("#ff0000"), None)]), (tiny.bounds(), vec![(paint("#00ff00"), None)])];
+    assert_eq!(painted_paths(&s, id), want, "both runs give their results");
+}
+
+/// When the results of a later painted effect's runs on the two fills of a large path do not fit
+/// together, and the first fill's result and another copy of the path do not fit either, the first
+/// fill stays on the path and the second fill's result, which fits beside the path, is drawn.
+#[test]
+fn a_later_painted_run_that_did_not_fit_beside_an_earlier_result_fits_once_that_is_left_out() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let (large, first, second) = (tall_curves(577), tall_curves(1_058), tall_curves(770));
+    let two = json!({"objects": [{"path": large, "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let on_first = json!({"objects": [{"path": first}]}).to_string();
+    let on_second = json!({"objects": [{"path": second}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.refit.fills", true), &two));
+    let each = painting("test.engine.refit.each", true);
+    install_wat(&mut s, &tpl::when_given_else(&each, tpl::Given::Params, r#""item":{"fill":0}"#, &on_first, &on_second));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for effect in ["plugin.test.engine.refit.fills", "plugin.test.engine.refit.each"] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "item": fill}));
+    }
+    let want = [(large.bounds(), vec![(paint("#ff0000"), None)]), (second.bounds(), vec![(paint("#00ff00"), None)])];
+    assert_eq!(painted_paths(&s, id), want, "the second fill's result is drawn");
 }
 
 /// A Transform effect before a painted effect on a fill moves the fill's placed gradient: a piece
@@ -1181,6 +1420,39 @@ fn the_first_view_defers_plug_in_effects_past_its_budget() {
     assert_eq!(fx_c.view(|| drawn(&other)).pixel(180, 50), RED);
     fx_c.first_view_done();
     assert_eq!(fx_c.take_report(), Some(0));
+}
+
+/// A later painted effect deferred on the fills a piece returned is listed once, at its place among
+/// the object's fill's effects, and a refresh of the object runs it on each of them.
+#[test]
+fn deferred_runs_on_the_fills_a_piece_returned_keep_the_fill_s_stage() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let blue = json!({"objects": [{"path": square_at(80.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.deferred.two", true), &two));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.deferred.later", true), &blue));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.deferred.two", "item": fill}));
+    // The first effect's result is kept from a drawing outside a view's budget.
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.deferred.later", "item": fill}));
+    let step = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(3_000));
+    let fx = vectorcraft_plugins::deferred::Deferrals::with_clock(stepping_clock(&step));
+    s.doc_mut().unwrap().plugin_effects = fx.clone();
+    let img = fx.view(|| drawn(&s));
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50)), (GREEN, WHITE), "the fills on the first effect's piece");
+    let places = run(&mut s, "effect.deferredStatus", json!({}))["effects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| (e["objectId"].as_u64().unwrap(), e["item"].as_u64(), e["effectIndex"].as_u64().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(places, [(id.0, Some(fill as u64), 1)], "the fill's stage, listed once");
+    step.store(0, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(run(&mut s, "effect.refreshDeferred", json!({"ids": [id.0]})), json!({"refreshed": 1, "stillDeferred": 0, "failed": 0}));
+    let img = fx.view(|| drawn(&s));
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50)), (WHITE, BLUE), "both fills replaced");
 }
 
 /// Deferred stages are listed where their effects are: after an effect that changes no geometry,

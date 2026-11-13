@@ -156,6 +156,47 @@ under 0.9 px RMS from the gradient's contours, 1.13 px when smoothed as edges, a
 four corners); `layers::tests` (a ramp, flat colors in palette entries far apart, close flat colors, a
 thin flat stroke, colors off the line between their entries, and Grayscale's grays, each read from both
 sides of the crack) and `subpixel::tests` (the rule, and one decision for a whole piece from either side).
+## Staircases in smooth areas
+Where a band border in a gradient or a shaded area runs at a slant, its pixels form a staircase whose
+steps are two or more pixels long. One piece of outline can run along a sharp edge in the image and then
+along such a border with no junction between them. That piece as a whole is not a contour (see above),
+and the outline kept a corner at every step. `subpixel::outline` now reads a run of three or more edges of
+1 to 8 px (`STAIR_MAX`), each turning one way where it starts and the other where it ends, with no
+junction on it, as a staircase when the run's own cracks pass `subpixel::low_contrast`. A run is cut at
+any step whose own cracks show half of the step between the two colors or more. The 8 px limit and the
+one-half cut are VectorCraft's own values. The run's edges are then steps, as one-pixel steps already
+were: the outline has no corner where two of them meet, and each gives one point, its middle, moved by the
+mean of its cracks' shifts. Where a run meets an edge that is not a step, the corner between them stays,
+so a straight edge longer than 8 px next to a staircase stays straight. A straight edge of 8 px or less
+between two turns of opposite sign is read as one more step of the run. Inside a run, two one-pixel steps
+between longer ones are read as part of the slope and do not make a notch. A staircase of longer steps,
+and one whose cracks read as an edge, keep their corners, and Black and White traces do not use the rule.
+The runs are the same from either side of the border.
+Measured with the harness below, before and after the change: rows of the "flat colour art" inputs do not
+change. On gradient and photo inputs, anchors change in 106 rows, 101 of them fewer, by −64% to +6.4%: for
+example 390 to 142 (Shades of Gray, linear gradients), 1,860 to 1,537 (High Fidelity Photo, linear
+gradients), 6,766 to 6,542 (High Fidelity Photo, gradient and photo) and 47 to 50 (High Fidelity Photo with
+Gradients, blurred). On gradient and photo, 6 Colors, 6 Colors with Shapes, with Auto Grouping, without
+Gradients and enhanced each leave a gap of 0.9 px (was 1.2) and an overlap of 1.0 px (was 0.8). Edge ΔE
+of Shades of Gray on linear gradients goes from 8.36 to 8.40 (8.39 enhanced), and that of 6 Colors with
+Gradients on a blurred input from 2.24 to 2.22; other ΔE and edge ΔE values change by 0.01 or less.
+Lines % changes by −2 to +3, grouped % by −1 to +4, upright % by +1 in 3 rows (Shades of Gray on a blurred
+input), and specks do not change. On synthetic photos of 800 and 4,000 px traced outside this harness,
+the corners of rectilinear staircases per 100 px of outline fall from 0.57 to 0.46 and from 1.09 to 0.94
+with High Fidelity Photo. On the 800 px photo, the 95th percentile of the pixel difference with High
+Fidelity Photo rises from 6.33 to 6.67, and 16 Colors leaves 2 staircases of steps of 2 px or more where
+it left none. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn outlines in `subpixel::tests`:
+`a_staircase_of_longer_steps_in_a_smooth_area_becomes_the_slope_through_its_steps` (a piece with a
+staircase of 2 × 3 px steps in a smooth area, a straight run and the same staircase on a sharp edge: the
+first gives its steps' middles and none of its corners, the straight run keeps the corners at its ends, the
+second staircase keeps its corners, both regions get the same points, and 10 px steps keep their corners
+in a smooth area), `a_staircase_that_runs_on_from_a_smooth_area_into_an_edge_keeps_the_edges_corners`,
+`a_staircase_whose_cracks_do_not_read_as_a_contour_keeps_its_corners` (two flat colors),
+`a_staircase_step_moves_by_the_mean_shift_of_its_cracks`,
+`a_staircase_of_mixed_one_pixel_and_longer_steps_is_one_slope_without_a_notch`,
+`a_run_of_two_steps_keeps_its_corners`, `a_junction_on_a_step_ends_the_staircase_there` and
+`a_step_whose_cracks_read_as_an_edge_ends_the_staircase_there`.
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
 right. It used to build a table of outgoing directions for every pixel corner in a raster pass and
