@@ -11,13 +11,17 @@
 //! - The selection column selects a row's art (`layer.selectAll`, Shift adds or removes); a row
 //!   whose art is selected shows a square in its layer's colour, and dragging that square onto
 //!   another row moves the selected art there (Alt copies it).
-//! - The eye and lock columns toggle a row (`layer.setProps`); dragging down a column sets every
-//!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
-//!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
-//!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
-//!   `layer.lockOthers` and `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers
-//!   to Outline and the row's layer to Preview (`layer.outlineOthers`), or switches every layer to
-//!   Preview when the others are in Outline (`layer.previewAll`).
+//! - The eye and lock columns toggle a row (`layer.setProps`), a ruler guide's row included;
+//!   dragging down a column sets every row it passes to the same state, in one undo step.
+//!   Ctrl/Cmd-click a layer's eye switches it between Preview and Outline. Alt-click an eye hides
+//!   the other layers (`layer.hideOthers`), or shows every layer when they are hidden
+//!   (`layer.showAll`); Alt-click a lock does the same with `layer.lockOthers` and
+//!   `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers to Outline and the
+//!   row's layer to Preview (`layer.outlineOthers`), or switches every layer to Preview when the
+//!   others are in Outline (`layer.previewAll`).
+//! - A ruler guide's row selects the guide (`guide.select`) and leaves no row highlighted, so
+//!   Delete then deletes the guide; dragged onto another layer's row the guide goes there
+//!   (`guide.setLayer`), and onto the trash it is deleted (`guide.remove`).
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
 //!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
@@ -134,7 +138,7 @@ enum LayersDrag {
     /// The selected-art square: the selected objects go to the row it is dropped on.
     Art,
     /// Ruler guide rows (indexes into the document's guides): they go to the layer of the row
-    /// they are dropped on.
+    /// they are dropped on, or are deleted when dropped on the trash.
     Guides(Vec<usize>),
 }
 
