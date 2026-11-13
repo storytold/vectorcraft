@@ -1175,15 +1175,15 @@ const MAX_DIFFERING: usize = 64;
 const MAX_PATCH_PAIRS: usize = 4_000_000;
 
 /// The layers as read and at the placed files' other placement (each with its count of text
-/// objects the page doesn't draw), the one that draws closer to the page first. `reflow` as in
-/// [`PageView::difference`].
-fn closer_first(
+/// objects the page doesn't draw, and what goes with it), the one that draws closer to the page
+/// first. `reflow` as in [`PageView::difference`].
+fn closer_first<T>(
     frame: &Frame<'_>,
     view: &mut PageView,
-    doc: (Document, usize),
-    other: Option<(Document, usize)>,
+    doc: (Document, usize, T),
+    other: Option<(Document, usize, T)>,
     reflow: bool,
-) -> Vec<(Document, usize)> {
+) -> Vec<(Document, usize, T)> {
     match other {
         Some(other)
             if view.difference_on_every_page(&other.0, frame.rect, reflow).any < view.difference_on_every_page(&doc.0, frame.rect, reflow).any =>
@@ -1320,11 +1320,15 @@ struct Placements<'a> {
 }
 
 /// [`keep_differing`] of the placement of `layers` that draws closer to the page, the envelopes of
-/// type the page holds against them ([`held_back`]) having their drawn art and hidden type back,
-/// and where none of that placement's differing objects can then come in as the page's art, every
-/// envelope of type: the document, how many of its text objects were taken out, its notes, and
-/// whether an envelope of type got its drawn art back. `free` is set to the places of those the
-/// page doesn't hold against the layers.
+/// type the page holds against that placement ([`held_back`], each placement weighed on its own: the
+/// other one draws placed files elsewhere, under or over the envelopes) having their drawn art and
+/// hidden type back; and where none of the placements' differing objects can then come in as the
+/// page's art, every envelope of type: the document, how many of its text objects were taken out,
+/// its notes, and whether an envelope of type got its drawn art back. A placement that draws as the
+/// page with only the envelopes the page holds put back is used as it is, as one with all the live
+/// envelopes' drawn art put back would have been ([`drawn_or_trusted`]): nothing in it differs to
+/// come in as the page's art. `free` is set to the places of those the page doesn't hold against
+/// the layers as read.
 #[allow(clippy::too_many_arguments)]
 fn keep_differing_typed(
     frame: &Frame<'_>,
@@ -1337,18 +1341,28 @@ fn keep_differing_typed(
 ) -> Option<(Document, usize, Vec<String>, bool)> {
     let held = held_back(frame, view, layers.doc, layers.drawn, reflow);
     *free = Some(free_places(layers.places, &held));
+    let held_other = layers.other.map(|(other, _)| held_back(frame, view, other, layers.drawn, reflow));
     let all: BTreeSet<NodeId> = layers.places.iter().map(|(id, _)| *id).collect();
-    let tries = if held.len() < all.len() { vec![held, all] } else { vec![all] };
-    tries.into_iter().find_map(|held| {
+    let fewer = held.len() < all.len() || held_other.as_ref().is_some_and(|h| h.len() < all.len());
+    let mut tries = vec![];
+    if fewer {
+        tries.push((held, held_other));
+    }
+    tries.push((all.clone(), Some(all.clone())));
+    tries.into_iter().find_map(|(held, held_other)| {
+        // Each placement with what it put back: whether an envelope of type, and whether only some.
         let mut base = layers.doc.clone();
-        let typed = type_drawn(&mut base, layers.drawn, &held);
+        let typed = (type_drawn(&mut base, layers.drawn, &held), held.len() < all.len());
         let other = layers.other.map(|(other, unseen)| {
-            let mut other = other.clone();
-            type_drawn(&mut other, layers.drawn, &held);
-            (other, *unseen)
+            let (mut other, held) = (other.clone(), held_other.as_ref().unwrap_or(&held));
+            let typed = (type_drawn(&mut other, layers.drawn, held), held.len() < all.len());
+            (other, *unseen, typed)
         });
-        let placements = closer_first(frame, view, (base, layers.unseen), other, reflow);
-        placements.into_iter().find_map(|(base, unseen)| {
+        let placements = closer_first(frame, view, (base, layers.unseen, typed), other, reflow);
+        placements.into_iter().find_map(|(base, unseen, (typed, some))| {
+            if some && let Ok(notes) = compare(frame, view, &base, reflow) {
+                return Some((base, unseen, notes, typed));
+            }
             keep_differing(&base, frame, view, threaded_frames, shown, reflow).map(|(kept, notes)| (kept, unseen, notes, typed))
         })
     })
@@ -3039,5 +3053,75 @@ mod candidate_tests {
         assert!(typed, "the envelope got its drawn art back");
         assert!(kept.node(id).is_none());
         assert!(notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
+    }
+
+    /// The placed files' other placement is weighed on its own: an envelope of type that the layers
+    /// as read draw as the page, but that a placed file moved over it at the other placement makes
+    /// differ, gets its drawn art back there, where that placement's differing objects then come in
+    /// as the page's art.
+    #[test]
+    fn the_other_placement_of_placed_files_is_weighed_on_its_own() {
+        let black = vectorcraft_color::Color::BLACK;
+        let gray = vectorcraft_color::Color::rgb(0.5, 0.5, 0.5);
+        let (envelope, fillers) = (Rect::new(10.0, 10.0, 30.0, 30.0), [Rect::new(40.0, 80.0, 50.0, 90.0), Rect::new(70.0, 80.0, 80.0, 90.0)]);
+        let placed = Rect::new(60.0, 60.0, 76.0, 76.0);
+        // The page draws the envelope's drawn art in two halves.
+        let page = black_page(&[Rect::new(10.0, 10.0, 20.0, 30.0), Rect::new(20.0, 10.0, 30.0, 30.0), placed, fillers[0], fillers[1]]);
+        let (mut doc, drawn) = stand_ins(&[envelope], &[envelope]);
+        let layer = doc.layers[0].id;
+        for r in fillers {
+            let n = filled_rect(&mut doc, r, black);
+            doc.insert(Some(layer), 0, n).unwrap();
+        }
+        // Two placed files, standing in as rectangles: one 20 points above where the page has it, one
+        // a gray rectangle off the art. At their other placement the first is where the page has it
+        // and the gray one lies over half of the envelope.
+        let image = filled_rect(&mut doc, Rect::new(60.0, 40.0, 76.0, 56.0), black);
+        let strip = filled_rect(&mut doc, Rect::new(85.0, 40.0, 95.0, 60.0), gray);
+        // On top of the layer: the strip covers the envelope where it lies over it.
+        let top = doc.layers[0].children().map_or(0, Vec::len);
+        let (image, strip) = (doc.insert(Some(layer), top, image).unwrap(), doc.insert(Some(layer), top + 1, strip).unwrap());
+        let mut other = doc.clone();
+        other.node_mut(image).unwrap().transform(Affine::translate(Vec2::new(0.0, 20.0)), PAGE_MOVE);
+        other.node_mut(strip).unwrap().transform(Affine::translate(Vec2::new(-65.0, -30.0)), PAGE_MOVE);
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert!(held_back(&frame, &mut view, &doc, &drawn, false).is_empty());
+        assert_eq!(held_back(&frame, &mut view, &other, &drawn, false), BTreeSet::from([drawn[0].0]));
+        let other = (other, 0);
+        let layers = Placements { doc: &doc, unseen: 0, other: Some(&other), drawn: &drawn, places: &[(drawn[0].0, 0)] };
+        let mut free = None;
+        let found = keep_differing_typed(&frame, &mut view, &layers, &BTreeSet::new(), &[], false, &mut free);
+        assert_eq!(free, Some(vec![0]), "the layers as read don't hold the envelope");
+        let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
+        assert!(notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
+        assert!(typed && kept.node(drawn[0].0).is_none(), "the envelope keeps its drawn art at the other placement");
+    }
+
+    /// Where putting back only the envelopes of type the page holds makes the layers draw as the page,
+    /// though putting back every live envelope's drawn art doesn't (an envelope of type the page
+    /// doesn't hold has stale drawn art), the layers are used as they then are: nothing differs to
+    /// come in as the page's art.
+    #[test]
+    fn layers_that_draw_as_the_page_with_the_held_envelopes_of_type_put_back_are_used_so() {
+        let (held, kept_live) = (Rect::new(10.0, 10.0, 30.0, 30.0), Rect::new(60.0, 10.0, 80.0, 30.0));
+        let page = black_page(&[held, kept_live]);
+        // The first is drawn 6 points off its drawn art, which the page draws; the second draws as the
+        // page, its drawn art 6 points off.
+        let (doc, drawn) = stand_ins(&[Rect::new(16.0, 10.0, 36.0, 30.0), kept_live], &[held, Rect::new(66.0, 10.0, 86.0, 30.0)]);
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert!(compare(&frame, &mut view, &doc, false).is_err());
+        let mut all = doc.clone();
+        all.insert_beside(drawn.iter().map(|(id, art, _)| (*id, art.clone())).collect(), true).unwrap();
+        assert!(compare(&frame, &mut view, &all, false).is_err(), "with every drawn art put back they don't draw as the page");
+        let places = [(drawn[0].0, 0), (drawn[1].0, 1)];
+        let layers = Placements { doc: &doc, unseen: 0, other: None, drawn: &drawn, places: &places };
+        let mut free = None;
+        let found = keep_differing_typed(&frame, &mut view, &layers, &BTreeSet::new(), &[], false, &mut free);
+        assert_eq!(free, Some(vec![1]));
+        let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
+        assert!(typed && kept.node(drawn[0].0).is_none() && kept.node(drawn[1].0).is_some());
+        assert!(!notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
     }
 }
