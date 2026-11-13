@@ -1,7 +1,7 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{
-    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, hangs, leader_outline, optical_hangs, optical_hangs_rtl, optical_punct, optical_share,
-    roman_share, set_width, squeeze_em, tab_advance, word_width,
+    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, drawn_after_tab, drawn_width, hangs, leader_outline, optical_hangs, optical_hangs_rtl,
+    optical_punct, optical_share, roman_share, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
 use super::vertical::{
@@ -344,6 +344,8 @@ fn prepare_paragraph<'a, 'text>(
 struct PlacementContext<'a> {
     para: &'a ParaStyle,
     pr: &'a Range<usize>,
+    /// [`ParagraphData::bidi`].
+    bidi: Option<&'a BidiInfo<'a>>,
     sg: &'a mut [SGlyph],
     /// [`ParagraphData::line_end`].
     line_end: &'a [f64],
@@ -378,6 +380,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     let PlacementContext {
         para,
         pr,
+        bidi,
         sg,
         line_end,
         continued,
@@ -429,11 +432,32 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
         let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
             Some(&(end, hyph)) if end > *i => (end, hyph, false),
             _ if *i < n => {
+                let start = *i;
+                let glyphs: &[SGlyph] = sg;
+                // A horizontal line with right-to-left text is drawn in another order than its
+                // text's, and its tabs take their stops in the order they are drawn: whether the line
+                // ending before glyph `end` fits is measured as it is drawn ([`drawn_width`]).
+                let drawn_fits = |end: usize, hyphenated: bool| {
+                    let mut trimmed = end;
+                    while trimmed > start && glyphs.get(trimmed - 1).is_some_and(|g| g.is_space() || g.ch == '\u{2028}') {
+                        trimmed -= 1;
+                    }
+                    let bytes = glyphs.get(start).map_or(pr.start, |g| g.byte)..glyphs.get(end).map_or(pr.end, |g| g.byte);
+                    let drawn: Vec<usize> = visual_order(*bidi, pr.start, bytes, glyphs.get(start..end).unwrap_or_default())
+                        .into_iter()
+                        .map(|offset| start + offset)
+                        .filter(|&j| j < trimmed)
+                        .collect();
+                    let hyphen = if hyphenated { end.checked_sub(1).and_then(|k| glyphs.get(k)).map_or(0.0, |g| hyphen_glyph(g).adv) } else { 0.0 };
+                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k)).copied().unwrap_or(0.0);
+                    drawn_width(glyphs, &drawn, &para.tabs, ind_l) + hyphen - credit <= width + EPS
+                };
+                let fits: Option<&dyn Fn(usize, bool) -> bool> = (!cx.vertical && bidi.is_some_and(|b| b.has_rtl())).then_some(&drawn_fits);
                 let line = |ty| {
                     break_line(
                         cx.text,
-                        sg,
-                        *i,
+                        glyphs,
+                        start,
                         width,
                         &para.tabs,
                         ind_l,
@@ -444,6 +468,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         *hanging,
                         cx.vertical,
                         line_end,
+                        fits,
                     )
                 };
                 let (end, hyph) = line(para.kinsoku_type);
@@ -500,6 +525,14 @@ struct LineGeometry {
     last_of_para: bool,
 }
 
+impl LineGeometry {
+    /// The line's glyphs before its trailing spaces (indices into the paragraph's glyphs), in the
+    /// order they are drawn: the glyphs its tabs are measured over.
+    fn measured(&self) -> Vec<usize> {
+        self.order.iter().map(|&offset| self.index + offset).filter(|&j| j < self.trimmed).collect()
+    }
+}
+
 struct LineJustification {
     per_space: f64,
     per_gap: f64,
@@ -540,6 +573,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         let mut placement = PlacementContext {
             para: paragraph.para,
             pr: &paragraph.pr,
+            bidi: paragraph.bidi.as_ref(),
             sg: &mut paragraph.sg,
             line_end: &paragraph.line_end,
             continued: paragraph.continued,
@@ -611,10 +645,13 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         .checked_sub(1)
         .filter(|&k| k >= index && rules.trims_line_end())
         .map_or(0.0, |k| line_end_trim(sg, &paragraph.compressed, &paragraph.wakan, rules, k));
-    let measured_width = set_width(sg, index, trimmed, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
     let line_start = sg.get(index).map_or(paragraph.pr.start, |g| g.byte);
     let line_end = sg.get(position.end).map_or(paragraph.pr.end, |g| g.byte);
     let order = visual_order(paragraph.bidi.as_ref().filter(|_| !cx.vertical), paragraph.pr.start, line_start..line_end, &sg[index..position.end]);
+    // The line is as wide as it is drawn: its glyphs before its trailing spaces in drawing order,
+    // each tab up to its stop from where the glyphs drawn before it end.
+    let measured: Vec<usize> = order.iter().map(|&offset| index + offset).filter(|&j| j < trimmed).collect();
+    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
     // The glyphs before `stop` in visual order, each with the advance it is set with. A list
     // marker does not hang: it is counted with no width.
     let visible = |stop: usize| -> (Vec<usize>, Vec<(&SGlyph, f64)>) {
@@ -861,15 +898,16 @@ fn is_tab_fixed(fixed: &[bool], index: usize, glyph: usize) -> bool {
 
 // The natural width of justified area type `line` with a tab, as [`emit_flow_line`] draws it from
 // the line's start: its glyphs in drawing order, each tab up to its stop from where the glyphs
-// drawn before it end, then the line's hyphen.
+// drawn before it end, aligning the glyphs drawn after it, then the line's hyphen.
 fn tabbed_natural_width(paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, fixed: &[bool]) -> f64 {
     let sg = &paragraph.sg;
     let start = line.ax0 - line.opt_l;
     let mut x = start;
-    for &j in &line.drawn {
+    let measured = line.measured();
+    for (k, &j) in measured.iter().enumerate().filter(|&(_, &j)| j < line.body) {
         let Some(g) = sg.get(j) else { continue };
         x += if g.ch == '\t' && g.len > 0 && is_tab_fixed(fixed, line.index, j) {
-            tab_advance(&paragraph.para.tabs, line.position.x0, x + line.opt_l, sg.get(j + 1..line.trimmed).unwrap_or_default()).0
+            tab_advance(&paragraph.para.tabs, line.position.x0, x + line.opt_l, drawn_after_tab(sg, &measured, k)).0
         } else if j + 1 == line.trimmed {
             g.adv - line.end_trim
         } else {
@@ -1041,8 +1079,9 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing, fixed }
 }
 
-/// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
-/// ([`tab_advance`], measured from `tab_origin` less `tab_shift`), or, for the last tab of
+/// The advance and leader of tab `glyph_index` of `line`, drawn at `order_index` of
+/// [`LineGeometry::order`], at pen position `x`: up to its stop ([`tab_advance`], measured from
+/// `tab_origin` less `tab_shift`, aligning the glyphs drawn after it), or, for the last tab of
 /// right-aligned area type ([`LineJustification::last_tab`]), up to where the rest of the line
 /// ends on the right edge. The tab after a list marker keeps the width `prepend_marker` gave it
 /// (`advance`).
@@ -1050,7 +1089,7 @@ fn tab_glyph<'p>(
     paragraph: &'p ParagraphData<'_, '_>,
     line: &LineGeometry,
     justification: &LineJustification,
-    glyph_index: usize,
+    (glyph_index, order_index): (usize, usize),
     x: f64,
     (tab_origin, tab_shift): (f64, f64),
     advance: f64,
@@ -1060,7 +1099,8 @@ fn tab_glyph<'p>(
     if !sg.get(glyph_index).is_some_and(|g| g.len > 0) {
         return (advance, "");
     }
-    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, sg.get(glyph_index + 1..line.trimmed).unwrap_or_default());
+    let rest = line.order.iter().skip(order_index + 1).map(|&offset| line.index + offset).filter(|&j| j < line.trimmed).filter_map(|j| sg.get(j));
+    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, rest);
     if justification.last_tab != Some(glyph_index) {
         return (advance, leader);
     }
@@ -1128,13 +1168,14 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     let line_em = sg.get(index..position.end).map_or(0.0, |glyphs| glyphs.iter().map(glyph_em).fold(0.0, f64::max));
     // Tab stops are measured from the frame's left edge (point type: the origin).
     let tab_origin = if paragraph.regions.is_some() { position.x0 } else { 0.0 };
-    // A line with tabs is measured as if it started at the left (see `set_width`), then
+    // A line with tabs is measured as if it started at the left (see `drawn_width`), then
     // aligned as a whole: its tabs stop where they were measured, however it is aligned.
     let tab_shift = start_x - if paragraph.regions.is_some() { ax0 } else { position.ind_l };
     // RTL's logical trailing spaces precede the visible content. Keep them outside
-    // the aligned content extent, just as LTR trailing spaces extend to its right.
-    let leading_space_width: f64 =
-        order.iter().take_while(|&&offset| index + offset >= trimmed).filter_map(|&offset| sg.get(index + offset)).map(|glyph| glyph.adv).sum();
+    // the aligned content extent, just as LTR trailing spaces extend to its right. A tab among
+    // them keeps its own width.
+    let leading = order.iter().take_while(|&&offset| index + offset >= trimmed).count();
+    let leading_space_width: f64 = order.iter().take(leading).filter_map(|&offset| sg.get(index + offset)).map(|glyph| glyph.adv).sum();
     let mut x = start_x - leading_space_width;
     let mut x_end = start_x;
     // The glyphs drawn for the list marker, and the index of its tab's glyph, when the line starts the paragraph.
@@ -1152,8 +1193,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         // Glyph scaling a justified line adds to the glyph (1: none).
         let mut scale = 1.0;
         let mut leader = "";
-        if glyph.ch == '\t' {
-            (advance, leader) = tab_glyph(paragraph, line, justification, glyph_index, x, (tab_origin, tab_shift), advance);
+        if glyph.ch == '\t' && order_index >= leading {
+            (advance, leader) = tab_glyph(paragraph, line, justification, (glyph_index, order_index), x, (tab_origin, tab_shift), advance);
         } else if glyph_index < body && !is_tab_fixed(&justification.fixed, index, glyph_index) {
             let flex = flow_line_flex(glyph_index, &paragraph.flex, &line.held, &line.hung);
             if is_word_space(glyph) {
