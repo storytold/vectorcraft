@@ -786,7 +786,8 @@ art's colours (by default as global swatches the art links to).
 them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
 The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
-names Select All Unused selects), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
+its ink), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
 `swatch.sortByKind`.
 `brush.move {name | names, to?, type?}` reorders brushes among the brushes of their type, as dragging one onto
 another of its type in the Brushes panel does. `to` is an index among the brushes of that type in `brush.list`
@@ -5945,6 +5946,40 @@ of its art, as one clipped group. A PDF, `.ai` or `.ait` page read from `path` (
 `textAs: "outlines"`) is a placed document the same way, showing page `page` clipped to its `crop` box (or its
 art's bounds); with `link: false` it is placed as one clipped group. EPS and PostScript `.ai` files are embedded. `at` centres it, `rect` fits it, `replace`
 swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
+A DCS file (Desktop Color Separation, version 1.0 or 2.0: an EPS file whose header names one EPS program per printing
+plate, <http://www.telegraphics.net/doc/DCS.txt>) is placed only from its `path` with link, as one linked image
+([Import DCS files](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/import-dcs-files.html)).
+`file.place` with `link: false` or from `dataBase64`, `document.open` and `links.embed` fail with "DCS files can only
+be placed linked" and change nothing. The plates are read from the file (`%%PlateFile: (name) EPS #offset size`) or
+from the plate files it names (`%%PlateFile: (name) EPS Local file`, and the `%%CyanPlate:`, `%%MagentaPlate:`,
+`%%YellowPlate:` and `%%BlackPlate:` comments of DCS 1.0), which are looked for by file name in the DCS file's folder.
+Each plate is the one image its program draws, and a dark pixel is ink; a plate program that draws more than one
+image, art besides its image, or its image through a clipping path is an error naming the plate. Each spot plate adds a spot swatch (when
+the file is placed, and when `links.update` or `links.relink` reads it) in the
+CMYK values of the file's `%%CMYKCustomColor:` comment (else `%%RGBCustomColor:`; black, with a warning, when the file
+gives neither). A swatch of the same name that the document already has is kept, with a warning (in `warnings` of
+`file.place`, `links.update` and `links.relink`) when it is not a spot color of the same values; Separations Preview
+and `file.print` separations then show and print the plate in that swatch's color, and a plate whose name is a
+process swatch prints as process inks in that swatch's color. `swatch.unused` does not list a spot or process swatch
+while such an image that the art shows has a plate of its name; deleting the swatch makes the plate print as its CMYK values. The clipping path the
+file's composite is drawn through clips the image (a clipping group, its path under the nonzero fill rule, an even-odd
+clipping path kept as the same area), and `file.place` answers the image's id as
+`image`, since the Links commands take the image and not the group. `links.update` and `links.relink` clip the image
+by the file's clipping path again (in a new clipping group when none holds it, and inside a clipping mask made in the
+document, whose path is kept), unless Placement Options clip the image, the same way for the images in symbols, graph designs, patterns and opacity masks; when the new file has no
+clipping path, a clipping group holding just the image whose path is the old file's clipping path loses that path and
+stays as a plain group of the image, with its id, name, visibility and transparency (one whose path was given the
+even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes
+or is gone, as it does when the DCS file changes, and the app's link watch acts on a changed plate file as on a
+changed DCS file. `links.relink {copy: true}` fails for a DCS file that reads plate files of its own, and copies
+nothing. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
+mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
+Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
+of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
+mean of the plate pixels each shown pixel covers. A file may name 64 plates, a plate file may be 1 GB, and the plates together may hold 512 MB of
+ink amounts; a plate that can't be read is an error naming the plate, and nothing is placed. The plates go on the first
+plate's pixel grid, grown to hold every plate where it prints; a plate of another size or position is resampled onto
+it, and a file naming more than 64 plates is an error. `file.place.info` answers `plates` (the ink names) for a DCS file.
 The art's bounds are the bounds of the art that shows, with its strokes and effects, as an export measures them:
 hidden objects, guides and template layers do not count, and symbol instances are measured by their art. A page or artboard holds the objects
 whose shown art lies on it; a hidden object on it is still placed and stays hidden, as do the hidden members of the groups placed.
@@ -6664,6 +6699,14 @@ allowance has bytes, drawn as a crossed gray box on the canvas and left out of e
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
 With automation read roots, a file outside them has no `path` or `found` in `links.list` and `links.check`, and no
 `link`, `path`, `location`, `fileSize` or `modified` in `links.info`; its row keeps the file's name.
+An image placed from a DCS file has the `format` `DCS`. `links.list {dcsTransparency: true}` (the panel menu's Show
+DCS Transparency Interactions, off by default) adds `dcsTransparency: true` to the rows of such images that
+[are transparent or overlap transparent objects](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/eps-and-dcs-file-import-in-illustrator.html),
+and the panel shows a warning mark on them. VectorCraft's rule for it: the image, or a group or layer holding it, has
+an opacity below 100%, a blend mode other than Normal, an opacity mask or an effect, or its bounds overlap the
+bounds of another visible object that has one of those or a gradient with a transparent stop (in a fill, a stroke or
+a character's fill or stroke); a DCS image with transparency of its own counts as such an object. The check looks at
+every object in the layers each time the list is read. A `dcsTransparency` that is not true or false is an error.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.

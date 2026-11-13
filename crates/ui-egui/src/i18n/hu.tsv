@@ -2753,6 +2753,8 @@ file-filter	Templates	Sablonok
 	Not found	Nem található
 	Note:	Megjegyzés:
 	Nothing matches the Show filter.	A Megjelenítés szűrőnek semmi sem felel meg.
+	Show DCS Transparency Interactions	DCS-átlátszósági kölcsönhatások megjelenítése
+	Transparent, or overlaps transparent objects: check its separations	Átlátszó, vagy átlátszó objektumokat fed át: ellenőrizze a színkivonatait
 	Nothing to print	Nincs mit nyomtatni
 	NTSC Colors	NTSC-színek
 	Nudge	Léptetés
