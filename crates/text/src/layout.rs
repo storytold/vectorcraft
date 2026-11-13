@@ -241,7 +241,7 @@ impl Ctx<'_> {
     /// Layout on or Fractional Widths off, whole-point advances.
     fn finish_shaping<'s>(&self, v: &mut [SGlyph], style: impl Fn(&SGlyph) -> &'s CharStyle) {
         if self.vertical {
-            tate_chu_yoko(v, |g| {
+            tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
                 TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
             });
@@ -318,6 +318,8 @@ impl Ctx<'_> {
         tab.dx = 0.0;
         tab.dy = 0.0;
         tab.kern_shift = 0.0;
+        tab.aki_shift = 0.0;
+        tab.aki = 0.0;
         tab.tcy = None;
         tab.vpal = None;
         let left = para.laid_out_left_indent();
@@ -333,6 +335,19 @@ impl Ctx<'_> {
         let n = marker.len();
         sg.splice(0..0, marker);
         n
+    }
+
+    /// Does glyph `g`'s own width start where its placement sets it ([`PositionedGlyph::width_start`])?
+    /// Not for an inline graphic, nor in vertical type for an upright or tate-chu-yoko glyph, which
+    /// start their cell at the start of their advance.
+    fn places_own_width(&self, g: &SGlyph) -> bool {
+        g.inline.is_none() && !(self.vertical && (g.tcy.is_some() || (takes_cell(g) && stands_upright(g))))
+    }
+
+    /// How far glyph `g`'s own width moves when the glyph is drawn `shift` further along its
+    /// advance: `shift` when its placement sets where that width starts, otherwise 0.
+    fn own_width_shift(&self, g: &SGlyph, shift: f64) -> f64 {
+        if self.places_own_width(g) { shift } else { 0.0 }
     }
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
@@ -538,7 +553,7 @@ impl Ctx<'_> {
             let [a, b, ..] = pre.as_coeffs();
             a.hypot(b)
         };
-        let width_start = if g.inline.is_none() && !upright && !(self.vertical && g.tcy.is_some()) {
+        let width_start = if self.places_own_width(g) {
             Some((g.kern_shift + g.dx - g.lead) * along).filter(|s| s.is_finite()).unwrap_or(0.0)
         } else if upright {
             Some(g.kern_shift * along).filter(|s| s.is_finite()).unwrap_or(0.0)
@@ -617,6 +632,8 @@ impl Ctx<'_> {
         k.dx = 0.0;
         k.dy = 0.0;
         k.kern_shift = 0.0;
+        k.aki_shift = 0.0;
+        k.aki = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -674,6 +691,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -737,6 +756,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

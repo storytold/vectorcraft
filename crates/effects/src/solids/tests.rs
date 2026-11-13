@@ -457,6 +457,68 @@ fn transparency_stays_on_the_whole_surface_and_items_take_their_own_effect() {
     assert!(matches!(surfaces[1].kind, NodeKind::Path { .. }));
 }
 
+/// Two nested squares drawn in the same direction, so only the even-odd rule leaves a hole.
+fn nested_squares() -> [PathData; 2] {
+    [(100.0, 200.0), (130.0, 170.0)].map(|(lo, hi)| {
+        let mut b = BezPath::new();
+        b.move_to((lo, lo));
+        b.line_to((hi, lo));
+        b.line_to((hi, hi));
+        b.line_to((lo, hi));
+        b.close_path();
+        PathData::from_bezpath(&b)
+    })
+}
+
+/// The nested squares as an even-odd compound path and as one even-odd path, painted by `items`.
+fn even_odd_shapes(items: Vec<AppearanceItem>) -> [Node; 2] {
+    let [outer, inner] = nested_squares();
+    let appearance = Appearance { items, ..Default::default() };
+    let children = vec![
+        Arc::new(Node::path(NodeId(2), outer.clone(), Appearance::default())),
+        Arc::new(Node::path(NodeId(3), inner.clone(), Appearance::default())),
+    ];
+    let mut compound = Node::new(NodeId(1), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+    compound.appearance = appearance.clone().into();
+    let both = PathData::new(outer.subpaths.into_iter().chain(inner.subpaths).collect());
+    [compound, crate::group::shape_node(NodeId(1), both, FillRule::EvenOdd, appearance)]
+}
+
+/// Check that `art` draws `item` as one flat child: an even-odd path with a hole in the middle,
+/// below the 3D art after it.
+fn assert_flat_item_keeps_the_hole(art: &Node, item: &AppearanceItem, what: &str) {
+    use vectorcraft_geom::hit::fill_contains;
+    let children = art.children().unwrap();
+    let flat: Vec<usize> =
+        (0..children.len()).filter(|&i| children[i].appearance.items == [item.clone()] && children[i].path_data().is_some()).collect();
+    let [index] = flat[..] else { panic!("{what}: one flat child, got {flat:?}") };
+    let NodeKind::Path { path, rule, .. } = &children[index].kind else { panic!("{what}: a path") };
+    assert_eq!(*rule, FillRule::EvenOdd, "{what}");
+    let bez = path.to_bezpath();
+    assert!(fill_contains(&bez, *rule, Point::new(110.0, 150.0)), "{what}: the ring is filled");
+    assert!(!fill_contains(&bez, *rule, Point::new(150.0, 150.0)), "{what}: the hole stays open");
+    assert!(index + 1 < children.len(), "{what}: the 3D art is drawn above");
+}
+
+#[test]
+fn a_fill_or_stroke_without_the_effect_keeps_the_even_odd_hole() {
+    let red = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(RED)));
+    let blue = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(BLUE)));
+    let stroke = AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 4.0));
+    for id in SOLIDS {
+        // The top fill and then the top stroke take the effect; the fill below stays flat.
+        for (top, on) in [(&red, "fill"), (&stroke, "stroke")] {
+            let mut lifted = top.clone();
+            lifted.effects_mut().push(fx(id, json!({})));
+            for (n, shape) in even_odd_shapes(vec![blue.clone(), lifted]).into_iter().zip(["compound path", "path"]) {
+                let what = format!("{id} on the top {on} of a {shape}");
+                let art = solid_art(&n).unwrap_or_else(|| panic!("{what}"));
+                assert_flat_item_keeps_the_hole(&art, &blue, &what);
+            }
+        }
+    }
+}
+
 #[test]
 fn export_and_expand_bake_faces_with_their_own_ids() {
     for id in SOLIDS {

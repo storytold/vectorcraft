@@ -283,8 +283,9 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
 }
 
 /// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
-/// the Align buttons, the Align To menu and, for two or more selected artboards, the Distribute
-/// buttons. They align and distribute the selected artboards
+/// the Align buttons, the Align To menu and, while they can space the selected artboards
+/// ([`crate::panels::align::artboards_distribute`]), the Distribute buttons. They align and
+/// distribute the selected artboards
 /// ([`crate::panels::align::run_button`]). Each shows only while the bar has room for it, and none
 /// while the panel menu has the group off.
 fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -295,7 +296,7 @@ fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
     crate::panels::align::align_buttons(app, ui, BUTTON);
     if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x {
         crate::panels::align::align_to_menu(app, ui, BUTTON);
-        if crate::panels::align::artboards_selected(app) > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) {
+        if crate::panels::align::artboards_distribute(app) && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) {
             ui.add_space(GROUP_GAP);
             crate::panels::align::distribute_buttons(app, ui, BUTTON);
         }
