@@ -115,20 +115,23 @@ pub(crate) fn as_written(color: Color) -> Color {
     }
 }
 
-/// The RGB values written for `color`, clamped to 0..1: an RGB color's own values (in the working
-/// RGB space, as a reader reads them back), any other color's display RGB.
+/// The RGB values written for `color`, clamped to 0..1, in the working RGB space, as a reader
+/// reads them back: an RGB color's own values, any other color's display RGB converted into the
+/// working RGB space.
 pub(crate) fn rgb_values(color: Color) -> [f32; 3] {
     match color {
         Color::Rgb { r, g, b } => [r, g, b].map(unit),
-        c => c.to_rgb().map(unit),
+        c => vectorcraft_color::cms::active().srgb_to_rgb(c.to_rgb()).map(unit),
     }
 }
 
-/// The average colour of a gradient's stops (in RGB).
+/// The average color of a gradient's stops: the average of their display RGB, as an RGB color in
+/// the working RGB space.
 pub(crate) fn average(g: &Gradient) -> Color {
     let n = g.stops.len().max(1) as f32;
     let sum = g.stops.iter().map(|s| s.color.to_rgb()).fold([0.0f32; 3], |a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]]);
-    Color::rgb(unit(sum[0] / n), unit(sum[1] / n), unit(sum[2] / n))
+    let [r, green, b] = vectorcraft_color::cms::active().srgb_to_rgb(sum.map(|v| v / n)).map(unit);
+    Color::rgb(r, green, b)
 }
 
 /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.

@@ -817,6 +817,63 @@ fn rgb_stops_are_written_again_unchanged() {
     assert_eq!(again, first);
 }
 
+/// With a working RGB space other than sRGB, a Lab fill and a freeform gradient's average color
+/// are written as RGB values in the working RGB space, so they read back as RGB colors that show as
+/// the colors they were written for.
+#[test]
+fn a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_LEGACY_AI_WIDE_GAMUT_LAB";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "legacy_ai::tests::a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let lab = Color::lab(60.0, 20.0, -30.0);
+    let mut doc = Document::new(100.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), Paint::solid(lab), Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    // A freeform gradient is written as the average of its stops' display colors.
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let stops = vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)];
+    let free = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Freeform, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(60.0, 10.0, 90.0, 50.0)), free, Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    // Written without [`write`]'s printed comparison, which paints a gradient in its first stop's
+    // color and not in the average color the writer writes for a freeform gradient.
+    let back = crate::import(&export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap().bytes).unwrap().document;
+    let mut read = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { .. } = n.kind {
+            read.push(n.appearance.fill_paint());
+        }
+    });
+    let [Paint::Solid { color: got @ Color::Rgb { .. }, .. }, Paint::Solid { color: avg @ Color::Rgb { .. }, .. }] = read.as_slice() else {
+        panic!("two RGB fills: {read:?}")
+    };
+    for (got, w, what) in [(got, lab.to_rgb(), "Lab fill"), (avg, average, "freeform gradient's average")] {
+        let g = got.to_rgb();
+        assert!(g.iter().zip(w).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {w:?}");
+    }
+}
+
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
 /// to the object).
 fn white_to_navy(kind: GradientKind, geom: Option<vectorcraft_color::GradientGeom>) -> Paint {

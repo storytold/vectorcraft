@@ -26,7 +26,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
-use crate::ps;
+use crate::{ai_ops, ps};
 
 /// What the text document holds of type, and what it leaves out.
 pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
@@ -170,11 +170,13 @@ fn set(resources: Vec<V>, display: bool) -> V {
 }
 
 /// A paint: kind 0 gray (`[alpha, lightness]`), 1 RGB, 2 CMYK, as the reader's `paint` reads them.
+/// RGB values are an RGB color's own (in the working RGB space) and a Lab color's converted into
+/// the working RGB space ([`ai_ops::rgb_values`]).
 fn paint(c: &Color) -> V {
     let (kind, values) = match *c {
         Color::Gray { k } => (0, vec![1.0 - f64::from(k.clamp(0.0, 1.0))]),
         Color::Cmyk { c, m, y, k } => (2, [c, m, y, k].iter().map(|v| f64::from(v.clamp(0.0, 1.0))).collect()),
-        Color::Rgb { .. } | Color::Lab { .. } => (1, c.to_rgb().iter().map(|v| f64::from(v.clamp(0.0, 1.0))).collect()),
+        Color::Rgb { .. } | Color::Lab { .. } => (1, ai_ops::rgb_values(*c).iter().map(|v| f64::from(*v)).collect()),
     };
     let values: Vec<f64> = std::iter::once(1.0).chain(values).collect();
     dict(vec![(99, V::Name("SimplePaint")), (0, dict(vec![(0, V::Int(kind)), (1, reals(&values))]))])
