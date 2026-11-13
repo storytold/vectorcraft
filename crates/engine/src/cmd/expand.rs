@@ -634,7 +634,9 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    // So do the raster effects of its fills and strokes.
+    // So do the raster effects of it and of its fills and strokes, by the Transform effects that
+    // moved it.
+    carry.hide_skipped(&mut m.appearance.effects);
     vectorcraft_render::effects::follow_items(&mut m);
     m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
@@ -662,7 +664,8 @@ pub(crate) fn fill_shape(
     if carry.moves(&one) {
         carry.apply(&mut one);
     }
-    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    let mut moved = one.items.pop().unwrap_or_else(|| item.clone());
+    carry.hide_skipped(moved.effects_mut());
     Some((with_path(l, outline.clone()), outline, b, moved))
 }
 

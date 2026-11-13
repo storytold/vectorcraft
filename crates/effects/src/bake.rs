@@ -83,15 +83,17 @@ fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext
 
 /// The geometry `g` with the own effects of `item` (one of the fills and strokes `ctx` is the
 /// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
-/// moved along with them.
+/// moved along with them and the Transform effects the geometry pass left out hidden
+/// ([`crate::Carry::hide_skipped`]).
 fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
     let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
     let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
-    if !carry.moves(&ap) {
-        return (ig, carried.clone());
+    if carry.moves(&ap) {
+        carry.apply(&mut ap);
     }
-    carry.apply(&mut ap);
-    (ig, ap.items.pop().unwrap_or_else(|| carried.clone()))
+    let mut out = ap.items.pop().unwrap_or_else(|| carried.clone());
+    carry.hide_skipped(out.effects_mut());
+    (ig, out)
 }
 
 /// A path node of `kind`'s flavour (compound when the result has several subpaths).
@@ -470,6 +472,7 @@ fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
+    carry.hide_skipped(&mut m.appearance.effects);
     // The raster effects of its fills and strokes follow its Transform effects, as on the canvas.
     crate::raster::follow_items(&mut m);
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
