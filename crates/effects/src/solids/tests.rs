@@ -450,6 +450,45 @@ fn a_fill_and_strokes_together_past_the_limit_draw_the_source() {
     assert!(solid_art(&n).is_none(), "the source art draws");
 }
 
+/// The check builds the solids from the shapes the art draws them from: after the geometry effects
+/// before the 3D effect, on an object, on its fill and on a group. Copies a Transform effect before
+/// it makes that take the solids past the limit fail the check, as the art then draws the source.
+#[test]
+fn the_check_counts_the_faces_after_the_geometry_effects_before() {
+    let mut alone = polygon_node(1, 16_384);
+    alone.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let [Ok(Some(each))] = solid_faces(EXTRUDE, &alone, MAX_OBJECT_FACES)[..] else { panic!("one solid") };
+    // Side by side, each copy builds the same solid.
+    let copies = |k: usize| fx("distort.transform", json!({"moveH": 30_000.0, "copies": k}));
+    for (k, fits) in [(1, true), (MAX_OBJECT_FACES / each, false)] {
+        let mut n = polygon_node(1, 16_384);
+        n.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&n, EXTRUDE, &json!({})).is_ok(), fits, "on the object, {k} copies");
+        assert_eq!(solid_art(&n).is_some(), fits, "on the object, {k} copies");
+        let mut f = polygon_node(1, 16_384);
+        f.appearance.items[0].effects_mut().extend([copies(k), fx(EXTRUDE, json!({}))]);
+        assert_eq!(validate_three_d_at(&f, EXTRUDE, &json!({}), (Some(0), 1)).is_ok(), fits, "on the fill, {k} copies");
+        assert_eq!(solid_art(&f).is_some(), fits, "on the fill, {k} copies");
+        let mut g = Node::group(NodeId(9999), vec![Arc::new(polygon_node(1, 16_384))]);
+        g.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&g, EXTRUDE, &json!({})).is_ok(), fits, "on a group, {k} copies");
+        assert_eq!(solid_art(&g).is_some(), fits, "on a group, {k} copies");
+        // A new effect goes after the copies.
+        let mut new = polygon_node(1, 16_384);
+        new.appearance.effects = vec![copies(k)];
+        assert_eq!(validate_three_d_at(&new, EXTRUDE, &json!({}), (None, 1)).is_ok(), fits, "a new effect, {k} copies");
+    }
+    // A hidden effect checked at its own index counts only the effects before it: copies after it
+    // copy the drawn art once it is shown again.
+    let mut hidden = polygon_node(1, 16_384);
+    let mut extrude = fx(EXTRUDE, json!({}));
+    extrude.visible = false;
+    hidden.appearance.effects = vec![extrude, copies(MAX_OBJECT_FACES / each)];
+    assert!(validate_three_d_at(&hidden, EXTRUDE, &json!({}), (None, 0)).is_ok());
+    hidden.appearance.effects[0].visible = true;
+    assert!(solid_art(&hidden).is_some());
+}
+
 /// At no volume Inflate's front is flat: turned, the fill's cells are all drawn before the stroke's,
 /// whatever their depths, as the extrusion's caps are. When the fill puffs, a stroke too narrow to
 /// puff on the grid stays flat and keeps its depths: the fill's puff is drawn over its far side.

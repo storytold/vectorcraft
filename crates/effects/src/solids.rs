@@ -250,33 +250,50 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 /// [`validate_solid`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
 /// build from the art they show ([`resolve`]).
 pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
-    validate_solid_for(doc, n, id, p, None)
+    validate_solid_for(doc, n, id, p, (None, None))
 }
 
-/// [`validate_solid_in`] for the effect on the object (`item` `None`) or on its appearance item
-/// `item`, whose shadow is cast by that item's solid alone.
-fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, item: Option<usize>) -> Result<(), String> {
+/// [`validate_solid_in`] for the effect at `(item, index)`: index `index` of the effects of the
+/// object (`item` `None`) or of its appearance item `item`, whose shadow is cast by that item's
+/// solid alone. The index is the effects' length for a new effect. The solids are checked as
+/// [`solid_art_in`] draws them: from the shapes after the geometry effects before the 3D effect.
+/// On the object (or group) with `index` `None`, that effect is its first visible Extrude & Bevel,
+/// Inflate or Rotate, as drawn, or a new one after its other effects when it has none.
+fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: (Option<usize>, Option<usize>)) -> Result<(), String> {
     validate_solid_params(id, p)?;
     if let Some(doc) = doc {
         graphics::validate_symbols(doc, p)?;
     }
     let label = label_of(id);
     let n = &*source::resolve_for(doc, n, label, is_plane(id))?;
+    let effects = &n.appearance.effects;
+    let index = match at {
+        (None, Some(index)) => index,
+        _ => solid(effects).map_or(effects.len(), |(index, _)| index),
+    };
+    let before = effects.get(..index).unwrap_or(effects);
     if is_container(n) {
-        let shapes = members(n, label)?;
+        let mut shapes = members(n, label)?;
+        reshape_members(n, before, &mut shapes);
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))?;
         check_solids(id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
     let (path, rule) = object_profile(n, label)?;
-    let b = path.bounds().ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
-    facets(id, &path, rule, b, p)?;
+    let anchors = || format!("{label} requires a shape with at least two anchors");
+    path.bounds().ok_or_else(anchors)?;
+    let ctx = GeomContext::of(n);
     // With its shadow on, the shadow of the object's solids (or of the item's) must fit too.
-    let items = match item.and_then(|i| n.appearance.items.get(i)) {
-        Some(item) => vec![item.clone()],
-        None => solid_paints(n),
+    let (path, items) = match at.0.and_then(|i| Some((n.appearance.items.get(i)?, at.1.unwrap_or(usize::MAX)))) {
+        Some((item, index)) => {
+            let path = geometry(&path, effects, &ctx);
+            (geometry(&path, item.effects().get(..index).unwrap_or(item.effects()), &ctx.item(item)), vec![item.clone()])
+        }
+        None => (geometry(&path, before, &ctx), solid_paints(n)),
     };
+    let b = path.bounds().ok_or_else(anchors)?;
+    facets(id, &path, rule, b, p)?;
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
     check_solids(id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
@@ -468,26 +485,28 @@ pub fn validate_three_d_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value
     if crate::revolve::is_revolve(id) { crate::revolve::validate_in(doc, n, id, p) } else { validate_solid_in(doc, n, id, p) }
 }
 
-/// [`validate_three_d`] for an effect at `(item, index)`, index `index` of the effects of
-/// appearance item `item` of `n` (the effects' length for a new effect), or on the object itself
-/// when `at` is `None`. A Revolve on a fill or stroke is checked in that item's paint, after the
-/// item's geometry effects before it, together with the object's other items that carry a Revolve.
-/// A group's or layer's fills and strokes take no 3D effect: only the group's own effect draws.
-pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+/// [`validate_three_d`] for an effect at `(item, index)`: index `index` of the effects of
+/// appearance item `item` of `n`, or of the object itself when `item` is `None` (the effects'
+/// length for a new effect). An Extrude & Bevel, Inflate or Rotate is checked on the shapes after
+/// the geometry effects before that index. A Revolve on a fill or stroke is checked in that item's
+/// paint, after the item's geometry effects before it, together with the object's other items that
+/// carry a Revolve. A group's or layer's fills and strokes take no 3D effect: only the group's own
+/// effect draws.
+pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: (Option<usize>, usize)) -> Result<(), String> {
     validate_three_d_at_in(None, n, id, p, at)
 }
 
 /// [`validate_three_d_at`] with the symbols of `doc` ([`validate_solid_in`]). A symbol instance, a
 /// blend and a clipping group take a 3D effect as groups do: on the object itself.
-pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: (Option<usize>, usize)) -> Result<(), String> {
     graphics::validate(id, p)?;
     match at {
-        Some(_) if is_container(n) || source::resolves(n) => {
+        (Some(_), _) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
-        Some((item, index)) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
-        Some((item, _)) => validate_solid_for(doc, n, id, p, Some(item)),
-        None => validate_three_d_in(doc, n, id, p),
+        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
+        (None, _) if crate::revolve::is_revolve(id) => crate::revolve::validate_in(doc, n, id, p),
+        (item, index) => validate_solid_for(doc, n, id, p, (item, Some(index))),
     }
 }
 
