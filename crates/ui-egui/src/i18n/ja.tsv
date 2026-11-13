@@ -4162,6 +4162,10 @@ axis	Both	両方
 	Dock Panel	パネルをドッキング
 	Dock to Top	上部にドッキング
 	Dock to Bottom	下部にドッキング
+	Dock to Left	左側にドッキング
+	Dock to Right	右側にドッキング
+	Dock Toolbar	ツールバーをドッキング
+	Float Toolbar	ツールバーをフローティング
 	Control Bar Options	コントロールバーオプション
 	Tool Options	ツールオプション
 	Object Options	オブジェクトオプション

@@ -145,6 +145,8 @@ pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
+    // The lane where toolbars made with New Toolbar dock on the left, right of Tools.
+    crate::custom_toolbars::lane_beside_canvas(app, ui);
 }
 
 /// Is the Tools panel docked on the right, between the canvas and the panels?

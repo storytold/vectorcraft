@@ -3968,6 +3968,10 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Dock to Left	Sola yerleştir
+	Dock to Right	Sağa yerleştir
+	Dock Toolbar	Araç çubuğunu yerleştir
+	Float Toolbar	Araç Çubuğunu Yüzer Yap
 	Control Bar Options	Kontrol Çubuğu Seçenekleri
 	Tool Options	Araç Seçenekleri
 	Object Options	Nesne Seçenekleri

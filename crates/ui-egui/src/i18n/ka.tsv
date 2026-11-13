@@ -816,6 +816,10 @@
 	Dock Panel	პანელის მიმაგრება
 	Dock to Top	ზემოთ მიმაგრება
 	Dock to Bottom	ქვემოთ მიმაგრება
+	Dock to Left	მარცხნივ მიმაგრება
+	Dock to Right	მარჯვნივ მიმაგრება
+	Dock Toolbar	ხელსაწყოთა ზოლის მიმაგრება
+	Float Toolbar	მცურავი ხელსაწყოთა ზოლი
 	Control Bar Options	მართვის ზოლის პარამეტრები
 	Tool Options	ხელსაწყოს პარამეტრები
 	Object Options	ობიექტის პარამეტრები

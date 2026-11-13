@@ -4209,6 +4209,10 @@ axis	Both	Обидві
 	Dock Panel	Прикріпити панель
 	Dock to Top	Прикріпити вгорі
 	Dock to Bottom	Прикріпити внизу
+	Dock to Left	Прикріпити ліворуч
+	Dock to Right	Прикріпити праворуч
+	Dock Toolbar	Прикріпити панель інструментів
+	Float Toolbar	Від’єднати панель інструментів
 	Control Bar Options	Параметри панелі керування
 	Tool Options	Параметри інструменту
 	Object Options	Параметри об’єкта

@@ -2257,6 +2257,10 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Dock to Left	Αγκύρωση αριστερά
+	Dock to Right	Αγκύρωση δεξιά
+	Dock Toolbar	Αγκύρωση γραμμής εργαλείων
+	Float Toolbar	Αιωρούμενη γραμμή εργαλείων
 	Control Bar Options	Επιλογές γραμμής ελέγχου
 	Tool Options	Επιλογές εργαλείου
 	Object Options	Επιλογές αντικειμένου

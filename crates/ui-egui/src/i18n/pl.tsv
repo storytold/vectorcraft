@@ -868,6 +868,10 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Dock to Left	Zadokuj po lewej
+	Dock to Right	Zadokuj po prawej
+	Dock Toolbar	Zadokuj pasek narzędzi
+	Float Toolbar	Odepnij pasek narzędzi
 	Control Bar Options	Opcje paska sterowania
 	Tool Options	Opcje narzędzia
 	Object Options	Opcje obiektu

@@ -4084,6 +4084,10 @@ axis	Both	Båda
 	Dock Panel	Docka panel
 	Dock to Top	Docka överst
 	Dock to Bottom	Docka nederst
+	Dock to Left	Docka till vänster
+	Dock to Right	Docka till höger
+	Dock Toolbar	Docka verktygsfältet
+	Float Toolbar	Gör verktygsfältet flytande
 	Control Bar Options	Alternativ för kontrollfältet
 	Tool Options	Verktygsalternativ
 	Object Options	Objektalternativ

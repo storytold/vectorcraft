@@ -1114,6 +1114,10 @@ font-technology	Variable	Változó
 	Dock Panel	Panel dokkolása
 	Dock to Top	Dokkolás felülre
 	Dock to Bottom	Dokkolás alulra
+	Dock to Left	Dokkolás balra
+	Dock to Right	Dokkolás jobbra
+	Dock Toolbar	Eszköztár dokkolása
+	Float Toolbar	Eszköztár lebegtetése
 	Control Bar Options	Vezérlősáv beállításai
 	Tool Options	Eszközbeállítások
 	Object Options	Objektumbeállítások

@@ -4146,6 +4146,10 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Dock to Left	왼쪽에 고정
+	Dock to Right	오른쪽에 고정
+	Dock Toolbar	도구 막대 고정
+	Float Toolbar	도구 막대 분리
 	Control Bar Options	컨트롤 막대 옵션
 	Tool Options	도구 옵션
 	Object Options	개체 옵션

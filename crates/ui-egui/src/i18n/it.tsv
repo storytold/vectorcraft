@@ -4220,6 +4220,10 @@ axis	Both	Entrambi
 	Dock Panel	Ancora pannello
 	Dock to Top	Ancora in alto
 	Dock to Bottom	Ancora in basso
+	Dock to Left	Ancora a sinistra
+	Dock to Right	Ancora a destra
+	Dock Toolbar	Ancora barra degli strumenti
+	Float Toolbar	Rendi mobile barra degli strumenti
 	Control Bar Options	Opzioni barra di controllo
 	Tool Options	Opzioni strumento
 	Object Options	Opzioni oggetto

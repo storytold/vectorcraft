@@ -923,6 +923,10 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Dock to Left	Ukotvit vlevo
+	Dock to Right	Ukotvit vpravo
+	Dock Toolbar	Ukotvit panel nástrojů
+	Float Toolbar	Plovoucí panel nástrojů
 	Control Bar Options	Možnosti ovládacího panelu
 	Tool Options	Možnosti nástroje
 	Object Options	Možnosti objektu
