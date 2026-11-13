@@ -1263,7 +1263,7 @@ fn removing_a_filled_line_bands_stroke_leaves_its_color() {
     let (mut s, id, band) = band_graph();
     let was = series_parts(&s, id, 0)[0].appearance.fill_paint();
     s.execute("paint.setStroke", &json!({"ids": [band.0], "none": true})).unwrap();
-    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(Paint::None));
+    assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.stroke.is_none()));
     assert_eq!(redrawn_band(&mut s, id).0, was);
 }
 
@@ -1731,6 +1731,236 @@ fn swapping_onto_a_hidden_top_fill_leaves_the_stored_fill() {
     s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#00ff00", "weight": 3})).unwrap();
     s.execute("paint.swap", &json!({"ids": [marks[0].0]})).unwrap();
     assert_eq!(spec(&s, id).series_paints[0].fill, red);
+}
+
+/// A column graph whose series 0 stores a red fill and a red 2 pt stroke set on its second mark, while the topmost fill
+/// (over a visible one) and the green stroke of its first mark are hidden: the graph and the first mark.
+fn hidden_top_rows() -> (Session, NodeId, NodeId) {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("appearance.addFill", &json!({"ids": [marks[0].0]})).unwrap();
+    let (_, upper) = fill_rows(&s, marks[0]);
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": upper, "visible": false})).unwrap();
+    let stroke = top_row(&s, marks[0], false);
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#00ff00", "weight": 3, "visible": false})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "color": "#ff0000"})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], false), "color": "#ff0000", "weight": 2})).unwrap();
+    (s, id, marks[0])
+}
+
+/// `paint.setFill`, `paint.setStroke`, `paint.none`, Apply Fill to Stroke and Apply Stroke to Fill write the topmost row
+/// of the kind even when it is hidden. The mark shows what it showed before, and the series keeps the paint it stored.
+#[test]
+fn a_paint_set_on_a_hidden_top_row_leaves_the_stored_paint() {
+    let cases = [
+        ("paint.setFill", json!({"color": "#0000ff"})),
+        ("paint.setFill", json!({"none": true})),
+        ("paint.setStroke", json!({"color": "#0000ff"})),
+        ("paint.setStroke", json!({"none": true})),
+        ("paint.none", json!({})),
+        ("addon.color.fillToStroke", json!({})),
+        ("addon.color.strokeToFill", json!({})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let (mut s, id, mark) = hidden_top_rows();
+        let was = spec(&s, id).series_paints;
+        let red = was[0].fill.clone().unwrap();
+        assert_eq!((was[0].stroke.clone(), was[0].stroke_width), (Some(red.clone()), Some(2.0)));
+        let mut p = params.clone();
+        if *cmd == "paint.none" {
+            s.execute("select.set", &json!({"ids": [mark.0]})).unwrap();
+        } else {
+            p["ids"] = json!([mark.0]);
+        }
+        let before = s.doc().unwrap().doc.node(mark).unwrap().clone();
+        s.execute(cmd, &p).unwrap();
+        assert_ne!(*s.doc().unwrap().doc.node(mark).unwrap(), before, "the command wrote the hidden row");
+        assert_eq!(spec(&s, id).series_paints, was);
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        assert!(marks_of(&s, id, 0).iter().all(|m| *m == (red.clone(), red.clone(), 2.0)), "{:?}", marks_of(&s, id, 0));
+    });
+}
+
+/// `paint.setFill` with `item` on the visible fill under a hidden topmost one changes what the mark shows, and the series
+/// stores it. On a fill under a visible topmost one, the series keeps the paint of the topmost one.
+#[test]
+fn a_paint_set_on_a_row_under_the_top_one_is_stored_only_when_it_shows() {
+    let (mut s, id, mark) = hidden_top_rows();
+    let (lower, _) = fill_rows(&s, mark);
+    s.execute("paint.setFill", &json!({"ids": [mark.0], "item": lower, "color": "#0000ff"})).unwrap();
+    let blue = s.doc().unwrap().doc.node(mark).unwrap().appearance.paint_at(Some(lower), true).cloned();
+    assert!(blue.as_ref().is_some_and(|p| !p.is_none()));
+    assert_eq!(spec(&s, id).series_paints[0].fill, blue);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_ne!(spec(&s, id).series_paints[0].fill, blue);
+
+    // The first mark has a green fill over another one, and the series stores the red fill of the second mark.
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("appearance.addFill", &json!({"ids": [marks[0].0]})).unwrap();
+    let (lower, upper) = fill_rows(&s, marks[0]);
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": upper, "color": "#00ff00"})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "color": "#ff0000"})).unwrap();
+    let red = Some(fill_of(&s, marks[1]));
+    assert_ne!(red, Some(fill_of(&s, marks[0])));
+    assert_eq!(spec(&s, id).series_paints[0].fill, red);
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "item": lower, "color": "#0000ff"})).unwrap();
+    assert_ne!(s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.paint_at(Some(lower), true), red.as_ref());
+    assert_eq!(spec(&s, id).series_paints[0].fill, red);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| Some(&m.0) == red.as_ref()), "{:?}", marks_of(&s, id, 0));
+}
+
+/// A library gradient applied to a selected mark goes to the topmost fill as `paint.setFill` puts it there: the series
+/// stores it from a visible row, and keeps its stored paint when that row is hidden.
+#[test]
+fn a_library_gradient_on_a_series_mark_is_stored_only_from_a_row_it_shows() {
+    for hidden in [false, true] {
+        let (mut s, id, mark) = hidden_top_rows();
+        if !hidden {
+            s.execute("appearance.showAllHidden", &json!({"ids": [mark.0]})).unwrap();
+        }
+        let lib = s.execute("library.create", &json!({})).unwrap()["id"].as_str().unwrap().to_string();
+        let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 20})).unwrap()["id"].clone();
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [rect]})).unwrap();
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        s.execute("library.add", &json!({"library": lib, "kind": "fillGradient"})).unwrap();
+        s.execute("select.set", &json!({"ids": [mark.0]})).unwrap();
+        let was = spec(&s, id).series_paints;
+        s.execute("library.use", &json!({"library": lib, "kind": "fillGradient", "item": "Gradient"})).unwrap();
+        let fill = fill_of(&s, mark);
+        assert!(matches!(fill, Paint::Gradient(_)), "{hidden}");
+        let now = spec(&s, id).series_paints;
+        if hidden {
+            assert_eq!(now, was);
+        } else {
+            assert_eq!(now[0].fill, Some(fill));
+        }
+    }
+}
+
+/// A mark's fill and stroke rows already have the paint a command writes, while the series stores the paint of another
+/// mark. `paint.setFill`, `paint.setStroke`, Apply Fill to Stroke and Apply Stroke to Fill leave the mark as it was, and
+/// the series stores the mark's paint for the kind of row the command wrote, and only for that kind.
+#[test]
+fn writing_the_paint_a_mark_already_has_stores_it_for_the_series() {
+    let cases = [
+        ("paint.setFill", json!({"color": "#ff0000"}), true),
+        ("paint.setStroke", json!({"color": "#ff0000"}), false),
+        ("addon.color.fillToStroke", json!({}), false),
+        ("addon.color.strokeToFill", json!({}), true),
+        ("addon.color.fillToStroke", json!({"skipNone": true}), false),
+    ];
+    every_case(cases, |(cmd, params, fill)| {
+        let (mut s, id, _, marks) = column_marks();
+        for (mark, hex, weight) in [(marks[0], "#ff0000", 3), (marks[1], "#0000ff", 2)] {
+            s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, true), "color": hex})).unwrap();
+            s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, false), "color": hex, "weight": weight})).unwrap();
+        }
+        let was = spec(&s, id).series_paints;
+        let (red, blue) = (fill_of(&s, marks[0]), fill_of(&s, marks[1]));
+        assert_eq!((was[0].fill.clone(), was[0].stroke.clone(), was[0].stroke_width), (Some(blue.clone()), Some(blue.clone()), Some(2.0)));
+        let before = s.doc().unwrap().doc.node(marks[0]).unwrap().clone();
+        let mut p = params.clone();
+        p["ids"] = json!([marks[0].0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(*s.doc().unwrap().doc.node(marks[0]).unwrap(), before, "the mark is as it was");
+        let now = spec(&s, id).series_paints;
+        let expected = if *fill { (Some(red), Some(blue), Some(2.0)) } else { (Some(blue), Some(red), Some(3.0)) };
+        assert_eq!((now[0].fill.clone(), now[0].stroke.clone(), now[0].stroke_width), expected);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(spec(&s, id).series_paints, was);
+    });
+}
+
+/// Apply Fill to Stroke and Apply Stroke to Fill on a mark store the paint they give its topmost visible row, and every
+/// mark of the series has it after the graph is drawn again. With `skipNone`, a mark without the source paint keeps what
+/// the series stores.
+#[test]
+fn applying_one_paint_kind_to_the_other_on_a_series_mark_is_kept() {
+    let (mut s, id, marks) = stored_red_stroke();
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": top_row(&s, marks[0], true), "color": "#0000ff"})).unwrap();
+    let blue = fill_of(&s, marks[0]);
+    s.execute("addon.color.fillToStroke", &json!({"ids": [marks[0].0]})).unwrap();
+    let kept = spec(&s, id).series_paints;
+    assert_eq!((kept[0].fill.clone(), kept[0].stroke.clone()), (Some(blue.clone()), Some(blue.clone())));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| (&m.0, &m.1) == (&blue, &blue)), "{:?}", marks_of(&s, id, 0));
+
+    let (mut s, id, marks) = stored_red_stroke();
+    let red = spec(&s, id).series_paints[0].stroke.clone();
+    s.execute("addon.color.strokeToFill", &json!({"ids": [marks[1].0]})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill, red);
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "none": true})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "color": "#0000ff"})).unwrap();
+    let was = spec(&s, id).series_paints;
+    s.execute("addon.color.fillToStroke", &json!({"ids": [marks[0].0], "skipNone": true})).unwrap();
+    assert_eq!(spec(&s, id).series_paints, was);
+}
+
+/// When one paint command writes several marks of a series with different paints, the frontmost mark sets what the
+/// graph stores, whatever order the ids are given in and whatever the marks' ids are.
+#[test]
+fn a_paint_command_on_several_marks_of_a_series_stores_the_frontmost_ones_paint() {
+    every_case([[0, 1, 2], [2, 1, 0], [1, 2, 0]], |order| {
+        let (mut s, id, _, marks) = column_marks();
+        // The mark made last goes to the back, so the marks' ids are not in paint order.
+        s.execute("select.set", &json!({"ids": [marks[2].0]})).unwrap();
+        s.execute("object.arrange.sendToBack", &json!({})).unwrap();
+        let drawn: Vec<NodeId> = series_parts(&s, id, 0).iter().map(|m| m.id).filter(|m| marks[..3].contains(m)).collect();
+        assert_eq!(drawn, [marks[2], marks[0], marks[1]]);
+        for (mark, hex) in [(marks[0], "#ff0000"), (marks[1], "#00ff00"), (marks[2], "#0000ff")] {
+            s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, true), "color": hex})).unwrap();
+        }
+        s.execute("addon.color.fillToStroke", &json!({"ids": order.map(|i| marks[i].0)})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0].stroke, Some(fill_of(&s, marks[1])), "{order:?}");
+    });
+
+    // The frontmost mark loses its stroke and a mark under it takes one: the series stores the frontmost mark's.
+    let (mut s, id, marks) = stored_red_stroke();
+    s.execute("appearance.setItem", &json!({"ids": [marks[2].0], "index": top_row(&s, marks[2], false), "color": "#00ff00", "weight": 2})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [marks[2].0], "none": true})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": top_row(&s, marks[0], true), "color": "#0000ff"})).unwrap();
+    s.execute("addon.color.fillToStroke", &json!({"ids": [marks[0].0, marks[2].0]})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.stroke_paint().is_none());
+    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(Paint::None));
+}
+
+/// A stroke set on a Filled Lines band with `paint.setStroke` or Apply Fill to Stroke is not stored: the band keeps its
+/// color and its thin black outline when the graph is drawn again. A fill set with `paint.setFill` is stored.
+#[test]
+fn a_paint_command_stroke_on_a_filled_line_band_does_not_repaint_it() {
+    every_case([("paint.setStroke", json!({"color": "#ff0000"})), ("addon.color.fillToStroke", json!({}))], |(cmd, params)| {
+        let (mut s, id, band) = band_graph();
+        let was = series_parts(&s, id, 0)[0].appearance.fill_paint();
+        let mut p = params.clone();
+        p["ids"] = json!([band.0]);
+        s.execute(cmd, &p).unwrap();
+        assert!(!s.doc().unwrap().doc.node(band).unwrap().appearance.stroke_paint().is_none());
+        assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.stroke.is_none()));
+        assert_eq!(redrawn_band(&mut s, id), (was, Paint::solid(vectorcraft_color::Color::BLACK), 0.25));
+    });
+    let (mut s, id, band) = band_graph();
+    s.execute("paint.setFill", &json!({"ids": [band.0], "color": "#0000ff"})).unwrap();
+    let blue = s.doc().unwrap().doc.node(band).unwrap().appearance.fill_paint();
+    assert_eq!(redrawn_band(&mut s, id), (blue, Paint::solid(vectorcraft_color::Color::BLACK), 0.25));
+}
+
+/// `paint.setStroke` with None on a marker that shows no stroke changes nothing, and the line keeps the stroke the series
+/// stores. On the line itself it stores the empty stroke.
+#[test]
+fn removing_the_stroke_of_a_mark_without_one_leaves_the_stored_stroke() {
+    let (mut s, id, line, marker) = line_and_marker();
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "color": "#ff0000"})).unwrap();
+    let red = s.doc().unwrap().doc.node(line).unwrap().appearance.stroke_paint();
+    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(red.clone()));
+    s.execute("paint.setStroke", &json!({"ids": [marker.0], "none": true})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(red.clone()));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    assert_eq!(line_parts(&s, id).0.appearance.stroke_paint(), red);
+
+    let line = line_parts(&s, id).0.id;
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "none": true})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(Paint::None));
 }
 
 /// Run `case` on each of `cases`, and fail naming every case that failed, not only the first one.

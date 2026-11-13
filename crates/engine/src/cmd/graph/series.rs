@@ -143,29 +143,6 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     out
 }
 
-/// Copy the paint just applied to generated series art into that series' fill or stroke. Called
-/// inside the same document edit, so the visible paint and future regeneration undo together.
-/// Gradients, patterns and swatch links are kept as [`Paint`], not reduced to a solid colour.
-/// Returns whether a series' captured fill or stroke changed.
-pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bool) -> bool {
-    let members = series_members(doc);
-    if members.is_empty() {
-        return false;
-    }
-    let captures: Vec<_> = ids
-        .iter()
-        .filter_map(|id| {
-            // Only a series' own marks set its paint, not the art of a marker design.
-            let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
-            let node = doc.node(*id)?;
-            let paint = node.appearance.paint_at(None, fill)?.clone();
-            let width = (!fill).then(|| node.appearance.stroke_width());
-            Some((r.graph, r.index, fill, paint, width))
-        })
-        .collect();
-    store_series_paints(doc, captures)
-}
-
 /// The paint of the topmost visible fill (`true`) or stroke (`false`) of `node`, and a stroke's weight (0 without paint).
 /// With no such row: no paint.
 pub(crate) fn shown_paint(node: &Node, fill: bool) -> (Paint, f64) {
@@ -178,7 +155,8 @@ pub(crate) fn shown_paint(node: &Node, fill: bool) -> (Paint, f64) {
 
 /// Copy the paint of the topmost visible fill (`true`) or stroke (`false`), and a stroke's weight, of generated series
 /// art just edited (`edited`: each object with the kind of row, later entries replacing earlier ones) into that series'
-/// fill or stroke; art left without such a row keeps no paint. A series that draws Filled Lines bands stores no stroke: its
+/// fill or stroke; art left without such a row keeps no paint. Gradients, patterns and swatch links are kept as
+/// [`Paint`], not reduced to a solid color. A series that draws Filled Lines bands stores no stroke: its
 /// bands keep their own outline. Called inside the same document edit, so both undo together. Returns whether a series'
 /// captured fill or stroke changed.
 pub(crate) fn capture_series_top_paints(doc: &mut Document, edited: &[(NodeId, bool)]) -> bool {

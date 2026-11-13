@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke",
             [],
             None,
-            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern)",
+            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's stroke changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row or changed it (exceptions: docs/mcp.md)",
             has_doc,
             |s, p| { set_paint(s, p, false) }
         ),
@@ -64,10 +64,18 @@ pub fn specs() -> Vec<CommandSpec> {
                 Ok(json!({ "fillActive": s.fill_active }))
             }
         ),
-        cmd!("paint.none", "None", [], Some("/"), "{} set the active proxy (fill or stroke) to None → {objects}", has_doc, |s, _| {
-            let f = s.fill_active;
-            set_paint(s, &json!({"none": true}), f)
-        }),
+        cmd!(
+            "paint.none",
+            "None",
+            [],
+            Some("/"),
+            "{} set the active proxy (fill or stroke) to None, as paint.setFill or paint.setStroke with none does → {objects}",
+            has_doc,
+            |s, _| {
+                let f = s.fill_active;
+                set_paint(s, &json!({"none": true}), f)
+            }
+        ),
         cmd!(
             "transparency.set",
             "Transparency",
@@ -523,6 +531,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         vec![]
     };
     let label = if fill { "Fill Color" } else { "Stroke Color" };
+    // Each object whose appearance took the paint, with the row it went to, for the paint a graph stores for its series
+    // (a series mark is a path, so it always has a row here).
+    let written = std::cell::RefCell::new(Vec::new());
     edit_items_then(
         s,
         &ids,
@@ -581,10 +592,15 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
             if !fill {
                 super::object::snap_if_aligned(n);
             }
+            let at = match index {
+                Some(_) => n.appearance.item_of_kind(index, fill),
+                None => n.appearance.items.iter().rposition(|it| it.is_fill() == fill),
+            };
+            written.borrow_mut().extend(at.map(|at| (n.id, at)));
             Ok(())
         },
-        |_, d, changed| {
-            let series = super::graph::capture_series_paints(d, changed, fill);
+        |before, d, changed| {
+            let series = super::appearance::capture_series_paint_writes(before, d, changed, &written.borrow());
             let labels = super::graph::capture_label_styles(d, changed, &|st| {
                 if fill {
                     st.fill = paint.clone();

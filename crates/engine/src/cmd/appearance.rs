@@ -725,6 +725,33 @@ pub(crate) fn capture_series_changes(before: &vectorcraft_doc::Document, d: &mut
     !marks.is_empty() && capture_series_writes(before, d, &marks, (false, false), (false, false), false, false)
 }
 
+/// Store on the graph the paint that an edit of `ids` (from `before` to `d`) leaves on the topmost visible fill and stroke
+/// of the series marks among them: a paint or stroke weight that changed, and the paint of each row the edit wrote
+/// (`written`: an object with the index of the row) when that row is the topmost visible one of its kind and has paint.
+/// A row written under that one, and a hidden one, keep what the graph stores. When the edit reaches several marks of one
+/// series, the frontmost one sets what the graph stores, whatever order `ids` are in. Returns whether the stored paint
+/// changed.
+pub(crate) fn capture_series_paint_writes(
+    before: &vectorcraft_doc::Document,
+    d: &mut vectorcraft_doc::Document,
+    ids: &[NodeId],
+    written: &[(NodeId, usize)],
+) -> bool {
+    // Only objects directly in a series group can be marks: other edits skip the comparison of paints and the search of
+    // the document for graphs.
+    let in_series = |id: &NodeId| d.parent_of(*id).and_then(|p| d.node(p)).is_some_and(|g| g.extras().series_index.is_some());
+    let mut marks: Vec<NodeId> = ids.iter().copied().filter(in_series).collect();
+    // A later mark's capture replaces an earlier one's: take them in paint order, each with all of its rows.
+    marks.sort_by_cached_key(|id| d.index_path(*id));
+    let mut rows = Vec::new();
+    for id in &marks {
+        rows.extend(top_paint_changed(before, d, &[*id]));
+        let shown = written.iter().filter(|(w, _)| w == id).filter_map(|(_, at)| Some((*id, top_row_kind(&d.node(*id)?.appearance, *at)?)));
+        rows.extend(painted_rows(d, shown.collect::<Vec<_>>()));
+    }
+    super::graph::capture_series_top_paints(d, &rows)
+}
+
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
 fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
     let fill = ap.items.get(at)?.is_fill();
