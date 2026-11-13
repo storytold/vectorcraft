@@ -196,6 +196,42 @@ fn a_restyled_empty_frame_keeps_its_style_after_a_paragraph_break() {
     assert_eq!(tail_style(&[&first, &restyled, &right], &[false, true, true]), Some(Justify::Right));
 }
 
+/// A frame whose empty last paragraph (after a final paragraph break) was just restyled keeps that
+/// style against the unedited first paragraph of the next frame, empty or with text, and across an
+/// unedited empty frame. A restyled first paragraph in the next frame still wins.
+#[test]
+fn restyled_empty_last_paragraph_wins_over_unedited_next_frame() {
+    let style = |j| ParaStyle { justify: j, ..Default::default() };
+    let mut first = frame(0.0);
+    first.runs = vec![TextRun { text: "a\n".into(), style: CharStyle::default(), inline: None }];
+    first.set_paragraph_styles(vec![style(Justify::Left), style(Justify::Center)]);
+    let empty = frame(200.0);
+    let mut with_text = frame(400.0);
+    with_text.runs = vec![TextRun { text: "def".into(), style: CharStyle::default(), inline: None }];
+    let justify = |frames: &[&TextObject], later: &[bool], earlier: &[bool]| {
+        story_paras_restyled(frames, later, earlier).iter().map(|p| p.justify).collect::<Vec<_>>()
+    };
+    use Justify::*;
+
+    assert_eq!(justify(&[&first, &empty], &[false, false], &[true, false]), [Left, Center]);
+    assert_eq!(justify(&[&first, &with_text], &[false, false], &[true, false]), [Left, Center]);
+    assert_eq!(justify(&[&first, &empty, &with_text], &[false, false, false], &[true, false, false]), [Left, Center]);
+    assert_eq!(justify(&[&first, &empty, &empty], &[false, false, false], &[true, false, false]), [Left, Center]);
+    // Without the edit, the next frame gives the paragraph its style, as before.
+    assert_eq!(justify(&[&first, &empty], &[false, false], &[false, false]), [Left, Left]);
+    assert_eq!(story_paras(&[&first, &with_text], &[]).iter().map(|p| p.justify).collect::<Vec<_>>(), [Left, Left]);
+    // A restyled first paragraph in the next frame wins over the restyled tail.
+    let mut right = with_text.clone();
+    right.set_all_paras(style(Right));
+    assert_eq!(justify(&[&first, &right], &[false, true], &[true, true]), [Left, Right]);
+    assert_eq!(justify(&[&first, &empty, &right], &[false, false, true], &[true, false, true]), [Left, Right]);
+    // A middle frame is the later side at one boundary and the earlier side at the next.
+    let mut middle = frame(200.0);
+    middle.runs = vec![TextRun { text: "b\n".into(), style: CharStyle::default(), inline: None }];
+    middle.set_paragraph_styles(vec![style(Right), style(JustifyAll)]);
+    assert_eq!(justify(&[&first, &middle, &with_text], &[false, true, false], &[false, true, false]), [Left, Right, JustifyAll]);
+}
+
 /// Numbered list paragraphs count on from one frame to the next: the second frame's first
 /// whole paragraph takes the next number. A paragraph split between the frames has its number
 /// in the first frame only, and the paragraph after it takes the next number.

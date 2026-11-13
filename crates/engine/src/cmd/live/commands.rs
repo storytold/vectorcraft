@@ -172,7 +172,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Top Object",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+C"),
-            "{ids?} the topmost selected path becomes the envelope of the others: its outline splits into four sides at its corners, and each piece of a side takes a share of the content in proportion to its control polygon's length (type maps from its glyph outline bounds) → {id}",
+            "{ids?} the topmost selected path becomes the envelope of the others: its outline splits into four sides at its corners, and each piece of a side takes a share of the content in proportion to its control polygon's length, and a side whose pieces are all one curve split at anchors follows that curve's parameter (type maps from its glyph outline bounds) → {id}",
             has_multi,
             env_make_top
         ),
