@@ -2,7 +2,7 @@ use vectorcraft_color::BlendMode;
 
 use super::axis::radar_axis;
 use super::labels::{Role, filled_lines_on, label_para, label_style};
-use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
+use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Rect, Result, Session, Value, bad};
 
 // ---------- generation ----------
 
@@ -216,7 +216,8 @@ pub(crate) fn capture_series_top_paints(doc: &mut Document, edited: &[(NodeId, b
             continue;
         }
         let (paint, width) = shown_paint(node, *fill);
-        captures.push((r.graph, r.index, *fill, paint, (!*fill).then_some(width)));
+        let width = (!*fill).then_some(width);
+        captures.push((r.graph, r.index, *fill, paint, width, paint_box(node, width)));
     }
     store_series_paints(doc, captures)
 }
@@ -265,11 +266,90 @@ fn settle_series_paints(doc: &mut Document, before: SeriesPaintsBefore) -> bool 
     changed
 }
 
-/// Store each capture (graph, series index, fill or stroke, paint, stroke weight) in its series. Returns whether a
+/// The box a series keeps a gradient relative to: (0, 0)–(1, 1), as graphic styles keep theirs.
+const UNIT_BOX: Rect = vectorcraft_doc::GraphicStyle::UNIT_BOX;
+
+/// The gradient `slot` keeps for its fill (`fill`) or stroke relative to the unit box, placed on box `on` as the graph
+/// draws it there. None when the slot keeps no such gradient or there is no box.
+fn kept_on(slot: &vectorcraft_doc::SeriesPaint, fill: bool, on: Option<Rect>) -> Option<Paint> {
+    let (kept, unit) = if fill { (&slot.fill, slot.fill_unit_box) } else { (&slot.stroke, slot.stroke_unit_box) };
+    let (Some(Paint::Gradient(g)), true, Some(on)) = (kept, unit, on) else { return None };
+    let mut g = g.clone();
+    g.rebase(UNIT_BOX, on);
+    Some(Paint::Gradient(g))
+}
+
+/// The box a gradient on `node`'s fill (`width` None) or on its stroke of `width` is placed on: the geometric bounds, grown
+/// by half the weight for a stroke. None for a box with no width or no height, which a gradient's place cannot be kept
+/// relative to.
+fn paint_box(node: &Node, width: Option<f64>) -> Option<Rect> {
+    let b = node.geometric_bounds()?;
+    let b = width.map_or(b, |w| vectorcraft_doc::appearance::stroke_paint_bounds(b, w));
+    (b.width() > 1e-9 && b.height() > 1e-9).then_some(b)
+}
+
+/// `paint` as a series keeps it: a gradient placed on `from` (the edited mark's [`paint_box`]) is moved to the same place
+/// relative to [`UNIT_BOX`], so each mark takes it on its own box. Returns the paint and whether it was moved.
+fn unit_box_paint(paint: Paint, from: Option<Rect>) -> (Paint, bool) {
+    match (paint, from) {
+        (Paint::Gradient(mut g), Some(from)) => {
+            g.rebase(from, UNIT_BOX);
+            (Paint::Gradient(g), true)
+        }
+        (paint, _) => (paint, false),
+    }
+}
+
+/// The paths directly inside series `i`'s group (`items`) with the series' kept gradients, which are kept relative to the
+/// unit box, placed on each path's own box: a fill on its geometric bounds, a stroke on its stroke's box. Paints kept in
+/// document coordinates (from files saved before the unit box) are left as they are.
+pub(super) fn with_series_gradients(g: &GraphSpec, i: usize, mut items: Vec<Arc<Node>>) -> Vec<Arc<Node>> {
+    let Some(slot) = g.series_paints.get(i) else { return items };
+    fn kept(p: &Option<Paint>, unit: bool) -> Option<&Paint> {
+        p.as_ref().filter(|p| unit && matches!(p, Paint::Gradient(_)))
+    }
+    let (fill, stroke) = (kept(&slot.fill, slot.fill_unit_box), kept(&slot.stroke, slot.stroke_unit_box));
+    if fill.is_none() && stroke.is_none() {
+        return items;
+    }
+    // A Filled Lines band takes the kept stroke as its fill when no fill is kept.
+    let band_fill = if slot.fill.is_none() { stroke } else { None };
+    let fill_from_store = |p: &Paint| fill == Some(p) || band_fill == Some(p);
+    let stroke_from_store = |p: &Paint| stroke == Some(p);
+    for item in &mut items {
+        if !matches!(item.kind, NodeKind::Path { .. }) {
+            continue;
+        }
+        let Some(b) = item.geometric_bounds() else { continue };
+        let ap = &item.appearance;
+        if !ap.fill().is_some_and(|f| fill_from_store(&f.paint)) && !ap.stroke().is_some_and(|st| stroke_from_store(&st.paint)) {
+            continue;
+        }
+        let ap = &mut Arc::make_mut(item).appearance;
+        if let Some(f) = ap.fill_mut().filter(|f| fill_from_store(&f.paint))
+            && let Paint::Gradient(gp) = &mut f.paint
+        {
+            gp.rebase(UNIT_BOX, b);
+        }
+        if let Some(st) = ap.stroke_mut().filter(|st| stroke_from_store(&st.paint)) {
+            let to = st.paint_bounds(b);
+            if let Paint::Gradient(gp) = &mut st.paint {
+                gp.rebase(UNIT_BOX, to);
+            }
+        }
+    }
+    items
+}
+
+/// A paint taken from a series mark: graph, series index, fill or stroke, paint, stroke weight and the mark's
+/// [`paint_box`].
+type Capture = (NodeId, usize, bool, Paint, Option<f64>, Option<Rect>);
+
+/// Store each capture in its series; a gradient is kept relative to the unit box ([`unit_box_paint`]). Returns whether a
 /// series' captured fill or stroke differs from what the graph stored before the first capture.
-fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, Paint, Option<f64>)>) -> bool {
+fn store_series_paints(doc: &mut Document, captures: Vec<Capture>) -> bool {
     let mut before = SeriesPaintsBefore::new();
-    for (graph, index, fill, paint, width) in captures {
+    for (graph, index, fill, paint, width, from) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         before.entry(graph).or_insert_with(|| spec.series_paints.clone());
         // `index` is below the graph's series count (`series_members`).
@@ -277,10 +357,17 @@ fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, P
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
         }
         let Some(slot) = spec.series_paints.get_mut(index) else { continue };
+        // A mark that shows the kept gradient as it was drawn leaves the kept gradient as it is.
+        let drawn = kept_on(slot, fill, from).is_some_and(|kept| kept == paint);
+        let (paint, unit) = unit_box_paint(paint, from);
         if fill {
-            slot.fill = Some(paint);
+            if !drawn {
+                (slot.fill, slot.fill_unit_box) = (Some(paint), unit);
+            }
         } else {
-            slot.stroke = Some(paint);
+            if !drawn {
+                (slot.stroke, slot.stroke_unit_box) = (Some(paint), unit);
+            }
             slot.stroke_width = width;
         }
     }

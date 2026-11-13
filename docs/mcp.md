@@ -805,8 +805,12 @@ color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit
 `addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
 commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
 leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
-them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
-placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
+them sets what the graph stores. A gradient is stored with its placement relative to the box of the path it was stored
+from (a stroke's box is the path's bounds grown by half the weight), and every path of the series, the legend swatch
+included, takes it at the same place on its own box when the graph is drawn again, also after the data changes or the
+graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series paints. A gradient stored from a
+path with no width or no height is drawn at the place in the document where it was stored. So is a gradient a graph
+stored without these flags. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
 profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
