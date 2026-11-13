@@ -154,6 +154,29 @@ fn taper_shrinks_the_back_and_twist_turns_it() {
     assert!(open.len() > 2 * 8, "{}", open.len());
 }
 
+/// A flat facet carries its plane: the depth it gives at each corner of its drawing is the corner's
+/// view-space depth, with and without perspective. A piece of a twisted wall whose corners lie off
+/// one plane has none.
+#[test]
+fn a_flat_facet_measures_its_depth_on_its_plane() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let o = Extrude { depth: 60.0, cap: true, ..Extrude::default() };
+    for perspective in [0.0, 50.0] {
+        let view = View { rotation_x: -20.0, rotation_y: 30.0, perspective, ..front() };
+        let flat = extrude(&p, FillRule::EvenOdd, b, o, view).unwrap();
+        assert!(!flat.is_empty());
+        for f in &flat {
+            assert!(f.plane.is_some(), "{perspective}");
+            for (q, v) in f.contours.iter().flatten().zip(f.view.iter().flatten()) {
+                let d = f.depth_at(*q);
+                assert!(d.is_some_and(|d| close(d, v.2, 1e-6)), "{perspective}: {d:?} against {}", v.2);
+            }
+        }
+        let twisted = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 90.0, ..o }, view).unwrap();
+        assert!(twisted.iter().any(|f| f.side && f.plane.is_none()), "{perspective}");
+    }
+}
+
 #[test]
 fn a_bevel_inside_shrinks_the_cap_and_outside_grows_the_walls() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));

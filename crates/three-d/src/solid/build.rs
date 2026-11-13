@@ -6,8 +6,8 @@ use super::rings::{
     solid_rings_traced,
 };
 use super::{
-    Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View, eye_distance,
-    perspective_scale,
+    Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
+    eye_distance, perspective_scale,
 };
 use crate::shadow::Projection;
 
@@ -129,6 +129,11 @@ impl Builder<'_> {
         } else {
             (V3(-n.0, -n.1, -n.2), false)
         };
+        // A face whose corners lie off one plane (a piece of a twisted wall bent into a saddle) has
+        // no plane to measure its depth on.
+        let offset = n.dot(centre);
+        let flat = contours.iter().flatten().all(|v| (n.dot(*v) - offset).abs() <= 1e-3);
+        let plane = flat.then_some(DepthPlane { normal: [n.0, n.1, n.2], offset, center: self.camera.origin, eye: self.camera.eye });
         #[cfg(test)]
         let view = contours.clone();
         let contours: Vec<Vec<Point>> = contours.iter().map(|c| c.iter().map(|v| self.camera.project(*v)).collect()).collect();
@@ -156,6 +161,7 @@ impl Builder<'_> {
             side: false,
             away: behind,
             end: None,
+            plane,
             #[cfg(test)]
             view,
         });

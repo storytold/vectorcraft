@@ -117,11 +117,20 @@ The rest is our reading:
   each side face of the fill's solid that is turned toward the viewer is drawn before every face of the same
   shape's strokes, turned toward the viewer, whose bounds overlap it, so the stroke's walls cover the fill's walls
   at concave corners. This applies to strokes on closed paths without dashes, a width profile or a brush, painted
-  with a solid color or a gradient without transparent stops; with other strokes, and without caps, the faces keep
-  their depth order. Otherwise
-  each solid is drawn on its own with its opacity and blending, the lower item's first. With a light that is not
-  white, each solid is also drawn on its own when one of them is a puffed, shaded Inflate surface in a solid color
-  (drawn as one composite) or is painted with a gradient that has transparent stops (drawn with an opacity mask).
+  with a solid color or a gradient without transparent stops, under Extrude & Bevel (both kinds). Under Inflate
+  the fill can rise in front of such a stroke, so it is drawn like the other strokes. Other strokes (dashed, with a
+  width profile or a brush, on an open subpath, or in a paint that may show through) leave parts of the fill's edge
+  uncovered, such as the gaps between dashes. Each face of such a stroke that passes through a face of the fill's
+  solid, or through a face of another of the shape's strokes, where the two overlap in the drawing is cut where
+  their depths meet, and the faces of the shape's fill and strokes that overlap are drawn in the order of their
+  depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Inflate's
+  curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
+  transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
+  this order, in runs that each carry the mask, and so do its graphics. A member of a 3D group with its own opacity
+  mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
+  they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
+  lower item's first. With a light that is not white, each solid is also drawn on its own when one of them is a
+  puffed, shaded Inflate surface in a solid color (drawn as one composite).
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.
