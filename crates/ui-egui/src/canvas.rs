@@ -226,6 +226,17 @@ fn opening_fit_follows(app: &VectorcraftApp, ui: &Ui, rect: egui::Rect, fitted: 
 }
 
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
+/// `overlays` with the text caret on or off as it blinks ([`overlays::blink_caret`]), asking for
+/// the frame where it next turns on or off.
+fn blinking(app: &mut VectorcraftApp, ui: &Ui, overlays: Vec<Overlay>) -> Vec<Overlay> {
+    let (now, focused) = ui.input(|i| (i.time, i.focused));
+    let (overlays, toggle) = overlays::blink_caret(&mut app.canvas.caret, now, focused, overlays);
+    if let Some(secs) = toggle {
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs.max(0.01)));
+    }
+    overlays
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let full = ui.available_rect_before_wrap();
@@ -407,11 +418,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         original_path_overlay(app, &painter, &xf);
 
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
-        let (now, focused) = ui.input(|i| (i.time, i.focused));
-        let (overlays, toggle) = overlays::blink_caret(&mut app.canvas.caret, now, focused, overlays);
-        if let Some(secs) = toggle {
-            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs.max(0.01)));
-        }
+        let overlays = blinking(app, ui, overlays);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);

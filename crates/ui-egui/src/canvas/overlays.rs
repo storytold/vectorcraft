@@ -355,7 +355,7 @@ pub(crate) const CARET_BLINK: f64 = 0.53;
 /// off as long, and so on (#6406). Without focus the window isn't being typed in, so the caret
 /// stays on.
 pub(crate) fn caret_shown(elapsed: f64, focused: bool) -> bool {
-    !focused || !elapsed.is_finite() || elapsed < 0.0 || (elapsed / CARET_BLINK).floor() as u64 % 2 == 0
+    !focused || !elapsed.is_finite() || elapsed < 0.0 || ((elapsed / CARET_BLINK).floor() as u64).is_multiple_of(2)
 }
 
 /// `overlays` with the text caret blinking: `caret` (its ends' bits and when it got there) starts
