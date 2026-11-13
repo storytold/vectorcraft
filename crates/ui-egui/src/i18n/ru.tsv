@@ -4805,6 +4805,7 @@ axis	Both	Оба
 @msg	paths contain invalid coordinates	контуры содержат недопустимые координаты
 @msg	paths: give at least one file	paths: укажите как минимум один файл
 @msg	replace: the object to replace was changed or deleted	replace: заменяемый объект был изменён или удалён
+@msg	the document it was prepared for is no longer active	документ, для которого это было подготовлено, больше не активен
 @msg	pattern missing	узор отсутствует
 @msg	patterns nested too deeply are filled with mid-grey	слишком глубоко вложенные узоры заполняются серым
 @msg	percent must be above 0 and at most 6400, not {p}	percent должен быть больше 0 и не более 6400, а не {p}

@@ -4909,6 +4909,7 @@ imageTrace	Outline	Obris
 @msg	paths contain invalid coordinates	putanje sadrže nevažeće koordinate
 @msg	paths: give at least one file	paths: navedite barem jednu datoteku
 @msg	replace: the object to replace was changed or deleted	replace: objekat za zamjenu je promijenjen ili izbrisan
+@msg	the document it was prepared for is no longer active	dokument za koji je pripremljeno više nije aktivan
 @msg	pattern missing	uzorak nedostaje
 @msg	patterns nested too deeply are filled with mid-grey	previše duboko ugniježđeni uzorci ispunjavaju se srednje sivom
 @msg	percent must be above 0 and at most 6400, not {p}	percent mora biti iznad 0 i najviše 6400, a ne {p}

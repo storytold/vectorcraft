@@ -5967,6 +5967,7 @@ digits	Malayalam	Malaiàlam
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
+@msg	the document it was prepared for is no longer active	el document per al qual es va preparar ja no està actiu
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
