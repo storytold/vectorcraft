@@ -158,7 +158,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("scatter-shapes"),
             json!("game-trails"),
             json!("energy-beams"),
-            json!("dry-media")
+            json!("dry-media"),
+            json!("impact-bursts")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());

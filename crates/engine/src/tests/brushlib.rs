@@ -115,7 +115,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "scatter-shapes",
             "game-trails",
             "energy-beams",
-            "dry-media"
+            "dry-media",
+            "impact-bursts"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -143,12 +144,20 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
     assert_eq!((libs[8]["name"].as_str(), libs[8]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    let impact = run(&mut s, "brush.library", json!({"library": "impact-bursts"}));
+    assert_eq!(
+        impact["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
+        ["Star Burst", "Ring Shock", "Slash Arc", "Spark Fan", "Debris Spray", "Crack Line"]
+    );
+    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Impact Bursts"), Some(6)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
     assert_eq!(strs(&added["added"]), ["Laser Bolt"]);
-    // One kind of brush per library (Ink and Wash: art brushes and a calligraphic one), every
-    // brush drawing something.
+    run(&mut s, "file.new", json!({"width": 100.0, "height": 100.0})).unwrap();
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "impact-bursts", "name": "Star Burst"}));
+    assert_eq!(added["added"], json!(["Star Burst"]));
+    // One kind of brush per library, every brush drawing something.
     for (id, kind) in [
         ("art-ribbons", "art"),
         ("ink-and-wash", "art"),
@@ -159,6 +168,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("impact-bursts", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
