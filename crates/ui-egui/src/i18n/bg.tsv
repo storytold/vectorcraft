@@ -6308,6 +6308,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор на опорни точки
 	Add Points at Crossings	Добавяне на точки в пресичанията
 	Split at Crossings	Разделяне в пресичанията
+	Trim at Crossings Tool	Инструмент „Подрязване в пресичанията“
+	Trim at Crossings	Подрязване в пресичанията
 	Extend Path	Удължаване на път
 	Measure & Inspect	Измерване и проверка
 	Set Anchor	Задаване на опорна точка

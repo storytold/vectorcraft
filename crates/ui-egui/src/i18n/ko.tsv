@@ -6452,6 +6452,8 @@ anchor	Points:	포인트:
 	Anchor Inspector	앵커 포인트 검사기
 	Add Points at Crossings	교차점에 포인트 추가
 	Split at Crossings	교차점에서 분할
+	Trim at Crossings Tool	교차점에서 트림 도구
+	Trim at Crossings	교차점에서 트림
 	Extend Path	패스 연장
 	Measure & Inspect	측정 및 검사
 	Set Anchor	앵커 포인트 설정

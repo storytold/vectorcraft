@@ -6848,6 +6848,8 @@ anchor	Points:	Pontok:
 	Anchor Inspector	Horgonypont-vizsgáló
 	Add Points at Crossings	Pontok hozzáadása a kereszteződésekben
 	Split at Crossings	Felosztás a kereszteződésekben
+	Trim at Crossings Tool	Levágás a kereszteződésekben eszköz
+	Trim at Crossings	Levágás a kereszteződésekben
 	Extend Path	Útvonal meghosszabbítása
 	Measure & Inspect	Mérés és vizsgálat
 	Set Anchor	Horgonypont beállítása

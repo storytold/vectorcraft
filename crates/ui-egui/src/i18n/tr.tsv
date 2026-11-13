@@ -6821,6 +6821,8 @@ anchor	Points:	Noktalar:
 	Anchor Inspector	Bağlantı Noktası Denetçisi
 	Add Points at Crossings	Kesişimlere Nokta Ekle
 	Split at Crossings	Kesişimlerden Böl
+	Trim at Crossings Tool	Kesişimlerden Kırpma Aracı
+	Trim at Crossings	Kesişimlerden Kırp
 	Extend Path	Yolu Uzat
 	Measure & Inspect	Ölç ve İncele
 	Set Anchor	Bağlantı Noktasını Ayarla

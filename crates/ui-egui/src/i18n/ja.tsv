@@ -6557,6 +6557,8 @@ anchor	Points:	ポイント:
 	Anchor Inspector	アンカーポイントインスペクター
 	Add Points at Crossings	交差点にポイントを追加
 	Split at Crossings	交差点で分割
+	Trim at Crossings Tool	交差点でトリムツール
+	Trim at Crossings	交差点でトリム
 	Extend Path	パスを延長
 	Measure & Inspect	計測・検査
 	Set Anchor	アンカーポイントを設定

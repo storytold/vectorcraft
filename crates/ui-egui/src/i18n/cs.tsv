@@ -6865,6 +6865,8 @@ anchor	Points:	Body:
 	Anchor Inspector	Inspektor kotevních bodů
 	Add Points at Crossings	Přidat body v křížení
 	Split at Crossings	Rozdělit v křížení
+	Trim at Crossings Tool	Nástroj Zastřihnout v křížení
+	Trim at Crossings	Zastřihnout v křížení
 	Extend Path	Prodloužit cestu
 	Measure & Inspect	Měřit a zkoumat
 	Set Anchor	Nastavit kotevní bod
