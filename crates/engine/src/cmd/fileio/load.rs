@@ -132,6 +132,12 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
+    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
+    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
+    // signature starts the file is checked first.
+    if vectorcraft_metafile::is_pict(bytes) {
+        return format("pict");
+    }
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
     }
@@ -497,6 +503,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "emf" | "wmf" => {
             let (doc, warnings) = super::metafile::import(bytes)?;
+            (doc, warnings, false)
+        }
+        "pict" => {
+            let (doc, warnings) = super::metafile::import_pict(bytes)?;
             (doc, warnings, false)
         }
         "hpgl" => {
