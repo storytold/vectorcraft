@@ -1,4 +1,4 @@
-use super::build::{PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_without_page, reid_page_art};
+use super::build::{PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -177,15 +177,27 @@ pub fn layered_ai_from(
         add_notes(&mut all, read.notes());
         (visible, all, false)
     };
-    let built = structure
-        .unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new))
-        .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
+    // The envelopes of type the page doesn't hold against layers that don't draw as it, and how many
+    // envelopes of type the layers had.
+    let (mut free, mut count) = (None, 0);
+    let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
+        count = structure.warped_type.envelope_count();
+        build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free)
+    });
     // Layers that waited on the page only for their envelopes of type open alone, as they would
-    // have without them, each envelope keeping its drawn art, unless one opened live with the page.
-    let live = matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
+    // have without them, unless one opened live with the layers drawing as the page. Alone, each
+    // envelope keeps its drawn art but those the page didn't hold against the layers, which open
+    // live as they were weighed. They were weighed on the layers as compared with the page, before
+    // any object of them came in as the page's art: those layers aren't used here, whatever came of
+    // them.
+    let live = free.is_none() && matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
     if !live
         && let Some((mut done, notes)) = alone.and_then(|(pages, unit)| {
-            let structure = ai::read_over_page(&data, false, names).ok()?;
+            let mut structure = ai::read_over_page(&data, false, names).ok()?;
+            // With none free, nothing needs settling again: every envelope keeps its drawn art.
+            if let Some(free) = free.as_deref().filter(|free| !free.is_empty()) {
+                structure.warped_type.open_alone(free, count);
+            }
             build_without_page(structure, &data, &pages, unit).ok()?.ok()
         })
     {

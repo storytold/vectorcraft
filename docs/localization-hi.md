@@ -39,6 +39,14 @@ vector point is पॉइंट and a printer's mark is मार्क, never �
 and a range message keeps both comparisons: minimum ≤ desired ≤ maximum. The same test rejects
 these senses, and others found in the catalog, in every row whose English names the word.
 
+A variable is वेरिएबल (plural वेरिएबल्स) in every sense: a data-merge variable and the
+variable library, a variable font, a variable stroke width and an environment variable. It is
+never चर, परिवर्तनीय or वैरिएबल. Joining paths, anchor points, point type or the lines of a
+paragraph is जोड़ें (जोड़ने के लिए in a purpose clause); शामिल हों is kept for joining the
+community. The stroke corner names (Bevel Join, Miter Join, Round Join) and the Join tool keep
+जॉइन. `hindi_rows_use_one_term_for_a_variable_and_for_joining_paths` checks both terms in every
+row.
+
 ## Terminology
 
 | English | Hindi |
@@ -62,6 +70,8 @@ these senses, and others found in the catalog, in every row whose English names 
 | Type (text object) / Crop / Resolution | टाइप / क्रॉप / रिज़ॉल्यूशन |
 | Appearance / Graphic style | अपीयरेंस / ग्राफ़िक स्टाइल |
 | Symbol / Envelope | सिंबल / एन्वेलप |
+| Variable / Variables / Variable library | वेरिएबल / वेरिएबल्स / वेरिएबल लाइब्रेरी |
+| Join (paths, points, type, lines) | जोड़ें |
 | Clipping mask / Opacity mask | क्लिपिंग मास्क / ओपेसिटी मास्क |
 | Image Trace / Live Paint | इमेज ट्रेस / लाइव पेंट |
 | Shape Builder / Pathfinder | शेप बिल्डर / पाथफ़ाइंडर |
@@ -79,7 +89,7 @@ The draft has 7,877 unique rows, including 2,537 `@msg`, 45 `@msgplural` and 38 
 Its source set combines the sibling catalogs with the current test scanner's UI/undo and error
 message dumps, so it includes runtime labels outside the literal scanner. Row count is not a
 percentage of the application's entire interface.
-On 2026-11-13 the catalog has 8,732 rows, including 3,003 `@msg`, 47 `@msgplural` and 41
+On 2026-11-13 the catalog has 8,782 rows, including 3,014 `@msg`, 47 `@msgplural` and 41
 `@plural` rows. A wording pass on that date corrected 193 rows outside the plug-in
 messages for meaning, dropped clauses, English left in place and the save, swatch, crop,
 resolution, path and type terms. A second pass on that date corrected 85 short labels and

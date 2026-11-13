@@ -1367,6 +1367,7 @@ impl<'a> Reader<'a> {
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
                 page,
+                alone: None,
             },
             styles_read,
             text_patterns,

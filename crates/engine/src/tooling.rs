@@ -804,6 +804,12 @@ impl Session {
         self.tool.wants_ticks()
     }
 
+    /// Did the active tool leave part of its overlays for the next frame
+    /// ([`vectorcraft_tools::Tool::overlays_pending`])?
+    pub fn tool_overlays_pending(&self) -> bool {
+        self.tool.overlays_pending()
+    }
+
     /// Does the active tool build a stroke from every position the pointer passed
     /// ([`vectorcraft_tools::Tool::wants_samples`])?
     pub fn tool_wants_samples(&self) -> bool {

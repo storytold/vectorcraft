@@ -331,6 +331,45 @@ fn the_live_paint_bucket_shows_a_bucket_or_a_brush() {
     }
 }
 
+/// Live Paint Selection's cursors are the solid arrow, its tip on the hotspot, with a badge at its
+/// lower right: a filled square over a face, a line between two anchor marks over an edge, and an x
+/// where a click selects nothing.
+#[test]
+fn live_paint_selection_shows_the_arrow_with_a_face_edge_or_x_badge() {
+    for ppp in [2.0f32, 3.0] {
+        let img = |c| rasterize(c, ppp).unwrap_or_else(|| panic!("{c:?} at {ppp}"));
+        let (arrow, cross) = (img(Cursor::Arrow), img(Cursor::Crosshair));
+        let (face, edge, out) = (img(Cursor::LivePaintSelectFace), img(Cursor::LivePaintSelectEdge), img(Cursor::LivePaintSelectOutside));
+        // The pixel at (dx, dy) points from the hotspot.
+        let at = |img: &CustomCursorImage, dx: f32, dy: f32| {
+            let [hx, hy] = img.hotspot.map(usize::from);
+            let (x, y) = ((hx as f32 + dx * ppp) as usize, (hy as f32 + dy * ppp) as usize);
+            if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y) } else { [0; 4] }
+        };
+        let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+        // Inside the square, away from the x's strokes and the edge's line.
+        let square = (15.0, 14.0);
+        // The edge's upper anchor mark, beyond the square and the x.
+        let mark = (19.0, 13.0);
+        // On the x's stroke from top left to bottom right, away from the edge's line.
+        let x_stroke = (13.0, 14.0);
+        for (c, i, want) in [
+            (Cursor::LivePaintSelectFace, &face, [true, false, true]),
+            (Cursor::LivePaintSelectEdge, &edge, [false, true, false]),
+            (Cursor::LivePaintSelectOutside, &out, [false, false, true]),
+        ] {
+            assert_eq!(i.hotspot, arrow.hotspot, "{c:?} has the arrow's hotspot at {ppp}");
+            assert!(inked(at(i, 1.5, 6.0)), "{c:?} is the solid arrow at {ppp}");
+            let got = [square, mark, x_stroke].map(|(x, y)| inked(at(i, x, y)));
+            assert_eq!(got, want, "{c:?} at {ppp}");
+            assert!(c.stand_in().is_none(), "{c:?} is drawn");
+            assert_ne!(i, &arrow, "{c:?} is not the plain arrow at {ppp}");
+            assert_eq!(rasterize(c.precise(), ppp).as_ref(), Some(&cross), "{c:?} with Use Precise Cursors at {ppp}");
+        }
+        assert!(face != edge && edge != out && face != out, "three looks at {ppp}");
+    }
+}
+
 #[test]
 fn each_bitmap_is_made_once_so_the_os_cursor_is_kept() {
     let mut images = Images::default();
