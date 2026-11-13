@@ -196,7 +196,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.pixelPreview", "Pixel Preview", "Cmd+Alt+Y", "{}"),
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
-    ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
+    (
+        "view.snapToPixel",
+        "Snap to Pixel",
+        "",
+        "{} toggle: drawing, moving and scaling land on whole pixels, each while its option in view.snapToPixel.options is on",
+    ),
     (
         "view.snapToGlyph",
         "Snap to Glyph",
@@ -1254,7 +1259,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth opens it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",

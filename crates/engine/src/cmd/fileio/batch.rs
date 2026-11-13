@@ -41,6 +41,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
             roll_back(s, start, &stash);
             s.notify_text_tool("batch.rollBack");
             s.active = active;
+            s.sync_front_profiles();
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
             s.pending_paint = None;
             return Err(e);
