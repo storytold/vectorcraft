@@ -2192,6 +2192,18 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
   `live_paint_bucket_drag_rejects_invalid_points_atomically` covers invalid command input.
   Behaviour source: [Paint with the Live Paint Bucket tool](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html).
   Scores and estimates unchanged.
+- **Live Paint Bucket cursors:** over a face a click fills (of a Live Paint group, or a region of
+  the selected paths) the cursor is a filled paint bucket, over an edge it paints it is a brush,
+  and where a click paints nothing it is an empty bucket. It follows Paint Fills, Paint Strokes
+  and Shift, and shows with Highlight off too; Alt still shows the Eyedropper, and Use Precise
+  Cursors shows the crosshair. The drawings are VectorCraft's own. With a Live Paint group and
+  ordinary paths selected, a region of the paths outside the group is highlighted and shows the
+  filled bucket, as a click there fills it. Tests:
+  `bucket_cursor_shows_what_a_click_paints`, `bucket_cursor_fills_a_region_of_the_selected_paths`,
+  `bucket_fills_a_region_of_a_selection_that_mixes_a_group_and_paths`,
+  `the_live_paint_bucket_shows_a_bucket_or_a_brush`. Behavior source:
+  [the help page](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html).
+  The cursor swatch preview is not built. Scores and estimates unchanged.
 
 ## Revision history
 
