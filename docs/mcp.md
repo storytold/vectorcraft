@@ -5447,6 +5447,11 @@ length that isn't a number above 0 is an error. An ellipse (Ellipse Properties):
 counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. Each call is
 one undo step.
 
+`object.setLiveShape` returns a parameter error, and leaves the document and its undo history as they were, for a key
+it does not take, at the top level (`` unknown parameter `path` ``) or in one of `items`
+(`` unknown parameter `items[0].corner`; did you mean `items[0].corners`? ``), for a `sides` that is not a whole number
+from 3 to 1000, such as 2.5, 2 or 1001, and for a negative `radius`. A `radius` of 0 removes the rounding.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
