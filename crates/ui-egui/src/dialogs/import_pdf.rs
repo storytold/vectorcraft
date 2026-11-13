@@ -207,7 +207,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
     let r = if d.str("mode") == "place" {
         let mut p = with_file(d.fields.get("__place"), &d, &file);
-        p["page"] = json!(page(&d));
+        if crate::place::has_pages_spec(&p) {
+            if let Some(obj) = p.as_object_mut() {
+                obj.remove("page");
+            }
+        } else {
+            p["page"] = json!(page(&d));
+        }
         p["crop"] = json!(crop(&d).id());
         if let Some(pw) = password(&d) {
             p["password"] = json!(pw);

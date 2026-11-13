@@ -396,7 +396,15 @@ fn load_pages_mode(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, si
         {
             None
         } else {
-            Some(vectorcraft_pdf::open_pdf(&src.bytes, password).map(|opened| opened.page_count().max(1)).unwrap_or(1))
+            match vectorcraft_pdf::open_pdf(&src.bytes, password) {
+                Ok(opened) => {
+                    let count = opened.page_count().max(1);
+                    let is_placeholder_ai =
+                        count == 1 && fileio::opened_page_document(&src.bytes, &opened, 0, &opts).err().is_some_and(|e| fileio::is_placeholder(&e));
+                    if is_placeholder_ai { None } else { Some(count) }
+                }
+                Err(_) => Some(1),
+            }
         };
 
         let pages_to_place = resolve_pdf_pages(p, cmd, single_only, total_pages)?;
@@ -953,6 +961,10 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     }
 
     let layout_bounds = Rect::new(0.0, 0.0, layout_w.max(1.0), max_h.max(1.0));
+    if !layout_bounds.width().is_finite() || !layout_bounds.height().is_finite() {
+        return Err(bad(PLACE, "multipage layout bounds are not finite"));
+    }
+
     let layout_xf = match (old_node, rect) {
         (Some(o), _) => replace_xf(&st.doc, o, layout_bounds, true),
         (None, Some(r)) => fit(layout_bounds, r),
@@ -962,11 +974,23 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         }
     };
 
-    let p0 = layout_xf * Point::new(layout_bounds.x0, layout_bounds.y0);
-    let px = layout_xf * Point::new(layout_bounds.x1, layout_bounds.y0);
-    let py = layout_xf * Point::new(layout_bounds.x0, layout_bounds.y1);
-    let width = (px - p0).hypot();
-    let height = (py - p0).hypot();
+    // Transform all four corners of layout_bounds and take their axis-aligned bounding box
+    // so rotated replacements (e.g. 90 degrees) report swapped width and height.
+    let corners = [
+        layout_xf * Point::new(layout_bounds.x0, layout_bounds.y0),
+        layout_xf * Point::new(layout_bounds.x1, layout_bounds.y0),
+        layout_xf * Point::new(layout_bounds.x1, layout_bounds.y1),
+        layout_xf * Point::new(layout_bounds.x0, layout_bounds.y1),
+    ];
+    let min_x = corners.iter().map(|pt| pt.x).fold(f64::INFINITY, f64::min);
+    let max_x = corners.iter().map(|pt| pt.x).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = corners.iter().map(|pt| pt.y).fold(f64::INFINITY, f64::min);
+    let max_y = corners.iter().map(|pt| pt.y).fold(f64::NEG_INFINITY, f64::max);
+    let width = (max_x - min_x).max(0.0);
+    let height = (max_y - min_y).max(0.0);
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return Err(bad(PLACE, "replace: invalid replacement geometry"));
+    }
 
     let parent = st.insertion_parent();
     let below = st.current_layer().or_else(|| parent.and_then(|p| st.doc.layer_of(p)));

@@ -1317,3 +1317,40 @@ fn multipage_pdf_layout_centers_on_at_and_honors_rect_and_replace() {
     assert!((fit_res["width"].as_f64().unwrap() - 110.0).abs() < 1e-3);
     assert!((fit_res["height"].as_f64().unwrap() - 25.0).abs() < 1e-3);
 }
+
+#[test]
+fn multipage_replace_on_rotated_object_swaps_axis_aligned_width_and_height() {
+    let pdf_bytes = synthetic_multipage_pdf(2);
+    let b64 = vectorcraft_format::base64_encode(&pdf_bytes);
+
+    // 1. Unrotated multipage placement baseline dimensions (width > height for 2 side-by-side pages)
+    let mut s0 = Session::new();
+    s0.execute("file.new", &json!({})).unwrap();
+    let unrotated = s0.execute("file.place", &json!({ "name": "two.pdf", "dataBase64": b64, "pages": "all" })).unwrap();
+    let base_w = unrotated["width"].as_f64().unwrap();
+    let base_h = unrotated["height"].as_f64().unwrap();
+    assert!(base_w > base_h);
+
+    // 2. Place an image, rotate it by 90 degrees, then replace it with the 2-page PDF
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let png_b64 = vectorcraft_format::base64_encode(&png(100, 50, [255, 0, 0, 255], None));
+    s.execute("file.place", &json!({ "name": "img.png", "dataBase64": png_b64 })).unwrap();
+    s.execute("object.rotate", &json!({ "angle": 90.0 })).unwrap();
+    let replaced = s
+        .execute(
+            "file.place",
+            &json!({
+                "name": "two.pdf",
+                "dataBase64": b64,
+                "replace": true,
+                "pages": "all"
+            }),
+        )
+        .unwrap();
+    let rot_w = replaced["width"].as_f64().unwrap();
+    let rot_h = replaced["height"].as_f64().unwrap();
+
+    // A 90-degree rotated replacement swaps axis-aligned width and height (so rot_h > rot_w)
+    assert!(rot_h > rot_w, "expected 90-degree rotated replacement to swap dimensions, got width={rot_w}, height={rot_h}");
+}

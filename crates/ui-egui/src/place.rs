@@ -170,9 +170,8 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
     {
         p["at"] = json!([v.center.x, v.center.y]);
     }
-    let multi_page = has_pages_spec(&p);
     match read {
-        Read::ForUser { dropped } if !multi_page && crate::placing::available(app) => {
+        Read::ForUser { dropped } if crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);
             if let Err(e) = &r {
                 app.status(e.clone());
@@ -520,7 +519,7 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
-                if is_pdf(&name) {
+                if is_pdf(&name) || fileio::detect(&name, &bytes).is_some_and(|f| f.id == "pdf") {
                     p["pages"] = json!("all");
                 }
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
