@@ -4911,7 +4911,9 @@ stay live. `object.expand.info` answers which options have something to expand i
 (`{object, fill, stroke, gradient, appearance, symbolArt?}`; `gradient` says whether Fill has a gradient fill, which Expand
 Gradient To applies to, that it turns into art: it is false when every such fill repeats or reflects in more than 256
 runs across the box it fills, which for type, symbol art included, is the box of each outline Object makes of a character,
-ruby character, underline or strikethrough; `appearance` whether the selection has appearance attributes Expand Appearance expands first,
+ruby character, underline or strikethrough, and for a fill of the type object itself the box of its whole outline;
+`stroke` and `fill` count the type object's own strokes and pattern fills as well as its characters' (its own
+only when the type has an outline, which type of only spaces does not); `appearance` whether the selection has appearance attributes Expand Appearance expands first,
 for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke, gradient}`, present when the selection
 holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
@@ -8327,6 +8329,14 @@ indent and bullet or number again.
 ```json
 {"name":"run_command","arguments":{"command":"text.thread.add","params":{"from":42,"at":[300,120]}}}
 ```
+
+`type.createOutlines` (Type › Create Outlines) makes a group with a path per glyph, ruby glyph and underline or
+strikethrough bar, each painted as its characters are. The type object's own fills and strokes (the items around the
+Appearance panel's Characters row, not the characters' formatting) go on paths of the type's whole outline: the items
+below the Characters row on one path under the glyph paths, the others on one path over them, in their order and with
+their opacity, blend mode, effects and stroke settings. Their gradients that are not placed are fixed to the type's
+layout box, as the canvas paints them, so one gradient spans every glyph. The group itself has no fills or strokes.
+`object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
 Appearance describes) take an outlined frame of threaded text out of its thread with the text it shows, and the other
