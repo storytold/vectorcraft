@@ -22,13 +22,22 @@ pub struct SimplifyOptions {
     /// How far (points, the spread of a Gaussian along the path) the path is smoothed before it is
     /// refitted, so that bumps and jags come out as one curve ([`smooth_level`]); 0 for none.
     pub smooth: f64,
+    /// With [`smooth`](Self::smooth), refit each stretch fitted as one piece (between corners) within
+    /// twice the farthest the smoothing moved any of its points when that is less than `tolerance`, and
+    /// never within less than a tenth of `tolerance`. A stretch that smoothing barely moves anywhere
+    /// keeps its shape. The limit is the same along the whole stretch, so where smoothing moves some of
+    /// its points far, all of it is refitted within up to `tolerance`, as without this option.
+    pub smooth_moved_only: bool,
 }
 
 impl Default for SimplifyOptions {
     fn default() -> Self {
-        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false, smooth: 0.0 }
+        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false, smooth: 0.0, smooth_moved_only: false }
     }
 }
+
+/// The least share of the tolerance that [`SimplifyOptions::smooth_moved_only`] refits within.
+const SMOOTH_MOVED_FLOOR: f64 = 0.1;
 
 /// Simplify with the default corner threshold (30°).
 pub fn simplify(path: &PathData, tolerance: f64) -> PathData {
@@ -310,16 +319,27 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
 }
 
 /// Adds the refit of `part`, consecutive segments with no corner between them and the steps to
-/// sample each one with, to `result`. `ends` is the direction it leaves and arrives along, when not
-/// those of its first and last segments.
-fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Option<Vec2>, result: &mut Vec<Seg>) {
+/// sample each one with, to `result`. `ends`, given only when `part` is a whole closed loop, is the
+/// direction it leaves and arrives along; when the loop is smoothed, the smoothing runs across its
+/// start and the direction comes from the smoothed samples there.
+fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends: Option<Vec2>, result: &mut Vec<Seg>) {
     let (Some((first, _)), Some((last, _))) = (part.first(), part.last()) else { return };
     let mut pts = Vec::new();
     for (k, (s, steps)) in part.iter().enumerate() {
         sample(&s.c, *steps, &mut pts, k == 0);
     }
+    let mut tol = tol;
     if opts.smooth > 0.0 {
-        pts = smooth_points(&pts, opts.smooth);
+        let smoothed = if ends.is_some() { smooth_loop_points(&pts, opts.smooth) } else { smooth_points(&pts, opts.smooth) };
+        if ends.is_some()
+            && let (Some(&next), Some(&prev)) = (smoothed.get(1), smoothed.len().checked_sub(2).and_then(|i| smoothed.get(i)))
+        {
+            ends = unit(next - prev).or(ends);
+        }
+        if opts.smooth_moved_only {
+            tol = tol.min((2.0 * smoothing_moved(&pts, &smoothed)).max(tol * SMOOTH_MOVED_FLOOR));
+        }
+        pts = smoothed;
     }
     if opts.straight_lines {
         let keep = rdp(&pts, tol * (1.0 - SAMPLE_GAP));
@@ -344,6 +364,66 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Op
 /// densely the path is sampled.
 fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
     smooth_points_counted(pts, sigma, &mut 0)
+}
+
+/// [`smooth_points`] for the samples `pts` of a whole closed loop, whose last sample is its first:
+/// the samples at its start are smoothed like the others, and the first and last ones move together.
+/// The loop is smoothed twice as an open run of the same samples, once from its start and once from
+/// the sample nearest halfway round by length, where [`smooth_points`] keeps each run's ends in place.
+/// Each sample takes a blend of the two that runs smoothly round the loop, with weights
+/// `(1 ± cos θ) / 2`: `θ` goes from 0 at the start to π at the halfway sample and on to 2π at the end,
+/// in proportion to length, so the start takes only the second run and the halfway sample only the
+/// first, and no sample takes any of a run's fixed ends.
+fn smooth_loop_points(pts: &[Point], sigma: f64) -> Vec<Point> {
+    let Some(m) = pts.len().checked_sub(1).filter(|&m| m >= 3) else { return smooth_points(pts, sigma) };
+    let mut along = Vec::with_capacity(pts.len());
+    let mut total = 0.0;
+    for (i, p) in pts.iter().enumerate() {
+        if let Some(prev) = i.checked_sub(1).and_then(|j| pts.get(j)) {
+            total += prev.distance(*p);
+        }
+        along.push(total);
+    }
+    if !(total.is_finite() && total > 0.0) {
+        return smooth_points(pts, sigma);
+    }
+    let half = (1..m).min_by(|&a, &b| (along[a] - total / 2.0).abs().total_cmp(&(along[b] - total / 2.0).abs())).unwrap_or(m / 2);
+    let mid = along[half];
+    if !(mid > 0.0 && mid < total) {
+        return smooth_points(pts, sigma);
+    }
+    let ring = &pts[..m];
+    let turned: Vec<Point> = ring[half..].iter().chain(&ring[..=half]).copied().collect();
+    let from_half = smooth_points(&turned, sigma);
+    let mut out = smooth_points(pts, sigma);
+    for (i, (p, &s)) in out.iter_mut().zip(&along).enumerate() {
+        // Sample `i` of the loop is sample `i - half` of `turned`, round the loop.
+        let Some(&q) = from_half.get((i + m - half) % m) else { continue };
+        let theta = if s <= mid { s / mid } else { 1.0 + (s - mid) / (total - mid) } * std::f64::consts::PI;
+        let w = 0.5 * (1.0 + theta.cos());
+        *p = p.lerp(q, w);
+    }
+    if let Some(&start) = out.first()
+        && let Some(end) = out.last_mut()
+    {
+        *end = start;
+    }
+    out
+}
+
+/// How far [`smooth_points`] moved the samples `pts` to `smoothed` (the same number of points, in
+/// order) across the path: the largest distance from a smoothed point to the lines between the
+/// samples up to two on either side of the one it came from.
+fn smoothing_moved(pts: &[Point], smoothed: &[Point]) -> f64 {
+    smoothed
+        .iter()
+        .enumerate()
+        .map(|(i, &q)| {
+            let own = pts.get(i).map_or(f64::INFINITY, |p| p.distance(q));
+            let (lo, hi) = (i.saturating_sub(2), (i + 2).min(pts.len().saturating_sub(1)));
+            (lo..hi).filter_map(|j| Some(Line::new(*pts.get(j)?, *pts.get(j + 1)?).nearest(q, 1e-9).distance_sq.sqrt())).fold(own, f64::min)
+        })
+        .fold(0.0, f64::max)
 }
 
 /// How many groups of samples a spread holds at most in [`smooth_points`]. Weighing them in groups
@@ -678,6 +758,7 @@ pub fn smooth_options(path: &PathData, level: f64) -> SimplifyOptions {
         corner_angle_deg: SMOOTH_CORNER_DEG,
         straight_lines: false,
         smooth: size * 0.05 * level / 100.0,
+        smooth_moved_only: false,
     }
 }
 
@@ -1180,6 +1261,31 @@ mod tests {
         let mut work = 0;
         smooth_points_counted(&pts, 1000.0, &mut work);
         assert!(work <= 400 * pts.len(), "{work} steps for {} samples", pts.len());
+    }
+
+    /// A spike on a closed loop whose samples are ten times denser on one half than on the other is
+    /// smoothed out wherever it is, including at the sample halfway through the list, which is only
+    /// about a quarter of the way round by length.
+    #[test]
+    fn loop_smoothing_smooths_a_spike_on_unevenly_sampled_loops() {
+        let c = Point::new(300.0, 300.0);
+        let on = |a: f64, r: f64| c + r * Vec2::from_angle(a);
+        let mut pts: Vec<Point> = (0..300).map(|i| on(f64::from(i) / 300.0 * std::f64::consts::PI, 100.0)).collect();
+        pts.extend((0..30).map(|i| on(std::f64::consts::PI * (1.0 + f64::from(i) / 30.0), 100.0)));
+        let m = pts.len();
+        pts.push(pts[0]);
+        for spike in [m / 2, 0, 100] {
+            let mut p = pts.clone();
+            p[spike] = on(std::f64::consts::PI * spike as f64 / 300.0, 105.0);
+            if spike == 0 {
+                p[m] = p[0];
+            }
+            let out = smooth_loop_points(&p, 10.0);
+            assert_eq!(out.len(), p.len());
+            assert_eq!(out[0], out[m], "spike at {spike}: the loop stays closed");
+            let left = out[spike].distance(c) - 100.0;
+            assert!(left < 1.0, "spike at {spike}: {left} pt of 5 pt left");
+        }
     }
 
     #[test]

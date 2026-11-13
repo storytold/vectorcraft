@@ -523,11 +523,12 @@ fn a_groups_transform_applies_after_its_members_own() {
     let mut on_fill = fill_square(33, vec![shadow(10.0, 0.0, 0.0)]);
     on_fill.appearance.effects = vec![turn()];
     let art = crate::evaluate_container(None, &group(32, vec![on_fill], vec![uneven()])).unwrap();
-    assert!(near(&[fill_shadow(&node_in(&art, 33))], &[want]), "fill: {:?}", fill_shadow(&node_in(&art, 33)));
+    // The member is drawn as its art: a group with its id holding the turned square.
+    let filled = node_in(&art, 33).children().and_then(|ch| ch.first().map(|c| (**c).clone())).unwrap();
+    assert!(near(&[fill_shadow(&filled)], &[want]), "fill: {:?}", fill_shadow(&filled));
     let nested = group(34, vec![group(35, vec![square(36, vec![shadow(10.0, 0.0, 0.0)])], vec![turn()])], vec![uneven()]);
     let art = crate::evaluate_container(None, &nested).unwrap();
-    let inner = crate::evaluate_container(None, &node_in(&art, 35)).unwrap();
-    assert!(near(&shadows_in(&inner), &[want]), "nested: {:?}", shadows_in(&inner));
+    assert!(near(&shadows_in(&art), &[want]), "nested: {:?}", shadows_in(&art));
 }
 
 /// An object's Transform effect transforms the raster effects of its fills and strokes with the
@@ -645,7 +646,8 @@ fn a_groups_transform_moves_its_members_fills_shadows_beside_their_own_transform
         let art = crate::evaluate_container(None, &g).unwrap();
         for (id, _, want) in &cases {
             let member = node_in(&art, *id);
-            let drawn = shadows_in(&crate::reshape(None, &member, None).unwrap());
+            // The member is drawn as its art, its fill's own Transform effect applied.
+            let drawn = shadows_in(&member);
             assert!(!drawn.is_empty() && near(&drawn, &vec![*want; drawn.len()]), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
         }
     }
