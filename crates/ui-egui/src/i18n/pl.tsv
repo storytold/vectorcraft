@@ -176,6 +176,10 @@
 	Corner Color	Kolor narożników
 	Contiguous	Ciągły
 	Each Channel	Każdy kanał
+	Color Mask…	Maska koloru…
+	Color Mask	Maska koloru
+	Remove Color Mask	Usuń maskę koloru
+	Apply Color Mask	Zastosuj maskę koloru
 	Edit Path	Edytuj ścieżkę
 	Mask	Maska
 	Rasterize…	Rasteryzuj…
@@ -4922,6 +4926,10 @@ imageTrace	Outline	Kontur
 @msg	a CMYK image has no transparency to set	obraz CMYK nie ma przezroczystości, którą można ustawić
 @msg	every pixel matches the background: no image would be left	każdy piksel pasuje do tła: nie zostałby żaden obraz
 @msg	an image of {w} × {h} pixels is too large to change	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go zmienić
+@msg	select an image with a color mask	zaznacz obraz z maską koloru
+@msg	the color mask's settings are out of range	ustawienia maski koloru są poza zakresem
+@msg	a CMYK image can't take a color mask	obraz CMYK nie może mieć maski koloru
+@msg	the mask would hide every pixel	maska ukryłaby każdy piksel
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Zmiana kolorów zakończona; bez zmian: {locked} i {hidden}

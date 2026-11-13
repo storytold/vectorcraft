@@ -712,6 +712,10 @@ font-technology	Variable	Variables
 	Corner Color	Couleur des angles
 	Contiguous	Contigu
 	Each Channel	Chaque canal
+	Color Mask…	Masque de couleur…
+	Color Mask	Masque de couleur
+	Remove Color Mask	Supprimer le masque de couleur
+	Apply Color Mask	Appliquer le masque de couleur
 	Edit Path	Modifier le tracé
 	Mask	Masque
 	Crop Marks	Traits de coupe
@@ -4777,6 +4781,10 @@ axis	Both	Les deux
 @msg	a CMYK image has no transparency to set	une image CMJN n’a pas de transparence à définir
 @msg	every pixel matches the background: no image would be left	chaque pixel correspond à l’arrière-plan : il ne resterait aucune image
 @msg	an image of {w} × {h} pixels is too large to change	une image de {w} × {h} pixels est trop grande pour être modifiée
+@msg	select an image with a color mask	sélectionnez une image avec un masque de couleur
+@msg	the color mask's settings are out of range	les réglages du masque de couleur sont hors limites
+@msg	a CMYK image can't take a color mask	une image CMJN ne peut pas recevoir de masque de couleur
+@msg	the mask would hide every pixel	le masque cacherait tous les pixels
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}

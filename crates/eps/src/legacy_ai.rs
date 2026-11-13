@@ -179,7 +179,7 @@ pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
     matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
         && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
         && doc
-            .image_blob(im)
+            .image_blob(&doc.shown_image(n, im))
             .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
 }
 

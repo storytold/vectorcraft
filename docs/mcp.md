@@ -10567,8 +10567,9 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 
 ## Image Tools add-on
 
-Image Tools is a built-in add-on for placed images: its command is `addon.image.removeBackground`, and in the desktop
-app it lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
+Image Tools is a built-in add-on for placed images: its commands are `addon.image.removeBackground`,
+`addon.image.colorMask`, `addon.image.removeColorMask` and `addon.image.applyColorMask`, and in the desktop app it
+lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
 
 ### Remove Background
 
@@ -10613,6 +10614,59 @@ a preview step does not keep them.
 ```json
 {"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"colors","colors":["#ffffff","#f0f0f0"],"tolerance":5,"softness":15}}}
 {"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"corners","contiguous":false,"match":"channels","tolerance":12.55,"softness":0}}}
+```
+
+### Color Mask
+
+`addon.image.colorMask` hides colors of the selected images, or of the images in `ids`, and leaves their pixels as
+they are. It takes `background`, `colors`, `contiguous`, `match`, `tolerance` and `softness` with the same values,
+defaults and refusals as `addon.image.removeBackground`, and matches colors the same way. The image keeps its own
+pixels. The mask is kept with the image object and saved with the document: its settings, and a PNG of the image's
+pixels with the hidden colors made clear (16-bit and gray images keep their depth and channels, with the source's color
+profile and resolution). PDF's color key masking hides chosen colors of an image in a similar way
+([ISO 32000-1 §8.9.6.4](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)).
+
+- The canvas, printing and separations, PDF (PDF/X-1a and PDF/X-3 flatten the hidden pixels as transparency), SVG,
+  EPS, the raster formats, DXF, EMF, WMF, the legacy .ai, the .ai editing data, copy and paste, and placing a document
+  show the masked pixels. A linked image stays linked. An output that refers to linked files instead of embedding them
+  (SVG with `images: "link"`) writes the masked pixels in place of the link.
+- A grayscale image's masked pixels have an alpha channel when the mask hides pixels. A colorize color on such an image
+  follows the rule for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a mask
+  that hides pixels of a grayscale image colorized with a process color. A mask that hides no pixels shows the image's
+  own pixels, so a grayscale image with such a mask takes a process color. Each image is checked on the pixels its new
+  mask shows, whatever other images in the document hold. Remove Background checks the image's own pixels, which it
+  clears.
+- A click anywhere in the image's frame selects it, hidden pixels included, as it does for an image with clear pixels.
+  The Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels,
+  hidden colors included.
+- Running the command again on a masked image replaces its mask. All the images change in one undo step. An image whose
+  mask does not change is left as it is, and when none changes the command adds no undo step and returns `changed: 0`.
+  `hidden` counts the pixels made fully clear in the images that changed.
+- When the image's own pixels are replaced later (Update Link, Relink, Crop Image, a recolor, or a linked file read
+  again when the document opens), the mask is made again for the new pixels. When the new pixels can't be masked (CMYK
+  pixels, missing pixels, every pixel would be hidden, or the image is grayscale and colorized with a process color
+  and the mask would hide some of its pixels), the mask keeps its settings and hides nothing.
+- The command refuses, and changes nothing, when an object in `ids` is not an image, an image is CMYK, a linked image
+  shows its preview (embed or relink it first), an image would need more than the decode allowance, or the mask would
+  hide every pixel of an image.
+- With none of `background`, `colors`, `contiguous`, `match`, `tolerance` and `softness` given, nothing changes, and
+  the command returns the mask settings of the first image (the defaults when it has no mask) with `masked`. Color
+  Mask… opens the command's dialog on those settings, with a Preview that works as Remove Background's does.
+
+→ `{changed, ids, hidden}`, or without settings `{background, colors, contiguous, match, tolerance, softness, masked}`
+
+`addon.image.removeColorMask` takes the mask off the selected images, or the images in `ids`, in one undo step, and
+the images show their own pixels again. `addon.image.applyColorMask` makes each mask part of its image: the masked
+pixels become the image's own, embedded as a PNG with an alpha channel (a linked image is embedded), and the mask is
+taken off, in one undo step. A mask that hides nothing is only taken off, and the image keeps its pixels and its link.
+Images without a mask are left as they are, and an object in `ids` that is not an image is refused. Apply Color Mask
+also refuses, and changes nothing, when a mask made again for new pixels would give a grayscale image colorized with a
+process color an alpha channel. Both commands are
+enabled only when a selected image has a mask. → `{changed, ids}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.image.colorMask","params":{"background":"colors","colors":"#00ff00","contiguous":false,"tolerance":15,"softness":10}}}
+{"name":"run_command","arguments":{"command":"addon.image.applyColorMask","params":{}}}
 ```
 
 ## Type Tools add-on

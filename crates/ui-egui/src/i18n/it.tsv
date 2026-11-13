@@ -710,6 +710,10 @@ font-technology	Variable	Variabili
 	Corner Color	Colore degli angoli
 	Contiguous	Contiguo
 	Each Channel	Ogni canale
+	Color Mask…	Maschera colore…
+	Color Mask	Maschera colore
+	Remove Color Mask	Rimuovi maschera colore
+	Apply Color Mask	Applica maschera colore
 	Edit Path	Modifica tracciato
 	Mask	Maschera
 	Crop Marks	Segni di ritaglio
@@ -4839,6 +4843,10 @@ axis	Both	Entrambi
 @msg	a CMYK image has no transparency to set	un'immagine CMYK non ha trasparenza da impostare
 @msg	every pixel matches the background: no image would be left	ogni pixel corrisponde allo sfondo: non resterebbe alcuna immagine
 @msg	an image of {w} × {h} pixels is too large to change	un'immagine di {w} × {h} pixel è troppo grande per essere modificata
+@msg	select an image with a color mask	seleziona un'immagine con una maschera colore
+@msg	the color mask's settings are out of range	le impostazioni della maschera colore sono fuori intervallo
+@msg	a CMYK image can't take a color mask	un'immagine CMYK non può avere una maschera colore
+@msg	the mask would hide every pixel	la maschera nasconderebbe ogni pixel
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}
