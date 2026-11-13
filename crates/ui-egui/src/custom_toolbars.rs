@@ -241,7 +241,8 @@ fn index(ui: &UiState, name: &str) -> Result<usize, String> {
 
 /// The All Tools drawer beside the toolbar named `old`, and a group's flyout open on it (`ctx`),
 /// close when it is deleted (`new` is `None`) or renamed; a new name that changes only the case
-/// leaves them open on it.
+/// leaves them open on it. A drag of its title bar in progress ends with them, so Escape does not
+/// put a toolbar that takes the name later back where this one was.
 fn close_popups(ui: &mut UiState, ctx: Option<&egui::Context>, old: &str, new: Option<&str>) {
     let same = new.is_some_and(|n| key(n) == key(old));
     if drawer_target(ui).map(key) == Some(key(old)) {
@@ -253,6 +254,9 @@ fn close_popups(ui: &mut UiState, ctx: Option<&egui::Context>, old: &str, new: O
         }
     }
     let Some(ctx) = ctx else { return };
+    if !same && ctx.data(|d| d.get_temp::<Move>(move_id())).is_some_and(|m| key(&m.name) == key(old)) {
+        ctx.data_mut(|d| d.remove::<Move>(move_id()));
+    }
     let id = crate::toolbar::flyout_toolbar_id();
     if ui.flyout.is_some() && ctx.data(|d| d.get_temp::<Option<String>>(id)).flatten().is_some_and(|t| key(&t) == key(old)) {
         if same {
@@ -2099,6 +2103,52 @@ mod tests {
         assert_eq!(app.ui.flyout, None, "deleted, then its name taken");
     }
 
+    /// Deleting or renaming a toolbar while its title bar is dragged ends the drag: Escape then
+    /// leaves a toolbar that took its name where it is. The drag of another toolbar goes on, and so
+    /// does the drag of a toolbar whose new name changes only the case.
+    #[test]
+    fn deleting_or_renaming_the_toolbar_being_dragged_ends_its_drag() {
+        let mut app = app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        // A drag of the toolbar's title bar in progress, begun where the toolbar is now.
+        let hold = |app: &VectorcraftApp, name: &str| {
+            let bar = find(&app.ui, name).unwrap();
+            let m = Move {
+                name: bar.name.clone(),
+                from: pos2(10.0, 10.0),
+                grab: egui::Vec2::ZERO,
+                dock: bar.dock,
+                right: bar.dock_right,
+                pos: bar.pos,
+                cancelled: false,
+            };
+            ctx.data_mut(|d| d.insert_temp(move_id(), m));
+        };
+        let held = || ctx.data(|d| d.get_temp::<Move>(move_id())).is_some();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.run("window.toolbar.dock", json!({"name": "Mine", "side": "right"})).unwrap();
+        hold(&app, "Mine");
+        delete(&mut app.ui, Some(&ctx), "Other").unwrap();
+        assert!(held(), "another toolbar's delete leaves the drag going");
+        delete(&mut app.ui, Some(&ctx), "Mine").unwrap();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        let at = find(&app.ui, "Mine").unwrap().pos;
+        assert!(!cancel(&mut app.ui, &ctx), "the deleted toolbar's drag ended");
+        assert_eq!((place(&app, "Mine"), find(&app.ui, "Mine").unwrap().pos), ((None, false), at), "deleted, then its name taken");
+        app.run("window.toolbar.dock", json!({"name": "Mine", "side": "right"})).unwrap();
+        hold(&app, "Mine");
+        rename(&mut app.ui, Some(&ctx), "Mine", "mine").unwrap();
+        assert!(held(), "a new name that changes only the case leaves the drag going");
+        rename(&mut app.ui, Some(&ctx), "mine", "Pens").unwrap();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        let at = find(&app.ui, "Mine").unwrap().pos;
+        assert!(!cancel(&mut app.ui, &ctx), "the renamed toolbar's drag ended");
+        assert_eq!((place(&app, "Mine"), find(&app.ui, "Mine").unwrap().pos), ((None, false), at), "renamed, then its name taken");
+        assert_eq!(place(&app, "Pens"), (Some(0), true), "the renamed toolbar stays docked");
+    }
+
     /// A toolbar deleted while Manage Toolbars has it selected leaves none selected, and a click
     /// on + or the trash can meant for it does nothing, so the dialog can go on.
     #[test]
@@ -2677,6 +2727,9 @@ mod tests {
         // Escape while it is dragged out of the lane puts it back in its place.
         drag(&mut app, grip(&ctx), pos2(600.0, 300.0), Some(4));
         assert_eq!(place(&app, "Mine"), (Some(0), false), "Escape keeps it docked");
+        // Escape in the frame of the first move after the press: no drag starts.
+        drag(&mut app, grip(&ctx), pos2(600.0, 300.0), Some(1));
+        assert_eq!(place(&app, "Mine"), (Some(0), false), "Escape with the first move keeps it docked");
         // Dragged out of the lane, it floats under the pointer.
         drag(&mut app, grip(&ctx), pos2(600.0, 300.0), None);
         assert_eq!(place(&app, "Mine"), (None, false));
@@ -2685,6 +2738,8 @@ mod tests {
         let at = find(&app.ui, "Mine").unwrap().pos;
         drag(&mut app, grip(&ctx), pos2(1195.0, 400.0), Some(5));
         assert_eq!((place(&app, "Mine"), find(&app.ui, "Mine").unwrap().pos), ((None, false), at));
+        drag(&mut app, grip(&ctx), pos2(1195.0, 400.0), Some(1));
+        assert_eq!((place(&app, "Mine"), find(&app.ui, "Mine").unwrap().pos), ((None, false), at), "Escape with the first move");
         // Dropped on the right edge, it docks there.
         drag(&mut app, grip(&ctx), pos2(1195.0, 400.0), None);
         assert_eq!(place(&app, "Mine"), (Some(0), true));
