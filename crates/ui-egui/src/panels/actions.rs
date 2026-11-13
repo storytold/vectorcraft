@@ -1254,34 +1254,54 @@ fn recorded_steps_fit(app: &mut VectorcraftApp) -> Result<(), String> {
 }
 
 /// Before the engine command `id` runs with `params`: Err when the recording in progress would keep
-/// it as a step that does not fit in its action ([`recording_room`]); else whether the recording
-/// would keep it, for [`after_recorded_command`]. A command is kept as a step when it is journaled,
-/// a batch (`command.batch`, which journals itself) too, and Find Objects when it selects what it
-/// finds. Undo and Redo are steps too, and are refused when they do not fit.
-pub(crate) fn before_recorded_command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<bool, String> {
+/// it as a step that does not fit in its action ([`recording_room`]). A command is kept as a step
+/// when it is journaled, a batch (`command.batch`, which journals itself) too, and Find Objects
+/// when it selects what it finds. Undo and Redo are steps too, and are refused when they do not
+/// fit.
+pub(crate) fn before_recorded_command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<(), String> {
     let journaled = vectorcraft_engine::find_command(id).is_some_and(|c| c.journal)
         || id == "command.batch"
         || (id == "document.find" && params.get("select").and_then(Value::as_bool) == Some(true));
     if app.ui.recording.is_none() || !journaled || app.session.active().is_some_and(|d| d.interaction.is_some()) {
-        return Ok(false);
+        return Ok(());
     }
-    recording_room(app, id, params)?;
-    Ok(true)
+    recording_room(app, id, params)
 }
 
-/// After a command that the recording keeps as a step (`recorded`, [`before_recorded_command`]) has
-/// run with result `r`: when the values the command added to its step as it ran make the steps no
-/// longer fit ([`recorded_steps_fit`]), the command's edit and its result stay, the status bar
-/// names the limit, no later recorded command runs, and Stop Playing/Recording leaves the step out
-/// ([`steps_that_fit`]) → the command's result.
-pub(crate) fn after_recorded_command(app: &mut VectorcraftApp, recorded: bool, r: Result<Value, String>) -> Result<Value, String> {
-    if recorded
-        && r.is_ok()
-        && let Err(e) = recorded_steps_fit(app)
-    {
-        app.status(e);
+/// After an engine command has run with result `r`: when the steps it journaled, the values a
+/// command added to its step as it ran or the commands a script ran (`script.run`), make the steps
+/// no longer fit ([`after_journaled_edit`]), the command's edit and its result stay, the status bar
+/// names the limit, no later recorded command runs, and Stop Playing/Recording leaves the steps
+/// out ([`steps_that_fit`]) → the command's result.
+pub(crate) fn after_recorded_command(app: &mut VectorcraftApp, r: Result<Value, String>) -> Result<Value, String> {
+    if r.is_ok() {
+        after_journaled_edit(app);
     }
     r
+}
+
+/// After an edit that journals without [`before_recorded_command`]'s check (a script run's
+/// commands, a tool's or a panel's edit, a dialog's commit): when the journal changed since the
+/// last check and the steps that the recording in progress keeps no longer fit in its action
+/// ([`recorded_steps_fit`]), the edit and the journal stay, the status bar names the limit, no
+/// later recorded command runs, and Stop Playing/Recording keeps the steps that fit
+/// ([`steps_that_fit`]) → whether the status bar names a limit.
+pub(crate) fn after_journaled_edit(app: &mut VectorcraftApp) -> bool {
+    if app.ui.recording.is_none() {
+        return false;
+    }
+    let journal = (app.session.journal.rewrites(), app.session.journal.len());
+    if app.ui.recording_checked == Some(journal) {
+        return false;
+    }
+    app.ui.recording_checked = Some(journal);
+    match recorded_steps_fit(app) {
+        Ok(()) => false,
+        Err(e) => {
+            app.status(e);
+            true
+        }
+    }
 }
 
 /// What Stop Playing/Recording adds to a set ([`recorded_into`]).
@@ -1453,6 +1473,7 @@ fn start_recording(app: &mut VectorcraftApp, set: usize, name: String, into: Opt
     app.ui.recording_into = into;
     app.ui.recording_base = None;
     app.ui.recording_tail = None;
+    app.ui.recording_checked = Some((app.session.journal.rewrites(), start));
 }
 
 /// How many of `steps`, from the first, Stop Playing/Recording can give the recording's action so
@@ -1499,6 +1520,7 @@ fn stop_recording(app: &mut VectorcraftApp) {
     let Some((set, name, _)) = app.ui.recording.take() else { return };
     app.ui.recording_base = None;
     app.ui.recording_tail = None;
+    app.ui.recording_checked = None;
     app.session.journal.hold(None);
     match app.ui.recording_into.take() {
         Some(id) => {
@@ -5259,6 +5281,212 @@ mod tests {
         app.run(STOP_RECORDING, json!({})).unwrap();
         assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the scale's step is left out");
         assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    }
+
+    /// A script that moves the selection twice.
+    const TWO_MOVES: &str = "vc.run('object.move', {dx: 1, dy: 0}); vc.run('object.move', {dx: 1, dy: 0});";
+
+    /// Runs `source` to its end: in one call (`frames` false, a run with nobody to ask), or a frame
+    /// at a time, as the app does.
+    fn run_script(app: &mut VectorcraftApp, source: &str, frames: bool) {
+        app.session.script_frames = frames;
+        app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        for _ in 0..10_000 {
+            if !app.session.script_running() {
+                return;
+            }
+            crate::script_runs::poll(app);
+        }
+        panic!("the script did not end");
+    }
+
+    /// Begin Recording with `filler` steps already recorded.
+    fn recording_with(app: &mut VectorcraftApp, filler: usize) {
+        app.run(START_RECORDING, json!({})).unwrap();
+        for _ in 0..filler {
+            app.session.journal.push(("object.group".to_string(), json!({})));
+        }
+    }
+
+    /// A script whose commands take a recording past 10,000 steps keeps its edit and the whole
+    /// journal, the status bar names the limit as the run ends, the next recorded command does not
+    /// run, and Stop Playing/Recording keeps the 10,000 steps that fit. One that fills the action
+    /// exactly names no limit.
+    #[test]
+    fn script_run_checks_recording_step_limit_on_completion() {
+        let steps = "the action already has 10,000 steps";
+        for frames in [false, true] {
+            let (mut app, x) = app_with_three_moves();
+            recording_with(&mut app, files::MAX_ACTION_STEPS - 1);
+            app.ui.status.clear();
+            run_script(&mut app, TWO_MOVES, frames);
+            assert_eq!(x(&app), 2.0, "frames {frames}: the script's edit stays");
+            let start = recording_start(&app).unwrap();
+            assert_eq!(app.session.journal.len() - start, files::MAX_ACTION_STEPS + 1, "frames {frames}: the journal keeps every step");
+            assert_eq!(app.ui.status, steps, "frames {frames}: the status bar names the limit now");
+            assert!(app.ui.recording.is_some(), "the recording goes on");
+            assert_eq!(app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap_err(), steps, "no later command runs");
+            assert_eq!(x(&app), 2.0);
+            app.run(STOP_RECORDING, json!({})).unwrap();
+            let recorded = app.ui.action_sets[0].actions.last().unwrap();
+            assert_eq!(recorded.steps.len(), files::MAX_ACTION_STEPS);
+            assert_eq!(recorded.steps.last().map(|(c, _)| c.as_str()), Some("object.move"), "the first move fits");
+            let saved = files::write_set(&app.ui.action_sets[0]);
+            assert_eq!(files::read_set(&saved, "Test").unwrap().actions[1].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+
+            let (mut app, _) = app_with_three_moves();
+            recording_with(&mut app, files::MAX_ACTION_STEPS - 2);
+            app.ui.status.clear();
+            run_script(&mut app, TWO_MOVES, frames);
+            let ran = if frames { "Ran t.js" } else { "" };
+            assert_eq!(app.ui.status, ran, "frames {frames}: 10,000 steps fit");
+        }
+    }
+
+    /// A script whose commands give the recording's set a file larger than 8 MiB keeps its edit,
+    /// the status bar names the limit as the run ends, and Stop Playing/Recording keeps the steps
+    /// that fit in a set that Load Actions… reads. One that fills the file exactly names no limit.
+    #[test]
+    fn script_run_checks_recording_byte_limit_on_completion() {
+        let size = "the action set would be larger than 8 MiB";
+        for frames in [false, true] {
+            for spare in [0, 1] {
+                let (mut app, x) = app_with_three_moves();
+                // The two steps as an action keeps them.
+                let before = app.session.journal.len();
+                run_script(&mut app, TWO_MOVES, false);
+                let both: usize = app.session.journal_for_action(before).iter().map(|(c, p)| files::step_bytes(c, p)).sum();
+                app.run("edit.undo", json!({})).unwrap();
+                assert_eq!(x(&app), 0.0);
+                let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+                app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
+                let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+                // Room for both moves, or for one move and all but a byte of the other.
+                app.ui.action_sets[0].actions[0].steps = vec![pad(room - both + 1 - spare)];
+                let into = app.ui.action_sets[0].actions[0].id;
+                app.run(START_RECORDING, json!({})).unwrap();
+                app.ui.recording_into = Some(into);
+                app.ui.status.clear();
+                run_script(&mut app, TWO_MOVES, frames);
+                assert_eq!(x(&app), 2.0, "frames {frames}: the script's edit stays");
+                let what = format!("frames {frames}, spare {spare}");
+                if spare == 1 {
+                    assert_eq!(app.ui.status, if frames { "Ran t.js" } else { "" }, "{what}: the file is exactly 8 MiB");
+                    continue;
+                }
+                assert_eq!(app.ui.status, size, "{what}: the status bar names the limit now");
+                assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 2, "the journal keeps both moves");
+                assert_eq!(app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap_err(), size, "no later command runs");
+                app.run(STOP_RECORDING, json!({})).unwrap();
+                assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 2, "{what}: the first move fits");
+                let saved = files::write_set(&app.ui.action_sets[0]);
+                assert!(saved.len() <= files::MAX_SET_FILE);
+                assert!(files::read_set(&saved, "Test").is_ok());
+            }
+        }
+    }
+
+    /// Presses, drags and releases the active tool from `from` to `to`, as the canvas hands its
+    /// results on ([`crate::canvas::apply_requests`]).
+    fn tool_drag(app: &mut VectorcraftApp, from: (f64, f64), to: (f64, f64)) {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let view = app.view_info();
+        for (kind, (x, y)) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            let r = app.session.pointer(&PointerEvent::new(kind, x, y), view);
+            crate::canvas::apply_requests(app, r);
+        }
+    }
+
+    /// A drag with the Selection tool (a committed preview) or the Rectangle tool (a command the
+    /// tool runs) that takes a recording past 10,000 steps keeps its edit and the journal, the
+    /// status bar names the limit as the tool ends, and Stop Playing/Recording keeps the 10,000
+    /// steps that fit. One that fills the action exactly names no limit.
+    #[test]
+    fn tool_commit_checks_recording_step_limit() {
+        let steps = "the action already has 10,000 steps";
+        for tool in ["selection", "rectangle"] {
+            for filler in [files::MAX_ACTION_STEPS, files::MAX_ACTION_STEPS - 1] {
+                let (mut app, _) = app_with_three_moves();
+                app.select_tool(tool);
+                recording_with(&mut app, filler);
+                app.ui.status.clear();
+                let (journal, art) = (app.session.journal.len(), app.session.active().unwrap().doc.art_bounds());
+                tool_drag(&mut app, (20.0, 20.0), (60.0, 50.0));
+                assert_eq!(app.session.journal.len(), journal + 1, "{tool}: the tool journals one step");
+                assert_ne!(app.session.active().unwrap().doc.art_bounds(), art, "{tool}: the edit stays");
+                if filler < files::MAX_ACTION_STEPS {
+                    assert_eq!(app.ui.status, "", "{tool}: 10,000 steps fit");
+                    continue;
+                }
+                assert_eq!(app.ui.status, steps, "{tool}: the status bar names the limit now");
+                assert!(app.ui.recording.is_some(), "the recording goes on");
+                app.run(STOP_RECORDING, json!({})).unwrap();
+                assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
+            }
+        }
+    }
+
+    /// A tool's edit whose step gives the recording's set a file larger than 8 MiB keeps its edit,
+    /// the status bar names the limit as the tool ends, and Stop Playing/Recording leaves the step
+    /// out of a set that Load Actions… reads.
+    #[test]
+    fn tool_commit_checks_recording_byte_limit() {
+        let size = "the action set would be larger than 8 MiB";
+        for tool in ["selection", "rectangle"] {
+            let (mut app, _) = app_with_three_moves();
+            app.select_tool(tool);
+            app.run(START_RECORDING, json!({})).unwrap();
+            let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+            app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
+            let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+            app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
+            app.ui.recording_into = Some(app.ui.action_sets[0].actions[0].id);
+            app.ui.status.clear();
+            let art = app.session.active().unwrap().doc.art_bounds();
+            tool_drag(&mut app, (20.0, 20.0), (60.0, 50.0));
+            assert_ne!(app.session.active().unwrap().doc.art_bounds(), art, "{tool}: the edit stays");
+            assert_eq!(app.ui.status, size, "{tool}: the status bar names the limit now");
+            assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 1, "{tool}: the journal keeps the step");
+            app.run(STOP_RECORDING, json!({})).unwrap();
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "{tool}: the step is left out");
+            assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+        }
+    }
+
+    /// A step that reaches the journal outside a command, as a panel's or a dialog's commit does, is
+    /// checked on the app's next frame. A journal rewrite that makes a checked step larger is
+    /// checked again, and a frame with no new step does not name the limit again.
+    #[test]
+    fn a_journal_rewrite_or_a_direct_commit_is_checked_on_the_next_frame() {
+        let size = "the action set would be larger than 8 MiB";
+        let (mut app, _) = app_with_three_moves();
+        let small = ("object.move".to_string(), json!({"dx": 1, "dy": 0}));
+        let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+        app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
+        let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+        app.ui.action_sets[0].actions[0].steps = vec![pad(room - files::step_bytes(&small.0, &small.1))];
+        let into = app.ui.action_sets[0].actions[0].id;
+        app.run(START_RECORDING, json!({})).unwrap();
+        app.ui.recording_into = Some(into);
+        let ctx = egui::Context::default();
+        let frame = |app: &mut VectorcraftApp| {
+            app.begin_host_iteration();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+            out.textures_delta.clear();
+        };
+        app.session.journal.push(small);
+        app.ui.status.clear();
+        frame(&mut app);
+        assert_eq!(app.ui.status, "", "a step that fills the file exactly");
+        let start = recording_start(&app).unwrap();
+        app.session.journal.replace(start, pad(1));
+        frame(&mut app);
+        assert_eq!(app.ui.status, size, "the rewritten step no longer fits");
+        app.ui.status.clear();
+        frame(&mut app);
+        assert_eq!(app.ui.status, "", "named once");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the step is left out");
     }
 
     /// When the action New Action made for the recording in progress is deleted, Stop
