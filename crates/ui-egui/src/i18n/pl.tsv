@@ -4484,6 +4484,7 @@ imageTrace	Outline	Kontur
 @msg	Plug-ins can't be loaded from {path}: {e}	Nie można wczytać wtyczek z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	zaznacz bezpośrednio punkty kontrolne, w których ma nastąpić cięcie (nie punkty końcowe otwartych ścieżek)
 @msg	Divide Objects Below: select a path	Podziel obiekty poniżej: zaznacz ścieżkę
+@msg	select a path	zaznacz ścieżkę
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy

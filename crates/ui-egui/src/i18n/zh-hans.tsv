@@ -4256,6 +4256,7 @@ imageTrace	Outline	轮廓
 @msg	direct-select anchor points to cut at (not the end points of open paths)	请直接选择要在其处切割的锚点 (不能是开放路径的端点)
 @msg	select paths or anchor points	请选择路径或锚点
 @msg	Divide Objects Below: select a path	分割下方对象：请选择一条路径
+@msg	select a path	请选择一条路径
 @msg	Divide Objects Below: select exactly one path	分割下方对象：请只选择一条路径
 @msg	Offset Path: select paths	偏移路径：请选择路径
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	偏移路径：偏移后所选路径不剩任何部分 (内缩量大于形状)

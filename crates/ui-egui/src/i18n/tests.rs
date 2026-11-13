@@ -2576,6 +2576,37 @@ fn plugin_limit_errors_are_translated() {
     }
 }
 
+/// The reason Object › Path's commands are unavailable while the selection holds no path has its
+/// own row in every language that translates every message, and shows translated both alone and
+/// inside the error a disabled command returns.
+#[test]
+fn selected_path_reason_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::EngineError;
+    let reason = "select a path";
+    assert!(message_literals().contains(reason));
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Type"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let error = match s.execute("path.reverse", &json!({})) {
+        Err(e @ EngineError::Disabled(..)) => e.to_string(),
+        other => panic!("a selection of type alone: {other:?}"),
+    };
+    assert_eq!(error, "command `path.reverse` is not available right now: select a path");
+    assert_eq!(message(Lang::EN, &error), error);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == reason).map(|(_, _, tr)| tr.as_str());
+        let Some(row) = row else { panic!("{code}: no `@msg` row for {reason:?}") };
+        assert_ne!(row, reason, "{code}");
+        assert_eq!(message(lang, reason), row, "{code}");
+        let shown = message(lang, &error);
+        assert!(shown.contains(row) && !shown.contains(reason) && shown.contains("`path.reverse`"), "{code}: {shown}");
+    }
+}
+
 /// The errors a script's `File` and `Folder` objects, `vc.run` and `$.evalFile` raise are
 /// translated in every language of [`COMPLETE_MESSAGES`], and so is the status bar's line for a run
 /// that ends with one: the script's name, its place, the command ids and what the script itself

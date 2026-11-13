@@ -4558,6 +4558,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	direct-select anchor points to cut at (not the end points of open paths)	ダイレクト選択ツールで、カットする位置のアンカーポイントを選択してください (オープンパスの端点を除く)
 @msg	select paths or anchor points	パスまたはアンカーポイントを選択してください
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
+@msg	select a path	パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)

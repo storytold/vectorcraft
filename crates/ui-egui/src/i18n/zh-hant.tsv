@@ -2002,6 +2002,7 @@ file-filter	Templates	範本
 @msg	direct-select anchor points to cut at (not the end points of open paths)	請直接選取要剪開的錨點 (不能是開放路徑的端點)
 @msg	select paths or anchor points	請選取路徑或錨點
 @msg	Divide Objects Below: select a path	分割下方物件：請選取路徑
+@msg	select a path	請選取路徑
 @msg	Divide Objects Below: select exactly one path	分割下方物件：請只選取一條路徑
 @msg	Offset Path: select paths	位移複製：請選取路徑
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	位移複製：位移後所選路徑不留任何部分 (內縮量大於形狀)
