@@ -2942,6 +2942,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
 	Color Theme Picker	Выбор цветовой темы
 	Click or drag across the art to pick its colors; Shift adds more	Щёлкните или проведите по рисунку, чтобы взять его цвета; Shift добавляет ещё
+	Prominent Colors	Преобладающие цвета
+	Save All Colors	Сохранить все цвета
+	Save Prominent Colors	Сохранить преобладающие цвета
 	Reset to Default	Сбросить к значениям по умолчанию
 	Reset to White, Black	Сбросить к белому, чёрному
 	Reset with Mesh	Сбросить с сеткой
@@ -6144,6 +6147,7 @@ axis	Y Axis	Ось Y
 @msg	message must be text	message должно быть текстом
 @msg	allowContinue must be true or false	allowContinue должно быть true или false
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
+@msg	Batch cannot play an action with a View menu step	Пакет не может воспроизвести действие с шагом из меню Просмотр
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
 	Insert Select Path	Вставить выделение контура
@@ -7432,6 +7436,19 @@ shape	Open	Открытый
 	Show where this tool is	Показать, где находится этот инструмент
 @msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
+	View more	Подробнее
+	Finish tutorial	Завершить урок
+	Next Up	Далее
+	You finished the last tutorial in this skill.	Вы завершили последний урок этого навыка.
+	Back to skills	Назад к навыкам
+	Open Tutorial Sample	Открыть пример урока
+	Finish Tutorial	Завершить урок
+	Next Tutorial	Следующий урок
+	Back to Skills	Назад к навыкам
+@msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
+@msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` является последним уроком своего навыка
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты

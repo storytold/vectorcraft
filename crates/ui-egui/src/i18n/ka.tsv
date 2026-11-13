@@ -2591,6 +2591,9 @@ digits	Malayalam	მალაიალამური
 	Reset the rows to the artwork's colors	სტრიქონებისთვის ნახატის ფერების დაბრუნება
 	Color Theme Picker	ფერთა თემის ამრჩევი
 	Click or drag across the art to pick its colors; Shift adds more	დააწკაპუნეთ ან გადაატარეთ ნახატზე მისი ფერების ასაღებად; Shift ამატებს კიდევ
+	Prominent Colors	გამოკვეთილი ფერები
+	Save All Colors	ყველა ფერის შენახვა
+	Save Prominent Colors	გამოკვეთილი ფერების შენახვა
 	Separate colors into rows	ფერების სტრიქონებად დაყოფა
 	Unlink harmony colors	ჰარმონიის ფერების კავშირის გაწყვეტა
 	1 Color Job	1-ფერიანი ბეჭდვა
@@ -6484,6 +6487,7 @@ axis	Y Axis	Y ღერძი
 @msg	message must be text	message უნდა იყოს ტექსტი
 @msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
+@msg	Batch cannot play an action with a View menu step	პაკეტურ დამუშავებას არ შეუძლია ხედის მენიუს ნაბიჯის მქონე მოქმედების შესრულება
 	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
 	Insert Menu Item	მენიუს ელემენტის ჩასმა
 	Insert Select Path	ტრაექტორიის მონიშვნის ჩასმა
@@ -7457,6 +7461,19 @@ font-script	Japanese	იაპონური
 	Show where this tool is	ამ ხელსაწყოს მდებარეობის ჩვენება
 @msg	missing `tutorial` (see learn.list)	აკლია `tutorial` (იხ. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	უცნობი გაკვეთილი `{id}` (იხ. learn.list)
+	View more	მეტის ნახვა
+	Finish tutorial	გაკვეთილის დასრულება
+	Next Up	შემდეგი
+	You finished the last tutorial in this skill.	თქვენ დაასრულეთ ამ უნარის ბოლო გაკვეთილი.
+	Back to skills	უნარებზე დაბრუნება
+	Open Tutorial Sample	გაკვეთილის ნიმუშის გახსნა
+	Finish Tutorial	გაკვეთილის დასრულება
+	Next Tutorial	შემდეგი გაკვეთილი
+	Back to Skills	უნარებზე დაბრუნება
+@msg	tutorial `{id}` has no practice sample	გაკვეთილს `{id}` არ აქვს სავარჯიშო ნიმუში
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	ჯერ დაასრულეთ `{id}` (იხ. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` თავისი უნარის ბოლო გაკვეთილია
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება

@@ -3474,6 +3474,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	message must be text	message உரையாக இருக்க வேண்டும்
 @msg	allowContinue must be true or false	allowContinue என்பது true அல்லது false ஆக இருக்க வேண்டும்
 @msg	Batch cannot play an action with a stop	நிறுத்தம் உள்ள செயலைத் தொகுதிச் செயலால் இயக்க முடியாது
+@msg	Batch cannot play an action with a View menu step	பார்வை மெனு படி உள்ள செயலைத் தொகுதிச் செயலால் இயக்க முடியாது
 	Insert Menu Item…	பட்டி உருப்படியைச் செருகு…
 	Insert Menu Item	மெனு உருப்படியைச் செருகு
 	Insert Select Path	பாதைத் தேர்வைச் செருகு
@@ -3959,6 +3960,9 @@ antiAlias	Sharp	கூர்மையான
 	Reset the rows to the artwork's colors	வரிசைகளை ஓவியத்தின் நிறங்களுக்கு மீட்டமை
 	Color Theme Picker	நிறத் தீம் தேர்வி
 	Click or drag across the art to pick its colors; Shift adds more	ஓவியத்தின் நிறங்களை எடுக்க அதன் மீது சொடுக்கவும் அல்லது இழுக்கவும்; Shift மேலும் சேர்க்கும்
+	Prominent Colors	மேலோங்கிய நிறங்கள்
+	Save All Colors	அனைத்து நிறங்களையும் சேமி
+	Save Prominent Colors	மேலோங்கிய நிறங்களைச் சேமி
 	Reset to default	இயல்புநிலைக்கு மீட்டமை
 	Reset to Default	இயல்புநிலைக்கு மீட்டமை
 	Reset to Defaults	இயல்புநிலைகளுக்கு மீட்டமை
@@ -8702,6 +8706,19 @@ theme	Appearance	தோற்றப்பாணி
 	Show where this tool is	இந்தக் கருவி எங்கே உள்ளது எனக் காட்டு
 @msg	missing `tutorial` (see learn.list)	`tutorial` காணவில்லை (learn.list ஐப் பார்க்கவும்)
 @msg	unknown tutorial `{id}` (see learn.list)	அறியப்படாத பயிற்சி `{id}` (learn.list ஐப் பார்க்கவும்)
+	View more	மேலும் காண்க
+	Finish tutorial	பயிற்சியை முடி
+	Next Up	அடுத்து வருவது
+	You finished the last tutorial in this skill.	இந்தத் திறனின் கடைசிப் பயிற்சியை முடித்துவிட்டீர்கள்.
+	Back to skills	திறன்களுக்குத் திரும்பு
+	Open Tutorial Sample	பயிற்சி மாதிரியைத் திற
+	Finish Tutorial	பயிற்சியை முடி
+	Next Tutorial	அடுத்த பயிற்சி
+	Back to Skills	திறன்களுக்குத் திரும்பு
+@msg	tutorial `{id}` has no practice sample	`{id}` என்ற பயிற்சிக்குப் பயிற்சி மாதிரி இல்லை
+@msg	open the practice sample of `{id}` first (see learn.openSample)	முதலில் `{id}` இன் பயிற்சி மாதிரியைத் திறக்கவும் (learn.openSample ஐப் பார்க்கவும்)
+@msg	finish `{id}` first (see learn.finish)	முதலில் `{id}` ஐ முடிக்கவும் (learn.finish ஐப் பார்க்கவும்)
+@msg	`{id}` is the last tutorial in its skill	`{id}` அதன் திறனின் கடைசிப் பயிற்சி
 	Refresh Deferred Effects	ஒத்திவைக்கப்பட்ட விளைவுகளை மீள்புதுப்பி
 	Deferred Effects	ஒத்திவைக்கப்பட்ட விளைவுகள்
 @msg	no plug-in effect is deferred	எந்தச் செருகுநிரல் விளைவும் ஒத்திவைக்கப்படவில்லை
