@@ -148,25 +148,29 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
             }
             continue;
         }
+        // Insert Aki keeps its width: only the rest of the advance is spaced or scaled.
+        let aki = if g.aki.is_finite() { g.aki } else { 0.0 };
         if is_word_space(g) {
             // The font's word space (with its tracking), set at Desired.
-            let base = g.adv;
-            g.adv = base * w_des;
+            let base = g.adv - aki;
+            g.adv = base * w_des + aki;
             f.word = (base * (w_max - w_des).max(0.0), base * (w_des - w_min).max(0.0));
             continue;
         }
         if g.is_space() || g.inline.is_some() || g.ch == '\u{2028}' {
             continue;
         }
-        let base = g.adv;
+        let base = g.adv - aki;
         if g_des != 1.0 {
-            g.adv *= g_des;
+            g.adv = base * g_des + aki;
             g.tracking *= g_des;
             g.sx *= g_des;
             g.dx *= g_des;
-            g.kern_shift *= g_des;
+            g.kern_shift = (g.kern_shift - g.aki_shift) * g_des + g.aki_shift;
+            // The space Mojikumi took off before the glyph scales with it.
+            g.lead *= g_des;
         }
-        f.width = g.adv;
+        f.width = g.adv - aki;
         f.scale = g_des;
         f.glyph = (base * (g_max - g_des).max(0.0), base * (g_des - g_min).max(0.0));
         if gap {

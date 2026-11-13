@@ -672,7 +672,7 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {

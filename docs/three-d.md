@@ -64,9 +64,9 @@ pages describe it.
   own choice. The group keeps the object's place, id, name, opacity, blending mode, opacity mask, attributes
   and text wrap and is selected; objects without a visible 3D effect do not change. It is one undo step, and an error changes nothing
   when no selected object has a visible 3D effect.
-- The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab and
-  ray-traced rendering are not built (see below). The rotation and light rings on the artboard are part of the
-  options dialog only.
+- The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab holds
+  the Graphics ([Graphics](#graphics)); base materials and ray-traced rendering are not built (see below). The
+  rotation and light rings on the artboard are part of the options dialog only.
 
 ## Extrude & Bevel
 
@@ -177,9 +177,13 @@ solids are ([Groups](#groups)), turned about one shared axis.
 - The objects stay live: editing the clipping path, the blend's keys or the symbol reshapes the solid.
 - An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
   images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).
-  A hidden image in a group is left out like any hidden member, and so is an image in a clipping group whose bounds
-  lie wholly outside the clipping path's bounds, when the image has no visible fills or strokes of its own and
-  neither the image nor a group holding it inside the clipping group has effects.
+  A hidden image in a group is left out like any hidden member. An image in a clipping group is left out when its
+  frame, as its transform places it, lies wholly outside the area that every clipping path around it fills together
+  (holes of an even-odd or compound clipping path included), when the image has no visible fills or strokes of its
+  own and neither the image nor a group holding it inside the clipping group has effects. A clipping path hides
+  everything outside its shape ([the help page](https://helpx.adobe.com/illustrator/using/clipping-masks.html)). An
+  image that the clips show any part of is refused. Resolving one effect's art cuts image frames to clipping paths at
+  most 1,024 times (VectorCraft's own limit); past that, the art is refused.
 
 ## Rotate
 
@@ -294,6 +298,59 @@ Our reading:
 - Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
   path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
 
+## Graphics
+
+The public [Map artworks on 3D object](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/map-artwork-on-3d-objects.html)
+page describes graphics: art kept with the document and placed on single surfaces of a 3D object, and the
+[3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+page lists Graphics and Add Materials and Graphics on the Materials tab. VectorCraft maps graphics onto planar faces:
+Extrude & Bevel's front and back caps, and the plane of the Plane type (Rotate).
+
+- The panel's **Materials** tab shows the document's graphics as thumbnails. A graphic is a document symbol, as
+  the public page allows existing symbols to be used. **Add as Single Graphic** keeps the selected art as a new
+  symbol (`threeD.addGraphic`) and leaves the art as it is; art dragged from the artboard onto the thumbnails is
+  added the same way. The thumbnails and Add as Single Graphic show without a selected 3D object too.
+- Clicking a thumbnail maps that graphic onto the front of the 3D effect of each selected object
+  (`threeD.mapGraphic`), in one undo step. A graphic larger than the object starts scaled down to fit inside it.
+- Below the thumbnails the tab lists the graphics mapped onto the first selected object. The selected one shows
+  its Face (Front or Back; Plane has only a front), X and Y (the offset of its center from the center of the
+  object's bounds, in the face's plane), Scale (a percentage of the symbol's size) and Rotation
+  (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
+- While the tab is open, a blue handle sits on the center of each mapped graphic whose face is turned toward the
+  viewer. Dragging a handle moves that graphic over its face, previewed while the pointer is down and recorded as
+  one undo step when it is released. The handles are hidden while the selected objects have different graphics,
+  and while a geometry effect (such as Transform) comes after the 3D effect. A press on the canvas while its
+  context menu is open only closes the menu and does not grab a handle.
+
+These rules are VectorCraft's own:
+
+- A graphic is drawn on the visible face of each of the object's solids (a fill's, and a stroke's outline),
+  turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
+  with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
+  which keep their own colors. It is drawn with the
+  opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
+  the viewer is not drawn.
+- On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
+  there.
+- The symbol's fills and strokes are drawn as filled areas, a stroke as its outline, and their gradients and
+  patterns are placed with the graphic. Images, hidden objects,
+  guides and clipping paths in the symbol are left out, and clipping groups draw their art unclipped. Instances
+  of other symbols in it are drawn. Symbols may nest in its art up to 8 levels deep, and its objects may be nested
+  up to 128 levels deep; commands refuse a graphic past either limit, and a loaded file draws the object without it.
+- Without perspective, the graphic maps exactly. With perspective, straight lines stay straight and each curve is
+  cut into 8 cubic pieces before it is mapped. The part of a graphic at or behind the eye is left out.
+- An object takes up to 64 graphics. One graphic draws up to 4,096 fills and strokes, and the graphics of one 3D
+  effect draw up to 400,000 path elements together. Commands refuse a graphic past either limit. A loaded file
+  draws the object without a graphic past the first limit, and without all of its graphics past the second.
+- A hollow Extrude & Bevel has no caps, so its graphics are not drawn until Cap is turned on again, and
+  `threeD.mapGraphic` refuses to map a new one onto it. Changing the type to Revolve or Inflate
+  drops the graphics, and changing between Extrude and Plane keeps them, except that Plane drops the graphics
+  on the back cap.
+- `effect.apply` and `effect.setParams` refuse a graphic that names a symbol the document does not have, unless
+  the effect already holds a graphic of that symbol. A graphic whose symbol is deleted is no longer drawn. Renaming a symbol renames it in the graphics that use it,
+  in the layers, in the art of symbols, patterns, graph designs, brushes and opacity masks, and in graphic
+  styles, and Select All Unused in the Symbols panel counts a symbol a graphic uses as used, a graphic in a graphic style included.
+
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
@@ -302,6 +359,10 @@ Our reading:
 uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightColor` (`#rrggbb`, default `#ffffff`), `lightIntensity` (%), `lightRotation`,
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely. All four take `shadow` (boolean, false), `shadowPosition` (`behind` or `below`), `shadowDistance` (0..100%, 0) and `shadowBounds` (10..400%, 100) ([Shadows](#shadows)); values out of range are rejected before editing.
+`threeD.extrude` and `threeD.rotate` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
+with `symbol` (the name of a document symbol), `face` (`front` or `back`, default `front`; `threeD.rotate` takes
+`front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
+default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
 
 ## What differs from the public documentation
 
@@ -310,10 +371,11 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base, Adobe Substance and graphics), soft shadows, shadows of lights after the first,
-  and **ray-traced rendering** are not built: shading uses directional lights, in the paint of the fill or
-  stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and the shadow is hard-edged
-  ([Shadows](#shadows)).
+- **Materials** (base and Adobe Substance), graphics on curved surfaces (Revolve, Inflate and Extrude & Bevel's
+  walls and bevels), soft shadows, shadows of lights after the first, and **ray-traced rendering** are not built:
+  shading uses directional lights, in the paint of the fill or stroke the solid is built for
+  ([Fills and strokes](#fills-and-strokes)), and the shadow is hard-edged ([Shadows](#shadows)). Graphics map
+  onto planar faces only ([Graphics](#graphics)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn
   back to front, with a flat cap or flat back turned toward the viewer drawn after all of them. Concave solids

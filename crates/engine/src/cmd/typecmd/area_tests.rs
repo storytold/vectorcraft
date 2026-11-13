@@ -1663,6 +1663,63 @@ fn tate_chu_yoko_settings_are_character_attributes_saved_only_when_set() {
     assert_eq!(offsets(&s), before);
 }
 
+/// Insert Aki Left and Right (Character panel, East Asian options): character attributes in
+/// thousandths of an em, 0 by default and saved only when not 0. Both commands set either side
+/// alone, keeping the other side of every run, in one undo step; a value that is not a number or
+/// lies outside 0 to 1000 is refused, naming the key, before anything changes; a character style
+/// captured from the characters carries them.
+#[test]
+fn insert_aki_is_a_character_attribute_set_one_side_at_a_time() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let aki = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("akiLeft").is_none() && saved.get("akiRight").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"akiLeft": 250})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 0.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+
+    // One side on part of the text: the runs keep their other side.
+    let paren = "（".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": paren, "akiRight": 500})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 250.0, 500.0), ("日本）".to_string(), 250.0, 0.0)]);
+    s.execute("text.setFormat", &json!({"akiLeft": 0})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 0.0, 500.0), ("日本）".to_string(), 0.0, 0.0)]);
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!((saved.get("akiLeft"), saved["akiRight"].clone()), (None, json!(500.0)));
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect();
+    assert_eq!(reopened, aki(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!((attrs["akiLeft"].clone(), attrs["akiRight"].clone()), (json!(0.0), json!(500.0)));
+
+    let before = aki(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"akiLeft": "250"}), "`akiLeft` must be a number"),
+        ("text.setFormat", json!({"akiRight": -1}), "`akiRight` must be from 0 to 1000"),
+        ("text.setFormat", json!({"akiLeft": 250, "akiRight": 1000.5}), "`akiRight` must be from 0 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "akiRight": true}), "`akiRight` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": paren, "akiLeft": 2000}), "`akiLeft` must be from 0 to 1000"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(aki(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
 /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
 /// attribute, off by default and saved only when on. Documents written before it read as off; a
 /// character style captured from the characters carries it.
@@ -2049,6 +2106,60 @@ fn new_type_is_composed_with_line_end_half_width_punctuation() {
     let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
     assert_eq!(old.mojikumi, Mojikumi::None);
     assert!(serde_json::to_value(&old).unwrap().get("mojikumi").is_none());
+}
+
+/// `text.setFormat {mojikumi}` takes each predefined Mojikumi set as one undo step, refuses any
+/// other value without changing the type, and each set survives a native save and reopen and a
+/// paragraph style that captures it.
+#[test]
+fn every_predefined_mojikumi_set_is_set_saved_and_carried_by_styles() {
+    use vectorcraft_doc::Mojikumi;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "「雅楽」。"})).unwrap()["id"].as_u64().unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let sets = [
+        ("yakumonoHankaku", Mojikumi::YakumonoHankaku),
+        ("gyomatsuYakumonoHankaku", Mojikumi::GyomatsuYakumonoHankaku),
+        ("gyomatsuYakumonoZenkaku", Mojikumi::GyomatsuYakumonoZenkaku),
+        ("yakumonoZenkaku", Mojikumi::YakumonoZenkaku),
+        ("none", Mojikumi::None),
+        ("lineEndHalf", Mojikumi::LineEndHalf),
+    ];
+    for (key, set) in sets {
+        s.execute("text.setFormat", &json!({"mojikumi": key})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key}");
+        let doc = s.doc().unwrap().doc.clone();
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+        match &back.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => assert_eq!(t.para.mojikumi, set, "{key} saved"),
+            _ => panic!("text"),
+        }
+        let style = format!("Spacing {key}");
+        s.execute("paraStyle.new", &json!({"name": style, "attrs": {"mojikumi": key}})).unwrap();
+        s.execute("text.setFormat", &json!({"mojikumi": if set == Mojikumi::None { "lineEndHalf" } else { "none" }})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": style, "id": id})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key} from a paragraph style");
+    }
+    // One undo step back to the set before.
+    s.execute("text.setFormat", &json!({"mojikumi": "yakumonoHankaku"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+    // A value that is no set, or not a string, is refused and leaves the type as it was.
+    s.execute("text.setFormat", &json!({"mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    for bad in [json!("YakumonoHankaku"), json!("lineEnd"), json!(""), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"mojikumi": bad, "leftIndent": 12})).is_err(), "{bad}");
+        let p = para(&s);
+        assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 0.0), "{bad}");
+    }
+    // A null value leaves the set as it is.
+    s.execute("text.setFormat", &json!({"mojikumi": null, "leftIndent": 12})).unwrap();
+    let p = para(&s);
+    assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 12.0));
 }
 
 #[test]

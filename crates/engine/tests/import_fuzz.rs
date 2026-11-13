@@ -3,7 +3,8 @@
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
-//! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
+//! of every kind with random contents) opened, placed or pasted, nor PICT pictures (damaged files,
+//! opcodes with random contents) opened or placed, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
@@ -3065,6 +3066,106 @@ proptest! {
     #[test]
     fn pasted_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..12)) {
         paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
+    }
+}
+
+// ---------- PICT pictures: opened and placed ----------
+
+fn be16(v: &[i16]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_be_bytes()).collect()
+}
+
+/// A version 2 PICT file of a 200 × 100 pt frame holding `ops`, each padded to an even length.
+fn pict_of(ops: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    let mut b = vec![0; 512];
+    b.extend(be16(&[0, 0, 0, 100, 200]));
+    b.extend([0x00, 0x11, 0x02, 0xFF, 0x0C, 0x00]);
+    b.extend(be16(&[-1, 0]));
+    b.extend([0; 20]);
+    for (op, data) in ops {
+        b.extend(op.to_be_bytes());
+        b.extend(data);
+        if b.len() % 2 == 1 {
+            b.push(0);
+        }
+    }
+    b.extend([0x00, 0xFF]);
+    b
+}
+
+/// A picture with shapes, a region, text, a pattern and a packed pixel map.
+fn pict_sample() -> Vec<u8> {
+    let region = [be16(&[36, 0, 0, 20, 20]), be16(&[0, 0, 20, 0x7FFF, 10, 10, 20, 0x7FFF, 20, 0, 10, 0x7FFF, 0x7FFF])].concat();
+    let table = be16(&[0, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1]);
+    let pixmap = [
+        be16(&[0x8008u16 as i16, 0, 0, 2, 8]),
+        be16(&[0, 0, 0, 0, 72, 0, 72, 0, 0, 8, 1, 8, 0, 0, 0, 0, 0, 0]),
+        table,
+        be16(&[0, 0, 2, 8, 10, 20, 14, 36, 0]),
+        vec![2, 0xF9, 0, 9, 7, 1, 0, 1, 0, 1, 0, 1, 0],
+    ]
+    .concat();
+    pict_of(&[
+        (0x1A, be16(&[-1, 0, 0])),
+        (0x07, be16(&[2, 2])),
+        (0x31, be16(&[10, 20, 50, 80])),
+        (0x30, be16(&[10, 20, 50, 80])),
+        (0x0B, be16(&[8, 8])),
+        (0x41, be16(&[0, 100, 40, 160])),
+        (0x51, be16(&[50, 100, 90, 160])),
+        (0x61, be16(&[0, 0, 60, 60, 30, 120])),
+        (0x71, be16(&[22, 0, 0, 40, 40, 0, 0, 40, 40, 0, 40])),
+        (0x81, region.clone()),
+        (0x01, region),
+        (0x20, be16(&[70, 10, 70, 190])),
+        (0x21, be16(&[90, 100])),
+        (0x0A, vec![0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]),
+        (0x34, be16(&[0, 0, 10, 10])),
+        (0x2C, [be16(&[9, 3]), vec![6], b"Geneva".to_vec()].concat()),
+        (0x0D, be16(&[12])),
+        (0x28, [be16(&[80, 10]), vec![3], b"abc".to_vec()].concat()),
+        (0x98, pixmap),
+    ])
+}
+
+/// The sample the mutations start from opens with art and an image.
+#[test]
+fn the_pict_sample_opens() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pct", &pict_sample()).unwrap();
+    assert_eq!(l.format.id, "pict");
+    let (mut paths, mut images, mut texts) = (0, 0, 0);
+    l.doc.walk(|n| match n.kind {
+        vectorcraft_doc::NodeKind::Path { .. } => paths += 1,
+        vectorcraft_doc::NodeKind::Image(_) => images += 1,
+        vectorcraft_doc::NodeKind::Text(_) => texts += 1,
+        _ => {}
+    });
+    assert!(paths > 8 && images == 1 && texts == 1, "{paths} paths, {images} images, {texts} texts, warnings {:?}", l.warnings);
+}
+
+/// PICT opcodes VectorCraft reads, and reserved ones it skips.
+const PICT_OPS: [u16; 40] = [
+    0x01, 0x03, 0x04, 0x07, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x12, 0x13, 0x14, 0x1A, 0x1B, 0x20, 0x21, 0x22, 0x23, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x30,
+    0x31, 0x38, 0x41, 0x51, 0x61, 0x71, 0x81, 0x90, 0x91, 0x98, 0x99, 0x9A, 0x9B, 0xA1, 0x8200, 0x0024,
+];
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn mutated_pict_pictures_never_panic(cut in 0usize..4096, edits in prop::collection::vec((0usize..4096, any::<u8>()), 0..16)) {
+        let mut bytes = pict_sample();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[512 + at % (n - 512)] = b;
+        }
+        bytes.truncate(cut.max(512));
+        survive_metafile("mutated PICT", "x.pct", &bytes)?;
+    }
+
+    #[test]
+    fn random_pict_opcodes_never_panic(ops in prop::collection::vec((prop::sample::select(PICT_OPS.to_vec()), arb_body()), 0..32)) {
+        survive_metafile("PICT opcodes", "x.pct", &pict_of(&ops))?;
     }
 }
 

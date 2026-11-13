@@ -597,6 +597,10 @@ fn the_profile_follows_the_preset_access_and_reset() {
     let roots = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[dir.as_path()]).unwrap().unwrap();
     let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "A4"}))).unwrap();
     assert!(r.get("profile").is_none() && r["profileError"]["profile"] == "Print", "{r}");
+    // The reason does not say where the folder is.
+    let reason = r["profileError"]["reason"].as_str().unwrap_or_default();
+    let folder = dir.file_name().unwrap().to_string_lossy().to_string();
+    assert!(!reason.is_empty() && !reason.contains(&folder), "{reason}");
     assert!(!swatch_names(&s).contains(&"Brand Red".to_string()));
     // Nothing tells such a request which profiles have files.
     let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "Web 1920×1080"}))).unwrap();
@@ -624,6 +628,58 @@ fn the_profile_follows_the_preset_access_and_reset() {
     assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": false}));
     let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
     assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The new document's links find their files from the profile's file, as a document opened from
+/// that file does; a document without a profile has no such file.
+#[test]
+fn the_new_document_links_from_the_profile_file() {
+    let (mut s, dir) = with_profiles("links");
+    edit_print_profile(&mut s, &dir);
+    assert_eq!(s.execute("file.new", &json!({"preset": "A4"})).unwrap()["profile"], "Print");
+    let file = dir.join("Print.vectorcraft").to_string_lossy().to_string();
+    assert_eq!(s.doc().unwrap().links_from.as_deref(), Some(file.as_str()));
+    s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert_eq!(s.doc().unwrap().links_from, None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A color profile the profile's file carries is installed when this machine lacks it, as opening
+/// the file installs it, so the new document keeps it and a save carries it; one that can't be used
+/// is a warning.
+#[test]
+fn a_profile_brings_the_color_profile_its_file_carries() {
+    use vectorcraft_color::cms;
+    let (mut s, dir) = with_profiles("icc");
+    let builtin = cms::profiles().into_iter().find(|p| p.kind == cms::ProfileKind::Rgb && p.builtin && p.name != cms::SRGB).unwrap();
+    let icc = cms::icc_bytes(&builtin.name).unwrap().to_vec();
+    let name = format!("Profile RGB {}", std::process::id());
+    cms::register_icc(&icc, Some(name.clone())).unwrap();
+    let bytes_of = |v: &Value| vectorcraft_format::base64_decode(v.as_str().expect("base64")).unwrap();
+    s.execute("file.new", &json!({"preset": "Web 1920×1080", "profile": null})).unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).color_profiles.rgb = Some(name.clone());
+    let file = String::from_utf8(bytes_of(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap()["dataBase64"])).unwrap();
+    cms::unregister_icc(&name);
+    // A profile made on another machine names a color profile this one lacks.
+    let elsewhere = format!("Profile RGB elsewhere {}", std::process::id());
+    assert!(cms::profile(&elsewhere).is_none());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Web.vectorcraft"), file.replace(&name, &elsewhere)).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profile"] == "Web" && r.get("warnings").is_none(), "{r}");
+    assert_eq!(cms::profile(&elsewhere).map(|p| p.kind), Some(cms::ProfileKind::Rgb));
+    assert_eq!(s.doc().unwrap().doc.color_profiles.rgb.as_deref(), Some(elsewhere.as_str()));
+    let saved: Value = serde_json::from_slice(&bytes_of(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap()["dataBase64"])).unwrap();
+    assert_eq!(vectorcraft_format::base64_decode(saved["profiles"][&elsewhere]["data"].as_str().unwrap()).unwrap(), icc);
+    cms::unregister_icc(&elsewhere);
+    // Damaged profile data starts the document with a warning.
+    let broken = format!("Profile RGB broken {}", std::process::id());
+    let mut v: Value = serde_json::from_str(&file.replace(&name, &broken)).unwrap();
+    v["profiles"][&broken]["data"] = json!("AAAA");
+    std::fs::write(dir.join("Web.vectorcraft"), serde_json::to_vec(&v).unwrap()).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profile"] == "Web" && r["warnings"][0].as_str().unwrap_or_default().contains(&broken), "{r}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

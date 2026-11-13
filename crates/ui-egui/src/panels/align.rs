@@ -142,6 +142,14 @@ pub(crate) fn artboards_selected(app: &VectorcraftApp) -> usize {
     if n == 0 { 0 } else { super::artboards::picked(app, n).len() }
 }
 
+/// With the Artboard tool chosen, whether the Distribute buttons of the Align panel and the Control
+/// bar can space the selected artboards: two or more with Align to Artboard, whose spacing places
+/// the second from the active one (the Artboard tool's selection always holds its active artboard),
+/// else three or more, since the first and the last stay where they are.
+pub(crate) fn artboards_distribute(app: &VectorcraftApp) -> bool {
+    artboards_selected(app) >= if app.ui.align_to == AlignTo::Artboard { 2 } else { 3 }
+}
+
 /// Runs what a click on button `b` runs with the Artboard tool chosen: the artboard command on
 /// the artboards the tool has selected. With Align to Artboard chosen, it sends `to: "artboard"`,
 /// which keeps the tool's active artboard in place, and the Distribute buttons send the
@@ -217,6 +225,12 @@ pub fn run_button(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> 
 fn spacing_sent(app: &VectorcraftApp) -> Option<f64> {
     let sent = if on_artboards(app) { app.ui.align_to == AlignTo::Artboard } else { align_to(app) == AlignTo::Key };
     sent.then_some(app.ui.align_spacing)
+}
+
+/// The lowest Distribute Spacing value the Align panel's field takes: none with the Artboard tool
+/// chosen, since `artboard.distributeSpacing` overlaps the artboards with a negative spacing, else 0.
+fn spacing_min(app: &VectorcraftApp) -> f64 {
+    if on_artboards(app) { f64::NEG_INFINITY } else { 0.0 }
 }
 
 /// The six align buttons of the Control bar and the Properties panel, `size` points square.
@@ -405,8 +419,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let spacing = app.ui.align_spacing;
     let key = spacing_sent(app).is_some();
     // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one
-    // path; or two or more artboards.
-    let distributes = boards.map_or(n + selected_guides(app) >= 2 || has_anchors(app), |b| b >= 2);
+    // path; or the artboards [`artboards_distribute`] asks for.
+    let distributes = boards.map_or(n + selected_guides(app) >= 2 || has_anchors(app), |_| artboards_distribute(app));
+    let (unit, min_spacing) = (app.session.general_unit(), spacing_min(app));
     widgets::subheader(ui, tl!("Align Objects:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
@@ -452,7 +467,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run_button(app, Button::Spacing("horizontal")).ok();
                 }
                 ui.add_enabled_ui(key, |ui| {
-                    if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), app.session.general_unit(), 70.0, 1.0, 0.0, &[]) {
+                    if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), unit, 70.0, 1.0, min_spacing, &[]) {
                         app.ui.align_spacing = v;
                     }
                 });

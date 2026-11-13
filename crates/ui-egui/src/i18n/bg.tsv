@@ -696,6 +696,10 @@ font-technology	Variable	Променливи
 	Corner Color	Цвят на ъглите
 	Contiguous	Съседни
 	Each Channel	Всеки канал
+	Color Mask…	Цветова маска…
+	Color Mask	Цветова маска
+	Remove Color Mask	Премахване на цветовата маска
+	Apply Color Mask	Прилагане на цветовата маска
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
@@ -793,6 +797,8 @@ font-technology	Variable	Променливи
 	Delete Width Point	Изтриване на точка на ширината
 	Delete Workspace	Изтриване на работно пространство
 	Delete {kind} Style	Изтриване на стил ({kind})
+	Delete the selected items and their artwork?	Да се изтрият ли избраните елементи заедно с графиката им?
+	Delete this layer and its artwork?	Да се изтрие ли този слой заедно с графиката му?
 	Delete “{name}”?	Изтриване на „{name}“?
 	Depth:	Дълбочина:
 	Description	Описание
@@ -1005,6 +1011,7 @@ font-technology	Variable	Променливи
 	Enable Contextual Task Bar	Разрешаване на контекстуалната лента със задачи
 	Enable copying of text, images and other content	Разрешаване на копирането на текст, изображения и друго съдържание
 	Enable in-menu font previews	Разрешаване на прегледи на шрифтове в менюто
+	Show samples on white	Показване на мострите на бял фон
 	Enable Missing Glyph Protection	Разрешаване на защита срещу липсващи глифи
 	Enable Opacity Mask	Разрешаване на маска за непрозрачност
 	Enable plaintext metadata	Разрешаване на метаданни в обикновен текст
@@ -1967,6 +1974,10 @@ font-technology	Variable	Променливи
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор Kinsoku
 	Kinsoku Shori Type	Тип Kinsoku Shori
 	Push In First	Първо прибиране
@@ -2103,6 +2114,7 @@ font-technology	Variable	Променливи
 	Art Brush	Артистична четка
 	Bristle Brush	Четка с косъм
 	Pattern Brush	Четка с мостра
+	missing from the Brushes panel	липсва в панела „Четки“
 	Select art to make a scatter, art or pattern brush.	Изберете графика, за да създадете разпръсната четка, артистична четка или четка с мостра.
 	Brush Art	Графика на четка
 	New Calligraphic Brush	Нова калиграфска четка
@@ -2199,6 +2211,8 @@ font-technology	Variable	Променливи
 	Normal Screen Mode	Нормален режим на екран
 	Note:	Забележка:
 	Nothing matches the Show filter.	Нищо не отговаря на филтъра за показване.
+	Show DCS Transparency Interactions	Показване на взаимодействията на DCS с прозрачност
+	Transparent, or overlaps transparent objects: check its separations	Прозрачно е или се припокрива с прозрачни обекти: проверете цветоотделянето му
 	Nothing to print	Няма нищо за отпечатване
 	Nudge	Преместване
 	Nudge in Perspective	Преместване в перспектива
@@ -2542,6 +2556,8 @@ font-technology	Variable	Променливи
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	Insert Aki Left	Вмъкване на аки отляво
+	Insert Aki Right	Вмъкване на аки отдясно
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -2814,6 +2830,8 @@ digits	Malayalam	Малаялам
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
+	Color Theme Picker	Избор на цветова тема
+	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
 	Reset to Default	Връщане към стандартните
 	Reset to White, Black	Нулиране към бяло, черно
 	Reset with Mesh	Нулиране с мрежа
@@ -3209,6 +3227,7 @@ digits	Malayalam	Малаялам
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
 	Show Recent Colors	Показване на скорошните цветове
+	Toggle RGB Percent	Превключване на RGB в проценти
 	Show Original Path	Показване на оригиналния път
 	Open this dialog with these settings next time	Отваряне на този прозорец с тези настройки следващия път
 	Auto-Simplify	Автоматично опростяване
@@ -5976,6 +5995,23 @@ axis	Y Axis	Y ос
 @msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
 	Insert Menu Item…	Вмъкване на елемент от меню…
 	Insert Menu Item	Вмъкване на елемент от меню
+	Insert Select Path	Вмъкване на избор на път
+	Select Path	Избор на път
+@msg	select one whole path or compound path	изберете един цял път или съставен път
+@msg	select only one path	изберете само един път
+@msg	the path is hidden or locked, or cannot be selected here	пътят е скрит или заключен, или не може да бъде избран тук
+@msg	object {value} is not the stored path: it changed, or the document is another one	обект {value} не е запазеният път: той е променен или документът е друг
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` трябва да е "v1:" и 16 шестнадесетични цифри с малки букви
+	Select Object…	Избиране на обект…
+	Select Object	Избиране на обект
+	Set Selection	Задаване на селекция
+	Case Sensitive	Различаване на главни и малки букви
+	Whole Word	Цяла дума
+	Select Object: {note}	Избиране на обект: {note}
+	Select by Note	Избиране по забележка
+@msg	the note is empty	забележката е празна
+@msg	the note is longer than 1,024 bytes	забележката е по-дълга от 1024 байта
+@msg	no object that can be selected has a note matching “{query}”	няма обект, който може да бъде избран, със забележка, съответстваща на „{query}“
 	Menu Item:	Елемент от меню:
 	No menu item matches.	Няма съвпадащ елемент от меню.
 	Several menu items match. Choose one from the list.	Съвпадат няколко елемента от меню. Изберете един от списъка.

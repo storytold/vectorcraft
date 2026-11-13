@@ -254,6 +254,35 @@ fn type_in_a_missing_family_warns_as_pdf_export_does() {
     }
 }
 
+/// The warnings of `file.print` (PDF and PostScript) and `print.preview` list what the job
+/// leaves out of the document or prints differently first, then the notes on the options.
+#[test]
+fn what_a_print_loses_comes_before_the_notes_on_the_options() {
+    let (mut s, _) = session();
+    s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let notes = |v: &Value| -> Vec<String> { v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect() };
+    // A fixed flatness isn't written to a PDF: a note on the options, made before the type's.
+    let fixed = json!({"settings": {"graphics": {"autoFlatness": false}}});
+    for v in [print(&mut s, fixed.clone()).1, s.execute("print.preview", &fixed).unwrap()] {
+        let n = notes(&v);
+        assert!(n.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{n:?}");
+        assert!(n.last().is_some_and(|w| w.starts_with("a fixed flatness")), "{n:?}");
+    }
+    // PostScript doesn't apply the printer profile.
+    let profile = json!({"format": "postscript", "settings": {"color": {"profile": vectorcraft_color::cms::SRGB}}});
+    let n = notes(&s.execute("file.print", &profile).unwrap());
+    assert!(n.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{n:?}");
+    assert!(n.last().is_some_and(|w| w.starts_with("the printer profile")), "{n:?}");
+    // An artboard larger than Letter: copies per sheet that don't fit come after the art that
+    // doesn't print.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 700, "height": 900})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 700, "height": 900})).unwrap();
+    let n = notes(&print(&mut s, json!({"settings": {"copiesPerSheet": true}})).1);
+    assert!(n.iter().any(|w| w.contains("part of it doesn't print")), "{n:?}");
+    assert!(n.last().is_some_and(|w| w.ends_with("it prints one copy per sheet")), "{n:?}");
+}
+
 #[test]
 fn type_that_does_not_fit_its_frame_is_named() {
     let (mut s, _) = session();

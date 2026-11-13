@@ -672,6 +672,10 @@ font-technology	Variable	可變
 	Corner Color	轉角顏色
 	Contiguous	連續
 	Each Channel	每個通道
+	Color Mask…	顏色遮色片…
+	Color Mask	顏色遮色片
+	Remove Color Mask	移除顏色遮色片
+	Apply Color Mask	套用顏色遮色片
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -770,6 +774,8 @@ font-technology	Variable	可變
 	Delete Width Point	刪除寬度點
 	Delete Workspace	刪除工作區
 	Delete {kind} Style	刪除{kind}樣式
+	Delete the selected items and their artwork?	要刪除所選項目及其圖稿嗎？
+	Delete this layer and its artwork?	要刪除此圖層及其圖稿嗎？
 	Delete “{name}”?	要刪除「{name}」嗎？
 	Depth:	深度：
 	Description	描述
@@ -999,6 +1005,7 @@ font-technology	Variable	可變
 	Enable Contextual Task Bar	啟用快捷工作列
 	Enable copying of text, images and other content	啟用複製文字、影像與其他內容
 	Enable in-menu font previews	啟用選單內字體預覽
+	Show samples on white	在白色背景上顯示樣本
 	Enable Missing Glyph Protection	啟用遺失字符保護
 	Enable Opacity Mask	啟用不透明度遮色片
 	Enable plaintext metadata	啟用純文字中繼資料
@@ -2208,6 +2215,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	not a PICT file	不是 PICT 檔案
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
@@ -2424,6 +2432,10 @@ file-filter	Templates	範本
 @msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
 @msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
+@msg	select an image with a color mask	請選取帶有顏色遮色片的影像
+@msg	the color mask's settings are out of range	顏色遮色片的設定超出範圍
+@msg	a CMYK image can't take a color mask	CMYK 影像無法使用顏色遮色片
+@msg	the mask would hide every pixel	遮色片會隱藏所有像素
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
@@ -2477,6 +2489,85 @@ file-filter	Templates	範本
 @msg	the script's run is no longer available	指令碼執行已無法使用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
+@msg	Script file access denied	指令碼檔案存取遭拒
+@msg	Script file exceeds 8 MiB	指令碼檔案超過 8 MiB
+@msg	Script file is not open	指令碼檔案未開啟
+@msg	Script file cannot be decoded	無法解碼指令碼檔案
+@msg	Script file is not a regular file	指令碼檔案不是一般檔案
+@msg	Script file does not exist	指令碼檔案不存在
+@msg	Script file could not be read	無法讀取指令碼檔案
+@msg	Script folder has more than 2,048 entries	指令碼資料夾的項目超過 2,048 個
+@msg	Script file open mode must be r, w, e or a	指令碼檔案的開啟模式必須是 r、w、e 或 a
+@msg	Script file writing is not available	無法使用指令碼檔案寫入
+@msg	Script file dialogs are not available	無法使用指令碼檔案對話方塊
+@msg	Script files cannot be opened in another application	指令碼檔案無法在其他應用程式中開啟
+@msg	Script file access is unavailable on the web	網頁版無法存取指令碼檔案
+@msg	Script has 256 files open	指令碼已開啟 256 個檔案
+@msg	Script file path exceeds 32,767 characters	指令碼檔案路徑超過 32,767 個字元
+@msg	Script folder mask takes too many steps to match	指令碼資料夾遮罩比對所需步驟過多
+@msg	the script opened more file data than one run may open (32 MiB)	指令碼開啟的檔案資料超過單次執行可開啟的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一個位置和一個模式
+@msg	vc.run: give a command id, as a string	vc.run：請以字串提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一個命令 ID 和一個參數物件
+@msg	vc.run: the parameters must be an object	vc.run：參數必須是物件
+@msg	vc.run: the result{place} is too large for a script	vc.run：結果{place}對指令碼來說過大
+@msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
+@msg	{name}: {e} (thrown)	{name}：{e}（擲回）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 欄：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（語法錯誤）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 欄：{e}（語法錯誤）
+@msg	{name}: {e} (syntax)	{name}：{e}（語法錯誤）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 欄：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（內部錯誤）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 欄：{e}（內部錯誤）
+@msg	{name}: {e} (internal)	{name}：{e}（內部錯誤）
+@msg	{e} (these files stay written: {paths})	{e}（這些檔案保持已寫入狀態：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：請以字串提供名稱
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：請提供 "en" 或 "de_DE" 之類的地區設定，或以 null 表示介面的地區設定
+@msg	$.localize: give true or false	$.localize：請提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能設定 512（開啟在地化）或 0
+@msg	$.flags: give a number	$.flags：請提供一個數字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此處指令碼只讀寫 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：請以字串提供編碼名稱
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：無法設定記憶體快取大小
+@msg	$.setenv: give a value, as a string	$.setenv：請以字串提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能設定 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 個字母、數字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：請提供 0 到 {MAX_SLEEP_MS} 之間的毫秒數
+@msg	$.sleep: give a number of milliseconds	$.sleep：請提供毫秒數
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：執行不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中等待；請從指令碼本身的程式碼呼叫
+@msg	$.bp: scripts here have no debugger	$.bp：此處指令碼沒有偵錯工具
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：指令碼目前還不能顯示對話框
+@msg	{name}: give a message	{name}：請提供訊息
+@msg	{name}: give the text the field starts with	{name}：請提供欄位的初始文字
+@msg	{name}: the message is longer than 16 KiB	{name}：訊息超過 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：標題超過 256 位元組
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：欄位的初始文字超過 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：對話框不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中開啟；請從指令碼本身的程式碼呼叫
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一個回答是給 {_1} 的，而不是給 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已沒有此對話框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}對指令碼來說太大
+@msg	vc.log: the log of this run is full	vc.log：本次執行的記錄已滿
+@msg	this function's script run has ended	此函式的指令碼執行已結束
+@msg	the script made more host calls than one run may make	指令碼進行的主機呼叫超過一次執行允許的數量
+@msg	the script passed more data to and from commands than one run may pass	指令碼與命令之間傳遞的資料超過一次執行允許的數量
+@msg	the script added more objects and data to the documents than one run may add	指令碼加入文件的物件和資料超過一次執行允許的數量
+@msg	{what}: the object is not a File or a Folder	{what}：此物件既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：數量必須是 0 或更大的有限數
+@msg	File.seek: the position must be a finite number	File.seek：位置必須是有限數
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必須是 0, 1 或 2
+@msg	script file is compiled: {value}	指令碼檔案已編譯：{value}
+@msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
+@msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Exported {path}	已匯出 {path}
@@ -2575,6 +2666,7 @@ file-filter	Templates	範本
 @msg	choose the font files to add	請選擇要加入的字體檔案
 @msg	not a file	不是檔案
 @msg	not a font file	不是字體檔案
+@msg	the active document changed while the question was open; nothing was deleted	問題開啟期間作用中文件已變更；未刪除任何內容
 @msg	that document is no longer open	該文件已不再開啟
 @msg	larger than 256 MB	大於 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	檔案總計超過 1 GB：請每次少加入一些
@@ -3036,6 +3128,10 @@ file-filter	Templates	範本
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
 	Push In First	先推入
@@ -3189,6 +3285,7 @@ file-filter	Templates	範本
 	Art Brush	藝術筆刷
 	Bristle Brush	鬃毛筆刷
 	Pattern Brush	圖樣筆刷
+	missing from the Brushes panel	「筆刷」面板中沒有
 	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
 	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
@@ -3285,6 +3382,8 @@ file-filter	Templates	範本
 	Normal Screen Mode	正常螢幕模式
 	Note:	註解：
 	Nothing matches the Show filter.	沒有項目符合「顯示」篩選條件。
+	Show DCS Transparency Interactions	顯示 DCS 透明度互動
+	Transparent, or overlaps transparent objects: check its separations	透明或與透明物件重疊：請檢查其分色
 	Nothing to print	沒有可列印的內容
 	Nudge	微移
 	Nudge in Perspective	在透視中微移
@@ -3642,6 +3741,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在後方插入空白
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
@@ -3917,6 +4018,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
+	Color Theme Picker	色彩主題選取器
+	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設
@@ -4324,6 +4427,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Note	顯示註解
 	Show Options	顯示選項
 	Show Recent Colors	顯示最近使用的顏色
+	Toggle RGB Percent	切換 RGB 百分比顯示
 	Show Original Path	顯示原始路徑
 	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
 	Auto-Simplify	自動簡化
@@ -5500,6 +5604,65 @@ lighting	Light	光源
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}無法從影像建立立體：請先使用「物件 › 影像描圖 › 製作」描圖。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有兩個錨點的形狀
 @msg	The shape is too complex for a 3D effect	形狀過於複雜，無法套用 3D 效果
+@msg	Extrude & Bevel	突出與斜角
+@msg	Revolve	迴轉
+@msg	Inflate	膨脹
+@msg	Rotate	旋轉
+@msg	Extrude & Bevel (Classic)	突出與斜角 (經典)
+@msg	Revolve (Classic)	迴轉 (經典)
+@msg	Rotate (Classic)	旋轉 (經典)
+@msg	This effect	此效果
+@msg	clipping paths	剪裁路徑
+@msg	other objects	其他物件
+@msg	{label} requires a group holding a shape with at least two anchors	{label}需要一個包含至少有兩個錨點之形狀的群組
+@msg	Revolve requires a group holding a shape with at least two anchors	迴轉需要一個包含至少有兩個錨點之形狀的群組
+@msg	Revolve requires a shape with at least two anchors	迴轉需要至少有兩個錨點的形狀
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	群組上的{label}需要路徑、複合路徑、文字、群組、剪裁群組、漸變和符號實例：請先釋放或展開以下內容：{what}。
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	群組上的{label}最多接受 {MAX_MEMBERS} 個物件
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	群組或圖層上的 3D 效果應套用在群組本身，而不是其填色或筆畫
+@msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
+@msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
+@msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
+@msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}無法從符號「{symbol}」的實例產生實體：該符號的圖稿無法使用
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪裁路徑過於複雜，無法用來剪裁圖稿
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}最多接受 {MAX_MEMBERS} 個物件
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}無法從巢狀超過 {MAX_DEPTH} 層的圖稿產生實體
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	迴轉的上色對此表面過於複雜；請減少分段數或簡化漸層
+@msg	Revolve edge must be left or right	迴轉：edge 必須是 left 或 right
+@msg	Revolve cap must be a boolean	迴轉：cap 必須是布林值
+@msg	the revolved object has no fill or stroke	迴轉物件沒有填色或筆畫
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor 必須是 #rrggbb 格式的不透明 RGB 顏色
+@msg	lights must contain one to ten lights	lights 必須包含一到十個光源
+@msg	each light must be an object	每個光源都必須是物件
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	未知的光源設定：請使用 color、intensity、rotation、height、softness 或 behind
+@msg	light {key} must be a number from {min} to {max}	光源：{key} 必須是介於 {min} 到 {max} 之間的數字
+@msg	light color must use opaque #rrggbb	光源的 color 必須是不透明的 #rrggbb
+@msg	light behind must be true or false	光源的 behind 必須是 true 或 false
+@msg	shadow must be true or false	shadow 必須是 true 或 false
+@msg	shadowPosition must be behind or below	shadowPosition 必須是 behind 或 below
+@msg	{key} must be a number from {min} to {max}	{key} 必須是介於 {min} 到 {max} 之間的數字
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每個項目都必須是物件
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的項目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每個項目都需要 `symbol`，也就是符號的名稱
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必須是 front 或 back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	圖形會對應到平坦的面：請使用「突出」或「平面」物件類型
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
+@msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
+@msg	The graphics are too complex: simplify the symbols' art	圖形過於複雜：請簡化符號的圖稿
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	圖形的圖稿最多可巢狀 {MAX_LEVELS} 層：請簡化符號的圖稿
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	圖形的圖稿最多可巢狀 {MAX_NESTING} 層符號：請簡化符號的圖稿
+@msg	A graphic's art holds too many objects: simplify the symbol's art	圖形的圖稿包含過多物件：請簡化符號的圖稿
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	一個圖形最多繪製 {MAX_PIECES} 個填色和筆畫：請簡化符號的圖稿
+@msg	`surface` must be one of {_1}	`surface` 必須是 {_1} 其中之一
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}為此物件繪製原始圖稿，而不是其 3D 表面
+@msg	{label} draws no faces for this object	{label}沒有為此物件繪製任何面
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	線框的邊超過 {MAX_WIRE_EDGES} 條
 @msg	The 3D surface is too complex; simplify the shape	3D 表面過於複雜；請簡化形狀
 	Transform Objects	變形物件
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
@@ -5510,6 +5673,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
 @msg	missing `{path}`	未提供 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 巢狀層級過深
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
@@ -5993,6 +6157,23 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
+	Insert Select Path	插入選取路徑
+	Select Path	選取路徑
+@msg	select one whole path or compound path	請選取一條完整路徑或複合路徑
+@msg	select only one path	請只選取一條路徑
+@msg	the path is hidden or locked, or cannot be selected here	該路徑已隱藏或鎖定，或無法在此處選取
+@msg	object {value} is not the stored path: it changed, or the document is another one	物件 {value} 不是儲存的路徑：它已變更，或這是另一份文件
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必須為 "v1:" 加上 16 位小寫十六進位數字
+	Select Object…	選取物件…
+	Select Object	選取物件
+	Set Selection	設定選取範圍
+	Case Sensitive	區分大小寫
+	Whole Word	全字拼寫須相符
+	Select Object: {note}	選取物件：{note}
+	Select by Note	依註解選取
+@msg	the note is empty	註解是空的
+@msg	the note is longer than 1,024 bytes	註解超過 1,024 位元組
+@msg	no object that can be selected has a note matching “{query}”	沒有可選取物件的註解符合「{query}」
 	Menu Item:	選單項目：
 	No menu item matches.	沒有相符的選單項目。
 	Several menu items match. Choose one from the list.	有多個選單項目相符。請從清單中選擇一個。
@@ -6707,7 +6888,9 @@ breakText	Glyphs	字符
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer": "{_2}"}} 開啟檔案
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是匯出增效模組：請用 document.export {{"format": "{_2}"}} 匯出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是即時效果：請用 effect.apply {{"effect": "{_2}"}} 套用
 @msg	the importer returned no objects	匯入增效模組未傳回任何物件
 @msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組

@@ -165,6 +165,9 @@ impl Exporter<'_> {
     pub(super) fn masked_image(&mut self, im: &vectorcraft_doc::ImageObject, m: &vectorcraft_doc::OpacityMask, interpolate: bool) -> Option<Image> {
         let art = &m.art;
         let NodeKind::Image(mi) = &art.kind else { return None };
+        // A color-masked image in the mask's art masks with the pixels it shows.
+        let shown = self.doc.shown_image(art, mi);
+        let mi = &*shown;
         let plain =
             art.opacity >= 1.0 && art.blend == BlendMode::Normal && art.extras().mask.is_none() && !art.appearance.effects.iter().any(|e| e.visible);
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {

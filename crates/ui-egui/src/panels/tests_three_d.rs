@@ -401,6 +401,334 @@ fn a_mixed_revolve_cap_shows_a_dash() {
     assert_eq!(undo_len(&app), history);
 }
 
+/// The app with a graphic "Graphic" made from a red square beside the blue one, and the blue square
+/// selected with Extrude & Bevel straight on; a context whose panel shows the Materials tab.
+fn materials_app() -> (VectorcraftApp, egui::Context) {
+    let mut app = app();
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    let red = app.run("shape.rectangle", json!({"x": 300, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(app.run("threeD.addGraphic", json!({"ids": [red]})).unwrap()["name"], "Graphic");
+    app.run("select.set", json!({"ids": [square]})).unwrap();
+    set_type(&mut app, "extrude").unwrap();
+    app.run("effect.setParams", json!({"index": 0, "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("materials"))]));
+    (app, ctx)
+}
+
+fn graphics(app: &VectorcraftApp) -> Value {
+    effect(app).1.get("graphics").cloned().unwrap_or(Value::Null)
+}
+
+#[test]
+fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
+    let (mut app, ctx) = materials_app();
+    ctx.enable_accesskit();
+    let nodes = controls(&mut app, &ctx);
+    named(&nodes, "Add as Single Graphic");
+    named(&nodes, "Graphic");
+    let history = undo_len(&app);
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    assert_eq!(graphics(&app)[0]["symbol"], "Graphic");
+    assert_eq!(undo_len(&app), history + 1);
+    // The mapped graphic is listed with its settings, and Remove Graphic takes it off.
+    let nodes = controls(&mut app, &ctx);
+    named(&nodes, "Remove Graphic");
+    named(&nodes, "Scale");
+    // Inflate has no planar faces to map onto.
+    set_type(&mut app, "inflate").unwrap();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+    let text = crate::tests_labels::shapes_text(&out);
+    assert!(text.contains("Graphics map onto planar faces"), "{text}");
+}
+
+#[test]
+fn art_can_be_added_as_a_graphic_before_any_3d_effect() {
+    let mut app = app();
+    let history = undo_len(&app);
+    let ctx = egui::Context::default();
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Add(None));
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1);
+    // The selection is still the square, not an instance.
+    let id = app.session.active().unwrap().selection.objects[0];
+    assert!(matches!(app.session.active().unwrap().doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Path { .. }));
+    assert!(painted_text(&mut app, show).contains("Add as Single Graphic"));
+}
+
+#[test]
+fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let history = undo_len(&app);
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let xf = crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default());
+    // Straight on, the graphic's handle is at the center of the square.
+    let handle = xf.to_screen(vectorcraft_geom::Point::new(150.0, 150.0));
+    let target = xf.to_screen(vectorcraft_geom::Point::new(170.0, 140.0));
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut taken = false;
+        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+            taken = super::graphic_handles_input(app, ui, &resp, rect);
+        })
+        .textures_delta
+        .clear();
+        taken
+    };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // A press away from the handle is left to the tool.
+    let away = xf.to_screen(vectorcraft_geom::Point::new(110.0, 110.0));
+    frame(&mut app, vec![egui::Event::PointerMoved(away)]);
+    assert!(!frame(&mut app, vec![button(away, true)]));
+    frame(&mut app, vec![button(away, false)]);
+    frame(&mut app, vec![egui::Event::PointerMoved(handle)]);
+    assert!(frame(&mut app, vec![button(handle, true)]));
+    assert!(frame(&mut app, vec![egui::Event::PointerMoved(target)]));
+    assert_eq!(undo_len(&app), history, "previewed while the pointer is down");
+    assert!(frame(&mut app, vec![button(target, false)]));
+    assert_eq!(undo_len(&app), history + 1);
+    let g = &graphics(&app)[0];
+    assert!((g["x"].as_f64().unwrap() - 20.0).abs() < 0.11 && (g["y"].as_f64().unwrap() + 10.0).abs() < 0.11, "{g}");
+    // With another selected object whose graphics differ, the artboard shows no handles.
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {}})).unwrap();
+    app.run("select.set", json!({"ids": [square, other]})).unwrap();
+    frame(&mut app, vec![egui::Event::PointerMoved(target)]);
+    assert!(!frame(&mut app, vec![button(target, true)]));
+    frame(&mut app, vec![button(target, false)]);
+    app.run("select.set", json!({"ids": [square]})).unwrap();
+    // With its 3D effect hidden and a visible one after it, the hidden effect's graphics show no
+    // handles.
+    {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        n.appearance.effects[0].visible = false;
+        n.appearance.effects.push(vectorcraft_effects::new_effect("threeD.extrude", &json!({})).unwrap());
+    }
+    let mut shown = true;
+    ctx.run_ui(egui::RawInput::default(), |ui| {
+        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+        shown = super::graphic_handles(&app, ui.ctx()).is_some();
+    })
+    .textures_delta
+    .clear();
+    assert!(!shown);
+    // With the tab closed, the artboard shows no handles.
+    crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("rotation"))]));
+    frame(&mut app, vec![egui::Event::PointerMoved(target)]);
+    assert!(!frame(&mut app, vec![button(target, true)]));
+}
+
+/// One frame of the artboard's graphic handles over an 800 × 600 canvas with `events`: whether the
+/// handles took the pointer.
+fn handles_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> bool {
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let mut taken = false;
+    ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+        crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+        let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+        taken = super::graphic_handles_input(app, ui, &resp, rect);
+    })
+    .textures_delta
+    .clear();
+    taken
+}
+
+/// Where document point (`x`, `y`) is on the 800 × 600 canvas of [`handles_frame`].
+fn handles_screen(app: &VectorcraftApp, x: f64, y: f64) -> egui::Pos2 {
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    crate::canvas::Xf::new(rect, &app.view().cloned().unwrap_or_default()).to_screen(vectorcraft_geom::Point::new(x, y))
+}
+
+fn primary(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+#[test]
+fn a_view_gesture_on_a_graphics_handle_is_left_to_the_canvas() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let handle = handles_screen(&app, 150.0, 150.0);
+    let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    // With Space held, the press pans the view.
+    handles_frame(&mut app, &ctx, vec![space(true)]);
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false), space(false)]);
+    // With the Hand, Zoom or Rotate View tool, the press is the tool's.
+    for tool in ["hand", "zoom", "rotateView"] {
+        app.select_tool(tool);
+        assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]), "{tool}");
+        handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    }
+    // With another tool and Space up, the press grabs the handle.
+    app.select_tool("selection");
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+#[test]
+fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let handle = handles_screen(&app, 150.0, 150.0);
+    let push_effect = |app: &mut VectorcraftApp, object: usize, id: &str, params: Value| {
+        let st = app.session.active_mut().unwrap();
+        let object = st.selection.objects[object];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(object).unwrap();
+        n.appearance.effects.truncate(1);
+        n.appearance.effects.push(vectorcraft_effects::new_effect(id, &params).unwrap());
+    };
+    // A Transform effect after the 3D effect draws the graphic 40 pt to the right of the frame's
+    // place for it: the artboard shows no handle there.
+    push_effect(&mut app, 0, "distort.transform", json!({"moveH": 40.0}));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    // A Drop Shadow after it leaves the graphic where the frame places it: the handle shows.
+    push_effect(&mut app, 0, "stylize.dropShadow", json!({}));
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    // A second selected object with the same graphic and a Transform effect after its 3D effect:
+    // a drag would move its graphic too, so the artboard shows no handles.
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
+        .unwrap();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    app.run("select.set", json!({"ids": [square, other]})).unwrap();
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    push_effect(&mut app, 1, "distort.transform", json!({"moveH": 40.0}));
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+#[test]
+fn a_hidden_fill_shows_no_handles_for_its_graphics() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    // The 3D effect, with its graphic, moves onto the square's fill.
+    let fill = {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        let fx = n.appearance.effects.remove(0);
+        let fill = n.appearance.items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+        n.appearance.effects_mut(Some(fill)).unwrap().push(fx);
+        fill
+    };
+    let shown = |app: &VectorcraftApp| {
+        let mut shown = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            shown = super::graphic_handles(app, ui.ctx()).is_some_and(|(_, _, handles)| !handles.is_empty());
+        })
+        .textures_delta
+        .clear();
+        shown
+    };
+    assert!(shown(&app), "the visible fill's graphic has a handle");
+    {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        if let Some(vectorcraft_doc::AppearanceItem::Fill(f)) = n.appearance.items.get_mut(fill) {
+            f.visible = false;
+        }
+    }
+    assert!(!shown(&app), "the hidden fill draws no graphic, so it has no handle");
+}
+
+#[test]
+fn a_press_that_closes_the_context_menu_does_not_grab_a_graphics_handle() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    // One frame of the canvas's input with a context menu: whether the menu is open after it.
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut open = false;
+        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            let resp = ui.interact(rect, egui::Id::unique("three-d-test-canvas"), egui::Sense::click_and_drag());
+            crate::canvas::canvas_input(app, ui, &resp, rect);
+            resp.context_menu(|ui| {
+                ui.label("Menu");
+            });
+            open = resp.context_menu_opened();
+        })
+        .textures_delta
+        .clear();
+        open
+    };
+    // A right-click below and to the right of the handle opens the menu there, clear of the handle.
+    let (handle, menu) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 195.0, 195.0));
+    let secondary =
+        |pressed| egui::Event::PointerButton { pos: menu, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(menu)]);
+    frame(&mut app, vec![secondary(true)]);
+    frame(&mut app, vec![secondary(false)]);
+    assert!(frame(&mut app, vec![egui::Event::PointerMoved(handle)]));
+    // The press on the handle only closes the menu: no drag of the graphic starts.
+    let (history, before) = (undo_len(&app), graphics(&app));
+    assert!(!frame(&mut app, vec![primary(handle, true)]));
+    assert!(ctx.data(|m| m.get_temp::<super::HandleDrag>(super::handle_drag_id())).is_none());
+    frame(&mut app, vec![egui::Event::PointerMoved(handle + egui::vec2(20.0, 0.0))]);
+    frame(&mut app, vec![primary(handle + egui::vec2(20.0, 0.0), false)]);
+    assert_eq!(undo_len(&app), history);
+    assert_eq!(graphics(&app), before);
+}
+
+#[test]
+fn a_click_on_a_graphics_handle_records_no_undo_step() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic", "x": 5.03})).unwrap();
+    let history = undo_len(&app);
+    let handle = handles_screen(&app, 155.03, 150.0);
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, false)]));
+    assert_eq!(undo_len(&app), history);
+    assert_eq!(graphics(&app)[0]["x"], json!(5.03));
+}
+
+#[test]
+fn a_selection_change_during_a_handle_drag_ends_it() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    // A second object with the same graphic.
+    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
+        .unwrap();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    app.run("select.set", json!({"ids": [square]})).unwrap();
+    let graphic_of = |app: &VectorcraftApp, id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        n.appearance.effects[0].params["graphics"][0].clone()
+    };
+    let before = graphic_of(&app, other);
+    let (handle, target, further) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 170.0, 140.0), handles_screen(&app, 190.0, 130.0));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(target)]);
+    // The selection changes to the other object while the pointer is down: the drag ends there.
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(further)]);
+    handles_frame(&mut app, &ctx, vec![primary(target, false)]);
+    assert_eq!(graphic_of(&app, other), before, "the other object's graphic moved");
+    let moved = graphic_of(&app, square);
+    assert!((moved["x"].as_f64().unwrap() - 20.0).abs() < 0.11, "{moved}");
+}
+
 /// Quick Actions › Expand as Wireframes shows for every object type, and turns the selected 3D
 /// object into a group of stroked edges in one undo step.
 #[test]
