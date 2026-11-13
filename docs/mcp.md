@@ -5137,6 +5137,24 @@ used, as a transform's does.
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Scale and Reflect on a turned bounding box
+
+`object.scale` and `object.reflect` with a named axis act along the selection's bounding box: after a rotation, `sx`
+stretches along the box's own width and `sy` along its height, and `"vertical"` and `"horizontal"` are the box's own
+axes, until Object › Transform › Reset Bounding Box squares the box to the page. Both take `basis?: "box"|"page"`:
+`"box"` is the default, and `"page"` acts along the page's axes. Any other `basis` is an error, and nothing changes.
+`origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
+objects stand at different angles, and anchors selected with Direct Selection, use the page's axes. The journal entry
+records the `basis` used, so a recorded action replays in the same frame; an older recording without `basis` acts
+along the box. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
+and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
+and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
+
+```json
+{"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"sy":100}}}
+{"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With

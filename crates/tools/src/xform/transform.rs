@@ -8,10 +8,12 @@
 //! while hovering, so transforms pivot exactly on a corner. A drag starts from the point it grabbed
 //! snapped the same way, and the pointer snaps as a drawn point does (Smart Guides: the other
 //! objects' anchors, centres and edges; or the grid, pixels, Snap to Point), so a corner dragged
-//! onto another object's anchor scales exactly onto it.
+//! onto another object's anchor scales exactly onto it. Scale stretches along the bounding box's
+//! own width and height, turned with rotated objects until Reset Bounding Box; Reflect's default
+//! axis is the box's vertical one, and Shift constrains a drawn axis to 45° steps from the box.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::target_overlays;
@@ -68,7 +70,24 @@ struct Drag {
     /// Alt was down at the press: a click opens the dialog, a drag transforms a copy.
     alt: bool,
     bounds: Rect,
+    /// The angle of the selection's bounding box: Scale and Reflect act along its axes
+    /// ([`TransformTool::matrix_in`]).
+    angle: f64,
+    /// Anchors are selected with Direct Selection: they transform alone along the page's axes,
+    /// and a copy transforms the whole objects along the box ([`Drag::angle_for`]).
+    anchors: bool,
+    /// The snapped pointer and Shift at the last drag event, to work out the transform again
+    /// when the Alt state at the release changes what it transforms.
+    pointer: Point,
+    shift: bool,
     last: Affine,
+}
+
+impl Drag {
+    /// The angle Scale and Reflect act along, for a drag that copies (`copy`) or not.
+    fn angle_for(&self, copy: bool) -> f64 {
+        if self.anchors && !copy { 0.0 } else { self.angle }
+    }
 }
 
 pub struct TransformTool {
@@ -125,6 +144,16 @@ impl TransformTool {
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.
     pub fn matrix_for(&self, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
+        self.matrix_in(0.0, o, start, p, shift, bounds)
+    }
+
+    /// [`TransformTool::matrix_for`] with the bounding box turned by `angle` (counter-clockwise
+    /// degrees): Scale stretches along the box's own width and height, and Reflect's default axis
+    /// and Shift's 45° steps start from the box's axes. A Reflect axis drawn by the drag is the
+    /// line the pointer draws on the page.
+    pub fn matrix_in(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
+        let frame = OrientedBox { angle, rect: Rect::ZERO };
+        let local = |v: Vec2| frame.to_doc().inverse() * v.to_point();
         match self.kind {
             TransformKind::Rotate => {
                 let (a, deg) = rotate_for_drag(o, start, p, shift);
@@ -132,15 +161,17 @@ impl TransformTool {
             }
             TransformKind::Reflect => {
                 let mut v = p - o;
-                if shift {
-                    v = vectorcraft_geom::constrain_angle(v, 45.0);
+                if v.hypot() < 1e-9 {
+                    v = (frame.to_doc() * Point::new(0.0, 1.0)).to_vec2();
+                } else if shift {
+                    v = (frame.to_doc() * vectorcraft_geom::constrain_angle(local(v).to_vec2(), 45.0).to_point()).to_vec2();
                 }
-                let theta = if v.hypot() < 1e-9 { std::f64::consts::FRAC_PI_2 } else { v.y.atan2(v.x) };
+                let theta = v.y.atan2(v.x);
                 (reflect_matrix(o, theta), format!("{:.1}°", vectorcraft_geom::normalize_deg(-theta.to_degrees())))
             }
             TransformKind::Scale => {
-                let d0 = start - o;
-                let d1 = p - o;
+                let d0 = local(start - o).to_vec2();
+                let d1 = local(p - o).to_vec2();
                 let ratio = |a: f64, b: f64| if a.abs() > 1e-6 { b / a } else { 1.0 };
                 let (mut sx, mut sy) = (ratio(d0.x, d1.x), ratio(d0.y, d1.y));
                 if shift {
@@ -151,7 +182,7 @@ impl TransformTool {
                 }
                 let clamp = |s: f64| if s.abs() < 1e-4 { 1e-4f64.copysign(s) } else { s };
                 let (sx, sy) = (clamp(sx), clamp(sy));
-                (about(o, Affine::scale_non_uniform(sx, sy)), format!("W: {:.1}%\nH: {:.1}%", sx * 100.0, sy * 100.0))
+                (about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), format!("W: {:.1}%\nH: {:.1}%", sx * 100.0, sy * 100.0))
             }
             TransformKind::Shear => {
                 // The shear axis follows the dominant drag direction. Shift keeps the drag on that
@@ -227,7 +258,21 @@ impl Tool for TransformTool {
                 // Alt: decided on release. A click sets the point and opens the dialog; a drag
                 // transforms a copy about the reference point as it was.
                 let origin = self.reference_point(cx).unwrap_or(bounds.center());
-                self.drag = Some(Drag { start: p, pick, origin, began: false, alt: ev.mods.alt, bounds, last: Affine::IDENTITY });
+                let anchors = vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure()).is_some();
+                let angle = selection_box(cx).map_or(0.0, |b| b.angle);
+                self.drag = Some(Drag {
+                    start: p,
+                    pick,
+                    origin,
+                    began: false,
+                    alt: ev.mods.alt,
+                    bounds,
+                    angle,
+                    anchors,
+                    pointer: p,
+                    shift: false,
+                    last: Affine::IDENTITY,
+                });
                 vec![]
             }
             PointerKind::Drag => {
@@ -247,8 +292,8 @@ impl Tool for TransformTool {
                 }
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, text) = self.matrix_for(d.origin, d.pick, p, ev.mods.shift, d.bounds);
-                d.last = m;
+                let (m, text) = self.matrix_in(d.angle_for(ev.mods.alt), d.origin, d.pick, p, ev.mods.shift, d.bounds);
+                (d.last, d.pointer, d.shift) = (m, p, ev.mods.shift);
                 self.drag = Some(d);
                 self.measure = Some((p, text));
                 out.push(preview(m, ev.mods.alt, ev.backquote));
@@ -257,8 +302,11 @@ impl Tool for TransformTool {
             PointerKind::Up => {
                 let Some(d) = self.end_drag() else { return vec![] };
                 if d.began {
-                    // The Alt state at release decides whether the result is a copy.
-                    vec![preview(d.last, ev.mods.alt, ev.backquote), Action::Commit]
+                    // The Alt state at release decides whether the result is a copy, and with
+                    // anchors selected, whether it acts along the box or the page.
+                    let m =
+                        if d.anchors { self.matrix_in(d.angle_for(ev.mods.alt), d.origin, d.pick, d.pointer, d.shift, d.bounds).0 } else { d.last };
+                    vec![preview(m, ev.mods.alt, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too.
                     self.origin = Some((d.pick, cx.selection.objects.clone()));
@@ -576,6 +624,62 @@ mod tests {
         let o = Point::new(150.0, 150.0);
         let (m, _) = t.matrix_for(o, Point::new(150.0, 100.0), Point::new(150.0, 50.0), false, Rect::ZERO);
         assert!((m * Point::new(100.0, 120.0)).distance(Point::new(200.0, 120.0)) < 1e-9);
+    }
+
+    /// With the selection turned by 30°, a Scale drag stretches along the box's own sides, and
+    /// Reflect's default axis and Shift steps start from the box's axes while a drawn axis stays
+    /// the line drawn on the page.
+    #[test]
+    fn scale_and_reflect_drags_follow_a_turned_bounding_box() {
+        let (mut d, id) = doc_with_rect();
+        let c = Point::new(150.0, 150.0);
+        d.node_mut(id).unwrap().transform(about(c, Affine::rotate(-30f64.to_radians())), false);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        (cx.smart_guides, cx.snap_to_point) = (false, false);
+        let frame = OrientedBox { angle: 30.0, rect: Rect::ZERO };
+        let along = |x: f64, y: f64| c + (frame.to_doc() * Point::new(x, y)).to_vec2();
+        // The right side's middle dragged out to twice its distance: the width doubles along the
+        // box, and the height stays.
+        let mut t = TransformTool::new(TransformKind::Scale);
+        let (from, to) = (along(50.0, 0.0), along(100.0, 0.0));
+        t.pointer(&cx, &ev(PointerKind::Down, from.x, from.y));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, to.x, to.y));
+        let m = matrix(&a[1]);
+        assert!((m * along(50.0, 50.0)).distance(along(100.0, 50.0)) < 1e-9, "{m:?}");
+        assert!((m * along(0.0, 50.0)).distance(along(0.0, 50.0)) < 1e-9, "{m:?}");
+        assert!(a.iter().any(|x| matches!(x, Action::Preview(..))));
+
+        let t = TransformTool::new(TransformKind::Reflect);
+        // No axis drawn: the box's vertical axis.
+        let (m, _) = t.matrix_in(30.0, c, c, c, false, Rect::ZERO);
+        assert!((m * along(40.0, 10.0)).distance(along(-40.0, 10.0)) < 1e-9, "{m:?}");
+        // Shift: 39° from the box's horizontal axis steps to 45° from it.
+        let (m, text) = t.matrix_in(30.0, c, c, along(10.0, 8.0), true, Rect::ZERO);
+        assert!((m * along(10.0, 0.0)).distance(along(0.0, 10.0)) < 1e-9, "{m:?}");
+        assert_eq!(text, "-15.0°");
+        // A drawn axis is the line on the page.
+        let (m, _) = t.matrix_in(30.0, c, c, c + Vec2::new(0.0, -50.0), false, Rect::ZERO);
+        assert!((m * Point::new(100.0, 120.0)).distance(Point::new(200.0, 120.0)) < 1e-9, "{m:?}");
+
+        // Anchors selected with Direct Selection scale alone along the page's axes; Alt at the
+        // release copies the whole object, which scales along its box.
+        let mut s = s.clone();
+        s.anchors.insert(id, [(0, 0), (0, 1)].into());
+        let mut cx = crate::testutil::cx(&d, &s, &p);
+        (cx.smart_guides, cx.snap_to_point) = (false, false);
+        let page_axes = |m: Affine| m.as_coeffs()[1].abs() < 1e-9 && m.as_coeffs()[2].abs() < 1e-9;
+        let (from, to) = (along(50.0, 0.0), along(100.0, 30.0));
+        for copy in [false, true] {
+            let mut t = TransformTool::new(TransformKind::Scale);
+            t.pointer(&cx, &ev(PointerKind::Down, from.x, from.y));
+            let a = t.pointer(&cx, &ev(PointerKind::Drag, to.x, to.y));
+            assert!(page_axes(matrix(&a[1])), "{a:?}");
+            let up = t.pointer(&cx, &ev(PointerKind::Up, to.x, to.y).with_mods(if copy { alt() } else { Mods::default() }));
+            assert_eq!(page_axes(matrix(&up[0])), !copy, "copy {copy}: {up:?}");
+        }
     }
 
     #[test]
