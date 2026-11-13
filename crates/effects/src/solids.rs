@@ -980,7 +980,8 @@ fn half(p: &[Point], values: &[f64], sign: f64) -> Vec<Point> {
 /// wall and a face of the same shape's covering stroke ([`Paints::Stroke`]) keep their order. Each
 /// face otherwise keeps its place in `order`, so a fill wall in the gap between two dashes stays
 /// where its depth puts it. A cycle of such pairs is broken at the face that comes first in `order`.
-/// Otherwise `order` as it is.
+/// A face drawn last (a planar end turned toward the viewer, at depth `f64::MAX`) keeps its place:
+/// no face moves across it. Otherwise `order` as it is.
 fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
     use std::cmp::Reverse;
     // The faces of each shape that take part, from left to right for a sweep along x.
@@ -1065,14 +1066,25 @@ fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
     // Each step draws the face that comes first in `order` of those whose faces before are drawn.
     let mut ready: std::collections::BinaryHeap<Reverse<(usize, usize)>> =
         (0..faces.len()).filter(|&k| waits[k] == 0).map(|k| Reverse((position[k], k))).collect();
+    // The faces drawn last, in `order`: each goes only after every face before it in `order`.
+    let last: Vec<usize> = order.iter().copied().filter(|&k| faces[k].depth >= f64::MAX).collect();
+    let mut next_last = 0usize;
     let mut drawn = vec![false; faces.len()];
     let mut out = Vec::with_capacity(order.len());
     let mut first = 0usize;
     while out.len() < order.len() {
-        let k = match ready.pop() {
-            Some(Reverse((_, k))) => k,
-            None => {
-                // A cycle: the first face in `order` not drawn yet goes next.
+        while last.get(next_last).is_some_and(|&k| drawn[k]) {
+            next_last += 1;
+        }
+        let limit = last.get(next_last).map_or(usize::MAX, |&k| position[k]);
+        let k = match ready.peek() {
+            Some(&Reverse((at, k))) if at < limit => {
+                ready.pop();
+                k
+            }
+            _ => {
+                // A cycle, or the faces left to draw before a face drawn last wait for faces after
+                // it: the first face in `order` not drawn yet goes next.
                 while order.get(first).is_some_and(|&k| drawn[k]) {
                     first += 1;
                 }

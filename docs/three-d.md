@@ -159,8 +159,11 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
   inside the 3D group applies to the solids of that group's members together. An opacity mask on
   a member masks its solids, and one on a group inside the 3D group masks the solids of that group's members
   together. The mask stays where it is on the page; it does not turn with the solids. A disabled mask is ignored.
-- When a member, or a group inside the 3D group, has an opacity mask or a blending mode other than Normal, each
-  solid is drawn on its own, the backmost member's first, as when a solid is transparent.
+- When a member, or a group inside the 3D group, has an opacity mask or a blending mode other than Normal, the
+  members' faces are not drawn in one shared order. Each member whose fills and strokes are opaque with Normal
+  blending draws their faces in one order of its own inside its masks and blending modes, as described under
+  [Fills and strokes](#fills-and-strokes). Otherwise each solid is drawn on its own, the backmost member's first, as
+  when a solid is transparent.
 - When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
   on its own, the backmost member's first.
 - Hidden members and guides are left out. A group holding a live object other than a blend (an envelope, a mesh, a

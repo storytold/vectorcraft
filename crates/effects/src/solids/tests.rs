@@ -684,6 +684,37 @@ fn local_order_puts_overlapping_fill_walls_and_stroke_faces_in_depth_order() {
     }
 }
 
+/// A cycle of overlapping stroke faces is broken at the face that comes first by depth, and a cap
+/// drawn last stays after every wall: 0 at x 0 to 10, flat at z 0; 1 at x 4 to 14, z = x - 8; 2 at
+/// x 8 to 18, flat at z 1. Where they overlap, 0 is nearer than 1, 1 nearer than 2 and 2 nearer
+/// than 0. 3 is the cap.
+#[test]
+fn a_depth_cycle_keeps_the_cap_last() {
+    let square = |x: f64| vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)];
+    let at = |depth: f64, x: f64, normal: [f64; 3], offset: f64| Placed {
+        depth,
+        side: true,
+        away: false,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member: 0,
+        paints: Paints::Other,
+        outline: square(x),
+        plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+    };
+    let cap = Placed {
+        depth: f64::MAX,
+        side: false,
+        away: false,
+        bounds: Rect::new(0.0, 0.0, 18.0, 10.0),
+        member: 0,
+        paints: Paints::Other,
+        outline: vec![],
+        plane: None,
+    };
+    let faces = [at(1.0, 0.0, [0.0, 0.0, 1.0], 0.0), at(2.0, 4.0, [-1.0, 0.0, 1.0], -8.0), at(3.0, 8.0, [0.0, 0.0, 1.0], 1.0), cap];
+    assert_eq!(draw_order(&faces, true), [0, 2, 1, 3]);
+}
+
 /// The order keeps depths except where a shape's fill wall turned toward the viewer overlaps a
 /// face of the same shape's stroke drawn before it: the wall then goes just before that face. A
 /// cap, a face turned away, another shape's stroke, a stroke face the wall does not overlap and an
