@@ -497,4 +497,19 @@ mod tests {
         assert_eq!(bar_of(&app).map(|b| b.1), Some(Bar::Mesh { rows: 3, cols: 2 }));
         bar_frame(&mut app, &ctx, vec![]);
     }
+
+    #[test]
+    fn the_control_bar_shows_mesh_rows_and_columns_after_a_warp_point_is_moved() {
+        let (mut app, _) = app_with_rect();
+        app.run(MAKE_WARP, json!({"style": "arc", "bend": 50})).unwrap();
+        assert!(bar_of(&app).is_some_and(|(_, bar)| matches!(bar, Bar::Warp { ref style, .. } if style == "arc")));
+        let (id, warp) = envelope(&app);
+        let grid = vectorcraft_doc::live::warp_grid(&warp).unwrap();
+        let p = grid.points[6].p;
+        app.run("object.mesh.movePoint", json!({"id": id.0, "index": 6, "x": p.x + 10.0, "y": p.y + 10.0})).unwrap();
+        assert_eq!(bar_of(&app), Some((false, Bar::Mesh { rows: grid.rows, cols: grid.cols })));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        bar_frame(&mut app, &ctx, vec![]);
+    }
 }

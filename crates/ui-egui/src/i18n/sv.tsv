@@ -1020,6 +1020,7 @@ font-technology	Variable	Variabla
 	Enable Rubber Band for	Aktivera gummiband för
 	Enable text access for screen readers	Ge skärmläsare åtkomst till text
 	Enable Touch Gestures	Aktivera pekgester
+	Switch Selection and Drawing Modes	Växla mellan markerings- och ritläge
 	Enable Touch Workspace	Aktivera arbetslayout för pekskärm
 	Encoding	Kodning
 	Encoding:	Kodning:
@@ -6383,6 +6384,35 @@ axis	Y Axis	Y-axel
 @msg	the path has no anchor points	banan har inga ankarpunkter
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
 @msg	true or false	true eller false
+@msg	a number >= {_1}	ett tal >= {_1}
+@msg	a number > {_1}	ett tal > {_1}
+@msg	a number <= {_1}	ett tal <= {_1}
+@msg	a number < {_1}	ett tal < {_1}
+@msg	a number {_1} to {_2}	ett tal från {_1} till {_2}
+@msg	a number >= {_1} and < {_2}	ett tal >= {_1} och < {_2}
+@msg	a number > {_1} and <= {_2}	ett tal > {_1} och <= {_2}
+@msg	a number > {_1} and < {_2}	ett tal > {_1} och < {_2}
+@msg	a number ({_1})	ett tal ({_1})
+@msg	a number >= {_1} ({_2})	ett tal >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	ett tal > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	ett tal <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	ett tal < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	ett tal från {_1} till {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	ett tal >= {_1} och < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	ett tal > {_1} och <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	ett tal > {_1} och < {_2} ({_3})
+@msg	an integer	ett heltal
+@msg	an integer >= {_1}	ett heltal >= {_1}
+@msg	an integer <= {_1}	ett heltal <= {_1}
+@msg	an integer {_1} to {_2}	ett heltal från {_1} till {_2}
+@msg	one of {_1}	ett av {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` måste vara ett av {_1}, inte {got}
+@msg	an object id (a non-negative integer)	ett objekt-id (ett icke-negativt heltal)
+@msg	a list of object ids	en lista med objekt-id:n
+@msg	a color (a string, [r, g, b] or an object)	en färg (en sträng, [r, g, b] eller ett objekt)
+@msg	[x, y] (two numbers)	[x, y] (två tal)
+@msg	an object	ett objekt
+@msg	a list	en lista
 @msg	unknown key `{k}`; the keys here are {_1}	okänd nyckel `{k}`; nycklarna här är {_1}
 @msg	{_1} is listed twice	{_1} finns två gånger
 @msg	{_1} is not the id of an input object	{_1} är inte id:t för ett indataobjekt
@@ -8071,7 +8101,7 @@ digits	Hindi	Hindi
 @msg	need at least two points	minst två punkter krävs
 @msg	needs points	punkter krävs
 @msg	nineSlice must be true or false	nineSlice måste vara true eller false
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett 0..1, med left + right < 1 och top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett -16..16, med left + right < 1 och top + bottom < 1
 @msg	no action set is current	ingen åtgärdsuppsättning är aktuell
 @msg	no active data set	ingen aktiv datauppsättning
 @msg	no appearance item {index}	inget utseendeobjekt {index}

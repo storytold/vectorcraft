@@ -1641,6 +1641,7 @@ antiAlias	Sharp	シャープ
 	Enable Opacity Mask	不透明マスクを有効にする
 	Enable Rubber Band for	ラバーバンドを有効にする対象
 	Enable Touch Gestures	タッチジェスチャーを有効にする
+	Switch Selection and Drawing Modes	選択モードと描画モードを切り替え
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする
@@ -6087,6 +6088,35 @@ axis	Y Axis	Y 軸
 @msg	the path has no anchor points	パスにアンカーポイントがありません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
 @msg	true or false	true または false
+@msg	a number >= {_1}	{_1} 以上の数値
+@msg	a number > {_1}	{_1} より大きい数値
+@msg	a number <= {_1}	{_1} 以下の数値
+@msg	a number < {_1}	{_1} 未満の数値
+@msg	a number {_1} to {_2}	{_1} から {_2} までの数値
+@msg	a number >= {_1} and < {_2}	{_1} 以上 {_2} 未満の数値
+@msg	a number > {_1} and <= {_2}	{_1} より大きく {_2} 以下の数値
+@msg	a number > {_1} and < {_2}	{_1} より大きく {_2} 未満の数値
+@msg	a number ({_1})	数値 ({_1})
+@msg	a number >= {_1} ({_2})	{_1} 以上の数値 ({_2})
+@msg	a number > {_1} ({_2})	{_1} より大きい数値 ({_2})
+@msg	a number <= {_1} ({_2})	{_1} 以下の数値 ({_2})
+@msg	a number < {_1} ({_2})	{_1} 未満の数値 ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} から {_2} までの数値 ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	{_1} 以上 {_2} 未満の数値 ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	{_1} より大きく {_2} 以下の数値 ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	{_1} より大きく {_2} 未満の数値 ({_3})
+@msg	an integer	整数
+@msg	an integer >= {_1}	{_1} 以上の整数
+@msg	an integer <= {_1}	{_1} 以下の整数
+@msg	an integer {_1} to {_2}	{_1} から {_2} までの整数
+@msg	one of {_1}	{_1} のいずれか
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` は {_1} のいずれかにしてください ({got} は使えません)
+@msg	an object id (a non-negative integer)	オブジェクト ID (0 以上の整数)
+@msg	a list of object ids	オブジェクト ID のリスト
+@msg	a color (a string, [r, g, b] or an object)	カラー (文字列、[r, g, b] またはオブジェクト)
+@msg	[x, y] (two numbers)	[x, y] (2 つの数値)
+@msg	an object	オブジェクト
+@msg	a list	リスト
 @msg	unknown key `{k}`; the keys here are {_1}	`{k}` は不明なキーです。ここで使えるキー: {_1}
 @msg	{_1} is listed twice	{_1} が 2 回指定されています
 @msg	{_1} is not the id of an input object	{_1} は入力オブジェクトの ID ではありません

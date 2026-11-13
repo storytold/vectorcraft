@@ -3526,6 +3526,7 @@ theme	Appearance	Udseende
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
+	Switch Selection and Drawing Modes	Skift mellem markerings- og tegnetilstand
 	Enable Touch Workspace	Aktivér touch-arbejdsområde
 	English: UK	Engelsk: UK
 	Every (minutes)	Hvert (minut)
@@ -4312,6 +4313,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` skal være et heltal mellem {min} og {max} (fik {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` skal være mellem {min} og {max} (fik {x})
 @msg	`{key}` must be one of {_1}	`{key}` skal være en af {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` skal være en af {_1}, ikke {got}
 @msg	`{key}` must be true or false	`{key}` skal være true eller false
 @msg	`{k}` must be [x, y]	`{k}` skal være [x, y]
 @msg	`{name}` has no options	`{name}` har ingen indstillinger

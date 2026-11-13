@@ -3793,6 +3793,7 @@ theme	Appearance	Motiv
 	Enable Missing Glyph Protection	Povolit ochranu chybějících glyfů
 	Enable Rubber Band for	Povolit gumovou čáru pro
 	Enable Touch Gestures	Povolit dotyková gesta
+	Switch Selection and Drawing Modes	Přepnout mezi režimem výběru a kreslení
 	Enable Touch Workspace	Povolit dotykový pracovní prostor
 	English: UK	Angličtina: Spojené království
 	Every (minutes)	Každých (minut)
@@ -6397,6 +6398,35 @@ axis	Y Axis	osa Y
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
 @msg	true or false	true nebo false
+@msg	a number >= {_1}	číslo >= {_1}
+@msg	a number > {_1}	číslo > {_1}
+@msg	a number <= {_1}	číslo <= {_1}
+@msg	a number < {_1}	číslo < {_1}
+@msg	a number {_1} to {_2}	číslo od {_1} do {_2}
+@msg	a number >= {_1} and < {_2}	číslo >= {_1} a < {_2}
+@msg	a number > {_1} and <= {_2}	číslo > {_1} a <= {_2}
+@msg	a number > {_1} and < {_2}	číslo > {_1} a < {_2}
+@msg	a number ({_1})	číslo ({_1})
+@msg	a number >= {_1} ({_2})	číslo >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	číslo > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	číslo <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	číslo < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	číslo od {_1} do {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	číslo >= {_1} a < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	číslo > {_1} a <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	číslo > {_1} a < {_2} ({_3})
+@msg	an integer	celé číslo
+@msg	an integer >= {_1}	celé číslo >= {_1}
+@msg	an integer <= {_1}	celé číslo <= {_1}
+@msg	an integer {_1} to {_2}	celé číslo od {_1} do {_2}
+@msg	one of {_1}	jedna z hodnot {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` musí být jedna z hodnot {_1}, nikoli {got}
+@msg	an object id (a non-negative integer)	ID objektu (nezáporné celé číslo)
+@msg	a list of object ids	seznam ID objektů
+@msg	a color (a string, [r, g, b] or an object)	barva (řetězec, [r, g, b] nebo objekt)
+@msg	[x, y] (two numbers)	[x, y] (dvě čísla)
+@msg	an object	objekt
+@msg	a list	seznam
 @msg	unknown key `{k}`; the keys here are {_1}	neznámý klíč `{k}`; zde platné klíče jsou {_1}
 @msg	{_1} is listed twice	{_1} je uveden dvakrát
 @msg	{_1} is not the id of an input object	{_1} není ID vstupního objektu

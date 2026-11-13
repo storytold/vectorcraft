@@ -988,6 +988,7 @@ font-technology	Variable	Μεταβλητές
 	Enable Rubber Band for	Ενεργοποίηση δυναμικής προεπισκόπησης γραμμής για
 	Enable text access for screen readers	Ενεργοποίηση πρόσβασης κειμένου για αναγνώστες οθόνης
 	Enable Touch Gestures	Ενεργοποίηση χειρονομιών αφής
+	Switch Selection and Drawing Modes	Εναλλαγή λειτουργιών επιλογής και σχεδίασης
 	Enable Touch Workspace	Ενεργοποίηση χώρου εργασίας αφής
 	Encoding	Κωδικοποίηση
 	Encoding:	Κωδικοποίηση:
@@ -6348,6 +6349,35 @@ axis	Y Axis	Άξονας Y
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
+@msg	a number >= {_1}	αριθμός >= {_1}
+@msg	a number > {_1}	αριθμός > {_1}
+@msg	a number <= {_1}	αριθμός <= {_1}
+@msg	a number < {_1}	αριθμός < {_1}
+@msg	a number {_1} to {_2}	αριθμός από {_1} έως {_2}
+@msg	a number >= {_1} and < {_2}	αριθμός >= {_1} και < {_2}
+@msg	a number > {_1} and <= {_2}	αριθμός > {_1} και <= {_2}
+@msg	a number > {_1} and < {_2}	αριθμός > {_1} και < {_2}
+@msg	a number ({_1})	αριθμός ({_1})
+@msg	a number >= {_1} ({_2})	αριθμός >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	αριθμός > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	αριθμός <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	αριθμός < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	αριθμός από {_1} έως {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	αριθμός >= {_1} και < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	αριθμός > {_1} και <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	αριθμός > {_1} και < {_2} ({_3})
+@msg	an integer	ακέραιος
+@msg	an integer >= {_1}	ακέραιος >= {_1}
+@msg	an integer <= {_1}	ακέραιος <= {_1}
+@msg	an integer {_1} to {_2}	ακέραιος από {_1} έως {_2}
+@msg	one of {_1}	μία από τις τιμές {_1}
+@msg	`{path}` must be one of {_1}, not {got}	Το `{path}` πρέπει να είναι μία από τις τιμές {_1}, όχι {got}
+@msg	an object id (a non-negative integer)	αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
+@msg	a list of object ids	λίστα αναγνωριστικών αντικειμένων
+@msg	a color (a string, [r, g, b] or an object)	χρώμα (συμβολοσειρά, [r, g, b] ή αντικείμενο)
+@msg	[x, y] (two numbers)	[x, y] (δύο αριθμοί)
+@msg	an object	αντικείμενο
+@msg	a list	λίστα
 @msg	unknown key `{k}`; the keys here are {_1}	άγνωστο κλειδί `{k}`· τα κλειδιά εδώ είναι {_1}
 @msg	{_1} is listed twice	το {_1} αναφέρεται δύο φορές
 @msg	{_1} is not the id of an input object	το {_1} δεν είναι αναγνωριστικό αντικειμένου εισόδου

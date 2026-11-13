@@ -26,7 +26,7 @@ use vectorcraft_doc::{Document, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Affine;
 use vectorcraft_tools::{PaintDefaults, Tool};
 
-pub use cmd::clipboard::Clipboard;
+pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::perspective_click;
 pub use cmd::params::{check_keys, check_params};

@@ -6,7 +6,7 @@ use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
-use vectorcraft_three_d::{Bevel, BevelProfile, BevelShape, Extrude, Facet, Inflate, Mesh, PlanarFace, View};
+use vectorcraft_three_d::{Bevel, BevelProfile, BevelShape, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, PlanarFace, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -311,34 +311,62 @@ pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 /// [`validate_solid`] with the symbols of `doc`: a symbol instance, a blend and a clipping group
 /// build from the art they show ([`resolve`]).
 pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
-    validate_solid_for(doc, n, id, p, None)
+    validate_solid_for(doc, n, id, p, (None, None))
 }
 
-/// [`validate_solid_in`] for the effect on the object (`item` `None`) or on its appearance item
-/// `item`, whose shadow is cast by that item's solid alone.
-fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, item: Option<usize>) -> Result<(), String> {
+/// [`validate_solid_in`] for the effect at `(item, index)`: index `index` of the effects of the
+/// object (`item` `None`) or of its appearance item `item`, whose shadow is cast by that item's
+/// solid alone. The index is the effects' length for a new effect. The solids are checked as
+/// [`solid_art_in`] draws them: from the shapes after the geometry effects before the 3D effect.
+/// On the object (or group) with `index` `None`, that effect is its first visible Extrude & Bevel,
+/// Inflate or Rotate, as drawn, or a new one after its other effects when it has none.
+fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: (Option<usize>, Option<usize>)) -> Result<(), String> {
     validate_solid_params(id, p)?;
     if let Some(doc) = doc {
         graphics::validate_symbols(doc, p)?;
     }
     let label = label_of(id);
     let n = &*source::resolve_for(doc, n, label, is_plane(id))?;
+    let effects = &n.appearance.effects;
+    let index = match at {
+        (None, Some(index)) => index,
+        _ => solid(effects).map_or(effects.len(), |(index, _)| index),
+    };
+    let before = effects.get(..index).unwrap_or(effects);
     if is_container(n) {
-        let shapes = members(n, label)?;
+        let mut shapes = members(n, label)?;
+        reshape_members(n, before, &mut shapes);
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))?;
+        check_solids(id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
     let (path, rule) = object_profile(n, label)?;
-    let b = path.bounds().ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
-    facets(id, &path, rule, b, p)?;
+    let anchors = || format!("{label} requires a shape with at least two anchors");
+    path.bounds().ok_or_else(anchors)?;
+    let ctx = GeomContext::of(n);
     // With its shadow on, the shadow of the object's solids (or of the item's) must fit too.
-    let items = match item.and_then(|i| n.appearance.items.get(i)) {
-        Some(item) => vec![item.clone()],
-        None => solid_paints(n),
+    let (path, items) = match at.0.and_then(|i| Some((n.appearance.items.get(i)?, at.1.unwrap_or(usize::MAX)))) {
+        Some((item, index)) => {
+            let path = geometry(&path, effects, &ctx);
+            (geometry(&path, item.effects().get(..index).unwrap_or(item.effects()), &ctx.item(item)), vec![item.clone()])
+        }
+        None => (geometry(&path, before, &ctx), solid_paints(n)),
     };
+    let b = path.bounds().ok_or_else(anchors)?;
+    facets(id, &path, rule, b, p)?;
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
+    check_solids(id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
+}
+
+/// Do the solids 3D effect `id` with parameters `p` builds from the fills and strokes of `shapes`
+/// fit, each on its own and all of them together ([`built_solids`])? Rotate's planes are not
+/// counted.
+fn check_solids(id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
+    let Some(b) = union_bounds(shapes).filter(|_| !is_plane(id)) else { return Ok(()) };
+    let (parts, bounds) = solid_parts(shapes, b);
+    built_solids(id, p, &parts, bounds, MAX_OBJECT_FACES).try_for_each(|r| r.map(|_| ()))
 }
 
 /// [`profile`], or the error a command reports for object `n`: type with no outlines to build from
@@ -518,26 +546,28 @@ pub fn validate_three_d_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value
     if crate::revolve::is_revolve(id) { crate::revolve::validate_in(doc, n, id, p) } else { validate_solid_in(doc, n, id, p) }
 }
 
-/// [`validate_three_d`] for an effect at `(item, index)`, index `index` of the effects of
-/// appearance item `item` of `n` (the effects' length for a new effect), or on the object itself
-/// when `at` is `None`. A Revolve on a fill or stroke is checked in that item's paint, after the
-/// item's geometry effects before it, together with the object's other items that carry a Revolve.
-/// A group's or layer's fills and strokes take no 3D effect: only the group's own effect draws.
-pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+/// [`validate_three_d`] for an effect at `(item, index)`: index `index` of the effects of
+/// appearance item `item` of `n`, or of the object itself when `item` is `None` (the effects'
+/// length for a new effect). An Extrude & Bevel, Inflate or Rotate is checked on the shapes after
+/// the geometry effects before that index. A Revolve on a fill or stroke is checked in that item's
+/// paint, after the item's geometry effects before it, together with the object's other items that
+/// carry a Revolve. A group's or layer's fills and strokes take no 3D effect: only the group's own
+/// effect draws.
+pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: (Option<usize>, usize)) -> Result<(), String> {
     validate_three_d_at_in(None, n, id, p, at)
 }
 
 /// [`validate_three_d_at`] with the symbols of `doc` ([`validate_solid_in`]). A symbol instance, a
 /// blend and a clipping group take a 3D effect as groups do: on the object itself.
-pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: (Option<usize>, usize)) -> Result<(), String> {
     graphics::validate(id, p)?;
     match at {
-        Some(_) if is_container(n) || source::resolves(n) => {
+        (Some(_), _) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
-        Some((item, index)) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
-        Some((item, _)) => validate_solid_for(doc, n, id, p, Some(item)),
-        None => validate_three_d_in(doc, n, id, p),
+        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
+        (None, _) if crate::revolve::is_revolve(id) => crate::revolve::validate_in(doc, n, id, p),
+        (item, index) => validate_solid_for(doc, n, id, p, (item, Some(index))),
     }
 }
 
@@ -655,6 +685,55 @@ fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<Part<'_>>, Rect) {
         .collect();
     let bounds = parts.iter().filter_map(|(_, _, area, _, _, _)| area.bounds()).reduce(|a, c| a.union(c)).unwrap_or(fallback);
     (parts, bounds)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many solids [`built_solids`] has built on this thread, for the tests.
+    static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The solids Extrude & Bevel (Classic included) or Inflate `id` with parameters `p` builds from
+/// `parts` ([`solid_parts`]) about `bounds`, one result for each part in order, each built only as
+/// the iterator reaches it. A stroke's solid past its own limits is `None` (left out of the art, its
+/// faces not counted); a fill's is an error. The faces of the solids kept count together: once they
+/// pass `limit` ([`MAX_OBJECT_FACES`] for the art) the result is an error, and
+/// no later part is built. An error ends the iterator.
+fn built_solids<'a>(
+    id: &'a str,
+    p: &'a Value,
+    parts: &'a [Part<'a>],
+    bounds: Rect,
+    limit: usize,
+) -> impl Iterator<Item = Result<Option<Vec<Facet>>, String>> + 'a {
+    // Inflate's eye is placed for every puff together, as far away as the highest needs.
+    let mut inflated = (id == INFLATE).then(|| {
+        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
+        vectorcraft_three_d::inflate_each(&shapes, bounds, inflate_options(p), view_options(p))
+    });
+    let mut kept = 0usize;
+    let mut ended = false;
+    parts.iter().map_while(move |(item, _, area, rule, _, _)| {
+        if ended {
+            return None;
+        }
+        #[cfg(test)]
+        SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
+        let built = match inflated.as_mut() {
+            Some(each) => each.next().unwrap_or_else(|| Ok(vec![])),
+            None => facets(id, area, *rule, bounds, p),
+        };
+        let result = match built {
+            Ok(f) => {
+                kept = kept.saturating_add(f.len());
+                if kept > limit { Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()) } else { Ok(Some(f)) }
+            }
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => Ok(None),
+            Err(e) => Err(e),
+        };
+        ended = result.is_err();
+        Some(result)
+    })
 }
 
 /// What a face of one of the solids [`art_for`] draws in one order was built from: the facet's
@@ -1044,24 +1123,19 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
         return Some(if masks { masked(n.id, out) } else { out.into_iter().map(|(_, s)| s).collect() });
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    let built = if fx.id == INFLATE {
-        // One eye for every puff, as far away as the highest needs.
-        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-        vectorcraft_three_d::inflate_together(&shapes, bounds, inflate_options(&p), view_options(&p))
-    } else {
-        parts.iter().map(|(_, _, area, rule, _, _)| facets(&fx.id, area, *rule, bounds, &p)).collect()
-    };
     let mut solids = vec![];
-    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(built) {
+    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES)) {
         let item: &AppearanceItem = item;
         match f {
-            Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => return None,
-            Ok(f) => solids.push((item, *opacity, *scopes, f, *member)),
+            Ok(Some(f)) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => {
+                return None;
+            }
+            Ok(Some(f)) => solids.push((item, *opacity, *scopes, f, *member)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
-            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
-            // A loaded file or a shape edited past the limits keeps drawing its source path
-            // instead of failing the frame; commands validate the same evaluator and report its
-            // errors.
+            Ok(None) => {}
+            // A loaded file or a shape edited past the limits (its own, or those of the object's
+            // solids together) keeps drawing its source path instead of failing the frame;
+            // commands validate the same evaluator and report its errors.
             Err(_) => return None,
         }
     }
@@ -1435,15 +1509,26 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
+    // The solids the art draws, past the limits of the object's solids together as it is
+    // ([`built_solids`]), each built and its faces counted as the loop reaches it, then dropped.
+    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
     // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
     // solid and its mesh are built as the loop reaches them.
     let mut inflated = (fx.id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
         vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
     });
-    let extrude = extrude_options(&p);
-    for (item, member, area, rule, _, _) in &parts {
+    let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
+    for ((item, member, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
         let item: &AppearanceItem = item;
+        if !drawn? {
+            // A stroke the art leaves out is left out of the meshes too; Inflate's next puff
+            // still belongs to the next part.
+            if let Some(built) = inflated.as_mut() {
+                built.next();
+            }
+            continue;
+        }
         let mesh = match inflated.as_mut() {
             Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
             None => vectorcraft_three_d::extrude_mesh(area, *rule, bounds, extrude, view),

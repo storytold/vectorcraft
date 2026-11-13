@@ -33,8 +33,8 @@ pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
-    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
-    charge_symbol_art,
+    EditedNineSlice, MAX_GUIDE_FRACTION, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE,
+    SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
@@ -265,8 +265,8 @@ pub struct Document {
     /// File → Document Setup (bleed, transparency grid, paper, type options).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub setup: DocSetup,
-    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers (by name)
-    /// they were copied from instead of the current layer.
+    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers and
+    /// sublayers they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
     /// File → File Info (its title is [`Document::info_title`]).

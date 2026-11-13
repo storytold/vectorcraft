@@ -3739,6 +3739,7 @@ theme	Appearance	Izgled
 	Enable Missing Glyph Protection	Omogući zaštitu od nedostajućih glifova
 	Enable Rubber Band for	Omogući gumenu traku za
 	Enable Touch Gestures	Omogući pokrete dodirom
+	Switch Selection and Drawing Modes	Prebaci između načina odabira i crtanja
 	Enable Touch Workspace	Omogući radni prostor za dodir
 	English: UK	Engleski: UK
 	Every (minutes)	Svakih (minuta)
@@ -4566,6 +4567,7 @@ imageTrace	Outline	Obris
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` mora biti cijeli broj između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` mora biti između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be one of {_1}	`{key}` mora biti jedno od {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` mora biti jedno od {_1}, a ne {got}
 @msg	`{key}` must be true or false	`{key}` mora biti true ili false
 @msg	`top` and `below` can't both be true	`top` i `below` ne mogu oba biti true
 @msg	`select` must be true or false	`select` mora biti true ili false
