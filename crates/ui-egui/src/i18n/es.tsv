@@ -5819,6 +5819,7 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{path}`; it takes: {keys}	parámetro desconocido `{path}`; acepta: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` debe ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` está anidado a demasiada profundidad
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
@@ -6365,6 +6366,16 @@ axis	Y Axis	Eje Y
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
 	Insert Menu Item…	Insertar elemento de menú…
 	Insert Menu Item	Insertar elemento de menú
+	Select Object…	Seleccionar objeto…
+	Select Object	Seleccionar objeto
+	Set Selection	Definir selección
+	Case Sensitive	Distinguir mayúsculas y minúsculas
+	Whole Word	Palabra completa
+	Select Object: {note}	Seleccionar objeto: {note}
+	Select by Note	Seleccionar por nota
+@msg	the note is empty	la nota está vacía
+@msg	the note is longer than 1,024 bytes	la nota ocupa más de 1024 bytes
+@msg	no object that can be selected has a note matching “{query}”	ningún objeto que se pueda seleccionar tiene una nota que coincida con “{query}”
 	Menu Item:	Elemento de menú:
 	No menu item matches.	Ningún elemento de menú coincide.
 	Several menu items match. Choose one from the list.	Coinciden varios elementos de menú. Elija uno de la lista.

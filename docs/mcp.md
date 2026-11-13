@@ -1795,6 +1795,11 @@ path to a value inside a list or an object, and the document and its undo histor
 → invalid parameters for `view.saved.edit`: `edits[0].delete` must be true or false, not 1
 ```
 
+A schema nests at most 16 lists and objects. A value that would go past that depth is refused with the same kind of
+parameter error, ``invalid parameters for `<id>`: `<path>` is nested too deeply``, where `<path>` is the path to the
+value. A schema that is wrong in itself, such as one that nests past 16 levels or puts a list of ids or a point
+inside 16 lists, is an internal error in the command, and the command does not run.
+
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
 more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3
@@ -2982,13 +2987,14 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1, 2 or 3, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  `{"format": "vcactions", "version": 1 to 4, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
-  `{message, allowContinue}`. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with stops use version 3, and files with excluded steps and no stops
-  use version 2, so older builds refuse them
-  instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
-  1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
+  wholeWord}`. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with Select Object steps use version 4, files with stops and no
+  Select Object step use version 3, and files with excluded steps and neither use version 2, so older builds refuse them
+  instead of playing the excluded steps or failing at a stop or a Select Object step; other files use version 1. A file with another `format` or a `version` other than
+  1 to 4, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
   less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
@@ -3081,6 +3087,28 @@ already walks Image Trace. Short agent entry points:
   `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
   Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
   OK runs this.
+- Actions: `ui.action.insertSelectObject {set?, action?, step?, note, caseSensitive?, wholeWord?}` inserts a Select
+  Object step without running it. The step is `select.byNote {note, caseSensitive, wholeWord}`: during playback it
+  selects the objects whose Attributes note matches `note`, and the steps after it act on them. `note` loses its
+  leading and trailing spaces and must then be 1 to 1,024 bytes; `caseSensitive` and `wholeWord` default to false. The
+  place, the selected step and the result are as `ui.action.insertStop` has them. A missing or empty note, a param of
+  another type, params that are not an object, an index past the last set, action or step, no action and no
+  recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB is an
+  error, and then nothing changes. When the step finds no object, the playback stops there with that error: at
+  Accelerated the whole batch is undone as for any failing step, and at Step by Step and Pause For the steps already
+  played stay. The panel's row for the step reads `Select Object: <note>`. The panel menu's Select Object… opens the
+  `actionSelectObject` dialog, Set Selection (`note`, `caseSensitive`, `wholeWord`, `set`, `action`, `step`), whose OK
+  runs this; OK is off while the note is empty. The two options, the 1,024-byte limit and stopping when nothing is
+  found are VectorCraft's own rules.
+- Select: `select.byNote {note, caseSensitive?, wholeWord?}` selects the objects whose Attributes note
+  (`attributes.set {note}`) holds `note` without its leading and trailing spaces, and returns `{count, ids}`. By default
+  the text may be anywhere in the note and in any letter case. `caseSensitive: true` asks for the same letter case, and
+  `wholeWord: true` for no letter, digit or `_` right before or after the text. It looks at the objects Select All
+  takes and the objects inside them, and leaves out hidden and locked objects and art on a locked artboard; in
+  isolation mode it looks inside the isolated group only. An object whose note matches is selected without the objects
+  inside it, and a member whose note matches is selected on its own. The objects found replace the selection, in paint
+  order. The command makes no undo step, and Select › Reselect repeats it. An empty note, a note longer than 1,024
+  bytes, a param of another type, or no object found is an error, and then the selection stays as it was.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
@@ -4293,7 +4321,10 @@ document's raster effects resolution (shadows and outer glows under the art; a b
 the object with the image). Type with a geometry effect (Outline Object included) or with fills and strokes of its own
 is outlined; type that has no fills or strokes of its own and whose only effects are shadows or outer glows stays
 type, with the image under it. A group's or layer's own fills and strokes become objects among its members, and its
-members are expanded too. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
+and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
+stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
+rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
@@ -4817,8 +4848,9 @@ the curve at an end), and the neighbours' handles keep their directions (their l
 moved there: the tool's click-and-drag on a segment). `op: "extend"` with `x`, `y` goes on from the `end` (default)
 or the `start` of an open subpath (the new end curves into the path unless `corner` is true), and `op: "close"` closes it from that end; `from` says how the old end bends into
 the new segment: `"keep"` (default) keeps its curve, `"smooth"` curves it through its neighbours (a point the tool
-placed), `"corner"` leaves it without handles. Alt-click or double-click toggles a point with `path.convertAnchor`, and
-Backspace/Delete removes the current point with `path.removeAnchor`.
+placed), `"corner"` leaves it without handles. Double-click, or Alt-click on any point but an end of an open subpath,
+toggles a point with `path.convertAnchor`; an Alt-click on an end of an open subpath only makes it the current point
+(`select.anchors`), so the next click extends from it. Backspace/Delete removes the current point with `path.removeAnchor`.
 
 ```json
 {"name":"run_command","arguments":{"command":"path.curvatureEdit","params":{"id":12,"op":"move","anchor":2,"x":260,"y":140}}}
@@ -5883,8 +5915,11 @@ The profile is read on every `file.new`, so a replayed journal or a recorded act
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
 When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
 folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. In
-the New Document dialog, Manage Profiles lists the profiles with Edit and Reset buttons. Edit is available only when
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
+file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
+adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
+profile's file until the document is saved. In the New Document dialog, Manage Profiles lists the profiles with Edit and Reset buttons. Edit is available only when
 there is a profiles folder, and Reset only for a profile that has a file. An unknown profile name is an error that
 lists the names.
 
