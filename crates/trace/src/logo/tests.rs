@@ -919,3 +919,242 @@ fn an_outline_fitted_without_area_is_left_out() {
         }
     }
 }
+
+/// A black disc and a gray square on white, the gray lying on the line from black to white: the
+/// disc's edge pixels are blends of black and white, so the gray is one shape (the square) and no
+/// gray lines the disc. Colors found and named exactly, the darker gray also named 52 levels off;
+/// sharp and soft edges.
+#[test]
+fn a_gray_between_black_and_white_is_one_shape() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [200, 200, 200]] {
+        for blur in [0.0, 0.6] {
+            let img = render(120, 60, blur, |x, y| {
+                Some(if (x - 30.0).hypot(y - 30.0) <= 20.0 {
+                    INK
+                } else if (60.0..=110.0).contains(&x) && (10.0..=50.0).contains(&y) {
+                    gray
+                } else {
+                    WHITE
+                })
+            });
+            // (A gray of 230 named 52 levels darker lies nearer white than its name, and is traced as white.)
+            let offs: &[Option<u8>] = if gray[0] == 200 { &[None, Some(0), Some(52)] } else { &[None, Some(0)] };
+            for &by in offs {
+                let (p, gray_name) = match by {
+                    None => (logo_params(), gray),
+                    Some(by) => {
+                        // Each name moved `by` levels toward mid-gray: the black lighter, the gray darker.
+                        let names = [INK.map(|v| v.saturating_add(by)), gray.map(|v| v.saturating_sub(by))];
+                        let logo_colors = names.iter().map(|c| format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])).collect();
+                        (TraceParams { logo_colors, ..logo_params() }, names[1])
+                    }
+                };
+                let what = format!("gray {gray:?}, blur {blur}, names moved {by:?}");
+                let res = trace(&img, &p);
+                let grays = res.paths.iter().filter(|t| t.color == gray_name).count();
+                let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+                assert_eq!(grays, 1, "{what}: {grays} gray paths; {paths:?}");
+                assert_eq!(top_color(&res, Point::new(85.0, 30.0)), Some(gray_name), "{what}: the square");
+                for k in 0..16 {
+                    let a = f64::from(k) * std::f64::consts::TAU / 16.0;
+                    let at = Point::new(30.0 + 20.0 * a.cos(), 30.0 + 20.0 * a.sin());
+                    assert_ne!(top_color(&res, at), Some(gray_name), "{what}: the disc's edge at {at:?}");
+                }
+            }
+        }
+    }
+}
+
+/// A one-pixel gray line between flat black and flat white, with the three colors named, stays a
+/// gray line along its whole length, beside a black disc whose edge pixels are as light as the gray.
+#[test]
+fn a_one_pixel_gray_line_between_black_and_white_stays_gray() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
+        let img = render(120, 80, 0.0, |x, y| {
+            Some(if x < 40.0 || (x - 90.0).hypot(y - 40.0) <= 15.0 {
+                INK
+            } else if x < 41.0 {
+                gray
+            } else {
+                WHITE
+            })
+        });
+        let logo_colors = vec!["#040403".into(), format!("#{:02X}{:02X}{:02X}", gray[0], gray[1], gray[2]), "#FFFFFF".into()];
+        let res = trace(&img, &TraceParams { logo_colors, ..logo_params() });
+        let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+        for y in 2..78 {
+            let at = Point::new(40.5, f64::from(y) + 0.5);
+            assert_eq!(top_color(&res, at), Some(gray), "gray {gray:?}: the line at {at:?}; {paths:?}");
+        }
+        for k in 0..16 {
+            let a = f64::from(k) * std::f64::consts::TAU / 16.0;
+            let at = Point::new(90.0 + 15.0 * a.cos(), 40.0 + 15.0 * a.sin());
+            assert_ne!(top_color(&res, at), Some(gray), "gray {gray:?}: the disc's edge at {at:?}");
+        }
+    }
+}
+
+/// A gray stroke 12 pixels long touching a black disc on white, with the three colors named: the
+/// stroke's pixels join the disc's edge pixels that are as light as the gray, but no gray lines the
+/// rest of the disc's edge, and a sharp stroke stays gray. Strokes two and three pixels wide outside
+/// the disc, on and off the pixel grid, sharp and soft. A soft stroke about two pixels wide that
+/// touches black is traced as black and white, and one about three pixels wide in part, so the
+/// stroke's own color is checked on sharp strokes.
+#[test]
+fn a_gray_stroke_touching_a_black_disc_leaves_its_edge_black_and_white() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
+        for blur in [0.0, 0.6] {
+            // The disc reaches x = 42 to 43 along the stroke's rows; each stroke starts inside it.
+            for (sx, wide) in [(41.0, 4.0), (41.5, 4.0), (41.0, 5.0)] {
+                let img = render(120, 60, blur, |x, y| {
+                    Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                        INK
+                    } else if (sx..sx + wide).contains(&x) && (22.0..34.0).contains(&y) {
+                        gray
+                    } else {
+                        WHITE
+                    })
+                });
+                let logo_colors = vec!["#040403".into(), format!("#{:02X}{:02X}{:02X}", gray[0], gray[1], gray[2]), "#FFFFFF".into()];
+                let res = trace(&img, &TraceParams { logo_colors, ..logo_params() });
+                let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+                let what = format!("gray {gray:?}, blur {blur}, stroke at {sx} {wide} px wide");
+                if blur == 0.0 {
+                    for y in 24..32 {
+                        let at = Point::new(sx + wide - 1.0, f64::from(y) + 0.5);
+                        assert_eq!(top_color(&res, at), Some(gray), "{what}: the stroke at {at:?}; {paths:?}");
+                    }
+                }
+                // Points on the disc's edge more than 30 degrees from the stroke (which spans about 20).
+                for k in 6..=58 {
+                    let a = f64::from(k) * std::f64::consts::TAU / 64.0;
+                    let at = Point::new(25.0 + 18.0 * a.cos(), 28.0 + 18.0 * a.sin());
+                    assert_ne!(top_color(&res, at), Some(gray), "{what}: the disc's edge at {at:?}; {paths:?}");
+                }
+            }
+        }
+    }
+}
+
+/// Stripes on white (black, a dark gray with a black disc on it, a light gray), with the colors
+/// named 52 levels off: each gray then lies on the line between two other names, and the dark
+/// stripe's rows beside white keep the stripe's color above and below the disc. Sharp and soft edges,
+/// with and without white named.
+#[test]
+fn a_gray_stripe_beside_white_keeps_its_color_beside_a_black_disc() {
+    const INK: [u8; 3] = [5, 5, 3];
+    for blur in [0.0, 0.6] {
+        let img = render(300, 160, blur, |x, y| {
+            let inside = |x0: f64, y0: f64, x1: f64, y1: f64| (x0..x1).contains(&x) && (y0..y1).contains(&y);
+            Some(if (x - 150.0).hypot(y - 80.0) <= 12.0 || inside(20.0, 20.0, 280.0, 50.0) {
+                INK
+            } else if inside(20.0, 65.0, 280.0, 95.0) {
+                [100, 100, 100]
+            } else if inside(20.0, 110.0, 280.0, 140.0) {
+                [190, 190, 190]
+            } else {
+                WHITE
+            })
+        });
+        for white in [false, true] {
+            let mut logo_colors: Vec<String> = ["#393937", "#989898", "#8A8A8A"].iter().map(|s| (*s).to_string()).collect();
+            if white {
+                logo_colors.push("#FFFFFF".into());
+            }
+            let res = trace(&img, &TraceParams { logo_colors, ..logo_params() });
+            let what = format!("blur {blur}, white named {white}");
+            let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+            let stripe = top_color(&res, Point::new(60.0, 80.0));
+            assert_ne!(stripe, Some([0x39, 0x39, 0x37]), "{what}: the stripe; {paths:?}");
+            for x in [140.0, 145.0, 150.0, 155.0, 160.0] {
+                for y in [65.5, 94.5] {
+                    assert_eq!(top_color(&res, Point::new(x, y)), stripe, "{what}: ({x}, {y}); {paths:?}");
+                }
+            }
+            if blur == 0.0 {
+                let inks = res.paths.iter().filter(|t| t.color == [0x39, 0x39, 0x37]).count();
+                assert_eq!(inks, 2, "{what}: {inks} paths in the black's name; {paths:?}");
+            }
+        }
+    }
+}
+
+/// Gray strokes two and three pixels wide on white (whole pixels of the gray), 3 and 4 px from a
+/// black disc, and a two-pixel stroke six pixels long, fewer pixels than a line needs to keep its
+/// class, 2 to 4.5 px from the disc: the strokes' pixels are blends of black and white too, but nothing
+/// darker than the gray lies beside them, and they stay gray.
+#[test]
+fn thin_gray_strokes_beside_black_stay_gray() {
+    const INK: [u8; 3] = [4, 4, 3];
+    for gray in [[230u8, 230, 230], [200, 200, 200]] {
+        for wide in [2.0, 3.0] {
+            let img = render(120, 60, 0.0, |x, y| {
+                Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
+                    INK
+                } else if ((47.0..47.0 + wide).contains(&x) && (8.0..50.0).contains(&y))
+                    || ((8.0..110.0).contains(&x) && (49.0..49.0 + wide).contains(&y))
+                    || ((44.0..46.0).contains(&x) && (16.0..22.0).contains(&y))
+                {
+                    gray
+                } else {
+                    WHITE
+                })
+            });
+            let logo_colors = vec!["#040403".into(), format!("#{:02X}{:02X}{:02X}", gray[0], gray[1], gray[2])];
+            let res = trace(&img, &TraceParams { logo_colors, ..logo_params() });
+            let what = format!("gray {gray:?}, {wide} px strokes");
+            let short = (17..21).map(|y| Point::new(45.0, f64::from(y) + 0.5));
+            let long = [Point::new(47.0 + wide / 2.0, 20.0), Point::new(47.0 + wide / 2.0, 30.0), Point::new(25.0, 49.0 + wide / 2.0)];
+            for at in long.into_iter().chain(short) {
+                let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+                assert_eq!(top_color(&res, at), Some(gray), "{what}: {at:?}; {paths:?}");
+            }
+        }
+    }
+}
+
+/// A sharp black disc and a mid-gray square on white, with up to 2 levels of noise added to each
+/// pixel: the edge pixels as light as the gray, read as blends of black and white, still count as
+/// unblended when judging whether the source is aliased, so the trace is softened as without them
+/// and no gray lines the disc.
+#[test]
+fn a_noisy_hard_edged_gray_between_black_and_white_is_one_shape() {
+    const GRAY: [u8; 3] = [128, 128, 128];
+    let mut img = render(120, 60, 0.0, |x, y| {
+        Some(if (x - 30.0).hypot(y - 30.0) <= 20.0 {
+            [0, 0, 0]
+        } else if (60.0..=110.0).contains(&x) && (10.0..=50.0).contains(&y) {
+            GRAY
+        } else {
+            WHITE
+        })
+    });
+    for (i, px) in img.rgba.chunks_mut(4).enumerate() {
+        let mut h = (i as u64 ^ 0x9E37_79B9_7F4A_7C15).wrapping_mul(0x2545_F491_4F6C_DD1D);
+        h ^= h >> 29;
+        let d = (h % 5) as i32 - 2;
+        for c in px.iter_mut().take(3) {
+            *c = (i32::from(*c) + d).clamp(0, 255) as u8;
+        }
+    }
+    for named in [false, true] {
+        let p = if named {
+            TraceParams { logo_colors: vec!["#000000".into(), "#808080".into(), "#FFFFFF".into()], ..logo_params() }
+        } else {
+            logo_params()
+        };
+        let res = trace(&img, &p);
+        let paths: Vec<_> = res.paths.iter().map(|t| (t.color, t.pixels)).collect();
+        let grays = res.paths.iter().filter(|t| t.color == GRAY).count();
+        assert_eq!(grays, 1, "named {named}: {grays} gray paths; {paths:?}");
+        assert_eq!(top_color(&res, Point::new(85.0, 30.0)), Some(GRAY), "named {named}: the square");
+        for k in 0..16 {
+            let a = f64::from(k) * std::f64::consts::TAU / 16.0;
+            let at = Point::new(30.0 + 20.0 * a.cos(), 30.0 + 20.0 * a.sin());
+            assert_ne!(top_color(&res, at), Some(GRAY), "named {named}: the disc's edge at {at:?}; {paths:?}");
+        }
+    }
+}
