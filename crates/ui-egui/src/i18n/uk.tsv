@@ -4246,6 +4246,85 @@ axis	Both	Обидві
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
+@msg	Script file access denied	Доступ до файлу скрипта заборонено
+@msg	Script file exceeds 8 MiB	Файл скрипта перевищує 8 МіБ
+@msg	Script file is not open	Файл скрипта не відкрито
+@msg	Script file cannot be decoded	Не вдається декодувати файл скрипта
+@msg	Script file is not a regular file	Файл скрипта не є звичайним файлом
+@msg	Script file does not exist	Файл скрипта не існує
+@msg	Script file could not be read	Не вдалося прочитати файл скрипта
+@msg	Script folder has more than 2,048 entries	Тека скрипта має понад 2048 елементів
+@msg	Script file open mode must be r, w, e or a	Режим відкриття файлу скрипта має бути r, w, e або a
+@msg	Script file writing is not available	Запис файлів скрипта недоступний
+@msg	Script file dialogs are not available	Діалогові вікна файлів скрипта недоступні
+@msg	Script files cannot be opened in another application	Файли скрипта не можна відкрити в іншому застосунку
+@msg	Script file access is unavailable on the web	Доступ до файлів скрипта у вебверсії недоступний
+@msg	Script has 256 files open	Скрипт має 256 відкритих файлів
+@msg	Script file path exceeds 32,767 characters	Шлях до файлу скрипта довший за 32 767 символів
+@msg	Script folder mask takes too many steps to match	Зіставлення маски теки скрипта потребує забагато кроків
+@msg	the script opened more file data than one run may open (32 MiB)	скрипт відкрив більше даних файлів, ніж може відкрити один запуск (32 МіБ)
+@msg	File.seek: takes a position and a mode	File.seek: приймає позицію і режим
+@msg	vc.run: give a command id, as a string	vc.run: укажіть ідентифікатор команди як рядок
+@msg	vc.run: takes a command id and an object of parameters	vc.run: приймає ідентифікатор команди та об’єкт параметрів
+@msg	vc.run: the parameters must be an object	vc.run: параметри мають бути об’єктом
+@msg	vc.run: the result{place} is too large for a script	vc.run: результат{place} завеликий для скрипта
+@msg	$.evalFile requires a file path	$.evalFile потребує шляху до файлу
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут має бути скінченним числом мілісекунд, 0 або більше
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: приймає шлях до файлу і тайм-аут
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: рядок {line}, стовпець {column} у {file}: {e} (виняток)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: рядок {line}, стовпець {column}: {e} (виняток)
+@msg	{name}: {e} (thrown)	{name}: {e} (виняток)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: рядок {line}, стовпець {column} у {file}: {e} (обмеження)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: рядок {line}, стовпець {column}: {e} (обмеження)
+@msg	{name}: {e} (limit)	{name}: {e} (обмеження)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: рядок {line}, стовпець {column} у {file}: {e} (синтаксична помилка)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: рядок {line}, стовпець {column}: {e} (синтаксична помилка)
+@msg	{name}: {e} (syntax)	{name}: {e} (синтаксична помилка)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: рядок {line}, стовпець {column} у {file}: {e} (зупинено)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: рядок {line}, стовпець {column}: {e} (зупинено)
+@msg	{name}: {e} (stopped)	{name}: {e} (зупинено)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: рядок {line}, стовпець {column} у {file}: {e} (внутрішня помилка)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: рядок {line}, стовпець {column}: {e} (внутрішня помилка)
+@msg	{name}: {e} (internal)	{name}: {e} (внутрішня помилка)
+@msg	{e} (these files stay written: {paths})	{e} (ці файли залишаються записаними: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: укажіть ім'я як рядок
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: укажіть локаль, наприклад "en" або "de_DE", або null для локалі інтерфейсу
+@msg	$.localize: give true or false	$.localize: укажіть true або false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: можна встановити лише 512, яке вмикає локалізацію, або 0
+@msg	$.flags: give a number	$.flags: укажіть число
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: тут скрипти читають і записують лише UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: укажіть назву кодування як рядок
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: розмір кешу пам'яті не можна встановити
+@msg	$.setenv: give a value, as a string	$.setenv: укажіть значення як рядок
+@msg	$.setenv: only {_1} can be set	$.setenv: можна встановити лише {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: значення має щонайбільше {MAX_ENV_BYTES} літер, цифр і знаків _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: укажіть кількість мілісекунд від 0 до {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: укажіть кількість мілісекунд
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: запуск не може чекати всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте її з власного коду скрипту
+@msg	$.bp: scripts here have no debugger	$.bp: тут у скриптів немає налагоджувача
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: скрипти поки не можуть показувати діалогове вікно
+@msg	{name}: give a message	{name}: укажіть повідомлення
+@msg	{name}: give the text the field starts with	{name}: укажіть текст, з якого починається поле
+@msg	{name}: the message is longer than 16 KiB	{name}: повідомлення довше за 16 КіБ
+@msg	{name}: the title is longer than 256 bytes	{name}: заголовок довший за 256 байтів
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: текст, з якого починається поле, довший за 16 КіБ
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: діалогове вікно не може відкритися всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: наступна відповідь у `answers` призначена для {_1}, а не для {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: у `answers` не залишилося відповіді для цього діалогового вікна
+@msg	vc.document{place} is too large for a script	vc.document{place} завеликий для скрипту
+@msg	vc.log: the log of this run is full	vc.log: журнал цього запуску заповнений
+@msg	this function's script run has ended	запуск скрипту цієї функції завершився
+@msg	the script made more host calls than one run may make	скрипт зробив більше викликів хоста, ніж дозволено одному запуску
+@msg	the script passed more data to and from commands than one run may pass	скрипт передав командам і отримав від них більше даних, ніж дозволено одному запуску
+@msg	the script added more objects and data to the documents than one run may add	скрипт додав до документів більше об'єктів і даних, ніж дозволено одному запуску
+@msg	{what}: the object is not a File or a Folder	{what}: об'єкт не є ні File, ні Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: кількість має бути скінченним числом, 0 або більше
+@msg	File.seek: the position must be a finite number	File.seek: позиція має бути скінченним числом
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: режим має бути 0, 1 або 2
+@msg	script file is compiled: {value}	файл скрипту скомпільований: {value}
+@msg	`name` must be the name of a script engine	`name` має бути назвою рушія скриптів
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	основний рушій скриптів створюється наново для кожного запуску й ніколи не зберігається, тому його не можна видалити
+@msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру

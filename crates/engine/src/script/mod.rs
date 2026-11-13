@@ -2179,8 +2179,8 @@ fn failure_text(report: &Value) -> String {
     let s = |k: &str| report[k].as_str().unwrap_or_default();
     let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
     let at = match report["file"].as_str() {
-        Some(file) if line > 0 => format!(" line {line}, column {column} of {file}"),
-        _ if line > 0 => format!(" line {line}, column {column}"),
+        Some(file) if line > 0 => format!(": line {line}, column {column} of {file}"),
+        _ if line > 0 => format!(": line {line}, column {column}"),
         _ => String::new(),
     };
     let written = report["written"].as_array().map_or(0, Vec::len);
@@ -2190,7 +2190,7 @@ fn failure_text(report: &Value) -> String {
     } else {
         String::new()
     };
-    format!("{}:{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
+    format!("{}{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
 }
 
 /// A run's slice: the working copy in, the real session lent to the host functions, one measured

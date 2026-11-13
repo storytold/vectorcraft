@@ -4135,6 +4135,85 @@ theme	Appearance	Erscheinungsbild
 @msg	the script's run is no longer available	der Lauf des Skripts ist nicht mehr verfügbar
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ein fehlgeschlagener Befehl hat Rückgängig-Schritte geändert, die nicht wiederhergestellt werden konnten, daher wurde das Skript angehalten
 @msg	a recovery copy could not be written, so the script was not run	eine Wiederherstellungskopie konnte nicht geschrieben werden, daher wurde das Skript nicht ausgeführt
+@msg	Script file access denied	Zugriff auf die Skriptdatei verweigert
+@msg	Script file exceeds 8 MiB	Die Skriptdatei ist größer als 8 MiB
+@msg	Script file is not open	Die Skriptdatei ist nicht geöffnet
+@msg	Script file cannot be decoded	Die Skriptdatei kann nicht dekodiert werden
+@msg	Script file is not a regular file	Die Skriptdatei ist keine reguläre Datei
+@msg	Script file does not exist	Die Skriptdatei existiert nicht
+@msg	Script file could not be read	Die Skriptdatei konnte nicht gelesen werden
+@msg	Script folder has more than 2,048 entries	Der Skriptordner hat mehr als 2.048 Einträge
+@msg	Script file open mode must be r, w, e or a	Der Öffnungsmodus der Skriptdatei muss r, w, e oder a sein
+@msg	Script file writing is not available	Das Schreiben von Skriptdateien ist nicht verfügbar
+@msg	Script file dialogs are not available	Dateidialoge für Skripte sind nicht verfügbar
+@msg	Script files cannot be opened in another application	Skriptdateien können nicht in einer anderen Anwendung geöffnet werden
+@msg	Script file access is unavailable on the web	Der Zugriff auf Skriptdateien ist im Web nicht verfügbar
+@msg	Script has 256 files open	Das Skript hat 256 Dateien geöffnet
+@msg	Script file path exceeds 32,767 characters	Der Pfad der Skriptdatei ist länger als 32.767 Zeichen
+@msg	Script folder mask takes too many steps to match	Der Abgleich der Maske des Skriptordners braucht zu viele Schritte
+@msg	the script opened more file data than one run may open (32 MiB)	das Skript hat mehr Dateidaten geöffnet, als ein Lauf öffnen darf (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: nimmt eine Position und einen Modus
+@msg	vc.run: give a command id, as a string	vc.run: Geben Sie eine Befehls-ID als Zeichenfolge an
+@msg	vc.run: takes a command id and an object of parameters	vc.run: nimmt eine Befehls-ID und ein Objekt mit Parametern
+@msg	vc.run: the parameters must be an object	vc.run: Die Parameter müssen ein Objekt sein
+@msg	vc.run: the result{place} is too large for a script	vc.run: Das Ergebnis{place} ist zu groß für ein Skript
+@msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
+@msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (Grenze)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: Zeile {line}, Spalte {column}: {e} (Grenze)
+@msg	{name}: {e} (limit)	{name}: {e} (Grenze)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (Syntaxfehler)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: Zeile {line}, Spalte {column}: {e} (Syntaxfehler)
+@msg	{name}: {e} (syntax)	{name}: {e} (Syntaxfehler)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (gestoppt)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: Zeile {line}, Spalte {column}: {e} (gestoppt)
+@msg	{name}: {e} (stopped)	{name}: {e} (gestoppt)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (interner Fehler)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: Zeile {line}, Spalte {column}: {e} (interner Fehler)
+@msg	{name}: {e} (internal)	{name}: {e} (interner Fehler)
+@msg	{e} (these files stay written: {paths})	{e} (diese Dateien bleiben geschrieben: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: Geben Sie einen Namen als Zeichenfolge an
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: Geben Sie ein Gebietsschema wie "en" oder "de_DE" an, oder null für das der Oberfläche
+@msg	$.localize: give true or false	$.localize: Geben Sie true oder false an
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: Nur 512, das die Lokalisierung einschaltet, oder 0 kann gesetzt werden
+@msg	$.flags: give a number	$.flags: Geben Sie eine Zahl an
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: Skripte lesen und schreiben hier nur UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: Geben Sie den Namen einer Kodierung als Zeichenfolge an
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: Die Größe des Speichercaches kann nicht gesetzt werden
+@msg	$.setenv: give a value, as a string	$.setenv: Geben Sie einen Wert als Zeichenfolge an
+@msg	$.setenv: only {_1} can be set	$.setenv: Nur {_1} können gesetzt werden
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: Ein Wert hat höchstens {MAX_ENV_BYTES} Buchstaben, Ziffern und _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: Geben Sie eine Anzahl von Millisekunden von 0 bis {MAX_SLEEP_MS} an
+@msg	$.sleep: give a number of milliseconds	$.sleep: Geben Sie eine Anzahl von Millisekunden an
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: Ein Lauf kann nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei warten, die $.evalFile ausführt; rufen Sie es aus dem eigenen Code des Skripts auf
+@msg	$.bp: scripts here have no debugger	$.bp: Skripte haben hier keinen Debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: Skripte können noch keinen Dialog anzeigen
+@msg	{name}: give a message	{name}: Geben Sie eine Meldung an
+@msg	{name}: give the text the field starts with	{name}: Geben Sie den Text an, mit dem das Feld beginnt
+@msg	{name}: the message is longer than 16 KiB	{name}: Die Meldung ist länger als 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: Der Titel ist länger als 256 Byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: Der Text, mit dem das Feld beginnt, ist länger als 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: Ein Dialog kann sich nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei öffnen, die $.evalFile ausführt; rufen Sie ihn aus dem eigenen Code des Skripts auf
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: Die nächste Antwort in `answers` ist für {_1}, nicht für {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` hat keine Antwort mehr für diesen Dialog
+@msg	vc.document{place} is too large for a script	vc.document{place} ist zu groß für ein Skript
+@msg	vc.log: the log of this run is full	vc.log: Das Protokoll dieses Laufs ist voll
+@msg	this function's script run has ended	der Skriptlauf dieser Funktion ist beendet
+@msg	the script made more host calls than one run may make	das Skript hat mehr Host-Aufrufe ausgeführt, als ein Lauf ausführen darf
+@msg	the script passed more data to and from commands than one run may pass	das Skript hat mehr Daten an Befehle und von Befehlen übergeben, als ein Lauf übergeben darf
+@msg	the script added more objects and data to the documents than one run may add	das Skript hat den Dokumenten mehr Objekte und Daten hinzugefügt, als ein Lauf hinzufügen darf
+@msg	{what}: the object is not a File or a Folder	{what}: Das Objekt ist weder ein File noch ein Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: Die Anzahl muss eine endliche Zahl sein, 0 oder mehr
+@msg	File.seek: the position must be a finite number	File.seek: Die Position muss eine endliche Zahl sein
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: Der Modus muss 0, 1 oder 2 sein
+@msg	script file is compiled: {value}	die Skriptdatei ist kompiliert: {value}
+@msg	`name` must be the name of a script engine	`name` muss der Name einer Skript-Engine sein
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	die Hauptskript-Engine ist für jeden Lauf neu und wird nie behalten, daher kann sie nicht verworfen werden
+@msg	there is no script engine named {name}	es gibt keine Skript-Engine namens {name}
 @msg	Running a script	Skript wird ausgeführt
 @msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads

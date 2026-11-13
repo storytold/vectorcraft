@@ -4703,6 +4703,85 @@ imageTrace	Outline	轮廓
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Script file access denied	脚本文件访问被拒绝
+@msg	Script file exceeds 8 MiB	脚本文件超过 8 MiB
+@msg	Script file is not open	脚本文件未打开
+@msg	Script file cannot be decoded	无法解码脚本文件
+@msg	Script file is not a regular file	脚本文件不是常规文件
+@msg	Script file does not exist	脚本文件不存在
+@msg	Script file could not be read	无法读取脚本文件
+@msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
+@msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
+@msg	Script file writing is not available	脚本文件写入不可用
+@msg	Script file dialogs are not available	脚本文件对话框不可用
+@msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
+@msg	Script file access is unavailable on the web	网页版无法访问脚本文件
+@msg	Script has 256 files open	脚本已打开 256 个文件
+@msg	Script file path exceeds 32,767 characters	脚本文件路径超过 32,767 个字符
+@msg	Script folder mask takes too many steps to match	脚本文件夹掩码匹配所需步骤过多
+@msg	the script opened more file data than one run may open (32 MiB)	脚本打开的文件数据超过了单次运行可打开的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一个位置和一个模式
+@msg	vc.run: give a command id, as a string	vc.run：请以字符串形式提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一个命令 ID 和一个参数对象
+@msg	vc.run: the parameters must be an object	vc.run：参数必须是对象
+@msg	vc.run: the result{place} is too large for a script	vc.run：结果{place}对脚本来说过大
+@msg	$.evalFile requires a file path	$.evalFile 需要文件路径
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：超时必须是 0 或更大的有限毫秒数
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一个文件路径和一个超时值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: {e} (thrown)	{name}：{e}（抛出）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: {e} (syntax)	{name}：{e}（语法错误）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: {e} (internal)	{name}：{e}（内部错误）
+@msg	{e} (these files stay written: {paths})	{e}（这些文件保持已写入状态：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：请以字符串形式提供名称
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：请提供 "en" 或 "de_DE" 之类的区域设置，或用 null 表示界面的区域设置
+@msg	$.localize: give true or false	$.localize：请提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能设置 512（开启本地化）或 0
+@msg	$.flags: give a number	$.flags：请提供一个数字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此处脚本只读写 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：请以字符串形式提供编码名称
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：无法设置内存缓存大小
+@msg	$.setenv: give a value, as a string	$.setenv：请以字符串形式提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能设置 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 个字母、数字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：请提供 0 到 {MAX_SLEEP_MS} 之间的毫秒数
+@msg	$.sleep: give a number of milliseconds	$.sleep：请提供毫秒数
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：运行不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中等待；请从脚本自身的代码中调用
+@msg	$.bp: scripts here have no debugger	$.bp：此处脚本没有调试器
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：脚本目前还不能显示对话框
+@msg	{name}: give a message	{name}：请提供消息
+@msg	{name}: give the text the field starts with	{name}：请提供字段的初始文本
+@msg	{name}: the message is longer than 16 KiB	{name}：消息超过 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：标题超过 256 字节
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：字段的初始文本超过 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：对话框不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中打开；请从脚本自身的代码中调用
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一个回答是给 {_1} 的，而不是给 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已没有此对话框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}对脚本来说过大
+@msg	vc.log: the log of this run is full	vc.log：本次运行的日志已满
+@msg	this function's script run has ended	此函数的脚本运行已结束
+@msg	the script made more host calls than one run may make	脚本进行的主机调用超过了一次运行允许的数量
+@msg	the script passed more data to and from commands than one run may pass	脚本与命令之间传递的数据超过了一次运行允许的数量
+@msg	the script added more objects and data to the documents than one run may add	脚本向文档添加的对象和数据超过了一次运行允许的数量
+@msg	{what}: the object is not a File or a Folder	{what}：该对象既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：数量必须是 0 或更大的有限数
+@msg	File.seek: the position must be a finite number	File.seek：位置必须是有限数
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必须是 0, 1 或 2
+@msg	script file is compiled: {value}	脚本文件已编译：{value}
+@msg	`name` must be the name of a script engine	`name` 必须是脚本引擎的名称
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主脚本引擎在每次运行时都是新的，从不保留，因此无法丢弃
+@msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}

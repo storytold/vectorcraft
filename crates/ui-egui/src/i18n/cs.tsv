@@ -4521,6 +4521,85 @@ imageTrace	Outline	Obrys
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
+@msg	Script file access denied	Přístup k souboru skriptu byl odepřen
+@msg	Script file exceeds 8 MiB	Soubor skriptu je větší než 8 MiB
+@msg	Script file is not open	Soubor skriptu není otevřen
+@msg	Script file cannot be decoded	Soubor skriptu nelze dekódovat
+@msg	Script file is not a regular file	Soubor skriptu není běžný soubor
+@msg	Script file does not exist	Soubor skriptu neexistuje
+@msg	Script file could not be read	Soubor skriptu se nepodařilo přečíst
+@msg	Script folder has more than 2,048 entries	Složka skriptu má více než 2 048 položek
+@msg	Script file open mode must be r, w, e or a	Režim otevření souboru skriptu musí být r, w, e nebo a
+@msg	Script file writing is not available	Zápis souborů skriptu není k dispozici
+@msg	Script file dialogs are not available	Dialogy souborů skriptu nejsou k dispozici
+@msg	Script files cannot be opened in another application	Soubory skriptu nelze otevřít v jiné aplikaci
+@msg	Script file access is unavailable on the web	Přístup k souborům skriptu není na webu k dispozici
+@msg	Script has 256 files open	Skript má otevřeno 256 souborů
+@msg	Script file path exceeds 32,767 characters	Cesta k souboru skriptu je delší než 32 767 znaků
+@msg	Script folder mask takes too many steps to match	Porovnání masky složky skriptu vyžaduje příliš mnoho kroků
+@msg	the script opened more file data than one run may open (32 MiB)	skript otevřel více dat ze souborů, než smí otevřít jeden běh (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: přijímá pozici a režim
+@msg	vc.run: give a command id, as a string	vc.run: zadejte ID příkazu jako řetězec
+@msg	vc.run: takes a command id and an object of parameters	vc.run: přijímá ID příkazu a objekt s parametry
+@msg	vc.run: the parameters must be an object	vc.run: parametry musí být objekt
+@msg	vc.run: the result{place} is too large for a script	vc.run: výsledek{place} je pro skript příliš velký
+@msg	$.evalFile requires a file path	$.evalFile vyžaduje cestu k souboru
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: časový limit musí být konečný počet milisekund, 0 nebo více
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: přijímá cestu k souboru a časový limit
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: řádek {line}, sloupec {column} v {file}: {e} (vyvolána výjimka)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: řádek {line}, sloupec {column}: {e} (vyvolána výjimka)
+@msg	{name}: {e} (thrown)	{name}: {e} (vyvolána výjimka)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: řádek {line}, sloupec {column} v {file}: {e} (omezení)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: řádek {line}, sloupec {column}: {e} (omezení)
+@msg	{name}: {e} (limit)	{name}: {e} (omezení)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: řádek {line}, sloupec {column} v {file}: {e} (syntaktická chyba)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: řádek {line}, sloupec {column}: {e} (syntaktická chyba)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaktická chyba)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: řádek {line}, sloupec {column} v {file}: {e} (zastaveno)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: řádek {line}, sloupec {column}: {e} (zastaveno)
+@msg	{name}: {e} (stopped)	{name}: {e} (zastaveno)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: řádek {line}, sloupec {column} v {file}: {e} (interní chyba)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: řádek {line}, sloupec {column}: {e} (interní chyba)
+@msg	{name}: {e} (internal)	{name}: {e} (interní chyba)
+@msg	{e} (these files stay written: {paths})	{e} (tyto soubory zůstávají zapsané: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: zadejte název jako řetězec
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: zadejte národní prostředí, například "en" nebo "de_DE", nebo null pro prostředí rozhraní
+@msg	$.localize: give true or false	$.localize: zadejte true nebo false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: lze nastavit jen 512, které zapíná lokalizaci, nebo 0
+@msg	$.flags: give a number	$.flags: zadejte číslo
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: skripty zde čtou a zapisují pouze UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: zadejte název kódování jako řetězec
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: velikost mezipaměti nelze nastavit
+@msg	$.setenv: give a value, as a string	$.setenv: zadejte hodnotu jako řetězec
+@msg	$.setenv: only {_1} can be set	$.setenv: lze nastavit pouze {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: hodnota má nejvýše {MAX_ENV_BYTES} písmen, číslic a znaků _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: zadejte počet milisekund od 0 do {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: zadejte počet milisekund
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: běh nemůže čekat uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
+@msg	$.bp: scripts here have no debugger	$.bp: skripty zde nemají ladicí program
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: skripty zatím nemohou zobrazit dialog
+@msg	{name}: give a message	{name}: zadejte zprávu
+@msg	{name}: give the text the field starts with	{name}: zadejte text, kterým pole začíná
+@msg	{name}: the message is longer than 16 KiB	{name}: zpráva je delší než 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: titulek je delší než 256 bajtů
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: text, kterým pole začíná, je delší než 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog se nemůže otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: další odpověď v `answers` je pro {_1}, ne pro {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` už nemá pro tento dialog žádnou odpověď
+@msg	vc.document{place} is too large for a script	vc.document{place} je pro skript příliš velký
+@msg	vc.log: the log of this run is full	vc.log: protokol tohoto běhu je plný
+@msg	this function's script run has ended	běh skriptu této funkce skončil
+@msg	the script made more host calls than one run may make	skript provedl více volání hostitele, než smí provést jeden běh
+@msg	the script passed more data to and from commands than one run may pass	skript předal příkazům a z příkazů více dat, než smí předat jeden běh
+@msg	the script added more objects and data to the documents than one run may add	skript přidal do dokumentů více objektů a dat, než smí přidat jeden běh
+@msg	{what}: the object is not a File or a Folder	{what}: objekt není File ani Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: počet musí být konečné číslo, 0 nebo více
+@msg	File.seek: the position must be a finite number	File.seek: pozice musí být konečné číslo
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: režim musí být 0, 1 nebo 2
+@msg	script file is compiled: {value}	soubor skriptu je zkompilovaný: {value}
+@msg	`name` must be the name of a script engine	`name` musí být název skriptovacího jádra
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
+@msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
