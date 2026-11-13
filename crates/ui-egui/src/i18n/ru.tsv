@@ -3628,6 +3628,8 @@ digits	Malayalam	Малаялам
 	Rename Library Group	Переименовать группу библиотеки
 	Delete Library Group	Удалить группу библиотеки
 	Move Library Item to Group	Переместить элемент библиотеки в группу
+	Rename Library Item	Переименовать элемент библиотеки
+	Add to Character Styles	Добавить в стили символов
 	Library	Библиотека
 	Rename Library	Переименовать библиотеку
 	Show Library	Показать библиотеку
@@ -4217,6 +4219,7 @@ axis	Both	Оба
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	нет библиотеки `{id}`
+@msg	the library has another item of that kind named `{name}`	в библиотеке уже есть другой элемент этого вида с именем `{name}`
 @msg	select some type first	сначала выделите текст
 @msg	kerning must be a number, "auto", or "optical"	kerning должен быть числом, «auto» или «optical»
 @msg	the selection has no gradient fill	у выделения нет градиентной заливки
