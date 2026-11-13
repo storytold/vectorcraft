@@ -499,8 +499,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG
-  Interactivity.
+  panel per context, context menus in the panels that have none, Layers row menu commands beyond Collect for
+  Export, and menus on guide and blend spine rows in the Layers panel.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
