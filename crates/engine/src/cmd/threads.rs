@@ -365,6 +365,11 @@ pub(crate) fn mark_continued(doc: &mut Document) {
 /// path; empty when `id` is in no thread or the thread has fewer than two such frames.
 pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
     let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    story_in(d, thread, id)
+}
+
+/// [`story_of`] for `id` in `thread`, the first of the document's threads that lists it.
+pub(crate) fn story_in(d: &Document, thread: &[NodeId], id: NodeId) -> Vec<NodeId> {
     let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
     if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
 }
