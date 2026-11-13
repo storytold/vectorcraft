@@ -572,6 +572,124 @@ fn an_object_opacity_a_series_mark_already_shows_replaces_the_kept_opacity() {
     assert!(spec(&s, id).series_paints.iter().all(|p| p.opacity.is_none()));
 }
 
+/// Randomize Opacity on marks of one series stores the opacity of the frontmost of them on the graph in the same undo
+/// step, and every mark of the series has it when the graph is drawn again.
+#[test]
+fn a_random_opacity_on_series_marks_survives_regeneration() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("addon.arrange.randomizeOpacity", &json!({"ids": [marks[1].0, marks[0].0], "min": 30, "max": 60, "seed": 7})).unwrap();
+    let front = s.doc().unwrap().doc.node(marks[1]).unwrap().opacity;
+    assert!(front < 1.0);
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(front));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(transparency_of(&s, id, 0).iter().all(|t| t.0 == front), "{:?}", transparency_of(&s, id, 0));
+    assert!(transparency_of(&s, id, 1).iter().all(|t| t.0 == 1.0), "{:?}", transparency_of(&s, id, 1));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(spec(&s, id).series_paints.is_empty(), "undo takes back the opacities and what the graph stored");
+}
+
+/// Sort Objects giving series marks new opacities stores the opacity of the frontmost of them on the graph, in place of
+/// the one another mark left there.
+#[test]
+fn an_opacity_sort_objects_gives_series_marks_survives_regeneration() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("object.setProps", &json!({"id": marks[2].0, "opacity": 30})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    // From left to right the three columns get 30%, 65% and 100%: the frontmost, the rightmost, is fully opaque.
+    let ids = [marks[0].0, marks[1].0, marks[2].0];
+    s.execute("addon.arrange.sort", &json!({"ids": ids, "by": "x", "apply": "opacity", "distribute": true})).unwrap();
+    let opacities: Vec<f32> = marks[..3].iter().map(|m| s.doc().unwrap().doc.node(*m).unwrap().opacity).collect();
+    assert_eq!(opacities, [0.3, 0.65, 1.0]);
+    assert_eq!(spec(&s, id).series_paints[0].opacity, None);
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(transparency_of(&s, id, 0).iter().all(|t| t.0 == 1.0), "{:?}", transparency_of(&s, id, 0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3), "undo takes back the sort and what the graph stored");
+}
+
+/// Sort Objects stores the opacity of the frontmost series mark whose opacity it changes: a mark in front that keeps its
+/// opacity leaves the stored value to the marks it changed.
+#[test]
+fn an_opacity_sort_objects_stores_the_frontmost_mark_it_changes() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 60})).unwrap();
+    s.execute("object.setProps", &json!({"id": marks[1].0, "opacity": 30})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    // From left to right the columns trade 60%, 30% and 100% for 30%, 60% and 100%: the frontmost keeps its 100%.
+    let ids = [marks[0].0, marks[1].0, marks[2].0];
+    s.execute("addon.arrange.sort", &json!({"ids": ids, "by": "x", "apply": "opacity"})).unwrap();
+    let opacities: Vec<f32> = marks[..3].iter().map(|m| s.doc().unwrap().doc.node(*m).unwrap().opacity).collect();
+    assert_eq!(opacities, [0.3, 0.6, 1.0]);
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.6));
+}
+
+/// An object opacity, blend mode, fill, stroke and weight that Global Edit gives a mark of another series from the mark
+/// that was edited are stored on the graph for that series in the same undo step, and every mark of the series has them
+/// when the graph is drawn again.
+#[test]
+fn what_global_edit_gives_series_marks_survives_regeneration() {
+    let (mut s, id, _, _) = column_marks();
+    // Equal values: the first column of each series has the same shape.
+    s.execute("graph.setData", &json!({"rows": [[3, 3], [5, 2]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let (first, other) = (series(&n, 0).children().unwrap()[0].id, series(&n, 1).children().unwrap()[0].id);
+    s.execute("object.isolate", &json!({"id": id.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+    let r = s.execute("select.globalEdit", &json!({})).unwrap();
+    assert!(r["ids"].as_array().unwrap().contains(&json!(other.0)), "{r}");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 40, "blend": "multiply"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#e8573f"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [first.0], "color": "#1f4e9c"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [first.0], "weight": 5})).unwrap();
+    let mark = s.doc().unwrap().doc.node(other).unwrap().clone();
+    assert_eq!((mark.opacity, mark.blend), (0.4, BlendMode::Multiply), "Global Edit reaches the other series' mark");
+    let kept = spec(&s, id).series_paints[1].clone();
+    assert_eq!((kept.opacity, kept.blend), (Some(0.4), Some(BlendMode::Multiply)));
+    assert_eq!(kept.fill, Some(mark.appearance.fill_paint()));
+    assert_eq!((kept.stroke, kept.stroke_width), (Some(mark.appearance.stroke_paint()), Some(5.0)));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let normal = BlendMode::Normal;
+    assert!(transparency_of(&s, id, 1).iter().all(|t| *t == (0.4, BlendMode::Multiply, normal, normal)), "{:?}", transparency_of(&s, id, 1));
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(series(&n, 1).children().unwrap().iter().all(|m| m.appearance.fill_paint() == mark.appearance.fill_paint()));
+    while s.doc().unwrap().history.undo.len() > steps {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(spec(&s, id).series_paints.iter().all(|p| *p == vectorcraft_doc::SeriesPaint::default()), "{:?}", spec(&s, id).series_paints);
+}
+
+/// With a whole series group picked and Global Edit on, the other series groups of the same form take the edit of its
+/// marks, and the graph stores it for their series too.
+#[test]
+fn what_global_edit_gives_the_marks_of_another_series_group_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    // Series without names draw no legend, so each series group holds only its columns, laid out like the other's.
+    let csv = ",,\nQ1,3,3\nQ2,5,5";
+    let made = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let (first, other) = (series(&n, 0).clone(), series(&n, 1).id);
+    s.execute("object.isolate", &json!({"id": id.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [first.id.0]})).unwrap();
+    let r = s.execute("select.globalEdit", &json!({})).unwrap();
+    assert!(r["ids"].as_array().unwrap().contains(&json!(other.0)), "{r}");
+    let marks: Vec<u64> = first.children().unwrap().iter().map(|m| m.id.0).collect();
+    s.execute("paint.setFill", &json!({"ids": marks, "color": "#e8573f"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let given = series(&n, 1).children().unwrap()[0].appearance.fill_paint();
+    assert_eq!(given, series(&n, 0).children().unwrap()[0].appearance.fill_paint(), "Global Edit reaches the other group");
+    assert_eq!(spec(&s, id).series_paints[1].fill, Some(given.clone()));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(series(&n, 1).children().unwrap().iter().all(|m| m.appearance.fill_paint() == given));
+}
+
 /// A blend mode set on the top fill or stroke row of one series mark is kept by the graph and drawn on every mark of
 /// the series again; Normal forgets it.
 #[test]
