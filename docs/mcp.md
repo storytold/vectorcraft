@@ -2948,7 +2948,10 @@ already walks Image Trace. Short agent entry points:
   is unused, and offers Remove Strokes or Cancel when one of them is in use.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?, newName?}`, `brush.delete {name} | {names}`,
-  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. `brush.new`,
+  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. A document or brush
+  library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
+  numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
+  brush. `brush.new`,
   `brush.duplicate` and `brush.options` trim the white space around the name they are given. A blank `name` gives
   the type's default name ("New Calligraphic Brush" for a calligraphic brush), and a blank `newName` gives
   "`<name>` copy" in `brush.duplicate` and keeps the name in `brush.options`. A Hue Shift `colorization` given to
