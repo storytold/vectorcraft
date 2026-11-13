@@ -3063,7 +3063,9 @@ already walks Image Trace. Short agent entry points:
   action set would be larger than 8 MiB`): it does not run, and the recording goes on. A batch (`command.batch`) is
   such a command too. A command whose step grows past a limit only as it runs, from values it adds to its step,
   keeps its edit and result; the status bar names the limit, later recorded commands do not run, and
-  `ui.action.stop` leaves its step out. A stop that playback reaches
+  `ui.action.stop` leaves its step out. So does a `script.run` whose commands, or a tool's or panel's edit whose
+  step, takes the recording past a limit: the status bar names the limit when the run or the edit ends, and
+  `ui.action.stop` keeps the steps that fit. A stop that playback reaches
   then is not recorded, and the status bar shows the reason. `ui.action.stop` leaves out any recorded steps still past
   either limit and shows which one in the status bar.
 - Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at

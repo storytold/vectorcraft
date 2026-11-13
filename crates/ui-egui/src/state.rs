@@ -632,6 +632,10 @@ pub struct UiState {
     /// ([`vectorcraft_engine::Journal::rewrites`]).
     #[serde(skip)]
     pub recording_tail: Option<(u64, usize, usize, usize)>,
+    /// The journal as the recording in progress last checked it against the limits of an action
+    /// set file: (its rewrites, its length) ([`crate::panels::actions::after_journaled_edit`]).
+    #[serde(skip)]
+    pub recording_checked: Option<(u64, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -1152,6 +1156,7 @@ impl Default for UiState {
             recording_into: None,
             recording_base: None,
             recording_tail: None,
+            recording_checked: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),
