@@ -17,7 +17,9 @@ pub(super) const CURVE_PIECES: u32 = 32;
 pub(super) const MIN_CURVE_PIECES: u32 = 4;
 
 const TOO_COMPLEX_SHAPE: &str = "The shape is too complex for a 3D effect";
-pub(super) const TOO_COMPLEX_SURFACE: &str = "The 3D surface is too complex; simplify the shape";
+/// The error a solid past its limits returns, and a 3D effect whose solids together pass
+/// [`crate::MAX_OBJECT_FACES`].
+pub const TOO_COMPLEX_SURFACE: &str = "The 3D surface is too complex; simplify the shape";
 
 /// How many straight pieces follow `c` within `tolerance` (Wang's bound on a cubic's distance from
 /// its chords), 1 to [`CURVE_PIECES`].

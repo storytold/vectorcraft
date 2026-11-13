@@ -150,6 +150,22 @@
 	32 bit	32 பிட்
 	32 bits/pixel	32 பிட்/பிக்சல்
 	3D and Materials	3D மற்றும் பொருட்கள்
+	Add as Single Graphic	ஒற்றை வரைகலையாகச் சேர்
+	Add art with Add as Single Graphic, or drop art here.	ஒற்றை வரைகலையாகச் சேர் மூலம் ஓவியத்தைச் சேர்க்கவும், அல்லது ஓவியத்தை இங்கே விடவும்.
+	Expand as Wireframes	கம்பிச்சட்டங்களாக விரிவாக்கு
+	Face	முகம்
+	Graphics map onto planar faces: pick the Plane or Extrude object type.	வரைகலைகள் தட்டையான முகங்களில் மட்டுமே பொருத்தப்படும்: தளம் அல்லது வெளித்தள்ளு பொருள் வகையைத் தேர்ந்தெடுக்கவும்.
+	Line Gap	வரி இடைவெளி
+	Manage Profiles	சுயவிவரங்களை நிர்வகி
+	Mapped graphics	பொருத்தப்பட்ட வரைகலைகள்
+	Materials	பொருட்கள்
+	NEW DOCUMENT PROFILES	புதிய ஆவணச் சுயவிவரங்கள்
+	Pick a graphic above to map it onto the object.	பொருளின் மீது பொருத்த, மேலே உள்ள ஒரு வரைகலையைத் தேர்ந்தெடுக்கவும்.
+	Remove Graphic	வரைகலையை அகற்று
+	Replace the selected 3D objects with the edges of their faces, as stroked paths.	தேர்ந்தெடுத்த 3D பொருட்களை அவற்றின் முகங்களின் விளிம்புகளால், கோடிட்ட பாதைகளாக மாற்று.
+	Select a 3D object to map the graphic onto it.	வரைகலையைப் பொருத்த ஒரு 3D பொருளைத் தேர்ந்தெடுக்கவும்.
+	The selected objects have different graphics.	தேர்ந்தெடுத்த பொருட்களில் வெவ்வேறு வரைகலைகள் உள்ளன.
+	Word Gap	சொல் இடைவெளி
 	Plane	தளம்
 	Extrude	வெளித்தள்ளு
 	Revolve	சுழற்றி உருவாக்கு
@@ -1617,6 +1633,7 @@ antiAlias	Sharp	கூர்மையான
 	Enable Rubber Band for	இதற்கு ரப்பர் பட்டையை இயக்கு
 	Enable text access for screen readers	திரைப் படிப்பான்களுக்கு உரை அணுகலை அனுமதி
 	Enable Touch Gestures	தொடு சைகைகளை இயக்கு
+	Switch Selection and Drawing Modes	தேர்வு மற்றும் வரைதல் பயன்முறைகளுக்கு இடையே மாறு
 	Enable Touch Workspace	தொடு பணியிடத்தை இயக்கு
 	Enclosing Lasso	சூழும் லாசோ
 	Enclosing Lasso Tool	சூழும் லாசோ கருவி
@@ -7101,7 +7118,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	needs points	புள்ளிகள் தேவை
 @msg	New Window isn't available yet: a document opens in one window	புதிய சாளரம் இன்னும் கிடைக்கவில்லை: ஓர் ஆவணம் ஒரே சாளரத்தில் திறக்கிறது
 @msg	nineSlice must be true or false	nineSlice true அல்லது false ஆக இருக்க வேண்டும்
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides [left, top, right, bottom] ஆக இருக்க வேண்டும்: ஒவ்வொன்றும் 0..1, மேலும் left + right < 1, top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides [left, top, right, bottom] ஆக இருக்க வேண்டும்: ஒவ்வொன்றும் -16..16, மேலும் left + right < 1, top + bottom < 1
 @msg	no action set is current	நடப்புச் செயல் தொகுப்பு எதுவும் இல்லை
 @msg	no action set to save	சேமிக்கச் செயல் தொகுப்பு எதுவும் இல்லை
 @msg	no active data set	செயலில் உள்ள தரவுத் தொகுப்பு இல்லை

@@ -2094,7 +2094,7 @@ fn three_d_refusals_translate_with_their_values() {
         vectorcraft_engine::EngineError::BadParams { cmd: "effect.apply".into(), msg: e }.to_string()
     };
     let errors = [
-        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), Some((0, 0)))), "goes on the group itself", vec![]),
+        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), (Some(0), 0))), "goes on the group itself", vec![]),
         (
             refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"lights": [{"intensity": 500}]}))),
             "must be a number from",

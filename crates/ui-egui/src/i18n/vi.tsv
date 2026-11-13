@@ -1207,6 +1207,7 @@ font-technology	Variable	Biến thiên
 	Enable Rubber Band for	Bật vùng chọn kéo cho
 	Enable text access for screen readers	Bật truy cập văn bản cho trình đọc màn hình
 	Enable Touch Gestures	Bật cử chỉ cảm ứng
+	Switch Selection and Drawing Modes	Chuyển giữa chế độ chọn và vẽ
 	Enable Touch Workspace	Bật không gian làm việc cảm ứng
 	Encoding	Mã hóa
 	Encoding:	Mã hóa:

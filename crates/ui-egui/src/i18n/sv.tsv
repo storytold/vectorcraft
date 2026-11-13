@@ -1020,6 +1020,7 @@ font-technology	Variable	Variabla
 	Enable Rubber Band for	Aktivera gummiband för
 	Enable text access for screen readers	Ge skärmläsare åtkomst till text
 	Enable Touch Gestures	Aktivera pekgester
+	Switch Selection and Drawing Modes	Växla mellan markerings- och ritläge
 	Enable Touch Workspace	Aktivera arbetslayout för pekskärm
 	Encoding	Kodning
 	Encoding:	Kodning:
@@ -3537,11 +3538,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
-	Composite Fonts…	Sammansatta teckensnitt…
-	Composite Fonts	Sammansatta teckensnitt
-	Export Composite Fonts	Exportera sammansatta teckensnitt
-	Import Composite Fonts	Importera sammansatta teckensnitt
-	Delete Font	Ta bort teckensnitt
+	Composite Fonts…	Sammansatta typsnitt…
+	Composite Fonts	Sammansatta typsnitt
+	Export Composite Fonts	Exportera sammansatta typsnitt
+	Import Composite Fonts	Importera sammansatta typsnitt
+	Delete Font	Ta bort typsnitt
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Siffror
@@ -5385,7 +5386,7 @@ lighting	Light	Ljus
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: urklippsbanan är för komplex för att klippa teckningen med
 @msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} tar högst {MAX_MEMBERS} objekt
 @msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kan inte bygga solider av teckning som är kapslad mer än {MAX_DEPTH} nivåer djupt
-@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Färgen för Rotera runt axel är för komplex för den här ytan; minska Segment eller förenkla övertoningen
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Färgen för Rotera runt axel är för komplex för den här ytan; minska Segment eller förenkla gradienten
 @msg	Revolve edge must be left or right	Rotera runt axel: edge måste vara left eller right
 @msg	Revolve cap must be a boolean	Rotera runt axel: cap måste vara ett booleskt värde
 @msg	the revolved object has no fill or stroke	det roterade objektet har ingen fyllning eller linje
@@ -6472,8 +6473,8 @@ axis	Y Axis	Y-axel
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” begär behörigheterna {asked}: en person måste godkänna dem i skrivbordsappen, eller skicka `grant` i en session som startats med --allow-plugin-grants
-@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` och `allowHeavy` gäller bara i en session som startats med --allow-plugin-grants: godkänn insticksprogrammet i skrivbordsappen
-@msg	Only the person at the keyboard can approve installing a plug-in	Bara personen vid tangentbordet kan godkänna installationen av ett insticksprogram
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` och `allowHeavy` gäller bara i en session som startats med --allow-plugin-grants: godkänn pluginet i skrivbordsappen
+@msg	Only the person at the keyboard can approve installing a plug-in	Bara personen vid tangentbordet kan godkänna installationen av ett plugin
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ett tungt filter körs i bakgrunden, så det kan inte deklarera `commands`
 @msg	at most {MAX_COMMANDS} `commands`	högst {MAX_COMMANDS} `commands`
@@ -6578,7 +6579,7 @@ axis	Y Axis	Y-axel
 	Skill Icons	Färdighetsikoner
 	Attack	Attack
 	Defend	Försvar
-	Heal	Läkning
+	Heal	Retuschering
 	Buff	Buff
 	Ult	Ult
 	Sword	Svärd
@@ -8096,7 +8097,7 @@ digits	Hindi	Hindi
 @msg	need at least two points	minst två punkter krävs
 @msg	needs points	punkter krävs
 @msg	nineSlice must be true or false	nineSlice måste vara true eller false
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett 0..1, med left + right < 1 och top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett -16..16, med left + right < 1 och top + bottom < 1
 @msg	no action set is current	ingen åtgärdsuppsättning är aktuell
 @msg	no active data set	ingen aktiv datauppsättning
 @msg	no appearance item {index}	inget utseendeobjekt {index}
@@ -8801,3 +8802,40 @@ digits	Hindi	Hindi
 	Margin	Marginal
 	Box	Ram
 	Swatch	Färgruta
+	Duplicate Effects	Duplicera effekter
+	Remove Effects	Ta bort effekter
+	Add art with Add as Single Graphic, or drop art here.	Lägg till grafik med Lägg till som enkel grafik, eller släpp grafik här.
+	Add as Single Graphic	Lägg till som enkel grafik
+	Add to Custom Dictionary	Lägg till i egen ordlista
+	Assamese	assamesiska
+	Bulgarian	bulgariska
+	Cancel Opening	Avbryt öppning
+	Change in Custom Dictionary	Ändra i egen ordlista
+	Delete from Custom Dictionary	Radera från egen ordlista
+	Delete SVG Filter	Radera SVG-filter
+	Edit SVG Filter	Redigera SVG-filter
+	Expand as Wireframes	Expandera som trådmodeller
+	Face	Yta
+	Graphics map onto planar faces: pick the Plane or Extrude object type.	Grafik mappas på plana ytor: välj objekttypen Plan eller Extrudera.
+	Import SVG Filter	Importera SVG-filter
+	Import SVG Filter…	Importera SVG-filter…
+	Line Gap	Radmellanrum
+	List Installed Scripts	Lista installerade skript
+	Manage Profiles	Hantera profiler
+	Mapped graphics	Mappad grafik
+	Materials	Material
+	Move Type Path Handle	Flytta handtag för textbana
+	NEW DOCUMENT PROFILES	PROFILER FÖR NYTT DOKUMENT
+	New SVG Filter	Nytt SVG-filter
+	Pick a graphic above to map it onto the object.	Välj en grafik ovan för att mappa den på objektet.
+	Reading the file…	Läser filen…
+	Remove Graphic	Ta bort grafik
+	Replace the selected 3D objects with the edges of their faces, as stroked paths.	Ersätt de markerade 3D-objekten med kanterna på deras ytor, som banor med kontur.
+	Sanskrit	sanskrit
+	Select a 3D object to map the graphic onto it.	Markera ett 3D-objekt för att mappa grafiken på det.
+	Select Symbol Instance Part	Markera del av symbolinstans
+	Spelling Suggestions	Stavningsförslag
+	Stroke Weight Down	Minska konturtjocklek
+	Stroke Weight Up	Öka konturtjocklek
+	The selected objects have different graphics.	De markerade objekten har olika grafik.
+	Word Gap	Ordmellanrum

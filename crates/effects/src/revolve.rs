@@ -1351,7 +1351,7 @@ mod tests {
         group.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
         for id in [REVOLVE, crate::EXTRUDE] {
             assert!(crate::validate_three_d(&group, id, &json!({})).is_ok(), "{id} on the group itself");
-            let refused = crate::validate_three_d_at(&group, id, &json!({}), Some((0, 0))).unwrap_err();
+            let refused = crate::validate_three_d_at(&group, id, &json!({}), (Some(0), 0)).unwrap_err();
             assert!(refused.contains("on the group itself"), "{id}: {refused}");
         }
     }
