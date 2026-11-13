@@ -5447,8 +5447,12 @@ the selected artboards (those the Artboard tool has selected, else the active on
 `artboard.fitToSelection` calls it runs without `index`. Both include MCP's `run_command` calls in remote mode. The
 Artboards panel menu's Fit to Artwork Bounds also passes the selected artboards. A batch passes its `artboard` on to
 each of their steps that names no `index`, as the step's `index`. When the document a step runs in has no artboard at
-that index, the step gets that document's last artboard. An action recorded in the Actions panel leaves `index` and
-`indices` out of these steps, and they resize the artboard that is active when the action plays.
+that index, the step gets that document's last artboard. An `artboard.fitToArt` step that names neither `index` nor
+`indices`, while the Artboard tool is chosen with several artboards selected when the step runs, gets those artboards
+as its `indices` instead, and the batch's journal entry records them, so a replay of the journal fits the same
+artboards. A step's own `index` or `indices` is kept. An action recorded in the Actions panel leaves `index` and
+`indices` out of these steps: when the action plays, Fit to Artwork Bounds resizes the artboards the Artboard tool then
+has selected (two or more), else the active artboard, and Fit to Selected Art resizes the active artboard.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
