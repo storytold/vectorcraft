@@ -49,6 +49,10 @@
 //!   member with another order, and any other change to the list (items moved, or several added
 //!   or removed at once), takes the model's whole list of fills and strokes.
 //!
+//! A path directly in a graph series that takes an edit from another member (a graph's paths are
+//! members only while the graph is isolated) also has what changed stored on its graph, so that
+//! every path of the series takes it when the graph is drawn again (docs/mcp.md).
+//!
 //! Members that are hidden or locked at the time are left as they are. An edit that would take any
 //! member past the canvas (beyond [`vectorcraft_doc::MAX_COORD`]) is refused whole, as one that
 //! takes the selection there is. Whenever the document is put back (Undo, Redo, a cancelled drag
@@ -778,7 +782,20 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
         }
         super::object::keep_compound_aligned(d, *id, Scaling::default());
     }
+    keep_series_changes(before, d, &edited);
     edited
+}
+
+/// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
+/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
+    let mut taken = vec![];
+    for id in edited {
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c: &Node| taken.push(c.id));
+        }
+    }
+    super::appearance::capture_series_changes(before, d, &taken);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
