@@ -299,6 +299,27 @@ fn a_batch_fit_step_records_the_batchs_artboard() {
     assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
 }
 
+/// A batch step with `"params": null` gets the Artboard tool's selected artboards, or else the
+/// batch's `artboard`, as a step without params does.
+#[test]
+fn a_batch_fit_step_with_null_params_gets_the_artboards() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let steps = json!([{"command": "artboard.fitToArt", "params": null}]);
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "the selected artboards");
+    let (_, p) = s.journal.last().unwrap().clone();
+    assert_eq!(p["commands"][0]["params"], json!({"indices": [0, 2]}));
+    let mut s = Session::new();
+    three_artboards_with_art(&mut s);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard");
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
     let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();

@@ -105,7 +105,8 @@ fn run_steps(
         if s.active().is_some() {
             s.begin_interaction(label)?;
         }
-        let mut params = c.get("params").cloned().unwrap_or(json!({}));
+        // `"params": null` reads as no params, so the artboards below can still be added.
+        let mut params = c.get("params").filter(|v| !v.is_null()).cloned().unwrap_or(json!({}));
         let key = if crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str()) {
             Some("artboard")
         } else {
