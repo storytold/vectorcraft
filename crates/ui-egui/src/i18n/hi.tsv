@@ -1222,6 +1222,8 @@ antiAlias	Sharp	शार्प
 	Define Perspective Grid…	पर्सपेक्टिव ग्रिड डिफ़ाइन करें…
 	Definition	परिभाषा
 	Delete	हटाएँ
+	Delete the selected items and their artwork?	चुने गए आइटम और उनका आर्टवर्क हटाएँ?
+	Delete this layer and its artwork?	यह लेयर और इसका आर्टवर्क हटाएँ?
 	Delete “{name}”?	"{name}" को हटाएं?
 	Delete {kind} Style	Delete {kind} Style
 	Delete Action Sets	एक्शन सेट हटाएं
@@ -7821,6 +7823,7 @@ antiAlias	Sharp	शार्प
 @msg	textureImage: {e}	textureImage: {e}
 @msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: किसी इमेज फ़ाइल का {path} या {name, dataBase64} दें, या effect.list द्वारा दिया गया टेक्सचर दें
 @msg	that anchor can't slide: an end of an open path has nowhere to go	कि एंकर स्लाइड नहीं कर सकते: एक खुले रास्ते का अंत कहीं नहीं जाना है
+@msg	the active document changed while the question was open; nothing was deleted	प्रश्न खुला रहते हुए सक्रिय डॉक्यूमेंट बदल गया; कुछ भी नहीं हटाया गया
 @msg	that document is no longer open	यह डॉक्यूमेंट अब खुला नहीं है
 @msg	that makes more than {MAX_PIECES} slices	जो {MAX_PIECES} स्लाइस से अधिक बनाता है
 @msg	that makes too many pieces (at most 100000): make the dashes longer	जो बहुत सारे टुकड़े बनाता है (अधिकांश 100000 में): डैश को लंबे समय तक बनाते हैं

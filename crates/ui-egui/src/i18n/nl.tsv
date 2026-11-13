@@ -1988,6 +1988,8 @@ digits	Malayalam	Malayalam
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
+	Delete the selected items and their artwork?	De geselecteerde items en hun artwork verwijderen?
+	Delete this layer and its artwork?	Deze laag en het artwork erin verwijderen?
 	Delete “{name}”?	„{name}” verwijderen?
 	Document Swatches	Documentstalen
 	Edit or Apply Color Group	Kleurgroep bewerken of toepassen

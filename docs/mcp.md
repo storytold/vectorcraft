@@ -4236,7 +4236,12 @@ and `layerRows`, the rows highlighted in the panel.
   `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them but
   above a clipping layer's clipping path, with Ctrl/Cmd+Alt; both refused while an opacity mask is edited),
   `layer.delete {ids?}` (rows with what they hold; the
-  last layer stays), `layer.locate {id?}` (highlights the selected object's row; the panel opens the rows around it)
+  last layer stays; it does not ask), `ui.layerDelete {ids?|id?}` (the panel's trash, rows dropped on it, Delete
+  Selection, and Delete or Backspace on highlighted rows: when a layer or sublayer among the rows holds art, hidden,
+  locked or nested art included, dialog `confirm` asks "Delete this layer and its artwork?" for one layer, else "Delete
+  the selected items and their artwork?"; OK deletes the rows it asked about in that document, one undo step, and
+  Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once),
+  `layer.locate {id?}` (highlights the selected object's row; the panel opens the rows around it)
   and `layer.clippingMask.toggle`.
 - **Panel menu**: `layer.duplicate {ids?}`, `layer.merge {ids?}` (into the layer highlighted last, keeping the
   stacking order), `layer.flatten {id?}` (every other visible layer's art into one layer; hidden layers are deleted,

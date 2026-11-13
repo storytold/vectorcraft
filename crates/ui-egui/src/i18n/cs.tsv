@@ -2172,6 +2172,8 @@ digits	Malayalam	Malajálamské
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}
+	Delete the selected items and their artwork?	Odstranit vybrané položky i s kresbou?
+	Delete this layer and its artwork?	Odstranit tuto vrstvu i s kresbou?
 	Delete “{name}”?	Odstranit „{name}“?
 	Document Swatches	Vzorník dokumentu
 	Edit or Apply Color Group	Upravit nebo použít skupinu barev
@@ -5396,6 +5398,7 @@ imageTrace	Outline	Obrys
 @msg	choose the font files to add	vyberte soubory písem, které chcete přidat
 @msg	not a file	nejde o soubor
 @msg	not a font file	nejde o soubor písma
+@msg	the active document changed while the question was open; nothing was deleted	aktivní dokument se změnil, zatímco byla otázka otevřená; nic nebylo odstraněno
 @msg	that document is no longer open	tento dokument už není otevřen
 @msg	larger than 256 MB	větší než 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	soubory mají dohromady více než 1 GB: přidávejte jich méně najednou

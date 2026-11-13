@@ -2133,6 +2133,8 @@ digits	Malayalam	Malajalam
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
+	Delete the selected items and their artwork?	Poistetaanko valitut kohteet ja niiden kuvitus?
+	Delete this layer and its artwork?	Poistetaanko tämä taso ja sen kuvitus?
 	Delete “{name}”?	Poistetaanko ”{name}”?
 	Document Swatches	Asiakirjan värimallit
 	Edit or Apply Color Group	Muokkaa tai käytä väriryhmää
@@ -5296,6 +5298,7 @@ imageTrace	Outline	Ääriviiva
 @msg	choose the font files to add	valitse lisättävät fonttitiedostot
 @msg	not a file	ei tiedosto
 @msg	not a font file	ei fonttitiedosto
+@msg	the active document changed while the question was open; nothing was deleted	aktiivinen asiakirja vaihtui kysymyksen ollessa auki; mitään ei poistettu
 @msg	that document is no longer open	kyseinen asiakirja ei ole enää auki
 @msg	larger than 256 MB	suurempi kuin 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	tiedostojen koko on yli 1 GB: lisää vähemmän kerrallaan

@@ -799,6 +799,8 @@ font-technology	Variable	Variabla
 	Delete Width Point	Radera breddpunkt
 	Delete Workspace	Radera arbetslayout
 	Delete {kind} Style	Radera stil ({kind})
+	Delete the selected items and their artwork?	Radera de markerade objekten och deras bildmaterial?
+	Delete this layer and its artwork?	Radera det här lagret och dess bildmaterial?
 	Delete “{name}”?	Radera ”{name}”?
 	Depth:	Djup:
 	Description	Beskrivning
@@ -4983,6 +4985,7 @@ axis	Both	Båda
 @msg	choose the font files to add	välj de typsnittsfiler som ska läggas till
 @msg	not a file	inte en fil
 @msg	not a font file	inte en typsnittsfil
+@msg	the active document changed while the question was open; nothing was deleted	det aktiva dokumentet ändrades medan frågan var öppen; inget raderades
 @msg	that document is no longer open	det dokumentet är inte längre öppet
 @msg	larger than 256 MB	större än 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	filerna blir större än 1 GB: lägg till färre åt gången

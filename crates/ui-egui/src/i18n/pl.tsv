@@ -2090,6 +2090,8 @@ digits	Malayalam	Malajalam
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}
+	Delete the selected items and their artwork?	Usunąć zaznaczone elementy razem z grafiką?
+	Delete this layer and its artwork?	Usunąć tę warstwę razem z grafiką?
 	Delete “{name}”?	Usunąć „{name}”?
 	Document Swatches	Próbki dokumentu
 	Edit or Apply Color Group	Edytuj lub zastosuj grupę kolorów
@@ -5222,6 +5224,7 @@ imageTrace	Outline	Kontur
 @msg	choose the font files to add	wybierz pliki czcionek do dodania
 @msg	not a file	to nie jest plik
 @msg	not a font file	to nie jest plik czcionki
+@msg	the active document changed while the question was open; nothing was deleted	aktywny dokument zmienił się, gdy pytanie było otwarte; nic nie zostało usunięte
 @msg	that document is no longer open	ten dokument nie jest już otwarty
 @msg	larger than 256 MB	większy niż 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	pliki przekraczają łącznie 1 GB: dodawaj mniej naraz

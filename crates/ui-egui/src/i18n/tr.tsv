@@ -791,6 +791,8 @@ font-technology	Variable	Değişken
 	Delete Width Point	Genişlik Noktasını Sil
 	Delete Workspace	Çalışma Alanını Sil
 	Delete {kind} Style	{kind} Stilini Sil
+	Delete the selected items and their artwork?	Seçili öğeler ve içlerindeki çizim silinsin mi?
+	Delete this layer and its artwork?	Bu katman ve içindeki çizim silinsin mi?
 	Delete “{name}”?	“{name}” silinsin mi?
 	Depth:	Derinlik:
 	Description	Açıklama
@@ -4821,6 +4823,7 @@ axis	Both	Her İkisi
 @msg	choose the font files to add	eklenecek yazı tipi dosyalarını seçin
 @msg	not a file	dosya değil
 @msg	not a font file	yazı tipi dosyası değil
+@msg	the active document changed while the question was open; nothing was deleted	soru açıkken etkin belge değişti; hiçbir şey silinmedi
 @msg	that document is no longer open	bu belge artık açık değil
 @msg	larger than 256 MB	256 MB'tan büyük
 @msg	the files come to more than 1 GB: add fewer at a time	dosyalar 1 GB'tan fazla geliyor: bir kerede daha azını ekleyin

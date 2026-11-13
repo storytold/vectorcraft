@@ -1903,6 +1903,8 @@ digits	Malayalam	მალაიალამური
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
+	Delete the selected items and their artwork?	წაიშალოს მონიშნული ელემენტები და მათი ნახატი?
+	Delete this layer and its artwork?	წაიშალოს ეს შრე და მისი ნახატი?
 	Delete “{name}”?	წაიშალოს „{name}“?
 	Document Swatches	დოკუმენტის ფერის ნიმუშები
 	Edit or Apply Color Group	ფერთა ჯგუფის რედაქტირება ან გამოყენება
@@ -4733,6 +4735,7 @@ font-technology	Variable	ცვლადი
 @msg	choose the font files to add	აირჩიეთ დასამატებელი შრიფტის ფაილები
 @msg	not a file	ფაილი არ არის
 @msg	not a font file	შრიფტის ფაილი არ არის
+@msg	the active document changed while the question was open; nothing was deleted	აქტიური დოკუმენტი შეიცვალა, სანამ კითხვა ღია იყო; არაფერი წაშლილა
 @msg	that document is no longer open	ის დოკუმენტი აღარ არის გახსნილი
 @msg	larger than 256 MB	256 MB-ზე დიდია
 @msg	the files come to more than 1 GB: add fewer at a time	ფაილები 1 GB-ს აჭარბებს: დაამატეთ ნაკლები ერთდროულად

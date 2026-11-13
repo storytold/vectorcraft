@@ -1974,6 +1974,8 @@ digits	Malayalam	Malayalam
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
+	Delete the selected items and their artwork?	Hapus item yang dipilih beserta karya seninya?
+	Delete this layer and its artwork?	Hapus lapisan ini beserta karya seninya?
 	Delete “{name}”?	Hapus “{name}”?
 	Document Swatches	Swatch dokumen
 	Edit or Apply Color Group	Edit atau terapkan grup warna

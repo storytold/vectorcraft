@@ -797,6 +797,8 @@ font-technology	Variable	Променливи
 	Delete Width Point	Изтриване на точка на ширината
 	Delete Workspace	Изтриване на работно пространство
 	Delete {kind} Style	Изтриване на стил ({kind})
+	Delete the selected items and their artwork?	Да се изтрият ли избраните елементи заедно с графиката им?
+	Delete this layer and its artwork?	Да се изтрие ли този слой заедно с графиката му?
 	Delete “{name}”?	Изтриване на „{name}“?
 	Depth:	Дълбочина:
 	Description	Описание

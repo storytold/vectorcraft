@@ -1471,6 +1471,8 @@ antiAlias	Sharp	シャープ
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
+	Delete the selected items and their artwork?	選択した項目とそのアートワークを削除しますか？
+	Delete this layer and its artwork?	このレイヤーとそのアートワークを削除しますか？
 	Delete “{name}”?	「{name}」を削除しますか？
 	Depth:	深さ:
 	Description	説明
@@ -5206,6 +5208,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	choose the font files to add	追加するフォントファイルを選択してください
 @msg	not a file	ファイルではありません
 @msg	not a font file	フォントファイルではありません
+@msg	the active document changed while the question was open; nothing was deleted	質問が開いている間にアクティブなドキュメントが変わったため、何も削除されませんでした
 @msg	that document is no longer open	そのドキュメントはもう開かれていません
 @msg	larger than 256 MB	256 MB を超えています
 @msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください

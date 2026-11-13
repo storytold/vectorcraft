@@ -791,6 +791,8 @@ font-technology	Variable	Variabel
 	Delete Width Point	Breitenpunkt löschen
 	Delete Workspace	Arbeitsbereich löschen
 	Delete {kind} Style	{kind}format löschen
+	Delete the selected items and their artwork?	Die ausgewählten Elemente und ihr Bildmaterial löschen?
+	Delete this layer and its artwork?	Diese Ebene und ihr Bildmaterial löschen?
 	Delete “{name}”?	„{name}“ löschen?
 	Depth:	Tiefe:
 	Description	Beschreibung
@@ -5013,6 +5015,7 @@ theme	Appearance	Erscheinungsbild
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
 @msg	not a file	keine Datei
 @msg	not a font file	keine Schriftdatei
+@msg	the active document changed while the question was open; nothing was deleted	das aktive Dokument hat sich geändert, während die Frage offen war; es wurde nichts gelöscht
 @msg	that document is no longer open	dieses Dokument ist nicht mehr geöffnet
 @msg	larger than 256 MB	größer als 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	die Dateien sind zusammen größer als 1 GB: Fügen Sie weniger auf einmal hinzu

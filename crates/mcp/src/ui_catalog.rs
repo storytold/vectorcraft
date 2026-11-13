@@ -946,6 +946,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
     ),
     (
+        "ui.layerDelete",
+        "Delete Selection",
+        "",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
+    ),
+    (
         "ui.rename",
         "Rename",
         "",
