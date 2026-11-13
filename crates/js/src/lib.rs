@@ -83,7 +83,7 @@ pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, UNKNOWN_SOURCE};
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.

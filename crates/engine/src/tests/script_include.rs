@@ -454,6 +454,49 @@ fn script_included_error_has_local_file_and_line() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `$.stack`'s text with each frame's file cut to its name: `function@name:line` a line.
+pub(crate) fn short_stack(stack: &Value) -> String {
+    let stack = stack.as_str().unwrap_or_else(|| panic!("a stack: {stack}"));
+    stack
+        .lines()
+        .map(|frame| match (frame.split_once('@'), frame.rsplit_once(':')) {
+            (Some((name, _)), Some((place, line))) => {
+                let file = place.split_once('@').map_or(place, |(_, f)| f).rsplit(['/', '\\']).next().unwrap_or_default();
+                format!("{name}@{file}:{line}\n")
+            }
+            _ => format!("{frame}\n"),
+        })
+        .collect()
+}
+
+/// `$.line` and `$.stack` give the line of the file the running code is in: the script, a file it
+/// included (and a file that one included) or a file `$.evalFile` gave and the files it included,
+/// whatever lines come before it in the run's expanded source.
+#[test]
+fn script_line_and_stack_are_at_the_line_of_each_file() {
+    let base = folder("line-stack");
+    write(
+        &base.join("main/lib.jsxinc"),
+        "\nfunction libWhere() {\n  return [$.line, $.stack];\n}\nvar libLine = $.line;\n#include \"deep.jsxinc\"\n",
+    );
+    write(&base.join("main/deep.jsxinc"), "\n\nvar deepLine = $.line;\nfunction deepStack() {\n  return $.stack;\n}");
+    write(&base.join("main/sub/ev.jsx"), "#include \"inc.jsxinc\"\nfunction evWhere() {\n  return incWhere();\n}\nevWhere();");
+    write(&base.join("main/sub/inc.jsxinc"), "\n\nfunction incWhere() {\n  return [$.line, $.stack];\n}");
+    let text = "var a = 1;\nvar b = 2;\n#include \"lib.jsxinc\"\nvar mainLine = $.line;\nvc.log([libLine, deepLine, mainLine]);\n\
+                vc.log(libWhere());\nvc.log(deepStack());\nvc.log($.evalFile('sub/ev.jsx'));";
+    let log = run(&base, text).unwrap()["log"].clone();
+    assert_eq!(log[0], json!([5, 3, 4]), "{log}");
+    assert_eq!(log[1][0], 3, "{log}");
+    assert_eq!(short_stack(&log[1][1]), "[global]@main.jsx:6\nlibWhere@lib.jsxinc:3\n");
+    assert_eq!(short_stack(&log[2]), "[global]@main.jsx:7\ndeepStack@deep.jsxinc:5\n");
+    assert_eq!(log[3][0], 4, "{log}");
+    assert_eq!(short_stack(&log[3][1]), "[global]@main.jsx:8\n[global]@ev.jsx:5\nevWhere@ev.jsx:3\nincWhere@inc.jsxinc:4\n");
+    // The file a frame names is the one `$.fileName` gives while that file runs.
+    let log = run(&base, "vc.log($.stack.slice(9, -3) === $.fileName);").unwrap()["log"].clone();
+    assert_eq!(log, json!([true]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Pumps the run in the app until it ends or waits at a dialog (`None`).
 fn pump(s: &mut Session) -> Option<Result<Value>> {
     for _ in 0..10_000 {
