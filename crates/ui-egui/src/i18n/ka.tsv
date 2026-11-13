@@ -1778,6 +1778,15 @@ digits	Malayalam	მალაიალამური
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-ის ნაკრები
 	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
+	Kinsoku Shori Settings…	Kinsoku Shori-ის პარამეტრები…
+	Kinsoku Shori Settings	Kinsoku Shori-ის პარამეტრები
+	Kinsoku Sets	Kinsoku-ის ნაკრებები
+	Kinsoku Set Base	Kinsoku-ის ნაკრების საფუძველი
+	Based on:	საფუძველი:
+	Cannot Start Line	ვერ დაიწყებს ხაზს
+	Cannot End Line	ვერ დაასრულებს ხაზს
+	Hanging Punctuation	დაკიდებული პუნქტუაცია
+	Inseparable Characters	განუყოფელი სიმბოლოები
 	Push In First	ჯერ შეტანა
 	Push Out First	ჯერ გატანა
 	Push Out Only	მხოლოდ გატანა

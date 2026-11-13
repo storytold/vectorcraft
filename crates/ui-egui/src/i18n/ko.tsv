@@ -76,6 +76,15 @@ digits	Malayalam	말라얄람어
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	긴소쿠 세트
 	Kinsoku Shori Type	긴소쿠 처리 유형
+	Kinsoku Shori Settings…	긴소쿠 처리 설정…
+	Kinsoku Shori Settings	긴소쿠 처리 설정
+	Kinsoku Sets	긴소쿠 세트 목록
+	Kinsoku Set Base	긴소쿠 세트 기준
+	Based on:	기준:
+	Cannot Start Line	행 시작 금지 문자
+	Cannot End Line	행 끝 금지 문자
+	Hanging Punctuation	매달림 문장 부호
+	Inseparable Characters	분리 금지 문자
 	Push In First	밀어 넣기 우선
 	Push Out First	밀어내기 우선
 	Push Out Only	밀어내기만

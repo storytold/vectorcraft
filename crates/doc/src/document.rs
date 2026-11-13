@@ -35,6 +35,7 @@ impl Document {
             char_styles,
             para_styles,
             composite_fonts,
+            kinsoku_sets,
             text_threads,
             symbols,
             graph_designs,
@@ -94,6 +95,7 @@ impl Document {
             && *char_styles == other.char_styles
             && *para_styles == other.para_styles
             && *composite_fonts == other.composite_fonts
+            && *kinsoku_sets == other.kinsoku_sets
             && *text_threads == other.text_threads
             && symbols.len() == other.symbols.len()
             && symbols.iter().zip(&other.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
@@ -219,6 +221,7 @@ impl Document {
             char_styles: Default::default(),
             para_styles: Default::default(),
             composite_fonts: Default::default(),
+            kinsoku_sets: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],

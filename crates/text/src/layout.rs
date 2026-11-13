@@ -35,6 +35,7 @@ mod shaped;
 mod vertical;
 
 pub(crate) use bidi::{is_rtl, para_bidi};
+pub(crate) use breaking::is_hanging_punctuation;
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};

@@ -2091,6 +2091,15 @@ file-filter	Templates	Modelli
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set kinsoku
 	Kinsoku Shori Type	Tipo di kinsoku shori
+	Kinsoku Shori Settings…	Impostazioni kinsoku shori…
+	Kinsoku Shori Settings	Impostazioni kinsoku shori
+	Kinsoku Sets	Elenco set kinsoku
+	Kinsoku Set Base	Base del set kinsoku
+	Based on:	Basato su:
+	Cannot Start Line	Non può iniziare la riga
+	Cannot End Line	Non può terminare la riga
+	Hanging Punctuation	Punteggiatura sospesa
+	Inseparable Characters	Caratteri inseparabili
 	Push In First	Prima all'interno
 	Push Out First	Prima all'esterno
 	Push Out Only	Solo all'esterno

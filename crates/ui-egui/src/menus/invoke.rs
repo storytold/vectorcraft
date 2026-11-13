@@ -291,6 +291,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
+    // Kinsoku Shori Settings…: the document's custom Kinsoku sets, to edit before OK sets them.
+    if id == crate::dialogs::kinsoku_sets::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::kinsoku_sets::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {

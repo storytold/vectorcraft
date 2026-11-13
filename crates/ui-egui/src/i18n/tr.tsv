@@ -1881,6 +1881,15 @@ font-technology	Variable	Değişken
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku Seti
 	Kinsoku Shori Type	Kinsoku Shori Türü
+	Kinsoku Shori Settings…	Kinsoku Shori Ayarları…
+	Kinsoku Shori Settings	Kinsoku Shori Ayarları
+	Kinsoku Sets	Kinsoku Setleri
+	Kinsoku Set Base	Kinsoku Seti Temeli
+	Based on:	Temel:
+	Cannot Start Line	Satır Başlatamaz
+	Cannot End Line	Satır Bitiremez
+	Hanging Punctuation	Asılı Noktalama
+	Inseparable Characters	Ayrılmaz Karakterler
 	Push In First	Önce İçeri
 	Push Out First	Önce Dışarı
 	Push Out Only	Yalnızca Dışarı

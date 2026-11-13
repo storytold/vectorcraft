@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use super::char_style::CharStyle;
+use super::kinsoku_set::KinsokuSet;
 use super::tabs_lists::{ParaList, TabStop};
 use super::{Deserialize, Serialize};
 
@@ -234,6 +237,10 @@ pub struct ParaStyle {
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
     pub kinsoku: Kinsoku,
+    /// A custom Kinsoku Shori set (Type › Kinsoku Shori Settings…) chosen in Kinsoku Set: a copy of
+    /// the document's set of that name, which takes the place of [`Self::kinsoku`]. A paragraph
+    /// with one keeps [`Kinsoku::Hard`] in `kinsoku`, which builds without custom sets read.
+    pub kinsoku_set: Option<Arc<KinsokuSet>>,
     /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
     /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
     pub kinsoku_type: KinsokuShoriType,
@@ -274,6 +281,21 @@ impl ParaStyle {
         }
         for t in &mut self.tabs {
             t.position = within(t.position, 0.0, 100_000.0);
+        }
+    }
+
+    /// Does kinsoku apply: a custom set, or a Kinsoku Set other than None?
+    pub fn kinsoku_on(&self) -> bool {
+        self.kinsoku_set.is_some() || self.kinsoku != Kinsoku::None
+    }
+
+    /// The name Kinsoku Set shows: the custom set's, or None, Hard or Soft.
+    pub fn kinsoku_name(&self) -> &str {
+        match (&self.kinsoku_set, self.kinsoku) {
+            (Some(set), _) => &set.name,
+            (None, Kinsoku::None) => "None",
+            (None, Kinsoku::Hard) => "Hard",
+            (None, Kinsoku::Soft) => "Soft",
         }
     }
 
@@ -340,6 +362,8 @@ struct ParaStyleFile {
     burasagari: Burasagari,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku: Kinsoku,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kinsoku_set: Option<Arc<KinsokuSet>>,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku_type: KinsokuShoriType,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
@@ -380,6 +404,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
             roman_hanging,
@@ -407,6 +432,7 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
             roman_hanging,
@@ -438,6 +464,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
             roman_hanging,
@@ -445,6 +472,11 @@ impl From<ParaStyleFile> for ParaStyle {
             korean_line_break_anywhere,
             ..
         } = f;
+        // A set whose saved name can't name a custom set (None, Hard or Soft, say) is read as no set:
+        // the paragraph keeps its Kinsoku Set. A paragraph with a custom set keeps Hard, so one read
+        // with None or Soft (a paragraph style written before custom sets, applied over one) has no
+        // custom set.
+        let kinsoku_set = kinsoku_set.filter(|s| !s.name.is_empty() && kinsoku == Kinsoku::Hard);
         Self {
             justify,
             left_indent,
@@ -464,6 +496,7 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
             kinsoku_type,
             bunri_kinshi,
             roman_hanging,

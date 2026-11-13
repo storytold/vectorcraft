@@ -108,6 +108,19 @@ impl Document {
             vec_bytes(c)
                 + c.iter().map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>()).sum::<usize>()
         });
+        n += shared(&self.kinsoku_sets, &newer.kinsoku_sets, |k| {
+            vec_bytes(k)
+                + k.iter()
+                    .map(|s: &crate::KinsokuSet| {
+                        s.name.capacity()
+                            + vec_bytes(&s.cannot_start)
+                            + vec_bytes(&s.cannot_end)
+                            + vec_bytes(&s.hanging)
+                            + vec_bytes(&s.inseparable)
+                            + s.inseparable.iter().map(String::capacity).sum::<usize>()
+                    })
+                    .sum::<usize>()
+        });
         n += shared(&self.saved_selections, &newer.saved_selections, |s| {
             vec_bytes(s) + s.iter().map(|s: &SavedSelection| s.name.capacity() + vec_bytes(&s.objects)).sum::<usize>()
         });

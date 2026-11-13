@@ -2053,6 +2053,15 @@ font-technology	Variable	Variables
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto de kinsoku
 	Kinsoku Shori Type	Tipo de kinsoku shori
+	Kinsoku Shori Settings…	Configuración de kinsoku shori…
+	Kinsoku Shori Settings	Configuración de kinsoku shori
+	Kinsoku Sets	Conjuntos de kinsoku
+	Kinsoku Set Base	Base del conjunto de kinsoku
+	Based on:	Basado en:
+	Cannot Start Line	No puede iniciar línea
+	Cannot End Line	No puede terminar línea
+	Hanging Punctuation	Puntuación colgante
+	Inseparable Characters	Caracteres inseparables
 	Push In First	Primero hacia dentro
 	Push Out First	Primero hacia fuera
 	Push Out Only	Solo hacia fuera

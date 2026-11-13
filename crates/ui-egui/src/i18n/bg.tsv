@@ -1983,6 +1983,15 @@ font-technology	Variable	Променливи
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор Kinsoku
 	Kinsoku Shori Type	Тип Kinsoku Shori
+	Kinsoku Shori Settings…	Настройки на Kinsoku Shori…
+	Kinsoku Shori Settings	Настройки на Kinsoku Shori
+	Kinsoku Sets	Набори Kinsoku
+	Kinsoku Set Base	Основа на набор Kinsoku
+	Based on:	Въз основа на:
+	Cannot Start Line	Не може да започва ред
+	Cannot End Line	Не може да завършва ред
+	Hanging Punctuation	Висяща пунктуация
+	Inseparable Characters	Неразделими знаци
 	Push In First	Първо прибиране
 	Push Out First	Първо изтласкване
 	Push Out Only	Само изтласкване

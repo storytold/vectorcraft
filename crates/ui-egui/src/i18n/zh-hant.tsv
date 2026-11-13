@@ -3129,6 +3129,15 @@ file-filter	Templates	範本
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
+	Kinsoku Shori Settings…	Kinsoku 處理設定…
+	Kinsoku Shori Settings	Kinsoku 處理設定
+	Kinsoku Sets	Kinsoku 集清單
+	Kinsoku Set Base	Kinsoku 集基準
+	Based on:	依據：
+	Cannot Start Line	不能位於行首
+	Cannot End Line	不能位於行尾
+	Hanging Punctuation	懸掛標點
+	Inseparable Characters	不可分割字元
 	Push In First	先推入
 	Push Out First	先推出
 	Push Out Only	只推出

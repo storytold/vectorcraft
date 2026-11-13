@@ -2085,6 +2085,15 @@ file-filter	Templates	Шаблони
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набір kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
+	Kinsoku Shori Settings…	Налаштування kinsoku shori…
+	Kinsoku Shori Settings	Налаштування kinsoku shori
+	Kinsoku Sets	Набори kinsoku
+	Kinsoku Set Base	Основа набору kinsoku
+	Based on:	На основі:
+	Cannot Start Line	Не може починати рядок
+	Cannot End Line	Не може закінчувати рядок
+	Hanging Punctuation	Висяча пунктуація
+	Inseparable Characters	Нероздільні символи
 	Push In First	Спершу втягувати
 	Push Out First	Спершу виштовхувати
 	Push Out Only	Лише виштовхувати

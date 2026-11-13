@@ -20,12 +20,14 @@ use std::sync::Arc;
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_doc::text::{KINSOKU_NAME_MAX, KINSOKU_SETS_MAX};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Document, Effect, GraphicStyle, Node, NodeKind, PatternDef, Symbol, SymbolExportType, SymbolNineSlice,
-    SymbolRegistration, TextStyleDef,
+    Appearance, AppearanceItem, Document, Effect, GraphicStyle, Kinsoku, KinsokuSet, Node, NodeKind, PatternDef, Symbol, SymbolExportType,
+    SymbolNineSlice, SymbolRegistration, TextStyleDef,
 };
 
 use super::super::brushsym::{set_natural_size, stored_natural_size};
+use super::super::typecmd::refresh_bounds;
 
 use super::super::patterncmds::add_pattern;
 use super::super::{EngineError, Result, bad, unique_name};
@@ -584,6 +586,9 @@ struct Relink {
     styles: BTreeMap<u32, u32>,
     /// Swatch (its name in the document) → the colour linked colours show at 100 %.
     colors: BTreeMap<String, Color>,
+    /// A custom Kinsoku set the pasted paragraphs and paragraph styles hold → the document's set
+    /// they take, or none (Hard) when the document has no room for it ([`Clipboard::import_kinsoku_sets`]).
+    kinsoku: HashMap<KinsokuSet, Option<Arc<KinsokuSet>>>,
 }
 
 impl Relink {
@@ -649,6 +654,17 @@ impl Relink {
         }
     }
     fn attrs(&self, a: &mut Map<String, Value>) {
+        if let Some(to) =
+            a.get("kinsoku_set").and_then(|v| serde_json::from_value::<KinsokuSet>(v.clone()).ok()).and_then(|set| self.kinsoku.get(&set))
+        {
+            match to {
+                Some(set) => a.insert("kinsoku_set".into(), json!(set)),
+                None => {
+                    a.insert("kinsoku".into(), json!(Kinsoku::Hard));
+                    a.insert("kinsoku_set".into(), Value::Null)
+                }
+            };
+        }
         for k in STYLE_PAINTS {
             let Some(before) = style_paint(a, k) else { continue };
             let mut p = before.clone();
@@ -680,10 +696,21 @@ impl Relink {
                         self.name(Res::CharStyle, s);
                     }
                 }
+                // Lines break anew when a paragraph's set takes other characters or Hard.
+                let mut relaid = false;
                 for pa in t.para_styles_mut() {
                     if let Some(s) = &mut pa.style_name {
                         self.name(Res::ParaStyle, s);
                     }
+                    if let Some(set) = pa.kinsoku_set.as_deref()
+                        && let Some(to) = self.kinsoku.get(set)
+                    {
+                        relaid |= to.as_deref().is_none_or(|to| kinsoku_chars(to) != kinsoku_chars(set));
+                        pa.kinsoku_set = to.clone();
+                    }
+                }
+                if relaid {
+                    refresh_bounds(t);
                 }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),
@@ -695,6 +722,11 @@ impl Relink {
             self.node(Arc::make_mut(c));
         }
     }
+}
+
+/// The characters and sequences of Kinsoku set `s`, without its name.
+fn kinsoku_chars(s: &KinsokuSet) -> (&[char], &[char], &[char], &[String]) {
+    (&s.cannot_start, &s.cannot_end, &s.hanging, &s.inseparable)
 }
 
 /// Is `ours` (a document definition's art) the art of `theirs` (a pasted one's) once that is
@@ -1087,6 +1119,7 @@ impl Clipboard {
         out.relink.filters = self.filter_links(d, same_doc)?;
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
+        self.import_kinsoku_sets(d, used, same_doc, &mut out);
         let mut defs: Vec<Def<'_>> = vec![];
         for (r, list) in [(Res::CharStyle, &self.char_styles), (Res::ParaStyle, &self.para_styles)] {
             defs.extend(list.iter().filter(|s| used.has(r, &s.name)).map(|s| Def::Style(r, s)));
@@ -1233,8 +1266,73 @@ impl Clipboard {
             && out.relink.filters.is_empty()
             && out.relink.styles.is_empty()
             && out.relink.colors.is_empty()
+            && out.relink.kinsoku.is_empty()
             && used.styles.is_empty());
         Ok(out)
+    }
+
+    /// Add the custom Kinsoku sets that the pasted paragraphs and the used paragraph styles hold
+    /// to `d`'s sets, and record in [`Relink::kinsoku`] which set of `d` each one takes. A set
+    /// takes `d`'s set of its name (in any case) when that has the same characters, or, pasted
+    /// back into its own document, in any case; else a numbered copy of it ("Tight 2") with the
+    /// same characters. Any other set is added under a free name, so editing `d`'s set of that
+    /// name leaves the pasted paragraphs alone. When `d` already holds [`KINSOKU_SETS_MAX`] sets,
+    /// or no free name fits [`KINSOKU_NAME_MAX`], the paragraphs and styles take Hard.
+    fn import_kinsoku_sets(&self, d: &mut Document, used: &Used, same_doc: bool, out: &mut Imported) {
+        let mut found: Vec<KinsokuSet> = vec![];
+        let mut seen: HashSet<KinsokuSet> = HashSet::new();
+        let mut note = |set: &KinsokuSet| {
+            if !seen.contains(set) {
+                seen.insert(set.clone());
+                found.push(set.clone());
+            }
+        };
+        let mut nodes = |n: &Node| {
+            // Opacity-mask art included.
+            vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+                if let NodeKind::Text(t) = &m.kind {
+                    t.para_styles().filter_map(|p| p.kinsoku_set.as_deref()).for_each(&mut note);
+                }
+            });
+        };
+        self.nodes.iter().for_each(&mut nodes);
+        self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).for_each(|s| nodes(s.art.as_ref()));
+        self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).flat_map(|p| p.art.iter()).for_each(|a| nodes(a.as_ref()));
+        self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name)).flat_map(Brush::art).for_each(&mut nodes);
+        let styles = self.para_styles.iter().filter(|s| used.has(Res::ParaStyle, &s.name));
+        for set in styles.filter_map(|s| s.attrs.get("kinsoku_set")).filter_map(|v| serde_json::from_value::<KinsokuSet>(v.clone()).ok()) {
+            note(&set);
+        }
+        for set in found {
+            let lower = set.name.to_lowercase();
+            let mut copies: Vec<&KinsokuSet> = d.kinsoku_sets.iter().filter(|x| copy_of(&lower, &x.name.to_lowercase())).collect();
+            // The set of its name first.
+            copies.sort_by_key(|x| !KinsokuSet::same_name(&x.name, &set.name));
+            let own = copies.first().copied().filter(|x| same_doc && KinsokuSet::same_name(&x.name, &set.name));
+            let to = match own.or_else(|| copies.iter().copied().find(|x| kinsoku_chars(x) == kinsoku_chars(&set))) {
+                Some(x) => {
+                    if !KinsokuSet::same_name(&x.name, &set.name) {
+                        out.renamed.push(json!({"kind": "kinsokuSet", "from": set.name, "to": x.name}));
+                    }
+                    Some(Arc::new(x.clone()))
+                }
+                None => {
+                    let name = unique_name(&set.name, |n| KinsokuSet::named(&d.kinsoku_sets, n).is_some());
+                    (d.kinsoku_sets.len() < KINSOKU_SETS_MAX && name.chars().count() <= KINSOKU_NAME_MAX).then(|| {
+                        let added = KinsokuSet { name: name.clone(), ..set.clone() };
+                        d.kinsoku_sets.push(added.clone());
+                        out.added += 1;
+                        if name != set.name {
+                            out.renamed.push(json!({"kind": "kinsokuSet", "from": set.name, "to": name}));
+                        }
+                        Arc::new(added)
+                    })
+                }
+            };
+            if to.as_deref() != Some(&set) {
+                out.relink.kinsoku.insert(set, to);
+            }
+        }
     }
 
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
