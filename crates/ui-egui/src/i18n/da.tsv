@@ -6034,6 +6034,7 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop

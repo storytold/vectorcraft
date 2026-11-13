@@ -6586,6 +6586,7 @@ axis	Y Axis	Y-akseli
 	Continue	Jatka
 	Continue Action	Jatka toimintoa
 	Delete Action Step	Poista toiminnon vaihe
+	Move Action Step	Siirrä toiminnon vaihe
 	Press Play Current Selection in the Actions panel to go on.	Jatka valitsemalla Toiminnot-paneelista Toista nykyinen valinta.
 	Stop: {message}	Pysäytys: {message}
 @msg	no action is waiting at a stop	mikään toiminto ei odota pysäytyksessä

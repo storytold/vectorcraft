@@ -6034,6 +6034,7 @@ axis	Y Axis	Sumbu Y
 	Continue	Lanjutkan
 	Continue Action	Lanjutkan tindakan
 	Delete Action Step	Hapus langkah tindakan
+	Move Action Step	Pindahkan langkah tindakan
 	Press Play Current Selection in the Actions panel to go on.	Untuk melanjutkan, tekan Putar seleksi saat ini di panel Tindakan.
 	Stop: {message}	Henti: {message}
 @msg	no action is waiting at a stop	tidak ada tindakan yang menunggu di titik henti

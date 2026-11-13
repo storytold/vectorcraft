@@ -6499,6 +6499,7 @@ axis	Y Axis	Eje Y
 	Continue	Continuar
 	Continue Action	Continuar acción
 	Delete Action Step	Eliminar paso de la acción
+	Move Action Step	Mover paso de la acción
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	ninguna acción está esperando en una parada

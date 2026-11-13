@@ -6167,6 +6167,7 @@ axis	Y Axis	Ось Y
 	Continue	Продолжить
 	Continue Action	Продолжить действие
 	Delete Action Step	Удалить шаг действия
+	Move Action Step	Переместить шаг действия
 	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
 	Stop: {message}	Остановка: {message}
 @msg	no action is waiting at a stop	ни одно действие не ожидает на остановке

@@ -6471,6 +6471,7 @@ axis	Y Axis	Eixo Y
 	Continue	Continuar
 	Continue Action	Continuar Ação
 	Delete Action Step	Excluir Etapa da Ação
+	Move Action Step	Mover Etapa da Ação
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pressione Reproduzir Seleção Atual no painel Ações.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	nenhuma ação está aguardando em uma parada

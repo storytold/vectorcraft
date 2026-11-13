@@ -6395,6 +6395,7 @@ axis	Y Axis	Y 轴
 	Continue	继续
 	Continue Action	继续动作
 	Delete Action Step	删除动作步骤
+	Move Action Step	移动动作步骤
 	Press Play Current Selection in the Actions panel to go on.	要继续，请按“动作”面板中的“播放当前选择项目”。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	没有动作在停止处等待

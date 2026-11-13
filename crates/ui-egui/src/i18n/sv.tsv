@@ -6537,6 +6537,7 @@ axis	Y Axis	Y-axel
 	Continue	Fortsätt
 	Continue Action	Fortsätt åtgärd
 	Delete Action Step	Radera åtgärdssteg
+	Move Action Step	Flytta åtgärdssteg
 	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
