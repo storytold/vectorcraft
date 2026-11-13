@@ -66,6 +66,7 @@ fn settings() -> impl Iterator<Item = Setting> {
         "systemTitleBar" => SYSTEM_TITLE_BAR,
         "appTitleBar" => APP_TITLE_BAR_SHOWN,
         "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
+        "monitorProfileDisplay" => !cfg!(target_arch = "wasm32"),
         _ => true,
     };
     let prefs =
@@ -554,6 +555,15 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     } else {
                         tl!("Applies the next time VectorCraft starts.")
                     };
+                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
+                }
+            }
+            // The desktop app only: the web build has no display profile to read. A note says
+            // which profile the canvas is drawn through, or why none.
+            PrefKind::Bool if sp.key == "monitorProfileDisplay" => {
+                if !cfg!(target_arch = "wasm32") {
+                    bool_row(ui, d, sp.key, sp.label);
+                    let note = app.display_profile.note(d.bool(sp.key));
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }

@@ -33,6 +33,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             xh: 4.0,
             ch,
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
             keeps_word: false,
@@ -97,6 +98,7 @@ fn indic_hyphenation_reaches_both_composers_without_splitting_marks() {
             false,
             false,
             &[],
+            None,
         );
         assert_eq!((end, hyphen), (4, true), "{tag}");
         let params = Params { justify_last: false, ragged: true, tolerance: 1.0, uniform_from: 0, hyphen_limit: 0 };
@@ -169,7 +171,7 @@ fn greedy_wrap_keeps_an_oversized_first_cluster_and_its_source_range() {
     let glyphs = synthetic_glyphs(&[(0, 4, 2.0, 'ب'), (0, 4, 2.0, 'ب'), (4, 2, 1.0, 'ت')]);
 
     let (end, hyphenated) =
-        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[], None);
 
     assert!(!hyphenated);
     assert_eq!(end, 2, "oversized base-plus-mark cluster must stay together");
@@ -183,12 +185,26 @@ fn greedy_wrap_keeps_an_oversized_cluster_after_a_line_start_atomic() {
     let glyphs = synthetic_glyphs(&[(0, 4, 1.0, 'ب'), (4, 4, 2.0, 'ت'), (4, 4, 2.0, 'ت'), (8, 2, 1.0, 'ث')]);
 
     let (first_end, _) =
-        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[], None);
     assert_eq!(first_end, 1);
     assert_eq!(source_range(&glyphs, 0, first_end), 0..4);
 
-    let (second_end, hyphenated) =
-        break_line(text, &glyphs, first_end, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
+    let (second_end, hyphenated) = break_line(
+        text,
+        &glyphs,
+        first_end,
+        3.0,
+        &[],
+        0.0,
+        None,
+        Burasagari::None,
+        Kinsoku::Hard,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        None,
+    );
 
     assert!(!hyphenated);
     assert_eq!(second_end, 3, "oversized cluster at the next line start must stay together");
@@ -244,7 +260,7 @@ fn no_break_keeps_marked_characters_on_one_line() {
     let text = "A B";
     let plain = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 1, 4.0, ' '), (2, 1, 10.0, 'B')]);
     let (end, hyphen) =
-        break_line(text, &plain, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &plain, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], None);
     assert!(!hyphen);
     assert_eq!(end, 2, "without the mark the line ends after the space");
 
@@ -253,7 +269,7 @@ fn no_break_keeps_marked_characters_on_one_line() {
         g.no_break = true;
     }
     let (end, hyphen) =
-        break_line(text, &marked, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &marked, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], None);
     assert!(!hyphen);
     assert_eq!(end, 3, "the marked words stay together even though they are wider than the line");
 
@@ -263,10 +279,10 @@ fn no_break_keeps_marked_characters_on_one_line() {
     glyphs[2].no_break = true;
     glyphs[3].no_break = true;
     let (end, _) =
-        break_line(text, &glyphs, 0, 22.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &glyphs, 0, 22.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], None);
     assert_eq!(end, 2, "the marked pair moves to the next line together");
     let (end, _) =
-        break_line(text, &glyphs, end, 15.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
+        break_line(text, &glyphs, end, 15.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], None);
     assert_eq!(end, 4, "on its own line the pair stays together even when it is wider than the line");
 
     let breaks = candidates(text, &glyphs, None, Kinsoku::None);
@@ -336,7 +352,7 @@ fn full_width(text: &str) -> Vec<SGlyph> {
 fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
     use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
     let hung = |text: &str, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType, hanging: bool| {
-        break_line(text, &full_width(text), 0, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, hanging, false, &[]).0
+        break_line(text, &full_width(text), 0, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, hanging, false, &[], None).0
     };
     let end = |text: &str, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType| hung(text, width, kinsoku, ty, false);
     let text = "一二三四五六七八九十一二三四五」六";
@@ -402,7 +418,7 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     let mut glyphs = full_width(mixed);
     glyphs[3].level = unicode_bidi::Level::rtl();
     let mixed_end =
-        |ty: KinsokuShoriType| break_line(mixed, &glyphs, 0, 150.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[]).0;
+        |ty: KinsokuShoriType| break_line(mixed, &glyphs, 0, 150.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[], None).0;
     assert_eq!(mixed_end(PushInFirst), 14, "right-to-left text on the line: 五 is pushed out with 」");
     assert_eq!(mixed_end(PushOutOnly), 14);
 
@@ -414,7 +430,7 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
         g.sy *= 2.0;
     }
     let tall_end =
-        |ty: KinsokuShoriType| break_line(tall, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[]).0;
+        |ty: KinsokuShoriType| break_line(tall, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[], None).0;
     assert_eq!(tall_end(PushInFirst), 4, "Vertical Scale does not widen the gaps: 五 is pushed out with 」");
 
     // No gap closes inside a shaped cluster. 二 is two glyphs here, so the line has five gaps to
@@ -424,7 +440,7 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     let half = glyphs[1].clone();
     glyphs.insert(2, half);
     let split_end =
-        |width: f64| break_line(tall, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushInFirst, false, false, &[]).0;
+        |width: f64| break_line(tall, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushInFirst, false, false, &[], None).0;
     assert_eq!(split_end(54.0), 5, "五 is pushed out with 」");
     assert_eq!(split_end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
 }
@@ -438,10 +454,196 @@ fn kinsoku_shori_type_counts_no_gap_at_a_format_control() {
     let mut glyphs = full_width(text);
     glyphs[2].adv = 0.0;
     let end = |width: f64| {
-        break_line(text, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[]).0
+        break_line(text, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[], None).0
     };
     assert_eq!(end(54.0), 5, "五 is pushed out with 」");
     assert_eq!(end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
+}
+
+/// A line with a tab that does not fit as drawn ends at the latest break that does, even when an
+/// earlier break does not fit.
+#[test]
+fn a_tabbed_line_ends_at_the_latest_break_that_fits_as_drawn() {
+    let text = "a\tb c d e";
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 1.0, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    // Breaks after the spaces end the line before glyphs 4, 6 and 8; the paragraph ends at 9.
+    let drawn_fits = |end: usize, _hyphenated: bool| end == 4 || end == 8;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(text, &glyphs, 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (8, false));
+}
+
+/// Past the breaks a tabbed line measures one by one, it ends at the latest break without a hyphen
+/// that fits as drawn, whatever the breaks with a hyphen between them measure.
+#[test]
+fn a_long_tabbed_line_ends_at_the_latest_plain_break_that_fits_as_drawn() {
+    // a (0), tab (1), then b, a soft hyphen, b and a space for each u: breaks before 4 + 4u (with a
+    // hyphen) and 6 + 4u.
+    let text = format!("a\t{}", "b\u{AD}b ".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 1.0, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let drawn_fits = |end: usize, hyphenated: bool| !hyphenated && end <= 606;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 1e6, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (606, false));
+}
+
+/// A line with a tab that overflows in the order of its text at many clusters stays whole when it
+/// fits as drawn.
+#[test]
+fn a_tabbed_line_that_fits_as_drawn_stays_whole_past_many_clusters() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let text = format!("a\t{}", "b ".repeat(600));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 0.1, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let tabs = [TabStop { position: 500.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    // In the text's order the line is 500 pt and 120 pt of text wide; drawn, it fits.
+    let drawn_fits = |_end: usize, _hyphenated: bool| true;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended = break_line(
+        &text,
+        &glyphs,
+        0,
+        600.0,
+        &tabs,
+        0.0,
+        None,
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (glyphs.len(), false));
+}
+
+/// A line of tabs and glyphs without width stops reading once its tabs reach past the frame: the
+/// rest of the paragraph is not measured.
+#[test]
+fn a_tabbed_line_stops_reading_where_its_tabs_reach_past_the_frame() {
+    let text = format!("a{}", "\tx ".repeat(2000));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if ch == 'a' { 1.0 } else { 0.0 }, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let furthest = std::cell::Cell::new(0);
+    let drawn_fits = |end: usize, _hyphenated: bool| {
+        furthest.set(furthest.get().max(end));
+        end <= 4
+    };
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (4, false));
+    assert!(furthest.get() < 100, "measured up to glyph {}", furthest.get());
+}
+
+/// A tab to an explicit stop past the frame stops a line from reading on: the rest of the paragraph
+/// is not measured.
+#[test]
+fn a_tab_to_a_stop_past_the_frame_stops_the_line_reading() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let text = format!("a b\t{}", "x ".repeat(2000));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if ch == 'x' { 0.0 } else { 1.0 }, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let tabs = [TabStop { position: 500.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    let furthest = std::cell::Cell::new(0);
+    let drawn_fits = |end: usize, _hyphenated: bool| {
+        furthest.set(furthest.get().max(end));
+        end <= 2
+    };
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended = break_line(
+        &text,
+        &glyphs,
+        0,
+        100.0,
+        &tabs,
+        0.0,
+        None,
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (2, false));
+    assert!(furthest.get() < 100, "measured up to glyph {}", furthest.get());
+}
+
+/// A tabbed line that ends in a word with more hyphenation points than are measured one by one ends
+/// at the latest point that fits as drawn.
+#[test]
+fn a_tabbed_line_ends_at_the_latest_hyphenation_point_that_fits_as_drawn() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    // a (0), tab (1), then a word of 400 syllables of two glyphs from glyph 2: points before 4, 6, ...
+    let text = format!("a\t{}", "कि".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 1.0, ch)).collect();
+    let mut glyphs = synthetic_glyphs(&specs);
+    for glyph in &mut glyphs {
+        glyph.hyphen_language = crate::hyphen::Language::from_tag(Some("hi"));
+        glyph.sx = 0.001;
+    }
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 50;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended = break_line(
+        &text,
+        &glyphs,
+        0,
+        600.0,
+        &[],
+        0.0,
+        Some((&opts, 0.0)),
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (50, true));
+}
+
+/// A glyph with a negative advance after a tab draws the line short of the tab's stop: a line that
+/// fits as drawn stays whole.
+#[test]
+fn a_negative_advance_after_a_tab_keeps_a_fitting_line_whole() {
+    let text = "a\tb";
+    let glyphs = synthetic_glyphs(&[(0, 1, 1.0, 'a'), (1, 1, 1.0, '\t'), (2, 1, -20.0, 'b')]);
+    let drawn_fits = |_end: usize, _hyphenated: bool| true;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (3, false));
+    // Two right tabs can align on the same stop when the text after the second steps back: the
+    // second tab does not reach the next stop.
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let text = "a\tb\tc";
+    let glyphs = synthetic_glyphs(&[(0, 1, 1.0, 'a'), (1, 1, 1.0, '\t'), (2, 1, 1.0, 'b'), (3, 1, 1.0, '\t'), (4, 1, -10.0, 'c')]);
+    let tabs = [100.0, 500.0].map(|position| TabStop { position, align: TabAlign::Right, leader: String::new(), align_on: '.' });
+    let ended = break_line(
+        text,
+        &glyphs,
+        0,
+        200.0,
+        &tabs,
+        0.0,
+        None,
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (5, false));
 }
 
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
@@ -455,7 +657,7 @@ fn greedy_wrap_counts_the_narrower_line_end() {
     let mut credit = vec![0.0; glyphs.len()];
     credit[3] = 5.0;
     let end = |glyphs: &[SGlyph], width: f64, burasagari: Burasagari, line_end: &[f64]| {
-        break_line(text, glyphs, 0, width, &[], 0.0, None, burasagari, Kinsoku::Hard, PushOutOnly, false, false, line_end).0
+        break_line(text, glyphs, 0, width, &[], 0.0, None, burasagari, Kinsoku::Hard, PushOutOnly, false, false, line_end, None).0
     };
     assert_eq!(end(&glyphs, 35.0, Burasagari::None, &credit), 4, "」 half width fits");
     assert_eq!(end(&glyphs, 35.0, Burasagari::None, &[]), 2, "」 full width does not: 三 goes with it");
@@ -471,7 +673,7 @@ fn greedy_wrap_counts_the_narrower_line_end() {
     let comma = "一二三、";
     let glyphs = full_width(comma);
     let end = |line_end: &[f64]| {
-        break_line(comma, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, PushOutOnly, false, false, line_end).0
+        break_line(comma, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, PushOutOnly, false, false, line_end, None).0
     };
     assert_eq!(end(&[0.0, 0.0, 5.0, 0.0]), 2);
 
@@ -480,7 +682,7 @@ fn greedy_wrap_counts_the_narrower_line_end() {
     let pushed = "一二三四」。六";
     let glyphs = full_width(pushed);
     let end = |ty: KinsokuShoriType, line_end: &[f64]| {
-        break_line(pushed, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, line_end).0
+        break_line(pushed, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, line_end, None).0
     };
     let stop = [0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 0.0];
     assert_eq!(end(PushInFirst, &stop), 6, "。 is pushed in");
@@ -490,7 +692,7 @@ fn greedy_wrap_counts_the_narrower_line_end() {
     let pushed = format!("{}二」「四", "一".repeat(10));
     let glyphs = full_width(&pushed);
     let end = |line_end: &[f64]| {
-        break_line(&pushed, &glyphs, 0, 130.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutFirst, false, false, line_end).0
+        break_line(&pushed, &glyphs, 0, 130.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutFirst, false, false, line_end, None).0
     };
     let mut bracket = vec![0.0; glyphs.len()];
     bracket[11] = 5.0;
@@ -503,8 +705,9 @@ fn greedy_wrap_counts_the_narrower_line_end() {
     glyphs[2].adv = 5.0;
     let half = glyphs[2].clone();
     glyphs.insert(3, half);
-    let end =
-        |line_end: &[f64]| break_line(text, &glyphs, 0, 26.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, PushOutOnly, false, false, line_end).0;
+    let end = |line_end: &[f64]| {
+        break_line(text, &glyphs, 0, 26.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, PushOutOnly, false, false, line_end, None).0
+    };
     assert_eq!(end(&[0.0, 0.0, 4.0, 0.0]), 2, "the cluster stays whole and goes to the next line");
     assert_eq!(end(&[0.0, 0.0, 0.0, 4.0]), 4, "its last glyph's credit keeps it on the line");
 }
@@ -784,8 +987,9 @@ fn korean(text: &str, anywhere: bool) -> Vec<SGlyph> {
 fn korean_words_break_at_spaces_unless_line_break_anywhere() {
     use KinsokuShoriType::PushOutOnly;
     let text = "가나다 라마바";
-    let greedy =
-        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    let greedy = |g: &[SGlyph], width: f64| {
+        break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[], None).0
+    };
     let ends = |g: &[SGlyph]| candidates(text, g, None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
     // 50 pt holds "가나다 라" and not "가나다 라마".
     assert_eq!(greedy(&korean(text, false), 50.0), 4, "off: the line ends at the space");
@@ -804,7 +1008,7 @@ fn korean_words_break_at_spaces_unless_line_break_anywhere() {
     // A soft return still ends the line.
     let soft = "가나\u{2028}다라";
     assert_eq!(
-        break_line(soft, &korean(soft, false), 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0,
+        break_line(soft, &korean(soft, false), 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[], None).0,
         3
     );
 }
@@ -825,7 +1029,8 @@ fn korean_words_keep_their_letters_and_break_after_punctuation() {
     for g in &mut glyphs[1..3] {
         g.no_break = true;
     }
-    let end = break_line(text, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]).0;
+    let end =
+        break_line(text, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[], None).0;
     assert_eq!(end, 1, "No Break keeps 나다 together");
 }
 
@@ -852,6 +1057,7 @@ fn korean_words_take_no_hyphen() {
             false,
             false,
             &[],
+            None,
         );
         assert_eq!(line, (2, false));
         assert!(candidates(text, &glyphs, Some(&opts), Kinsoku::Hard).iter().all(|b| b.hyphen == 0.0));
@@ -897,8 +1103,9 @@ fn bunri_kinshi_keeps_jlreq_pairs_in_both_composers() {
     let marked = |text: &str| pairs(text, true).iter().filter(|g| g.keeps_next).count();
     assert_eq!((marked("……‥‥〳〵〴〵"), marked("—\u{2028}—"), marked("—〵"), marked("〵〳")), (4, 0, 0, 0));
     // 35 pt holds "あい—" and not "あい——".
-    let greedy =
-        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    let greedy = |g: &[SGlyph], width: f64| {
+        break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[], None).0
+    };
     assert_eq!(greedy(&pairs(text, false), 35.0), 3, "off: the line ends between the dashes");
     assert_eq!(greedy(&pairs(text, true), 35.0), 2, "on: both dashes go to the next line");
     assert_eq!(breaking::word_width(&pairs("——あ", true), 0, &[], Kinsoku::Hard), 20.0);
@@ -916,7 +1123,7 @@ fn bunri_kinshi_keeps_jlreq_pairs_in_both_composers() {
 fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
     use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
     let line = |text: &str, g: &[SGlyph], i: usize, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType| {
-        break_line(text, g, i, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, false, false, &[]).0
+        break_line(text, g, i, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, false, false, &[], None).0
     };
     let text = "——あ";
     assert_eq!(line(text, &pairs(text, true), 0, 15.0, Kinsoku::Hard, PushOutOnly), 2, "the pair overflows the line whole");
@@ -950,4 +1157,27 @@ fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
     let text = "あ〳〵い」";
     assert_eq!(line(text, &pairs(text, false), 0, 46.5, Kinsoku::Hard, PushInFirst), 5);
     assert_eq!(line(text, &pairs(text, true), 0, 46.5, Kinsoku::Hard, PushInFirst), 3);
+}
+
+/// Justification adds no gap between two glyphs of one warichu block, whichever of them is drawn
+/// first: right to left, the block's first glyph (the one that starts it) is drawn after the
+/// others. Between glyphs of two blocks, the gap stays.
+#[test]
+fn justification_adds_no_gap_inside_a_warichu_block_drawn_right_to_left() {
+    let block = |g: &mut SGlyph, start: usize, pen: f64| {
+        g.wari = Some(crate::shape::Wari { start, pen, along: 0.0, across: 0.0, advance: g.adv, em: 10.0 });
+    };
+    // Glyph 1 is drawn first, then glyph 0, which starts the block.
+    let after = [None, Some(0)];
+    for (first, second) in [('א', 'ב'), ('漢', 'א')] {
+        let mut glyphs = synthetic_glyphs(&[(0, 2, 10.0, first), (2, 2, 0.0, second)]);
+        block(&mut glyphs[0], 0, 0.0);
+        block(&mut glyphs[1], 0, 10.0);
+        assert!(!flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
+        assert!(!flow::is_cjk_gap(1, &[], &after, 0, &glyphs), "{first}{second}");
+        // The same two glyphs as the first glyphs of two blocks.
+        block(&mut glyphs[1], 2, 0.0);
+        assert!(flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
+        assert_eq!(flow::is_cjk_gap(1, &[], &after, 0, &glyphs), first == '漢', "{first}{second}");
+    }
 }

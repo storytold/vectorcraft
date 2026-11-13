@@ -70,9 +70,17 @@ impl Panes {
     }
 
     /// Bring `slot`'s render up to `key` (`size` pixels through `view`), on the worker when there
-    /// is one, then draw the slot's latest render through `xf`, turned and scaled into the view it
-    /// was rendered for.
-    fn draw(&mut self, ctx: &egui::Context, painter: &egui::Painter, xf: &Xf, slot: Slot, frame: PaneFrame) {
+    /// is one, converted into the display profile `display`, then draw the slot's latest render
+    /// through `xf`, turned and scaled into the view it was rendered for.
+    fn draw(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        xf: &Xf,
+        slot: Slot,
+        frame: PaneFrame,
+        display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
+    ) {
         let (key, doc, ((w, h), view), opts) = frame;
         if !self.worker_started {
             self.worker_started = true;
@@ -101,8 +109,16 @@ impl Panes {
         if !current {
             let mut queued = false;
             if let Some(worker) = &self.worker {
-                let (job_doc, job_opts) = (doc.clone(), opts.clone());
-                queued = worker.submit(slot, (slot, key.clone()), Box::new(move |r| Some(r.render(&job_doc, w, h, view, &job_opts))));
+                let (job_doc, job_opts, job_display) = (doc.clone(), opts.clone(), display.clone());
+                queued = worker.submit(
+                    slot,
+                    (slot, key.clone()),
+                    Box::new(move |r| {
+                        let mut img = r.render(&job_doc, w, h, view, &job_opts);
+                        crate::display_profile::convert(job_display.as_deref(), &mut img.pixels);
+                        Some(img)
+                    }),
+                );
                 if queued {
                     self.pending.insert(slot, key.clone());
                 } else {
@@ -110,7 +126,8 @@ impl Panes {
                 }
             }
             if !queued {
-                let img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
+                let mut img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
+                crate::display_profile::convert(display.as_deref(), &mut img.pixels);
                 self.upload(ctx, slot, key, &img);
             }
         }
@@ -314,7 +331,8 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     let opts = frame_options(app, &key, st.shown_mask(), smooth_images);
     let (fw, fh, view) = frame_view(pixel, (pw, ph), &drawn, ppp);
     let doc = st.doc.clone();
-    app.canvas.panes.draw(ui.ctx(), &painter, &xf, slot, (key, doc, ((fw, fh), view), opts));
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
+    app.canvas.panes.draw(ui.ctx(), &painter, &xf, slot, (key, doc, ((fw, fh), view), opts), display);
     let Some(st) = app.session.documents().get(w.0) else { return false };
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);

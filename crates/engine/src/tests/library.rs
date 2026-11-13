@@ -816,7 +816,7 @@ fn style_order_of(s: &mut Session) -> Vec<String> {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_library_item_rename_is_saved_or_taken_back() {
-    let dir = vectorcraft_testkit::temp_dir("library-rename-item");
+    let dir = vectorcraft_testkit::TempDir::new("library-rename-item");
     let folder = dir.to_string_lossy().to_string();
     let mut s = session();
     s.libraries.set_dir(Some(folder.clone()));
@@ -836,7 +836,6 @@ fn a_library_item_rename_is_saved_or_taken_back() {
     run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "Text", "name": " Text "}));
     assert!(s.execute("library.renameItem", &json!({"kind": "charStyle", "item": "Text", "name": "Copy"})).is_err());
     assert_eq!(style_order_of(&mut s), ["Text"], "taken back");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1056,7 +1055,8 @@ fn a_new_item_is_added_where_it_is_dropped() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn an_add_that_cannot_be_placed_makes_no_library() {
-    let folder = vectorcraft_testkit::temp_dir("library-add-unplaced").to_string_lossy().to_string();
+    let dir = vectorcraft_testkit::TempDir::new("library-add-unplaced");
+    let folder = dir.to_string_lossy().to_string();
     let mut s = session();
     s.libraries.set_dir(Some(folder.clone()));
     for bad in [json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}), json!({"kind": "fillColor", "color": "#808080", "after": "Nope"})]
@@ -1163,7 +1163,7 @@ fn a_library_of_one_repeated_name_imports_numbered() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_library_is_exported_to_a_file_and_imported_from_it() {
-    let dir = vectorcraft_testkit::temp_dir("library-export");
+    let dir = vectorcraft_testkit::TempDir::new("library-export");
     let path = dir.join("Brand.vclibrary").to_string_lossy().to_string();
     let (mut s, g, ..) = brand();
     run(&mut s, "library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": g}]}));

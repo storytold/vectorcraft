@@ -906,6 +906,8 @@ antiAlias	Sharp	Nítid
 	Convert to destination (preserve numbers)	Converteix al destí (conserva els números)
 	Convert to Global	Converteix en global
 	Convert to Grayscale	Converteix a escala de grisos
+	Convert to Indexed Color	Converteix a color indexat
+	Convert to Indexed Color…	Converteix a color indexat…
 	Convert To Outlines	Converteix en contorns
 	Convert To Point Type	Converteix en text de punt
 	Convert to RGB	Converteix a RGB
@@ -3144,6 +3146,8 @@ digits	Malayalam	Malaiàlam
 	per slice	per tall
 	Percent:	Percentatge:
 	Perceptual	Perceptual
+	Hue Clockwise	To en sentit horari
+	Hue Counterclockwise	To en sentit antihorari
 	Perceptual Scales	Escales perceptuals
 	Performance	Rendiment
 	Permissions	Permisos
@@ -3401,6 +3405,11 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
+	Canvas display profile:	Perfil de pantalla del llenç:
+	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No s’ha trobat cap perfil de pantalla utilitzable: el llenç es dibuixa en sRGB.
 	Rearrange	Reorganitza
 	Select All Artboards	Selecciona tots els taulers
 	Switch Orientation	Canvia l’orientació
@@ -3928,6 +3937,22 @@ digits	Malayalam	Malaiàlam
 	Graphite Pencil	Llapis de grafit
 	Wax Crayon	Cera de colors
 	Charcoal Dust	Pols de carbó
+	Notched Ribbon	Cinta dentada
+	Double Line	Línia doble
+	Wave	Ona
+	Teardrop	Llàgrima
+	Striped Ribbon	Cinta ratllada
+	Fine Nib	Plomí fi
+	Broad Nib	Plomí ample
+	Chisel	Escarpra
+	Round Pen	Ploma rodona
+	Pressure Pen	Ploma de pressió
+	Beads	Perles
+	Dash Dot	Ratlla i punt
+	Scallops	Festons
+	Stars	Estrelles
+	Triangles	Triangles
+	Sparkles	Espurnes
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4054,6 +4079,7 @@ digits	Malayalam	Malaiàlam
 	Continue	Continua
 	Continue Action	Continua l’acció
 	Delete Action Step	Suprimeix el pas de l’acció
+	Move Action Step	Mou el pas de l’acció
 	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
 	Stop: {message}	Aturada: {message}
 @msg	no action is waiting at a stop	cap acció no espera en una aturada
@@ -4587,6 +4613,11 @@ digits	Malayalam	Malaiàlam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configuració de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configuració de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Configuració de Warichu…
+	Warichu Settings	Configuració de Warichu
+	Lines:	Línies:
+	Line Gap:	Separació entre línies:
 	Composite Fonts…	Tipus de lletra compostos…
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
@@ -5196,7 +5227,7 @@ digits	Malayalam	Malaiàlam
 @msg	`ids` must be an array of object ids, not {v}	`ids` ha de ser una matriu d’identificadors d’objecte, no {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
-@msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` ha de ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
@@ -5229,6 +5260,9 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` ha de ser [x, y, width, height]: quatre nombres finits, amb amplada i alçada no negatives
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` ha de ser `auto` o un codi d’idioma com `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` ha de ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
+@msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
+@msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
@@ -5523,9 +5557,16 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No s’ha pogut col·locar {name}: el document on es va deixar anar s’ha revertit
+@msg	Couldn't place {name}: the document it was placed in was reverted	No s’ha pogut col·locar {name}: el document on es va col·locar s’ha revertit
+@msg	Couldn't paste: the document it was pasted in was reverted	No s’ha pogut enganxar: el document on s’enganxava s’ha revertit
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Crea a partir de guies: el document no té cap tauler
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crea a partir de guies: les guies fan més de {MAX_PIECES} talls
 @msg	Create from Selection: the selection has no area	Crea a partir de la selecció: la selecció no té àrea
@@ -5614,6 +5655,7 @@ digits	Malayalam	Malaiàlam
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita: activeu «Escriu les pàgines de més de 200 in a mida real, en punts»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	el PDF 1.4 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per quedar dins del límit de pàgina de 14.400 unitats del PDF/A-2: el fitxer s’escriu com a PDF 1.6
@@ -5899,6 +5941,7 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. S’ha obert amb {n} nota: {first}|{notice}. S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
@@ -6807,6 +6850,8 @@ anchor	Points:	Punts:
 	Anchor Inspector	Inspector de punts d’ancoratge
 	Add Points at Crossings	Afegeix punts als encreuaments
 	Split at Crossings	Divideix als encreuaments
+	Trim at Crossings Tool	Eina de retallar als encreuaments
+	Trim at Crossings	Retalla als encreuaments
 	Extend Path	Allarga el traçat
 	Measure & Inspect	Mesura i inspecciona
 	Set Anchor	Defineix el punt d’ancoratge
@@ -7397,3 +7442,9 @@ breakText	Glyphs	Glifs
 	Margin	Marge
 	Box	Caixa
 	Swatch	Mostra
+	Banner Hems and Grommets…	Vores i ullets de pancarta…
+	Banner Hems and Grommets	Vores i ullets de pancarta
+	Hem	Vora
+	Grommets	Ullets
+	Grommet Inset	Distància dels ullets a la vora
+	Diameter	Diàmetre

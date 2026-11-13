@@ -1110,11 +1110,17 @@ fn no_guides(n: &Node, depth: usize) -> bool {
 /// Twist keeps the file's drawn look.
 const MAX_TWIST: f64 = 90.0;
 
+/// The largest Twist angle, in degrees either way, read as a live effect on a path or compound path
+/// with straight segments: VectorCraft's own limit. One with a larger Twist keeps the file's drawn
+/// look.
+const MAX_STRAIGHT_TWIST: f64 = 180.0;
+
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
 /// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
-/// stroked: on a path or compound path with straight segments at any angle, or up to [`MAX_TWIST`]
-/// degrees either way on another object with no guide in it. Transform that scales, turns or reflects
-/// is read only when nothing is stroked (its reference point lies on the bounds without strokes).
+/// stroked and its angle is a number: up to [`MAX_STRAIGHT_TWIST`] degrees either way on a path or
+/// compound path with straight segments, or up to [`MAX_TWIST`] degrees either way on another object
+/// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
+/// (its reference point lies on the bounds without strokes).
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
@@ -1124,7 +1130,8 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && object.children().into_iter().flatten().all(|c| moves_alike(c, 1))
         && st.effects.iter().all(|e| match e.id.as_str() {
             "distort.twist" => {
-                !stroked && (straight(object) || (no_guides(object, 0) && e.params["angle"].as_f64().is_some_and(|a| a.abs() <= MAX_TWIST)))
+                let within = |limit: f64| e.params["angle"].as_f64().is_some_and(|a| a.abs() <= limit);
+                !stroked && if straight(object) { within(MAX_STRAIGHT_TWIST) } else { no_guides(object, 0) && within(MAX_TWIST) }
             }
             "distort.transform" => {
                 let p = &e.params;

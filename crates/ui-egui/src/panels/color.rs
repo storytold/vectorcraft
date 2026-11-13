@@ -248,8 +248,9 @@ pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Col
     .inner
 }
 
-/// The printable colour closest to `c` (its working-CMYK reproduction, back in RGB) when `c` is out
-/// of the CMYK gamut, through `color.convert`.
+/// The printable color closest to `c` (its reproduction in the active CMYK space, the document's
+/// assigned CMYK profile or else the working CMYK space, back in RGB) when `c` is out of that
+/// space's gamut, through `color.convert`.
 pub(crate) fn in_gamut(app: &mut VectorcraftApp, c: &Color) -> Option<Color> {
     let r = app.run("color.convert", json!({"color": color_json(c), "to": "cmyk"})).ok()?;
     if !r["outOfGamut"].as_bool()? {
@@ -261,17 +262,24 @@ pub(crate) fn in_gamut(app: &mut VectorcraftApp, c: &Color) -> Option<Color> {
     Some(Color::rgb(v(&rgb, 0)? as f32, v(&rgb, 1)? as f32, v(&rgb, 2)? as f32))
 }
 
-/// [`in_gamut`], cached under `key` for the last colour asked (panels ask every frame).
+/// [`in_gamut`], cached under `key` for the last color asked (panels ask every frame) together with
+/// the active color settings and profiles generation it was asked under, so a change of Color
+/// Settings or of the document's assigned profiles updates the warning while the color stays the same.
 pub(crate) fn gamut_fix(app: &mut VectorcraftApp, ctx: &egui::Context, key: &str, c: &Color) -> Option<Color> {
-    match pstate::<Option<(Color, Option<Color>)>>(ctx, key) {
-        Some((k, fix)) if k == *c => fix,
+    let under = (cms::active_settings(), cms::profiles_generation());
+    match pstate::<Option<GamutFix>>(ctx, key) {
+        Some((k, at, fix)) if k == *c && at == under => fix,
         _ => {
             let fix = in_gamut(app, c);
-            set_pstate(ctx, key, Some((*c, fix)));
+            set_pstate(ctx, key, Some((*c, under, fix)));
             fix
         }
     }
 }
+
+/// A [`gamut_fix`] cache entry: the color, the active color settings and profiles generation it was
+/// asked under, and its correction.
+pub(crate) type GamutFix = (Color, (cms::ColorSettings, u64), Option<Color>);
 
 /// Serde reader for the saved panel mode ([`crate::UiState::color_mode`]): a menu mode, else none,
 /// so an unknown value doesn't lose the rest of the preferences.

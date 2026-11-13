@@ -47,6 +47,10 @@
 //!   rasterised in SVG
 //!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html>).
 //!   On characters they are written as linear gradients through stops on the perceptual curve.
+//! * **Gradients mixed around the hue wheel** (Hue Clockwise and Hue Counterclockwise,
+//!   VectorCraft's own methods) fill or stroke objects as an `<image>` of the gradient too, at the
+//!   document's raster effects resolution. On characters they are written as gradients through
+//!   stops on their way around the wheel.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
@@ -572,7 +576,7 @@ pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Resu
 }
 
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
+pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT, MAX_NODES};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {

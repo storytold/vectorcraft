@@ -573,6 +573,8 @@ antiAlias	Sharp	Nítido
 	Convert to Artboards	Converter em Mesas de Trabalho
 	Convert to CMYK	Converter para CMYK
 	Convert to Grayscale	Converter para Escala de Cinza
+	Convert to Indexed Color	Converter para Cores Indexadas
+	Convert to Indexed Color…	Converter para Cores Indexadas…
 	Convert to RGB	Converter para RGB
 	Convert to Shape	Converter em Forma
 	Convert to sRGB	Converter para sRGB
@@ -2258,6 +2260,11 @@ digits	Malayalam	Malaiala
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
+	Use Monitor Profile for Canvas	Usar Perfil do Monitor para a Tela
+	The canvas is drawn in sRGB.	A tela é desenhada em sRGB.
+	Canvas display profile:	Perfil do monitor para a tela:
+	The system matches the window to the display's colors.	O sistema ajusta a janela às cores do monitor.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nenhum perfil de monitor utilizável foi encontrado: a tela é desenhada em sRGB.
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
 	Rearrange	Reorganizar
 	Select All Artboards	Selecionar Todas as Mesas de Trabalho
@@ -3810,8 +3817,15 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Não foi possível inserir {name}: o documento em que foi solto foi fechado
 @msg	Couldn't place {name}: the document it was placed in was closed	Não foi possível inserir {name}: o documento em que estava sendo inserido foi fechado
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Não foi possível inserir {name}: o documento em que foi solto foi revertido
+@msg	Couldn't place {name}: the document it was placed in was reverted	Não foi possível inserir {name}: o documento em que estava sendo inserido foi revertido
+@msg	Couldn't paste: the document it was pasted in was reverted	Não foi possível colar: o documento em que estava sendo colado foi revertido
 @msg	Couldn't read {name}: {e}	Não foi possível ler {name}: {e}
 @msg	Couldn't save recovery data: {e}	Não foi possível salvar os dados de recuperação: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Não foi possível salvar os dados de recuperação de {title}: {e}. As cópias vão para {folder}, a pasta de recuperação padrão; para usar outra pasta, defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Não foi possível salvar os dados de recuperação de {title}: {e}. As cópias vão para {folder}, a pasta definida em Preferências; para usar outra pasta, defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Não foi possível salvar os dados de recuperação: {e}. As cópias vão para {folder}, a pasta de recuperação padrão; para usar outra pasta, defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Não foi possível salvar os dados de recuperação: {e}. As cópias vão para {folder}, a pasta definida em Preferências; para usar outra pasta, defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
 @msg	Create Outlines: select text objects	Criar contornos: selecione objetos de texto
 @msg	Create from Guides: the document has no artboard	Criar a partir de guias: o documento não tem prancheta
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Criar a partir de guias: as guias formam mais de {MAX_PIECES} fatias
@@ -3896,6 +3910,9 @@ axis	Both	Ambos
 @msg	`{keep}` is not a side of this axis	`{keep}` não é um lado deste eixo
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` deve ser `auto` ou um código de idioma como `en` ou `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` deve ser uma cor #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve ser uma cor #rrggbb ou o nome de uma cor de camada
+@msg	unknown Live Paint option `{key}`	opção de Pintura ao Vivo desconhecida `{key}`
+@msg	unknown Shape Builder option `{key}`	opção do Construtor de Formas desconhecida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve ser uma cor #rrggbb
 @msg	`{key}` must be a number	`{key}` deve ser um número
 @msg	`{key}` must be a number, not {v}	`{key}` deve ser um número, não {v}
@@ -4045,6 +4062,7 @@ axis	Both	Ambos
 @msg	internal error: {msg} (please report this bug)	erro interno: {msg} (relate este bug)
 @msg	invalid PDF setting: {0}	configuração de PDF inválida: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): ela é gravada com um UserUnit de {unit}, então apps que ignoram UserUnit a mostram essa quantidade de vezes menor
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): ela é gravada com um UserUnit de {unit}, então apps que ignoram UserUnit a mostram essa quantidade de vezes menor: ative "Gravar páginas com mais de 200 in em tamanho real, em pontos"
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): páginas {label} são gravadas sem UserUnit, em pontos, e apps que respeitam o limite cortam a página em 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	o PDF 1.5 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para manter seu tamanho: o arquivo é gravado como PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	o PDF 1.4 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para ficar dentro do limite de página do PDF/A-2, de 14.400 unidades: o arquivo é gravado como PDF 1.6
@@ -4482,6 +4500,7 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} documento recuperado descartado|{n} documentos recuperados descartados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} documento recuperado restaurado: salve-o para mantê-lo|{n} documentos recuperados restaurados: salve-os para mantê-los
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aberto com {n} observação: {first}|Aberto com {n} observações: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Aberto com {n} observação: {first}|{notice}. Aberto com {n} observações: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} salvo com {n} observação: {first}|{path} salvo com {n} observações: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} imagem incorporada; faltam {missing}: revincule-as primeiro|{n} imagens incorporadas; faltam {missing}: revincule-as primeiro
 @msgplural	Embedded {n} image|Embedded {n} images	{n} imagem incorporada|{n} imagens incorporadas
@@ -5181,6 +5200,11 @@ axis	Both	Ambos
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configurações de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configurações de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Configurações de Warichu…
+	Warichu Settings	Configurações de Warichu
+	Lines:	Linhas:
+	Line Gap:	Distância entre linhas:
 	Composite Fonts…	Fontes compostas…
 	Composite Fonts	Fontes compostas
 	Export Composite Fonts	Exportar fontes compostas
@@ -5643,6 +5667,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto Contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tom em sentido horário
+	Hue Counterclockwise	Tom em sentido anti-horário
 	Relative Colorimetric	Colorimétrico Relativo
 	Absolute Colorimetric	Colorimétrico Absoluto
 	Exact	Exato
@@ -6228,7 +6254,7 @@ axis	Y Axis	Eixo Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a preenchimentos em gradiente (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a preenchimentos em gradiente (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve ser true ou false
-@msg	`method` must be classic or perceptual	`method` deve ser classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` deve ser classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` deve ser pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve ser um número inteiro de 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a gradientes lineares, radiais, cônicos e em losango
@@ -6471,6 +6497,7 @@ axis	Y Axis	Eixo Y
 	Continue	Continuar
 	Continue Action	Continuar Ação
 	Delete Action Step	Excluir Etapa da Ação
+	Move Action Step	Mover Etapa da Ação
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pressione Reproduzir Seleção Atual no painel Ações.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	nenhuma ação está aguardando em uma parada
@@ -6642,6 +6669,22 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+	Notched Ribbon	Fita Entalhada
+	Double Line	Linha Dupla
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Fita Listrada
+	Fine Nib	Pena Fina
+	Broad Nib	Pena Larga
+	Chisel	Cinzel
+	Round Pen	Pena Redonda
+	Pressure Pen	Pena de Pressão
+	Beads	Contas
+	Dash Dot	Traço-Ponto
+	Scallops	Festões
+	Stars	Estrelas
+	Triangles	Triângulos
+	Sparkles	Brilhos
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -6753,6 +6796,8 @@ anchor	Points:	Pontos:
 	Anchor Inspector	Inspetor de Pontos de Ancoragem
 	Add Points at Crossings	Adicionar Pontos nos Cruzamentos
 	Split at Crossings	Dividir nos Cruzamentos
+	Trim at Crossings Tool	Ferramenta Aparar nos Cruzamentos
+	Trim at Crossings	Aparar nos Cruzamentos
 	Extend Path	Estender Caminho
 	Measure & Inspect	Medir e Inspecionar
 	Set Anchor	Definir Ponto de Ancoragem
@@ -7489,3 +7534,9 @@ swatch	Yellow Green	Verde-amarelado
 	Margin	Margem
 	Box	Caixa
 	Swatch	Amostra
+	Banner Hems and Grommets…	Bainhas e ilhoses de banner…
+	Banner Hems and Grommets	Bainhas e ilhoses de banner
+	Hem	Bainha
+	Grommets	Ilhoses
+	Grommet Inset	Distância dos ilhoses à borda
+	Diameter	Diâmetro

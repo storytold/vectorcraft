@@ -42,6 +42,7 @@ const SPOT_GRADIENTS_L2: &str =
     "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+const SPOT_GRADIENTS_HUE: &str = "gradients of spot colors mixed around the hue wheel are written in process colors";
 const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
 const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
 const SPREAD_CAPPED: &str =
@@ -913,8 +914,8 @@ impl<'a> Scene<'a> {
     /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
     /// print with its ink. An off-center midpoint is a stop
     /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
-    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
-    /// it is then written in process colors.
+    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method
+    /// or around the hue wheel; it is then written in process colors.
     fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
         let doc = self.doc;
         let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
@@ -936,7 +937,7 @@ impl<'a> Scene<'a> {
             return None;
         }
         if !g.method.is_classic() {
-            self.warn(SPOT_GRADIENTS_PERCEPTUAL);
+            self.warn(if g.method.is_hue() { SPOT_GRADIENTS_HUE } else { SPOT_GRADIENTS_PERCEPTUAL });
             return None;
         }
         if names.len() > MAX_DEVICE_N {
@@ -1093,6 +1094,14 @@ impl<'a> Scene<'a> {
     /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
+        // One mixed around the hue wheel that reflects is repeated from its curve's stops, which
+        // keep no swatch links: the warning [`Self::ink_stops`] gives the others.
+        if g.gradient.method.is_hue() && g.gradient.is_spread() && g.gradient.spread == vectorcraft_color::GradientSpread::Reflect {
+            let doc = self.doc;
+            if g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
+                self.warn(SPOT_GRADIENTS_HUE);
+            }
+        }
         // A linear, radial or diamond gradient that repeats or reflects: PostScript's shadings
         // pad past their ends, so its stops are repeated as many times as the area needs.
         if let Some(padded) = g.gradient.padded_over(&geom, area) {

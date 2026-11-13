@@ -607,6 +607,8 @@ font-technology	Variable	Variabel
 	Convert to Artboards	In Zeichenflächen umwandeln
 	Convert to CMYK	In CMYK konvertieren
 	Convert to Grayscale	In Graustufen konvertieren
+	Convert to Indexed Color	In indizierte Farben konvertieren
+	Convert to Indexed Color…	In indizierte Farben konvertieren…
 	Convert To Outlines	In Pfade umwandeln
 	Convert To Point Type	In Punkttext umwandeln
 	Convert to RGB	In RGB konvertieren
@@ -2667,6 +2669,11 @@ digits	Malayalam	Malayalam
 	Rating:	Bewertung:
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
+	Use Monitor Profile for Canvas	Monitorprofil für Arbeitsfläche verwenden
+	The canvas is drawn in sRGB.	Die Arbeitsfläche wird in sRGB dargestellt.
+	Canvas display profile:	Bildschirmprofil der Arbeitsfläche:
+	The system matches the window to the display's colors.	Das System passt das Fenster an die Farben des Bildschirms an.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kein verwendbares Bildschirmprofil gefunden: Die Arbeitsfläche wird in sRGB dargestellt.
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
 	Rearrange	Neu anordnen
 	Select All Artboards	Alle Zeichenflächen auswählen
@@ -3588,6 +3595,11 @@ effect	Points	Punkte
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-Einstellungen…
 	Tate-chu-yoko Settings	Tate-chu-yoko-Einstellungen
+	Warichu	Warichu
+	Warichu Settings…	Warichu-Einstellungen…
+	Warichu Settings	Warichu-Einstellungen
+	Lines:	Zeilen:
+	Line Gap:	Zeilenabstand:
 	Composite Fonts…	Zusammengesetzte Schriften…
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
@@ -4264,8 +4276,15 @@ theme	Appearance	Erscheinungsbild
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde geschlossen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde geschlossen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't paste: the document it was pasted in was reverted	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde auf die letzte Version zurückgesetzt
 @msg	Couldn't read {name}: {e}	{name} konnte nicht gelesen werden: {e}
 @msg	Couldn't save recovery data: {e}	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Wiederherstellungsdaten für {title} konnten nicht gespeichert werden: {e}. Kopien werden in {folder} gespeichert, dem Standardordner für die Wiederherstellung; um einen anderen Ordner zu verwenden, legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Wiederherstellungsdaten für {title} konnten nicht gespeichert werden: {e}. Kopien werden in {folder} gespeichert, dem in den Voreinstellungen festgelegten Ordner; um einen anderen Ordner zu verwenden, legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}. Kopien werden in {folder} gespeichert, dem Standardordner für die Wiederherstellung; um einen anderen Ordner zu verwenden, legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}. Kopien werden in {folder} gespeichert, dem in den Voreinstellungen festgelegten Ordner; um einen anderen Ordner zu verwenden, legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
 @msg	Create Outlines: select text objects	In Pfade umwandeln: Wählen Sie Textobjekte aus
 @msg	Create from Guides: the document has no artboard	Aus Hilfslinien erstellen: Das Dokument hat keine Zeichenfläche
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Aus Hilfslinien erstellen: Die Hilfslinien ergeben mehr als {MAX_PIECES} Slices
@@ -4351,6 +4370,9 @@ theme	Appearance	Erscheinungsbild
 @msg	`{keep}` is not a side of this axis	`{keep}` ist keine Seite dieser Achse
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` muss `auto` oder ein Sprachcode wie `en` oder `zh-hant` sein
 @msg	`{key}` must be a #rrggbb color	`{key}` muss eine Farbe der Form #rrggbb sein
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` muss eine Farbe der Form #rrggbb oder der Name einer Ebenenfarbe sein
+@msg	unknown Live Paint option `{key}`	unbekannte Option für Interaktiv malen `{key}`
+@msg	unknown Shape Builder option `{key}`	unbekannte Option für Formerstellung `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` muss eine Farbe der Form #rrggbb sein
 @msg	`{key}` must be a number	`{key}` muss eine Zahl sein
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
@@ -4510,6 +4532,7 @@ theme	Appearance	Erscheinungsbild
 @msg	internal error: {msg} (please report this bug)	interner Fehler: {msg} (bitte melden Sie diesen Fehler)
 @msg	invalid PDF setting: {0}	ungültige PDF-Einstellung: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): sie wird mit einer UserUnit von {unit} geschrieben, daher zeigen Apps, die UserUnit ignorieren, sie entsprechend oft kleiner an
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): sie wird mit einer UserUnit von {unit} geschrieben, daher zeigen Apps, die UserUnit ignorieren, sie entsprechend oft kleiner an: „Seiten über 200 in in voller Größe in Punkt schreiben“ aktivieren
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): {label}-Seiten werden ohne UserUnit in Punkt geschrieben, und Apps, die die Grenze einhalten, schneiden die Seite auf 200 in ab
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um ihre Größe zu behalten: die Datei wird als PDF 1.6 geschrieben
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um innerhalb der PDF/A-2-Seitengrenze von 14.400 Einheiten zu bleiben: die Datei wird als PDF 1.6 geschrieben
@@ -4951,6 +4974,7 @@ theme	Appearance	Erscheinungsbild
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Mit {n} Hinweis geöffnet: {first}|Mit {n} Hinweisen geöffnet: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Mit {n} Hinweis geöffnet: {first}|{notice}. Mit {n} Hinweisen geöffnet: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} mit {n} Hinweis gespeichert: {first}|{path} mit {n} Hinweisen gespeichert: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet
@@ -5905,7 +5929,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
@@ -6148,6 +6174,7 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
@@ -6319,6 +6346,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -6430,6 +6473,8 @@ anchor	Points:	Punkte:
 	Anchor Inspector	Ankerpunkt-Inspektor
 	Add Points at Crossings	Punkte an Kreuzungen hinzufügen
 	Split at Crossings	An Kreuzungen teilen
+	Trim at Crossings Tool	An-Kreuzungen-kürzen-Werkzeug
+	Trim at Crossings	An Kreuzungen kürzen
 	Extend Path	Pfad verlängern
 	Measure & Inspect	Messen und prüfen
 	Set Anchor	Ankerpunkt festlegen
@@ -7012,3 +7057,9 @@ breakText	Glyphs	Glyphen
 	Margin	Rand
 	Box	Rahmen
 	Swatch	Farbfeld
+	Banner Hems and Grommets…	Bannersäume und Ösen…
+	Banner Hems and Grommets	Bannersäume und Ösen
+	Hem	Saum
+	Grommets	Ösen
+	Grommet Inset	Randabstand der Ösen
+	Diameter	Durchmesser

@@ -103,6 +103,70 @@ fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
     }
 }
 
+/// In a PDF without a standard, the warning for a page longer than 14,400 pt written with a
+/// `UserUnit` above 1 names "Write pages longer than 200 in at full size in points": at PDF 1.5
+/// (written as 1.6) and later, through `document.exportPdf`, `document.export`, a page of the
+/// art's bounds and the Summary's export, with one such warning per page. PDF/A files and `.ai`
+/// saves keep the warning without the option's name. Pages written in points (the option on, PDF
+/// 1.4, PDF/X, a page too narrow for a `UserUnit` above 1) and a page too long and narrow for
+/// 14,400 units have other warnings, which don't name it.
+#[test]
+fn a_page_with_a_user_unit_names_the_option_that_writes_it_in_points() {
+    use super::pdf::LONG_PAGES_IN_POINTS;
+    const SMALLER: &str = "so apps that ignore UserUnit show it that many times smaller";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20_000, "height": 1_000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 19_000, "height": 500})).unwrap();
+    let warnings = |v: &Value| -> Vec<String> {
+        v["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str()).filter(|w| w.contains("UserUnit")).map(str::to_string).collect()
+    };
+    let named = |v: &Value| warnings(v).iter().any(|w| w.contains(LONG_PAGES_IN_POINTS));
+    for p in [
+        json!({"longPagesInPoints": false}),
+        json!({"longPagesInPoints": false, "compatibility": "1.5"}),
+        json!({"longPagesInPoints": false, "compatibility": "2.0"}),
+        json!({"longPagesInPoints": false, "useArtboards": false}),
+    ] {
+        let mut q = p.clone();
+        q["includeDocument"] = json!(true);
+        for v in [export(&mut s, p.clone()), s.execute("document.export", &as_export(&p)).unwrap(), s.execute("document.pdfSettings", &q).unwrap()] {
+            let page: Vec<String> = warnings(&v).into_iter().filter(|w| w.starts_with("the page of artboard")).collect();
+            assert_eq!(page.len(), 1, "{p}: {v}");
+            assert!(page[0].ends_with(&format!("{SMALLER}{LONG_PAGES_IN_POINTS}")), "{p}: {page:?}");
+            assert_eq!(warnings(&v).iter().filter(|w| w.contains("apps that ignore UserUnit")).count(), 1, "{p}: {v}");
+        }
+    }
+    for p in [
+        json!({"longPagesInPoints": true}),
+        json!({"longPagesInPoints": false, "compatibility": "1.4"}),
+        json!({"longPagesInPoints": false, "preset": "PDF/X-4:2010"}),
+    ] {
+        assert!(!named(&export(&mut s, p.clone())), "{p}");
+    }
+    for p in
+        [json!({"longPagesInPoints": false, "standard": "pdfA2b"}), json!({"longPagesInPoints": false, "standard": "pdfA2b", "compatibility": "1.4"})]
+    {
+        let v = export(&mut s, p.clone());
+        assert!(warnings(&v).iter().any(|w| w.ends_with(SMALLER)) && !named(&v), "{p}: {v}");
+    }
+    let ai = s.execute("document.export", &json!({"format": "ai", "longPagesInPoints": false})).unwrap();
+    assert!(warnings(&ai).iter().any(|w| w.ends_with(SMALLER)) && !named(&ai), "{ai}");
+    // The art's bounds are within 14,400 pt.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 500, "height": 500})).unwrap();
+    assert!(!named(&export(&mut s, json!({"longPagesInPoints": false, "useArtboards": false}))));
+    // A page 3 pt high keeps a UserUnit of 1, so it is written in points either way; a page
+    // 85,040 × 17 pt gets a UserUnit above 1 that leaves its long side past 14,400 units.
+    for (w, h) in [(20_000, 3), (85_040, 17)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": w, "height": h})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 100, "y": 0, "width": w - 1_000, "height": h})).unwrap();
+        let v = export(&mut s, json!({"longPagesInPoints": false}));
+        assert!(!named(&v), "{w} × {h}: {v}");
+    }
+}
+
 /// A PDF of the art's bounds carries no Preserve Editing data, through `document.exportPdf`,
 /// `document.export` and the Summary's export in memory, and says so in a warning: reopened, its
 /// editing data would replace the document's artboards with the one around the art. A PDF of the

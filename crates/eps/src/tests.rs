@@ -673,6 +673,53 @@ fn perceptual_gradients_of_spot_inks_are_written_in_process_colors() {
     assert!(text(&export(&d, &opts(&d), None, None).unwrap()).contains("/ColorSpace VCdn0"));
 }
 
+/// The colors between two stops mixed around the hue wheel are not mixes of the stops' inks: a
+/// gradient of spot inks mixed that way is written in process colors, with its own warning, as
+/// the same gradient without spot inks is.
+#[test]
+fn hue_wheel_gradients_of_spot_inks_are_written_in_process_colors() {
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        let stops = vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, "Leaf Ink", LEAF, 1.0)];
+        let mut hue = Gradient::new(GradientKind::Linear, stops.clone());
+        hue.method = method;
+        // Reflecting, it is written from the stops on its curve, and warns all the same.
+        let reflected = Gradient { spread: vectorcraft_color::GradientSpread::Reflect, repeats: 2, ..hue.clone() };
+        let r = spot_gradient_doc_of(reflected);
+        let reflected_out = export(&r, &opts(&r), None, None).unwrap();
+        let reflected_page = checked_page(&text(&reflected_out));
+        assert!(!reflected_page.contains("VCdn") && !reflected_page.contains("VCsp"), "{method:?} reflected: {reflected_page}");
+        assert!(
+            reflected_out.warnings.iter().any(|w| w.contains("mixed around the hue wheel are written in process colors")),
+            "{method:?} reflected: {:?}",
+            reflected_out.warnings
+        );
+        let d = spot_gradient_doc_of(hue);
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let page = checked_page(&text(&out));
+        assert!(!page.contains("VCdn") && !page.contains("VCsp"), "{method:?}: {page}");
+        assert!(page.contains("/ColorSpace /DeviceCMYK"), "{method:?}: {page}");
+        assert!(
+            out.warnings.iter().any(|w| w.contains("gradients of spot colors mixed around the hue wheel are written in process colors")),
+            "{method:?}: {:?}",
+            out.warnings
+        );
+        assert!(!out.warnings.iter().any(|w| w.contains("Perceptual")), "{method:?}: {:?}", out.warnings);
+        let process = |c: Color| GradientStop::new(0.0, c);
+        let mut plain = Gradient::new(GradientKind::Linear, vec![process(GOLD), GradientStop { offset: 1.0, ..process(LEAF) }]);
+        plain.method = method;
+        let p = spot_gradient_doc_of(plain);
+        let plain_out = export(&p, &opts(&p), None, None).unwrap();
+        assert!(!plain_out.warnings.iter().any(|w| w.contains("hue wheel")), "{method:?}: {:?}", plain_out.warnings);
+        let plain_page = checked_page(&text(&plain_out));
+        let shading = |s: &str| -> Option<String> {
+            let i = s.find("/ShadingType")?;
+            Some(s[i..i + s[i..].find("shfill")?].to_string())
+        };
+        assert!(shading(&page).is_some_and(|s| s.contains("/Bounds")), "{method:?}: {page}");
+        assert_eq!(shading(&page), shading(&plain_page), "{method:?}");
+    }
+}
+
 #[test]
 fn rgb_is_written_as_cmyk_when_asked_and_in_cmyk_documents() {
     let d = doc_with(|d| vec![red_rect(d)]);
