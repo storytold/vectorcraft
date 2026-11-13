@@ -573,12 +573,15 @@ impl Tool for SmartPenTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
-        if cx.pen_rubber_band
-            && self.press.is_none()
+        // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
+        if self.press.is_none()
             && let (Some((id, _, sp)), Some(h)) = (self.active(cx), self.hover)
-            && let Some(path) = self.rubber_band(sp, h)
         {
-            o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            if cx.pen_rubber_band
+                && let Some(path) = self.rubber_band(sp, h)
+            {
+                o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            }
             if let Some(last) = sp.anchors.last().map(|a| a.p)
                 && cx.measurement_labels
                 && last.distance(h) > 1e-9

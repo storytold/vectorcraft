@@ -755,6 +755,8 @@ antiAlias	Sharp	锐利
 	Delete Width Point	删除宽度点
 	Delete Workspace	删除工作区
 	Delete {kind} Style	删除{kind}样式
+	Delete the selected items and their artwork?	要删除所选项目及其图稿吗？
+	Delete this layer and its artwork?	要删除此图层及其图稿吗？
 	Delete “{name}”?	要删除“{name}”吗？
 	Depth:	深度：
 	Description	描述
@@ -973,6 +975,7 @@ antiAlias	Sharp	锐利
 	Enable Contextual Task Bar	启用上下文任务栏
 	Enable copying of text, images and other content	启用复制文字、图像与其他内容
 	Enable in-menu font previews	启用菜单内字体预览
+	Show samples on white	在白色背景上显示样本
 	Enable Missing Glyph Protection	启用缺字保护
 	Enable Opacity Mask	启用不透明度蒙版
 	Enable plaintext metadata	启用纯文本元数据
@@ -4444,6 +4447,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	not a PICT file	不是 PICT 文件
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
@@ -4895,6 +4899,7 @@ imageTrace	Outline	轮廓
 @msg	choose the font files to add	请选择要添加的字体文件
 @msg	not a file	不是文件
 @msg	not a font file	不是字体文件
+@msg	the active document changed while the question was open; nothing was deleted	问题打开期间活动文档已更改；未删除任何内容
 @msg	that document is no longer open	该文档已不再打开
 @msg	larger than 256 MB	大于 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	文件总计超过 1 GB：请每次少添加一些
@@ -5345,6 +5350,10 @@ font-technology	Variable	可变
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 处理方式
 	Push In First	先推入
@@ -7061,7 +7070,9 @@ breakText	Glyphs	字形
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 类型的增效工具，不是导入增效工具
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 类型的增效工具，不是导出增效工具
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer": "{_2}"}} 打开文件
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是导出增效工具：请用 document.export {{"format": "{_2}"}} 导出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是实时效果：请用 effect.apply {{"effect": "{_2}"}} 应用
 @msg	the importer returned no objects	导入增效工具未返回任何对象
 @msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节

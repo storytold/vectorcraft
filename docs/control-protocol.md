@@ -140,6 +140,9 @@ of another kind, it moves.
 
 Confirmations: deleting swatches from the Swatches panel opens a `confirm` dialog (fields `message`, `detail`);
 `ui.dialog.confirm` runs the command it asks about (here `swatch.delete`) and `ui.dialog.cancel` drops it.
+Deleting Layers panel rows that include a layer or sublayer with art (`engine.execute` of `ui.layerDelete`, which the
+panel's trash, its menu's Delete Selection and Delete or Backspace run) opens a `confirm` dialog too; its OK deletes
+those rows with `layer.delete` in the document the question was asked in. `layer.delete` itself deletes at once.
 
 New swatches and colour groups: `ui.newSwatch {spot?, global?, group?}` opens the `newSwatch` dialog prefilled from the active
 fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern only takes `name`) and

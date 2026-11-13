@@ -235,8 +235,16 @@ fn live_effect_plugins_reshape_editable_art_and_expand() {
     run(&mut s, "select.all", json!({}));
     run(&mut s, "object.move", json!({"dx": 50, "dy": 0}));
     assert_eq!(effected(&s), *node(&s, a).path_data().unwrap());
+    // A parameter of another type than the manifest gives it is refused.
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let wrong = json!({"ids": [a.0], "effect": "plugin.test.engine.tri", "params": {"size": "4 pt"}});
+    let e = s.execute("effect.apply", &wrong).unwrap_err().to_string();
+    assert!(e.contains("`size` must be a number"), "{e}");
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before);
     run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "plugin.test.engine.tri", "params": {"size": 4}}));
     assert_eq!(effected(&s), triangle());
+    let e = s.execute("effect.setParams", &json!({"ids": [a.0], "index": 1, "params": {"size": true}})).unwrap_err().to_string();
+    assert!(e.contains("`size` must be a number"), "{e}");
     assert_eq!(node(&s, a).appearance.effects[1].params, json!({"size": 4}));
     // Uninstalled: the geometry is drawn as it is.
     run(&mut s, "plugin.remove", json!({"id": "test.engine.tri"}));

@@ -679,13 +679,23 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
 }
 
 /// Fill `{name}` placeholders in one pass: a value that holds `{name}` text stays as it is.
-/// Unknown placeholders are left as written.
+/// Unknown placeholders are left as written. `{{` and `}}` are a literal `{` and `}`.
 fn fill_once(template: &str, args: &[(&str, &str)]) -> String {
     let mut rest = template;
     let mut out = String::with_capacity(rest.len());
-    while let Some(open) = rest.find('{') {
+    while let Some(open) = rest.find(['{', '}']) {
         out.push_str(&rest[..open]);
         let after = &rest[open + 1..];
+        if rest[open..].starts_with('}') {
+            out.push('}');
+            rest = after.strip_prefix('}').unwrap_or(after);
+            continue;
+        }
+        if let Some(escaped) = after.strip_prefix('{') {
+            out.push('{');
+            rest = escaped;
+            continue;
+        }
         let filled = after.find('}').and_then(|close| args.iter().find(|(k, _)| *k == &after[..close]).map(|(_, v)| (*v, close)));
         match filled {
             Some((value, close)) => {

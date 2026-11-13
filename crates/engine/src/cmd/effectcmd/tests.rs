@@ -664,6 +664,50 @@ fn warp_options_non_warp_target_rejection_is_atomic() {
     assert!(!state.is_dirty());
 }
 
+/// `effect.setParams` refuses a `visible` that is not true or false, when called and when a step
+/// plays, and the effect, the document and the undo history stay as they were. `null` leaves the
+/// visibility as it is.
+#[test]
+fn set_params_refuses_a_visible_that_is_not_true_or_false() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": null})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for visible in [json!(1), json!(0), json!("false"), json!([])] {
+        let p = json!({"index": 0, "item": null, "visible": visible, "params": {"size": 9}});
+        for replay in [false, true] {
+            let r = if replay { s.replay("effect.setParams", &p) } else { s.execute("effect.setParams", &p) };
+            let err = r.err().map(|e| e.to_string()).unwrap_or_default();
+            assert!(err.contains("`visible` must be true or false"), "{visible} (replay {replay}): {err}");
+            let state = s.doc().unwrap();
+            assert_eq!(state.doc, before, "{visible} (replay {replay})");
+            assert_eq!(state.history.undo.len(), undo, "{visible} (replay {replay})");
+            assert!(!state.is_dirty());
+        }
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "visible": null, "params": {"size": 9}})).unwrap();
+    let n = node(&s, id);
+    assert!(n.appearance.effects[0].visible);
+    assert_eq!(n.appearance.effects[0].params["size"], 9);
+}
+
+/// The effect `effect.setParams` checks the parameters against is the one it leaves: a Warp's new
+/// style and a 3D effect's new type, and the effect as it is otherwise.
+#[test]
+fn set_params_checks_the_effect_it_leaves() {
+    use super::edited_effect_id;
+    assert_eq!(edited_effect_id("warp.arc", None, Some("flag")), "warp.flag");
+    assert_eq!(edited_effect_id("warp.arc", None, None), "warp.arc");
+    assert_eq!(edited_effect_id("distort.roughen", None, Some("flag")), "distort.roughen");
+    assert_eq!(edited_effect_id("threeD.extrude", Some("threeD.revolve"), None), "threeD.revolve");
+    assert_eq!(edited_effect_id("warp.arc", Some("threeD.revolve"), None), "warp.arc");
+    let (mut s, _) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "warp.arc", "item": null})).unwrap();
+    let p = json!({"index": 0, "item": null, "warpStyle": "flag", "params": {"bend": 25}});
+    assert_eq!(super::set_params_effects(&s, &p), ["warp.flag"]);
+}
+
 #[test]
 fn list_remove_and_set_params() {
     let (mut s, id) = session_with_rect();

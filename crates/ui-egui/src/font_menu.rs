@@ -90,6 +90,9 @@ impl WheelOwner {
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
     pub samples: bool,
+    /// Preferences › Type › Show samples on white: each sample is drawn in dark type on a white
+    /// area, whatever the interface's brightness (off by default).
+    pub on_white: bool,
     /// Preferences › Type › Show Font Names in English (on by default).
     pub english_names: bool,
     /// Row height in points (Font Preview Size).
@@ -106,9 +109,9 @@ pub struct MenuLook<'a> {
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites, no wheel.
+    /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
+        Self { samples: true, on_white: false, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
     }
 }
 
@@ -121,6 +124,7 @@ impl<'a> MenuLook<'a> {
         };
         Self {
             samples: app.session.prefs.font_preview,
+            on_white: app.session.prefs.font_samples_on_white,
             english_names: app.session.prefs.font_names_in_english,
             row,
             favorites: &app.ui.favorite_fonts,
@@ -1235,6 +1239,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
     let current = current.as_str();
     let row_h = look.row;
     let t = Tokens::get(ui.ctx());
+    let ink = sample_ink(look.on_white, t.text);
     let db = vectorcraft_text::FontDb::global();
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
     let widest = name_width(ui, look.english_names, &rows);
@@ -1315,9 +1320,12 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(NAME_SIZE), t.text);
         // The sample takes the row's whole height.
         let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(STAR + 2.0, 0.0));
-        if !look.samples {
-        } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
-            paint_sample(ui, sample_rect, &tex, t.text);
+        if look.samples {
+            // The paper is drawn while the sample is still rendering, and for a family whose sample fails.
+            let area = sample_area(ui, sample_rect, ink, PAPER_INSET);
+            if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, area.height()) {
+                paint_sample(ui, area, &tex, ink);
+            }
         }
         if resp.clicked() && !on_triangle && !on_star {
             chosen = row.pick();
@@ -1366,19 +1374,67 @@ pub(crate) const MENU_SAMPLE_SIZE: egui::Vec2 = vec2(90.0, 16.0);
 
 /// A generic sample of `family` drawn in `slot` (the room a Type → Font item of the in-window
 /// menu bar keeps for it; the native macOS menu shows names only).
-pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str) {
-    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, slot.height()) {
-        paint_sample(ui, slot, &tex, Tokens::get(ui.ctx()).text_dim);
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text_dim);
+    let area = sample_area(ui, slot, ink, 0.0);
+    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, area.height()) {
+        paint_sample(ui, area, &tex, ink);
     }
 }
 
-/// Draw sample `tex` (tinted `tint`) at the left of `area`, centred vertically, cut at its right.
-fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, tint: Color32) {
+/// What a sample is drawn on with Show samples on white.
+pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
+
+/// How a sample is drawn: in `theme` (an interface text color) on the menu's own background, or,
+/// with Show samples on white, in the Light brightness's text color on [`SAMPLE_PAPER`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SampleInk {
+    pub ink: Color32,
+    pub paper: Option<Color32>,
+}
+
+pub(crate) fn sample_ink(on_white: bool, theme: Color32) -> SampleInk {
+    if on_white {
+        SampleInk { ink: Tokens::for_brightness(crate::theme::Brightness::Light).text, paper: Some(SAMPLE_PAPER) }
+    } else {
+        SampleInk { ink: theme, paper: None }
+    }
+}
+
+/// Space between the left edge of a sample's paper and its type.
+const PAPER_PAD: f32 = 3.0;
+
+/// Space above and below a menu row's paper, where the row's highlight color shows.
+pub(crate) const PAPER_INSET: f32 = 2.0;
+
+/// The part of `slot` a sample is drawn in: `slot` itself, or, when `ink` has paper, the paper
+/// painted in `slot` with `inset` points left above and below it.
+fn sample_area(ui: &Ui, slot: egui::Rect, ink: SampleInk, inset: f32) -> egui::Rect {
+    let Some(paper) = ink.paper else { return slot };
+    let area = slot.shrink2(vec2(0.0, inset));
+    if area.is_positive() {
+        ui.painter_at(slot).rect_filled(area, 2.0, paper);
+    }
+    area
+}
+
+/// Draw sample `tex` at the left of `area`, centered vertically, cut at its right; on paper,
+/// [`PAPER_PAD`] in from its left edge.
+fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, ink: SampleInk) {
+    let painter = ui.painter_at(area);
+    let mut start = area.left_center();
+    if ink.paper.is_some() {
+        start.x += PAPER_PAD;
+    }
     let size = tex.size_vec2() / ui.ctx().pixels_per_point();
-    let at = egui::Rect::from_min_size(area.left_center() - vec2(0.0, size.y * 0.5), size);
+    let at = egui::Rect::from_min_size(start - vec2(0.0, size.y * 0.5), size);
     let shown = at.intersect(area);
+    if !shown.is_positive() {
+        return;
+    }
     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown.width() / size.x).clamp(0.0, 1.0), 1.0));
-    ui.painter_at(area).image(tex.id(), shown, uv, tint);
+    painter.image(tex.id(), shown, uv, ink.ink);
 }
 
 type Key = (String, String, String, u32);

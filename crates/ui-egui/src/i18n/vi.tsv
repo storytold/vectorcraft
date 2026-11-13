@@ -938,6 +938,8 @@ font-technology	Variable	Biến thiên
 	Delete Width Point	Xóa điểm chiều rộng
 	Delete Workspace	Xóa không gian làm việc
 	Delete {kind} Style	Xóa kiểu {kind}
+	Delete the selected items and their artwork?	Xóa các mục đã chọn và tác phẩm của chúng?
+	Delete this layer and its artwork?	Xóa lớp này và tác phẩm của nó?
 	Delete “{name}”?	Xóa “{name}”?
 	Depth	Độ sâu
 	Depth:	Độ sâu:
@@ -1198,6 +1200,7 @@ font-technology	Variable	Biến thiên
 	Enable Contextual Task Bar	Bật thanh tác vụ theo ngữ cảnh
 	Enable copying of text, images and other content	Bật sao chép văn bản, ảnh và nội dung khác
 	Enable in-menu font previews	Bật xem trước phông trong menu
+	Show samples on white	Hiển thị mẫu trên nền trắng
 	Enable Missing Glyph Protection	Bật bảo vệ glyph bị thiếu
 	Enable Opacity Mask	Bật mặt nạ độ mờ
 	Enable plaintext metadata	Bật siêu dữ liệu văn bản thuần
@@ -2388,6 +2391,10 @@ digits	Hindi	Hindi
 	Long	Dài
 	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	RGB màn hình
 	Mono	Đơn sắc
 	Monochrome images	Ảnh đơn sắc
@@ -5054,6 +5061,7 @@ theme	Appearance	Giao diện
 @msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not an HP-GL file	không phải tệp HP-GL
+@msg	not a PICT file	không phải tệp PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` phải là mảng từ 1 đến 255 màu #rrggbb
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
@@ -5261,6 +5269,7 @@ theme	Appearance	Giao diện
 @msg	t, dx and dy must be finite	t, dx và dy phải là số hữu hạn
 @msg	Targa files are RGB: colorModel rgb	Tệp Targa là RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Bọc chữ: hãy chọn đối tượng bọc
+@msg	the active document changed while the question was open; nothing was deleted	tài liệu đang hoạt động đã thay đổi khi câu hỏi đang mở; không có gì bị xóa
 @msg	that document is no longer open	tài liệu đó không còn mở
 @msg	Extrude & Bevel	Kéo dài & vát
 @msg	Revolve	Xoay tròn
@@ -6830,7 +6839,9 @@ breakText	Glyphs	Glyph
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` là plug-in xuất: hãy xuất bằng document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` là hiệu ứng trực tiếp: hãy áp dụng bằng effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
 @msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc

@@ -783,15 +783,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_east_asian_options {
         ui.horizontal(|ui| {
             widgets::dim_label(ui, tl!("Mojikumi Set"));
-            let sets = [tl!("None"), tl!("Line-end Punctuation Half Width")];
-            let current = match shared_para(app, |p| p.mojikumi) {
-                Some(Mojikumi::LineEndHalf) => sets[1],
-                Some(Mojikumi::None) => sets[0],
-                None => "",
-            };
+            let sets = mojikumi_sets();
+            let names = sets.map(|s| s.0);
+            let current = shared_para(app, |p| p.mojikumi).and_then(|m| sets.iter().find(|s| s.1 == m).map(|s| s.0)).unwrap_or("");
             // Already translated: shown as they are.
-            if let Some(i) = widgets::dropdown_names(ui, "pa-mojikumi", current, &sets, ui.available_width() - 4.0) {
-                format(app, json!({"mojikumi": if i == 1 { "lineEndHalf" } else { "none" }}));
+            if let Some(i) = widgets::dropdown_names(ui, "pa-mojikumi", current, &names, ui.available_width() - 4.0)
+                && let Some((_, _, key)) = sets.get(i)
+            {
+                format(app, json!({"mojikumi": key}));
             }
         });
         // Which characters may not start or end a line.
@@ -907,6 +906,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// paragraphs the panel acts on ([`format`]), in one undo step.
 fn set_kinsoku_type(app: &mut VectorcraftApp, key: &str) {
     format(app, json!({"kinsokuType": key}));
+}
+
+/// The Mojikumi Set menu's entries, translated: each one's label, its set and its `mojikumi` value
+/// for `text.setFormat`. The five predefined sets come first, then Line-end Punctuation Half Width,
+/// the set new type gets.
+fn mojikumi_sets() -> [(&'static str, Mojikumi, &'static str); 6] {
+    [
+        (tl!("None"), Mojikumi::None, "none"),
+        (tl!("YakumonoHankaku"), Mojikumi::YakumonoHankaku, "yakumonoHankaku"),
+        (tl!("GyomatsuYakumonoHankaku"), Mojikumi::GyomatsuYakumonoHankaku, "gyomatsuYakumonoHankaku"),
+        (tl!("GyomatsuYakumonoZenkaku"), Mojikumi::GyomatsuYakumonoZenkaku, "gyomatsuYakumonoZenkaku"),
+        (tl!("YakumonoZenkaku"), Mojikumi::YakumonoZenkaku, "yakumonoZenkaku"),
+        (tl!("Line-end Punctuation Half Width"), Mojikumi::LineEndHalf, "lineEndHalf"),
+    ]
 }
 
 /// Bunri-Kinshi's menu item for the paragraphs the panel acts on ([`format`]): (available, checked).
