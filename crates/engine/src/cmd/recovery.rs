@@ -576,11 +576,23 @@ pub fn store(s: &Session) -> Option<Arc<dyn RecoveryStore>> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let folder = Some(s.prefs.recovery_folder.trim()).filter(|f| !f.is_empty()).map(str::to_string).or_else(|| s.recovery.default_folder.clone());
-        folder.map(|f| Arc::new(FolderStore::new(f)) as Arc<dyn RecoveryStore>)
+        folder(s).map(|(f, _)| Arc::new(FolderStore::new(f)) as Arc<dyn RecoveryStore>)
     }
     #[cfg(target_arch = "wasm32")]
     None
+}
+
+/// The folder copies go to now, and whether the `recoveryFolder` preference names it (else it is
+/// the folder the app sets). `None` when they go to a store the host installed (browser storage)
+/// or nowhere.
+pub fn folder(s: &Session) -> Option<(String, bool)> {
+    if s.recovery.store.is_some() || cfg!(target_arch = "wasm32") {
+        return None;
+    }
+    match s.prefs.recovery_folder.trim() {
+        "" => s.recovery.default_folder.clone().map(|f| (f, false)),
+        set => Some((set.to_string(), true)),
+    }
 }
 
 fn has_store(s: &Session) -> std::result::Result<(), String> {

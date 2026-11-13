@@ -98,13 +98,14 @@ pub(super) fn rotated(t: &TextObject) -> bool {
     })
 }
 
-/// Can 8-bit text hold type `t`: horizontal, without ruby (which a text object can't hold), its
-/// runs plain characters (no inline graphics) that 8-bit text can hold, filled and stroked with
-/// colours?
+/// Can 8-bit text hold type `t`: horizontal, without ruby or warichu (which a text object can't
+/// hold), its runs plain characters (no inline graphics) that 8-bit text can hold, filled and
+/// stroked with colours?
 pub(super) fn holds_as_text(t: &TextObject) -> bool {
     let solid = |p: &Paint| matches!(p, Paint::Solid { .. } | Paint::None);
     !t.vertical
         && t.ruby.is_empty()
+        && !t.stacks_warichu()
         && t.runs.iter().any(|r| !r.text.is_empty())
         && t.runs.iter().all(|r| {
             r.inline.is_none()

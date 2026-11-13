@@ -28,7 +28,7 @@ shown_when = [
     "The Selection tool over empty canvas or over an unselected object (no Alt).",
     "Dragging with the Selection tool (a move), with Direct Selection (an anchor, a segment or a handle), or with a shape tool (from the selection's centre point).",
     "Any tool with no cursor of its own (Touch Type, Rotate View).",
-    "The resting state of Live Paint Selection, Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
+    "The resting state of Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
 ]
 hotspot = "The arrow's tip."
 look = "The default pointer: a solid arrow. ArrowHollow is its hollow twin."
@@ -88,6 +88,39 @@ shown_when = [
 ]
 hotspot = "The front arrowhead's tip."
 look = "Says \"a copy\": a double arrowhead, one in front of the other."
+
+[[cursor]]
+id = "LivePaintSelectFace"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection over a face of a Live Paint group that a click selects: inside the face, with Select Fills on, and without Alt unless Select Strokes is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small filled square badge (a face). LivePaintSelectEdge and LivePaintSelectOutside share the arrow."
+
+[[cursor]]
+id = "LivePaintSelectEdge"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection within reach of an edge of a Live Paint group that a click selects: Select Strokes is on, and Alt is held or Select Fills is off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a short line badge (an edge)."
+
+[[cursor]]
+id = "LivePaintSelectOutside"
+group = "Selection"
+shown_when = [
+    "Live Paint Selection where a click selects no face or edge: away from Live Paint groups, over a group that is locked, hidden or outside the isolated art, inside a face with Alt held and no edge within reach, or with Select Fills and Select Strokes both off.",
+    "From a press there until the release, wherever the drag goes.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The arrow's tip."
+look = "Arrow with a small x badge (nothing to select)."
 
 [[cursor]]
 id = "Move"

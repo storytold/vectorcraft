@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_pathops::BoolOp;
 use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, PlanarFace, View};
@@ -21,13 +21,14 @@ pub use classic::{CLASSIC_EXTRUDE, CLASSIC_ROTATE, ROTATE_SURFACES, SHADING_COLO
 mod source;
 pub(crate) use source::{resolve, resolve_for};
 
-mod graphics;
+pub(crate) mod graphics;
 pub use graphics::{
     GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, graphic_symbols, mapped_graphics, missing_symbol, names_graphic_symbol,
     rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
 };
 pub use graphics::{
-    MAX_OFFSET as GRAPHIC_MAX_OFFSET, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, rename_appearance_graphic_symbol,
+    MAX_OFFSET as GRAPHIC_MAX_OFFSET, NOT_TAKEN as GRAPHICS_NOT_TAKEN, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols,
+    rename_appearance_graphic_symbol,
 };
 
 pub(crate) mod shadow;
@@ -80,8 +81,9 @@ pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
             }
         }
     }
-    // A plane has only a front, so graphics on the back cap are dropped.
-    if to == ROTATE
+    // A plane has only a front, and Revolve's graphics go on its side, named the front, so graphics
+    // on the back cap are dropped.
+    if (to == ROTATE || to == crate::REVOLVE)
         && let Some(Value::Array(list)) = out.get_mut(GRAPHICS)
     {
         list.retain(|g| g.get("face").and_then(Value::as_str) != Some(PlanarFace::Back.id()));
@@ -205,6 +207,19 @@ pub(crate) fn solid_paints(n: &Node) -> Vec<AppearanceItem> {
         });
     }
     runs
+}
+
+/// [`solid_paints`] with, for each paint, the item of `n` it copies: the item a live-effect plug-in
+/// before the paint's own 3D effect is told it sits on. The paints of a type's first run copy no
+/// item of `n` and have none.
+pub(crate) fn solid_paint_sources(n: &Node) -> (Vec<Option<&AppearanceItem>>, Vec<AppearanceItem>) {
+    let own: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+    if own.is_empty() {
+        let paints = solid_paints(n);
+        return (vec![None; paints.len()], paints);
+    }
+    let paints = own.iter().map(|i| (*i).clone()).collect();
+    (own.into_iter().map(Some).collect(), paints)
 }
 
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
@@ -505,7 +520,7 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
         (Some(_), _) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
-        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
+        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(doc, n, id, p, item, index),
         (None, _) if crate::revolve::is_revolve(id) => crate::revolve::validate_in(doc, n, id, p),
         (item, index) => validate_solid_for(doc, n, id, p, (item, Some(index))),
     }
@@ -528,7 +543,7 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.blend = blend;
         return group;
     }
-    // Preserve existing white-light paints, alpha composition and seam joins exactly.
+    // Preserve existing white-light paints and alpha composition exactly.
     let (opaque, mask) = if colored { crate::lighting::opaque_paint(paint) } else { (paint.clone(), None) };
     let paint = &opaque;
     let children = facets
@@ -549,10 +564,7 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
                 .into_iter()
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
-                    let mut edge = StrokeLayer::new(fill.paint.clone(), seam);
-                    if colored {
-                        edge.join = vectorcraft_doc::LineJoin::Round;
-                    }
+                    let mut edge = crate::lighting::seam_stroke(fill.paint.clone(), seam);
                     edge.opacity = fill.opacity;
                     vec![item, AppearanceItem::Stroke(edge)]
                 })
@@ -1772,7 +1784,7 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
-    let paints = solid_paints(n);
+    let (sources, paints) = solid_paint_sources(n);
     let mut children = vec![];
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
@@ -1790,9 +1802,9 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
         crate::raster::follow_paints(&mut paints, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
-        for item in &paints {
+        for (source, item) in sources.into_iter().zip(&paints) {
             if let Some((index, fx)) = solid(item.effects()) {
-                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
+                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(source.unwrap_or(item)));
                 let (shadow, surfaces) = art_for(doc, n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
                 let later: Vec<Effect> = item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
                 let with_later = |mut art: Arc<Node>| {
@@ -1840,9 +1852,10 @@ pub fn graphic_frame(doc: Option<&Document>, n: &Node, item: Option<usize>) -> O
 }
 
 /// [`graphic_frame`] of the 3D effect at `index` in that list, which must be a visible Extrude &
-/// Bevel or Rotate.
+/// Bevel, Rotate or Revolve. Revolve's frame is its unrolled side seen from the front, centered on
+/// the origin, with no face maps: it sizes a new graphic and places no handles.
 pub fn graphic_frame_at(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<graphics::GraphicFrame> {
-    frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && SOLIDS.contains(&e.id.as_str())).map(|e| (index, e)))
+    frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && is_three_d(&e.id)).map(|e| (index, e)))
 }
 
 /// Does a visible geometry effect come after the 3D effect at `index` in the effects of `n` (on the
@@ -1886,6 +1899,21 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
     }
     let p = crate::merged_params(&fx.id, &fx.params);
     let b = union_bounds(&shapes)?;
+    if fx.id == crate::REVOLVE {
+        // Revolve's graphics lie on its unrolled side (in a group, the side of the member with the
+        // longest profile): the frame is the part of it seen from the front, with no planar face
+        // to place a handle on.
+        let options = crate::revolve::revolve_options(&p);
+        let (w, h) = shapes
+            .iter()
+            .filter(|s| crate::revolve::surface_item(&s.items).is_some())
+            .filter_map(|s| vectorcraft_three_d::revolve_surface_size(&s.path, b, options))
+            .fold((0.0f64, 0.0f64), |best, size| if size.1 > best.1 { size } else { best });
+        if w <= 0.0 || h <= 0.0 {
+            return None;
+        }
+        return Some(graphics::GraphicFrame::new(Rect::new(-w / 2.0, -h / 2.0, w / 2.0, h / 2.0), None, None));
+    }
     let view = view_options(&p);
     if fx.id == ROTATE {
         let plane = vectorcraft_three_d::plane_face_map(b, view);
@@ -2071,16 +2099,16 @@ fn meshes_within(doc: Option<&Document>, n: &Node, total: &mut usize, limit: usi
     } else {
         let (path, rule) = object_profile(n, label)?;
         let ctx = GeomContext::of(n);
-        let paints = solid_paints(n);
+        let (sources, paints) = solid_paint_sources(n);
         if let Some((index, fx)) = solid(&n.appearance.effects) {
             let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
             meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }], total, limit)?
         } else {
             let path = geometry(&path, &n.appearance.effects, &ctx);
             let mut out = vec![];
-            for item in &paints {
+            for (source, item) in sources.into_iter().zip(&paints) {
                 if let Some((index, fx)) = solid(item.effects()) {
-                    let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+                    let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(source.unwrap_or(item)));
                     out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }], total, limit)?);
                 }
             }

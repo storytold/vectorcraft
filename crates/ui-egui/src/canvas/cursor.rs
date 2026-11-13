@@ -83,7 +83,10 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::CornerRadius
         | Cursor::PathBracket
         | Cursor::TypeWidget
-        | Cursor::LoadedText => C::Default,
+        | Cursor::LoadedText
+        | Cursor::LivePaintSelectFace
+        | Cursor::LivePaintSelectEdge
+        | Cursor::LivePaintSelectOutside => C::Default,
         Cursor::SelectionCopy => C::Copy,
         Cursor::Move => C::Move,
         Cursor::Crosshair => C::Crosshair,

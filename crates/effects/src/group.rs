@@ -261,8 +261,17 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
             carry.apply(&mut m.appearance);
         }
         // So do the raster effects of its fills and strokes, by `n`'s Transform effects
-        // ([`crate::follow_items`]).
-        crate::raster::follow_items_of(&mut m, &n.appearance.effects);
+        // ([`crate::follow_items`]) that moved the outline.
+        let mut owner = std::borrow::Cow::Borrowed(n.appearance.effects.as_slice());
+        if carry.skipped() {
+            carry.hide_skipped(owner.to_mut());
+            if m.appearance.effects == n.appearance.effects {
+                let mut ap = (*m.appearance).clone();
+                ap.effects = owner.to_vec();
+                m.appearance = ap.into();
+            }
+        }
+        crate::raster::follow_items_of(&mut m, &owner);
     }
     without_geometry_effects(&mut m);
     m

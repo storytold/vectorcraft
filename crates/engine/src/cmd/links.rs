@@ -1173,6 +1173,19 @@ pub(crate) fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
     crate::file_access::current().is_none() || fileio::document_path(path, doc_path).is_ok_and(|p| crate::file_access::check_read(&p).is_ok())
 }
 
+/// Is the linked JavaScript file `f` (of the document saved at `doc_path`) named by its file name
+/// alone in a reply to the caller asking now? Only a path [`path_shown`] does not allow; a URL is
+/// always shown as it is.
+pub(crate) fn script_hidden(f: &str, doc_path: Option<&str>) -> bool {
+    !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url))
+}
+
+/// The linked JavaScript file `f` of the open document `st` as a reply to the caller asking now
+/// may name it: as it is, or by its file name alone where [`script_hidden`] says so.
+pub fn shown_script<'a>(st: &crate::DocState, f: &'a str) -> Cow<'a, str> {
+    if script_hidden(f, LinkBase::of(st).doc) { Cow::Owned(LinkInfo::new(f).name().to_string()) } else { Cow::Borrowed(f) }
+}
+
 /// `row[key] = path` when [`path_shown`] says so; otherwise `row` has no `key`.
 pub(crate) fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
     if path_shown(path, doc_path) {
@@ -1556,8 +1569,7 @@ pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, base: LinkBase) -> Co
             }
         }
     }
-    let script_hidden = |f: &str| !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url));
-    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f)) {
+    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f, doc_path)) {
         *f = LinkInfo::new(f.as_str()).name().to_string();
     }
     Cow::Owned(d)

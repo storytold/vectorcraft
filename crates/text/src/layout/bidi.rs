@@ -4,13 +4,19 @@ use super::{BidiInfo, Level, ParaDirection, Range, SGlyph};
 /// without one, from its first strong character. `None` for the usual paragraph with nothing right
 /// to left in it (no right-to-left character or direction), which skips the algorithm.
 pub(crate) fn para_bidi(text: &str, direction: Option<ParaDirection>) -> Option<BidiInfo<'_>> {
-    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
     let rtl_set = direction == Some(ParaDirection::RightToLeft);
-    if !rtl_set && !text.chars().any(|c| matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)) {
+    if !rtl_set && !text.chars().any(starts_bidi) {
         return None;
     }
     let level = direction.map(|d| if d == ParaDirection::RightToLeft { Level::rtl() } else { Level::ltr() });
     Some(BidiInfo::new(text, level))
+}
+
+/// Whether character `c` makes [`para_bidi`] resolve a paragraph that holds it: a right-to-left
+/// letter, an Arabic number, or a right-to-left embedding, override or isolate.
+pub(crate) fn starts_bidi(c: char) -> bool {
+    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
+    matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)
 }
 
 /// [`para_bidi`] for a paragraph whose characters in `set` (byte ranges of `text`, in order and not
