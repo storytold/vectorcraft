@@ -3065,6 +3065,8 @@ antiAlias	Sharp	शार्प
 	Note:	ध्यान दें:
 	Nothing is selected. Select the art to export, then open this tab again.	कुछ भी नहीं चुना गया है। निर्यात करने के लिए कला सिलेक्ट करें, फिर इस टैब को फिर से ओपन करें।
 	Nothing matches the Show filter.	कुछ भी नहीं शो फिल्टर से मेल खाता है।
+	Show DCS Transparency Interactions	DCS पारदर्शिता इंटरैक्शन दिखाएँ
+	Transparent, or overlaps transparent objects: check its separations	पारदर्शी है या पारदर्शी ऑब्जेक्ट पर चढ़ता है: इसके सेपरेशन जाँचें
 	Nothing to print	प्रिंट करने के लिए कुछ भी नहीं
 	NTSC Colors	NTSC रंग
 	Nudge	न्याय
@@ -3470,6 +3472,13 @@ antiAlias	Sharp	शार्प
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
 	Insert Menu Item…	मेनू आइटम जोड़ें…
 	Insert Menu Item	मेनू आइटम जोड़ें
+	Insert Select Path	सिलेक्ट पाथ जोड़ें
+	Select Path	पाथ सिलेक्ट करें
+@msg	select one whole path or compound path	एक पूरा पाथ या कंपाउंड पाथ चुनें
+@msg	select only one path	केवल एक पाथ चुनें
+@msg	the path is hidden or locked, or cannot be selected here	पाथ छिपा हुआ है या लॉक है, या यहाँ चुना नहीं जा सकता
+@msg	object {value} is not the stored path: it changed, or the document is another one	ऑब्जेक्ट {value} सहेजा गया पाथ नहीं है: वह बदल गया है, या डॉक्यूमेंट दूसरा है
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` "v1:" और छोटे अक्षरों वाले 16 हेक्स अंक होना चाहिए
 	Select Object…	ऑब्जेक्ट सिलेक्ट करें…
 	Select Object	ऑब्जेक्ट सिलेक्ट करें
 	Set Selection	सिलेक्शन सेट करें
@@ -7824,6 +7833,65 @@ antiAlias	Sharp	शार्प
 @msg	that makes too many pieces (at most 100000): make the dashes longer	जो बहुत सारे टुकड़े बनाता है (अधिकांश 100000 में): डैश को लंबे समय तक बनाते हैं
 @msg	that object is not in the overlap	उस ऑब्जेक्ट को ओवरलैप में नहीं है
 @msg	the {tool} tool has no options	{tool} टूल में कोई ऑप्शन्स नहीं है
+@msg	Extrude & Bevel	एक्सट्रूडेड और बेवेल
+@msg	Revolve	रिवॉल्व
+@msg	Inflate	फुलाएँ
+@msg	Rotate	घुमाव
+@msg	Extrude & Bevel (Classic)	एक्सट्रूडेड और बेवेल (क्लासिक)
+@msg	Revolve (Classic)	रिवॉल्व (क्लासिक)
+@msg	Rotate (Classic)	घुमाव (क्लासिक)
+@msg	This effect	यह इफ़ेक्ट
+@msg	clipping paths	क्लिपिंग पाथ
+@msg	other objects	अन्य ऑब्जेक्ट
+@msg	{label} requires a group holding a shape with at least two anchors	{label} को कम से कम दो एंकरों वाले आकार से युक्त ग्रुप की आवश्यकता होती है
+@msg	Revolve requires a group holding a shape with at least two anchors	रिवॉल्व को कम से कम दो एंकरों वाले आकार से युक्त ग्रुप की आवश्यकता होती है
+@msg	Revolve requires a shape with at least two anchors	रिवॉल्व को कम से कम दो एंकरों वाले आकार की आवश्यकता होती है
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	ग्रुप पर {label} के लिए पाथ, कंपाउंड पाथ, टाइप, ग्रुप, क्लिपिंग ग्रुप, ब्लेंड और सिंबल इंस्टेंस चाहिए: पहले इन्हें रिलीज़ या एक्सपैंड करें: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	ग्रुप पर {label} अधिकतम {MAX_MEMBERS} ऑब्जेक्ट लेता है
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	किसी ग्रुप या लेयर पर 3D इफ़ेक्ट ग्रुप पर ही लगता है, उसके फ़िल या स्ट्रोक पर नहीं
+@msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
+@msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
+@msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
+@msg	bevel must be none or one of {_1}	bevel को none या {_1} में से एक होना चाहिए
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} इस आर्ट से ठोस नहीं बना सकता: इसके सिंबल इंस्टेंस, ब्लेंड और क्लिपिंग ग्रुप में बहुत अधिक ऑब्जेक्ट हैं
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} सिंबल "{symbol}" के इंस्टेंस से ठोस नहीं बना सकता: सिंबल का आर्ट उपलब्ध नहीं है
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: क्लिपिंग पाथ आर्ट को काटने के लिए बहुत जटिल है
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} अधिकतम {MAX_MEMBERS} ऑब्जेक्ट लेता है
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} {MAX_DEPTH} स्तर से अधिक गहराई तक नेस्ट किए गए आर्ट से ठोस नहीं बना सकता
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	रिवॉल्व का पेंट इस सतह के लिए बहुत जटिल है; सेगमेंट कम करें या ग्रेडिएंट को सरल बनाएँ
+@msg	Revolve edge must be left or right	रिवॉल्व: edge को left या right होना चाहिए
+@msg	Revolve cap must be a boolean	रिवॉल्व: cap एक बूलियन होना चाहिए
+@msg	the revolved object has no fill or stroke	रिवॉल्व किए गए ऑब्जेक्ट में कोई फ़िल या स्ट्रोक नहीं है
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor को #rrggbb रूप में अपारदर्शी RGB रंग होना चाहिए
+@msg	lights must contain one to ten lights	lights में एक से दस लाइटें होनी चाहिए
+@msg	each light must be an object	हर लाइट एक ऑब्जेक्ट होनी चाहिए
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	अज्ञात लाइट सेटिंग: color, intensity, rotation, height, softness या behind का उपयोग करें
+@msg	light {key} must be a number from {min} to {max}	लाइट: {key} को {min} से {max} तक की संख्या होना चाहिए
+@msg	light color must use opaque #rrggbb	लाइट का color अपारदर्शी #rrggbb होना चाहिए
+@msg	light behind must be true or false	लाइट का behind, true या false होना चाहिए
+@msg	shadow must be true or false	shadow को true या false होना चाहिए
+@msg	shadowPosition must be behind or below	shadowPosition को behind या below होना चाहिए
+@msg	{key} must be a number from {min} to {max}	{key} को {min} से {max} तक की संख्या होना चाहिए
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` की हर प्रविष्टि एक ऑब्जेक्ट होनी चाहिए
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` की प्रविष्टियाँ symbol, face, x, y, scale और rotation लेती हैं, `{k}` नहीं
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` की हर प्रविष्टि को `symbol` चाहिए, यानी किसी सिंबल का नाम
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	ग्राफ़िक्स समतल फ़ेस पर लगते हैं: एक्सट्रूड या समतल ऑब्जेक्ट प्रकार का उपयोग करें
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
+@msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
+@msg	The graphics are too complex: simplify the symbols' art	ग्राफ़िक्स बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	ग्राफ़िक का आर्ट अधिकतम {MAX_LEVELS} स्तर तक नेस्ट हो सकता है: सिंबल के आर्ट को सरल बनाएँ
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	ग्राफ़िक का आर्ट सिंबल को अधिकतम {MAX_NESTING} स्तर तक नेस्ट कर सकता है: सिंबल के आर्ट को सरल बनाएँ
+@msg	A graphic's art holds too many objects: simplify the symbol's art	ग्राफ़िक के आर्ट में बहुत अधिक ऑब्जेक्ट हैं: सिंबल के आर्ट को सरल बनाएँ
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	एक ग्राफ़िक अधिकतम {MAX_PIECES} फ़िल और स्ट्रोक बनाता है: सिंबल के आर्ट को सरल बनाएँ
+@msg	`surface` must be one of {_1}	`surface` को {_1} में से एक होना चाहिए
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} इस ऑब्जेक्ट के लिए उसकी 3D सतह के बजाय स्रोत आर्ट बनाता है
+@msg	{label} draws no faces for this object	{label} इस ऑब्जेक्ट के लिए कोई फ़ेस नहीं बनाता
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	वायरफ़्रेम में {MAX_WIRE_EDGES} से अधिक किनारे हैं
 @msg	The 3D surface is too complex; simplify the shape	3D सतह बहुत जटिल है; आकार को सरल बनाएं
 @msg	the action has no included steps	कार्रवाई में कोई कदम शामिल नहीं है
 @msg	the action has no steps	कार्रवाई में कोई कदम नहीं है

@@ -2753,6 +2753,8 @@ file-filter	Templates	Sablonok
 	Not found	Nem található
 	Note:	Megjegyzés:
 	Nothing matches the Show filter.	A Megjelenítés szűrőnek semmi sem felel meg.
+	Show DCS Transparency Interactions	DCS-átlátszósági kölcsönhatások megjelenítése
+	Transparent, or overlaps transparent objects: check its separations	Átlátszó, vagy átlátszó objektumokat fed át: ellenőrizze a színkivonatait
 	Nothing to print	Nincs mit nyomtatni
 	NTSC Colors	NTSC-színek
 	Nudge	Léptetés
@@ -5859,6 +5861,65 @@ imageTrace	Outline	Körvonal
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} képből nem tud testet létrehozni: előbb vektorizálja az Objektum › Képvektorizálás › Létrehozás paranccsal.
 @msg	{label} requires a shape with at least two anchors	{label} legalább két szerkesztőpontos alakzatot igényel
 @msg	The shape is too complex for a 3D effect	Az alakzat túl összetett a 3D effektushoz
+@msg	Extrude & Bevel	Kihúzás és élletörés
+@msg	Revolve	Forgatás tengely körül
+@msg	Inflate	Felfújás
+@msg	Rotate	Elforgatás
+@msg	Extrude & Bevel (Classic)	Kihúzás és élletörés (klasszikus)
+@msg	Revolve (Classic)	Forgatás tengely körül (klasszikus)
+@msg	Rotate (Classic)	Elforgatás (klasszikus)
+@msg	This effect	Ez az effektus
+@msg	clipping paths	vágóútvonalak
+@msg	other objects	egyéb objektumok
+@msg	{label} requires a group holding a shape with at least two anchors	{label}: legalább két szerkesztőpontos alakzatot tartalmazó csoport szükséges
+@msg	Revolve requires a group holding a shape with at least two anchors	Forgatás tengely körül: legalább két szerkesztőpontos alakzatot tartalmazó csoport szükséges
+@msg	Revolve requires a shape with at least two anchors	Forgatás tengely körül: legalább két szerkesztőpontos alakzat szükséges
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} csoporton: útvonalak, összetett útvonalak, szöveg, csoportok, vágócsoportok, összemosások és szimbólumpéldányok szükségesek; előbb bontsa fel vagy alakítsa át ezeket: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} csoporton: legfeljebb {MAX_MEMBERS} objektum lehet
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	A csoporton vagy rétegen lévő 3D effektus magára a csoportra kerül, nem a kitöltésére vagy körvonalára
+@msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
+@msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
+@msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
+@msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: nem hozható létre test a(z) „{symbol}” szimbólum példányából: a szimbólum rajza nem érhető el
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: a vágóútvonal túl összetett a rajz kivágásához
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}: legfeljebb {MAX_MEMBERS} objektum lehet
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}: nem hozható létre test {MAX_DEPTH} szintnél mélyebben egymásba ágyazott rajzból
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	A Forgatás tengely körül festése túl összetett ehhez a felülethez; csökkentse a Szakaszok értékét, vagy egyszerűsítse a színátmenetet
+@msg	Revolve edge must be left or right	Forgatás tengely körül: az edge értéke left vagy right lehet
+@msg	Revolve cap must be a boolean	Forgatás tengely körül: a cap értéke logikai érték lehet
+@msg	the revolved object has no fill or stroke	a forgatott objektumnak nincs kitöltése vagy körvonala
+@msg	lightColor must be an opaque RGB color in #rrggbb form	a lightColor értéke #rrggbb formájú átlátszatlan RGB szín lehet
+@msg	lights must contain one to ten lights	a lights egy és tíz közötti számú fényt tartalmazhat
+@msg	each light must be an object	minden fénynek objektumnak kell lennie
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	ismeretlen fénybeállítás: ezeket használja: color, intensity, rotation, height, softness vagy behind
+@msg	light {key} must be a number from {min} to {max}	fény: a {key} értéke {min} és {max} közötti szám lehet
+@msg	light color must use opaque #rrggbb	egy fény color értéke átlátszatlan #rrggbb lehet
+@msg	light behind must be true or false	egy fény behind értéke true vagy false lehet
+@msg	shadow must be true or false	a shadow értéke true vagy false lehet
+@msg	shadowPosition must be behind or below	a shadowPosition értéke behind vagy below lehet
+@msg	{key} must be a number from {min} to {max}	a {key} értéke {min} és {max} közötti szám lehet
+@msg	each of `{GRAPHICS}` must be an object	a `{GRAPHICS}` minden elemének objektumnak kell lennie
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	a `{GRAPHICS}` elemei symbol, face, x, y, scale és rotation értéket fogadnak, nem `{k}` értéket
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	a `{GRAPHICS}` minden eleméhez kell `symbol`, egy szimbólum neve
+@msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
+@msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	A grafikák sík lapokra kerülnek: használja a Kihúzás vagy a Sík objektumtípust
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
+@msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
+@msg	The graphics are too complex: simplify the symbols' art	A grafikák túl összetettek: egyszerűsítse a szimbólumok rajzát
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Egy grafika rajza legfeljebb {MAX_LEVELS} szint mélyen lehet egymásba ágyazva: egyszerűsítse a szimbólum rajzát
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Egy grafika rajza legfeljebb {MAX_NESTING} szint mélyen ágyazhat egymásba szimbólumokat: egyszerűsítse a szimbólum rajzát
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Egy grafika rajza túl sok objektumot tartalmaz: egyszerűsítse a szimbólum rajzát
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Egy grafika legfeljebb {MAX_PIECES} kitöltést és körvonalat rajzol: egyszerűsítse a szimbólum rajzát
+@msg	`surface` must be one of {_1}	`surface`: ezek egyike kell: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}: ehhez az objektumhoz a forrásrajzot rajzolja a 3D felülete helyett
+@msg	{label} draws no faces for this object	{label}: ehhez az objektumhoz nem rajzol lapot
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	a drótváznak több mint {MAX_WIRE_EDGES} éle van
 @msg	The 3D surface is too complex; simplify the shape	A 3D felület túl összetett; egyszerűsítse az alakzatot
 	Transform Objects	Objektumok transzformálása
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
@@ -6415,6 +6476,13 @@ axis	Y Axis	Y tengely
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
+	Insert Select Path	Útvonal kijelölésének beszúrása
+	Select Path	Útvonal kijelölése
+@msg	select one whole path or compound path	jelölj ki egy teljes útvonalat vagy összetett útvonalat
+@msg	select only one path	csak egy útvonalat jelölj ki
+@msg	the path is hidden or locked, or cannot be selected here	az útvonal rejtett vagy zárolt, vagy itt nem jelölhető ki
+@msg	object {value} is not the stored path: it changed, or the document is another one	a(z) {value} objektum nem a tárolt útvonal: megváltozott, vagy ez egy másik dokumentum
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	a `fingerprint` értéke "v1:" és 16 kisbetűs hexadecimális számjegy kell legyen
 	Select Object…	Objektum kijelölése…
 	Select Object	Objektum kijelölése
 	Set Selection	Kijelölés beállítása

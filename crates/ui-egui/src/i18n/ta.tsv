@@ -3048,6 +3048,8 @@ antiAlias	Sharp	கூர்மையான
 	Note:	குறிப்பு:
 	Nothing is selected. Select the art to export, then open this tab again.	எதுவும் தேர்ந்தெடுக்கப்படவில்லை. ஏற்றுமதி செய்ய ஓவியத்தைத் தேர்ந்தெடுத்து, பிறகு இந்தத் தாவலை மீண்டும் திறக்கவும்.
 	Nothing matches the Show filter.	காட்டு வடிகட்டிக்குப் பொருந்துவது எதுவும் இல்லை.
+	Show DCS Transparency Interactions	DCS வெளிப்படைத்தன்மை இடைவினைகளைக் காட்டு
+	Transparent, or overlaps transparent objects: check its separations	வெளிப்படையானது, அல்லது வெளிப்படையான பொருட்களின் மேல் படிகிறது: அதன் பிரிப்புகளைச் சரிபார்க்கவும்
 	Nothing to print	அச்சிட எதுவும் இல்லை
 	NTSC Colors	NTSC நிறங்கள்
 	Nudge	சிறு நகர்வு
@@ -3448,6 +3450,13 @@ antiAlias	Sharp	கூர்மையான
 @msg	Batch cannot play an action with a stop	நிறுத்தம் உள்ள செயலைத் தொகுதிச் செயலால் இயக்க முடியாது
 	Insert Menu Item…	பட்டி உருப்படியைச் செருகு…
 	Insert Menu Item	மெனு உருப்படியைச் செருகு
+	Insert Select Path	பாதைத் தேர்வைச் செருகு
+	Select Path	பாதையைத் தேர்ந்தெடு
+@msg	select one whole path or compound path	ஒரு முழுப் பாதையையோ கூட்டுப் பாதையையோ தேர்ந்தெடுக்கவும்
+@msg	select only one path	ஒரே ஒரு பாதையை மட்டும் தேர்ந்தெடுக்கவும்
+@msg	the path is hidden or locked, or cannot be selected here	பாதை மறைக்கப்பட்டுள்ளது அல்லது பூட்டப்பட்டுள்ளது, அல்லது இங்கே தேர்ந்தெடுக்க முடியாது
+@msg	object {value} is not the stored path: it changed, or the document is another one	பொருள் {value} சேமிக்கப்பட்ட பாதை அல்ல: அது மாறியுள்ளது, அல்லது இது வேறு ஆவணம்
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` ஆனது "v1:" உடன் 16 சிறிய எழுத்து ஹெக்ஸ் இலக்கங்களாக இருக்க வேண்டும்
 	Select Object…	பொருளைத் தேர்ந்தெடு…
 	Select Object	பொருளைத் தேர்ந்தெடு
 	Set Selection	தேர்வை அமை
@@ -7787,6 +7796,65 @@ antiAlias	Sharp	கூர்மையான
 @msg	that makes too many pieces (at most 100000): make the dashes longer	அது மிக அதிகமான துண்டுகளை உருவாக்கும் (அதிகபட்சம் 100000): கோடுகளை நீளமாக்கவும்
 @msg	that object is not in the overlap	அந்தப் பொருள் ஒன்றின்மேல் ஒன்று படியும் பகுதியில் இல்லை
 @msg	the {tool} tool has no options	{tool} கருவிக்கு விருப்பங்கள் இல்லை
+@msg	Extrude & Bevel	வெளித்தள்ளல் மற்றும் சரிவு
+@msg	Revolve	சுழற்றி உருவாக்கு
+@msg	Inflate	ஊதிப்பெருக்கு
+@msg	Rotate	சுழற்று
+@msg	Extrude & Bevel (Classic)	வெளித்தள்ளல் மற்றும் சரிவு (பாரம்பரியம்)
+@msg	Revolve (Classic)	சுழற்றி உருவாக்கு (பாரம்பரியம்)
+@msg	Rotate (Classic)	சுழற்று (பாரம்பரியம்)
+@msg	This effect	இந்த விளைவு
+@msg	clipping paths	வெட்டுப் பாதைகள்
+@msg	other objects	பிற பொருட்கள்
+@msg	{label} requires a group holding a shape with at least two anchors	{label}: குறைந்தது இரண்டு நங்கூரப் புள்ளிகள் உள்ள வடிவத்தைக் கொண்ட குழு தேவை
+@msg	Revolve requires a group holding a shape with at least two anchors	சுழற்றி உருவாக்கு: குறைந்தது இரண்டு நங்கூரப் புள்ளிகள் உள்ள வடிவத்தைக் கொண்ட குழு தேவை
+@msg	Revolve requires a shape with at least two anchors	சுழற்றி உருவாக்கு: குறைந்தது இரண்டு நங்கூரப் புள்ளிகள் உள்ள வடிவம் தேவை
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	குழுவின் மீது {label}: பாதைகள், கூட்டுப் பாதைகள், உரை, குழுக்கள், வெட்டுக் குழுக்கள், கலப்புகள் மற்றும் சின்ன நிகழ்வுகள் தேவை; முதலில் அதன் {what} ஐ விடுவிக்கவும் அல்லது விரிவாக்கவும்.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	குழுவின் மீது {label}: அதிகபட்சம் {MAX_MEMBERS} பொருட்களை ஏற்கும்
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	குழு அல்லது அடுக்கின் மீதான 3D விளைவு அந்தக் குழுவின் மீதே இடப்படும், அதன் நிரப்பு அல்லது கோட்டின் மீது அல்ல
+@msg	a 3D effect on a group's fill or stroke draws nothing	குழுவின் நிரப்பு அல்லது கோட்டின் மீதான 3D விளைவு எதையும் வரையாது
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	குழுவின் நிரப்பு அல்லது கோட்டின் மீதான 3D விளைவு ஏற்றுமதி செய்ய எதையும் வரையாது
+@msg	The 3D object is too complex to export	3D பொருள் ஏற்றுமதி செய்ய முடியாத அளவுக்குச் சிக்கலானது
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	பொருளில் 3D விளைவு இல்லை (வெளித்தள்ளல் மற்றும் சரிவு, சுழற்றி உருவாக்கு, ஊதிப்பெருக்கு அல்லது சுழற்று)
+@msg	its 3D effect builds no solid	அதன் 3D விளைவு எந்தத் திடப்பொருளையும் உருவாக்கவில்லை
+@msg	bevel must be none or one of {_1}	bevel ஆனது none ஆகவோ {_1} இல் ஒன்றாகவோ இருக்க வேண்டும்
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: இந்த ஓவியத்திலிருந்து திடப்பொருட்களை உருவாக்க முடியாது: அதன் சின்ன நிகழ்வுகள், கலப்புகள் மற்றும் வெட்டுக் குழுக்களில் மிக அதிகமான பொருட்கள் உள்ளன
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: "{symbol}" சின்னத்தின் நிகழ்விலிருந்து திடப்பொருளை உருவாக்க முடியாது: சின்னத்தின் ஓவியம் கிடைக்கவில்லை
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ஓவியத்தை வெட்டுவதற்கு வெட்டுப் பாதை மிகவும் சிக்கலானது
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}: அதிகபட்சம் {MAX_MEMBERS} பொருட்களை ஏற்கும்
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}: {MAX_DEPTH} நிலைகளுக்கு மேல் ஆழமாக உள்ளமைந்த ஓவியத்திலிருந்து திடப்பொருட்களை உருவாக்க முடியாது
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	சுழற்றி உருவாக்கு: வண்ணம் இந்த மேற்பரப்புக்கு மிகவும் சிக்கலானது; பகுதிகளைக் குறைக்கவும் அல்லது சாய்வை எளிதாக்கவும்
+@msg	Revolve edge must be left or right	சுழற்றி உருவாக்கு: edge ஆனது left அல்லது right ஆக இருக்க வேண்டும்
+@msg	Revolve cap must be a boolean	சுழற்றி உருவாக்கு: cap ஆனது ஒரு பூலியன் மதிப்பாக (true அல்லது false) இருக்க வேண்டும்
+@msg	the revolved object has no fill or stroke	சுழற்றி உருவாக்கப்பட்ட பொருளுக்கு நிரப்போ கோடோ இல்லை
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor ஆனது #rrggbb வடிவில் ஒளிபுகாத RGB நிறமாக இருக்க வேண்டும்
+@msg	lights must contain one to ten lights	lights இல் ஒன்று முதல் பத்து ஒளிகள் இருக்க வேண்டும்
+@msg	each light must be an object	ஒவ்வொரு ஒளியும் ஒரு பொருளாக இருக்க வேண்டும்
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	அறியப்படாத ஒளி அமைப்பு: color, intensity, rotation, height, softness அல்லது behind ஐப் பயன்படுத்தவும்
+@msg	light {key} must be a number from {min} to {max}	ஒளி: {key} ஆனது {min} முதல் {max} வரையிலான எண்ணாக இருக்க வேண்டும்
+@msg	light color must use opaque #rrggbb	ஒளி: color ஆனது ஒளிபுகாத #rrggbb ஆக இருக்க வேண்டும்
+@msg	light behind must be true or false	ஒளி: behind ஆனது true அல்லது false ஆக இருக்க வேண்டும்
+@msg	shadow must be true or false	shadow ஆனது true அல்லது false ஆக இருக்க வேண்டும்
+@msg	shadowPosition must be behind or below	shadowPosition ஆனது behind அல்லது below ஆக இருக்க வேண்டும்
+@msg	{key} must be a number from {min} to {max}	{key} ஆனது {min} முதல் {max} வரையிலான எண்ணாக இருக்க வேண்டும்
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` இன் ஒவ்வொரு உருப்படியும் ஒரு பொருளாக இருக்க வேண்டும்
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` உருப்படிகள் symbol, face, x, y, scale, rotation ஆகியவற்றை ஏற்கும், `{k}` ஐ அல்ல
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` இன் ஒவ்வொரு உருப்படிக்கும் `symbol`, அதாவது ஒரு சின்னத்தின் பெயர், தேவை
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` இன் face ஆனது front அல்லது back ஆக இருக்க வேண்டும்
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` இன் {key} ஆனது {lo} முதல் {hi} வரையிலான எண்ணாக இருக்க வேண்டும்
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ஒரு வரிசையாக இருக்க வேண்டும்
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	வரைகலைகள் தட்டையான முகங்களில் மட்டுமே பொருத்தப்படும்: வெளித்தள்ளு அல்லது தளம் பொருள் வகையைப் பயன்படுத்தவும்
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` அதிகபட்சம் {MAX_GRAPHICS} வரைகலைகளை ஏற்கும்
+@msg	A plane has one face: map its graphics onto the front	தளத்துக்கு ஒரே ஒரு முகம் உண்டு: அதன் வரைகலைகளை முன்புறத்தில் பொருத்தவும்
+@msg	The graphics are too complex: simplify the symbols' art	வரைகலைகள் மிகவும் சிக்கலானவை: சின்னங்களின் ஓவியத்தை எளிதாக்கவும்
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	ஒரு வரைகலையின் ஓவியம் அதிகபட்சம் {MAX_LEVELS} நிலைகள் ஆழம் வரை மட்டுமே உள்ளமைந்திருக்கலாம்: சின்னத்தின் ஓவியத்தை எளிதாக்கவும்
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	ஒரு வரைகலையின் ஓவியம் சின்னங்களை அதிகபட்சம் {MAX_NESTING} நிலைகள் ஆழம் வரை மட்டுமே உள்ளமைக்கலாம்: சின்னத்தின் ஓவியத்தை எளிதாக்கவும்
+@msg	A graphic's art holds too many objects: simplify the symbol's art	ஒரு வரைகலையின் ஓவியத்தில் மிக அதிகமான பொருட்கள் உள்ளன: சின்னத்தின் ஓவியத்தை எளிதாக்கவும்
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	ஒரு வரைகலை அதிகபட்சம் {MAX_PIECES} நிரப்புகளையும் கோடுகளையும் மட்டுமே வரையும்: சின்னத்தின் ஓவியத்தை எளிதாக்கவும்
+@msg	`surface` must be one of {_1}	`surface` {_1} இல் ஒன்றாக இருக்க வேண்டும்
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}: இந்தப் பொருளுக்கு அதன் 3D மேற்பரப்புக்குப் பதிலாக மூல ஓவியம் வரையப்படுகிறது
+@msg	{label} draws no faces for this object	{label}: இந்தப் பொருளுக்கு எந்த முகமும் வரையப்படவில்லை
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	கம்பிச்சட்டத்தில் {MAX_WIRE_EDGES} க்கும் மேற்பட்ட விளிம்புகள் உள்ளன
 @msg	The 3D surface is too complex; simplify the shape	3D மேற்பரப்பு மிகவும் சிக்கலானது; வடிவத்தை எளிமையாக்கவும்
 @msg	the action has no included steps	செயலில் சேர்க்கப்பட்ட படிகள் எதுவும் இல்லை
 @msg	the action has no steps	செயலில் படிகள் இல்லை
