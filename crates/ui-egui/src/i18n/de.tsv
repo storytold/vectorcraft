@@ -5488,7 +5488,10 @@ lighting	Light	Licht
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
-@msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel muss none, einer der Werte {_1} oder custom mit {BEVEL_PROFILE} sein
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom benötigt {BEVEL_PROFILE}, die Punkte der abgeflachten Kante
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} muss eine Zeichenfolge sein
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} muss 2 bis {most} Punkte [x, y] enthalten, jeder Anteil zwischen 0 und 1, von [0, 0] (Kante der Deckfläche) bis [1, 1] (Seitenwand)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kann keinen Körper aus der Instanz des Symbols „{symbol}“ erstellen: Das Bildmaterial des Symbols ist nicht verfügbar
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: Der Schnittpfad ist zu komplex, um das Bildmaterial damit zu beschneiden

@@ -5510,7 +5510,10 @@ lighting	Light	Світло
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
-@msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel має бути none, одним з: {_1}, або custom з {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom потрібен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} має бути рядком
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} має містити від 2 до {most} точок [x, y], кожна частка від 0 до 1, від [0, 0] (край торця) до [1, 1] (бічна стінка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: не вдається побудувати тіло з екземпляра символу «{symbol}»: ілюстрація символу недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: відсічний контур надто складний, щоб обрізати ним ілюстрацію

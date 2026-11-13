@@ -5516,7 +5516,10 @@ lighting	Light	Свет
 @msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
 @msg	its 3D effect builds no solid	его 3D-эффект не строит тела
-@msg	bevel must be none or one of {_1}	bevel должен быть none или одним из: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel должен быть none, одним из: {_1}, или custom с {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	для bevel custom нужен {BEVEL_PROFILE}, точки фаски
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} должно быть строкой
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} должен содержать от 2 до {most} точек [x, y], каждая доля от 0 до 1, от [0, 0] (край торца) до [1, 1] (боковая стенка)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: нельзя построить тела из этой иллюстрации: её экземпляры символов, переходы и обтравочные группы содержат слишком много объектов
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: нельзя построить тело из экземпляра символа «{symbol}»: иллюстрация символа недоступна
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: обтравочный контур слишком сложен, чтобы обрезать им иллюстрацию

@@ -5743,7 +5743,10 @@ mark-style	Japanese	Japońskie
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
-@msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel musi mieć wartość none, jedną z: {_1}, albo custom z {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom wymaga {BEVEL_PROFILE}, punktów fazy
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} musi być ciągiem znaków
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} musi zawierać od 2 do {most} punktów [x, y], każdy udział od 0 do 1, od [0, 0] (krawędź ściany czołowej) do [1, 1] (ściana boczna)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tego rysunku: jego wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nie może utworzyć bryły z wystąpienia symbolu „{symbol}”: rysunek symbolu jest niedostępny
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ścieżka przycinająca jest zbyt złożona, aby przyciąć nią rysunek

@@ -5483,7 +5483,10 @@ lighting	Light	Lumière
 @msg	The 3D object is too complex to export	L'objet 3D est trop complexe pour être exporté
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'objet n'a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
-@msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel doit valoir none, l’une des valeurs {_1}, ou custom avec {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom nécessite {BEVEL_PROFILE}, les points du biseau
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} doit être une chaîne
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} doit contenir de 2 à {most} points [x, y], chaque proportion entre 0 et 1, de [0, 0] (le bord de la face) à [1, 1] (la paroi latérale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ne peut pas construire de volumes à partir de cette illustration : ses occurrences de symbole, dégradés de formes et groupes de découpe contiennent trop d'objets
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ne peut pas construire de volume à partir de l'occurrence du symbole « {symbol} » : l'illustration du symbole n'est pas disponible
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1} : le tracé de découpe est trop complexe pour découper l'illustration

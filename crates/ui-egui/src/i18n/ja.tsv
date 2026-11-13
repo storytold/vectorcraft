@@ -5572,7 +5572,10 @@ lighting	Light	ライト
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
-@msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel には none、{_1} のいずれか、または {BEVEL_PROFILE} を付けた custom を指定してください
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom にはベベルのポイントを表す {BEVEL_PROFILE} が必要です
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} は文字列にしてください
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} には 2 個から {most} 個の [x, y] ポイントを、各値を 0 から 1 までの割合として、[0, 0] (端面の縁) から [1, 1] (側面の壁) まで指定してください
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} はシンボル「{symbol}」のインスタンスからソリッドを作成できません。シンボルのアートを使用できません
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: クリッピングパスが複雑すぎるため、アートを切り抜けません
