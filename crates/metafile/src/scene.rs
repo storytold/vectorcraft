@@ -28,6 +28,7 @@ const OPAQUE: f32 = 0.998;
 
 const TRANSPARENCY: &str = "transparency is left out of paths: transparent fills and strokes are written opaque";
 const BLENDING: &str = "blending modes are left out";
+const EXPANSION_LEFT_OUT: &str = "symbols placed inside symbols hold too many objects for a metafile: the instances past that were left out";
 const MASKS: &str = "opacity masks are left out";
 const RASTER_FX: &str = "raster effects (shadows, glows, blurs, feathering) are left out";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
@@ -131,6 +132,8 @@ pub(crate) struct Scene<'a> {
     nest: u32,
     /// Pattern tiles left to write ([`MAX_TILES`]).
     tiles_left: usize,
+    /// The objects of the symbol art written so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    expanded: u64,
     /// Pattern tiles being written that may be merged: their parts aren't left out off the page,
     /// so each tile draws the same parts (the fill's clip still trims them).
     whole_tiles: bool,
@@ -150,6 +153,7 @@ impl<'a> Scene<'a> {
             opacity: 1.0,
             nest: 0,
             tiles_left: MAX_TILES,
+            expanded: if cfg!(test) { vectorcraft_doc::MAX_SYMBOL_NODES - 1_000_000 } else { 0 },
             whole_tiles: false,
         }
     }
@@ -217,13 +221,33 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n)
-                    && let Some(art) =
-                        if self.clips { self.doc.place_symbol_art(symbol, &art, *xf) } else { self.doc.place_symbol_art_unclipped(symbol, &art, *xf) }
                 {
-                    self.nest += 1;
-                    self.node(&art, true);
-                    self.nest -= 1;
+                    // Symbols holding instances of symbols are written in full for each instance, empty
+                    // or not: every instance's art counts against one budget for the export.
+                    let (doc, clips) = (self.doc, self.clips);
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let count = art.count_with_masks() as u64;
+                    // Placed through 9-slice guides it can make more objects than `art` holds.
+                    let most = doc
+                        .symbol_slice_map(symbol, *xf)
+                        .map_or(count, |m| if clips { m.most_placed(&art, doc) } else { m.most_placed_unclipped(&art, doc) });
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.expanded, most, || {
+                        let placed = if clips { doc.place_symbol_art(symbol, &art, *xf) } else { doc.place_symbol_art_unclipped(symbol, &art, *xf) };
+                        let count = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, count)
+                    });
+                    match placed {
+                        Some(Some(art)) => {
+                            self.nest += 1;
+                            self.node(&art, true);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.expanded = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(EXPANSION_LEFT_OUT);
+                        }
+                    }
                 }
             }
             // Live blends, envelopes, meshes and repeats are written as their evaluated art.
@@ -324,13 +348,15 @@ impl<'a> Scene<'a> {
             Paint::Gradient(g) if self.clips => self.gradient(bp, rule, g, opacity, bounds),
             Paint::Pattern { pattern, xf } if self.clips && self.nest < MAX_NEST && self.tiles_left > 0 && self.doc.pattern(pattern).is_some() => {
                 let area = bp.bounding_box().intersect(self.region);
-                let tiles = self.doc.pattern(pattern).map(|def| def.instances_in(*xf, area)).unwrap_or_default();
-                if tiles.len() > self.tiles_left {
+                // Over what the budget has left, none are built.
+                let tiles =
+                    self.doc.pattern(pattern).map(|def| def.instances_in_at_most(*xf, area, false, self.tiles_left, false)).unwrap_or_default();
+                let Some(tiles) = tiles else {
                     self.tiles_left = 0;
                     self.warn(TOO_MANY_TILES);
                     self.flat_fill(bp, rule, paint, opacity);
                     return;
-                }
+                };
                 self.tiles_left -= tiles.len();
                 // Tiles that can't overlap one another (grid and brick tilings whose art stays in
                 // its tile) may be merged: see `merge_tiles`.
@@ -340,7 +366,7 @@ impl<'a> Scene<'a> {
                 self.ops.push(Op::Clip { path: bp.clone(), rule });
                 self.nest += 1;
                 let mut chunks = Vec::new();
-                let (whole, left) = (self.whole_tiles, self.tiles_left);
+                let (whole, left, spent) = (self.whole_tiles, self.tiles_left, self.expanded);
                 self.whole_tiles = per_tile.is_some();
                 for (i, t) in tiles.iter().enumerate() {
                     if per_tile.is_some_and(|k| k > 0 && i % k == 0) {
@@ -357,6 +383,8 @@ impl<'a> Scene<'a> {
                     }
                     // Patterns inside the tiles take from the budget once.
                     self.tiles_left = left;
+                    // The walk that was dropped doesn't count against the art that is kept.
+                    self.expanded = spent;
                     tiles.iter().for_each(|t| self.node(t, true));
                 }
                 self.nest -= 1;

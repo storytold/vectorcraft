@@ -523,3 +523,39 @@ fn hex_tilings_and_stroked_tiles_keep_each_tile_apart() {
     let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
     assert!(fills(&ops).len() > 400 && clips(&ops) > 200, "stroked: {} fills, {} clips", fills(&ops).len(), clips(&ops));
 }
+
+#[test]
+fn symbols_holding_many_instances_of_symbols_stop_at_the_budget() {
+    let inst = |next: &str| Arc::new(Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: next.into(), xf: Affine::IDENTITY }));
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let first = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY });
+    add(&mut d, first);
+    let leaf = path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S5".into(), art: Arc::new(leaf) });
+    for level in (0..5).rev() {
+        let kids = (0..40).map(|_| inst(&format!("S{}", level + 1))).collect();
+        let art = Node::new(d.alloc_id(), NodeKind::Group { children: kids, clip: false });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("S{level}"), art: Arc::new(art) });
+    }
+    let out = export(&d, Rect::new(0.0, 0.0, 100.0, 100.0), Kind::Emf).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("too many objects")), "{:?}", out.warnings);
+}
+
+#[test]
+fn pattern_tiles_over_what_is_left_are_not_built() {
+    let def = point_tiles("P", path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0));
+    let region = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100, false).is_none());
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 1_000_000, false).is_some_and(|t| t.len() >= 10_000));
+}
+
+#[test]
+fn a_deep_allowance_counts_every_object_of_the_tile_art() {
+    let kids = (0..100).map(|_| Arc::new(path(shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), red(), Paint::None, 0.0))).collect();
+    let group = Node::new(NodeId(0), NodeKind::Group { children: kids, clip: false });
+    let def = point_tiles("P", group);
+    let region = Rect::new(0.0, 0.0, 100.0, 100.0);
+    // About 10,000 positions of one top-level node: within 100,000 flat, over it counted deep.
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100_000, false).is_some());
+    assert!(def.instances_in_at_most(Affine::IDENTITY, region, false, 100_000, true).is_none());
+}
