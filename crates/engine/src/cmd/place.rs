@@ -404,12 +404,7 @@ fn load_pages_mode(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, si
         let mut total_nodes: usize = 0;
 
         let linked = link_pdf && bool_or(p, "link", true) && opts.password.is_none() && opts.text_as == vectorcraft_pdf::TextAs::Text;
-        // Allocate a single shared ImageBlob so all linked pages share one Arc<Vec<u8>> buffer
-        let shared_blob = if src.path.is_some() && linked && pages_to_place.len() > 1 {
-            Some(vectorcraft_doc::ImageBlob::new("application/pdf", src.bytes.clone()))
-        } else {
-            None
-        };
+        let mut shared_bytes: Option<Arc<Vec<u8>>> = None;
 
         for page_num in pages_to_place {
             if let Some(path) = src.path.filter(|_| linked) {
@@ -417,13 +412,17 @@ fn load_pages_mode(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, si
                 let s = document::source_with_blob(
                     src.name,
                     &src.bytes,
-                    shared_blob.as_ref(),
+                    &mut shared_bytes,
                     Some(path),
                     page_u32,
                     !crop,
                     document::page_box(opts.crop),
                     cmd,
                 )?;
+                total_nodes = total_nodes.saturating_add(s.node_count);
+                if total_nodes > MAX_PLACE_TOTAL_NODES {
+                    return Err(bad(cmd, format!("multipage PDF placement exceeded the {MAX_PLACE_TOTAL_NODES}-node budget on page {page_num}")));
+                }
                 let link = LinkInfo { page: Some(page_u32), ..super::links::link_info(path, &src.bytes) };
                 let (natural, warnings) = (s.frame, s.warnings.clone());
                 loaded_pages.push(Loaded {
@@ -437,7 +436,8 @@ fn load_pages_mode(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, si
                 });
             } else {
                 let a = pdf_art(src.name, &src.bytes, src.path, page_num, opts.clone(), !crop, cmd)?;
-                total_nodes = total_nodes.saturating_add(a.nodes.iter().map(|n| n.count()).sum::<usize>());
+                let page_nodes = a.nodes.iter().map(|n| n.count()).sum::<usize>();
+                total_nodes = total_nodes.saturating_add(page_nodes);
                 if total_nodes > MAX_PLACE_TOTAL_NODES {
                     return Err(bad(cmd, format!("multipage PDF placement exceeded the {MAX_PLACE_TOTAL_NODES}-node budget on page {page_num}")));
                 }
@@ -925,18 +925,53 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     let first = loaded.first().ok_or_else(|| bad(PLACE, "nothing to place"))?;
     let name = first.name.clone();
     let format = first.format.id;
-    let mut warnings = Vec::new();
-    let at_pt = at.or_else(|| rect.map(|r| r.origin())).or_else(|| st.doc.artboards.first().map(|a| a.rect.origin())).unwrap_or_default();
-    let mut cursor_x = at_pt.x;
+
+    if at.is_some() && rect.is_some() {
+        return Err(bad(PLACE, "specify either at or rect, not both"));
+    }
+    if old.is_some() && (at.is_some() || rect.is_some()) {
+        return Err(bad(PLACE, "replace cannot be combined with at or rect"));
+    }
+
     let page_gap = 20.0_f64;
+    let mut local_offsets = Vec::with_capacity(loaded.len());
+    let mut layout_w = 0.0_f64;
+    let mut max_h = 0.0_f64;
+
+    for (idx, item) in loaded.iter().enumerate() {
+        if idx > 0 {
+            layout_w += page_gap;
+        }
+        local_offsets.push(layout_w);
+        let page_bounds = item.natural;
+        let page_width = page_bounds.width().max(1.0);
+        let page_height = page_bounds.height().max(1.0);
+        layout_w += page_width;
+        if page_height > max_h {
+            max_h = page_height;
+        }
+    }
+
+    let layout_bounds = Rect::new(0.0, 0.0, layout_w.max(1.0), max_h.max(1.0));
+    let layout_xf = match (old_node, rect) {
+        (Some(o), _) => replace_xf(&st.doc, o, layout_bounds, true),
+        (None, Some(r)) => fit(layout_bounds, r),
+        (None, None) => {
+            let c = at.or_else(|| st.doc.artboards.first().map(|a| a.rect.center())).unwrap_or_default();
+            Affine::translate(c - layout_bounds.center())
+        }
+    };
+
+    let p0 = layout_xf * Point::new(layout_bounds.x0, layout_bounds.y0);
+    let px = layout_xf * Point::new(layout_bounds.x1, layout_bounds.y0);
+    let py = layout_xf * Point::new(layout_bounds.x0, layout_bounds.y1);
+    let width = (px - p0).hypot();
+    let height = (py - p0).hypot();
 
     let parent = st.insertion_parent();
     let below = st.current_layer().or_else(|| parent.and_then(|p| st.doc.layer_of(p)));
 
-    let (ids, width, height, any_linked) = s.edit("Place", |d, sel| {
-        let mut ids = Vec::with_capacity(loaded.len());
-        let mut max_h = 0.0_f64;
-        let mut any_linked = false;
+    let (ids, any_linked, warnings) = s.edit("Place", |d, sel| {
         let (into, mut index) = match old {
             Some(old) => {
                 let (par, idx, _) = d.position(old).ok_or(EngineError::NoNode(old))?;
@@ -946,35 +981,33 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
             None if template => (Some(template_layer(d, below, &name)?), usize::MAX),
             None => (parent, usize::MAX),
         };
-        for mut item in loaded {
+        let mut ids = Vec::with_capacity(loaded.len());
+        let mut any_linked = false;
+        let mut warnings = Vec::new();
+        for (mut item, local_x) in loaded.into_iter().zip(local_offsets) {
             let page_bounds = item.natural;
-            let page_width = page_bounds.width().max(1.0);
-            let page_height = page_bounds.height().max(1.0);
-            if page_height > max_h {
-                max_h = page_height;
-            }
             warnings.append(&mut item.warnings);
             let link = item.link.take().filter(|_| bool_or(p, "link", true));
             if link.is_some() {
                 any_linked = true;
             }
-            let m = Affine::translate((cursor_x - page_bounds.x0, at_pt.y - page_bounds.y0));
+            let local_m = Affine::translate((local_x - page_bounds.x0, -page_bounds.y0));
+            let m = layout_xf * local_m;
             let node = transformed(build(d, item, link), m);
             let id = d.insert(into, index, node)?;
             if index != usize::MAX {
                 index += 1;
             }
             ids.push(id);
-            cursor_x += page_width + page_gap;
         }
         if template {
             sel.clear();
         } else {
             sel.set(ids.iter().copied());
         }
-        let total_w = if ids.is_empty() { 0.0 } else { cursor_x - page_gap - at_pt.x };
-        Ok((ids, total_w, max_h, any_linked))
+        Ok((ids, any_linked, warnings))
     })?;
+
     let id_vals: Vec<Value> = ids.into_iter().map(|id| json!(id.0)).collect();
     Ok(json!({ "ids": id_vals, "name": name, "format": format, "linked": any_linked, "width": width, "height": height, "warnings": warnings }))
 }

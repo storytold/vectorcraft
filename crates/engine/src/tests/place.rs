@@ -1243,3 +1243,77 @@ fn pages_parameter_validates_types_and_ranges() {
         .unwrap();
     assert_eq!(ok["ids"].as_array().unwrap().len(), 3);
 }
+
+#[test]
+fn multipage_pdf_reconciles_memo_hit_with_shared_blob() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+
+    let dir = std::env::temp_dir();
+    let pdf_path = dir.join(format!("vc_test_memo_reconcile_3p_{}.pdf", std::process::id()));
+    let pdf_bytes = synthetic_multipage_pdf(3);
+    std::fs::write(&pdf_path, &pdf_bytes).unwrap();
+    let path_str = pdf_path.to_string_lossy().to_string();
+
+    // 1. Prime MEMO with page 1 alone first
+    s.execute("file.place", &json!({ "path": path_str, "link": true, "page": 1 })).unwrap();
+
+    // 2. Now place all pages (page 1 hits MEMO; pages 2 and 3 miss MEMO)
+    let res = s.execute("file.place", &json!({ "path": path_str, "link": true, "pages": "all" })).unwrap();
+    let batch_ids: Vec<u64> = res["ids"].as_array().unwrap().iter().filter_map(|v| v.as_u64()).collect();
+    assert_eq!(batch_ids.len(), 3);
+
+    // Verify all 3 pages in the batch share the exact same Arc<Vec<u8>> pointer
+    let doc = &s.doc().unwrap().doc;
+    let ptrs: Vec<_> = batch_ids
+        .iter()
+        .map(|id_val| {
+            let n = doc.node(NodeId(*id_val)).unwrap();
+            match &n.kind {
+                NodeKind::PlacedDocument(p) => Arc::as_ptr(&doc.images[&p.key].bytes),
+                other => panic!("expected PlacedDocument, got {other:?}"),
+            }
+        })
+        .collect();
+    assert_eq!(ptrs.len(), 3);
+    assert!(ptrs.windows(2).all(|w| w[0] == w[1]), "cached page 1 and uncached pages 2..3 must share one source allocation");
+
+    let _ = std::fs::remove_file(&pdf_path);
+}
+
+#[test]
+fn multipage_pdf_layout_centers_on_at_and_honors_rect_and_replace() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+
+    let pdf_bytes = synthetic_multipage_pdf(2);
+    let b64 = vectorcraft_format::base64_encode(&pdf_bytes);
+
+    // 1. Conflicting `at` + `rect` is rejected
+    let conflict = s.execute(
+        "file.place",
+        &json!({
+            "name": "two.pdf",
+            "dataBase64": b64,
+            "at": [100.0, 100.0],
+            "rect": [0.0, 0.0, 110.0, 50.0],
+            "pages": "all"
+        }),
+    );
+    assert!(conflict.is_err(), "combining at and rect must be rejected");
+
+    // 2. `rect: [10, 20, 110, 50]` fits the 2-page layout inside 110x50
+    let fit_res = s
+        .execute(
+            "file.place",
+            &json!({
+                "name": "two.pdf",
+                "dataBase64": b64,
+                "rect": [10.0, 20.0, 110.0, 50.0],
+                "pages": "all"
+            }),
+        )
+        .unwrap();
+    assert!((fit_res["width"].as_f64().unwrap() - 110.0).abs() < 1e-3);
+    assert!((fit_res["height"].as_f64().unwrap() - 25.0).abs() < 1e-3);
+}
