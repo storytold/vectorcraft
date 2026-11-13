@@ -688,7 +688,8 @@ fn box_gap(c: &CubicBez, p: Point) -> Option<f64> {
 const MEASURE_LIMIT: f64 = 1e9;
 
 /// The length of `seg` to `accuracy`; 0 for a segment whose control points are not finite or past
-/// [`MEASURE_LIMIT`].
+/// [`MEASURE_LIMIT`], and 0 when the measurement is not finite (kurbo gives NaN for a quadratic
+/// segment whose three points coincide).
 pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
     let ok = |p: Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MEASURE_LIMIT && p.y.abs() <= MEASURE_LIMIT;
     let fits = match seg {
@@ -696,7 +697,11 @@ pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
         PathSeg::Quad(q) => ok(q.p0) && ok(q.p1) && ok(q.p2),
         PathSeg::Cubic(c) => ok(c.p0) && ok(c.p1) && ok(c.p2) && ok(c.p3),
     };
-    if fits { kurbo::ParamCurveArclen::arclen(seg, accuracy) } else { 0.0 }
+    if !fits {
+        return 0.0;
+    }
+    let len = kurbo::ParamCurveArclen::arclen(seg, accuracy);
+    if len.is_finite() { len } else { 0.0 }
 }
 
 /// The largest x or y, in size, of a segment's control points for which [`segment_bounds`]
@@ -1054,6 +1059,19 @@ mod tests {
     #[test]
     fn length_of_square() {
         assert!((square().length() - 40.0).abs() < 1e-6);
+    }
+
+    /// A quadratic segment whose three points coincide measures 0, not NaN; quadratic segments
+    /// with only two points together, and an ordinary one, keep kurbo's length.
+    #[test]
+    fn measured_arclen_of_a_quad_whose_points_coincide_is_zero() {
+        let quad = |a: (f64, f64), b: (f64, f64), c: (f64, f64)| PathSeg::Quad(kurbo::QuadBez::new(a, b, c));
+        assert_eq!(measured_arclen(&quad((5.0, 5.0), (5.0, 5.0), (5.0, 5.0)), 1e-6), 0.0);
+        assert_eq!(measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (0.0, 0.0)), 1e-3), 0.0);
+        assert!((measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (10.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        assert!((measured_arclen(&quad((0.0, 0.0), (10.0, 0.0), (0.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        let ordinary = quad((0.0, 0.0), (10.0, 0.0), (10.0, 10.0));
+        assert_eq!(measured_arclen(&ordinary, 1e-6), kurbo::ParamCurveArclen::arclen(&ordinary, 1e-6));
     }
 
     #[test]

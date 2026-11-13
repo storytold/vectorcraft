@@ -24,9 +24,15 @@ fn pushes_in(para: &ParaStyle) -> bool {
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
 
+/// Whether every line of area type in `regions` is as wide however tall it is and wherever it is set:
+/// rectangular cells without text wrap.
+fn constant_width(regions: Option<&[Region]>) -> bool {
+    regions.is_some_and(|r| r.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty()))
+}
+
 /// Every-line composition of paragraph glyphs `sg` if applicable (area text, justified or ragged,
-/// with uniform line metrics or in rectangular cells without text wrap); `None` falls back to the
-/// greedy single-line composer. With `continued`, the paragraph continues from the frame before,
+/// in any frame shape, with or without text wrap); `None` falls back to the greedy single-line
+/// composer. With `continued`, the paragraph continues from the frame before,
 /// and its first composed line is not its first line. `line_end` is how much narrower a line
 /// ending with each glyph is set ([`ParagraphData::line_end`]).
 #[allow(clippy::too_many_arguments)]
@@ -66,14 +72,11 @@ fn compose_para(
     let m = Metrics::of(&sg[0]);
     // Line widths are independent of the breaks when every line has the same metrics, or when
     // a line's width does not depend on how far down the frame it is set: rectangular cells
-    // without text wrap. Then a paragraph whose characters differ in line metrics (type size,
-    // font, leading, vertical scale, an inline graphic taller than the text) is composed too. In
-    // other shapes, or with text wrap, a taller line can move the lines below it to where the
-    // frame is narrower, so such a paragraph is broken line by line.
-    let plain = pen.regions.is_some_and(|r| r.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty()));
-    if !plain && sg.iter().any(|g| Metrics::of(g) != m) {
-        return None;
-    }
+    // without text wrap. In other shapes, or with text wrap, a paragraph whose characters differ
+    // in line metrics (type size, font, leading, vertical scale, an inline graphic taller than
+    // the text) can have a taller line move the lines below it to where the frame is narrower:
+    // each line the composer tries is then placed after the lines it follows (`shaped::Shaped`).
+    let shaped = !constant_width(pen.regions) && sg.iter().any(|g| Metrics::of(g) != m);
     let total: f64 = sg.iter().map(|g| g.adv).sum();
     // The same rule as the line loop below: an opening bracket starting a wrapped line gives up
     // the space before it.
@@ -86,7 +89,7 @@ fn compose_para(
     let mut acc = 0.0;
     // A line's width and placement depend on the sum of its indents alone, which the mirrored
     // indents of a right-to-left list ([`line_indents`]) keep.
-    while widths.len() < sg.len() {
+    while !shaped && widths.len() < sg.len() {
         let first = widths.is_empty();
         let ind_l = para.laid_out_left_indent() + if first && !continued { para.first_line_indent } else { 0.0 };
         // Only the first line's first word is known here. Later lines are placed as the composed
@@ -103,7 +106,11 @@ fn compose_para(
             break;
         }
     }
-    let last = *widths.last()?;
+    let last = match widths.last() {
+        Some(&last) => last,
+        None if shaped => 0.0,
+        None => return None,
+    };
     let width = |k: usize| widths.get(k).copied().unwrap_or(last);
     // Lines from `uniform_from` on are interchangeable (same width).
     let uniform_from = widths.iter().rposition(|&w| (w - last).abs() > EPS).map_or(0, |k| k + 1);
@@ -119,6 +126,14 @@ fn compose_para(
     let (strict, loose) = (1.0, f64::INFINITY);
     // A line's last character is set narrower, as the line loop sets it.
     let end_credit = |end: usize| end.checked_sub(1).and_then(|k| line_end.get(k)).copied().unwrap_or(0.0);
+    if shaped {
+        // Both passes share the placements tried and one search budget.
+        let mirror = mirrors_indents(para, rtl, cx.vertical);
+        let mut measure = super::shaped::Shaped::new(sg, line_end, para, &start_credit, continued, mirror, pen);
+        let mut pass = |p: &Params| crate::composer::compose_with(sg, &mut measure, &start_credit, &end_credit, &cands, flex, p);
+        let lines = pass(&params(strict));
+        return lines.or_else(|| pass(&params(loose)));
+    }
     let pass = |p: &Params| compose(sg, &width, &start_credit, &end_credit, &cands, flex, p);
     pass(&params(strict)).or_else(|| pass(&params(loose)))
 }
@@ -142,7 +157,7 @@ fn mirrors_indents(para: &ParaStyle, rtl: bool, vertical: bool) -> bool {
 /// the right and the right indent from the left: the bullet of a right-to-left list hangs at the
 /// right, and the lines it wraps to line up with the text after the bullet. A list level past the
 /// first adds to the left indent ([`ParaStyle::laid_out_left_indent`]), mirrored with it.
-fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
+pub(super) fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
     let start = para.laid_out_left_indent() + if first { para.first_line_indent } else { 0.0 };
     if mirror { (para.right_indent, start) } else { (start, para.right_indent) }
 }
@@ -162,6 +177,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         next_top: None,
         no_room_for: f64::INFINITY,
         steps_left: std::rc::Rc::new(std::cell::Cell::new(super::breaking::MAX_TOTAL_STEPS)),
+        search: Default::default(),
     };
     let markers = list_markers(t, paras);
     for (pi, pr) in paras.iter().enumerate() {
@@ -392,6 +408,12 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     }
     // The line's first word, as narrow as the line sets it at both ends.
     let word = word_width(sg, *i, line_end, para.kinsoku);
+    // A composed line in a frame whose lines are not all as wide is placed at its own tallest
+    // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
+    let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+        Some(&(end, _)) if end > *i && !constant_width(pen.regions) => sg.get(*i..end).and_then(Metrics::max).unwrap_or(est),
+        _ => est,
+    };
     // Place, break, then settle the baseline on the line's real metrics (moving on to the
     // next row/column if it no longer fits).
     loop {
