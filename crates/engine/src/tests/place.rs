@@ -1044,3 +1044,202 @@ fn a_clipped_top_level_group_stays_clipped() {
     let [inner] = children.as_slice() else { panic!("one object: {children:?}") };
     assert!(matches!(&inner.kind, NodeKind::Group { children, clip: true } if children.len() == 2), "{:?}", inner.kind);
 }
+
+fn multi_page_pdf(pages: &[[u8; 3]]) -> Vec<u8> {
+    let mut d = Document::new(100.0, 50.0);
+    let layer = d.layers[0].id;
+    for (i, rgb) in pages.iter().enumerate() {
+        let x = i as f64 * 150.0;
+        let page = Rect::new(x, 0.0, x + 100.0, 50.0);
+        if i > 0 {
+            let mut b = d.artboards[0].clone();
+            (b.id, b.rect) = (i as u32 + 1, page);
+            d.artboards.push(b);
+        }
+        let id = d.alloc_id();
+        let look = vectorcraft_doc::Appearance::basic(Paint::solid(vectorcraft_color::Color::rgb8(rgb[0], rgb[1], rgb[2])), Paint::None, 0.0);
+        d.insert(Some(layer), usize::MAX, Node::path(id, vectorcraft_geom::shapes::rectangle(page), look)).unwrap();
+    }
+    let p = json!({"range": "all", "preserveEditing": false});
+    cmd::fileio::encode_all(&d, "pdf", &p).unwrap().files[0].1.clone()
+}
+
+#[test]
+fn placing_a_pdf_without_page_or_with_pages_all_places_all_pages_side_by_side() {
+    let pdf_bytes = multi_page_pdf(&[[255, 0, 0], [0, 255, 0], [0, 0, 255]]);
+
+    // 1. Placing with pages: "all"
+    let mut s1 = session();
+    let r1 = place(&mut s1, "multipage.pdf", &pdf_bytes, json!({ "pages": "all", "at": [0, 0] }));
+    let ids1 = r1["ids"].as_array().unwrap();
+    assert_eq!(ids1.len(), 3, "should place 3 pages for pages: all");
+    let b0 = s1.doc().unwrap().doc.node(NodeId(ids1[0].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    let b1 = s1.doc().unwrap().doc.node(NodeId(ids1[1].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    let b2 = s1.doc().unwrap().doc.node(NodeId(ids1[2].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    let gap01 = b1.x0 - b0.x1;
+    let gap12 = b2.x0 - b1.x1;
+    assert!((gap01 - 20.0).abs() < 1e-4, "gap between page 1 and page 2 should be 20.0, got {gap01}");
+    assert!((gap12 - 20.0).abs() < 1e-4, "gap between page 2 and page 3 should be 20.0, got {gap12}");
+
+    // 2. Placing with an explicit page (page: 2)
+    let mut s2 = session();
+    let r2 = place(&mut s2, "multipage.pdf", &pdf_bytes, json!({ "page": 2, "at": [0, 0] }));
+    let ids2 = r2["ids"].as_array().unwrap();
+    assert_eq!(ids2.len(), 1, "should place exactly 1 page when page is specified");
+
+    // 3. Placing without page parameter (defaults to placing all pages side-by-side)
+    let mut s3 = session();
+    let r3 = place(&mut s3, "multipage.pdf", &pdf_bytes, json!({ "at": [0, 0] }));
+    let ids3 = r3["ids"].as_array().unwrap();
+    assert_eq!(ids3.len(), 3, "should place all 3 pages by default when page is omitted");
+}
+
+fn synthetic_multipage_pdf(count: usize) -> Vec<u8> {
+    let pages = vec![vectorcraft_testkit::pdf::PdfPage::new(100.0, 50.0, "0 0 10 10 re f"); count];
+    vectorcraft_testkit::pdf::pdf(&pages, None)
+}
+
+fn synthetic_pdf_with_broken_second_page() -> Vec<u8> {
+    let pdf_str = "%PDF-1.4\n\
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+2 0 obj << /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >> endobj\n\
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >> endobj\n\
+4 0 obj << /Length 15 >>\n\
+stream\n\
+0 0 10 10 re f\n\
+endstream\n\
+endobj\n\
+5 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 6 0 R >> endobj\n\
+6 0 obj << /Length 10 /Filter /FlateDecode >>\n\
+stream\n\
+corrupted!\n\
+endstream\n\
+endobj\n\
+xref\n\
+0 7\n\
+0000000000 65535 f \n\
+0000000009 00000 n \n\
+0000000058 00000 n \n\
+0000000120 00000 n \n\
+0000000213 00000 n \n\
+0000000276 00000 n \n\
+0000000369 00000 n \n\
+trailer << /Size 7 /Root 1 0 R >>\n\
+startxref\n\
+468\n\
+%%EOF\n";
+    pdf_str.as_bytes().to_vec()
+}
+
+#[test]
+fn multipage_linked_pdf_shares_single_source_buffer_and_enforces_page_budget() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+
+    // 1. Write a 4-page synthetic PDF to a temporary path so `link: true` creates Art::Document nodes
+    let dir = std::env::temp_dir();
+    let pdf_path = dir.join(format!("vc_test_shared_blob_4p_{}.pdf", std::process::id()));
+    let pdf_bytes = synthetic_multipage_pdf(4);
+    std::fs::write(&pdf_path, &pdf_bytes).unwrap();
+
+    let res = s
+        .execute(
+            "file.place",
+            &json!({
+                "path": pdf_path.to_string_lossy(),
+                "link": true,
+                "pages": "all"
+            }),
+        )
+        .unwrap();
+    let ids = res["ids"].as_array().unwrap();
+    assert_eq!(ids.len(), 4);
+
+    // Verify all 4 placed Art::Document sources point to the exact same Arc<Vec<u8>> allocation
+    let doc = &s.doc().unwrap().doc;
+    let blobs: Vec<_> = ids
+        .iter()
+        .map(|id_val| {
+            let n = doc.node(NodeId(id_val.as_u64().unwrap())).unwrap();
+            match &n.kind {
+                NodeKind::PlacedDocument(p) => Arc::as_ptr(&doc.images[&p.key].bytes),
+                other => panic!("expected PlacedDocument, got {other:?}"),
+            }
+        })
+        .collect();
+    assert_eq!(blobs.len(), 4);
+    assert!(blobs.windows(2).all(|w| w[0] == w[1]), "linked pages must share one source buffer");
+
+    let _ = std::fs::remove_file(&pdf_path);
+
+    // 2. Verify exceeding MAX_PLACE_PAGES (64) is rejected before loading the batch
+    let oversized_pdf = synthetic_multipage_pdf(65);
+    let b64 = vectorcraft_format::base64_encode(&oversized_pdf);
+    let err = s
+        .execute(
+            "file.place",
+            &json!({
+                "name": "oversized.pdf",
+                "dataBase64": b64,
+                "pages": "all"
+            }),
+        )
+        .unwrap_err();
+    assert!(err.to_string().contains("exceeding the 64-page placement limit"), "unexpected error: {err}");
+}
+
+#[test]
+fn place_info_and_queue_only_load_first_page() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+
+    // Build a 2-page PDF where Page 1 is valid and Page 2 references an unresolvable/corrupt stream
+    let pdf_bytes = synthetic_pdf_with_broken_second_page();
+    let b64 = vectorcraft_format::base64_encode(&pdf_bytes);
+
+    // file.place.info must succeed by reading only Page 1 without decoding Page 2
+    let info = s
+        .execute(
+            "file.place.info",
+            &json!({
+                "name": "two_page_broken_second.pdf",
+                "dataBase64": b64
+            }),
+        )
+        .expect("file.place.info should only inspect page 1");
+    assert_eq!(info["format"], "pdf");
+}
+
+#[test]
+fn pages_parameter_validates_types_and_ranges() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let pdf_bytes = synthetic_multipage_pdf(4);
+    let b64 = vectorcraft_format::base64_encode(&pdf_bytes);
+
+    // Invalid types (`false`, `123`, `""`) and out-of-range pages (`"1-9"`) must fail
+    for bad_pages in [json!(false), json!(123), json!(""), json!("1-9"), json!("3-1")] {
+        let res = s.execute(
+            "file.place",
+            &json!({
+                "name": "four.pdf",
+                "dataBase64": b64,
+                "pages": bad_pages
+            }),
+        );
+        assert!(res.is_err(), "expected pages={bad_pages} to fail validation");
+    }
+
+    // Valid range `"1,3-4"` places exactly 3 pages (pages 1, 3, and 4)
+    let ok = s
+        .execute(
+            "file.place",
+            &json!({
+                "name": "four.pdf",
+                "dataBase64": b64,
+                "pages": "1,3-4"
+            }),
+        )
+        .unwrap();
+    assert_eq!(ok["ids"].as_array().unwrap().len(), 3);
+}

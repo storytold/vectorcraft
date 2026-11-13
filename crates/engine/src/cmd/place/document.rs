@@ -115,6 +115,19 @@ pub(crate) fn document_art(
     page_box: PageBox,
     cmd: &str,
 ) -> Result<DocumentArt> {
+    document_art_opened(name, bytes, None, path, page, bounding, page_box, cmd)
+}
+
+pub(crate) fn document_art_opened(
+    name: &str,
+    bytes: &[u8],
+    opened: Option<&vectorcraft_pdf::Opened>,
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<DocumentArt> {
     let file = fileio::file_name(name);
     let pdf = is_pdf(name, bytes);
     if !pdf && !is_native(name, bytes) {
@@ -125,7 +138,7 @@ pub(crate) fn document_art(
     }
     if pdf {
         let o = fileio::LoadOptions { crop: crop_to(page_box), ..Default::default() };
-        return super::pdf_art(name, bytes, path, page as usize, o, bounding, cmd);
+        return super::pdf_art_opened(name, bytes, opened, path, page as usize, o, bounding, cmd);
     }
     let mut l = fileio::load(name, bytes)?;
     // Its linked images show their files; its placed documents stay as they are, unless their
@@ -227,16 +240,45 @@ pub(crate) struct Source {
 /// artboard `page`, or the PDF or `.ai` file for showing page `page` clipped to its box
 /// `page_box` (its art's bounds when `bounding`).
 pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bounding: bool, page_box: PageBox, cmd: &str) -> Result<Source> {
+    source_with_blob(name, bytes, None, path, page, bounding, page_box, cmd)
+}
+
+pub(crate) fn source_with_blob(
+    name: &str,
+    bytes: &[u8],
+    shared_blob: Option<&ImageBlob>,
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<Source> {
     // The same document placed the same way is read once (placing it again is free).
     let key = key_for(&hash_bytes(bytes), page, bounding, page_box);
+    let hash_prefix = key.split('-').next().unwrap_or("");
+
+    let mut existing_bytes: Option<Arc<Vec<u8>>> = shared_blob.map(|b| Arc::clone(&b.bytes));
+
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
     // needs the same path, and nothing is shared with or from a confined (automation) caller.
     let confined = crate::file_access::current().is_some();
-    if !confined && let Some((_, s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
-        return Ok(s);
+    if !confined {
+        let guard = lock_memo();
+        if let Some((_, cached)) = guard.iter().find(|(at, s)| s.key == key && at.as_deref() == path) {
+            return Ok(cached.clone());
+        }
+        if existing_bytes.is_none() && !hash_prefix.is_empty() {
+            if let Some((_, same_file)) =
+                guard.iter().find(|(at, s)| (at.as_deref() == path || at.is_none()) && s.key.split('-').next().is_some_and(|h| h == hash_prefix))
+            {
+                existing_bytes = Some(Arc::clone(&same_file.blob.bytes));
+            }
+        }
     }
-    let a = document_art(name, bytes, path, page, bounding, page_box, cmd)?;
-    let mut blob = ImageBlob::new(mime(name, bytes), bytes.to_vec());
+
+    let a = document_art_opened(name, bytes, None, path, page, bounding, page_box, cmd)?;
+    let blob_bytes = existing_bytes.unwrap_or_else(|| Arc::new(bytes.to_vec()));
+    let mut blob = ImageBlob { mime: mime(name, bytes).to_string(), bytes: blob_bytes, proxy: None };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),

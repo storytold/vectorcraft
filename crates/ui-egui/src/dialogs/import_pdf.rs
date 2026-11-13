@@ -159,10 +159,16 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
 /// `file.place` with params `p` asks first (true) when they name a PDF (`.pdf`, `.ai`, `.ait`)
 /// with several pages or a password and no `page`.
 pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
-    if p.get("page").is_some() {
+    if p.get("page").is_some_and(|v| !v.is_null()) {
         return false;
     }
     let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
+    if crate::place::has_pages_spec(p) {
+        let password = p.get("password").and_then(Value::as_str);
+        if !matches!(vectorcraft_pdf::open_pdf(&bytes, password), Err(PdfError::NeedsPassword)) {
+            return false;
+        }
+    }
     offer(app, &name, &bytes, path, Some(p))
 }
 
