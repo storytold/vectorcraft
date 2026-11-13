@@ -1396,6 +1396,238 @@ fn a_noisy_gradient_keeps_its_tones_without_specks() {
     assert!(res.paths.len() <= 2 * res.palette.len(), "{} paths of {} colours", res.paths.len(), res.palette.len());
 }
 
+/// A shaded ball and a lit wall on a dark mottled ground, with `noise` levels of noise per channel:
+/// a photo's tones, in color or (`gray`) as their grays.
+fn photo_scene(noise: f64, gray: bool) -> Raster {
+    Raster::from_fn(160, 128, |x, y| {
+        let ground = f64::from(20 + 10 * ((x / 16 + y / 16) % 3));
+        let (dx, dy) = (f64::from(x) - 60.0, f64::from(y) - 64.0);
+        let c = if dx * dx + dy * dy < 1600.0 {
+            let shade = 0.25 + 0.75 * (1.0 - (dx + dy + 40.0) / 110.0).max(0.0);
+            [210.0 * shade + 20.0, 150.0 * shade + 20.0, 100.0 * shade + 20.0]
+        } else if x >= 110 {
+            let t = f64::from(y) / 127.0;
+            [200.0 - 90.0 * t, 180.0 - 40.0 * t, 70.0 + 50.0 * t]
+        } else {
+            [ground; 3]
+        };
+        let p = [0, 1, 2].map(|k| (c[k] + noise * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8);
+        if gray {
+            let g = quantize::luma([p[0], p[1], p[2], 255]);
+            [g, g, g, 255]
+        } else {
+            [p[0], p[1], p[2], 255]
+        }
+    })
+}
+
+#[test]
+fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [4.0, 6.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+    // Three-color gray flat art stays flat art with up to 16 levels of uniform noise. (Heavier
+    // noise or JPEG artifacts can make gray flat art continuous tone.)
+    let clean = three_colour_art(0.0);
+    for noise in [0.0, 8.0, 16.0] {
+        let mut gray = three_colour_art(noise);
+        for p in gray.rgba.as_chunks_mut::<4>().0 {
+            let g = quantize::luma(*p);
+            p[..3].fill(g);
+        }
+        assert!(!quantize::continuous_tone(&gray), "gray flat art, noise {noise}");
+        // The same noise on every channel, as a gray scan has it.
+        let scan = Raster::from_fn(clean.width, clean.height, |x, y| {
+            let i = ((y * clean.width + x) * 4) as usize;
+            let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+            let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&scan), "gray scan of flat art, noise {noise}");
+    }
+    // Nine clean equal gray bands, more levels than eight colors can hold, stay flat art.
+    for step in [15, 30] {
+        let bands = Raster::from_fn(180, 60, |x, _| {
+            let v = (x / 20 * step) as u8;
+            [v, v, v, 255]
+        });
+        assert!(!quantize::continuous_tone(&bands), "nine gray bands {step} levels apart");
+    }
+}
+
+/// Sepia: dark brown to cream.
+const SEPIA: [[f64; 3]; 2] = [[45.0, 28.0, 15.0], [250.0, 235.0, 205.0]];
+/// A single blue hue: navy to pale blue.
+const BLUE: [[f64; 3]; 2] = [[12.0, 22.0, 55.0], [205.0, 225.0, 255.0]];
+/// A duotone: near black to orange to cream, two lines meeting at the orange.
+const DUOTONE: [[f64; 3]; 3] = [[22.0, 18.0, 30.0], [205.0, 105.0, 35.0], [252.0, 238.0, 215.0]];
+/// The gray ramp.
+const GRAY_RAMP: [[f64; 3]; 2] = [[0.0; 3], [255.0; 3]];
+
+/// `img`'s grays (its red channel) as the colors of the ramp through `stops`, black going to the
+/// first stop and white to the last, with `chroma` levels of noise per channel. Alpha is kept.
+fn tinted(img: &Raster, stops: &[[f64; 3]], chroma: f64) -> Raster {
+    Raster::from_fn(img.width, img.height, |x, y| {
+        let i = ((y * img.width + x) * 4) as usize;
+        let g = f64::from(img.rgba[i]) / 255.0 * (stops.len() - 1) as f64;
+        let s = (g.floor() as usize).min(stops.len() - 2);
+        let t = g - s as f64;
+        let c = [0, 1, 2]
+            .map(|k| (stops[s][k] + t * (stops[s + 1][k] - stops[s][k]) + chroma * jitter(x, y, 7 + k as u32)).round().clamp(0.0, 255.0) as u8);
+        [c[0], c[1], c[2], img.rgba[i + 3]]
+    })
+}
+
+/// [`three_colour_art`] as a gray scan: its grays with `noise` levels of the same noise on every
+/// channel.
+fn gray_scan_of_flat_art(noise: f64) -> Raster {
+    let clean = three_colour_art(0.0);
+    Raster::from_fn(clean.width, clean.height, |x, y| {
+        let i = ((y * clean.width + x) * 4) as usize;
+        let g = f64::from(quantize::luma([clean.rgba[i], clean.rgba[i + 1], clean.rgba[i + 2], 255]));
+        let v = (g + noise * jitter(x, y, 0)).round().clamp(0.0, 255.0) as u8;
+        [v, v, v, 255]
+    })
+}
+
+/// `levels` clean gray bands, evenly spaced from black to white.
+fn gray_bands(levels: u32) -> Raster {
+    Raster::from_fn(16 * 20, 60, |x, _| {
+        let v = ((x / 20).min(levels - 1) * 255 / (levels - 1)) as u8;
+        [v, v, v, 255]
+    })
+}
+
+/// `img` on the left of a picture three times as wide whose other pixels are transparent and of
+/// every color.
+fn beside_transparent_colors(img: &Raster) -> Raster {
+    Raster::from_fn(img.width * 3, img.height, |x, y| {
+        if x < img.width {
+            let i = ((y * img.width + x) * 4) as usize;
+            [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2], img.rgba[i + 3]]
+        } else {
+            let c = |k: u32| (127.5 + 127.5 * jitter(x, y, 20 + k)) as u8;
+            [c(0), c(1), c(2), 0]
+        }
+    })
+}
+
+#[test]
+fn a_tinted_photo_is_continuous_tone_as_a_gray_photo_is() {
+    // With 0 to 4 levels of noise per channel (to 2 for the duotone).
+    let tints = [("sepia", &SEPIA[..], 4.0), ("blue", &BLUE[..], 4.0), ("duotone", &DUOTONE[..], 2.0)];
+    for noise in [4.0, 6.0] {
+        let gray = photo_scene(noise, true);
+        assert!(quantize::continuous_tone(&gray), "gray, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        for (name, stops, most) in tints {
+            for chroma in [0.0, 2.0, 4.0].into_iter().filter(|&c| c <= most) {
+                let photo = tinted(&gray, stops, chroma);
+                assert!(quantize::continuous_tone(&photo), "{name}, noise {noise}, chroma noise {chroma}");
+                // Transparent pixels, whatever their colors, leave it as it is.
+                assert!(quantize::continuous_tone(&beside_transparent_colors(&photo)), "{name} beside transparent colors, noise {noise}");
+            }
+        }
+    }
+}
+
+#[test]
+fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
+    // A sepia photo with a red and a green patch, each 2 in 100 of its pixels.
+    for noise in [4.0, 6.0] {
+        let photo = tinted(&photo_scene(noise, true), &SEPIA, 2.0);
+        let accented = Raster::from_fn(photo.width, photo.height, |x, y| match (x, y) {
+            (0..20, 0..20) => [220, 30, 40, 255],
+            (140..160, 108..128) => [40, 200, 60, 255],
+            _ => {
+                let i = ((y * photo.width + x) * 4) as usize;
+                [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 255]
+            }
+        });
+        assert!(quantize::continuous_tone(&accented), "noise {noise}");
+        // One patch, 4 in 100 of its pixels, in a color beside the middle of the ramp.
+        let beside = Raster::from_fn(photo.width, photo.height, |x, y| match (x, y) {
+            (0..32, 0..26) => [176, 104, 110, 255],
+            _ => {
+                let i = ((y * photo.width + x) * 4) as usize;
+                [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 255]
+            }
+        });
+        assert!(quantize::continuous_tone(&beside), "noise {noise}, one patch");
+    }
+}
+
+#[test]
+fn tinted_flat_art_stays_flat_art() {
+    let tints: [(&str, &[[f64; 3]]); 4] = [("gray", &GRAY_RAMP), ("sepia", &SEPIA), ("blue", &BLUE), ("duotone", &DUOTONE)];
+    for (name, stops) in tints {
+        // Clean bands, nine of them included: more than eight colors can hold.
+        for levels in [2, 3, 9] {
+            let bands = tinted(&gray_bands(levels), stops, 0.0);
+            assert!(!quantize::continuous_tone(&bands), "{levels} {name} bands");
+            assert!(!quantize::continuous_tone(&beside_transparent_colors(&bands)), "{levels} {name} bands beside transparent colors");
+        }
+        // Scans of flat art, with noise on the tone and on each channel.
+        for noise in [0.0, 8.0] {
+            for chroma in [0.0, 4.0] {
+                assert!(
+                    !quantize::continuous_tone(&tinted(&gray_scan_of_flat_art(noise), stops, chroma)),
+                    "{name} scan, noise {noise}, chroma noise {chroma}"
+                );
+            }
+        }
+    }
+    // As with gray (see `a_gray_photo_is_continuous_tone_as_its_color_original_is`), a single-hue
+    // scan stays flat art with up to 16 levels of noise on its tone.
+    for stops in [&GRAY_RAMP, &SEPIA, &BLUE] {
+        assert!(!quantize::continuous_tone(&tinted(&gray_scan_of_flat_art(16.0), stops, 0.0)), "{stops:?} scan, noise 16");
+    }
+}
+
+#[test]
+fn pictures_without_tones_are_not_continuous_tone() {
+    let photo = tinted(&photo_scene(6.0, true), &SEPIA, 2.0);
+    let none = Raster::from_fn(0, 0, |_, _| [0, 0, 0, 0]);
+    let transparent = Raster::from_fn(photo.width, photo.height, |x, y| {
+        let i = ((y * photo.width + x) * 4) as usize;
+        [photo.rgba[i], photo.rgba[i + 1], photo.rgba[i + 2], 0]
+    });
+    let one_pixel = Raster::from_fn(1, 1, |_, _| [200, 150, 100, 255]);
+    let one_color = Raster::from_fn(64, 64, |_, _| [200, 150, 100, 255]);
+    for (name, img) in [("empty", none), ("transparent", transparent), ("one pixel", one_pixel), ("one color", one_color)] {
+        assert!(!quantize::continuous_tone(&img), "{name}");
+    }
+}
+
+#[test]
+fn a_gray_photo_is_smoothed_before_it_is_traced() {
+    // As a color photo is. Traced with its noise, the noise mixes neighboring tones into one,
+    // leaving fewer colors than asked for, and steps the edges between them (more anchors).
+    for noise in [4.0, 6.0] {
+        let res = trace(&photo_scene(noise, true), &sixteen_colors());
+        assert!(res.palette.len() >= 14, "noise {noise}: {} colors", res.palette.len());
+        assert!(res.anchor_count() <= 1100, "noise {noise}: {} anchors", res.anchor_count());
+    }
+}
+
+#[test]
+fn a_tinted_photo_is_smoothed_before_it_is_traced() {
+    // As a gray photo is, in Color and in Grayscale. Traced with its noise, the noise mixes
+    // neighboring tones into one, leaving 6 to 13 of the sixteen colors, and steps the edges
+    // between them (up to 1,402 anchors).
+    for noise in [4.0, 6.0] {
+        for (name, stops) in [("sepia", &SEPIA[..]), ("blue", &BLUE[..]), ("duotone", &DUOTONE[..])] {
+            let photo = tinted(&photo_scene(noise, true), stops, 2.0);
+            for mode in [Mode::Color, Mode::Grayscale] {
+                let res = trace(&photo, &TraceParams { mode, ..sixteen_colors() });
+                assert!(res.palette.len() >= 12, "{name}, noise {noise}, {mode:?}: {} colors", res.palette.len());
+                assert!(res.anchor_count() <= 1000, "{name}, noise {noise}, {mode:?}: {} anchors", res.anchor_count());
+            }
+        }
+    }
+}
+
 #[test]
 fn stacked_layers_go_by_lightness_and_leave_ignored_white_alone() {
     // Stripes: black, white, mid gray, light gray (the widest).

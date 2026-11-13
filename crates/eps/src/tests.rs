@@ -1052,7 +1052,7 @@ fn a_tiff_preview_sits_behind_the_binary_header() {
     }
     // Asked for but not rendered: the file has no preview, and says so.
     let out = export(&d, &EpsOptions { preview: Preview::TiffColor, ..opts(&d) }, None, None).unwrap();
-    assert!(out.bytes.starts_with(b"%!PS") && out.warnings.iter().any(|w| w.contains("preview")));
+    assert!(out.bytes.starts_with(b"%!PS") && out.setting_notes.iter().any(|w| w.contains("preview")));
 }
 
 #[test]

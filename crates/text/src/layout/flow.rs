@@ -11,7 +11,7 @@ use super::{
     fit_line, hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
-use crate::shape::keep_korean_words;
+use crate::shape::{keep_inseparable_pairs, keep_korean_words};
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -229,6 +229,10 @@ fn prepare_paragraph<'a, 'text>(
     // Korean breaks between words, unless Korean Line Break Anywhere lets it break between syllables.
     if !para.korean_line_break_anywhere {
         keep_korean_words(&mut sg);
+    }
+    // Bunri-Kinshi keeps inseparable pairs on one line, while kinsoku is on.
+    if para.bunri_kinshi && para.kinsoku != Kinsoku::None {
+        keep_inseparable_pairs(text, &mut sg);
     }
     // Japanese composition: consecutive punctuation shares one half-em space.
     let mut compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
@@ -736,16 +740,37 @@ fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: us
 fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
     gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
         a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
-    })
+    }) && !in_pair(glyph, index, after, sg)
+}
+
+// Bunri-Kinshi: are glyph `glyph` and the glyph drawn after it in the two halves of an inseparable
+// pair? Justification adds no space between them. The halves are neighboring clusters: the
+// earlier one's last glyph keeps the next, and the later one starts right after it. Right to left,
+// the clusters are drawn in the other order, each with its glyphs in logical order, so the two
+// drawn neighbors need not be neighbors in `sg`.
+fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -> bool {
+    let Some(next) = drawn_after(index, glyph, after) else {
+        return false;
+    };
+    let (Some(a), Some(b)) = (sg.get(glyph), sg.get(next)) else {
+        return false;
+    };
+    if a.byte == b.byte {
+        return false;
+    }
+    let (first, later) = if a.byte < b.byte { (glyph, b.byte) } else { (next, a.byte) };
+    let byte = sg.get(first).map_or(0, |g| g.byte);
+    let last = first + sg.iter().skip(first + 1).take_while(|g| g.byte == byte).count();
+    sg.get(last).is_some_and(|g| g.keeps_next) && sg.get(last + 1).is_some_and(|g| g.byte == later)
 }
 
 // Single Word Justification's Full Justify spreads a line's leftover room over the gaps between
-// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell) or a
-// shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
-// together. On a line that ends in a drawn hyphen, the gap before the hyphen counts too: it follows
-// the line's last visible glyph.
+// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell), a shaped
+// cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
+// together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
+// hyphen counts too: it follows the line's last visible glyph.
 fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
-    if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) {
+    if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
@@ -1005,7 +1030,10 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             .map(|item| item.1);
         advance += kashida.unwrap_or(0.0);
         let y = line.position.baseline - align_shift(glyph, cx.style_at(glyph.byte).char_align, line_em, cx.vertical);
-        let transform = if scale != 1.0 { Affine::translate((x, y)) * Affine::scale_non_uniform(scale, 1.0) } else { Affine::translate((x, y)) };
+        // A glyph scaled to fill the line keeps its Insert Aki before it at its width.
+        let aki = if scale != 1.0 && glyph.aki_shift.is_finite() { glyph.aki_shift * (1.0 - scale) } else { 0.0 };
+        let transform =
+            if scale != 1.0 { Affine::translate((x + aki, y)) * Affine::scale_non_uniform(scale, 1.0) } else { Affine::translate((x, y)) };
         if glyph_index < paragraph.marker {
             let at = cx.out.glyphs.len();
             marker_glyphs = Some(marker_glyphs.map_or(at..at + 1, |range: Range<usize>| range.start.min(at)..range.end.max(at + 1)));
@@ -1014,8 +1042,11 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             }
         }
         cx.emit(glyph, transform, Point::new(x, y), 0.0, advance, line_index);
+        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
+        let own_shift = cx.own_width_shift(glyph, aki);
         if let Some(out) = cx.out.glyphs.last_mut() {
             out.scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
+            out.width_start += own_shift;
         }
         if !leader.is_empty() {
             // The leader belongs to the tab's glyph: the gap stays one character for the

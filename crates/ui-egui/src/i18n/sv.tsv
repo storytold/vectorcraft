@@ -698,6 +698,10 @@ font-technology	Variable	Variabla
 	Corner Color	Hörnfärg
 	Contiguous	Sammanhängande
 	Each Channel	Varje kanal
+	Color Mask…	Färgmask…
+	Color Mask	Färgmask
+	Remove Color Mask	Ta bort färgmask
+	Apply Color Mask	Tillämpa färgmask
 	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
@@ -1647,6 +1651,7 @@ font-technology	Variable	Variabla
 	Include Hidden Layers	Inkludera dolda lager
 	Include Linked Files	Inkludera länkade filer
 	Include Metadata	Inkludera metadata
+	Include Variable Data	Inkludera variabeldata
 	Include non-printing layers	Inkludera lager som inte skrivs ut
 	Write pages longer than 200 in at full size in points	Skriv sidor längre än 200 in i full storlek i punkter
 	Include SVG Code	Inkludera SVG-kod
@@ -2015,6 +2020,7 @@ font-technology	Variable	Variabla
 	Move Slices	Flytta skivor
 	Move Spine Point	Flytta ryggradspunkt
 	Reshape Spine Segment	Omforma ryggradssegment
+	Blend Easing	Blandningens acceleration
 	Move Brush	Flytta pensel
 	Move Swatch	Flytta färgruta
 	Move Up	Flytta upp
@@ -2112,6 +2118,7 @@ font-technology	Variable	Variabla
 	Art Brush	Konstpensel
 	Bristle Brush	Borstpensel
 	Pattern Brush	Mönsterpensel
+	missing from the Brushes panel	saknas i panelen Penslar
 	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
@@ -2555,6 +2562,8 @@ font-technology	Variable	Variabla
 	Proof Setup	Provtrycksinställningar
 	Properties	Egenskaper
 	Proportional Metrics	Proportionella mått
+	Insert Aki Left	Infoga aki till vänster
+	Insert Aki Right	Infoga aki till höger
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska
@@ -2820,9 +2829,15 @@ digits	Malayalam	Malayalam
 	Search Preferences	Sök i inställningar
 	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
+	Arrowheads	Pilspetsar
+	Edit Arrowheads	Redigera pilspetsar
+	Edit Arrowheads…	Redigera pilspetsar…
+	Reload Arrowheads	Läs in pilspetsar igen
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
+	Color Theme Picker	Färgtemaväljare
+	Click or drag across the art to pick its colors; Shift adds more	Klicka eller dra över teckningen för att hämta dess färger; Skift lägger till fler
 	Reset to Default	Återställ till standard
 	Reset to White, Black	Återställ till vitt, svart
 	Reset with Mesh	Återställ med nät
@@ -2871,6 +2886,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baslinje (roman)
 	Roman Hanging Punctuation	Hängande interpunktion (roman)
 	Korean Line Break Anywhere	Koreansk radbrytning var som helst
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Inställningar för östasiatisk sättning
 	Korean Composition Settings	Inställningar för koreansk sättning
 	Rotate	Rotera
@@ -2879,6 +2895,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Verktyget Rotera vy
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
 	Hold a Tool Shortcut to Use the Tool Temporarily	Håll ned ett verktygs kortkommando för att använda verktyget tillfälligt
+	Show Bounding Box While Moving and Drawing	Visa begränsningsram vid flyttning och ritning
 	Rotate…	Rotera…
 	Rotation	Rotation
 	Roughen…	Ojämn…
@@ -3216,6 +3233,7 @@ digits	Malayalam	Malayalam
 	Show Note	Visa anteckning
 	Show Options	Visa alternativ
 	Show Recent Colors	Visa senaste färger
+	Toggle RGB Percent	Växla RGB i procent
 	Show Original Path	Visa ursprunglig bana
 	Open this dialog with these settings next time	Öppna den här dialogrutan med de här inställningarna nästa gång
 	Auto-Simplify	Förenkla automatiskt
@@ -4112,6 +4130,85 @@ axis	Both	Båda
 @msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ett misslyckat kommando ändrade ångrasteg som inte kunde återställas, så skriptet stoppades
 @msg	a recovery copy could not be written, so the script was not run	en återställningskopia kunde inte skrivas, så skriptet kördes inte
+@msg	Script file access denied	Åtkomst till skriptfilen nekades
+@msg	Script file exceeds 8 MiB	Skriptfilen är större än 8 MiB
+@msg	Script file is not open	Skriptfilen är inte öppen
+@msg	Script file cannot be decoded	Skriptfilen kan inte avkodas
+@msg	Script file is not a regular file	Skriptfilen är inte en vanlig fil
+@msg	Script file does not exist	Skriptfilen finns inte
+@msg	Script file could not be read	Skriptfilen kunde inte läsas
+@msg	Script folder has more than 2,048 entries	Skriptmappen har fler än 2 048 poster
+@msg	Script file open mode must be r, w, e or a	Skriptfilens öppningsläge måste vara r, w, e eller a
+@msg	Script file writing is not available	Skrivning av skriptfiler är inte tillgänglig
+@msg	Script file dialogs are not available	Fildialogrutor för skript är inte tillgängliga
+@msg	Script files cannot be opened in another application	Skriptfiler kan inte öppnas i ett annat program
+@msg	Script file access is unavailable on the web	Åtkomst till skriptfiler är inte tillgänglig på webben
+@msg	Script has 256 files open	Skriptet har 256 filer öppna
+@msg	Script file path exceeds 32,767 characters	Skriptfilens sökväg är längre än 32 767 tecken
+@msg	Script folder mask takes too many steps to match	Skriptmappens mask kräver för många steg för att matcha
+@msg	the script opened more file data than one run may open (32 MiB)	skriptet öppnade mer fildata än en körning får öppna (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: tar en position och ett läge
+@msg	vc.run: give a command id, as a string	vc.run: ange ett kommando-id som en sträng
+@msg	vc.run: takes a command id and an object of parameters	vc.run: tar ett kommando-id och ett objekt med parametrar
+@msg	vc.run: the parameters must be an object	vc.run: parametrarna måste vara ett objekt
+@msg	vc.run: the result{place} is too large for a script	vc.run: resultatet{place} är för stort för ett skript
+@msg	$.evalFile requires a file path	$.evalFile kräver en filsökväg
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgränsen måste vara ett ändligt antal millisekunder, 0 eller mer
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: tar en filsökväg och en tidsgräns
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: rad {line}, kolumn {column} i {file}: {e} (kastat)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rad {line}, kolumn {column}: {e} (kastat)
+@msg	{name}: {e} (thrown)	{name}: {e} (kastat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: rad {line}, kolumn {column} i {file}: {e} (gräns)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: rad {line}, kolumn {column}: {e} (gräns)
+@msg	{name}: {e} (limit)	{name}: {e} (gräns)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: rad {line}, kolumn {column} i {file}: {e} (syntaxfel)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: rad {line}, kolumn {column}: {e} (syntaxfel)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaxfel)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: rad {line}, kolumn {column} i {file}: {e} (stoppat)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: rad {line}, kolumn {column}: {e} (stoppat)
+@msg	{name}: {e} (stopped)	{name}: {e} (stoppat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: rad {line}, kolumn {column} i {file}: {e} (internt fel)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: rad {line}, kolumn {column}: {e} (internt fel)
+@msg	{name}: {e} (internal)	{name}: {e} (internt fel)
+@msg	{e} (these files stay written: {paths})	{e} (dessa filer förblir skrivna: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: ange ett namn som en sträng
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: ange en språkinställning som "en" eller "de_DE", eller null för gränssnittets
+@msg	$.localize: give true or false	$.localize: ange true eller false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: endast 512, som slår på lokalisering, eller 0 kan anges
+@msg	$.flags: give a number	$.flags: ange ett tal
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: skript läser och skriver här endast UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: ange namnet på en kodning som en sträng
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: minnescachens storlek kan inte anges
+@msg	$.setenv: give a value, as a string	$.setenv: ange ett värde som en sträng
+@msg	$.setenv: only {_1} can be set	$.setenv: endast {_1} kan anges
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: ett värde har högst {MAX_ENV_BYTES} bokstäver, siffror och _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: ange ett antal millisekunder från 0 till {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: ange ett antal millisekunder
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: en körning kan inte vänta i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
+@msg	$.bp: scripts here have no debugger	$.bp: skript har ingen felsökare här
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: skript kan inte visa en dialogruta ännu
+@msg	{name}: give a message	{name}: ange ett meddelande
+@msg	{name}: give the text the field starts with	{name}: ange texten som fältet börjar med
+@msg	{name}: the message is longer than 16 KiB	{name}: meddelandet är längre än 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: rubriken är längre än 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: texten som fältet börjar med är längre än 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en dialogruta kan inte öppnas i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: nästa svar i `answers` gäller {_1}, inte {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` har inget svar kvar för den här dialogrutan
+@msg	vc.document{place} is too large for a script	vc.document{place} är för stort för ett skript
+@msg	vc.log: the log of this run is full	vc.log: loggen för den här körningen är full
+@msg	this function's script run has ended	skriptkörningen för den här funktionen har avslutats
+@msg	the script made more host calls than one run may make	skriptet gjorde fler värdanrop än en körning får göra
+@msg	the script passed more data to and from commands than one run may pass	skriptet skickade mer data till och från kommandon än en körning får skicka
+@msg	the script added more objects and data to the documents than one run may add	skriptet lade till fler objekt och mer data i dokumenten än en körning får lägga till
+@msg	{what}: the object is not a File or a Folder	{what}: objektet är varken en File eller en Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: antalet måste vara ett ändligt tal, 0 eller mer
+@msg	File.seek: the position must be a finite number	File.seek: positionen måste vara ett ändligt tal
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: läget måste vara 0, 1 eller 2
+@msg	script file is compiled: {value}	skriptfilen är kompilerad: {value}
+@msg	`name` must be the name of a script engine	`name` måste vara namnet på en skriptmotor
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	huvudskriptmotorn är ny för varje körning och sparas aldrig, så den kan inte tas bort
+@msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
@@ -4590,6 +4687,10 @@ axis	Both	Båda
 @msg	a CMYK image has no transparency to set	en CMYK-bild har ingen transparens att ställa in
 @msg	every pixel matches the background: no image would be left	varje pixel matchar bakgrunden: ingen bild skulle bli kvar
 @msg	an image of {w} × {h} pixels is too large to change	en bild på {w} × {h} pixlar är för stor för att ändras
+@msg	select an image with a color mask	markera en bild med en färgmask
+@msg	the color mask's settings are out of range	färgmaskens inställningar ligger utanför intervallet
+@msg	a CMYK image can't take a color mask	en CMYK-bild kan inte ha en färgmask
+@msg	the mask would hide every pixel	masken skulle dölja varje pixel
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}
@@ -4701,6 +4802,7 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
 @msg	not a preferences file: {e}	inte en inställningsfil: {e}
@@ -5255,6 +5357,7 @@ lighting	Light	Ljus
 @msg	unknown parameter `{path}`; it takes: {keys}	okänd parameter `{path}`; den tar: {keys}
 @msg	missing `{path}`	`{path}` saknas
 @msg	`{path}` must be {expected}, not {got}	`{path}` måste vara {expected}, inte {got}
+@msg	`{path}` is nested too deeply	`{path}` är för djupt kapslat
 	1 Layer	1 lager
 	1 bit	1 bit
 	16 Colors	16 färger
@@ -6145,6 +6248,74 @@ axis	Y Axis	Y-axel
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): en person måste godkänna det i skrivbordsappen, eller skicka `allowHeavy: true` i en session som startats med --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`{k}` must be one of {_1}	`{k}` måste vara något av {_1}
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kräver godkännande: det begär {0}, som användaren beviljar när pluginet installeras för sig
+@msg	`angle` must be a number	`angle` måste vara ett tal
+@msg	`aspect` must be from 0.01 to 100	`aspect` måste vara från 0.01 till 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` måste vara "butt", "round" eller "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` måste vara "nonzero" eller "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` måste vara en https://-adress på högst {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` måste ha 1-{MAX_HELP} utskrivbara tecken
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` måste vara ett effekt-id på 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	`id` måste vara id:t för ett indataobjekt
+@msg	`join` must be "miter", "round" or "bevel"	`join` måste vara "miter", "round" eller "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` och `group` måste ha 1-{MAX_LABEL} utskrivbara tecken
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` måste vara 1-{MAX_TEXT}, och standardvärdet får inte vara längre
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
+@msg	`name` must be a string	`name` måste vara en sträng
+@msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anger `{other}`, som inte är en parameter som deklarerats före den här
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anger högst {MAX_CONDITIONS} parametrar
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` tar värden från `{other}`, en kryssruta eller ett val
+@msg	`visible` must be true or false	`visible` måste vara true eller false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` måste vara ett tal från {_1} till {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` måste vara en array med högst {MAX_ITEMS} poster
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	ett standardvärde för färg måste vara ett färgobjekt eller en hexsträng som "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	ett färgobjekt eller en hexsträng som "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	en fri gradient innehåller högst {MAX_ITEMS} punkter och linjer
+@msg	a freeform gradient line names a point it doesn't have	en linje i en fri gradient anger en punkt som gradienten inte har
+@msg	a gradient needs 1-{MAX_ITEMS} stops	en gradient behöver 1-{MAX_ITEMS} stopp
+@msg	a list of numbers	en lista med tal
+@msg	a list of {min_items} to {max_items} numbers	en lista med {min_items} till {max_items} tal
+@msg	a new object needs a `path`	ett nytt objekt behöver en `path`
+@msg	a number	ett tal
+@msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
+@msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {"id"} eller som det gavs
+@msg	a string	en sträng
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	en kontur måste vara {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	en effekt måste vara {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
+@msg	an effect on a stroke returns only `strokes`	en effekt på en kontur returnerar bara `strokes`
+@msg	an object must be a JSON object	ett objekt måste vara ett JSON-objekt
+@msg	bad range	ogiltigt intervall
+@msg	choices must be 1-64 non-empty, printable strings	valen måste vara 1-64 icke-tomma, utskrivbara strängar
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	koordinat utanför intervallet (gräns ±{MAX_COORD} pt)
+@msg	default is not one of the options	standardvärdet är inte ett av alternativen
+@msg	each piece needs a `path`	varje del behöver en `path`
+@msg	is listed twice	finns två gånger
+@msg	pattern transform out of range	mönstertransformering utanför intervallet
+@msg	read-only field '{field}' changed	det skrivskyddade fältet '{field}' ändrades
+@msg	stops must be in order of `offset`	stoppen måste vara ordnade efter `offset`
+@msg	the document has no pattern {pattern}	dokumentet har inget mönster {pattern}
+@msg	the document has no swatch {n}	dokumentet har ingen färgruta {n}
+@msg	the output	utdata
+@msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
+@msg	true or false	true eller false
+@msg	unknown key `{k}`; the keys here are {_1}	okänd nyckel `{k}`; nycklarna här är {_1}
+@msg	{_1} is listed twice	{_1} finns två gånger
+@msg	{_1} is not the id of an input object	{_1} är inte id:t för ett indataobjekt
+@msg	{_1} is read-only	{_1} är skrivskyddat
+@msg	{what} must be from {lo} to {hi}	{what} måste vara från {lo} till {hi}
+@msg	a color component	en färgkomponent
+@msg	a plate	en plåt
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
@@ -6242,6 +6413,16 @@ axis	Y Axis	Y-axel
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
+	Select Object…	Markera objekt…
+	Select Object	Markera objekt
+	Set Selection	Ange markering
+	Case Sensitive	Skiftlägeskänslig
+	Whole Word	Helt ord
+	Select Object: {note}	Markera objekt: {note}
+	Select by Note	Markera efter anteckning
+@msg	the note is empty	anteckningen är tom
+@msg	the note is longer than 1,024 bytes	anteckningen är längre än 1 024 byte
+@msg	no object that can be selected has a note matching “{query}”	inget objekt som kan markeras har en anteckning som matchar ”{query}”
 	Menu Item:	Menyalternativ:
 	No menu item matches.	Inget menyalternativ matchar.
 	Several menu items match. Choose one from the list.	Flera menyalternativ matchar. Välj ett i listan.
@@ -6353,6 +6534,11 @@ axis	Y Axis	Y-axel
 	User Brush Library 9	Användarbibliotek för penslar 9
 	User Brush Library 10	Användarbibliotek för penslar 10
 	Art Ribbons	Konstband
+	Ink and Wash	Tusch och lavering
+	Tapered Ink	Avsmalnande tusch
+	Brush Pen	Penselpenna
+	Soft Wash	Mjuk lavering
+	Pooling Wash	Lavering med kant
 	Zigzag	Sicksack
 	Burst Ray	Stötstråle
 	Dash Trail	Streckat spår
@@ -8483,6 +8669,8 @@ digits	Hindi	Hindi
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
 	List Tutorials	Lista självstudier
 	Show Tutorial	Visa självstudie
+	Show Tool Location	Visa verktygets plats
+	Show where this tool is	Visa var det här verktyget finns
 @msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
 

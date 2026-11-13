@@ -300,7 +300,9 @@ pub(super) fn save_suggesting(
         if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
             return ask_format_options(app, mode, first.format, &path);
         }
-        return write_plan(app, first, (save_command(mode), with_path(p, &path)), None);
+        // Only `path` was asked about: the files written beside it are checked against the file
+        // the document was read from when the save writes them.
+        return write_plan(app, plan(app, mode, p)?, (save_command(mode), with_path(p, &path)), None);
     }
     if is_web(app) && ask_options {
         return Ok(open_options(app, mode.command(), first.format, &first.name, true));
@@ -337,6 +339,7 @@ pub(super) fn save_suggesting(
         crate::dialogs::opened_by_panel(app);
         return r;
     }
+    let chosen = plan(app, mode, &q)?;
     write_plan(app, chosen, (save_command(mode), q), None)
 }
 
@@ -469,8 +472,9 @@ pub fn save_pdf(app: &mut VectorcraftApp, mode: SaveMode, mut params: Value) -> 
 
 /// Open a written file in the system viewer (not on the web, which downloads it).
 pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
-    // The viewer is another app: an export automation asked for is written but not opened.
-    if !is_web(app) && app.refuse_automation("viewAfterSaving").is_ok() {
+    // The viewer is another app: an export automation asked for is written but not opened, also
+    // when it goes on from a save panel automation opened.
+    if !is_web(app) && !app.automation_asked() {
         app.open_url(&file_url(path));
     }
 }

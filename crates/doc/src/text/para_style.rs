@@ -237,6 +237,10 @@ pub struct ParaStyle {
     /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
     /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
     pub kinsoku_type: KinsokuShoriType,
+    /// Bunri-Kinshi (Paragraph panel menu): a line never breaks inside an inseparable pair (two em
+    /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
+    /// with kinsoku None, where it has no effect. Off by default.
+    pub bunri_kinshi: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -339,6 +343,8 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku_type: KinsokuShoriType,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    bunri_kinshi: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
@@ -375,6 +381,7 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -401,6 +408,7 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -431,6 +439,7 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,
@@ -456,6 +465,7 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
             korean_line_break_anywhere,

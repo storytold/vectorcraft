@@ -357,7 +357,7 @@ impl ParaList {
 
     /// The style the marker is set in: `first` (the style of the paragraph's first character)
     /// without its baseline shift, rotation, superscript or subscript, tracking, manual kerning,
-    /// tate-chu-yoko, underline and strikethrough.
+    /// Insert Aki, tate-chu-yoko, underline and strikethrough.
     pub fn marker_style(first: &CharStyle) -> CharStyle {
         CharStyle {
             baseline_shift: 0.0,
@@ -366,6 +366,8 @@ impl ParaList {
             tracking: 0.0,
             kerning: None,
             kerning_before: 0.0,
+            aki_left: 0.0,
+            aki_right: 0.0,
             optical_kerning: first.optical_kerning,
             tate_chu_yoko: false,
             underline: false,
