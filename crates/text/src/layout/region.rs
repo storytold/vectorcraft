@@ -187,18 +187,78 @@ const MAX_EDGE_PAIRS: usize = 1 << 14;
 /// within the band and its x range there.
 type Slant = (Point, Point, (f64, f64), (f64, f64));
 
+/// The line through two points.
+type Line = (Point, Point);
+
 /// The x of the line through `p` and `q` (not horizontal) at `y`.
 fn line_x(p: Point, q: Point, y: f64) -> f64 {
     p.x + (y - p.y) / (q.y - p.y) * (q.x - p.x)
 }
 
-/// The x ranges within a band at which the edges `slants` bound the frame. Edges that lie along one
-/// line and overlap there (contours that meet along an edge, however each one divides it) count by
-/// parity: a stretch of the line that an even number of them cover has the frame on both sides.
-/// At most [`MAX_EDGE_PAIRS`] pairs are compared; edges left unpaired still count as boundaries,
-/// which can make a line shorter at a seam but never puts it outside the frame. The flag is false
-/// when the limit left edges unpaired.
-fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool) {
+/// `a + b` as its rounded value and the rounding error, which sum to it exactly.
+fn two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b;
+    let v = s - a;
+    (s, (a - (s - v)) + (b - v))
+}
+
+/// `a * b` as its rounded value and the rounding error, which sum to it exactly (unless the error
+/// is too small for a normal f64).
+fn two_product(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b;
+    (p, a.mul_add(b, -p))
+}
+
+/// Does `r` lie exactly on the line through `p` and `q`? The cross product `(q - p) × (r - p)` is
+/// summed without rounding: two points apart by a single unit in the last place are never on one
+/// line.
+fn on_line_exactly(p: Point, q: Point, r: Point) -> bool {
+    let left = (q.x - p.x) * (r.y - p.y);
+    let right = (q.y - p.y) * (r.x - p.x);
+    // Rounding moves the product difference by less than this, so a larger one is not zero.
+    if (left - right).abs() > 4.0 * f64::EPSILON * (left.abs() + right.abs()) {
+        return false;
+    }
+    let (dx, dy, ex, ey) = (two_sum(q.x, -p.x), two_sum(q.y, -p.y), two_sum(r.x, -p.x), two_sum(r.y, -p.y));
+    let mut terms = [0.0; 16];
+    for (k, (a, b)) in [dx.0, dx.1].into_iter().flat_map(|a| [ey.0, ey.1].map(|b| (a, b))).enumerate() {
+        (terms[2 * k], terms[2 * k + 1]) = two_product(a, b);
+    }
+    for (k, (a, b)) in [dy.0, dy.1].into_iter().flat_map(|a| [ex.0, ex.1].map(|b| (a, b))).enumerate() {
+        (terms[8 + 2 * k], terms[9 + 2 * k]) = two_product(-a, b);
+    }
+    // The terms added into an expansion: parts of increasing size that don't overlap, whose sum is
+    // the exact sum of the terms and which keeps no zero part, so it is empty only when that sum is
+    // zero.
+    let (mut parts, mut len) = ([0.0; 16], 0);
+    for t in terms {
+        let (mut sum, mut kept) = (t, 0);
+        for i in 0..len {
+            let (s, err) = two_sum(sum, parts[i]);
+            if err != 0.0 {
+                parts[kept] = err;
+                kept += 1;
+            }
+            sum = s;
+        }
+        if sum != 0.0 {
+            parts[kept] = sum;
+            kept += 1;
+        }
+        len = kept;
+    }
+    len == 0
+}
+
+/// The x ranges within a band at which the edges `slants` bound the frame, and the line each edge
+/// lies along (the same two points for every edge it is paired with). Edges that lie exactly along
+/// one line and overlap there (contours that meet along an edge, however each one divides it) count
+/// by parity: a stretch of the line that an even number of them cover has the frame on both sides.
+/// Edges that are parallel but apart, however little, are not paired. At most [`MAX_EDGE_PAIRS`]
+/// pairs are compared; edges left unpaired still count as boundaries, which can make a line shorter
+/// at a seam but never puts it outside the frame. The flag is false when the limit left edges
+/// unpaired. `slants` is reordered, and the lines follow its new order.
+fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool, Vec<Line>) {
     fn root(parent: &mut [usize], mut i: usize) -> usize {
         while parent[i] != i {
             parent[i] = parent[parent[i]];
@@ -211,17 +271,16 @@ fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool) {
     let mut parent: Vec<usize> = (0..slants.len()).collect();
     let mut pairs = 0;
     'edges: for (i, &(p, q, _, (_, x1))) in slants.iter().enumerate() {
-        // Ends on the line up to rounding (a few units in the last place of the coordinates)
-        // count as on it.
+        // The x ranges of edges along one line, each found from its own ends, can differ by
+        // rounding (a few units in the last place of the coordinates).
         let scale = p.x.abs().max(p.y.abs()).max(q.x.abs()).max(q.y.abs()).max(1.0);
-        let (d, tol) = (q - p, 4.0 * f64::EPSILON * scale);
-        let on_line = |r: Point| d.cross(r - p).abs() <= tol * d.hypot();
+        let tol = 4.0 * f64::EPSILON * scale;
         for (j, &(r, s, ..)) in slants.iter().enumerate().skip(i + 1).take_while(|(_, o)| o.3.0 <= x1 + tol) {
             pairs += 1;
             if pairs > MAX_EDGE_PAIRS {
                 break 'edges;
             }
-            if on_line(r) && on_line(s) {
+            if on_line_exactly(p, q, r) && on_line_exactly(p, q, s) {
                 let (a, b) = (root(&mut parent, i), root(&mut parent, j));
                 parent[a] = b;
             }
@@ -230,6 +289,7 @@ fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool) {
     let mut groups: Vec<(usize, usize)> = (0..slants.len()).map(|i| (root(&mut parent, i), i)).collect();
     groups.sort_unstable();
     let mut out = Vec::new();
+    let mut lines: Vec<Line> = slants.iter().map(|s| (s.0, s.1)).collect();
     for run in groups.chunk_by(|a, b| a.0 == b.0) {
         if let [(_, i)] = run {
             out.push(slants[*i].3);
@@ -237,6 +297,9 @@ fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool) {
         }
         // The stretches an odd number of the edges cover: pairs of their sorted y ends.
         let (p, q, ..) = slants[run[0].1];
+        for &(_, i) in run {
+            lines[i] = (p, q);
+        }
         let mut ys: Vec<f64> = run.iter().flat_map(|&(_, i)| [slants[i].2.0, slants[i].2.1]).collect();
         ys.sort_by(f64::total_cmp);
         for c in ys.as_chunks::<2>().0.iter().filter(|c| c[1] > c[0]) {
@@ -244,7 +307,7 @@ fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool) {
             out.push((s.min(t), s.max(t)));
         }
     }
-    (out, pairs <= MAX_EDGE_PAIRS)
+    (out, pairs <= MAX_EDGE_PAIRS, lines)
 }
 
 /// The most pieces a line's band is cut into to keep it inside an Invert Wrap shape grown by its
@@ -285,29 +348,21 @@ fn band_edges(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f64, f6
 /// of edges cover).
 fn band_intervals(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f64)> {
     let (top, bottom) = (top.min(bottom), top.max(bottom));
-    // Contours that meet along an edge cross the middle of the band at the same x, up to a few
-    // units of rounding: the intervals on either side of it join (an edge that bounds the
-    // shape there is still subtracted below). A vertical edge crosses the middle at its own x with
-    // no rounding, so a gap at one is never taken for a seam.
-    let y = (top + bottom) * 0.5;
-    let mut upright: Vec<f64> = polys
-        .iter()
-        .flat_map(|poly| poly.iter().zip(poly.iter().cycle().skip(1)))
-        .filter(|(a, b)| a.x == b.x && (a.y <= y) != (b.y <= y))
-        .map(|(a, _)| a.x)
-        .collect();
-    upright.sort_by(f64::total_cmp);
-    let upright = |x: f64| upright.binary_search_by(|v| v.total_cmp(&x)).is_ok();
-    let mut mid = poly_intervals(polys, y);
+    let (edges, _, mut xs) = band_boundaries(polys, top, bottom);
+    // The edges of contours that meet along an edge cross the middle of the band at the same x,
+    // since each is crossed on the line through the same two points: the intervals on either side
+    // join there (an edge that bounds the shape there is still subtracted). Intervals with any gap
+    // between them stay apart.
+    xs.sort_by(f64::total_cmp);
+    let mut mid: Vec<(f64, f64)> = xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
     mid.dedup_by(|next, prev| {
-        let gap = next.0 - prev.1;
-        let seam = gap <= 8.0 * f64::EPSILON * prev.1.abs().max(next.0.abs()).max(1.0) && (gap <= 0.0 || !(upright(prev.1) || upright(next.0)));
+        let seam = next.0 <= prev.1;
         if seam {
             prev.1 = prev.1.max(next.1);
         }
         seam
     });
-    subtract_intervals(&mid, &band_boundaries(polys, top, bottom).0)
+    subtract_intervals(&mid, &edges)
 }
 
 /// The x at which `polys` (even-odd) is inside somewhere in the band `top..bottom`, sorted and
@@ -320,7 +375,7 @@ fn band_intervals(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f64)
 fn band_cover(polys: &[Vec<Point>], top: f64, bottom: f64, admit: bool) -> Vec<(f64, f64)> {
     let (top, bottom) = (top.min(bottom), top.max(bottom));
     let mut iv = poly_intervals(polys, (top + bottom) * 0.5);
-    let (edges, paired) = band_boundaries(polys, top, bottom);
+    let (edges, paired, _) = band_boundaries(polys, top, bottom);
     if paired || !admit {
         iv.extend(edges);
     }
@@ -350,10 +405,20 @@ fn band_cover_closed(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f
 /// Every x at which an edge of `polys` bounds the shape within the band `top..bottom`
 /// (`top <= bottom`), sorted and disjoint, leaving out edges that only touch the top or bottom of
 /// the band, stretches of edges that an even number of edges cover, and vertical edges. The flag is
-/// false when [`MAX_EDGE_PAIRS`] left edges unpaired, which can only add to the result.
-fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f64)>, bool) {
+/// false when [`MAX_EDGE_PAIRS`] left edges unpaired, which can only add to the result. Last, the x
+/// at which the edges cross the middle of the band (even-odd, as [`poly_intervals`] finds them),
+/// unsorted, each found along the line [`slant_boundaries`] gives its edge.
+fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f64)>, bool, Vec<f64>) {
     let (mut flats, mut slants) = band_edges(polys, top, bottom);
-    let (mut edges, paired) = slant_boundaries(&mut slants);
+    let (mut edges, paired, lines) = slant_boundaries(&mut slants);
+    let y = (top + bottom) * 0.5;
+    let mut xs: Vec<f64> = slants.iter().zip(&lines).filter(|((p, q, ..), _)| p.y <= y && y < q.y).map(|(_, &(p, q))| line_x(p, q, y)).collect();
+    // When the middle is the band's bottom (a band of no height), the edges that start there cross
+    // it but are not in the band: they cross it at their lower end.
+    if y == bottom {
+        let starts = polys.iter().flat_map(|poly| poly.iter().zip(poly.iter().cycle().skip(1)));
+        xs.extend(starts.filter(|(a, b)| a.y != b.y && a.y.min(b.y) == y).map(|(a, b)| if a.y < b.y { a.x } else { b.x }));
+    }
     // The x covered by an odd number of the horizontal edges at one height: pairs of their
     // sorted ends.
     flats.sort_by(|p, q| p.0.total_cmp(&q.0));
@@ -365,7 +430,7 @@ fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f6
     // A vertical edge covers a single x: where it bounds the shape, the band's middle already
     // ends at it or an edge of some width meets it, so it is left out (vertical seams join).
     edges.retain(|e| e.1 > e.0);
-    (union_intervals(edges), paired)
+    (union_intervals(edges), paired, xs)
 }
 
 impl Region {
@@ -704,6 +769,72 @@ fn lines_cross_an_edge_two_contours_share() {
     ]);
     let cells = Region::cells(&apart, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(x, x + 50.0), (x + 50.0 + 1e-7, x + 100.0)]);
+}
+
+/// Slanted edges of two contours four units in the last place apart, or one, near the edge of the
+/// canvas are not one edge: the line stops at each and keeps the gap between them.
+#[cfg(test)]
+#[test]
+fn separate_slanted_contours_keep_a_four_ulp_gap_near_canvas_limit() {
+    let x = 3_999_000.0;
+    let ulp = 2f64.powi(-31);
+    assert_eq!((x + ulp).to_bits(), x.to_bits() + 1);
+    for gap in [4.0 * ulp, ulp] {
+        let frame = closed(&[
+            &[(x - 100.0, 0.0), (x, 0.0), (x + 10.0, 10.0), (x - 90.0, 10.0)],
+            &[(x + gap, 0.0), (x + 100.0 + gap, 0.0), (x + 110.0 + gap, 10.0), (x + 10.0 + gap, 10.0)],
+        ]);
+        let cells = Region::cells(&frame, &LayoutOptions::default(), &[]);
+        let spans = cells[0].spans(1.0, 9.0);
+        assert_spans(&spans, &[(x - 91.0, x + 1.0), (x + 9.0 + gap, x + 101.0 + gap)]);
+        assert!(spans[0].1 < spans[1].0, "gap {gap}: {spans:?}");
+    }
+}
+
+/// Contours that share a slanted edge near the edge of the canvas, whole or divided by an anchor
+/// exactly on it, hold lines across it. So do contours whose shared edge is divided where the
+/// crossing found from the divided edge's own ends rounds to another x than the whole edge's.
+#[cfg(test)]
+#[test]
+fn shared_slanted_edge_still_joins_near_canvas_limit() {
+    let x = 3_999_000.0;
+    let left: &[(f64, f64)] = &[(x - 100.0, 0.0), (x, 0.0), (x + 10.0, 10.0), (x - 90.0, 10.0)];
+    let whole: &[(f64, f64)] = &[(x, 0.0), (x + 100.0, 0.0), (x + 110.0, 10.0), (x + 10.0, 10.0)];
+    let divided: &[(f64, f64)] = &[(x, 0.0), (x + 100.0, 0.0), (x + 110.0, 10.0), (x + 10.0, 10.0), (x + 2.5, 2.5)];
+    for right in [whole, divided] {
+        let cells = Region::cells(&closed(&[left, right]), &LayoutOptions::default(), &[]);
+        assert_spans(&cells[0].spans(1.0, 9.0), &[(x - 91.0, x + 101.0)]);
+    }
+    // (0.75, 1.75) lies exactly on the edge from (0, 0) to (3, 7).
+    let left: &[(f64, f64)] = &[(-100.0, 0.0), (0.0, 0.0), (3.0, 7.0), (-97.0, 7.0)];
+    let right: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 0.0), (103.0, 7.0), (3.0, 7.0), (0.75, 1.75)];
+    let (top, bottom) = (1.404, 2.404);
+    let y = (top + bottom) * 0.5;
+    assert_ne!(line_x(Point::new(0.0, 0.0), Point::new(3.0, 7.0), y), line_x(Point::new(0.75, 1.75), Point::new(3.0, 7.0), y));
+    let cells = Region::cells(&closed(&[left, right]), &LayoutOptions::default(), &[]);
+    assert_spans(&cells[0].spans(top, bottom), &[(-100.0 + 3.0 * bottom / 7.0, 100.0 + 3.0 * top / 7.0)]);
+}
+
+/// Area type in two slanted contours four units in the last place apart near the edge of the canvas
+/// sets no line across the gap between them.
+#[cfg(test)]
+#[test]
+fn area_type_sets_no_line_across_a_four_ulp_gap_between_slanted_contours() {
+    let x = 3_999_000.0;
+    let gap = 4.0 * 2f64.powi(-31);
+    let frame = closed(&[
+        &[(x - 200.0, 0.0), (x, 0.0), (x + 100.0, 100.0), (x - 100.0, 100.0)],
+        &[(x + gap, 0.0), (x + 200.0 + gap, 0.0), (x + 300.0 + gap, 100.0), (x + 100.0 + gap, 100.0)],
+    ]);
+    let style = vectorcraft_doc::CharStyle { size: 10.0, ..vectorcraft_doc::CharStyle::default() };
+    let mut t = crate::TextObject::point(Point::ZERO, &"word ".repeat(400), style);
+    t.kind = vectorcraft_doc::TextKind::Area { frame: PathData::from_bezpath(&frame) };
+    let laid = crate::layout(crate::FontDb::global(), &t);
+    assert!(!laid.lines.is_empty());
+    // Each contour is 200 pt wide at any height; the two together are twice that.
+    for line in &laid.lines {
+        assert!(line.x1 - line.x0 < 200.0, "{} to {}", line.x0, line.x1);
+    }
 }
 
 /// A frame of 200 thin slanted strips, whose edges in the band overlap in x far more than
