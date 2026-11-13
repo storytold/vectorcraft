@@ -36,8 +36,24 @@ struct Found {
     faces: Vec<Arc<FontFace>>,
     /// The characters no face covers.
     uncovered: Vec<char>,
-    /// [`FontDb::generation`] when the search ended.
+    /// [`FontDb::generation`] when the search started.
     generation: u64,
+}
+
+/// Look in `db` for the faces covering `chars`, each through `lookup`.
+fn search(db: &FontDb, chars: Vec<char>, lookup: impl Fn(&FontDb, char) -> Option<Arc<FontFace>>) -> Found {
+    // Read before the lookups: when a font is added during them, the generation kept is older than
+    // the database's, and the characters not found are looked for again.
+    let generation = db.generation();
+    let (mut faces, mut uncovered): (Vec<Arc<FontFace>>, Vec<char>) = (vec![], vec![]);
+    for c in chars {
+        match lookup(db, c) {
+            Some(f) if !faces.iter().any(|x| x.id() == f.id()) => faces.push(f),
+            Some(_) => {}
+            None => uncovered.push(c),
+        }
+    }
+    Found { faces, uncovered, generation }
 }
 
 #[derive(Default)]
@@ -48,7 +64,7 @@ pub(crate) struct UiFonts {
     /// Characters no font covered at the last search: looked for again once the font database's
     /// generation is no longer [`UiFonts::searched`].
     uncovered: HashSet<char>,
-    /// The font database's generation when the last search ended.
+    /// The font database's generation when the last search started.
     searched: u64,
     /// The fonts added to egui, by name.
     added: HashSet<String>,
@@ -85,17 +101,7 @@ impl UiFonts {
         if missing.is_empty() {
             return;
         }
-        let find = move || {
-            let (mut faces, mut uncovered): (Vec<Arc<FontFace>>, Vec<char>) = (vec![], vec![]);
-            for c in missing {
-                match db.face_covering(c) {
-                    Some(f) if !faces.iter().any(|x| x.id() == f.id()) => faces.push(f),
-                    Some(_) => {}
-                    None => uncovered.push(c),
-                }
-            }
-            Found { faces, uncovered, generation: db.generation() }
-        };
+        let find = move || search(db, missing, FontDb::face_covering);
         // Native: the installed fonts are read off the UI thread. Characters met meanwhile wait for
         // the next search (they aren't marked seen until then).
         #[cfg(not(target_arch = "wasm32"))]
@@ -491,6 +497,9 @@ mod tests {
     fn a_font_added_later_draws_characters_painted_before_it() {
         use vectorcraft_text::test_fonts::{PRIVATE_USE_CHAR, PRIVATE_USE_FAMILY, private_use_font};
         let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![])));
+        // Scanned first, as the app's database is at startup: a first scan during the search would
+        // change the generation and start one more search.
+        db.families();
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut fonts = UiFonts::default();
@@ -508,5 +517,30 @@ mod tests {
         assert!(has_glyph(&ctx, PRIVATE_USE_CHAR), "the added face draws the character");
         assert!(fonts.uncovered.is_empty());
         assert_eq!(REPORTED.with(|r| r.borrow().len()), 1, "a covered character is not reported again");
+    }
+
+    /// A font added while a search runs (another thread loading one) leaves the search's generation
+    /// older than the database's, so the next frame looks again for the characters it did not find.
+    #[test]
+    fn a_font_added_during_a_search_has_its_characters_looked_for_again() {
+        use vectorcraft_text::test_fonts::{PRIVATE_USE_CHAR, private_use_font};
+        let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![])));
+        let found = search(db, vec![PRIVATE_USE_CHAR], |db, c| {
+            let face = db.face_covering(c);
+            db.add_font(private_use_font().expect("the test face builds"));
+            face
+        });
+        assert_eq!(found.uncovered, [PRIVATE_USE_CHAR], "the lookup ran before the font was added");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut fonts = UiFonts::default();
+        fonts.found(&ctx, found, |_| {});
+        // Painted before: the character is looked for again only because the fonts changed.
+        fonts.seen.insert(PRIVATE_USE_CHAR);
+        let text = format!("Layer {PRIVATE_USE_CHAR}");
+        frame_in(&ctx, &mut fonts, &text, db);
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(has_glyph(&ctx, PRIVATE_USE_CHAR), "the added face draws the character");
+        assert!(fonts.uncovered.is_empty());
     }
 }
