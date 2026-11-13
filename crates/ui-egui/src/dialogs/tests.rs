@@ -2527,6 +2527,67 @@ fn slider_node(out: &egui::FullOutput, label: &str) -> (egui::accesskit::NodeId,
     (*id, node.numeric_value(), node.value().map(str::to_string))
 }
 
+/// Gaussian Blur's Radius and Radial Blur's Amount have a slider beside their field (#5935,
+/// #5936). The radius rail runs from 0.1 to 250 pt and the amount rail from 1 to 100: Home and End
+/// take each to its ends, and OK applies the value. The radius field takes a radius past the
+/// rail's end, up to the 1000 pt the effect applies; the amount field stops at 1 and 100.
+#[test]
+fn blur_dialogs_have_a_slider_beside_their_field() {
+    use egui::Key::{End, Home};
+    use egui::Modifiers as M;
+    use egui::accesskit::Role;
+    for (effect, label, key, start, low, high, typed) in [
+        ("blur.gaussian", "Radius:", "radius", 5.0, 0.1, 250.0, [("600", 600.0), ("5000", 1000.0)]),
+        ("blur.radial", "Amount:", "amount", 10.0, 1.0, 100.0, [("60", 60.0), ("500", 100.0)]),
+    ] {
+        let mut app = app();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": effect})).unwrap();
+        let value = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("the dialog is open").f64(key, -1.0);
+        let mut f = Frames::new();
+        f.run(&mut app, vec![]);
+        let out = f.run(&mut app, vec![]);
+        assert_eq!(slider_node(&out, label).1, Some(start), "{effect}: the slider shows the default");
+        let at = f.control(&mut app, label, Role::Slider);
+        f.press(&mut app, at, true);
+        f.press(&mut app, at, false);
+        f.key(&mut app, Home, M::NONE);
+        assert_eq!(value(&app), low, "{effect}: Home takes {key} to the rail's start");
+        f.key(&mut app, End, M::NONE);
+        assert_eq!(value(&app), high, "{effect}: End takes {key} to the rail's end");
+        // The field beside the slider (the dialog's only text field): a typed value past the rail.
+        let field = {
+            f.run(&mut app, vec![]);
+            let out = f.run(&mut app, vec![]);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let b = nodes
+                .iter()
+                .find(|(_, n)| matches!(n.role(), Role::TextInput | Role::SpinButton))
+                .unwrap_or_else(|| panic!("{effect}: no field beside the slider"))
+                .1
+                .bounds()
+                .expect("bounds");
+            egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+        };
+        for (text, want) in typed {
+            f.press(&mut app, field, true);
+            f.press(&mut app, field, false);
+            let all = M { ctrl: true, command: true, ..Default::default() };
+            f.run(&mut app, vec![egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: all }]);
+            f.run(&mut app, vec![egui::Event::Text(text.into())]);
+            // Tab commits the field (Enter would be the dialog's OK).
+            f.key(&mut app, egui::Key::Tab, M::NONE);
+            assert_eq!(value(&app), want, "{effect}: {text} typed in the field");
+        }
+        let applied = value(&app);
+        confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!((fx.id.as_str(), fx.params.get(key).and_then(serde_json::Value::as_f64)), (effect, Some(applied)), "OK applies it");
+    }
+}
+
 /// A form slider that a click gave the keyboard focus (Vector Halftone's Frequency, 1 to 150 lpi)
 /// steps the number of the field beside it with the arrow keys: one with → and ↑, back with ← and
 /// ↓, ten with Shift, and ten with Page Up and Page Down. Home and End take it to the ends of its

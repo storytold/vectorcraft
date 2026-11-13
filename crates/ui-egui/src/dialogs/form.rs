@@ -411,16 +411,28 @@ pub(crate) fn params(d: &Dialog) -> Value {
 pub(super) type Choices = &'static [(&'static str, &'static str)];
 
 /// Effects whose dialogs give their number fields spinner arrows (#5367, #5368): Drop Shadow's
-/// and the glows' Opacity, offsets and Blur, and the Gaussian Blur's Radius and Radial Blur's
-/// Amount (#5935, #5936), which are stepped more than typed.
+/// and the glows' Opacity, offsets and Blur, which are stepped more than typed.
 pub(super) fn has_spinners(effect: &str) -> bool {
-    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow" | "blur.gaussian" | "blur.radial")
+    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow")
+}
+
+/// The effect parameters that have a slider beside their field (#5935, #5936), as (the rail's
+/// range, the field's range): Gaussian Blur's Radius, a distance in points whose rail runs from
+/// 0.1 to 250 pt while the field takes any radius the effect applies (it clamps to 0..1000 pt), and
+/// Radial Blur's Amount, a slider over the 1 to 100 its effect documents.
+pub(super) fn param_slider(effect: &str, key: &str) -> Option<(std::ops::RangeInclusive<f64>, std::ops::RangeInclusive<f64>)> {
+    match (effect, key) {
+        ("blur.gaussian", "radius") => Some((0.1..=250.0, 0.0..=1000.0)),
+        ("blur.radial", "amount") => vectorcraft_effects::number_range(effect, key).map(|r| (r.clone(), r)),
+        _ => None,
+    }
 }
 
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
 /// parameters `is_length` names are distances shown and typed in `unit`, those `choices` gives
 /// choices for are dropdowns. Fields come in `rank` order (by name among equals). Returns true when
-/// a value changed. The fields of [`has_spinners`]' effects carry spinner arrows.
+/// a value changed. The fields of [`has_spinners`]' effects carry spinner arrows, and those
+/// [`param_slider`] names a slider.
 pub(super) fn param_fields(
     ui: &mut egui::Ui,
     d: &mut Dialog,
@@ -432,7 +444,10 @@ pub(super) fn param_fields(
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let mut pick: Option<(String, Color)> = None;
-    let spinners = has_spinners(&d.str("__effect"));
+    let effect = d.str("__effect");
+    let spinners = has_spinners(&effect);
+    let border = t.input_border;
+    let track = move |_| border;
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         let mut keys: Vec<(String, Value)> =
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -451,12 +466,28 @@ pub(super) fn param_fields(
                     }
                     return;
                 }
+                if let Some((rail, field)) = param_slider(&effect, &k) {
+                    let before = d.fields.get(&k).cloned();
+                    let name = humanized(&k);
+                    ui.horizontal(|ui| {
+                        if is_length(&k) {
+                            // The rail in points, shown and stepped in the document's units; the
+                            // field takes a radius past the rail's end.
+                            let shown = length_value(d, &k, unit, rail.clone());
+                            slider_rail_valued(ui, d, &k, &name, rail, shown, &track);
+                            length_within(ui, d, &k, unit, 70.0, Some(field));
+                        } else {
+                            slider_field_named(ui, d, &k, &name, field, "", &track);
+                        }
+                    });
+                    changed |= d.fields.get(&k) != before.as_ref();
+                    return;
+                }
                 if is_length(&k) {
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
                     if spinners {
-                        // A blur or a blur radius stops at 0.
-                        let bounds = range.unwrap_or(if matches!(k.as_str(), "blur" | "radius") { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
+                        let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
                         let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
                         if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
                             d.fields.insert(k.clone(), json!(x));
@@ -491,13 +522,7 @@ pub(super) fn param_fields(
                 }
                 match v {
                     Value::Number(n) if spinners => {
-                        // Opacity is a percentage; another number stops at the ends its effect
-                        // documents (Radial Blur's Amount, 1..100).
-                        let range = if k == "opacity" {
-                            0.0..=100.0
-                        } else {
-                            vectorcraft_effects::number_range(&d.str("__effect"), &k).unwrap_or(crate::widgets::ANY)
-                        };
+                        let range = if k == "opacity" { 0.0..=100.0 } else { crate::widgets::ANY };
                         if let Some(x) = crate::widgets::spin_range(ui, ("fx-num", k.as_str()), n.as_f64(), range, "", 3, 140.0, 1.0) {
                             d.fields.insert(k.clone(), typed_number(x));
                             changed = true;
