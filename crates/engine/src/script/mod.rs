@@ -672,6 +672,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        s.sync_front_profiles();
         exact
     }
 }
@@ -820,6 +821,34 @@ impl Host {
                 None => break,
             }
         }
+    }
+
+    /// The file and line that line `line` of the source with tag `tag` came from, as `$.line` and
+    /// `$.stack` give them: the run's script, a file it included or a file `$.evalFile` gave, in
+    /// this run or in an earlier run of its named engine, with the run's name standing for a script
+    /// given as text. Code that `eval` or `Function` compiled has no map and keeps its own line,
+    /// named `[eval]`; code whose map is gone, such as one the named engine let go to stay within
+    /// [`KEPT_MAP_BYTES`], is at line 0 of `[unknown]`.
+    fn source_place(&self, tag: u32, line: u32) -> (String, u32) {
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return ("[eval]".to_string(), line);
+        }
+        let named = |map: &include::SourceMap, script: Option<&Arc<str>>| {
+            let (index, file, line, _) = map.locate(line, 1);
+            match script {
+                Some(name) if index == 0 && file.is_empty() => (name.to_string(), line),
+                _ => (file.to_string(), line),
+            }
+        };
+        let script = self.script_tag.get();
+        let placed = match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => self.script_map.try_borrow().ok().map(|m| named(&m, Some(&self.report_name))),
+            Some(n) => self.eval_maps.try_borrow().ok().and_then(|maps| maps.get(n as usize - 1).map(|m| named(m, None))),
+            None => {
+                self.kept_maps.as_ref().and_then(|k| k.try_borrow().ok()).and_then(|k| k.get(tag).map(|kept| named(&kept.map, kept.script.as_ref())))
+            }
+        };
+        placed.unwrap_or_else(|| ("[unknown]".to_string(), 0))
     }
 
     /// `$.fileName` read by the code at `site`: the file that code is in, by the source map of the
@@ -1890,6 +1919,13 @@ impl Session {
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
+                if fresh {
+                    let l = link.clone();
+                    realm.set_source_locator(Rc::new(move |tag, line| match current(&l) {
+                        Ok(h) => h.source_place(tag, line),
+                        Err(_) => ("[unknown]".to_string(), 0),
+                    }));
+                }
                 (if fresh { realm.add_script_extensions() } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
@@ -2231,6 +2267,9 @@ fn failure_text(report: &Value) -> String {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The run's front document draws and converts through its own profiles, and the interface's
+    // again after the slice.
+    s.sync_front_profiles();
     s.script_in_run = true;
     let cell = job.host.session.clone();
     std::mem::swap(s, &mut *cell.borrow_mut());
@@ -2253,6 +2292,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.script_in_run = false;
     job.world.swap(s);
     s.depth = depth;
+    s.sync_front_profiles();
     r
 }
 

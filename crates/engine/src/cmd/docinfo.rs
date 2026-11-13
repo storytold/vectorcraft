@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -289,10 +289,46 @@ fn spot_swatches(d: &Document) -> HashSet<&str> {
     first.into_iter().filter(|&(name, spot)| spot && name != vectorcraft_color::swatch::REGISTRATION).map(|(name, _)| name).collect()
 }
 
+/// Which of gradient `g`'s stops color some part of it that draws, by the stretches
+/// [`vectorcraft_color::Gradient::sample`] mixes in, for stops in any order: the pair of stop `k`
+/// and stop `k + 1` covers the offsets above every offset of stops `0..=k` up to stop `k + 1`'s,
+/// and both its stops count when that stretch has positive width and either stop is above opacity
+/// 0. The first stop also counts when it is above opacity 0, since it colors the offsets up to its
+/// own, and so does the last stop, since it colors the offsets above every stop's. Any other stop,
+/// opaque or not, counts only through a pair: a stop out of order whose pairs have no width
+/// (another stop before it reaches past both ends) colors nothing. A freeform gradient draws from
+/// its points, so each of its stops counts while any stop is above opacity 0.
+fn drawn_stops(g: &vectorcraft_color::Gradient) -> Vec<bool> {
+    let stops = &g.stops;
+    if g.kind == vectorcraft_color::GradientKind::Freeform {
+        let any = stops.iter().any(|s| s.opacity > 0.0);
+        return vec![any; stops.len()];
+    }
+    let mut drawn = vec![false; stops.len()];
+    if let (Some(first), Some(d)) = (stops.first(), drawn.first_mut()) {
+        *d = first.opacity > 0.0;
+    }
+    if let (Some(last), Some(d)) = (stops.last(), drawn.last_mut()) {
+        *d |= last.opacity > 0.0;
+    }
+    // `f32::max` skips a NaN offset, which the sampler never picks either.
+    let mut reach = f32::NEG_INFINITY;
+    for k in 0..stops.len().saturating_sub(1) {
+        reach = reach.max(stops[k].offset);
+        let (a, b) = (&stops[k], &stops[k + 1]);
+        if b.offset > reach && (a.opacity > 0.0 || b.opacity > 0.0) {
+            drawn[k] = true;
+            drawn[k + 1] = true;
+        }
+    }
+    drawn
+}
+
 /// The spot colors paint `p` prints (`spots`: [`spot_swatches`]): the spot swatch a solid color is
-/// linked to, or those a gradient's stops are linked to, each once, in the order of the stops. A
-/// link at a tint of 0 prints no ink, a gradient whose stops are all at an opacity of 0 draws
-/// nothing, and a color that only looks like a spot color is not linked to one.
+/// linked to, or those a gradient's drawn stops ([`drawn_stops`]) are linked to, each once, in the
+/// order of the stops. A link at a tint of 0 prints no ink, a stop that colors only parts of a
+/// gradient at an opacity of 0 prints none, and a color that only looks like a spot color is not
+/// linked to one.
 fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     let mut add = |swatch: &Option<String>, tint: f32| {
@@ -306,7 +342,10 @@ fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     };
     match p {
         Paint::Solid { swatch, tint, .. } => add(swatch, *tint),
-        Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity > 0.0) => g.gradient.stops.iter().for_each(|s| add(&s.swatch, s.tint)),
+        Paint::Gradient(g) => {
+            let drawn = drawn_stops(&g.gradient);
+            g.gradient.stops.iter().zip(drawn).filter(|&(_, d)| d).for_each(|(s, _)| add(&s.swatch, s.tint));
+        }
         _ => {}
     }
     out
@@ -425,6 +464,64 @@ fn applied_brushes(d: &Document, n: &Node, members: &HashSet<*const Node>) -> Ve
     if follows { used } else { vec![] }
 }
 
+/// Whether `n` draws, as far as its own state goes: a hidden object, and an object at an opacity
+/// of 0, paint no color, and neither do their members.
+fn draws(n: &Node) -> bool {
+    n.visible && n.opacity > 0.0
+}
+
+/// The object of `d` at index path `path`, with whether the groups and layers around it draw
+/// ([`draws`]).
+fn node_and_drawn<'a>(d: &'a Document, path: &[usize]) -> Option<(&'a Node, bool)> {
+    let (first, rest) = path.split_first()?;
+    let mut at: &Node = d.layers.get(*first)?;
+    let mut drawn = true;
+    for &i in rest {
+        drawn &= draws(at);
+        at = &**at.children()?.get(i)?;
+    }
+    Some((at, drawn))
+}
+
+/// The spot colors, the patterns and the gradients (`spots`: [`spot_swatches`]) that object `n`
+/// paints, each once: those of its own fills and strokes ([`own_paints`], `members` included), of
+/// its drawn characters and, for a grayscale or 1-bit image, of the color it is colorized with.
+fn object_paints(d: &Document, spots: &HashSet<&str>, members: &HashSet<*const Node>, n: &Node) -> [Vec<String>; 3] {
+    let (spot, pattern, gradient) = (|p: &Paint| spot_labels(spots, p), one_label(pattern_label), one_label(gradient_label));
+    let labels: [&PaintNames<'_>; 3] = [&spot, &pattern, &gradient];
+    let painted_runs = painted_runs(d, spots, n);
+    let mut used = labels.map(|label| own_paints(d, n, members, painted_runs.as_ref(), label));
+    // The characters' own paints: an inline graphic draws no outline and does not take its run's
+    // paint (a list marker set in its run does), and a stroke with no width paints nothing.
+    if let Some((t, painted)) = &painted_runs {
+        for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
+            let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
+            for paint in std::iter::once(&run.style.fill).chain(stroke) {
+                for (used, label) in used.iter_mut().zip(labels) {
+                    for name in label(paint) {
+                        if !used.contains(&name) {
+                            used.push(name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // A grayscale or 1-bit image colorized with a spot color prints it, while its pixels take the
+    // color, as the renderer draws it.
+    if let NodeKind::Image(im) = &n.kind
+        && let Some(colorize) = n.extras().colorize.as_deref()
+        && d.image_blob(im).is_some_and(|b| b.takes_colorize())
+    {
+        for name in spot(colorize) {
+            if !used[0].contains(&name) {
+                used[0].insert(0, name);
+            }
+        }
+    }
+    used
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -440,8 +537,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let d = &st.doc;
     let selection_only = bool_or(p, "selectionOnly", false);
-    let roots: Vec<&Node> =
-        if selection_only { st.selection.objects.iter().filter_map(|id| d.node(*id)).collect() } else { d.layers.iter().map(|l| &**l).collect() };
+    // Each root with whether the groups and layers around it draw: a selected object inside a hidden group or layer, or one
+    // at an opacity of 0, paints nothing.
+    let roots: Vec<(&Node, bool)> = if selection_only {
+        st.selection.objects.iter().filter_map(|id| node_and_drawn(d, &d.index_path(*id)?)).collect()
+    } else {
+        d.layers.iter().map(|l| (&**l, true)).collect()
+    };
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
@@ -467,7 +569,6 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut spot_objects: Vec<Value> = vec![];
     let mut spot_rows: Vec<(String, String)> = vec![];
     let mut spot = BTreeSet::new();
-    let (spot_label, pattern, gradient) = (|p: &Paint| spot_labels(&spot_swatches, p), one_label(pattern_label), one_label(gradient_label));
     let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
     // `library` holds the Brushes panel's brushes, and `brushes` the brushes the visited objects' strokes draw with, each once,
     // in walk order.
@@ -494,10 +595,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
         }
     });
-    for r in roots {
-        r.walk(&mut |n| {
+    // Depth first, in paint order, as `Node::walk` visits: each object with whether it and the groups and layers around it
+    // draw. An object that does not draw is still counted, and its members are visited.
+    let mut stack: Vec<(&Node, bool)> = vec![];
+    for (r, drawn) in roots {
+        stack.push((r, drawn));
+        while let Some((n, around)) = stack.pop() {
             if !seen.insert(std::ptr::from_ref(n)) {
-                return;
+                continue;
+            }
+            let drawn = around && draws(n);
+            if let Some(ch) = n.children() {
+                stack.extend(ch.iter().rev().map(|c| (&**c, drawn)));
             }
             let k = match &n.kind {
                 // The Guides row counts paths made into guides; ruler guides are not objects.
@@ -545,42 +654,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
-            // The spot colors, the patterns and the gradients this object's fills and strokes paint, each once.
-            let painted_runs = painted_runs(d, &spot_swatches, n);
-            let mut used_spots = own_paints(d, n, &members, painted_runs.as_ref(), &spot_label);
-            let mut used_patterns = own_paints(d, n, &members, painted_runs.as_ref(), &pattern);
-            let mut used_gradients = own_paints(d, n, &members, painted_runs.as_ref(), &gradient);
-            // The characters' own paints: an inline graphic draws no outline and does not take its
-            // run's paint (a list marker set in its run does), and a stroke with no width paints
-            // nothing.
-            if let Some((t, painted)) = &painted_runs {
-                for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
-                    let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
-                    for paint in std::iter::once(&run.style.fill).chain(stroke) {
-                        let labels: [(&mut Vec<String>, &PaintNames<'_>); 3] =
-                            [(&mut used_spots, &spot_label), (&mut used_patterns, &pattern), (&mut used_gradients, &gradient)];
-                        for (used, label) in labels {
-                            for name in label(paint) {
-                                if !used.contains(&name) {
-                                    used.push(name);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // A grayscale or 1-bit image colorized with a spot color prints it, while its pixels take
-            // the color, as the renderer draws it.
-            if let NodeKind::Image(im) = &n.kind
-                && let Some(colorize) = n.extras().colorize.as_deref()
-                && d.image_blob(im).is_some_and(|b| b.takes_colorize())
-            {
-                for name in spot_label(colorize) {
-                    if !used_spots.contains(&name) {
-                        used_spots.insert(0, name);
-                    }
-                }
-            }
+            // The spot colors, the patterns and the gradients this object paints, each once; none when it does not draw.
+            let [used_spots, used_patterns, used_gradients] = if drawn { object_paints(d, &spot_swatches, &members, n) } else { Default::default() };
             // Objects counts the objects that Spot Color Objects, Pattern Objects and Gradient Objects list.
             if !used_spots.is_empty() {
                 let name = n.display_name();
@@ -615,9 +690,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             {
                 styles.push(&g.name);
             }
-            for b in applied_brushes(d, n, &members) {
-                if !brushes.contains(&b) {
-                    brushes.push(b);
+            if drawn {
+                for b in applied_brushes(d, n, &members) {
+                    if !brushes.contains(&b) {
+                        brushes.push(b);
+                    }
                 }
             }
             if let NodeKind::Repeat(spec) = &n.kind {
@@ -625,7 +702,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 repeats.push(entry);
                 repeat_rows.push(row);
             }
-        });
+        }
     }
     // The document's fonts include those of the type in opacity masks and in the art of its
     // symbols and patterns, as Find Font lists them.
@@ -1456,6 +1533,204 @@ mod tests {
             }
         }
         assert_eq!(spots(&mut s), (vec![], None, None));
+    }
+
+    /// Spot Color Objects leaves out a spot color linked only from gradient stops at an opacity of 0
+    /// whose stretches all lead to other stops at an opacity of 0 or have no width, while another
+    /// part of the gradient draws: an inner stop, an end stop and a stop at the offset of an opaque
+    /// stop. A clear stop next to an opaque stop tints the stretch between them, so it stays listed.
+    /// Type whose characters draw such a gradient follows the same rule, with and without Selection
+    /// Only, and the report writes the same rows.
+    #[test]
+    fn spot_color_objects_skip_spot_stops_only_in_clear_stretches() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let ink = |c: f64| json!({"model": "cmyk", "c": c, "m": 0.5, "y": 0.0, "k": 0.0});
+        for (k, name) in ["Ink", "Near", "Far", "Edge", "Seam"].into_iter().enumerate() {
+            s.execute("swatch.new", &json!({"name": name, "color": ink(0.2 * k as f64), "spot": true})).unwrap();
+        }
+        let stop = |offset: f64, swatch: Option<&str>, opacity: f64| match swatch {
+            Some(sw) => json!({"offset": offset, "color": "#000", "swatch": sw, "opacity": opacity}),
+            None => json!({"offset": offset, "color": "#fff", "opacity": opacity}),
+        };
+        let fill = |s: &mut Session, id: &Value, stops: Value| {
+            s.execute("paint.setFill", &json!({"ids": [id], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id], "none": true})).unwrap();
+        };
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        // Near borders the opaque Ink stop; Far sits between clear stops; Edge ends the ramp after a
+        // clear stop.
+        let ramp = square(&mut s, 0.0);
+        fill(
+            &mut s,
+            &ramp,
+            json!([stop(0.0, Some("Ink"), 1.0), stop(0.4, Some("Near"), 0.0), stop(0.6, Some("Far"), 0.0), stop(1.0, Some("Edge"), 0.0)]),
+        );
+        s.execute("layer.setProps", &json!({"id": ramp, "name": "Ramp"})).unwrap();
+        // Seam meets the opaque half only at one offset, where nothing between them has width.
+        let seam = square(&mut s, 20.0);
+        fill(&mut s, &seam, json!([stop(0.0, None, 0.0), stop(0.5, Some("Seam"), 0.0), stop(0.5, None, 1.0), stop(1.0, None, 1.0)]));
+        let t = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+        fill(&mut s, &t, json!([stop(0.0, Some("Ink"), 1.0), stop(0.5, None, 0.0), stop(1.0, Some("Far"), 0.0)]));
+        s.execute("layer.setProps", &json!({"id": t, "name": "Type"})).unwrap();
+        let check = |s: &mut Session, params: Value| {
+            let i = s.execute("document.info", &params).unwrap();
+            let listed: Vec<(String, Value)> =
+                i["spotObjects"].as_array().unwrap().iter().map(|o| (o["name"].as_str().unwrap().to_string(), o["spotColors"].clone())).collect();
+            assert_eq!(listed, vec![("Ramp".to_string(), json!(["Ink", "Near"])), ("Type".to_string(), json!(["Ink"]))], "{params}");
+            assert_eq!((i["spotColorNames"].clone(), i["objects"]["spots"].as_u64()), (json!(["Ink", "Near"]), Some(2)), "{params}");
+            let rows = i["sections"].as_array().unwrap().iter().find(|c| c["id"] == "spotColors").unwrap()["rows"].clone();
+            assert_eq!(rows, json!([["Ramp", "Ink, Near"], ["Type", "Ink"]]), "{params}");
+        };
+        check(&mut s, json!({}));
+        s.execute("select.set", &json!({"ids": [ramp, seam, t]})).unwrap();
+        check(&mut s, json!({"selectionOnly": true}));
+        let text = s.execute("document.info", &json!({"category": "spotColors", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nSPOT COLOR OBJECTS\nRamp: Ink, Near\nType: Ink\n"), "{text}");
+        assert!(!["Far", "Edge", "Seam"].iter().any(|n| text.contains(n)), "{text}");
+    }
+
+    /// A gradient's stops print where they color a stretch that draws, for stops in any order: the
+    /// sampler mixes stop `k` with stop `k + 1` above every offset of the stops before it, so an
+    /// out-of-order stop's pair can have no width.
+    #[test]
+    fn drawn_stops_follow_the_sampled_stretches() {
+        use vectorcraft_color::{Color, Gradient, GradientKind, GradientStop};
+        let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
+        let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
+        // In order: the clear stop next to the opaque one, not the one after it.
+        assert_eq!(drawn_stops(&g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)])), vec![true, true, false]);
+        // Out of order: the pair (0.8, 0.3) has no width, so the clear stop at 0.3 mixes only with
+        // the clear stop at 0.8 before it, and the pair (0.3, 1.0) is sampled above 0.8.
+        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 0.0), stop(1.0, 1.0)])), vec![false, false, true, true]);
+        // An opaque stop out of order: the pairs (0, 0.8) and (0.7, 1) cover every offset, so the
+        // pairs next to the stop at 0.3 have no width and it colors nothing.
+        let out_of_order = |o: f32| g(vec![stop(0.0, 0.0), stop(0.8, o), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
+        assert_eq!(drawn_stops(&out_of_order(0.0)), vec![false; 5]);
+        // With the stop at 0.8 opaque, the pairs next to it with width are drawn.
+        assert_eq!(drawn_stops(&out_of_order(1.0)), vec![true, true, false, false, false]);
+        // The last stop colors the offsets above every stop's, even when it is out of order.
+        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(0.6, 0.0), stop(0.5, 1.0)])), vec![false, false, true]);
+        // The first stop colors the offsets up to its own.
+        assert_eq!(drawn_stops(&g(vec![stop(0.0, 1.0), stop(0.0, 0.0), stop(1.0, 0.0)])), vec![true, false, false]);
+        // One stop, every stop clear, and no stops at all.
+        assert_eq!(drawn_stops(&g(vec![stop(0.5, 1.0)])), vec![true]);
+        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(1.0, 0.0)])), vec![false, false]);
+        assert!(drawn_stops(&g(vec![])).is_empty());
+        // A freeform gradient draws from its points: its stops count while any is above opacity 0.
+        let mut free = g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]);
+        free.kind = GradientKind::Freeform;
+        assert_eq!(drawn_stops(&free), vec![true, true, true]);
+    }
+
+    /// Brushes, Spot Color Objects, Pattern Objects and Gradient Objects leave out a hidden object,
+    /// an object at an opacity of 0 and the objects inside a hidden layer or a group at an opacity of
+    /// 0, with Selection Only too: their fills, strokes, characters and colorized pixels paint no
+    /// color. Objects still counts them.
+    #[test]
+    fn info_skips_paints_on_hidden_and_clear_objects_and_their_members() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        // A patterned square that stays drawn, an object at an opacity of 0 and a hidden one.
+        let (shown, clear, hidden) = (square(&mut s, 20.0), square(&mut s, 40.0), square(&mut s, 60.0));
+        s.execute("paint.setFill", &json!({"ids": [shown, clear], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [hidden], "swatch": "Ink"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [shown, clear, hidden], "none": true})).unwrap();
+        // A brushed square in a group.
+        let (brushed, other) = (square(&mut s, 80.0), square(&mut s, 100.0));
+        s.execute("brush.apply", &json!({"ids": [brushed], "name": "Charcoal"})).unwrap();
+        s.execute("select.set", &json!({"ids": [brushed, other]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+        // Type whose characters are filled with the spot color.
+        let word = s.execute("text.create", &json!({"x": 0, "y": 200, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"ids": [word], "swatch": "Ink"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [word], "none": true})).unwrap();
+        // A grayscale image colorized with the spot color.
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
+            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
+        let image = s
+            .edit("Place", |d, sel| {
+                d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
+                let id = d.alloc_id();
+                let im = vectorcraft_doc::ImageObject {
+                    key: "gray".into(),
+                    width: 2,
+                    height: 1,
+                    xf: Default::default(),
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+                sel.set([id]);
+                Ok(id)
+            })
+            .unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+        // A square with a gradient on a layer of its own.
+        let layer = s.execute("layer.new", &json!({"name": "Back"})).unwrap()["id"].as_u64().unwrap();
+        let ramp = square(&mut s, 120.0);
+        s.execute(
+            "paint.setFill",
+            &json!({"ids": [ramp], "gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
+        )
+        .unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [ramp], "none": true})).unwrap();
+        let listed = |s: &mut Session, p: Value| {
+            let i = s.execute("document.info", &p).unwrap();
+            let ids = |k: &str| -> Vec<u64> {
+                let mut ids: Vec<u64> = i[k].as_array().unwrap().iter().map(|o| o["id"].as_u64().unwrap()).collect();
+                ids.sort_unstable();
+                ids
+            };
+            (i["brushNames"].clone(), ids("spotObjects"), ids("patternObjects"), ids("gradientObjects"), i["objects"].clone())
+        };
+        // Everything drawn: each object is listed.
+        let (brushes, spots, patterns, gradients, before) = listed(&mut s, json!({}));
+        assert_eq!(brushes, json!(["Charcoal"]));
+        // New squares take the new spot color as their fill, the group's members included.
+        assert_eq!((spots, patterns, gradients), (vec![hidden, brushed, other, word, image.0], vec![shown, clear], vec![ramp]));
+        s.edit("hide", |d, _| {
+            d.node_mut(NodeId(clear)).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(hidden)).unwrap().visible = false;
+            d.node_mut(NodeId(group)).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(word)).unwrap().opacity = 0.0;
+            d.node_mut(image).unwrap().opacity = 0.0;
+            d.node_mut(NodeId(layer)).unwrap().visible = false;
+            Ok(())
+        })
+        .unwrap();
+        let (brushes, spots, patterns, gradients, after) = listed(&mut s, json!({}));
+        assert_eq!((brushes, spots, patterns, gradients), (json!([]), vec![], vec![shown], vec![]));
+        // Objects counts the listed objects, and every object as before.
+        assert_eq!((after["spots"].clone(), after["patterns"].clone(), after["gradients"].clone()), (Value::Null, json!(1), Value::Null));
+        for k in ["paths", "groups", "textObjects", "images"] {
+            assert_eq!(after[k], before[k], "{k}: {after}");
+        }
+        let rows = s.execute("document.info", &json!({"category": "brushes"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([]));
+        // Selection Only: an object selected inside a group at an opacity of 0 or a hidden layer paints nothing either.
+        s.execute("select.set", &json!({"ids": [brushed, ramp]})).unwrap();
+        let (brushes, _, _, gradients, after) = listed(&mut s, json!({"selectionOnly": true}));
+        assert_eq!((brushes, gradients, after["paths"].clone()), (json!([]), vec![], json!(2)));
+        // Drawn again, the group's brush and the layer's gradient are listed.
+        s.edit("show", |d, _| {
+            d.node_mut(NodeId(group)).unwrap().opacity = 1.0;
+            d.node_mut(NodeId(layer)).unwrap().visible = true;
+            Ok(())
+        })
+        .unwrap();
+        let (brushes, _, _, gradients, _) = listed(&mut s, json!({"selectionOnly": true}));
+        assert_eq!((brushes, gradients), (json!(["Charcoal"]), vec![ramp]));
     }
 
     /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and

@@ -1,6 +1,6 @@
 use super::{
-    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
-    strip_replay_only, waits_for_tool_edit,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd, find_command,
+    given_ids, guard, strip_replay_only, waits_for_tool_edit,
 };
 
 /// A command's result `r` with the warnings of the previews that settling an interaction applied
@@ -115,7 +115,7 @@ impl Session {
             if id == "effect.refreshDeferred" {
                 cmd::given_object_ids(params, id)?;
             } else {
-                cmd::given_objects(self, params, id)?;
+                cmd::given_nodes(self, params, id, TAKES_GUIDE_IDS.contains(&id))?;
             }
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
@@ -134,7 +134,8 @@ impl Session {
         // whichever tool is chosen.
         let given = given_ids(spec.params, params);
         // The guide commands take ruler guides by index; an object command given one's id is refused.
-        if let (Some(ids), Some(st)) = (&given, self.active())
+        if !TAKES_GUIDE_IDS.contains(&id)
+            && let (Some(ids), Some(st)) = (&given, self.active())
             && let Some(guide) = ids.iter().find(|i| st.doc.node(**i).is_some_and(|n| n.is_ruler_guide()))
         {
             let value = guide.0;
@@ -196,6 +197,10 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        // Colors are drawn and converted through the profiles of the document in front now, also
+        // after an undone or redone Assign Profile, a failed or panicked command's documents put
+        // back, and a batch step, before the next step converts through them.
+        self.sync_front_profiles();
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
             // A failed or panicked command's documents are put back: type is drawn in their

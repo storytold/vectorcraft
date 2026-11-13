@@ -945,6 +945,34 @@ fn library_defaults_store_and_find() {
     assert_eq!(unique_name(&lib, "Arrow"), "Arrow 2");
 }
 
+/// A stored library that repeats a name reads with the first brush of that name as stored and each
+/// later one numbered, past every name the library already has; strokes of the name keep drawing
+/// the first brush.
+#[test]
+fn repeated_brush_names_are_numbered_when_read() {
+    let mut d = Document::new(100.0, 100.0);
+    let named = |name: &str, size: f64| Brush { name: name.into(), ..calli(0.0, 100.0, size) };
+    store(&mut d, &[named("Nib", 1.0), named("Nib 2", 2.0), named("Nib", 3.0), named("Other", 4.0), named("Nib", 5.0), named("Nib 2", 6.0)]);
+    let lib = library(&d);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Nib", "Nib 2", "Nib 3", "Other", "Nib 4", "Nib 2 2"]);
+    let size = |b: &Brush| if let BrushKind::Calligraphic(c) = &b.kind { c.size } else { 0.0 };
+    assert_eq!(lib.iter().map(size).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    assert_eq!(find(&d, "Nib").map(|b| size(&b)), Some(1.0));
+    assert_eq!(find(&d, "Nib 3").map(|b| size(&b)), Some(3.0));
+    // Reading again gives the same names, and the numbered library stored again reads as stored.
+    assert_eq!(library(&d), lib);
+    store(&mut d, &lib);
+    assert_eq!(library(&d), lib);
+    // Many brushes of one name take the numbers in order, past the numbered names the file has.
+    let many: Vec<Brush> = (0..5000).map(|i| named(if i == 1 { "Nib 3" } else { "Nib" }, 1.0)).collect();
+    store(&mut d, &many);
+    let names: Vec<String> = library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names[..5], ["Nib", "Nib 3", "Nib 2", "Nib 4", "Nib 5"]);
+    assert_eq!(names.last().map(String::as_str), Some("Nib 5000"));
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
+}
+
 #[test]
 fn brushes_serde_round_trip() {
     let lib = defaults().to_vec();

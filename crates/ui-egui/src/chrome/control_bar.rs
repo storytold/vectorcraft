@@ -78,7 +78,8 @@ pub(super) const ISOLATION_BUTTON: &str = "cb-isolation";
 /// less, the menu is left out so those controls still fit the narrowest window.
 const ARTBOARD_SNAPPING_WIDTH: f32 = 900.0;
 
-/// The Control bar's snapping quick access; every change uses its existing command.
+/// The Control bar's snapping quick access; every change uses its existing command, and Pixel
+/// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.menu_button(tl!("Snapping"), |ui| {
         for (label, cmd, on) in [
@@ -91,6 +92,10 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             if widgets::check(ui, label, on, true) {
                 crate::menus::invoke(app, cmd, json!({}));
             }
+        }
+        if ui.button(tl!("Pixel Snapping Options…")).clicked() {
+            ui.close();
+            crate::menus::invoke(app, "view.snapToPixel.options", json!({}));
         }
         ui.separator();
         for (key, label, on) in [

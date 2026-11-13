@@ -803,35 +803,59 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
     let miter = number_given(p, "miterLimit", C)?.unwrap_or(4.0).clamp(1.0, 500.0);
     let roots = selected_roots(s)?;
     let ids = s.edit("Offset Path", |d, sel| {
-        let (mut out, mut above) = (vec![], vec![]);
-        let mut paths = false;
+        // Each selected root, whether it is a group, and the style of each of its leaf paths; the
+        // paths themselves go to `sources` in the same order.
+        let (mut roots_found, mut sources) = (vec![], vec![]);
         for id in &roots {
-            let Some(n) = d.node(*id).cloned() else { continue };
-            let mut lv = vec![];
-            leaves(&n, &mut lv);
+            let Some(n) = d.node(*id) else { continue };
+            let mut styles = vec![];
+            each_leaf(n, &mut |l| {
+                if !matches!(l.kind, NodeKind::Text(_))
+                    && let Some((path, rule)) = node_path(l)
+                {
+                    styles.push(Style::of(l));
+                    sources.push((path, rule, matches!(l.kind, NodeKind::Compound { .. })));
+                }
+            });
+            roots_found.push((*id, matches!(n.kind, NodeKind::Group { .. }), styles));
+        }
+        let paths = !sources.is_empty();
+        let offset = |(path, rule, compound): &(PathData, FillRule, bool)| {
+            let normalized;
+            let base = if *compound && path.is_closed() {
+                normalized = po::normalize(path, *rule);
+                &normalized
+            } else {
+                path
+            };
+            match po::try_offset_path(base, delta, join, miter) {
+                Ok(p) => Ok(Some(p)),
+                Err(po::PathOpsError::NonFinite) => Ok(None),
+                Err(e) => Err(e),
+            }
+        };
+        // The offsets are worked out together; the nodes are made here, in selection order, so
+        // the ids, the stacking and the first error are those of one path after another.
+        let (offsets, _) = ordered_map(&sources, offset_threads(), offset, std::result::Result::is_err);
+        let mut offsets = offsets.into_iter();
+        let (mut out, mut above) = (vec![], vec![]);
+        for (id, group, styles) in roots_found {
             let mut made = vec![];
-            for l in lv.iter().filter(|l| !matches!(l.kind, NodeKind::Text(_))) {
-                let Some((path, rule)) = node_path(l) else { continue };
-                paths = true;
-                let base = if matches!(l.kind, NodeKind::Compound { .. }) && path.is_closed() { po::normalize(&path, rule) } else { path };
-                let off = match po::try_offset_path(&base, delta, join, miter) {
-                    Ok(p) => p,
-                    Err(po::PathOpsError::NonFinite) => continue,
-                    Err(po::PathOpsError::TooComplex) => {
+            for style in &styles {
+                match offsets.next().flatten() {
+                    Some(Ok(Some(off))) if !off.is_empty() => made.push(shape_node_styled(d, off, style)),
+                    Some(Err(po::PathOpsError::TooComplex)) => {
                         return Err(EngineError::Other("Offset Path: the path is too complex to offset".into()));
                     }
-                    Err(e) => return Err(EngineError::Other(format!("Offset Path: {e}"))),
-                };
-                if off.is_empty() {
-                    continue;
+                    Some(Err(e)) => return Err(EngineError::Other(format!("Offset Path: {e}"))),
+                    _ => {}
                 }
-                made.push(shape_node(d, off, Some(l)));
             }
             if made.is_empty() {
                 continue;
             }
             let new = if made.len() == 1
-                && !matches!(n.kind, NodeKind::Group { .. })
+                && !group
                 && let Some(one) = made.pop()
             {
                 one
@@ -840,7 +864,7 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
                 Node::group(gid, made.into_iter().map(Arc::new).collect())
             };
             out.push(new.id);
-            above.push((*id, vec![new]));
+            above.push((id, vec![new]));
         }
         if out.is_empty() && paths {
             return Err(EngineError::Other("Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)".into()));
@@ -853,6 +877,86 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(out)
     })?;
     Ok(ids_json(&ids))
+}
+
+/// The threads [`offset_path`] works on: the logical CPUs, or one on the web.
+fn offset_threads() -> usize {
+    #[cfg(target_arch = "wasm32")]
+    {
+        1
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+    }
+}
+
+/// `f` of each of `items`, in their order. The items are split into runs whose sizes differ by
+/// at most one, as many as `threads` or the items allow and at least one. This thread works
+/// on the first run, and a thread of its own works on each other run (this thread does when that
+/// one can't start). Once `stop` accepts a result, the items after it are left out (`None`); every
+/// item before the first such result has its result. Returns the results and the number of
+/// threads that worked on them.
+pub(crate) fn ordered_map<T: Sync, R: Send>(
+    items: &[T],
+    threads: usize,
+    f: impl Fn(&T) -> R + Sync,
+    stop: impl Fn(&R) -> bool + Sync,
+) -> (Vec<Option<R>>, usize) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let mut out: Vec<Option<R>> = std::iter::repeat_with(|| None).take(items.len()).collect();
+    let stopped = AtomicUsize::new(usize::MAX);
+    let run = |from: usize, its: &[T], out: &mut [Option<R>]| {
+        for (i, (item, slot)) in its.iter().zip(out).enumerate() {
+            let at = from + i;
+            if at > stopped.load(Ordering::Relaxed) {
+                return;
+            }
+            let r = f(item);
+            if stop(&r) {
+                stopped.fetch_min(at, Ordering::Relaxed);
+            }
+            *slot = Some(r);
+        }
+    };
+    let runs = threads.clamp(1, items.len().max(1));
+    if runs == 1 {
+        run(0, items, &mut out);
+        return (out, 1);
+    }
+    // Run `k` holds the items from `start(k)` up to `start(k + 1)`.
+    let start = |k: usize| k * items.len() / runs;
+    let mut unstarted = vec![];
+    let used = std::thread::scope(|s| {
+        let mut rest = out.as_mut_slice();
+        let mut first = None;
+        let mut used = 1;
+        for k in 0..runs {
+            let (from, to) = (start(k), start(k + 1));
+            let Some((o, tail)) = std::mem::take(&mut rest).split_at_mut_checked(to - from) else { break };
+            rest = tail;
+            let its = items.get(from..to).unwrap_or_default();
+            if k == 0 {
+                first = Some((o, its));
+                continue;
+            }
+            let run = &run;
+            match std::thread::Builder::new().spawn_scoped(s, move || run(from, its, o)) {
+                Ok(_) => used += 1,
+                Err(_) => unstarted.push(k),
+            }
+        }
+        if let Some((o, its)) = first {
+            run(0, its, o);
+        }
+        used
+    });
+    for (from, to) in unstarted.into_iter().map(|k| (start(k), start(k + 1))) {
+        if let (Some(o), Some(its)) = (out.get_mut(from..to), items.get(from..to)) {
+            run(from, its, o);
+        }
+    }
+    (out, used)
 }
 
 // ---------- Outline Stroke ----------
@@ -946,7 +1050,7 @@ pub(crate) fn outlined_stroke(
 /// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, reshape, without_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, has_transform_art, reshape, without_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
@@ -983,11 +1087,16 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = st.clone();
-                plain.effects = without_geometry(&st.effects);
                 let stroked = match path.bounds() {
-                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    Some(b) if has_geometry(&st.effects) => {
+                        let (stroked, carry) = apply_geometry_carrying(&st.effects, &path, b, &ctx.item(item));
+                        // Its raster effects follow only the Transform effects that moved it.
+                        carry.hide_skipped(&mut plain.effects);
+                        stroked
+                    }
                     _ => path.clone(),
                 };
+                plain.effects = without_geometry(&plain.effects);
                 parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
