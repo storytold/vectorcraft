@@ -996,6 +996,43 @@ fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
 }
 
+/// Warichu and Warichu Settings… are in the panel menu with the East Asian options: Warichu marks
+/// the selected characters and takes the mark off again, one undo step each way, and Warichu
+/// Settings… opens the dialog on them.
+#[test]
+fn warichu_menu_items_show_with_east_asian_options_toggle_and_open_the_settings() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "abcd"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu);
+    assert!(!painted(&mut app).contains("Warichu"));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.warichu),
+        _ => panic!("text"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    let find = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+        texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1
+    };
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(painted(&mut app).contains("✓ Warichu"));
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+    let at = find(&ctx, &mut app, "Warichu Settings…");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::warichu::KIND));
+}
+
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
 /// marks the selected characters, one undo step each way; its check shows only while every
 /// selected character has it, and a mixed selection turns it on.

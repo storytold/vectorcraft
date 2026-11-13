@@ -813,12 +813,18 @@ pub(super) fn capture_series_writes(
 /// and objects the edit left as they were keep what the graph stores. When the edit changes several marks of one series,
 /// the frontmost one sets what the graph stores, whatever order `ids` are in. Returns whether the stored paint changed.
 pub(crate) fn capture_series_changes(before: &vectorcraft_doc::Document, d: &mut vectorcraft_doc::Document, ids: &[NodeId]) -> bool {
+    let marks = series_children_in_paint_order(d, ids);
+    !marks.is_empty() && capture_series_writes(before, d, &marks, (false, false), (false, false), false, false)
+}
+
+/// Each of `ids` directly in a series group, from the back to the front: a later mark's capture replaces an earlier
+/// one's, so the frontmost one sets what the graph stores.
+pub(crate) fn series_children_in_paint_order(d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Vec<NodeId> {
     // Only objects directly in a series group can be marks: other edits skip the search of the document for graphs.
     let in_series = |id: &NodeId| d.parent_of(*id).and_then(|p| d.node(p)).is_some_and(|g| g.extras().series_index.is_some());
     let mut marks: Vec<NodeId> = ids.iter().copied().filter(in_series).collect();
-    // A later mark's capture replaces an earlier one's: take them in paint order.
     marks.sort_by_cached_key(|id| d.index_path(*id));
-    !marks.is_empty() && capture_series_writes(before, d, &marks, (false, false), (false, false), false, false)
+    marks
 }
 
 /// Store on the graph the paint that an edit of `ids` (from `before` to `d`) leaves on the topmost visible fill and stroke
@@ -1666,6 +1672,7 @@ fn copied_character_styles<'a>(source: &Node, targets: impl Iterator<Item = &'a 
         local.baseline_shift /= scale.points;
         local.tcy_up_down /= scale.points;
         local.tcy_left_right /= scale.points;
+        local.warichu_gap /= scale.points;
         local.h_scale /= scale.horizontal;
         // As with dimensional type commands, reject overflow and underflow before layout.
         if !copied_dimensions_fit(&effective, &local) {
@@ -1684,6 +1691,7 @@ fn copied_dimensions_fit(from: &CharStyle, to: &CharStyle) -> bool {
         (from.baseline_shift, to.baseline_shift),
         (from.tcy_up_down, to.tcy_up_down),
         (from.tcy_left_right, to.tcy_left_right),
+        (from.warichu_gap, to.warichu_gap),
         (from.h_scale, to.h_scale),
     ]
     .iter()
