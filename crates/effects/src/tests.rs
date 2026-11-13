@@ -1662,6 +1662,27 @@ fn twist_turns_clockwise_for_positive_angles() {
     assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
 }
 
+/// Twist turns a line into a smooth spiral: the points it adds join their pieces without a kink,
+/// however far it turns (#7069).
+#[test]
+fn twist_joins_its_pieces_smoothly() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        assert!(anchors.len() > 8, "{angle}°: {} anchors", anchors.len());
+        for a in &anchors[1..anchors.len() - 1] {
+            let (into, out) = (a.p - a.h_in, a.h_out - a.p);
+            if into.hypot() < 1e-9 || out.hypot() < 1e-9 {
+                continue;
+            }
+            let kink = (into.x * out.y - into.y * out.x).atan2(into.dot(out)).to_degrees().abs();
+            assert!(kink < 1.0, "{angle}°: a kink of {kink:.1}° at {:?}", a.p);
+        }
+    }
+}
+
 #[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
