@@ -1036,6 +1036,7 @@ font-technology	Variable	Вариативные
 	Enable Rubber Band for	Включить «резиновую полосу» для
 	Enable text access for screen readers	Разрешить доступ к тексту для программ чтения с экрана
 	Enable Touch Gestures	Включить сенсорные жесты
+	Switch Selection and Drawing Modes	Переключить режимы выделения и рисования
 	Enable Touch Workspace	Включить сенсорную рабочую среду
 	Encoding	Кодировка
 	Encoding:	Кодировка:

@@ -1314,6 +1314,7 @@ font-technology	Variable	Változó
 	Enable Rubber Band for	Gumiszalag-előnézet ehhez:
 	Enable text access for screen readers	Szöveghozzáférés engedélyezése képernyőolvasóknak
 	Enable Touch Gestures	Érintési kézmozdulatok
+	Switch Selection and Drawing Modes	Váltás a kijelölési és a rajzolási mód között
 	Enable Touch Workspace	Érintőképernyős munkaterület
 	Encoding	Kódolás
 	Encoding:	Kódolás:

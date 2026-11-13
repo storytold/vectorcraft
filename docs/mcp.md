@@ -5459,6 +5459,15 @@ point deltas from an unnamed source in the desktop app, or line deltas that are 
 trackpad gesture holds Alt, it zooms until it ends, also after Alt is let go. The control channel's
 `ui.wheel` with `cmd: true` turns the wheel with Cmd/Ctrl held.
 
+With Preferences › Devices › Enable Touch Gestures on, a two-finger tap on the canvas undoes and a three-finger tap
+redoes. In the Touch workspace a two-finger tap runs `tool.toggleTouchMode` (Switch Selection and Drawing Modes, `{}`,
+desktop app) instead and undoes nothing ([the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/touch-workspace-in-illustrator.html)).
+From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool it chooses the
+drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
+chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
+Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
+are VectorCraft's own rules. A tap in Presentation Mode runs nothing.
+
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
 `file.new` gives a new document that grid, and `document.open`, `file.newFromTemplate` and `file.revert` give it to
