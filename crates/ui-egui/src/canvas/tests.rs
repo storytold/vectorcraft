@@ -884,6 +884,90 @@ fn the_artboard_tool_names_its_active_artboard_once() {
     assert!((active[0].1 - other[0].1).abs() < 2.0, "on the artboard's top edge like the other name: {active:?} vs {other:?}");
 }
 
+/// The texts one headless 800 × 600 canvas frame at `time` seconds draws, tooltips included.
+fn texts_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) -> Vec<String> {
+    fn collect(shape: &Shape, texts: &mut Vec<String>) {
+        match shape {
+            Shape::Text(t) => texts.push(t.galley.text().to_string()),
+            Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, texts)),
+            _ => {}
+        }
+    }
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    out.shapes.iter().for_each(|s| collect(&s.shape, &mut texts));
+    texts
+}
+
+/// The Artboard tool's add buttons: resting the pointer on one shows its tooltip after egui's
+/// tooltip delay, over the disc a press takes and not beside it. No tooltip shows while a drag
+/// is under way, or once the button is gone.
+#[test]
+fn an_artboard_add_button_shows_its_tooltip_while_the_pointer_rests_on_it() {
+    use egui::Event;
+    let tip = vectorcraft_tools::xform::EDGE_BUTTON_TIP;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    texts_at(&mut app, &ctx, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The bottom button: the one below the artboard.
+    let regions: Vec<(Pos2, f32)> = app
+        .session
+        .overlays(app.view_info())
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::HoverText { center, radius, text } if text == tip => Some((xf.to_screen(center), (radius * xf.zoom) as f32)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(regions.len(), 4, "one tooltip for each add button");
+    let (at, r) = regions.iter().copied().max_by(|a, b| a.0.y.total_cmp(&b.0.y)).unwrap();
+    assert!((r - 7.0).abs() < 1e-3, "the disc a press takes: {r}");
+    let shown = |texts: &[String]| texts.iter().any(|s| s == tip);
+    // Resting inside the disc: nothing at first, the tooltip after the delay.
+    assert!(!shown(&texts_at(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at + vec2(r - 1.0, 0.0))])));
+    assert!(!shown(&texts_at(&mut app, &ctx, 1.05, vec![])), "egui's tooltip delay first");
+    let mut seen = false;
+    for k in 1..=20 {
+        seen |= shown(&texts_at(&mut app, &ctx, 1.05 + 0.1 * f64::from(k), vec![]));
+    }
+    assert!(seen, "the tooltip shows while the pointer rests on the button");
+    // Just outside the disc, inside the square around it: no tooltip.
+    let mut t = 4.0;
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at + vec2(r - 1.0, r - 1.0))]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![])), "beside the button");
+    }
+    // A middle-button drag that starts on the button pans the view with the pointer, so the pointer
+    // stays on the button: no tooltip while it lasts.
+    let middle = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() };
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(at)]);
+    t += 0.1;
+    texts_at(&mut app, &ctx, t, vec![middle(at, true)]);
+    let to = at + vec2(30.0, 0.0);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(to)])), "during a drag");
+    }
+    texts_at(&mut app, &ctx, t, vec![middle(to, false)]);
+    // With an artboard below, there is no room for the bottom button, and its tooltip goes with it.
+    let r0 = app.session.active().unwrap().doc.artboards[0].rect;
+    app.session.execute("artboard.new", &json!({"beside": 0, "side": "bottom"})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc.artboards[0].rect, r0);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let below = xf.to_screen(vectorcraft_geom::Point::new(r0.center().x, r0.y1)) + vec2(0.0, 18.0);
+    texts_at(&mut app, &ctx, t, vec![Event::PointerMoved(below)]);
+    for _ in 0..20 {
+        t += 0.1;
+        assert!(!shown(&texts_at(&mut app, &ctx, t, vec![])), "no tooltip where no button shows");
+    }
+}
+
 #[test]
 fn shift_clicking_canvas_artboard_label_toggles_multi_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

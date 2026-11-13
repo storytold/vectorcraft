@@ -437,6 +437,29 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     p.circle_stroke(c, 8.0, Stroke::new(2.0, t.accent));
                 }
             }
+            // Shown as a tooltip by `overlay_hover_text`; nothing is drawn.
+            Overlay::HoverText { .. } => {}
+        }
+    }
+}
+
+/// The tooltips of the tool's [`Overlay::HoverText`] regions. Each region is a hover-only widget
+/// over the canvas, which keeps the clicks and drags; while the pointer rests inside a region's
+/// disc, egui shows its text, translated, after its usual tooltip delay. No tooltip shows during a
+/// canvas drag (`dragging`) or while a pointer button is down.
+pub(super) fn overlay_hover_text(ui: &egui::Ui, xf: &Xf, overlays: &[Overlay], dragging: bool) {
+    let pressed = ui.input(|i| i.pointer.any_down());
+    for (i, o) in overlays.iter().enumerate() {
+        let Overlay::HoverText { center, radius, text } = o else { continue };
+        let c = xf.to_screen(*center);
+        let r = (*radius * xf.zoom) as f32;
+        if !(r.is_finite() && r > 0.0 && c.is_finite()) {
+            continue;
+        }
+        let id = egui::Id::unique("canvas-hover-text").with(i);
+        let resp = ui.interact(egui::Rect::from_center_size(c, vec2(2.0 * r, 2.0 * r)), id, egui::Sense::hover());
+        if !dragging && !pressed && resp.hover_pos().is_some_and(|p| p.distance(c) <= r) {
+            resp.on_hover_text(crate::i18n::t(text));
         }
     }
 }

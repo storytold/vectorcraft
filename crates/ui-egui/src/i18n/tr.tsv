@@ -916,6 +916,8 @@ font-technology	Variable	Değişken
 	Duplicate	Çoğalt
 	Duplicate and Offset 10 pt	Çoğalt ve Ofset 10 pt
 	Duplicate Artboard	Çalışma Yüzeyini Çoğalt
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Bu tarafa çalışma yüzeyi eklemek için tıklayın, bu çalışma yüzeyini çizimiyle birlikte çoğaltmak için Alt tuşunu basılı tutarak tıklayın
+	Click to add an artboard on this side	Bu tarafa çalışma yüzeyi eklemek için tıklayın
 	Copy Artboard	Çalışma Yüzeyini Kopyala
 	Cut Artboard	Çalışma Yüzeyini Kes
 	Rename Artboards	Çalışma Yüzeylerini Yeniden Adlandır

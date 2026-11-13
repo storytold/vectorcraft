@@ -937,6 +937,8 @@ font-technology	Variable	Variables
 	Duplicate	Duplicar
 	Duplicate and Offset 10 pt	Duplicar y desplazar 10 pt
 	Duplicate Artboard	Duplicar mesa de trabajo
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Clic para añadir una mesa de trabajo en este lado, Alt+clic para duplicar esta mesa de trabajo con su ilustración
+	Click to add an artboard on this side	Clic para añadir una mesa de trabajo en este lado
 	Copy Artboard	Copiar mesa de trabajo
 	Cut Artboard	Cortar mesa de trabajo
 	Rename Artboards	Cambiar nombre de mesas de trabajo

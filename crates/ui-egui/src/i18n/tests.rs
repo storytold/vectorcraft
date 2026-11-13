@@ -332,6 +332,18 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Artboard tool's add buttons take their tooltips from the tools crate, which the `tl!` scan
+/// does not read, so each complete catalog is checked for them here.
+#[test]
+fn artboard_add_button_tooltips_are_in_complete_catalogs() {
+    use vectorcraft_tools::xform::{EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED};
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus || COMPLETE_MESSAGES.contains(&lang.code)) {
+        for label in [EDGE_BUTTON_TIP, EDGE_BUTTON_TIP_LOCKED] {
+            assert!(lang.catalog().plain(label).is_some_and(|t| !t.is_empty() && t != label), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
 #[test]
 fn monitor_profile_labels_are_in_complete_catalogs() {

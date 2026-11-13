@@ -1570,6 +1570,8 @@ antiAlias	Sharp	날카롭게
 	Drawing Mode	그리기 모드
 	Duplicate	복제
 	Duplicate Artboard	아트보드 복제
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	클릭하여 이쪽에 아트보드 추가, Alt-클릭하여 이 아트보드를 아트워크와 함께 복제
+	Click to add an artboard on this side	클릭하여 이쪽에 아트보드 추가
 	Copy Artboard	아트보드 복사
 	Cut Artboard	아트보드 잘라내기
 	Rename Artboards	아트보드 이름 바꾸기

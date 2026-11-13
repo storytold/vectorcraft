@@ -922,6 +922,8 @@ font-technology	Variable	Променливи
 	Duplicate	Дублиране
 	Duplicate and Offset 10 pt	Дублиране и отместване с 10 pt
 	Duplicate Artboard	Дублиране на работна област
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щракнете, за да добавите работна област от тази страна, Alt-щракване дублира тази работна област заедно с графиката ѝ
+	Click to add an artboard on this side	Щракнете, за да добавите работна област от тази страна
 	Copy Artboard	Копиране на работна област
 	Cut Artboard	Изрязване на работна област
 	Rename Artboards	Преименуване на работни области

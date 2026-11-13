@@ -879,6 +879,8 @@ antiAlias	Sharp	锐利
 	Duplicate	复制
 	Duplicate and Offset 10 pt	复制并偏移 10 pt
 	Duplicate Artboard	复制画板
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	单击在此侧添加画板，Alt+单击复制此画板及其图稿
+	Click to add an artboard on this side	单击在此侧添加画板
 	Copy Artboard	拷贝画板
 	Cut Artboard	剪切画板
 	Rename Artboards	重命名画板

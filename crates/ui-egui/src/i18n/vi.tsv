@@ -1109,6 +1109,8 @@ font-technology	Variable	Biến thiên
 	Duplicate	Nhân bản
 	Duplicate and Offset 10 pt	Nhân bản và dịch 10 pt
 	Duplicate Artboard	Nhân bản bảng vẽ
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Bấm để thêm bảng vẽ ở phía này, Alt-bấm để nhân bản bảng vẽ này cùng tác phẩm của nó
+	Click to add an artboard on this side	Bấm để thêm bảng vẽ ở phía này
 	Duplicate Artboards	Nhân bản các bảng vẽ
 	Duplicate Brush	Nhân bản cọ
 	Duplicate Character Style	Nhân bản kiểu ký tự
