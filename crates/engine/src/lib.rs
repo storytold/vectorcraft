@@ -153,6 +153,8 @@ pub struct Session {
     pub brush_libraries: cmd::brushlib::Libraries,
     /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
     pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The custom bevels of the bevels file (`threeD.bevels.*`); none without one.
+    pub bevels: cmd::bevels::Bevels,
     /// The id each loaded library outside a request's read roots has been shown under, by its own id
     /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
     shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,

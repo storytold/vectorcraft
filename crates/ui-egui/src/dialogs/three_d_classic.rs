@@ -11,15 +11,15 @@ use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE};
 use super::revolve::{c3, choice, heading, label, light_list, light_record, number, reset_dot, selected_light, store_selected, toggle};
 use crate::state::Dialog;
 
-/// Depth and cap, then the bevel: its shape, its height and whether it is added around the shape
-/// or carved into it.
-pub(super) fn object_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+/// Depth and cap, then the bevel: its shape (a custom one included), its height and whether it is
+/// added around the shape or carved into it.
+pub(super) fn object_controls(app: &crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     heading(ui, tl!("Object"));
     number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
     choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
     ui.add_space(10.0);
     heading(ui, c3("Bevel"));
-    choice(ui, d, "bevel", tl!("Bevel Shape"), &options("bevel"));
+    super::revolve::bevel_choice(app, ui, d, CLASSIC_EXTRUDE);
     ui.add_enabled_ui(d.str("bevel") != "none", |ui| {
         number(ui, d, "bevelHeight", tl!("Height"), (1.0, 100.0), "", 1, Some(unit));
         toggle(ui, d, "bevelInside", tl!("Bevel Inside"), false);
@@ -76,11 +76,6 @@ pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     if id == CLASSIC_EXTRUDE {
         toggle(ui, d, "drawHiddenFaces", tl!("Draw Hidden Faces"), false);
     }
-}
-
-/// The values of Extrude & Bevel (Classic)'s `key` as the dropdowns list them, (value, label).
-fn options(key: &str) -> Vec<(Value, &'static str)> {
-    options_of(CLASSIC_EXTRUDE, key)
 }
 
 /// The values of classic 3D effect `effect`'s `key` as the dropdowns list them, (value, label).

@@ -3466,7 +3466,7 @@ it, masks that member's solids ([three-d.md](three-d.md#groups)).
 `threeD.extrude`: `depth` (points, 0..2000, default 50), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100),
 `cap` (true solid, false hollow), `bevel` (`none`, `classic`, `rounded`, `cove`, `step`, `ogee`), `bevelWidth`
 and `bevelHeight` (points, default 4), `bevelRepeat` (1..32), `bevelSpace` (0..90%), `bevelInside`,
-`bevelBothSides`. `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
+`bevelBothSides`; `bevel` `custom` with `bevelName` and `bevelProfile` is a custom bevel (below). `threeD.inflate`: `depth` (points, default 0), `twist` (degrees, 0..360, 0), `taper` (1..100%, 100), `cap` (true
 solid, false open behind), `volume` (0..100%, default 50), `bothSides`.
 All three take `rotationX/Y/Z` (degrees, -180..180, default the Off-Axis Front position -21.88/-23.4/9.06),
 `perspectiveAngle` and the lighting parameters as Revolve. See [three-d.md](three-d.md) for the Position presets,
@@ -3478,12 +3478,37 @@ points returns "The shape is too complex for a 3D effect", and one whose faces d
 has so many points across so many of its grid's cells that filling the grid would pass its work limit. `threeD.rotate`
 takes up to 65,536 points.
 
+Custom bevels come from the bevels file, `Bevels.vectorcraft` next to the preferences (none on the web or in runs
+with `VECTORCRAFT_NO_PREFS`). `threeD.bevels.edit` (3D and Materials panel › Bevel Shape › Edit Bevels…) opens it,
+and first creates it with one example bevel when it is missing. Each symbol whose art is one open path is one bevel,
+named after the symbol and listed after the built-in shapes. These rules are VectorCraft's own: the path runs from its
+first anchor at the cap's edge to its last at the side wall, across the page across the bevel's width and down the
+page along its height, and curves are cut into straight lines of at most 64 points. The file is read when the app
+starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it again. A file larger than 64 MB is
+not read, at most 256 symbols are read, and a symbol that is not one open path, has more than 4,096 anchors, is cut
+into more than 8,192 straight lines, has ends that are not apart both across and down, or repeats an earlier name is
+listed in `skipped`. `threeD.bevels.list`
+returns each bevel's `name` and `points`, the `file` path, the `skipped` symbols and any read `error`.
+
+`threeD.extrude` and `threeD.classicExtrude` take `bevel: {"custom": name}` in `effect.apply` and `effect.setParams`,
+and store it as `bevel: "custom"` with `bevelName` and `bevelProfile`, a copy of the points (`[[x, y], …]`, 2 to 64
+shares 0..1 of the width and height from `[0, 0]` to `[1, 1]`), so the document draws the bevel without the file. An
+unknown name, `custom` without `bevelProfile`, points that do not run from `[0, 0]` to `[1, 1]` within 0..1, or a
+`bevelName` that is not a string is refused and the document is not changed. The help page
+[Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
+describes custom bevels drawn as open paths and kept as symbols in a bevels document.
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.bevels.list","params":{}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.extrude","item":null,"params":{"bevel":{"custom":"Example Bevel"},"bevelWidth":8,"bevelHeight":8}}}}
+```
+
 ## Extrude & Bevel (Classic)
 
 `effect.apply {effect: "threeD.classicExtrude", params: {...}, ids?, item?}` is Effect › 3D and Materials ›
 3D (Classic) › Extrude & Bevel (Classic)…. It builds the same solid as `threeD.extrude` and draws its faces with the
 classic surfaces. Parameters: `depth` (points, 0..2000, default 50), `cap` (true solid, false hollow), `bevel` (`none`,
-`classic`, `rounded`, `cove`, `step`, `ogee`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
+`classic`, `rounded`, `cove`, `step`, `ogee`, or a custom bevel as for `threeD.extrude`), `bevelHeight` (points, 1..100, default 4; the bevel is as wide as it
 is tall), `bevelInside` (false adds the bevel around the shape, true carves it into the shape), `rotationX/Y/Z` and
 `perspectiveAngle` as above, and the surface:
 

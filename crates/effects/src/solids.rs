@@ -6,7 +6,7 @@ use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect};
-use vectorcraft_three_d::{Bevel, BevelShape, Extrude, Facet, Inflate, Mesh, View};
+use vectorcraft_three_d::{Bevel, BevelProfile, BevelShape, Extrude, Facet, Inflate, Mesh, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -54,13 +54,22 @@ pub const THREE_D_TYPES: [(&str, &str); 4] = [("plane", ROTATE), ("extrude", EXT
 /// The parameters of 3D effect `to` for an effect `from` with `params`, as switching the object
 /// type keeps them: every setting `to` takes keeps its value from `params` (the defaults of `from`
 /// under them), each rotation angle wrapped into -180° to 180° when `to` is not Revolve, and the
-/// settings only `to` takes start at their defaults. Settings `to` does not take are dropped.
+/// settings only `to` takes start at their defaults. Settings `to` does not take are dropped; a
+/// custom bevel's name and points ([`BEVEL_NAME`], [`BEVEL_PROFILE`]) go with `bevel` when `to`
+/// takes one.
 pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
     let current = crate::merged_params(from, params);
     let mut out = crate::default_params(to).and_then(|v| v.as_object().cloned()).unwrap_or_default();
     for (key, value) in out.iter_mut() {
         if let Some(v) = current.get(key) {
             value.clone_from(v);
+        }
+    }
+    if out.contains_key("bevel") {
+        for key in [BEVEL_NAME, BEVEL_PROFILE] {
+            if let Some(v) = current.get(key).filter(|v| !v.is_null()) {
+                out.insert(key.into(), v.clone());
+            }
         }
     }
     if to != crate::REVOLVE {
@@ -125,14 +134,66 @@ pub fn view_options(p: &Value) -> View {
     }
 }
 
-/// Extrude & Bevel's parameters. `bevel` is `"none"` or a [`BevelShape`] id.
+/// The custom bevel's name parameter: the name the bevels file gave it, kept for the menus.
+pub const BEVEL_NAME: &str = "bevelName";
+/// The custom bevel's points parameter: `[[across, down], …]`, shares of the bevel's width and
+/// height from the cap's edge `[0, 0]` to the side wall `[1, 1]` (a copy of the bevel's path, so
+/// the document draws it without the bevels file).
+pub const BEVEL_PROFILE: &str = "bevelProfile";
+
+/// The points of `v`, a [`BEVEL_PROFILE`] value; `None` unless it is an array of `[x, y]` number
+/// pairs that make a [`BevelProfile`].
+fn bevel_profile(v: &Value) -> Option<BevelProfile> {
+    let list = v.as_array().filter(|a| a.len() <= BevelProfile::MAX_POINTS)?;
+    let pts: Option<Vec<(f64, f64)>> = list
+        .iter()
+        .map(|pt| match pt.as_array().map(Vec::as_slice) {
+            Some([x, y]) => Some((x.as_f64()?, y.as_f64()?)),
+            _ => None,
+        })
+        .collect();
+    BevelProfile::new(&pts?)
+}
+
+/// The bevel shape of parameters `p`: `bevel` `"none"` (none), a built-in [`BevelShape`] id, or
+/// `"custom"` with its points in [`BEVEL_PROFILE`] (none when they do not make a profile).
+pub(crate) fn bevel_shape(p: &Value) -> Option<BevelShape> {
+    match text(p, "bevel", "none") {
+        "custom" => p.get(BEVEL_PROFILE).and_then(bevel_profile).map(BevelShape::Custom),
+        id => BevelShape::parse(id),
+    }
+}
+
+/// Check the custom bevel parameters of `p`: `bevel` `"custom"` needs [`BEVEL_PROFILE`], whose
+/// points, when given, must make a profile, and [`BEVEL_NAME`] is a string.
+fn validate_bevel(p: &Value) -> Result<(), String> {
+    let most = BevelProfile::MAX_POINTS;
+    if let Some(v) = p.get(BEVEL_PROFILE)
+        && !v.is_null()
+        && bevel_profile(v).is_none()
+    {
+        return Err(format!(
+            "{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)"
+        ));
+    }
+    if text(p, "bevel", "none") == "custom" && p.get(BEVEL_PROFILE).is_none_or(Value::is_null) {
+        return Err(format!("bevel custom needs {BEVEL_PROFILE}, the bevel's points"));
+    }
+    if p.get(BEVEL_NAME).is_some_and(|v| !v.is_string() && !v.is_null()) {
+        return Err(format!("{BEVEL_NAME} must be a string"));
+    }
+    Ok(())
+}
+
+/// Extrude & Bevel's parameters. `bevel` is `"none"`, a [`BevelShape`] id, or `"custom"` with
+/// its points in [`BEVEL_PROFILE`].
 pub fn extrude_options(p: &Value) -> Extrude {
     Extrude {
         depth: num(p, "depth", 50.0),
         twist: num(p, "twist", 0.0),
         taper: num(p, "taper", 100.0) / 100.0,
         cap: flag(p, "cap", true),
-        bevel: BevelShape::parse(text(p, "bevel", "none")).map(|shape| Bevel {
+        bevel: bevel_shape(p).map(|shape| Bevel {
             shape,
             width: num(p, "bevelWidth", 4.0),
             height: num(p, "bevelHeight", 4.0),
@@ -213,12 +274,12 @@ fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
     crate::lighting::validate(p)?;
     shadow::validate(p)?;
     if let Some(v) = p.get("bevel")
-        && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
+        && !v.as_str().is_some_and(|s| s == "none" || s == "custom" || BevelShape::parse(s).is_some())
     {
         let names: Vec<_> = BevelShape::ALL.iter().map(|b| b.id()).collect();
-        return Err(format!("bevel must be none or one of {}", names.join(", ")));
+        return Err(format!("bevel must be none or one of {}, or custom with {BEVEL_PROFILE}", names.join(", ")));
     }
-    Ok(())
+    validate_bevel(p)
 }
 
 /// The name an error gives 3D effect `id`.

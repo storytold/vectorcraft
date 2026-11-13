@@ -378,13 +378,14 @@ impl Session {
     }
 }
 
-fn same_file(a: &str, b: &str) -> bool {
+pub(super) fn same_file(a: &str, b: &str) -> bool {
     let canon = |p: &str| std::fs::canonicalize(p).unwrap_or_else(|_| std::path::PathBuf::from(p));
     std::path::Path::new(a) == std::path::Path::new(b) || canon(a) == canon(b)
 }
 
-/// The document in the arrowheads file at `path`; `None` when there is no file.
-fn read(path: &str) -> std::result::Result<Option<Document>, String> {
+/// The document in the arrowheads file at `path` (or another such file of the user's, as the
+/// bevels file); `None` when there is no file.
+pub(super) fn read(path: &str) -> std::result::Result<Option<Document>, String> {
     let size = match std::fs::metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("{path}: {e}")),

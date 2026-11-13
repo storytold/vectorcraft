@@ -7,7 +7,7 @@
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -150,9 +150,11 @@ pub(crate) fn send(app: &mut VectorcraftApp, ctx: &egui::Context, changed: Map<S
         .iter()
         .filter_map(|(id, t, same_lights)| {
             let takes = vectorcraft_effects::default_params(&t.effect).unwrap_or(Value::Null);
+            // A custom bevel's name and points go with `bevel` to the effects that take one.
+            let custom_bevel = |k: &str| (k == BEVEL_NAME || k == BEVEL_PROFILE) && takes.get("bevel").is_some();
             let params: Map<String, Value> = pending
                 .iter()
-                .filter(|(k, _)| takes.get(k.as_str()).is_some() && (k.as_str() != "lights" || *same_lights))
+                .filter(|(k, _)| (takes.get(k.as_str()).is_some() || custom_bevel(k)) && (k.as_str() != "lights" || *same_lights))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             (!params.is_empty())
@@ -232,6 +234,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut d = Dialog { kind: ID.into(), fields };
     let before = crate::dialogs::form::params(&d);
     crate::dialogs::revolve::controls(app, ui, &mut d);
+    let edit_bevels = d.fields.remove("__editBevels").is_some();
     let state: Map<String, Value> = d
         .fields
         .iter()
@@ -243,6 +246,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let changed = changed_settings(&before, &after);
     let dragging = ctx.input(|i| i.pointer.any_down());
     send(app, &ctx, changed, dragging);
+    // Bevel Shape's Edit Bevels…: the bevels file opens as a document of its own.
+    if edit_bevels {
+        finish(app, &ctx);
+        if let Err(e) = app.run("threeD.bevels.edit", json!({})) {
+            app.ui.status = e;
+        }
+        return;
+    }
     if quick_actions_shown(&d) {
         ui.add_space(10.0);
         let t = Tokens::get(ui.ctx());

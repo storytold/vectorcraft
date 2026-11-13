@@ -14,6 +14,7 @@ mod assets;
 mod assets_3d;
 mod attributes;
 mod bboxrotate;
+mod bevels;
 mod blendfidelity;
 mod blendopts;
 mod blendspine;

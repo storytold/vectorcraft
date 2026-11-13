@@ -198,6 +198,40 @@ fn bevel_shapes_repeats_and_both_sides_change_the_surface() {
     }
 }
 
+/// A custom bevel's points are its cross-section, joined by straight lines: two points make the
+/// classic chamfer, and the step shape's points make the step shape's solid. Other points change
+/// the surface. A profile must run from (0, 0) to (1, 1) with every share in 0..1.
+#[test]
+fn custom_bevel_profiles_shape_the_bevel() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: -20.0, rotation_y: 30.0, ..front() };
+    let solid = |shape: BevelShape| {
+        let bevel = Bevel { shape, width: 12.0, height: 12.0, repeat: 2, space: 0.2, both_sides: true, ..Bevel::default() };
+        extrude(&p, FillRule::EvenOdd, b, Extrude { bevel: Some(bevel), ..Extrude::default() }, v).unwrap()
+    };
+    let custom = |pts: &[(f64, f64)]| BevelShape::Custom(BevelProfile::new(pts).unwrap());
+    assert_eq!(solid(custom(&[(0.0, 0.0), (1.0, 1.0)])), solid(BevelShape::Classic));
+    let step = [(0.0, 0.0), (0.0, 0.5), (0.5, 0.5), (0.5, 1.0), (1.0, 1.0)];
+    assert_eq!(solid(custom(&step)), solid(BevelShape::Step));
+    let notch = custom(&[(0.0, 0.0), (0.2, 0.6), (0.7, 0.4), (1.0, 1.0)]);
+    assert_ne!(solid(notch), solid(BevelShape::Classic));
+    assert_eq!(notch.id(), "custom");
+    assert_eq!(BevelShape::parse("custom"), None);
+    assert_eq!(notch.at(0.0), (0.0, 0.0));
+    assert_eq!(notch.at(1.0), (1.0, 1.0));
+    // The point a third of the way along is the second point, kept to 1/32,768.
+    let (x, y) = notch.at(1.0 / 3.0);
+    assert!(close(x, 0.2, 1e-4) && close(y, 0.6, 1e-4), "{x}, {y}");
+    // Inside, the bevel carves the shape with the same points.
+    let inside = Bevel { shape: notch, width: 12.0, height: 12.0, inside: true, ..Bevel::default() };
+    assert!(extrude(&p, FillRule::EvenOdd, b, Extrude { bevel: Some(inside), ..Extrude::default() }, v).is_ok());
+    let too_many = vec![(0.5, 0.5); BevelProfile::MAX_POINTS + 1];
+    for bad in [&[(0.0, 0.0)][..], &[(0.1, 0.0), (1.0, 1.0)], &[(0.0, 0.0), (1.0, 0.9)], &[(0.0, 0.0), (1.2, 0.5), (1.0, 1.0)], &too_many] {
+        assert_eq!(BevelProfile::new(bad), None, "{bad:?}");
+    }
+    assert!(BevelProfile::new(&[(0.0, 0.0), (f64::NAN, 0.5), (1.0, 1.0)]).is_none());
+}
+
 #[test]
 fn holes_stay_holes_in_the_caps_and_get_walls_of_their_own() {
     let mut b = square(0.0, 0.0, 100.0);

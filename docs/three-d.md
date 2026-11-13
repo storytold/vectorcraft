@@ -79,7 +79,7 @@ object is where the art was.
 | Twist | 0° to 360°: the back face turned against the front, the walls following in slices. |
 | Taper | 1–100 %: the back face's size against the front's. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
-| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
+| Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. After them come the custom bevels ([Custom bevels](#custom-bevels)). |
 | Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
 | Repeat, Space | The cross-section repeated 1–32 times across the width, with a share (0–90 %) of the width flat between repeats. |
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
@@ -87,6 +87,28 @@ object is where the art was.
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
 times the width), so a bevel wider than a narrow part of the shape folds over itself.
+
+### Custom bevels
+
+The public [Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
+page describes a custom bevel as one open path saved as a symbol in a bevels document, then listed in the Bevel menu.
+VectorCraft keeps its custom bevels in `Bevels.vectorcraft`, a native document next to the preferences (none on the
+web or in runs with `VECTORCRAFT_NO_PREFS`). The layout below is VectorCraft's own.
+
+- **Edit Bevels…** under Bevel Shape in the 3D and Materials panel (`threeD.bevels.edit`) opens the file, and first
+  creates it with one example bevel when it is missing.
+- Each symbol whose art is one open path (alone or in groups of one member) is one bevel, named after the symbol and
+  listed after the built-in shapes in the Bevel Shape menus of Extrude & Bevel and Extrude & Bevel (Classic).
+- The path runs from its first anchor, at the cap's edge, to its last, at the side wall. Across the page is across
+  the bevel's width and down the page is along its height, whichever way the path is drawn. Points past its ends are
+  held to them, curves are cut into straight lines, and a path is simplified to at most 64 points.
+- A custom bevel takes Width, Height, Repeat, Space, Bevel Inside and Bevel both sides like the built-in shapes.
+- The file is read when the app starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it
+  again. A file larger than 64 MB is not read, at most 256 symbols are read, and a symbol that is not one open path,
+  has more than 4,096 anchors, is cut into more than 8,192 straight lines, has ends that are not apart both across and down, or repeats an earlier name is listed
+  in `skipped` by `threeD.bevels.list`.
+- An effect that uses a custom bevel keeps its name and a copy of its points, so the document draws it the same way
+  without the bevels file.
 
 ## Inflate
 
@@ -297,7 +319,7 @@ Our reading:
 ## Parameters (`effect.apply`, `effect.setParams`)
 
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
-`ogee`), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
+`ogee`, or `custom` with `bevelName` and `bevelProfile`; `{custom: name}` takes a bevel of the bevels file), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
 uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightColor` (`#rrggbb`, default `#ffffff`), `lightIntensity` (%), `lightRotation`,
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
@@ -314,7 +336,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   and **ray-traced rendering** are not built: shading uses directional lights, in the paint of the fill or
   stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and the shadow is hard-edged
   ([Shadows](#shadows)).
-- The bevel shapes and their names are our own; custom bevel paths are not supported.
+- The bevel shapes and their names are our own. Custom bevels come from VectorCraft's own bevels file
+  ([Custom bevels](#custom-bevels)) and are cut into straight lines.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn
   back to front, with a flat cap or flat back turned toward the viewer drawn after all of them. Concave solids
   seen at steep angles can overlap wrongly; open (hollow) solids show both sides. Twisted walls and bevels are

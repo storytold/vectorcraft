@@ -249,6 +249,7 @@ fn with_stores(mut h: Headless) -> Headless {
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);
     prefs_dir::attach_arrowheads(&mut h.session);
+    prefs_dir::attach_bevels(&mut h.session);
     h
 }
 

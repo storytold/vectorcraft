@@ -619,6 +619,58 @@ fn parameters_are_validated_and_lengths_scale_with_the_object() {
     assert!(extrude_options(&json!({})).bevel.is_none());
 }
 
+/// `bevel` custom draws the points of `bevelProfile` in both Extrude & Bevels, with the other bevel
+/// settings; bad points, a custom bevel without points and a name that is not a string are refused.
+#[test]
+fn custom_bevels_draw_their_points_and_bad_points_are_refused() {
+    let n = square_node();
+    let notch = json!([[0, 0], [0.2, 0.6], [0.7, 0.4], [1, 1]]);
+    let custom = json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch, "bevelWidth": 10, "bevelRepeat": 2, "bevelBothSides": true});
+    let b = extrude_options(&custom).bevel.unwrap();
+    assert!(matches!(b.shape, BevelShape::Custom(_)));
+    assert_eq!((b.width, b.repeat, b.both_sides), (10.0, 2, true));
+    let points: Vec<(f64, f64)> = match b.shape {
+        BevelShape::Custom(p) => p.points().collect(),
+        _ => vec![],
+    };
+    assert_eq!(points.len(), 4);
+    assert!((points[2].0 - 0.7).abs() < 1e-4 && (points[2].1 - 0.4).abs() < 1e-4, "{points:?}");
+    assert!(matches!(classic_extrude_options(&custom).bevel.map(|b| b.shape), Some(BevelShape::Custom(_))));
+    for id in [EXTRUDE, CLASSIC_EXTRUDE] {
+        let classic_params = json!({"bevel": "classic", "bevelHeight": 10});
+        let custom_params = json!({"bevel": "custom", "bevelProfile": notch, "bevelHeight": 10, "bevelName": "Notch"});
+        assert!(validate_solid(&n, id, &custom_params).is_ok(), "{id}");
+        let art = |p: &Value| {
+            let mut n = square_node();
+            n.appearance.effects.push(fx(id, p.clone()));
+            solid_art(&n).unwrap()
+        };
+        assert_ne!(art(&classic_params), art(&custom_params), "{id}");
+        for (bad, err) in [
+            (json!({"bevel": "custom"}), "bevel custom needs bevelProfile"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0.1, 0], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0], [2, 0.5], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": [[0, 0], ["a", 0.5], [1, 1]]}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": "0,0 1,1"}), "bevelProfile must be 2 to 64"),
+            (json!({"bevel": "custom", "bevelProfile": notch, "bevelName": 3}), "bevelName must be a string"),
+        ] {
+            let e = validate_solid(&n, id, &bad).unwrap_err();
+            assert!(e.contains(err), "{id} {bad}: {e}");
+        }
+    }
+    // A loaded file whose points do not make a profile draws no bevel.
+    assert!(extrude_options(&json!({"bevel": "custom", "bevelProfile": [[0, 0]]})).bevel.is_none());
+    // Changing the type keeps the custom bevel where the new effect takes a bevel, and drops it
+    // where it does not.
+    let classic = three_d_params_as(EXTRUDE, &custom, CLASSIC_EXTRUDE);
+    assert_eq!((&classic["bevel"], &classic[BEVEL_NAME], &classic[BEVEL_PROFILE]), (&json!("custom"), &json!("Notch"), &notch));
+    assert!(validate_solid(&n, CLASSIC_EXTRUDE, &classic).is_ok());
+    assert_eq!(three_d_params_as(CLASSIC_EXTRUDE, &classic, EXTRUDE)[BEVEL_PROFILE], notch);
+    let inflate = three_d_params_as(EXTRUDE, &custom, INFLATE);
+    assert!(inflate.get(BEVEL_PROFILE).is_none() && inflate.get(BEVEL_NAME).is_none());
+}
+
 #[test]
 fn inflate_reads_twist_taper_and_cap() {
     let o = inflate_options(&json!({"twist": 90, "taper": 40, "cap": false}));

@@ -211,6 +211,41 @@ fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     assert_eq!(fx(c)[0].params, c_shadow);
 }
 
+/// A custom bevel picked in the panel sends its name and points with `bevel`, to the effects that
+/// take a bevel only, and another custom bevel replaces them.
+#[test]
+fn a_custom_bevel_sends_its_name_and_points() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.inflate", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    let pick = |name: &str, points: Value| {
+        Map::from_iter([
+            ("bevel".to_string(), json!("custom")),
+            (vectorcraft_effects::BEVEL_NAME.to_string(), json!(name)),
+            (vectorcraft_effects::BEVEL_PROFILE.to_string(), points),
+        ])
+    };
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Notch", notch.clone()), false);
+    let fx = |app: &VectorcraftApp, id: u64| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone()
+    };
+    let p = fx(&app, a);
+    assert_eq!(
+        (&p["bevel"], &p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]),
+        (&json!("custom"), &json!("Notch"), &notch)
+    );
+    assert!(fx(&app, b).get(vectorcraft_effects::BEVEL_PROFILE).is_none());
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Steps", steps.clone()), false);
+    let p = fx(&app, a);
+    assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();

@@ -427,6 +427,10 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     if texture_load_effect(id) {
         load_texture(&mut params, C)?;
     }
+    // A custom bevel by name takes a copy of its points from the bevels file.
+    if bevel_effect(id) {
+        super::bevels::resolve_custom(s, &mut params, C)?;
+    }
     // An SVG filter needs its <filter> element, and is named by its id.
     if id == effects::SVG_FILTER {
         let xml = params.get("xml").and_then(Value::as_str).ok_or_else(|| bad(C, "give `xml`, one SVG <filter> element"))?;
@@ -718,6 +722,9 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     if edited.iter().any(|e| texture_load_effect(e)) {
         load_texture(&mut params, C)?;
     }
+    if edited.iter().any(|e| bevel_effect(e)) || kind == Some(effects::EXTRUDE) {
+        super::bevels::resolve_custom(s, &mut params, C)?;
+    }
     let targets = effect_targets(s, p, item, index, C)?;
     // The type each 3D effect already has, with nothing else to change, is no edit (and is not
     // checked again).
@@ -796,6 +803,12 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+/// Does effect `id` take a `bevel` (Extrude & Bevel, Extrude & Bevel (Classic)), which may be a
+/// custom bevel given by name?
+fn bevel_effect(id: &str) -> bool {
+    id == effects::EXTRUDE || id == effects::CLASSIC_EXTRUDE
 }
 
 // ---------- Load Texture ----------
