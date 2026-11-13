@@ -273,7 +273,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             // Overrides: an attribute the style sets that the selection doesn't match.
             let overridden = is_cur && cur.as_ref().is_some_and(|(_, m)| attrs.iter().any(|(k, v)| m.get(k) != Some(v)));
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-            if resp.drag_started() {
+            if resp.drag_started_by(egui::PointerButton::Primary) {
                 egui::DragAndDrop::set_payload(ui.ctx(), RowDrag { kind, name: name.clone() });
             }
             if scroll_to.as_deref() == Some(name.as_str()) {
