@@ -396,7 +396,7 @@ fn is_dcs_file(f: &mut Found) -> bool {
         return dcs::is_dcs(b);
     }
     let Ok(head) = fileio::read_file_head(&f.path, dcs::HEAD_BYTES) else { return false };
-    if let Some(is) = dcs::head_is_dcs(&head) {
+    if let Some(is) = dcs::head_is_dcs(&head, f.size) {
         return is;
     }
     let Ok(b) = f.read() else { return false };

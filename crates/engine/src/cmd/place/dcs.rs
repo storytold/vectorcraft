@@ -42,18 +42,27 @@ pub(crate) fn is_dcs(bytes: &[u8]) -> bool {
 /// The most bytes read from the start of a file to look at its DCS header.
 pub(crate) const HEAD_BYTES: usize = 1 << 20;
 
-/// Does the header of the PostScript in file `head` (the first bytes of a file, at most
-/// [`HEAD_BYTES`]) name DCS plates? `None` when `head` can't tell: that PostScript doesn't start
-/// within it (a binary EPS header that puts it further on), or its header goes on past it.
-pub(crate) fn head_is_dcs(head: &[u8]) -> Option<bool> {
+/// Does the header of the PostScript in file `head` (the first bytes of a file `size` bytes long,
+/// at most [`HEAD_BYTES`]) name DCS plates? `None` when `head` can't tell: that PostScript doesn't
+/// start within it (a binary EPS header that puts it further on), or its header goes on past it. A
+/// `head` that holds the whole file is read as [`is_dcs`] reads it, and a binary EPS header whose
+/// PostScript or TIFF preview ends past `size` names none, as [`is_dcs`] finds for the whole file.
+pub(crate) fn head_is_dcs(head: &[u8], size: u64) -> Option<bool> {
     const DOS_MAGIC: [u8; 4] = [0xC5, 0xD0, 0xD3, 0xC6];
+    if head.len() < HEAD_BYTES || head.len() as u64 >= size {
+        return Some(is_dcs(head));
+    }
     let (ps, whole) = if head.starts_with(&DOS_MAGIC) {
         let word = |at: usize| head.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
+        let fits = |at: usize| Some((word(at)? as u64).checked_add(word(at + 4)? as u64).is_some_and(|end| end <= size));
+        if !fits(4)? || (word(24)? != 0 && !fits(20)?) {
+            return Some(false);
+        }
         let (start, len) = (word(4)?, word(8)?);
         let ps = head.get(start..).filter(|ps| !ps.is_empty())?;
         (ps.get(..len).unwrap_or(ps), start.checked_add(len).is_some_and(|end| end <= head.len()))
     } else {
-        (head, head.len() < HEAD_BYTES)
+        (head, false)
     };
     if is_dcs(ps) {
         return Some(true);

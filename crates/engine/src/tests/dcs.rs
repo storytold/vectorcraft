@@ -660,10 +660,16 @@ fn a_saved_document_reads_the_plates_again_with_the_low_resolution_eps_proxy() {
 
 #[test]
 fn a_dcs_header_is_found_at_the_start_of_a_file_or_behind_a_binary_eps_header() {
-    use crate::cmd::place::dcs::head_is_dcs;
+    use crate::cmd::place::dcs::{HEAD_BYTES, head_is_dcs, is_dcs};
+    // A whole file, as `is_dcs` reads it.
+    let whole = |b: &[u8]| {
+        let is = head_is_dcs(b, b.len() as u64);
+        assert_eq!(is, Some(is_dcs(b)));
+        is
+    };
     let ps = two_plates();
-    assert_eq!(head_is_dcs(&ps), Some(true));
-    assert_eq!(head_is_dcs(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n"), Some(false));
+    assert_eq!(whole(&ps), Some(true));
+    assert_eq!(whole(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n"), Some(false));
     let binary = |start: u32| {
         let mut b = vec![0xC5, 0xD0, 0xD3, 0xC6];
         b.extend(start.to_le_bytes());
@@ -672,23 +678,38 @@ fn a_dcs_header_is_found_at_the_start_of_a_file_or_behind_a_binary_eps_header() 
         b.extend(&ps);
         b
     };
-    assert_eq!(head_is_dcs(&binary(30)), Some(true));
-    // PostScript whose length runs past the bytes read: its header is read from the part there is.
+    assert_eq!(whole(&binary(30)), Some(true));
+    // A binary header whose PostScript or TIFF preview ends past the end of the file names none.
     let mut cut = binary(30);
     cut[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
-    assert_eq!(head_is_dcs(&cut), Some(true));
+    assert_eq!(whole(&cut), Some(false));
+    let mut tiff = binary(30);
+    tiff[20..24].copy_from_slice(&30u32.to_le_bytes());
+    tiff[24..28].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(whole(&tiff), Some(false));
+    // A file longer than the bytes read, its PostScript running past them: its header is read from
+    // the part there is, unless the header puts the PostScript or the preview past the file's end.
+    let mut big = binary(30);
+    big.resize(HEAD_BYTES, b' ');
+    big[8..12].copy_from_slice(&(64u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(true));
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20) - 1), Some(false));
+    big[20..24].copy_from_slice(&30u32.to_le_bytes());
+    big[24..28].copy_from_slice(&(65u32 << 20).to_le_bytes());
+    assert_eq!(head_is_dcs(&big, 30 + (64 << 20)), Some(false));
     // PostScript that starts past the bytes read: the whole file is needed.
-    assert_eq!(head_is_dcs(&binary(64)[..40]), None);
+    let far = binary(HEAD_BYTES as u32 + 10);
+    assert_eq!(head_is_dcs(&far[..HEAD_BYTES], far.len() as u64), None);
     // A header that goes on past the bytes read may name its plates further on.
     let mut long = b"%!PS-Adobe-3.0 EPSF-3.0\n".to_vec();
-    while long.len() < crate::cmd::place::dcs::HEAD_BYTES {
+    while long.len() < HEAD_BYTES {
         long.extend(format!("%%Title: {}\n", "x".repeat(190)).as_bytes());
     }
-    long.truncate(crate::cmd::place::dcs::HEAD_BYTES);
-    assert_eq!(head_is_dcs(&long), None);
+    long.truncate(HEAD_BYTES);
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), None);
     // One that ended within them names none.
     long[30..45].copy_from_slice(b"\n%%EndComments\n");
-    assert_eq!(head_is_dcs(&long), Some(false));
+    assert_eq!(head_is_dcs(&long, HEAD_BYTES as u64 + 1), Some(false));
 }
 
 #[test]
