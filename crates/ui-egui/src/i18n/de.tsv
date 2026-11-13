@@ -6942,6 +6942,19 @@ breakText	Glyphs	Glyphen
 	Show where this tool is	Zeigen, wo sich dieses Werkzeug befindet
 @msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
+	View more	Mehr anzeigen
+	Finish tutorial	Lernprogramm abschließen
+	Next Up	Als Nächstes
+	You finished the last tutorial in this skill.	Sie haben das letzte Lernprogramm dieser Fertigkeit abgeschlossen.
+	Back to skills	Zurück zu den Fertigkeiten
+	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
+	Finish Tutorial	Lernprogramm abschließen
+	Next Tutorial	Nächstes Lernprogramm
+	Back to Skills	Zurück zu den Fertigkeiten
+@msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
+@msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	schließen Sie zuerst `{id}` ab (siehe learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` ist das letzte Lernprogramm seiner Fertigkeit
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren

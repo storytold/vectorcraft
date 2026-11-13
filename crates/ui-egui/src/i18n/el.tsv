@@ -7299,6 +7299,19 @@ breakText	Glyphs	Γλύφοι
 	Show where this tool is	Εμφάνιση της θέσης αυτού του εργαλείου
 @msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
+	View more	Προβολή περισσότερων
+	Finish tutorial	Ολοκλήρωση οδηγού
+	Next Up	Επόμενο
+	You finished the last tutorial in this skill.	Ολοκληρώσατε τον τελευταίο οδηγό εκμάθησης αυτής της δεξιότητας.
+	Back to skills	Πίσω στις δεξιότητες
+	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
+	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
+	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Back to Skills	Πίσω στις δεξιότητες
+@msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
+@msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή

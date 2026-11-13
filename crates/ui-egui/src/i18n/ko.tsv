@@ -6937,6 +6937,19 @@ breakText	Glyphs	글리프
 	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
+	View more	자세히 보기
+	Finish tutorial	튜토리얼 완료
+	Next Up	다음
+	You finished the last tutorial in this skill.	이 기술의 마지막 튜토리얼을 완료했습니다.
+	Back to skills	기술로 돌아가기
+	Open Tutorial Sample	튜토리얼 샘플 열기
+	Finish Tutorial	튜토리얼 완료
+	Next Tutorial	다음 튜토리얼
+	Back to Skills	기술로 돌아가기
+@msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
+@msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
+@msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
+@msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

@@ -6976,6 +6976,19 @@ breakText	Glyphs	Glifi
 	Show where this tool is	Mostra dove si trova questo strumento
 @msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+	View more	Mostra altro
+	Finish tutorial	Termina il tutorial
+	Next Up	Prossimo
+	You finished the last tutorial in this skill.	Hai terminato l’ultimo tutorial di questa competenza.
+	Back to skills	Torna alle competenze
+	Open Tutorial Sample	Apri l’esempio del tutorial
+	Finish Tutorial	Termina il tutorial
+	Next Tutorial	Tutorial successivo
+	Back to Skills	Torna alle competenze
+@msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
+@msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina prima `{id}` (vedi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` è l’ultimo tutorial della sua competenza
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati

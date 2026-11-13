@@ -7420,6 +7420,19 @@ swatch	Yellow Green	Verde-amarelado
 	Show where this tool is	Mostrar onde está esta ferramenta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+	View more	Ver mais
+	Finish tutorial	Concluir tutorial
+	Next Up	A seguir
+	You finished the last tutorial in this skill.	Você concluiu o último tutorial desta habilidade.
+	Back to skills	Voltar às habilidades
+	Open Tutorial Sample	Abrir Amostra do Tutorial
+	Finish Tutorial	Concluir Tutorial
+	Next Tutorial	Próximo Tutorial
+	Back to Skills	Voltar às Habilidades
+@msg	tutorial `{id}` has no practice sample	o tutorial `{id}` não tem amostra de prática
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	conclua primeiro `{id}` (veja learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` é o último tutorial da sua habilidade
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados

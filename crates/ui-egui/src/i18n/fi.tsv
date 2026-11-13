@@ -7382,6 +7382,19 @@ breakText	Glyphs	Merkit
 	Show where this tool is	Näytä, missä tämä työkalu on
 @msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
+	View more	Näytä lisää
+	Finish tutorial	Viimeistele opetusohjelma
+	Next Up	Seuraavaksi
+	You finished the last tutorial in this skill.	Viimeistelit tämän taidon viimeisen opetusohjelman.
+	Back to skills	Takaisin taitoihin
+	Open Tutorial Sample	Avaa opetusohjelman harjoitustiedosto
+	Finish Tutorial	Viimeistele opetusohjelma
+	Next Tutorial	Seuraava opetusohjelma
+	Back to Skills	Takaisin taitoihin
+@msg	tutorial `{id}` has no practice sample	opetusohjelmalla `{id}` ei ole harjoitustiedostoa
+@msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	viimeistele ensin `{id}` (ks. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` on taitonsa viimeinen opetusohjelma
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet

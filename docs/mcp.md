@@ -2688,13 +2688,34 @@ toggles it (`show` omitted or null), and answers whether it shows; Window › Le
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
 other value of `show` is an error and changes nothing. `learn.list {}` → `{skills: [{id, title, tutorials: [{id, title, steps}]}]}`, in the order the Skills tab
-lists them, where `steps` is the number of steps. `learn.show {tutorial}` shows the panel on its Skills tab with that
+lists them, where `steps` is the number of steps. `learn.skills {}` shows the panel on its Skills tab with the list of
+skills, with no skill and no tutorial open, as the Quick skill guide card and Back to skills do, and answers what
+`learn.list` answers. `learn.show {tutorial}` shows the panel on its Skills tab with that
 tutorial's steps → `{skill, tutorial, title, steps: [text]}`. A missing, non-string or unknown `tutorial` is an error
-and changes nothing. Behavior reference:
+and changes nothing.
+
+Under a tutorial's steps, View more opens the tutorial's practice sample, a small drawing of VectorCraft's own with the
+art its steps work on, as a new untitled document that becomes the active one; Save asks where to save it. Once the
+sample is open, Finish tutorial marks the tutorial finished. A finished tutorial shows Next Up with the title of the
+next tutorial in the same skill, which Next Up shows without opening its sample. A skill's last tutorial, finished,
+says so and shows Back to skills instead; Next Up never moves to another skill. Which tutorials are finished is kept
+while the app runs, and the skill rings and counts do not show it yet. These are VectorCraft's own rules; the help
+page also plays a short video, which VectorCraft does not have. `learn.openSample {tutorial}` runs View more →
+`{tutorial, index, title}` of the new document, and moves the Learn view to that tutorial; each call opens another
+copy and leaves the open documents as they are. `learn.finish {tutorial}` runs Finish tutorial →
+`{tutorial, finished: true, next}`, where `next` is the next tutorial's id in the skill, or null after the skill's
+last one; the tutorial's sample must have been opened, and finishing it again keeps one entry. `learn.next {tutorial}`
+runs Next Up on a finished tutorial and shows the panel on the next one → `{skill, tutorial, title}`; on a tutorial
+not finished, or a skill's last tutorial, it is an error. For all three, a missing, non-string or unknown `tutorial`
+is an error, and an error changes nothing. Behavior reference:
 [Quick skill guide](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/learn-skills-quick-skill-guide.html).
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"learn.show","params":{"tutorial":"pen-paths"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.openSample","params":{"tutorial":"pen-paths"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.finish","params":{"tutorial":"pen-paths"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.next","params":{"tutorial":"pen-paths"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.skills","params":{}}}
 ```
 
 A step that names a tool shows the tool's name as a blue link. A click on it, or Enter or Space while it has the
