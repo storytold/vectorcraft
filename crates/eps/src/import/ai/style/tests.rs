@@ -1513,7 +1513,7 @@ fn only_a_style_of_one_pattern_paint_holds_a_pattern_for_type() {
     }
 }
 
-/// A style that is one paint reads as the fill and stroke its `Xd` turns on, in the paint's colours
+/// A style that is one paint reads as the fill and stroke its `Xd` turns on, in the paint's colors
 /// and the stroke's style; one that turns on a paint not read here, or has no `Xd`, isn't read.
 #[test]
 fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
@@ -1534,7 +1534,7 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     // Only what `Xd` turns on; nothing when it turns on neither.
     assert!(matches!(one(&format!("0 0 1 0 k\n{stroke}1 0 Xd\n")), Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
     assert_eq!(one(&format!("0 0 1 0 k\n{stroke}0 0 Xd\n")), Some(Ok(vec![])));
-    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a paint turned on with no colour.
+    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a paint turned on with no color.
     for paint in [
         format!("0 0 1 0 k\n{stroke}"),
         "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n".to_string(),

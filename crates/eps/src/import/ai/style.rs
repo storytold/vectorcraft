@@ -33,7 +33,7 @@
 //! paints at all. A blend filter's `mode opacity isolate knockout shape Xy` is its transparency.
 //!
 //! A style with no filters is one paint (`/SimpleStyle :` … `/Paint ;` in place of `/ActiveStyle`):
-//! the fill's and stroke's colours and the stroke's style as an object's own paint operators write
+//! the fill's and stroke's colors and the stroke's style as an object's own paint operators write
 //! them, `stroke fill Xd` turning each on, and an `Xy` for its transparency.
 //!
 //! A stroke with a Calligraphic or Art brush is its own basic filter, `(Adobe Calligraphic Brush
@@ -212,7 +212,7 @@ pub(super) struct ArtStyle {
     pub simple_pattern: Option<StyleItem>,
     /// A style that is one paint: its fill and stroke, bottom first, each there when its
     /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
-    /// stroke whose paint isn't read here (a gradient, a pattern, a colour that isn't read) or has
+    /// stroke whose paint isn't read here (a gradient, a pattern, a color that isn't read) or has
     /// no `Xd`. `None` for a style with filters, whose paint is [`Self::items`].
     pub one_paint: Option<Result<Vec<StyleItem>, ()>>,
 }
