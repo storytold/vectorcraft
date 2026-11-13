@@ -2192,6 +2192,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Pincel de cerdas
 	Pattern Brush	Pincel de motivo
 	missing from the Brushes panel	falta en el panel Pinceles
+	built in	integrada
+	embedding not allowed	incrustación no permitida
+	embedding for editing	incrustación para edición
+	embedding for preview and print	incrustación para vista previa e impresión
+	embedding allowed	incrustación permitida
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	sustituida: se muestra con {family} {style} ({detail})
+	missing: shown in {family} {style}	falta: se muestra con {family} {style}
+	missing	falta
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradado lineal
+	Radial gradient	Degradado radial
+	Conic gradient	Degradado cónico
+	Diamond gradient	Degradado de rombo
+	Freeform gradient	Degradado libre
+@plural	{n} instance|{n} instances	{n} instancia|{n} instancias
+@plural	{n} row|{n} rows	{n} fila|{n} filas
+@plural	{n} column|{n} columns	{n} columna|{n} columnas
 	Select art to make a scatter, art or pattern brush.	Selecciona una ilustración para crear un pincel de dispersión, de arte o de motivo.
 	Brush Art	Ilustración del pincel
 	New Calligraphic Brush	Nuevo pincel caligráfico

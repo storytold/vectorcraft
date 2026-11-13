@@ -1801,6 +1801,29 @@ antiAlias	Sharp	Nítido
 	Bristle Brush	Pincel de Cerdas
 	Pattern Brush	Pincel de Padrão
 	missing from the Brushes panel	ausente do painel Pincéis
+	built in	integrada
+	embedding not allowed	incorporação não permitida
+	embedding for editing	incorporação para edição
+	embedding for preview and print	incorporação para visualização e impressão
+	embedding allowed	incorporação permitida
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	substituída: exibida em {family} {style} ({detail})
+	missing: shown in {family} {style}	ausente: exibida em {family} {style}
+	missing	ausente
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradiente linear
+	Radial gradient	Gradiente radial
+	Conic gradient	Gradiente cônico
+	Diamond gradient	Gradiente losango
+	Freeform gradient	Gradiente de forma livre
+@plural	{n} instance|{n} instances	{n} instância|{n} instâncias
+@plural	{n} row|{n} rows	{n} linha|{n} linhas
+@plural	{n} column|{n} columns	{n} coluna|{n} colunas
 	Select art to make a scatter, art or pattern brush.	Selecione arte para criar um pincel de dispersão, de arte ou de padrão.
 	Brush Art	Arte do Pincel
 	New Calligraphic Brush	Novo Pincel Caligráfico

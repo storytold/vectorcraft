@@ -2230,6 +2230,29 @@ file-filter	Templates	Modelli
 	Bristle Brush	Pennello a setole
 	Pattern Brush	Pennello motivo
 	missing from the Brushes panel	mancante nel pannello Pennelli
+	built in	integrato
+	embedding not allowed	incorporamento non consentito
+	embedding for editing	incorporamento per la modifica
+	embedding for preview and print	incorporamento per anteprima e stampa
+	embedding allowed	incorporamento consentito
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	sostituito: mostrato con {family} {style} ({detail})
+	missing: shown in {family} {style}	mancante: mostrato con {family} {style}
+	missing	mancante
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Sfumatura lineare
+	Radial gradient	Sfumatura radiale
+	Conic gradient	Sfumatura conica
+	Diamond gradient	Sfumatura a rombo
+	Freeform gradient	Sfumatura libera
+@plural	{n} instance|{n} instances	{n} istanza|{n} istanze
+@plural	{n} row|{n} rows	{n} riga|{n} righe
+@plural	{n} column|{n} columns	{n} colonna|{n} colonne
 	Select art to make a scatter, art or pattern brush.	Seleziona la grafica per creare un pennello a dispersione, artistico o motivo.
 	Brush Art	Grafica del pennello
 	New Calligraphic Brush	Nuovo pennello calligrafico

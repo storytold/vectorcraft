@@ -3009,6 +3009,29 @@ file-filter	Templates	Sablonok
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
 	missing from the Brushes panel	hiányzik az Ecsetek panelről
+	built in	beépített
+	embedding not allowed	beágyazás nem engedélyezett
+	embedding for editing	beágyazás szerkesztéshez
+	embedding for preview and print	beágyazás előnézethez és nyomtatáshoz
+	embedding allowed	beágyazás engedélyezett
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	helyettesítve: megjelenítés ezzel: {family} {style} ({detail})
+	missing: shown in {family} {style}	hiányzik: megjelenítés ezzel: {family} {style}
+	missing	hiányzik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineáris színátmenet
+	Radial gradient	Körkörös színátmenet
+	Conic gradient	Kúpos színátmenet
+	Diamond gradient	Rombusz színátmenet
+	Freeform gradient	Szabad formájú színátmenet
+@plural	{n} instance|{n} instances	{n} példány
+@plural	{n} row|{n} rows	{n} sor
+@plural	{n} column|{n} columns	{n} oszlop
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai

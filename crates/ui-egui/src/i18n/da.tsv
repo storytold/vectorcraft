@@ -3139,6 +3139,29 @@ theme	Appearance	Udseende
 	Bristle Brush	Børstepensel
 	Pattern Brush	Mønsterpensel
 	missing from the Brushes panel	mangler i panelet Pensler
+	built in	indbygget
+	embedding not allowed	indlejring ikke tilladt
+	embedding for editing	indlejring til redigering
+	embedding for preview and print	indlejring til visning og udskrivning
+	embedding allowed	indlejring tilladt
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	erstattet: vist med {family} {style} ({detail})
+	missing: shown in {family} {style}	mangler: vist med {family} {style}
+	missing	mangler
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineær gradient
+	Radial gradient	Radial gradient
+	Conic gradient	Konisk gradient
+	Diamond gradient	Diamantgradient
+	Freeform gradient	Freeform-gradient
+@plural	{n} instance|{n} instances	{n} forekomst|{n} forekomster
+@plural	{n} row|{n} rows	{n} række|{n} rækker
+@plural	{n} column|{n} columns	{n} kolonne|{n} kolonner
 	Select art to make a scatter, art or pattern brush.	Markér grafik for at oprette en spredningspensel, grafikpensel eller mønsterpensel.
 	Brush Art	Penselgrafik
 	New Symbol	Nyt symbol

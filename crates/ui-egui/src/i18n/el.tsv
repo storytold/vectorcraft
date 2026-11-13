@@ -1827,6 +1827,29 @@ font-technology	Variable	Μεταβλητές
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
 	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
+	built in	ενσωματωμένη
+	embedding not allowed	η ενσωμάτωση δεν επιτρέπεται
+	embedding for editing	ενσωμάτωση για επεξεργασία
+	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
+	embedding allowed	η ενσωμάτωση επιτρέπεται
+	{file}; {embedding}	{file}· {embedding}
+	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
+	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
+	missing	λείπει
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Γραμμικό ντεγκραντέ
+	Radial gradient	Ακτινικό ντεγκραντέ
+	Conic gradient	Κωνικό ντεγκραντέ
+	Diamond gradient	Ρομβοειδές ντεγκραντέ
+	Freeform gradient	Ντεγκραντέ ελεύθερης μορφής
+@plural	{n} instance|{n} instances	{n} παρουσία|{n} παρουσίες
+@plural	{n} row|{n} rows	{n} γραμμή|{n} γραμμές
+@plural	{n} column|{n} columns	{n} στήλη|{n} στήλες
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…

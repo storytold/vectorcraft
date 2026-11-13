@@ -463,6 +463,46 @@ fn document_info_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The values Document Info makes and shows in the interface language: the font states and
+/// embedding permissions, the templates of the font, image, raster effects and Repeat object
+/// values, the names of gradients named by their kind, and the counted instances, rows and columns.
+#[test]
+fn document_info_values_are_in_complete_catalogs() {
+    const VALUES: [&str; 20] = [
+        "built in",
+        "embedding not allowed",
+        "embedding for editing",
+        "embedding for preview and print",
+        "embedding allowed",
+        "{file}; {embedding}",
+        "substituted: shown in {family} {style} ({detail})",
+        "missing: shown in {family} {style}",
+        "missing",
+        "{width} × {height} px",
+        "{size} — {file}",
+        "{n} ppi",
+        "{kind}, {instances}",
+        "{kind}, {rows} × {cols}",
+        "{grid}, {instances}",
+        "Linear gradient",
+        "Radial gradient",
+        "Conic gradient",
+        "Diamond gradient",
+        "Freeform gradient",
+    ];
+    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    let gradient_kinds: Vec<String> = vectorcraft_color::GradientKind::ALL.iter().map(|k| format!("{} gradient", k.label())).collect();
+    assert!(gradient_kinds.iter().all(|k| VALUES.contains(&k.as_str())), "{gradient_kinds:?}");
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for value in VALUES {
+            assert!(lang.catalog().plain(value).is_some(), "{} is missing {value}", lang.code);
+        }
+        for (one, other) in COUNTED {
+            assert!(lang.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]

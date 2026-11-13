@@ -7249,7 +7249,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
 its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
+in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+`family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
+file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
+face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
+linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
+embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
+the English `document.units`), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
@@ -7262,9 +7269,11 @@ whose drawn characters use a pattern included, hidden fills and strokes, fills a
 member's own fills and strokes, an image's fills and strokes that no Convert to Shape or Outline Object effect gives a
 shape, and characters that draw nothing (spaces and line breaks without an underline or strikethrough) left out, with
 the patterns it uses, which the patterns category lists as Pattern Objects and `objects.patterns` counts; with `selectionOnly`, those in the selection),
-`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients}]`: every object filled or
+`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients, kinds}]`: every object filled or
 stroked with a gradient, by the same rules as `patternObjects`, with the gradients it uses: the name of the gradient
-swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Freeform gradient`; the gradients category
+swatch a gradient is linked to, else its kind's name, such as `Linear gradient`, `Radial gradient` or `Freeform gradient`;
+`kinds` gives, for each of `gradients`, the kind (`linear`, `radial`, `conic`, `diamond` or `freeform`) of a gradient
+named by its kind and null for a swatch's name; the gradients category
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the

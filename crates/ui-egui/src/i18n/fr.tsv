@@ -2184,6 +2184,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Forme Soies
 	Pattern Brush	Forme de motif
 	missing from the Brushes panel	absente du panneau Formes
+	built in	intégrée
+	embedding not allowed	incorporation interdite
+	embedding for editing	incorporation pour la modification
+	embedding for preview and print	incorporation pour l’aperçu et l’impression
+	embedding allowed	incorporation autorisée
+	{file}; {embedding}	{file}, {embedding}
+	substituted: shown in {family} {style} ({detail})	remplacée, affichée en {family} {style} ({detail})
+	missing: shown in {family} {style}	absente, affichée en {family} {style}
+	missing	absente
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Dégradé linéaire
+	Radial gradient	Dégradé radial
+	Conic gradient	Dégradé conique
+	Diamond gradient	Dégradé en losange
+	Freeform gradient	Dégradé de forme libre
+@plural	{n} instance|{n} instances	{n} occurrence|{n} occurrences
+@plural	{n} row|{n} rows	{n} ligne|{n} lignes
+@plural	{n} column|{n} columns	{n} colonne|{n} colonnes
 	Select art to make a scatter, art or pattern brush.	Sélectionnez une illustration pour créer une forme diffuse, artistique ou de motif.
 	Brush Art	Illustration de la forme
 	New Calligraphic Brush	Nouvelle forme calligraphique
