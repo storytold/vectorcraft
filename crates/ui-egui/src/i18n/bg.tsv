@@ -2625,6 +2625,11 @@ digits	Malayalam	Малаялам
 	Rating:	Оценка:
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
+	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
+	Canvas display profile:	Профил на дисплея за платното:
+	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
+	No usable display profile was found: the canvas is drawn in sRGB.	Не е намерен използваем профил на дисплея: платното се изобразява в sRGB.
 	Rearrange All Artboards	Пренареждане на всички работни области
 	Rearrange	Пренареждане
 	Select All Artboards	Избиране на всички работни области

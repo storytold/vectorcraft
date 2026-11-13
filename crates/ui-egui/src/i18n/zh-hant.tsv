@@ -3806,6 +3806,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Rating:	評等：
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
+	Use Monitor Profile for Canvas	畫布使用顯示器描述檔
+	The canvas is drawn in sRGB.	畫布以 sRGB 繪製。
+	Canvas display profile:	畫布顯示描述檔：
+	The system matches the window to the display's colors.	系統會讓視窗符合顯示器的色彩。
+	No usable display profile was found: the canvas is drawn in sRGB.	找不到可用的顯示器描述檔：畫布以 sRGB 繪製。
 	Rearrange All Artboards	重新排列所有工作區域
 	Rearrange	重新排列
 	Select All Artboards	選取所有工作區域

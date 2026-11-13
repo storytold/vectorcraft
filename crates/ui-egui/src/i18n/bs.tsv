@@ -3835,6 +3835,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…

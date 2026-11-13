@@ -2703,6 +2703,11 @@ digits	Malayalam	Malayálam
 	Rating:	Clasificación:
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
+	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
+	Canvas display profile:	Perfil de pantalla del lienzo:
+	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No se encontró ningún perfil de pantalla utilizable: el lienzo se dibuja en sRGB.
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
 	Rearrange	Reorganizar
 	Select All Artboards	Seleccionar todas las mesas de trabajo

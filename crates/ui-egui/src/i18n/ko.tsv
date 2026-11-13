@@ -2783,6 +2783,11 @@ mark-style	Japanese	일본식
 	Rating:	평점:
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
+	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
+	Canvas display profile:	캔버스 디스플레이 프로필:
+	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
+	No usable display profile was found: the canvas is drawn in sRGB.	사용할 수 있는 디스플레이 프로필이 없습니다. 캔버스는 sRGB로 그려집니다.
 	Rearrange All Artboards	모든 아트보드 재정렬
 	Rearrange	재정렬
 	Select All Artboards	모든 아트보드 선택

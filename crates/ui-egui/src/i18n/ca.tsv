@@ -3405,6 +3405,11 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
+	Canvas display profile:	Perfil de pantalla del llenç:
+	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No s’ha trobat cap perfil de pantalla utilitzable: el llenç es dibuixa en sRGB.
 	Rearrange	Reorganitza
 	Select All Artboards	Selecciona tots els taulers
 	Switch Orientation	Canvia l’orientació

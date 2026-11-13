@@ -2662,6 +2662,53 @@ fn pixel_preview_shows_the_document_pixels() {
     assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
 }
 
+/// Preferences › Performance › Use Monitor Profile for Canvas: with a display profile read, the
+/// art is drawn converted into it, and drawn again when the profile or the preference changes.
+#[test]
+fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    assert!(app.session.prefs.monitor_profile_display, "on by default");
+    let ctx = egui::Context::default();
+    // How many pixels of the art's raster one frame uploads are `c`, None when it was not re-rendered.
+    let count = |app: &mut VectorcraftApp, c: egui::Color32| -> Option<usize> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let n = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.iter().filter(|p| **p == c).count()
+        });
+        delta.clear();
+        n
+    };
+    let red = egui::Color32::RED;
+    let srgb = count(&mut app, red).expect("the first frame");
+    assert!(srgb > 1000, "the rectangle in sRGB: {srgb}");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    let [r, g, b] = t.apply8([255, 0, 0]);
+    let shown = egui::Color32::from_rgb(r, g, b);
+    assert_ne!(shown, red, "sRGB red is less saturated on a wide-gamut display");
+    let reading = |found| Reading { display: Some("DP-1".into()), found };
+    assert!(app.display_profile.report(reading(Found::Profile { icc: p3.clone(), from: "test".into() })));
+    assert_eq!(count(&mut app, shown), Some(srgb), "drawn again, converted");
+    // The same profile again: nothing is drawn again.
+    assert!(!app.display_profile.report(reading(Found::Profile { icc: p3, from: "test".into() })));
+    assert_eq!(count(&mut app, shown), None);
+    // Off: drawn again in sRGB.
+    app.session.prefs.monitor_profile_display = false;
+    assert_eq!(count(&mut app, red), Some(srgb));
+    // On again, then the system takes over: sRGB.
+    app.session.prefs.monitor_profile_display = true;
+    assert_eq!(count(&mut app, shown), Some(srgb));
+    app.display_profile.report(reading(Found::System("test".into())));
+    assert_eq!(count(&mut app, red), Some(srgb));
+}
+
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
 /// draws it again, dimmed as before; each re-renders at once.
 #[test]
@@ -11787,6 +11834,7 @@ fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx,
         effects: Default::default(),
         may_copy: true,
         may_keep: true,
+        display: None,
     }
 }
 

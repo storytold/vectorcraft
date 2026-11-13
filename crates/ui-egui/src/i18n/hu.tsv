@@ -3265,6 +3265,11 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
+	Canvas display profile:	A vászon kijelzőprofilja:
+	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nem található használható kijelzőprofil: a vászon sRGB-ben jelenik meg.
 	Rearrange	Átrendezés
 	Select All Artboards	Összes rajztábla kijelölése
 	Switch Orientation	Tájolás váltása

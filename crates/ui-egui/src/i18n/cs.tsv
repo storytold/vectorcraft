@@ -3891,6 +3891,11 @@ theme	Appearance	Motiv
 	Primary	Primární
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
+	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
+	Canvas display profile:	Profil displeje pro plátno:
+	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nebyl nalezen použitelný profil displeje: plátno se vykresluje v sRGB.
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
 	Export Preferences…	Exportovat předvolby…

@@ -3442,6 +3442,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rating:	Αξιολόγηση:
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
+	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
+	Canvas display profile:	Προφίλ οθόνης καμβά:
+	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
+	No usable display profile was found: the canvas is drawn in sRGB.	Δεν βρέθηκε κατάλληλο προφίλ οθόνης: ο καμβάς σχεδιάζεται σε sRGB.
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
 	Rearrange	Αναδιάταξη
 	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
