@@ -415,6 +415,29 @@ fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
     assert_eq!(docking["result"]["flyout"], "library:swatches:loaded/b.svg", "{docking}");
 }
 
+/// `ui.inspect` shows a recovery folder outside the read root that the status text names (a failed
+/// recovery copy) by its folder name, also in the paths under it: the folder in use, and one a
+/// failure named before the preference moved on. A readable one stays.
+#[test]
+fn a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.session.recovery.set_default_folder(Some("/outside/recovery".into()));
+    let root = crate::tests_folder::Folder::new("recovery-status");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    let inspect = |app: &mut VectorcraftApp, status: String| {
+        app.ui.status = status;
+        let reply = vectorcraft_engine::file_access::confine(roots.as_ref(), || input_request(app, "ui.inspect", json!({})));
+        reply["result"]["ui"]["status"].clone()
+    };
+    let status = "Couldn't save recovery data: /outside/recovery/a-1 is not a folder. Copies go to /outside/recovery".to_string();
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: recovery/a-1 is not a folder. Copies go to recovery");
+    let inside = root.as_path().join("copies").to_string_lossy().into_owned();
+    app.session.prefs.recovery_folder = inside.clone();
+    app.recovery.named = vec!["/outside/earlier".into()];
+    assert_eq!(inspect(&mut app, "Copies go to /outside/earlier".into()), "Copies go to earlier");
+    assert_eq!(inspect(&mut app, format!("Copies go to {inside}")), json!(format!("Copies go to {inside}")));
+}
+
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
 /// as in one that failed.
 #[test]

@@ -5276,6 +5276,407 @@ fn formatting_one_label_keeps_that_kind_of_label() {
     assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("labelStyles").is_none());
 }
 
+/// Each Axes and Legend text after the graph is drawn again, with its object rows (fill or stroke, color, opacity, and
+/// for a stroke its weight) and its object opacity.
+type RowLooks = Vec<(bool, String, f32, f64)>;
+fn redrawn_label_rows(s: &mut Session, id: NodeId) -> Vec<(String, RowLooks, f32)> {
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let mut out = vec![];
+    for g in ["Axes", "Legend"] {
+        for c in group(&n, g).children().unwrap() {
+            if let NodeKind::Text(t) = &c.kind {
+                let rows = c
+                    .appearance
+                    .items
+                    .iter()
+                    .map(|it| {
+                        let w = match it {
+                            vectorcraft_doc::AppearanceItem::Stroke(st) => st.width,
+                            vectorcraft_doc::AppearanceItem::Fill(_) => 0.0,
+                        };
+                        (it.is_fill(), it.paint().color().map(|c| c.to_hex()).unwrap_or_default(), it.opacity(), w)
+                    })
+                    .collect();
+                out.push((t.plain_text(), rows, c.opacity));
+            }
+        }
+    }
+    out
+}
+
+fn rows_of(looks: &[(String, RowLooks, f32)], text: &str) -> (RowLooks, f32) {
+    looks.iter().find(|(t, _, _)| t == text).map(|(_, r, o)| (r.clone(), *o)).unwrap_or_else(|| panic!("no label {text}"))
+}
+
+/// Fill and stroke rows given to one label with the Appearance commands are kept for every label of its kind when the
+/// graph is drawn again, through save and open, and undo with the change.
+#[test]
+fn appearance_rows_on_one_label_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    // A category label: a red fill row at 50%.
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff0000", "opacity": 50})).unwrap();
+    // A value axis number: a 2 pt blue stroke row.
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("appearance.addStroke", &json!({"ids": [v.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [v.0], "index": 0, "color": "#0000ff", "weight": 2})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "Q1"), (vec![(true, "#ff0000".into(), 0.5, 0.0)], 1.0), "every category label: {looks:?}");
+    assert_eq!(rows_of(&looks, "0"), (vec![(false, "#0000ff".into(), 1.0, 2.0)], 1.0), "every value axis number: {looks:?}");
+    assert_eq!(rows_of(&looks, "2024"), (vec![], 1.0), "the legend keeps none: {looks:?}");
+    // One undo takes the data change back, the next the stroke's color and weight together with what the graph keeps.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let kept = spec(&s, id).label_styles.values_rows.unwrap();
+    assert_ne!(kept.paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex()), Some("#0000ff".into()));
+    assert_eq!(kept.paint.stroke_width, Some(1.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let path = vectorcraft_testkit::temp_dir("graph-label-rows").join("labels.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let g = spec(&s, id);
+    assert_eq!(g.label_styles.categories_rows.unwrap().paint.fill_opacity, Some(0.5));
+    assert_eq!(g.label_styles.values_rows.unwrap().paint.stroke_width, Some(2.0));
+    assert!(serde_json::to_value(vectorcraft_doc::LabelStyles::default()).unwrap().as_object().unwrap().is_empty());
+}
+
+/// Removing a label's rows, clearing its appearance or hiding its row leaves its kind with what the label then shows.
+#[test]
+fn removing_a_labels_rows_changes_what_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff0000"})).unwrap();
+    s.execute("appearance.removeItem", &json!({"ids": [c.0], "index": 0})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories_rows, None, "no row left");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff0000", "visible": false})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories_rows, None, "a hidden row shows nothing");
+    s.execute("appearance.showAllHidden", &json!({"ids": [c.0]})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "Q3").0, vec![(true, "#ff0000".into(), 1.0, 0.0)], "{looks:?}");
+    let c = text_id(&s, id, "Axes", "Q1");
+    s.execute("appearance.clear", &json!({"ids": [c.0]})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "Q3").0, vec![(true, String::new(), 1.0, 0.0), (false, String::new(), 1.0, 1.0)], "{looks:?}");
+}
+
+/// A fill row painted with `paint.setFill {item}` is kept with the label's rows, and its characters keep their own fill.
+#[test]
+fn painting_a_labels_row_keeps_the_row_and_not_its_characters() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let l = text_id(&s, id, "Legend", "2025");
+    s.execute("appearance.addFill", &json!({"ids": [l.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [l.0], "item": 0, "color": "#00ff00"})).unwrap();
+    let g = spec(&s, id);
+    assert_eq!(g.label_styles.legend_rows.and_then(|r| r.paint.fill).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#00ff00".into()));
+    assert_eq!(g.label_styles.legend, None, "the characters keep the default fill");
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().find(|(t, _, _)| t == "2024").is_some_and(|(_, _, fill)| fill == "#000000"), "{looks:?}");
+}
+
+/// Moving or copying an appearance onto a label (Layers panel drag) keeps the source's rows and object opacity for the
+/// label's kind.
+#[test]
+fn an_appearance_moved_onto_a_label_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": "#12ab34"})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [r.0], "opacity": 40})).unwrap();
+    let v = text_id(&s, id, "Axes", "2");
+    s.execute("appearance.transfer", &json!({"source": r.0, "target": v.0, "copy": true})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    let (rows, opacity) = rows_of(&looks, "6");
+    assert_eq!((rows.first().map(|r| r.1.clone()), opacity), (Some("#12ab34".into()), 0.4), "{looks:?}");
+}
+
+/// The Eyedropper onto a label keeps the characters' style, the paragraph attributes and the appended rows it gave the
+/// label for every label of its kind.
+#[test]
+fn the_eyedropper_on_a_label_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let src = NodeId(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x", "size": 14})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [src.0], "color": "#00ff00"})).unwrap();
+    let v = text_id(&s, id, "Axes", "4");
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [v.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one step");
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, size, fill)| t == "0" && *size == 14.0 && fill == "#00ff00"), "every value axis number: {looks:?}");
+    assert!(looks.iter().any(|(t, size, fill)| t == "Q1" && *size == 9.0 && fill == "#000000"), "other labels: {looks:?}");
+    // Appended rows (Shift+Alt-click) go with the label's rows.
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": "#abcdef"})).unwrap();
+    let c = text_id(&s, id, "Axes", "Q1");
+    s.execute("appearance.copyFrom", &json!({"source": r.0, "ids": [c.0], "append": true})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert!(rows_of(&looks, "Q3").0.iter().any(|(fill, hex, _, _)| *fill && hex == "#abcdef"), "{looks:?}");
+}
+
+/// Kept rows read from a saved graph's label styles are held to the ranges the controls keep to, and a place for the
+/// Characters row past the kept rows puts every row below the characters.
+#[test]
+fn kept_label_rows_from_a_file_stay_in_range() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let paint = |hex: &str| serde_json::to_value(Paint::solid(vectorcraft_color::Color::from_hex(hex).unwrap())).unwrap();
+    let saved = json!({"legendRows": {
+        "fill": paint("#ff0000"), "fillOpacity": 7.0,
+        "stroke": paint("#0000ff"), "strokeWidth": 1e9, "strokeOpacity": -2.0,
+        "opacity": -3.0, "below": 9,
+    }});
+    let styles: vectorcraft_doc::LabelStyles = serde_json::from_value(saved).unwrap();
+    s.edit("rows", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().graph.as_deref_mut().unwrap().label_styles = styles;
+        Ok(())
+    })
+    .unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "2024"), (vec![(true, "#ff0000".into(), 1.0, 0.0), (false, "#0000ff".into(), 0.0, 1000.0)], 0.0), "{looks:?}");
+    assert_eq!(label_node(&s, id, "Legend", "2024").appearance.contents_at(), 2);
+}
+
+/// Label `text` of group `grp` of graph `id`.
+fn label_node(s: &Session, id: NodeId, grp: &str, text: &str) -> vectorcraft_doc::Node {
+    s.doc().unwrap().doc.node(text_id(s, id, grp, text)).unwrap().clone()
+}
+
+/// An edit that leaves a label showing what it showed still sets what its kind keeps.
+#[test]
+fn a_label_already_showing_a_row_still_sets_what_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff0000"})).unwrap();
+    redrawn_label_rows(&mut s, id);
+    let a = text_id(&s, id, "Axes", "Q1");
+    s.execute("appearance.setItem", &json!({"ids": [a.0], "index": 0, "color": "#0000ff"})).unwrap();
+    // Q3 shows the red the graph drew it with.
+    let b = text_id(&s, id, "Axes", "Q3");
+    s.execute("appearance.setItem", &json!({"ids": [b.0], "index": 0, "color": "#ff0000"})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "Q1").0, vec![(true, "#ff0000".into(), 1.0, 0.0)], "{looks:?}");
+}
+
+/// Paint given to a label's characters leaves the rows its kind keeps as they are.
+#[test]
+fn paint_on_a_labels_characters_leaves_the_rows_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff0000"})).unwrap();
+    redrawn_label_rows(&mut s, id);
+    let a = text_id(&s, id, "Axes", "Q1");
+    s.execute("appearance.setItem", &json!({"ids": [a.0], "index": 0, "color": "#0000ff"})).unwrap();
+    // Q3 still shows red; its characters take green.
+    let b = text_id(&s, id, "Axes", "Q3");
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [b.0], "color": "#00ff00"})).unwrap();
+    // The Eyedropper from type, transparency included, onto its characters.
+    let src = NodeId(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x", "size": 14})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [b.0]})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "Q1").0, vec![(true, "#0000ff".into(), 1.0, 0.0)], "{looks:?}");
+}
+
+/// When labels of one kind are edited together, the last one in the order of `ids` sets what the kind keeps.
+#[test]
+fn the_last_label_of_a_kind_edited_together_sets_what_it_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let (a, b) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+    for (l, color) in [(a, "#ff0000"), (b, "#0000ff")] {
+        s.execute("appearance.addFill", &json!({"ids": [l.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [l.0], "index": 0, "color": color})).unwrap();
+    }
+    let kept = |s: &Session| spec(s, id).label_styles.categories_rows.unwrap().paint.fill.unwrap().color().unwrap().to_hex();
+    s.execute("appearance.addFill", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert_eq!(kept(&s), "#0000ff");
+    s.execute("appearance.addFill", &json!({"ids": [b.0, a.0]})).unwrap();
+    assert_eq!(kept(&s), "#ff0000");
+}
+
+/// A label's object opacity and blend mode set without a row (`transparency.set` without `item`) are kept for its kind.
+#[test]
+fn a_labels_object_opacity_and_blend_mode_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    // Another value axis number sets the kind's fill row; the label below has none, and the kind keeps the row.
+    let u = text_id(&s, id, "Axes", "2");
+    s.execute("appearance.addFill", &json!({"ids": [u.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [u.0], "index": 0, "color": "#0000ff"})).unwrap();
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("transparency.set", &json!({"ids": [v.0], "opacity": 50, "blend": "multiply"})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "0"), (vec![(true, "#0000ff".into(), 1.0, 0.0)], 0.5), "{looks:?}");
+    assert_eq!(label_node(&s, id, "Axes", "0").blend, BlendMode::Multiply);
+    assert_eq!(label_node(&s, id, "Axes", "Q1").blend, BlendMode::Normal);
+    // Another label of the kind sets them again.
+    let w = text_id(&s, id, "Axes", "2");
+    s.execute("transparency.set", &json!({"ids": [w.0], "opacity": 50, "blend": "screen"})).unwrap();
+    assert_eq!(label_node(&s, id, "Axes", "0").blend, BlendMode::Multiply);
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "0").1, 0.5, "{looks:?}");
+    assert_eq!(label_node(&s, id, "Axes", "0").blend, BlendMode::Screen);
+}
+
+/// Stroke options given to a label's stroke row, a fill row painted as the Appearance panel's active row, and a row's
+/// blend mode are kept for the label's kind.
+#[test]
+fn stroke_options_and_the_active_row_on_a_label_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("appearance.addStroke", &json!({"ids": [v.0]})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [v.0], "item": 0, "weight": 3})).unwrap();
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": 0})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ffff"})).unwrap();
+    s.execute("transparency.set", &json!({"item": 0, "blend": "multiply"})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "0").0.first().map(|r| r.3), Some(3.0), "{looks:?}");
+    assert_eq!(rows_of(&looks, "Q1").0.first().map(|r| r.1.clone()), Some("#00ffff".into()), "{looks:?}");
+    let q1 = label_node(&s, id, "Axes", "Q1");
+    assert_eq!(q1.appearance.items.first().map(|it| it.blend()), Some(BlendMode::Multiply));
+    let NodeKind::Text(t) = &q1.kind else { panic!("not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()), Some("#000000".into()), "the characters keep their fill");
+}
+
+/// A row below the Characters row stays below the characters when the graph is drawn again.
+#[test]
+fn a_kept_row_keeps_its_place_below_the_characters() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addStroke", &json!({"ids": [c.0]})).unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    // The stroke below the characters, the fill above them.
+    s.execute("appearance.moveItem", &json!({"ids": [c.0], "from": "contents", "to": 1})).unwrap();
+    let look = |ap: &vectorcraft_doc::Appearance| (ap.contents_at(), ap.items.iter().map(|it| it.is_fill()).collect::<Vec<_>>());
+    assert_eq!(look(&label_node(&s, id, "Axes", "Q2").appearance), (1, vec![false, true]));
+    redrawn_label_rows(&mut s, id);
+    assert_eq!(look(&label_node(&s, id, "Axes", "Q1").appearance), (1, vec![false, true]));
+}
+
+/// The Eyedropper keeps for a label's kind only the attributes it applied: a fill the label had of its own stays out.
+#[test]
+fn the_eyedropper_keeps_only_what_it_applied_for_a_labels_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let src = NodeId(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "x", "size": 14})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [src.0], "color": "#00ff00"})).unwrap();
+    let v = text_id(&s, id, "Axes", "4");
+    // A fill of the label's own, as the generator gives labels on dark pie wedges.
+    s.edit("own fill", |d, _| {
+        if let NodeKind::Text(t) = &mut d.node_mut(v).unwrap().kind {
+            t.runs.iter_mut().for_each(|r| r.style.fill = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+        }
+        Ok(())
+    })
+    .unwrap();
+    // A pick of transparency alone leaves the kind's character style unset.
+    let transparency = json!({"character": false, "paragraph": false, "appearance": {"fill": false, "stroke": false}});
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [v.0], "apply": transparency})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.values, None);
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [v.0], "apply": {"appearance": false}})).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, size, fill)| t == "0" && *size == 14.0 && fill == "#000000"), "{looks:?}");
+}
+
+/// Paint given to all of a label's text highlighted with the Type tool is kept for its kind, as for the whole label.
+#[test]
+fn paint_on_a_labels_highlighted_text_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.select_tool("type", crate::ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"id": v.0, "start": 0, "end": 1}));
+    s.execute("paint.setFill", &json!({"color": "#ff8800"})).unwrap();
+    s.select_tool("selection", crate::ViewInfo::default()).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#ff8800"), "{looks:?}");
+}
+
+/// Paint given to the whole graph without a row is kept for the characters of every kind of label.
+#[test]
+fn paint_on_the_whole_graph_is_kept_for_every_kind_of_label() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+    let looks = label_looks(&mut s, id);
+    for t in ["0", "Q1", "2024"] {
+        assert!(looks.iter().any(|(x, _, fill)| x == t && fill == "#ff00ff"), "{t}: {looks:?}");
+    }
+}
+
+/// A gradient placed on one label's characters or on its row is kept without that placement, so it fits each label of
+/// the kind when the graph is drawn again.
+#[test]
+fn a_placed_gradient_on_a_label_is_kept_to_fit_each_label() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let gradient = json!({"start": [30, 60], "end": [90, 60]});
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("paint.setFill", &json!({"ids": [v.0], "gradient": gradient})).unwrap();
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [c.0], "item": 0, "gradient": gradient})).unwrap();
+    let placed = |p: &Paint| matches!(p, Paint::Gradient(g) if g.geom.is_some());
+    let g = spec(&s, id);
+    assert!(g.label_styles.values.is_some_and(|st| matches!(st.fill, Paint::Gradient(_)) && !placed(&st.fill)));
+    assert!(g.label_styles.categories_rows.and_then(|r| r.paint.fill).is_some_and(|f| matches!(f, Paint::Gradient(_)) && !placed(&f)));
+}
+
+/// A graphic style applied to a label is kept with the label's rows for its kind.
+#[test]
+fn a_graphic_style_on_a_label_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": "#ff8000"})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": r.0, "name": "Orange"})).unwrap();
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("graphicStyle.apply", &json!({"name": "Orange", "ids": [v.0]})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert!(rows_of(&looks, "0").0.iter().any(|(fill, hex, _, _)| *fill && hex == "#ff8000"), "{looks:?}");
+    // A label still linked to the style follows a redefinition, and its kind keeps the new look.
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("graphicStyle.apply", &json!({"name": "Orange", "ids": [v.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [r.0], "color": "#0080ff"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Orange", "id": r.0})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    assert!(rows_of(&looks, "0").0.iter().any(|(fill, hex, _, _)| *fill && hex == "#0080ff"), "{looks:?}");
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();

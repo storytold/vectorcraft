@@ -4027,6 +4027,11 @@ mark-style	Japanese	Kiểu Nhật
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
 	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Cài đặt Warichu…
+	Warichu Settings	Cài đặt Warichu
+	Lines:	Dòng:
+	Line Gap:	Khoảng cách dòng:
 	Composite Fonts…	Phông chữ tổ hợp…
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
@@ -4527,6 +4532,9 @@ theme	Appearance	Giao diện
 @msg	`{keep}` is not a side of this axis	`{keep}` không phải là một cạnh của trục này
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` phải là `auto` hoặc mã ngôn ngữ như `en` hoặc `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` phải là màu #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` phải là màu #rrggbb hoặc tên màu lớp
+@msg	unknown Live Paint option `{key}`	tùy chọn Tô trực tiếp không xác định `{key}`
+@msg	unknown Shape Builder option `{key}`	tùy chọn Tạo hình dạng không xác định `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` phải là màu #rrggbb
 @msg	`{key}` must be a number	`{key}` phải là một số
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
@@ -4818,6 +4826,10 @@ theme	Appearance	Giao diện
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Tạo từ đường căn: tài liệu không có bảng vẽ
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Tạo từ đường căn: các đường căn tạo ra hơn {MAX_PIECES} lát cắt
 @msg	Create from Selection: the selection has no area	Tạo từ vùng chọn: vùng chọn không có diện tích
@@ -4891,6 +4903,7 @@ theme	Appearance	Giao diện
 @msg	invalid parameters for `{cmd}`: {msg}	tham số không hợp lệ cho `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần: hãy bật "Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm"
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): các trang {label} được ghi không có UserUnit, theo đơn vị điểm, và các ứng dụng tuân theo giới hạn sẽ cắt trang ở 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để giữ kích thước: tệp được ghi dưới dạng PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để nằm trong giới hạn trang 14.400 đơn vị của PDF/A-2: tệp được ghi dưới dạng PDF 1.6
@@ -5141,6 +5154,7 @@ theme	Appearance	Giao diện
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
@@ -6472,6 +6486,8 @@ anchor	Points:	Điểm:
 	Anchor Inspector	Trình kiểm tra điểm neo
 	Add Points at Crossings	Thêm điểm tại chỗ giao nhau
 	Split at Crossings	Tách tại chỗ giao nhau
+	Trim at Crossings Tool	Công cụ Cắt xén tại chỗ giao nhau
+	Trim at Crossings	Cắt xén tại chỗ giao nhau
 	Extend Path	Kéo dài đường dẫn
 	Measure & Inspect	Đo và kiểm tra
 	Set Anchor	Đặt điểm neo
@@ -7054,3 +7070,9 @@ breakText	Glyphs	Glyph
 	Margin	Lề
 	Box	Khung
 	Swatch	Mẫu màu
+	Banner Hems and Grommets…	Viền gấp và khoen băng rôn…
+	Banner Hems and Grommets	Viền gấp và khoen băng rôn
+	Hem	Viền gấp
+	Grommets	Khoen
+	Grommet Inset	Khoảng cách từ mép đến khoen
+	Diameter	Đường kính

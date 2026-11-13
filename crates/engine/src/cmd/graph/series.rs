@@ -251,6 +251,9 @@ fn series_draws_bands(g: &GraphSpec, i: usize) -> bool {
 /// one changed, so an edit compares what it leaves with these ([`settle_series_paints`]).
 type SeriesPaintsBefore = HashMap<NodeId, Vec<vectorcraft_doc::SeriesPaint>>;
 
+/// What an edit gave the characters of graph label `id`, applied to a character style ([`capture_label_text`]).
+pub(crate) type LabelTextChange<'a> = &'a dyn Fn(NodeId, &mut CharStyle);
+
 /// Does any graph in `before` now store other series paints than it did before the edit's first capture? Slots the
 /// captures added past the old end and left empty are removed again, so they do not count as a change.
 fn settle_series_paints(doc: &mut Document, before: SeriesPaintsBefore) -> bool {
@@ -605,6 +608,149 @@ pub(crate) fn capture_label_paragraphs(
         };
         changed |= slot.as_ref() != Some(&para);
         *slot = Some(para);
+    }
+    Ok(changed)
+}
+
+/// The object rows graph label `n` shows ([`vectorcraft_doc::LabelRows`]): the paint, weight, opacity and blend mode of
+/// its topmost visible fill and stroke row, its object opacity and blend mode, and where those rows paint. A placed
+/// gradient is kept without its placement, so it fits each label it lands on. `None`: no visible row, opaque and Normal.
+pub(crate) fn label_rows(n: &Node) -> Option<vectorcraft_doc::LabelRows> {
+    use vectorcraft_doc::AppearanceItem;
+    let items = &n.appearance.items;
+    let top = |fill: bool| items.iter().rposition(|it| it.is_fill() == fill && it.visible());
+    let opacity = |o: f32| (o != 1.0).then_some(o);
+    let blend = |b: BlendMode| (b != BlendMode::Normal).then_some(b);
+    let unplaced = crate::cmd::gradient::unplaced;
+    let mut rows = vectorcraft_doc::SeriesPaint { opacity: opacity(n.opacity), blend: blend(n.blend), ..Default::default() };
+    let (fill, stroke) = (top(true), top(false));
+    if let Some(f) = fill.and_then(|i| items.get(i)) {
+        (rows.fill, rows.fill_opacity, rows.fill_blend) = (Some(unplaced(f.paint())), opacity(f.opacity()), blend(f.blend()));
+    }
+    if let Some(AppearanceItem::Stroke(st)) = stroke.and_then(|i| items.get(i)) {
+        (rows.stroke, rows.stroke_width, rows.stroke_opacity, rows.stroke_blend) =
+            (Some(unplaced(&st.paint)), Some(st.width), opacity(st.opacity), blend(st.blend));
+    }
+    let contents = n.appearance.contents_at();
+    let below = [fill, stroke].into_iter().flatten().filter(|i| *i < contents).fold(0u8, |k, _| k + 1);
+    let rows = vectorcraft_doc::LabelRows {
+        paint: rows,
+        below: (below > 0).then_some(below),
+        stroke_under: matches!((fill, stroke), (Some(f), Some(s)) if s < f),
+    };
+    (rows != vectorcraft_doc::LabelRows::default()).then_some(rows)
+}
+
+/// Keep the object rows ([`label_rows`]) of graph labels `ids` for every label of their kind, as
+/// [`capture_label_styles`] keeps a character format, even when a label already showed them: the last label of a kind
+/// in the order of `ids` sets what that kind keeps. Objects other than type are left out before the graph's labels are
+/// looked up. Called inside the same edit, so they undo together. Returns whether kept rows changed.
+pub(crate) fn capture_label_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
+    store_label_rows(doc, ids, false)
+}
+
+/// Keep the object opacity and blend mode of graph labels `ids` for every label of their kind, as [`capture_label_rows`]
+/// keeps them, and leave the kept fill and stroke rows as they are. Returns whether what the graph keeps changed.
+pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -> bool {
+    store_label_rows(doc, ids, true)
+}
+
+/// Would [`capture_label_object_opacity`] change what a graph keeps for labels `ids`? Reads the document without copying
+/// it.
+pub(crate) fn label_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
+    label_rows_of(doc, ids).into_iter().any(|(graph, role, rows)| {
+        let Some(spec) = doc.node(graph).and_then(|n| n.extras().graph.as_deref()) else { return false };
+        let slot = match role {
+            Role::Value => &spec.label_styles.values_rows,
+            Role::Category => &spec.label_styles.categories_rows,
+            Role::Legend => &spec.label_styles.legend_rows,
+        };
+        *slot != kept_label_rows(slot, rows, true)
+    })
+}
+
+/// [`capture_label_rows`], or with `object_only` [`capture_label_object_opacity`].
+fn store_label_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bool {
+    let mut changed = false;
+    for (graph, role, rows) in label_rows_of(doc, ids) {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values_rows,
+            Role::Category => &mut spec.label_styles.categories_rows,
+            Role::Legend => &mut spec.label_styles.legend_rows,
+        };
+        let kept = kept_label_rows(slot, rows, object_only);
+        changed |= *slot != kept;
+        *slot = kept;
+    }
+    changed
+}
+
+/// What a kind keeps after a label of it shows `rows`: those rows, or with `object_only` what `slot` keeps with the
+/// label's object opacity and blend mode.
+fn kept_label_rows(
+    slot: &Option<vectorcraft_doc::LabelRows>,
+    rows: Option<vectorcraft_doc::LabelRows>,
+    object_only: bool,
+) -> Option<vectorcraft_doc::LabelRows> {
+    if !object_only {
+        return rows;
+    }
+    let mut kept = slot.clone().unwrap_or_default();
+    let shown = rows.unwrap_or_default();
+    (kept.paint.opacity, kept.paint.blend) = (shown.paint.opacity, shown.paint.blend);
+    (kept != vectorcraft_doc::LabelRows::default()).then_some(kept)
+}
+
+/// The graph, kind and rows ([`label_rows`]) of the last label of each kind among `ids`.
+fn label_rows_of(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, Role, Option<vectorcraft_doc::LabelRows>)> {
+    // Graph labels are type: without type among `ids`, the graph's labels are not looked up.
+    if !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
+        return vec![];
+    }
+    let labels = graph_labels(doc);
+    let mut picked: Vec<(NodeId, Role, Option<vectorcraft_doc::LabelRows>)> = vec![];
+    for (&(g, role), n) in ids.iter().rev().filter_map(|id| Some((labels.get(id)?, doc.node(*id)?))) {
+        if !picked.iter().any(|(pg, pr, _)| *pg == g && *pr == role) {
+            picked.push((g, role, label_rows(n)));
+        }
+    }
+    picked
+}
+
+/// Keep what an edit gave all of the text of graph labels `ids` for every label of their kind: `change`, when given (the
+/// character attributes the edit applied to label `id`), on the kind's kept style, as [`capture_label_styles`] keeps a
+/// character format, and `para`, when given, as the kind's paragraph attributes ([`capture_label_paragraphs`]).
+/// Attributes the edit did not apply stay as the kind keeps them. Returns whether a kept style or set of attributes
+/// changed.
+pub(crate) fn capture_label_text(
+    doc: &mut Document,
+    ids: &[NodeId],
+    change: Option<LabelTextChange>,
+    para: Option<&vectorcraft_doc::ParaStyle>,
+) -> Result<bool> {
+    if (change.is_none() && para.is_none()) || !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
+        return Ok(false);
+    }
+    // The last label of each kind sets what the kind keeps.
+    let labels = graph_labels(doc);
+    let mut last: Vec<((NodeId, Role), NodeId)> = vec![];
+    for id in ids.iter().rev() {
+        if let Some(kind) = labels.get(id).filter(|k| !last.iter().any(|(l, _)| l == *k)) {
+            last.push((*kind, *id));
+        }
+    }
+    let mut changed = false;
+    for id in last.iter().rev().map(|(_, id)| id) {
+        if let Some(change) = change {
+            changed |= capture_label_styles(doc, &[*id], &|st| change(*id, st));
+        }
+        if let Some(para) = para {
+            changed |= capture_label_paragraphs(doc, &[*id], &|p| {
+                *p = para.clone();
+                Ok(())
+            })?;
+        }
     }
     Ok(changed)
 }

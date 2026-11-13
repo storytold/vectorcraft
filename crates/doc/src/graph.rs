@@ -166,6 +166,16 @@ pub struct LabelStyles {
     /// The anti-aliasing method the legend labels keep once set. `None` draws them Sharp.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend_anti_alias: Option<crate::text::TypeAntiAlias>,
+    /// The object fill and stroke rows the value axis numbers keep once set with the Appearance controls ([`LabelRows`]).
+    /// `None`: no rows, opaque and Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values_rows: Option<LabelRows>,
+    /// The object fill and stroke rows the category labels keep, as [`Self::values_rows`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub categories_rows: Option<LabelRows>,
+    /// The object fill and stroke rows the legend labels keep, as [`Self::values_rows`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legend_rows: Option<LabelRows>,
 }
 
 impl LabelStyles {
@@ -361,6 +371,22 @@ pub struct SeriesPaint {
     /// it on its stroke's box (the geometric bounds grown by half the weight).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub stroke_unit_box: bool,
+}
+
+/// The object rows one kind of graph label keeps ([`LabelStyles::values_rows`]): the paint, weight, opacity and blend mode
+/// of a label's topmost visible fill and stroke row (an absent paint: no row of that kind), the label's object opacity and
+/// blend mode, and where the two rows paint relative to each other and to the characters.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LabelRows {
+    #[serde(flatten)]
+    pub paint: SeriesPaint,
+    /// How many of the kept rows paint below the characters, counted from the bottom. Absent: none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub below: Option<u8>,
+    /// The stroke row paints below the fill row.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub stroke_under: bool,
 }
 
 /// Graph data and options. `rows` are categories (one per row of the Graph Data window), each
