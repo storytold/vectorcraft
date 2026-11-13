@@ -1326,6 +1326,27 @@ fn a_missing_or_repeating_clipped_group_keeps_the_container() {
     assert_eq!(d.warnings, vec![Warning::TooDeep]);
 }
 
+/// A container, fill, outline or style argument too short for the id it names is damage: the
+/// shape comes in as a plain shape without that id.
+#[test]
+fn an_id_argument_cut_short_is_damage() {
+    for version in [700, 1100, 1600] {
+        let v = V(version);
+        let group = vec![(0x77, vec![clip_rect(v, 10.0, &[], [0.0, 0.0])])];
+        let container = clip_rect(v, 40.0, &[(8005, vec![0x77, 0, 0])], [0.0, 0.0]);
+        let d = read(&clip_drawing(version, group, vec![container]), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+        assert!(matches!(d.pages[0].layers[0].objects.as_slice(), [Object::Shape(_)]), "{version}: {:?}", d.pages[0].layers[0].objects);
+        assert_eq!(d.warnings, vec![Warning::Damaged], "{version}");
+        for kind in [20, 10, 200] {
+            let short = synth::object(v, 1, &[(kind, vec![1, 0]), (30, v.rect(10.0, 10.0, 0.0))], None);
+            let d = read(&clip_drawing(version, vec![], vec![short]), Limits::default()).unwrap_or_else(|e| panic!("{version} {kind}: {e}"));
+            let s = shapes(&d.pages[0].layers[0].objects);
+            assert!(s.len() == 1 && s[0].fill.is_none() && s[0].outline.is_none(), "{version} {kind}");
+            assert_eq!(d.warnings, vec![Warning::Damaged], "{version} {kind}");
+        }
+    }
+}
+
 /// An object with a lens or transparency (argument 8000) comes in opaque, with the lenses
 /// warning; one without the argument gives no warning.
 #[test]

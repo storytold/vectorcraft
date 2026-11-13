@@ -93,14 +93,16 @@ fn parse(b: &[u8], version: u16, take: &mut dyn FnMut(usize) -> bool) -> Option<
     if r.left() != 0 {
         return None;
     }
-    Some(Styles { fills: resolve(&styles, &fills, |s| s.fill), outlines: resolve(&styles, &outlines, |s| s.outline) })
+    let mut work = 0;
+    Some(Styles { fills: resolve(&styles, &fills, |s| s.fill, &mut work), outlines: resolve(&styles, &outlines, |s| s.outline, &mut work) })
 }
 
 /// For each style, the record of `table` that its own entry names, or the nearest parent's where
-/// its entry is 0. Each style is resolved once, so a chain of any length takes time in proportion
-/// to the styles; a chain that comes back to a style on it, or reaches a style that isn't there,
-/// gives no record.
-fn resolve(styles: &HashMap<u32, Style>, table: &HashMap<u32, u32>, entry: impl Fn(&Style) -> u32) -> HashMap<u32, u32> {
+/// its entry is 0. Each style is resolved once, and each path forgets only the styles on it, so a
+/// chain of any length takes time in proportion to the styles; a chain that comes back to a style
+/// on it, or reaches a style that isn't there, gives no record. `work` counts the styles visited
+/// and forgotten.
+fn resolve(styles: &HashMap<u32, Style>, table: &HashMap<u32, u32>, entry: impl Fn(&Style) -> u32, work: &mut usize) -> HashMap<u32, u32> {
     // `None`: resolved to no record.
     let mut done: HashMap<u32, Option<u32>> = HashMap::new();
     let mut path = Vec::new();
@@ -108,6 +110,7 @@ fn resolve(styles: &HashMap<u32, Style>, table: &HashMap<u32, u32>, entry: impl 
     for &start in styles.keys() {
         let mut id = start;
         let found = loop {
+            *work += 1;
             if let Some(&known) = done.get(&id) {
                 break known;
             }
@@ -122,8 +125,9 @@ fn resolve(styles: &HashMap<u32, Style>, table: &HashMap<u32, u32>, entry: impl 
                 e => break table.get(&e).copied(),
             }
         };
-        on_path.clear();
         for id in path.drain(..) {
+            *work += 1;
+            on_path.remove(&id);
             done.insert(id, found);
         }
     }
@@ -210,6 +214,19 @@ mod tests {
         chain.extend((2..=500).map(|id| synth::Style { id, parent: id - 1, fill: 0, outline: 0 }));
         let s = read(&synth::stlt_body(V(1100), &[(0x100, 7)], &[], &chain, false), 1100).unwrap();
         assert_eq!((s.fill(500), s.fill(250), s.outline(500)), (Some(7), Some(7), None));
+    }
+
+    /// A loop of 2,000 styles, which every walk into it follows around, leaves the walks of 20,000
+    /// other styles no more work than the styles they visit.
+    #[test]
+    fn one_long_walk_does_not_slow_the_walks_after_it() {
+        let mut styles: HashMap<u32, Style> = (1..=2000).map(|id| (id, Style { parent: id % 2000 + 1, fill: 0, outline: 0 })).collect();
+        styles.extend((10_001..=30_000).map(|id| (id, Style { parent: 0, fill: 0x100, outline: 0 })));
+        let table = HashMap::from([(0x100, 7)]);
+        let mut work = 0;
+        let fills = resolve(&styles, &table, |s| s.fill, &mut work);
+        assert_eq!((fills.get(&1), fills.get(&10_001), fills.len()), (None, Some(&7), 20_000));
+        assert!(work <= 4 * styles.len(), "{work}");
     }
 
     #[test]

@@ -451,20 +451,20 @@ impl<'a, 'b> Ctx<'a, 'b> {
             }),
         };
         // Without a fill or outline argument of its own, an object takes its style's (R45).
-        let style = loda.arg(ARG_STYLE).and_then(id_of);
+        let style = loda.arg(ARG_STYLE).and_then(|b| self.id(b));
         let fill_id = match loda.arg(ARG_FILL) {
-            Some(b) => id_of(b),
+            Some(b) => self.id(b),
             None => style.and_then(|s| self.style_entry(s, Styles::fill)),
         };
         let outline_id = match loda.arg(ARG_OUTLINE) {
-            Some(b) => id_of(b),
+            Some(b) => self.id(b),
             None => style.and_then(|s| self.style_entry(s, Styles::outline)),
         };
         let fill = fill_id.and_then(|id| self.fill(id));
         let outline = outline_id.and_then(|id| self.outline(id));
         let shape = Box::new(Shape { geometry, matrix, fill, outline });
         // A container clips the group its argument 8005 names (R46).
-        Some(match loda.arg(ARG_CONTAINER).and_then(id_of) {
+        Some(match loda.arg(ARG_CONTAINER).and_then(|b| self.id(b)) {
             Some(id) => self.clip(shape, id, guides),
             None => Object::Shape(shape),
         })
@@ -490,6 +490,15 @@ impl<'a, 'b> Ctx<'a, 'b> {
             return Object::Shape(container);
         }
         Object::Clip { container, objects }
+    }
+
+    /// The record id that argument `b` names; an argument too short for one is damage.
+    fn id(&mut self, b: &[u8]) -> Option<u32> {
+        let id = id_of(b);
+        if id.is_none() {
+            push(self.warn, Warning::Damaged);
+        }
+        id
     }
 
     /// The fill or outline record that style `id` names; a style table that doesn't parse is
