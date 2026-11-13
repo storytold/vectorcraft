@@ -1078,6 +1078,41 @@ fn an_eyedropper_pick_of_an_already_unpainted_row_leaves_series_transparency() {
     assert_eq!((kept.fill_opacity, kept.fill_blend), (Some(0.4), Some(BlendMode::Multiply)));
 }
 
+/// A whole Eyedropper pick from a source with no fill row, or no stroke row, removes that row from the mark. Where the
+/// mark's row had paint, the pick replaces the opacity and blend mode another mark of the series stored for that kind
+/// of row. Where the mark's row had no paint, the stored values stay.
+#[test]
+fn a_whole_eyedropper_pick_that_removes_a_painted_row_clears_its_stored_transparency() {
+    let stored = |s: &Session, id: NodeId, fill: bool| {
+        let kept = spec(s, id).series_paints[0].clone();
+        if fill { (kept.fill_opacity, kept.fill_blend) } else { (kept.stroke_opacity, kept.stroke_blend) }
+    };
+    for (fill, painted) in [(true, true), (false, true), (false, false)] {
+        let (mut s, id, _, marks) = column_marks();
+        let row = top_row(&s, marks[0], fill);
+        if painted {
+            s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": row, "color": "#ff0000"})).unwrap();
+        }
+        s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": row, "color": "#ff0000", "opacity": 40, "blend": "multiply"})).unwrap();
+        assert_eq!(stored(&s, id, fill), (Some(0.4), Some(BlendMode::Multiply)), "fill {fill}, painted {painted}");
+        let source = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[0].id;
+        s.execute("appearance.removeItem", &json!({"ids": [source.0], "index": top_row(&s, source, fill)})).unwrap();
+        let was = spec(&s, id).series_paints;
+        s.execute("appearance.copyFrom", &json!({"source": source.0, "ids": [marks[1].0]})).unwrap();
+        let mark = s.doc().unwrap().doc.node(marks[1]).unwrap().clone();
+        assert!(!mark.appearance.items.iter().any(|it| it.is_fill() == fill), "the pick removed the row: fill {fill}");
+        let want = if painted { (None, None) } else { (Some(0.4), Some(BlendMode::Multiply)) };
+        assert_eq!(stored(&s, id, fill), want, "fill {fill}, painted {painted}");
+        if painted {
+            let after = spec(&s, id).series_paints;
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, was);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, after);
+        }
+    }
+}
+
 /// An appearance moved between two marks of one series leaves the series with the target's paint, not the source's
 /// empty one, and the series still shows when the graph is drawn again.
 #[test]

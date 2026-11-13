@@ -1365,17 +1365,19 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         let (fill, stroke) = (attrs.appearance.fill, attrs.appearance.stroke);
         let source_has = |kind: bool| picked.appearance.items.iter().any(|it| it.is_fill() == kind);
         let source_shows = |kind: bool| picked.appearance.items.iter().any(|it| it.is_fill() == kind && it.visible());
+        // A whole pick replaces the stack: it removes the rows of a kind the source has no row of.
+        let whole = fill == FillAttrs::ALL && stroke == StrokeAttrs::ALL;
         let (paints, opacities) = if append {
             let rows = (fill.color && source_shows(true), stroke.color && source_shows(false));
             (rows, rows)
         } else {
             (
                 (fill.color, stroke.color || (stroke.weight && source_has(false))),
-                (fill.transparency && source_has(true), stroke.transparency && source_has(false)),
+                (fill.transparency && (whole || source_has(true)), stroke.transparency && (whole || source_has(false))),
             )
         };
         // A pick of some attributes edits the topmost row of its kind, which may be hidden; `append` and a whole pick write rows.
-        let rows_written = append || (fill == FillAttrs::ALL && stroke == StrokeAttrs::ALL);
+        let rows_written = append || whole;
         let top_shows = |id: NodeId, kind: bool| {
             let items = d.node(id).map_or(&[][..], |n| &n.appearance.items[..]);
             items.iter().rev().find(|it| it.is_fill() == kind).is_some_and(|it| it.visible())
