@@ -127,21 +127,53 @@ fn draws_inline(r: &TextRun) -> bool {
     r.inline.is_some() && vectorcraft_text::edit::is_inline_text(&r.text)
 }
 
-/// The fill and, when it is wider than 0, the stroke of the characters of `r` (of an inline
-/// graphic too: they paint its underline, strikethrough and ruby).
+/// The fill and, when it is wider than 0, the stroke of the characters of `r`.
 fn run_paints(r: &TextRun) -> impl Iterator<Item = &Paint> {
     [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)].into_iter().flatten()
 }
 
+/// [`run_paints`] of run `r` of `t` when its characters draw with them. The characters of an
+/// inline graphic draw no glyph: their fill and stroke paint only their underline and
+/// strikethrough (not on a path or in vertical type, see `vectorcraft_text::decorations`) and the
+/// ruby readings that layout draws with their run (`ruby`, as [`ruby_runs`] finds them).
+fn drawn_run_paints<'a>(t: &TextObject, ruby: &HashSet<*const TextRun>, r: &'a TextRun) -> impl Iterator<Item = &'a Paint> {
+    let drawn = !draws_inline(r) || inline_decorated(t, ruby, r);
+    run_paints(r).filter(move |_| drawn)
+}
+
+/// The inline graphic runs of `t` that layout draws a ruby reading with. A reading takes the run
+/// of the first base character on its line, and type on a path has no ruby. `t` is laid out only
+/// when it has ruby and an inline graphic painted with a pattern.
+fn ruby_runs(t: &TextObject) -> HashSet<*const TextRun> {
+    let patterned = |r: &TextRun| draws_inline(r) && run_paints(r).any(|p| pattern_name(p).is_some());
+    if t.ruby.is_empty() || !t.runs.iter().any(patterned) {
+        return HashSet::new();
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.ruby.iter().filter_map(|g| t.runs.get(g.run)).filter(|r| draws_inline(r)).map(std::ptr::from_ref).collect()
+}
+
+/// Whether inline graphic run `r` of `t` has an underline or strikethrough that draws, or a ruby
+/// reading that layout draws with it (it is in `ruby`).
+fn inline_decorated(t: &TextObject, ruby: &HashSet<*const TextRun>, r: &TextRun) -> bool {
+    let bars = !t.vertical && !matches!(t.kind, TextKind::OnPath { .. });
+    if bars && (r.style.underline || r.style.strikethrough) {
+        return true;
+    }
+    ruby.contains(&std::ptr::from_ref(r))
+}
+
 /// The patterns that the fills and strokes `n` draws name (of a text object, also those of its
 /// characters): those that [`paints`] holds for, and the character paints of the runs that draw
-/// (as [`drawn_runs`] finds them: not the overset runs of area type or type on a path).
+/// (as [`drawn_runs`] finds them: not the overset runs of area type or type on a path) where they
+/// draw (as [`drawn_run_paints`] says).
 fn paint_patterns(n: &Node) -> Vec<&str> {
     let mut out: Vec<&str> = n.appearance.items.iter().filter(|i| paints(i)).filter_map(|i| pattern_name(i.paint())).collect();
     if let NodeKind::Text(t) = &n.kind
         && t.runs.iter().flat_map(run_paints).any(|p| pattern_name(p).is_some())
     {
-        out.extend(drawn_runs(t).0.into_iter().flat_map(run_paints).filter_map(pattern_name));
+        let ruby = ruby_runs(t);
+        out.extend(drawn_runs(t).0.into_iter().flat_map(|r| drawn_run_paints(t, &ruby, r)).filter_map(pattern_name));
     }
     out
 }
@@ -519,7 +551,15 @@ impl Printed<'_> {
             _ => (vec![], false),
         };
         let items: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| paints(i)).collect();
-        let patterns: Vec<&str> = items.iter().map(|i| i.paint()).chain(runs.iter().flat_map(|r| run_paints(r))).filter_map(pattern_name).collect();
+        let ruby = match &n.kind {
+            NodeKind::Text(t) => ruby_runs(t),
+            _ => HashSet::new(),
+        };
+        let run_patterns = runs.iter().flat_map(|r| match &n.kind {
+            NodeKind::Text(t) => Some(drawn_run_paints(t, &ruby, r)),
+            _ => None,
+        });
+        let patterns: Vec<&str> = items.iter().map(|i| i.paint()).chain(run_patterns.flatten()).filter_map(pattern_name).collect();
         let brushed = vectorcraft_brush::has_brush(n);
         if (mask.is_some() || !patterns.is_empty() || brushed) && areas.is_none_or(|a| !open || self.meets(n, a)) {
             if let Some(m) = mask {
@@ -1937,6 +1977,70 @@ mod tests {
         assert_eq!(s.doc().unwrap().selection.objects, [NodeId(plain)]);
         assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 1);
         assert_eq!(s.doc().unwrap().selection.objects, [NodeId(point)]);
+    }
+
+    /// The characters of an inline graphic draw no glyph: their pattern fill paints only their
+    /// underline, strikethrough or ruby reading. Without one, Find doesn't select the text for the
+    /// pattern's type and Print doesn't count its font.
+    #[test]
+    fn find_font_skips_patterns_of_undecorated_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mark = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let point = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Hi", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": point, "at": 1, "symbol": "Mark"})).unwrap();
+        let style = |s: &mut Session, f: &dyn Fn(&mut TextObject)| {
+            s.edit("Style the inline graphic", |d, _| {
+                if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(point)).map(|n| &mut n.kind) {
+                    f(t);
+                }
+                Ok(())
+            })
+            .unwrap();
+        };
+        let found = |s: &mut Session| s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"].as_u64();
+        let printed = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            printed_type(d, &d.layers, &[Rect::new(-1000.0, -1000.0, 1000.0, 1000.0)]).0.into_iter().map(|(family, ..)| family).collect::<Vec<_>>()
+        };
+        style(&mut s, &|t| {
+            for r in t.runs.iter_mut().filter(|r| r.inline.is_some()) {
+                r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+            }
+        });
+        assert_eq!(found(&mut s), Some(0));
+        assert_eq!(printed(&s), ["Source Sans 3"]);
+        // An underline paints with the pattern.
+        style(&mut s, &|t| t.runs.iter_mut().filter(|r| r.inline.is_some()).for_each(|r| r.style.underline = true));
+        assert_eq!(found(&mut s), Some(1));
+        assert_eq!(printed(&s), ["Source Sans 3", "Source Serif 4"]);
+        // Vertical type draws no underline.
+        style(&mut s, &|t| t.vertical = true);
+        assert_eq!(found(&mut s), Some(0));
+        // A ruby reading that starts over the character before the inline graphic draws with that
+        // character's paint.
+        style(&mut s, &|t| {
+            assert!(t.runs[1].inline.is_some(), "the inline graphic is the second run");
+            t.ruby.push(vectorcraft_doc::RubySpan {
+                start: 0,
+                end: t.runs[0].text.len() + t.runs[1].text.len(),
+                text: "x".into(),
+                position: Default::default(),
+                align: Default::default(),
+                size_percent: 50.0,
+                overhang: true,
+            });
+        });
+        assert_eq!(found(&mut s), Some(0));
+        // A ruby reading that starts over the inline graphic paints with the pattern.
+        style(&mut s, &|t| t.ruby[0].start = t.runs[0].text.len());
+        assert_eq!(found(&mut s), Some(1));
     }
 
     /// Text whose inline graphic draws a symbol shows the symbol's type: Find selects that text
