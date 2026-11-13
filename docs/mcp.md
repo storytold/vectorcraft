@@ -5972,7 +5972,8 @@ stays as a plain group of the image, with its id, name, visibility and transpare
 even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes
 or is gone, as it does when the DCS file changes, and the app's link watch acts on a changed plate file as on a
 changed DCS file. `links.relink {copy: true}` fails for a DCS file that reads plate files of its own, and copies
-nothing. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
+nothing. Opening a document reads a DCS file and its plates again even with the `lowResProxyEps` preference, which
+keeps the saved preview of other linked EPS files. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
 mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
 Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
 of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the

@@ -387,6 +387,26 @@ fn keep_eps_preview(low_res_proxy_eps: bool, g: &Group, d: &Document) -> bool {
     low_res_proxy_eps && g.document.is_none() && linked_eps(&g.link) && previewing(d, &g.key)
 }
 
+/// Is the linked file `f` found a DCS file? Only the start of the file is read, unless a binary EPS
+/// header puts its PostScript further on; a DCS file read in full stays in `f`. A file that can't
+/// be read is not one.
+fn is_dcs_file(f: &mut Found) -> bool {
+    use super::place::dcs;
+    if let Some(b) = &f.bytes {
+        return dcs::is_dcs(b);
+    }
+    let Ok(head) = fileio::read_file_head(&f.path, dcs::HEAD_BYTES) else { return false };
+    if let Some(is) = dcs::head_is_dcs(&head) {
+        return is;
+    }
+    let Ok(b) = f.read() else { return false };
+    let is = dcs::is_dcs(&b);
+    if is {
+        f.bytes = Some(b);
+    }
+    is
+}
+
 /// Does group `g` of `d` show something other than its file: an image its preview, a placed
 /// document nothing (its file's bytes are gone)?
 fn stale(d: &Document, g: &Group) -> bool {
@@ -1159,6 +1179,9 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             }
             (Status::Ok, Some(mut f)) => {
                 let preview = previewing(d, &g.key);
+                // A DCS file is read in full even with the proxy: its plates print and separate on
+                // their own inks.
+                let eps_preview = eps_preview && !is_dcs_file(&mut f);
                 if let Some((blob, hash)) = read_images.get(&f.path).filter(|_| preview && !eps_preview).cloned() {
                     store_image(d, &g.key, blob, true);
                     let link = f.link_hashed(hash, &g.link);

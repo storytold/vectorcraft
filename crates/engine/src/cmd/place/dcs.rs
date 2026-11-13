@@ -39,6 +39,46 @@ pub(crate) fn is_dcs(bytes: &[u8]) -> bool {
     vectorcraft_eps::dcs::read(bytes).is_some()
 }
 
+/// The most bytes read from the start of a file to look at its DCS header.
+pub(crate) const HEAD_BYTES: usize = 1 << 20;
+
+/// Does the header of the PostScript in file `head` (the first bytes of a file, at most
+/// [`HEAD_BYTES`]) name DCS plates? `None` when `head` can't tell: that PostScript doesn't start
+/// within it (a binary EPS header that puts it further on), or its header goes on past it.
+pub(crate) fn head_is_dcs(head: &[u8]) -> Option<bool> {
+    const DOS_MAGIC: [u8; 4] = [0xC5, 0xD0, 0xD3, 0xC6];
+    let (ps, whole) = if head.starts_with(&DOS_MAGIC) {
+        let word = |at: usize| head.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
+        let (start, len) = (word(4)?, word(8)?);
+        let ps = head.get(start..).filter(|ps| !ps.is_empty())?;
+        (ps.get(..len).unwrap_or(ps), start.checked_add(len).is_some_and(|end| end <= head.len()))
+    } else {
+        (head, head.len() < HEAD_BYTES)
+    };
+    if is_dcs(ps) {
+        return Some(true);
+    }
+    (whole || header_ended(ps)).then_some(false)
+}
+
+/// Does `ps`, the start of some PostScript, hold all of the header [`vectorcraft_eps::dcs::read`]
+/// looks at (up to `%%EndComments`, a line that isn't a comment, or its 10,000th line)? Its last
+/// line may be cut off, so it doesn't count.
+fn header_ended(ps: &[u8]) -> bool {
+    let mut lines = ps.split(|b| matches!(b, b'\n' | b'\r')).filter(|l| !l.is_empty()).peekable();
+    let mut n = 0;
+    while let Some(line) = lines.next() {
+        if lines.peek().is_none() {
+            return false;
+        }
+        n += 1;
+        if line.starts_with(b"%%EndComments") || !line.starts_with(b"%") || n >= 10_000 {
+            return true;
+        }
+    }
+    false
+}
+
 /// DCS file `bytes`, read from `path` (when there is one: plate files of their own are found in its
 /// folder), with every plate.
 pub(crate) fn read(bytes: &[u8], path: Option<&str>) -> Result<DcsArt> {
