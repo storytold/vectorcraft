@@ -35,6 +35,9 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
 /// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
 /// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
 /// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
+/// Rows also never use a word's unrelated sense: a ruler is not शासक (a sovereign), a text character
+/// is not चरित्र (a personality), a vector point or a printer's mark is not अंक (a digit), fills are
+/// not भरता (the verb), Desired is not देसी (local), Even is not शाम (evening), and so on.
 #[test]
 fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     let hi = Lang::from_code("hi").expect("hi registered");
@@ -43,15 +46,35 @@ fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     for (_, src, translation) in &entries {
         let english = src.to_lowercase();
         let names = |words: &[&str]| english.split(|c: char| !c.is_ascii_alphabetic()).any(|w| words.contains(&w));
-        let banned: [(bool, &[&str]); 6] = [
-            (names(&["save", "saves", "saved", "saving"]), &["बचा", "सहेज"]),
+        let banned: &[(bool, &[&str])] = &[
+            (names(&["save", "saves", "saved", "saving"]), &["बचा", "बचत", "सहेज"]),
             (names(&["swatch", "swatches"]), &["घड़ी"]),
             (names(&["crop"]), &["फसल"]),
             (names(&["resolution", "resolutions"]), &["संकल्प"]),
             (names(&["path", "paths"]), &["पथ"]),
             (true, &["पाठ", "कई अंक"]),
+            (names(&["ruler", "rulers"]), &["शासक"]),
+            (names(&["character", "characters"]), &["चरित्र"]),
+            (names(&["point", "points", "mark", "marks"]), &["अंक"]),
+            (names(&["fill", "fills"]), &["भरता"]),
+            (names(&["desired"]), &["देसी", "इच्छा"]),
+            (names(&["even"]), &["शाम"]),
+            (names(&["force", "forced"]), &["सेना"]),
+            (names(&["same"]), &["समीर"]),
+            (names(&["thumbnail", "thumbnails"]), &["हिंदुस्तान"]),
+            (names(&["contrast"]), &["न्यायालय"]),
+            (names(&["function"]), &["समारोह"]),
+            (names(&["kern"]), &["बर्न"]),
+            (names(&["imageable"]), &["कल्पनाशील"]),
+            (names(&["constrain"]), &["कंस्ट्रक्शन"]),
+            (names(&["complement"]), &["संगम"]),
+            (names(&["concave"]), &["अवतरण"]),
+            (names(&["triad"]), &["त्रिद"]),
+            (names(&["trapped", "traps"]), &["निशानेबाज़", "जाल"]),
+            (names(&["alternate", "alternates"]), &["अल्टरनेटर"]),
+            (names(&["highlight"]), &["उच्च प्रकाश"]),
         ];
-        for (applies, words) in banned {
+        for &(applies, words) in banned {
             if let Some(word) = words.iter().find(|w| applies && translation.contains(**w)) {
                 wrong.push(format!("{word} in {src:?} -> {translation:?}"));
             }
@@ -83,6 +106,10 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
     assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
     let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
     assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+    assert_eq!(tr(hi, "Desired"), "वांछित");
+    let range = "न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए";
+    assert_eq!(tr(hi, "Minimum must not exceed Desired, nor Desired Maximum."), format!("{range}।"));
+    assert_eq!(message(hi, "`wordSpacing`: Minimum must not exceed Desired, nor Desired Maximum"), format!("`wordSpacing`: {range}"));
 }
 
 /// Locale tags name their language by region or script (in either case, with an encoding or
