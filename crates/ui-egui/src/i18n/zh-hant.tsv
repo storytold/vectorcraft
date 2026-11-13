@@ -1012,6 +1012,7 @@ font-technology	Variable	可變
 	Enable Rubber Band for	啟用橡皮筋預覽，適用於
 	Enable text access for screen readers	啟用螢幕閱讀器的文字存取
 	Enable Touch Gestures	啟用觸控手勢
+	Switch Selection and Drawing Modes	切換選取與繪圖模式
 	Enable Touch Workspace	啟用觸控工作區
 	Encoding	編碼
 	Encoding:	編碼：
@@ -6041,6 +6042,35 @@ axis	Y Axis	Y 軸
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
+@msg	a number >= {_1}	大於或等於 {_1} 的數字
+@msg	a number > {_1}	大於 {_1} 的數字
+@msg	a number <= {_1}	小於或等於 {_1} 的數字
+@msg	a number < {_1}	小於 {_1} 的數字
+@msg	a number {_1} to {_2}	介於 {_1} 到 {_2} 之間的數字
+@msg	a number >= {_1} and < {_2}	大於或等於 {_1} 且小於 {_2} 的數字
+@msg	a number > {_1} and <= {_2}	大於 {_1} 且小於或等於 {_2} 的數字
+@msg	a number > {_1} and < {_2}	大於 {_1} 且小於 {_2} 的數字
+@msg	a number ({_1})	數字（{_1}）
+@msg	a number >= {_1} ({_2})	大於或等於 {_1} 的數字（{_2}）
+@msg	a number > {_1} ({_2})	大於 {_1} 的數字（{_2}）
+@msg	a number <= {_1} ({_2})	小於或等於 {_1} 的數字（{_2}）
+@msg	a number < {_1} ({_2})	小於 {_1} 的數字（{_2}）
+@msg	a number {_1} to {_2} ({_3})	介於 {_1} 到 {_2} 之間的數字（{_3}）
+@msg	a number >= {_1} and < {_2} ({_3})	大於或等於 {_1} 且小於 {_2} 的數字（{_3}）
+@msg	a number > {_1} and <= {_2} ({_3})	大於 {_1} 且小於或等於 {_2} 的數字（{_3}）
+@msg	a number > {_1} and < {_2} ({_3})	大於 {_1} 且小於 {_2} 的數字（{_3}）
+@msg	an integer	整數
+@msg	an integer >= {_1}	大於或等於 {_1} 的整數
+@msg	an integer <= {_1}	小於或等於 {_1} 的整數
+@msg	an integer {_1} to {_2}	介於 {_1} 到 {_2} 之間的整數
+@msg	one of {_1}	{_1} 其中之一
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` 必須是 {_1} 其中之一，而不是 {got}
+@msg	an object id (a non-negative integer)	物件 ID（非負整數）
+@msg	a list of object ids	物件 ID 清單
+@msg	a color (a string, [r, g, b] or an object)	顏色（字串、[r, g, b] 或物件）
+@msg	[x, y] (two numbers)	[x, y]（兩個數字）
+@msg	an object	物件
+@msg	a list	清單
 @msg	unknown key `{k}`; the keys here are {_1}	未知的鍵 `{k}`；此處可用的鍵：{_1}
 @msg	{_1} is listed twice	{_1} 列出了兩次
 @msg	{_1} is not the id of an input object	{_1} 不是輸入物件的 ID

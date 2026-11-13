@@ -1018,6 +1018,7 @@ font-technology	Variable	Променливи
 	Enable Rubber Band for	Разрешаване на ластик за
 	Enable text access for screen readers	Разрешаване на достъп до текст за екранни четци
 	Enable Touch Gestures	Разрешаване на докосващи жестове
+	Switch Selection and Drawing Modes	Превключване между режим на селекция и рисуване
 	Enable Touch Workspace	Разрешаване на работно пространство за докосване
 	Encoding	Кодиране
 	Encoding:	Кодиране:
@@ -4197,6 +4198,7 @@ axis	Both	И двете
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` трябва да бъде цяло число между {min} и {max} (получено е {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` трябва да бъде между {min} и {max} (получено е {x})
 @msg	`{key}` must be one of {_1}	`{key}` трябва да бъде едно от {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` трябва да бъде едно от {_1}, а не {got}
 @msg	`{key}` must be true or false	`{key}` трябва да бъде true или false
 @msg	`{k}` must be [x, y]	`{k}` трябва да бъде [x, y]
 @msg	`{name}` has no options	`{name}` няма опции

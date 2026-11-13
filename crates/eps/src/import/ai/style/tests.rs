@@ -1512,3 +1512,48 @@ fn only_a_style_of_one_pattern_paint_holds_a_pattern_for_type() {
         assert!(styles(&body).get("S").is_none_or(|s| s.simple_pattern.is_none()), "{body}");
     }
 }
+
+/// A style that is one paint reads as the fill and stroke its `Xd` turns on, in the paint's colors
+/// and the stroke's style; one that turns on a paint not read here, or has no `Xd`, isn't read.
+#[test]
+fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
+    let one = |paint: &str| {
+        let data = format!("/KnownStyle :\n(S) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
+        art_styles_in(data.as_bytes(), &mut Names::default()).remove("S").and_then(|s| s.one_paint)
+    };
+    let stroke = "0 R\n0 1 1 0 K\n1 J 2 j 3 w 4 M [2 1]0 d\n";
+    let Some(Ok(items)) = one(&format!("0 O\n0 0 1 0 k\n{stroke}1 1 Xd\n")) else { panic!("{:?}", one(stroke)) };
+    let [StyleItem::Fill(fill), StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None }] =
+        items.as_slice()
+    else {
+        panic!("{items:?}")
+    };
+    assert_eq!((fill.color(), paint.color()), (Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0))));
+    assert_eq!((*width, *cap, *join, *miter), (3.0, LineCap::Round, LineJoin::Bevel, 4.0));
+    assert_eq!(dash.as_ref().map(|d| d.pattern.clone()), Some(vec![2.0, 1.0]));
+    // Only what `Xd` turns on; nothing when it turns on neither.
+    assert!(matches!(one(&format!("0 0 1 0 k\n{stroke}1 0 Xd\n")), Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
+    assert_eq!(one(&format!("0 0 1 0 k\n{stroke}0 0 Xd\n")), Some(Ok(vec![])));
+    // The last paint of each one counts: a solid color after a pattern or a gradient replaces it.
+    let solid_fill = |before: &str| one(&format!("{before}\n0 0 1 0 k\n0 1 Xd\n"));
+    for before in ["(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p", "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB"] {
+        assert!(matches!(solid_fill(before), Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Fill(_)])), "{before}");
+    }
+    let solid_stroke = one("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n0 1 1 0 K\n1 0 Xd\n");
+    assert!(matches!(solid_stroke, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
+    // A gradient instance's flag says which one it paints: a stroke gradient leaves a solid fill read.
+    let fill_and_stroke_gradient = one("0 0 1 0 k\n1 Bb\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 1 Xd\n");
+    assert!(matches!(fill_and_stroke_gradient, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Fill(_)])));
+    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a gradient stroke after a solid one, a paint
+    // turned on with no color.
+    for paint in [
+        format!("0 0 1 0 k\n{stroke}"),
+        "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n".to_string(),
+        "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 Xd\n".to_string(),
+        "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n1 0 Xd\n".to_string(),
+        "0 R\n0 1 1 0 K\n1 Bb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n".to_string(),
+        "0 0 1 0 k\n1 1 Xd\n".to_string(),
+    ] {
+        assert_eq!(one(&paint), Some(Err(())), "{paint}");
+    }
+}

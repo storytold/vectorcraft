@@ -3675,6 +3675,7 @@ theme	Appearance	Wygląd
 	Enable Missing Glyph Protection	Włącz ochronę przed brakującymi glifami
 	Enable Rubber Band for	Włącz gumkę podglądu dla
 	Enable Touch Gestures	Włącz gesty dotykowe
+	Switch Selection and Drawing Modes	Przełącz tryby zaznaczania i rysowania
 	Enable Touch Workspace	Włącz dotykowy obszar roboczy
 	English: UK	Angielski: Wielka Brytania
 	Every (minutes)	Co (minuty)
@@ -6252,6 +6253,35 @@ axis	Y Axis	Oś Y
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
 @msg	true or false	true lub false
+@msg	a number >= {_1}	liczbą >= {_1}
+@msg	a number > {_1}	liczbą > {_1}
+@msg	a number <= {_1}	liczbą <= {_1}
+@msg	a number < {_1}	liczbą < {_1}
+@msg	a number {_1} to {_2}	liczbą od {_1} do {_2}
+@msg	a number >= {_1} and < {_2}	liczbą >= {_1} i < {_2}
+@msg	a number > {_1} and <= {_2}	liczbą > {_1} i <= {_2}
+@msg	a number > {_1} and < {_2}	liczbą > {_1} i < {_2}
+@msg	a number ({_1})	liczbą ({_1})
+@msg	a number >= {_1} ({_2})	liczbą >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	liczbą > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	liczbą <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	liczbą < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	liczbą od {_1} do {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	liczbą >= {_1} i < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	liczbą > {_1} i <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	liczbą > {_1} i < {_2} ({_3})
+@msg	an integer	liczbą całkowitą
+@msg	an integer >= {_1}	liczbą całkowitą >= {_1}
+@msg	an integer <= {_1}	liczbą całkowitą <= {_1}
+@msg	an integer {_1} to {_2}	liczbą całkowitą od {_1} do {_2}
+@msg	one of {_1}	jedną z wartości {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` musi być jedną z wartości {_1}, a nie {got}
+@msg	an object id (a non-negative integer)	identyfikatorem obiektu (nieujemną liczbą całkowitą)
+@msg	a list of object ids	listą identyfikatorów obiektów
+@msg	a color (a string, [r, g, b] or an object)	kolorem (ciągiem znaków, [r, g, b] lub obiektem)
+@msg	[x, y] (two numbers)	[x, y] (dwiema liczbami)
+@msg	an object	obiektem
+@msg	a list	listą
 @msg	unknown key `{k}`; the keys here are {_1}	nieznany klucz `{k}`; klucze w tym miejscu to {_1}
 @msg	{_1} is listed twice	{_1} występuje dwa razy
 @msg	{_1} is not the id of an input object	{_1} nie jest identyfikatorem obiektu wejściowego

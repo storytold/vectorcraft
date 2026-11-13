@@ -684,6 +684,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        crate::touch::TOGGLE_MODE => Ok(crate::touch::toggle_mode(app)),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),

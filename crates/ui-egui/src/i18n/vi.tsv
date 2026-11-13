@@ -1207,6 +1207,7 @@ font-technology	Variable	Biến thiên
 	Enable Rubber Band for	Bật vùng chọn kéo cho
 	Enable text access for screen readers	Bật truy cập văn bản cho trình đọc màn hình
 	Enable Touch Gestures	Bật cử chỉ cảm ứng
+	Switch Selection and Drawing Modes	Chuyển giữa chế độ chọn và vẽ
 	Enable Touch Workspace	Bật không gian làm việc cảm ứng
 	Encoding	Mã hóa
 	Encoding:	Mã hóa:
@@ -6004,6 +6005,35 @@ axis	Y Axis	Trục Y
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
+@msg	a number >= {_1}	một số >= {_1}
+@msg	a number > {_1}	một số > {_1}
+@msg	a number <= {_1}	một số <= {_1}
+@msg	a number < {_1}	một số < {_1}
+@msg	a number {_1} to {_2}	một số từ {_1} đến {_2}
+@msg	a number >= {_1} and < {_2}	một số >= {_1} và < {_2}
+@msg	a number > {_1} and <= {_2}	một số > {_1} và <= {_2}
+@msg	a number > {_1} and < {_2}	một số > {_1} và < {_2}
+@msg	a number ({_1})	một số ({_1})
+@msg	a number >= {_1} ({_2})	một số >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	một số > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	một số <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	một số < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	một số từ {_1} đến {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	một số >= {_1} và < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	một số > {_1} và <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	một số > {_1} và < {_2} ({_3})
+@msg	an integer	một số nguyên
+@msg	an integer >= {_1}	một số nguyên >= {_1}
+@msg	an integer <= {_1}	một số nguyên <= {_1}
+@msg	an integer {_1} to {_2}	một số nguyên từ {_1} đến {_2}
+@msg	one of {_1}	một trong các giá trị {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` phải là một trong các giá trị {_1}, không phải {got}
+@msg	an object id (a non-negative integer)	một ID đối tượng (một số nguyên không âm)
+@msg	a list of object ids	một danh sách ID đối tượng
+@msg	a color (a string, [r, g, b] or an object)	một màu (một chuỗi, [r, g, b] hoặc một đối tượng)
+@msg	[x, y] (two numbers)	[x, y] (hai số)
+@msg	an object	một đối tượng
+@msg	a list	một danh sách
 @msg	unknown key `{k}`; the keys here are {_1}	khóa không xác định `{k}`; các khóa ở đây là {_1}
 @msg	{_1} is listed twice	{_1} được liệt kê hai lần
 @msg	{_1} is not the id of an input object	{_1} không phải là id của một đối tượng đầu vào

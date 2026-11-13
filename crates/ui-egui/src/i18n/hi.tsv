@@ -1632,6 +1632,7 @@ antiAlias	Sharp	शार्प
 	Enable Rubber Band for	के लिए रबर बैंड सक्षम करें
 	Enable text access for screen readers	स्क्रीन रीडर के लिए टेक्स्ट एक्सेस सक्षम करें
 	Enable Touch Gestures	टच जेस्चर ऑन करें
+	Switch Selection and Drawing Modes	चयन और ड्रॉइंग मोड के बीच बदलें
 	Enable Touch Workspace	टच वर्कस्पेस सक्षम करें
 	Enclosing Lasso	लासो संलग्न करना
 	Enclosing Lasso Tool	लासो टूल संलग्न करना
@@ -5551,6 +5552,35 @@ antiAlias	Sharp	शार्प
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
 @msg	true or false	true या false
+@msg	a number >= {_1}	एक संख्या >= {_1}
+@msg	a number > {_1}	एक संख्या > {_1}
+@msg	a number <= {_1}	एक संख्या <= {_1}
+@msg	a number < {_1}	एक संख्या < {_1}
+@msg	a number {_1} to {_2}	{_1} से {_2} तक की एक संख्या
+@msg	a number >= {_1} and < {_2}	एक संख्या >= {_1} और < {_2}
+@msg	a number > {_1} and <= {_2}	एक संख्या > {_1} और <= {_2}
+@msg	a number > {_1} and < {_2}	एक संख्या > {_1} और < {_2}
+@msg	a number ({_1})	एक संख्या ({_1})
+@msg	a number >= {_1} ({_2})	एक संख्या >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	एक संख्या > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	एक संख्या <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	एक संख्या < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} से {_2} तक की एक संख्या ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	एक संख्या >= {_1} और < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	एक संख्या > {_1} और <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	एक संख्या > {_1} और < {_2} ({_3})
+@msg	an integer	एक पूर्णांक
+@msg	an integer >= {_1}	एक पूर्णांक >= {_1}
+@msg	an integer <= {_1}	एक पूर्णांक <= {_1}
+@msg	an integer {_1} to {_2}	{_1} से {_2} तक का एक पूर्णांक
+@msg	one of {_1}	{_1} में से एक
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` {_1} में से एक होना चाहिए, {got} नहीं
+@msg	an object id (a non-negative integer)	एक ऑब्जेक्ट id (एक गैर-नकारात्मक पूर्णांक)
+@msg	a list of object ids	ऑब्जेक्ट ids की एक सूची
+@msg	a color (a string, [r, g, b] or an object)	एक रंग (एक स्ट्रिंग, [r, g, b] या एक ऑब्जेक्ट)
+@msg	[x, y] (two numbers)	[x, y] (दो संख्याएँ)
+@msg	an object	एक ऑब्जेक्ट
+@msg	a list	एक सूची
 @msg	unknown key `{k}`; the keys here are {_1}	अज्ञात कुंजी `{k}`; यहाँ की कुंजियाँ {_1} हैं
 @msg	{_1} is listed twice	{_1} दो बार सूचीबद्ध है
 @msg	{_1} is not the id of an input object	{_1} किसी इनपुट ऑब्जेक्ट का id नहीं है
@@ -7114,7 +7144,7 @@ antiAlias	Sharp	शार्प
 @msg	needs points	जरूरत अंक
 @msg	New Window isn't available yet: a document opens in one window	नई विंडो अभी तक उपलब्ध नहीं है: एक डॉक्यूमेंट एक विंडो में खुलता है
 @msg	nineSlice must be true or false	nineSlice को true या false होना चाहिए
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides को [left, top, right, bottom] होना चाहिए, हर मान 0..1, और left + right < 1 तथा top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides को [left, top, right, bottom] होना चाहिए, हर मान -16..16, और left + right < 1 तथा top + bottom < 1
 @msg	no action set is current	कोई कार्रवाई सेट चालू नहीं है
 @msg	no action set to save	बचाने के लिए कोई कार्रवाई सेट नहीं
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं

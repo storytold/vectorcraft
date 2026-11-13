@@ -416,6 +416,10 @@ impl VectorcraftApp {
         self.pen_end.forget_tool();
         self.held_tool.clear();
         self.activate_tool(id, true);
+        let now = self.session.tool_id();
+        if crate::touch::is_drawing_tool(now) {
+            self.ui.touch_drawing_tool = Some(now.to_string());
+        }
     }
 
     /// Go back to tool `id` after a tool that stood in for it (the pen's eraser end, [`stylus`]):

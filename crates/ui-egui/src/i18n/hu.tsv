@@ -1317,6 +1317,7 @@ font-technology	Variable	Változó
 	Enable Rubber Band for	Gumiszalag-előnézet ehhez:
 	Enable text access for screen readers	Szöveghozzáférés engedélyezése képernyőolvasóknak
 	Enable Touch Gestures	Érintési kézmozdulatok
+	Switch Selection and Drawing Modes	Váltás a kijelölési és a rajzolási mód között
 	Enable Touch Workspace	Érintőképernyős munkaterület
 	Encoding	Kódolás
 	Encoding:	Kódolás:
@@ -6381,6 +6382,35 @@ axis	Y Axis	Y tengely
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
 @msg	true or false	true vagy false
+@msg	a number >= {_1}	szám >= {_1}
+@msg	a number > {_1}	szám > {_1}
+@msg	a number <= {_1}	szám <= {_1}
+@msg	a number < {_1}	szám < {_1}
+@msg	a number {_1} to {_2}	{_1} és {_2} közötti szám
+@msg	a number >= {_1} and < {_2}	szám >= {_1} és < {_2}
+@msg	a number > {_1} and <= {_2}	szám > {_1} és <= {_2}
+@msg	a number > {_1} and < {_2}	szám > {_1} és < {_2}
+@msg	a number ({_1})	szám ({_1})
+@msg	a number >= {_1} ({_2})	szám >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	szám > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	szám <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	szám < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} és {_2} közötti szám ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	szám >= {_1} és < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	szám > {_1} és <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	szám > {_1} és < {_2} ({_3})
+@msg	an integer	egész szám
+@msg	an integer >= {_1}	egész szám >= {_1}
+@msg	an integer <= {_1}	egész szám <= {_1}
+@msg	an integer {_1} to {_2}	{_1} és {_2} közötti egész szám
+@msg	one of {_1}	{_1} közül az egyik
+@msg	`{path}` must be one of {_1}, not {got}	`{path}`: {_1} közül az egyik kell, nem ez: {got}
+@msg	an object id (a non-negative integer)	objektumazonosító (nemnegatív egész szám)
+@msg	a list of object ids	objektumazonosítók listája
+@msg	a color (a string, [r, g, b] or an object)	szín (karakterlánc, [r, g, b] vagy objektum)
+@msg	[x, y] (two numbers)	[x, y] (két szám)
+@msg	an object	objektum
+@msg	a list	lista
 @msg	unknown key `{k}`; the keys here are {_1}	ismeretlen kulcs: `{k}`; az itt használható kulcsok: {_1}
 @msg	{_1} is listed twice	{_1} kétszer szerepel
 @msg	{_1} is not the id of an input object	{_1} nem egy bemeneti objektum azonosítója
