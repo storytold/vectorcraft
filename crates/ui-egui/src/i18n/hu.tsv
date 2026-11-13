@@ -1114,6 +1114,10 @@ font-technology	Variable	Változó
 	Dock Panel	Panel dokkolása
 	Dock to Top	Dokkolás felülre
 	Dock to Bottom	Dokkolás alulra
+	Dock to Left	Dokkolás balra
+	Dock to Right	Dokkolás jobbra
+	Dock Toolbar	Eszköztár dokkolása
+	Float Toolbar	Eszköztár lebegtetése
 	Control Bar Options	Vezérlősáv beállításai
 	Tool Options	Eszközbeállítások
 	Object Options	Objektumbeállítások
@@ -4119,6 +4123,19 @@ mark-style	Japanese	Japán
 	Spot Color Objects	Direkt színeket használó objektumok
 	Pattern Objects	Mintázatokat használó objektumok
 	Gradient Objects	Színátmeneteket használó objektumok
+	Font Details	Betűtípus-részletek
+	Linked Images	Csatolt képek
+	Embedded Images	Beágyazott képek
+	Compound Paths	Összetett útvonalak
+	Text Objects	Szövegobjektumok
+	Placed Documents	Elhelyezett dokumentumok
+	Symbol Instances	Szimbólumpéldányok
+	Gradient Meshes	Színátmenetes hálók
+	Blends	Összemosások
+	Envelopes	Burkolók
+	Intertwine Groups	Összefonási csoportok
+	Opacity Masks	Átlátszósági maszkok
+	Objects with Effects	Effektusokat használó objektumok
 	Spot Colors	Direktszínek
 	Spot Colors (0)	Direktszínek (0)
 	Spot Colors…	Direktszínek…
