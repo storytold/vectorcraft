@@ -931,6 +931,8 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -997,6 +999,8 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);

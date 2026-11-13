@@ -8378,8 +8378,9 @@ fn brushes_the_reader_cant_read_are_left_out() {
     }
     left_out(vec![Brush { name: "A/B".into(), ..keep.clone() }], "slash");
     left_out(vec![Brush { kind: BrushKind::Bristle(Bristle::default()), ..keep.clone() }], "a second brush of the name");
-    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back. A
-    // path with "X" is drawn with the Pattern brush, so it comes back as its drawn look.
+    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back,
+    // as "X 2", the name the library gives it when it is read. A path with "X" is drawn with the
+    // Pattern brush, so it comes back as its drawn look.
     let mut doc = Document::new(300.0, 200.0);
     let x = Brush { name: "X".into(), ..keep.clone() };
     vectorcraft_brush::store(&mut doc, &[Brush { name: "X".into(), kind: BrushKind::Pattern(PatternBrush::default()) }, x.clone()]);
@@ -8387,7 +8388,7 @@ fn brushes_the_reader_cant_read_are_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert_eq!(vectorcraft_brush::library(&back), [x]);
+    assert_eq!(vectorcraft_brush::library(&back), [Brush { name: "X 2".into(), ..x }]);
     let n = &back.layers[0].children().unwrap()[0];
     assert!(n.appearance.stroke().is_none_or(|s| s.brush.is_none()), "not with the other brush of the name: {n:#?}");
 }
