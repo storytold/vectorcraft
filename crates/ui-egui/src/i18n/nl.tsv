@@ -5861,7 +5861,10 @@ mark-style	Japanese	Japans
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
 @msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
-@msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel moet none, een van {_1} of custom met {BEVEL_PROFILE} zijn
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom heeft {BEVEL_PROFILE} nodig, de punten van de afschuining
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} moet een tekenreeks zijn
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} moet 2 tot {most} punten [x, y] bevatten, elk aandeel tussen 0 en 1, van [0, 0] (de rand van de bovenkant) tot [1, 1] (de zijwand)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan van deze illustratie geen massieve objecten maken: de symboolinstanties, vermengingen en knipgroepen ervan bevatten te veel objecten
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan geen massief object maken van de instantie van symbool "{symbol}": de illustratie van het symbool is niet beschikbaar
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: het knippad is te complex om de illustratie mee uit te knippen
