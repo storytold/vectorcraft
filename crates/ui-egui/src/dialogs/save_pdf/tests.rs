@@ -263,7 +263,14 @@ fn long_page_notes_are_translated() {
     let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
     notes.extend(warnings.filter(|w| w.contains("too long and narrow")).map(str::to_string));
     assert_eq!(notes.len(), 5, "{notes:?}");
-    let english = ["has no UserUnit, which", "apps that ignore UserUnit", "apps that keep to the limit", "real numbers up to", "too long and narrow", "turn on"];
+    let english = [
+        "has no UserUnit, which",
+        "apps that ignore UserUnit",
+        "apps that keep to the limit",
+        "real numbers up to",
+        "too long and narrow",
+        "turn on",
+    ];
     for code in ["de", "fr", "ja", "zh-hans"] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
         for note in &notes {
