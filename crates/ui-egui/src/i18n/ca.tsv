@@ -906,6 +906,8 @@ antiAlias	Sharp	Nítid
 	Convert to destination (preserve numbers)	Converteix al destí (conserva els números)
 	Convert to Global	Converteix en global
 	Convert to Grayscale	Converteix a escala de grisos
+	Convert to Indexed Color	Converteix a color indexat
+	Convert to Indexed Color…	Converteix a color indexat…
 	Convert To Outlines	Converteix en contorns
 	Convert To Point Type	Converteix en text de punt
 	Convert to RGB	Converteix a RGB
@@ -1247,6 +1249,10 @@ antiAlias	Sharp	Nítid
 	Dock Panel	Acobla el panell
 	Dock to Top	Acobla a dalt
 	Dock to Bottom	Acobla a baix
+	Dock to Left	Acobla a l’esquerra
+	Dock to Right	Acobla a la dreta
+	Dock Toolbar	Acobla la barra d’eines
+	Float Toolbar	Flota la barra d’eines
 	Control Bar Options	Opcions de la barra de control
 	Tool Options	Opcions de l’eina
 	Object Options	Opcions de l’objecte
@@ -1542,6 +1548,8 @@ antiAlias	Sharp	Nítid
 	Expand Live Paint	Expandeix la pintura interactiva
 	Expand Object	Expandeix l’objecte
 	Expand Objects on Path	Expandeix els objectes del traçat
+	Detach	Separa
+	Detach Object from Path	Separa l’objecte del traçat
 	Expand Options	Opcions d’expansió
 	Expand Panels	Expandeix els panells
 	Expand Repeat	Expandeix la repetició
@@ -2634,6 +2642,8 @@ digits	Malayalam	Malaiàlam
 	Move in Perspective	Mou en perspectiva
 	Move Library Group	Mou el grup de la biblioteca
 	Move Library Item to Group	Mou l’element de la biblioteca al grup
+	Rename Library Item	Canvia el nom de l’element de la biblioteca
+	Add to Character Styles	Afegeix als estils de caràcter
 	Move Locked and Hidden Artwork with Artboard	Mou la il·lustració bloquejada i oculta amb el tauler
 	Move Mesh Point	Mou el punt de malla
 	Move Mesh Points	Mou els punts de malla
@@ -3136,6 +3146,8 @@ digits	Malayalam	Malaiàlam
 	per slice	per tall
 	Percent:	Percentatge:
 	Perceptual	Perceptual
+	Hue Clockwise	To en sentit horari
+	Hue Counterclockwise	To en sentit antihorari
 	Perceptual Scales	Escales perceptuals
 	Performance	Rendiment
 	Permissions	Permisos
@@ -3615,6 +3627,9 @@ digits	Malayalam	Malaiàlam
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
 	Color Theme Picker	Selector de tema de colors
 	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
+	Prominent Colors	Colors predominants
+	Save All Colors	Desa tots els colors
+	Save Prominent Colors	Desa els colors predominants
 	Reset to Default	Restableix el valor predeterminat
 	Reset to default	Restableix el valor predeterminat
 	Reset to Defaults	Restableix els valors predeterminats
@@ -3917,6 +3932,22 @@ digits	Malayalam	Malaiàlam
 	Graphite Pencil	Llapis de grafit
 	Wax Crayon	Cera de colors
 	Charcoal Dust	Pols de carbó
+	Notched Ribbon	Cinta dentada
+	Double Line	Línia doble
+	Wave	Ona
+	Teardrop	Llàgrima
+	Striped Ribbon	Cinta ratllada
+	Fine Nib	Plomí fi
+	Broad Nib	Plomí ample
+	Chisel	Escarpra
+	Round Pen	Ploma rodona
+	Pressure Pen	Ploma de pressió
+	Beads	Perles
+	Dash Dot	Ratlla i punt
+	Scallops	Festons
+	Stars	Estrelles
+	Triangles	Triangles
+	Sparkles	Espurnes
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -4043,12 +4074,14 @@ digits	Malayalam	Malaiàlam
 	Continue	Continua
 	Continue Action	Continua l’acció
 	Delete Action Step	Suprimeix el pas de l’acció
+	Move Action Step	Mou el pas de l’acció
 	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
 	Stop: {message}	Aturada: {message}
 @msg	no action is waiting at a stop	cap acció no espera en una aturada
 @msg	message must be text	message ha de ser text
 @msg	allowContinue must be true or false	allowContinue ha de ser true o false
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
+@msg	Batch cannot play an action with a View menu step	Lot no pot reproduir una acció amb un pas del menú Visualitza
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
 	Insert Select Path	Insereix una selecció de traçat
@@ -4379,6 +4412,19 @@ digits	Malayalam	Malaiàlam
 	Spot Color Objects	Objectes amb colors directes
 	Pattern Objects	Objectes amb motius
 	Gradient Objects	Objectes amb degradats
+	Font Details	Detalls dels tipus de lletra
+	Linked Images	Imatges enllaçades
+	Embedded Images	Imatges incrustades
+	Compound Paths	Traçats compostos
+	Text Objects	Objectes de text
+	Placed Documents	Documents col·locats
+	Symbol Instances	Instàncies de símbol
+	Gradient Meshes	Malles de degradat
+	Blends	Fusions
+	Envelopes	Embolcalls
+	Intertwine Groups	Grups entrellaçats
+	Opacity Masks	Màscares d’opacitat
+	Objects with Effects	Objectes amb efectes
 	Spot Colors	Colors directes
 	Spot Colors (0)	Colors directes (0)
 	Spot Colors…	Colors directes…
@@ -5171,7 +5217,7 @@ digits	Malayalam	Malaiàlam
 @msg	`ids` must be an array of object ids, not {v}	`ids` ha de ser una matriu d’identificadors d’objecte, no {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
-@msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` ha de ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
@@ -5498,6 +5544,9 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No s’ha pogut col·locar {name}: el document on es va deixar anar s’ha revertit
+@msg	Couldn't place {name}: the document it was placed in was reverted	No s’ha pogut col·locar {name}: el document on es va col·locar s’ha revertit
+@msg	Couldn't paste: the document it was pasted in was reverted	No s’ha pogut enganxar: el document on s’enganxava s’ha revertit
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}
@@ -5730,8 +5779,10 @@ digits	Malayalam	Malaiàlam
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu
@@ -5942,6 +5993,7 @@ digits	Malayalam	Malaiàlam
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
+@msg	the document it was prepared for is no longer active	el document per al qual es va preparar ja no està actiu
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
@@ -5997,6 +6049,7 @@ digits	Malayalam	Malaiàlam
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
+@msg	choose the object to detach with its Select/Move widget	tria l’objecte que vols separar amb el seu control Selecciona/Mou
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
 @msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
@@ -6092,7 +6145,9 @@ digits	Malayalam	Malaiàlam
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Els gràfics s’apliquen a cares planes: fes servir el tipus d’objecte Extrusió o Pla
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
 @msg	The graphics are too complex: simplify the symbols' art	Els gràfics són massa complexos: simplifica la il·lustració dels símbols
@@ -6676,6 +6731,13 @@ theme	Appearance	Aparença
 	Area Text	Text d’àrea
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcions d’ajust al píxel
+	Pixel Snapping Options…	Opcions d’ajust al píxel…
+	Snap to Pixel While Drawing	Ajusta al píxel en dibuixar
+	Snap to Pixel While Moving	Ajusta al píxel en moure
+	Snap to Pixel While Scaling	Ajusta al píxel en escalar
+	These options take effect when View › Snap to Pixel is on.	Aquestes opcions tenen efecte quan Visualitza › Ajusta al píxel està activat.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif
@@ -7321,6 +7383,19 @@ breakText	Glyphs	Glifs
 	Show where this tool is	Mostra on és aquesta eina
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+	View more	Mostra’n més
+	Finish tutorial	Acaba el tutorial
+	Next Up	A continuació
+	You finished the last tutorial in this skill.	Heu acabat l’últim tutorial d’aquesta habilitat.
+	Back to skills	Torna a les habilitats
+	Open Tutorial Sample	Obre la mostra del tutorial
+	Finish Tutorial	Acaba el tutorial
+	Next Tutorial	Tutorial següent
+	Back to Skills	Torna a les habilitats
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` és l’últim tutorial de la seva habilitat
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats

@@ -91,8 +91,8 @@ pub mod workspaces;
 mod document_drag;
 #[cfg(test)]
 use tests::{
-    background as tests_background, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors, svg as tests_svg,
-    synthetic as tests_synthetic, sysclip as tests_sysclip,
+    background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
+    svg as tests_svg, synthetic as tests_synthetic, sysclip as tests_sysclip,
 };
 #[cfg(test)]
 mod tests;
@@ -108,7 +108,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
+pub use sysclip::{CLIPBOARD_PROBE_STOP_WAIT, ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -138,9 +138,10 @@ pub struct VectorcraftApp {
     pub(crate) view_uids: Vec<u64>,
     /// The thread that checks the system clipboard for `system_paste` instead
     /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
-    /// first: on X11 the last clipboard handle alive hands what the app copied to the clipboard
-    /// manager, and that must be the app's own handle in `services`, dropped on the UI thread
-    /// before the process exits.
+    /// first, waiting up to [`CLIPBOARD_PROBE_STOP_WAIT`] for its thread to let go of its handle: on
+    /// X11 the last clipboard handle alive hands what the app copied to the clipboard manager, and
+    /// that should be the app's own handle in `services`, dropped on the UI thread before the
+    /// process exits.
     clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,

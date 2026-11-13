@@ -1038,7 +1038,7 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
 /// The documents [`the_writer_counts_objects_as_the_reader_reads_them`] writes: groups, compound
 /// paths, guides, sublayers, clipping groups and layers, painted clipping paths, opacity masks,
 /// gradients, pattern definitions and tiles, images, type, symbol definitions and instances,
-/// objects with art styles and objects bound to variables.
+/// objects with art styles, objects bound to variables and live envelopes.
 fn counted() -> Vec<(&'static str, Document)> {
     vec![
         ("sample", sample()),
@@ -1053,6 +1053,7 @@ fn counted() -> Vec<(&'static str, Document)> {
         ("painted clips", painted_clips()),
         ("blend", blend_doc()),
         ("brushes", brushes_document()),
+        ("envelopes", envelopes_document()),
     ]
 }
 
@@ -2633,6 +2634,34 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     let back = read_back(&doc);
     let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
     assert_eq!((color(&g.gradient.stops[0].color), g.gradient.stops[0].swatch.as_deref()), (color(&BRAND), None));
+    // A gradient mixed around the hue wheel, either way, is written as a classic one of the stops
+    // on its curve, no more than the reader reads, and opens with the colors it had.
+    for method in [vectorcraft_color::gradient::GradientMethod::HueClockwise, vectorcraft_color::gradient::GradientMethod::HueCounterclockwise] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut g = sunset();
+        g.method = method;
+        let want = g.clone();
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::GRADIENT_HUE], "{method:?}");
+        let back = read_back(&doc);
+        let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+        assert!(g.gradient.method.is_classic(), "{method:?}");
+        let written = g.gradient.stops.len();
+        assert!((want.stops.len() + 1..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let ((a, ao), (b, bo)) = (want.sample(t), g.gradient.sample(t));
+            let (a, b) = (a.to_rgb(), b.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03) && (ao - bo).abs() < 0.03, "{method:?} at {t}: {a:?} {ao} vs {b:?} {bo}");
+        }
+    }
 }
 
 /// A pattern whose art reaches past its tile is written as its tiles cut to the shape: a definition
@@ -7109,6 +7138,124 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
     assert!(p.contains("7.5 /Real (moveV_Pts) ,") && p.contains("0.5236 /Real (rotate_Radians) ,"), "{p}");
 }
 
+/// An embedded 8 × 8 image of a color ramp, `Photo`, 80 pt square at (20, 10) in `doc`, at half
+/// opacity, with `effects`.
+fn warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let ramp = image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([(x * 32) as u8, (y * 32) as u8, 160]));
+    let mut photo = image_node(doc, ImageBlob::png(png_of(ramp.into())), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    photo.name = Some("Photo".into());
+    photo.opacity = 0.5;
+    photo.appearance = Appearance { effects, ..Appearance::default() }.into();
+    photo
+}
+
+/// A 200 × 100 document holding `photo`, made by [`warped_photo`].
+fn photo_doc(photo: impl FnOnce(&mut Document) -> Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let n = photo(&mut doc);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// An embedded image with one Warp is written with an art style of that Warp, its bent pieces as its
+/// drawn look and the image itself on `%_` lines: it reads back as the image, its pixels, placement,
+/// name and opacity as they were, with its Warp live and its settings kept.
+#[test]
+fn an_image_with_a_warp_reads_back_with_its_warp_live() {
+    // GUARDS: an image with a Warp was written as its drawn pieces alone, and read back without its Warp.
+    for (id, params) in [
+        ("warp.arc", serde_json::json!({"bend": 40.0})),
+        ("warp.flag", serde_json::json!({"bend": -30.0, "horizontal": 10.0, "vertical": 0.0, "orientation": "vertical"})),
+    ] {
+        let doc = photo_doc(|d| warped_photo(d, vec![fx(id, params.clone())]));
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{id}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let art = back.layers[0].children().unwrap();
+        assert_eq!(art.len(), 1, "{id}: {:#?} {:?}", lines(&back), out.warnings);
+        let (mut want, mut got) = (vec![], vec![]);
+        pictures(&doc, doc.layers[0].children().unwrap(), "", &mut want);
+        pictures(&back, art, "", &mut got);
+        assert_eq!(got, want, "{id}");
+        let [warp] = art[0].appearance.effects.as_slice() else { panic!("{id}: {:?}", art[0].appearance) };
+        assert_eq!(warp.id, id);
+        let (w, g) = (vectorcraft_effects::merged_params(id, &params), vectorcraft_effects::merged_params(&warp.id, &warp.params));
+        for key in ["bend", "horizontal", "vertical"] {
+            assert!((g[key].as_f64().unwrap() - w[key].as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {g} for {w}");
+        }
+        assert_eq!(g["orientation"], w["orientation"], "{id}");
+    }
+}
+
+/// An image whose style's Warp bends it another way than its drawn look keeps that look, with the
+/// note, and the file as written opens with the image.
+#[test]
+fn an_image_whose_warp_draws_otherwise_than_its_look_keeps_its_look() {
+    // GUARDS: an image read with its Warp live whatever its drawn look showed.
+    let doc = photo_doc(|d| warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let (from, to) = (b"0.4 /Real (DeformValue)".as_slice(), b"-0.4 /Real (DeformValue)".as_slice());
+    let at = program.windows(from.len()).position(|w| w == from).expect("the warp's bend");
+    let mut other = program.clone();
+    other.splice(at..at + from.len(), to.iter().copied());
+    let (back, warnings) = crate::ai_alone(&other).unwrap();
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{art:#?}");
+    assert!(matches!(art[0].kind, NodeKind::Group { .. }), "the drawn look: {:?}", art[0].kind);
+    assert!(art[0].appearance.effects.is_empty(), "{:?}", art[0].appearance);
+    assert!(warnings.iter().any(|w| w.contains("drawn look")), "{warnings:?}");
+    let (back, _) = crate::ai_alone(&program).unwrap();
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Image(_)));
+}
+
+/// An image on `%_` lines is the copy of a styled object, as other objects there are: with a style
+/// the file doesn't define, its drawn look stands for it, named as it is, and the image doesn't come
+/// in beside the look.
+#[test]
+fn an_image_on_hidden_lines_does_not_come_in_beside_its_look() {
+    // GUARDS: an image whose samples were on `%_` lines came in as a second, visible object.
+    let doc = photo_doc(|d| warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let (from, to) = (b"1 (Anon 1) XW".as_slice(), b"1 (Unknown) XW".as_slice());
+    let at = program.windows(from.len()).position(|w| w == from).expect("the image's style");
+    let mut unknown = program.clone();
+    unknown.splice(at..at + from.len(), to.iter().copied());
+    let (back, _) = crate::ai_alone(&unknown).unwrap();
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    assert!(matches!(art[0].kind, NodeKind::Group { .. }), "the drawn look: {:?}", art[0].kind);
+    assert_eq!(art[0].name.as_deref(), Some("Photo"));
+}
+
+/// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
+/// written as their drawn art, with no art style.
+#[test]
+fn other_warped_images_are_written_as_their_drawn_art() {
+    let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
+    let linked = photo_doc(|d| {
+        let mut n = warped_photo(d, vec![arc()]);
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.link = Some(vectorcraft_doc::LinkInfo::new("/art/photo.png"));
+        }
+        n
+    });
+    let masked = photo_doc(|d| {
+        let mut n = warped_photo(d, vec![arc()]);
+        let white =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::WHITE), Paint::None, 0.0));
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, false)));
+        n
+    });
+    let stacked = photo_doc(|d| warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
+    for (what, doc) in [("linked", linked), ("masked", masked), ("stacked", stacked)] {
+        assert!(!program_shown(&doc).contains("1 (Anon"), "{what}");
+        let back = read_back(&doc);
+        let art = back.layers[0].children().unwrap();
+        assert!(art.iter().all(|n| n.appearance.effects.is_empty()), "{what}: {art:#?}");
+    }
+}
+
 /// Every kind of appearance a style isn't written for is written as its drawn look, with a warning.
 #[test]
 fn appearances_written_as_their_drawn_look() {
@@ -9054,4 +9201,447 @@ fn spread_gradients_past_the_stops_the_reader_reads_stay_gradients() {
     let back = read_back(&doc);
     let Some(Paint::Gradient(swatch)) = back.swatch("Bands").map(|s| &s.paint) else { panic!("the swatch is lost") };
     assert!((200..=crate::import::MAX_GRADIENT_STOPS).contains(&swatch.gradient.stops.len()), "{} stops", swatch.gradient.stops.len());
+}
+
+/// An envelope named `Bent` of `kind` around a red rectangle (40, 20)-(100, 80) and a blue one
+/// (100, 20)-(160, 80), with Fidelity `fidelity`, Edit Contents `editing` and `options`.
+fn envelope_node(
+    doc: &mut Document,
+    kind: vectorcraft_doc::live::EnvelopeKind,
+    fidelity: f64,
+    editing: bool,
+    options: vectorcraft_doc::live::EnvelopeOptions,
+) -> Node {
+    let content = vec![
+        Arc::new(square(doc, Rect::new(40.0, 20.0, 100.0, 80.0), Color::rgb(1.0, 0.0, 0.0))),
+        Arc::new(square(doc, Rect::new(100.0, 20.0, 160.0, 80.0), Color::rgb(0.0, 0.0, 1.0))),
+    ];
+    let kind = NodeKind::Envelope { content, kind: Box::new(kind), fidelity, editing, options, frame: Box::default() };
+    named(Node::new(doc.alloc_id(), kind), "Bent")
+}
+
+/// A 200 × 100 document of envelope `kind` ([`envelope_node`]) alone.
+fn envelope_doc(
+    kind: vectorcraft_doc::live::EnvelopeKind,
+    fidelity: f64,
+    editing: bool,
+    options: vectorcraft_doc::live::EnvelopeOptions,
+) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let envelope = envelope_node(&mut doc, kind, fidelity, editing, options);
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    doc
+}
+
+/// A grid of `rows`×`cols` patches over (30, 10)-(170, 90), row by row from the top left, with its
+/// sixth point moved.
+fn envelope_points(rows: u32, cols: u32) -> Vec<kurbo::Point> {
+    let mut points: Vec<kurbo::Point> = (0..=rows)
+        .flat_map(|r| {
+            (0..=cols).map(move |c| kurbo::Point::new(30.0 + 140.0 * f64::from(c) / f64::from(cols), 10.0 + 80.0 * f64::from(r) / f64::from(rows)))
+        })
+        .collect();
+    points[5] += kurbo::Vec2::new(5.0, -8.0);
+    points
+}
+
+/// The envelopes written live: warps (vertical, with distortions, and twisted), meshes (with
+/// handles of their own, one handle uneven, and with the smooth ones), top objects (a curved top
+/// side, and two segments to the top and bottom sides), with Edit Contents off and on.
+fn live_envelope_kinds() -> Vec<(&'static str, vectorcraft_doc::live::EnvelopeKind)> {
+    use vectorcraft_doc::live::{EnvelopeKind, H_RIGHT, WARP_NET, smooth_handles};
+    let warp = |style: &str, bend: f64, h: f64, v: f64, horizontal: bool| EnvelopeKind::Warp {
+        style: style.into(),
+        bend,
+        h,
+        v,
+        horizontal,
+        version: WARP_NET,
+    };
+    let points = envelope_points(2, 3);
+    let mut handles = smooth_handles(2, 3, &points);
+    handles[5][H_RIGHT] += kurbo::Vec2::new(4.0, 6.0);
+    let mut curved = kurbo::BezPath::new();
+    curved.move_to((30.0, 10.0));
+    curved.curve_to((70.0, -5.0), (130.0, -5.0), (170.0, 10.0));
+    curved.line_to((170.0, 90.0));
+    curved.line_to((30.0, 90.0));
+    curved.close_path();
+    let mut six = kurbo::BezPath::new();
+    six.move_to((30.0, 10.0));
+    for p in [(100.0, 0.0), (170.0, 10.0), (170.0, 90.0), (100.0, 95.0), (30.0, 90.0)] {
+        six.line_to(p);
+    }
+    six.close_path();
+    vec![
+        ("arc", warp("arc", 50.0, -20.0, 30.0, false)),
+        ("twist", warp("twist", -35.0, 0.0, 0.0, true)),
+        ("mesh", EnvelopeKind::Mesh { rows: 2, cols: 3, points: points.clone(), handles }),
+        ("smooth mesh", EnvelopeKind::Mesh { rows: 2, cols: 3, points, handles: vec![] }),
+        ("curved top object", EnvelopeKind::TopObject { path: PathData::from_bezpath(&curved), corners: None }),
+        ("six-anchor top object", EnvelopeKind::TopObject { path: PathData::from_bezpath(&six), corners: None }),
+    ]
+}
+
+/// `doc` written and read back from its editing data: the top object on its first layer, the
+/// writer's warnings and the reader's notes.
+fn envelope_back(doc: &Document) -> (Node, Vec<String>, Vec<String>) {
+    let (p, warnings) = private_data(doc, &opts()).unwrap();
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    assert_eq!(a.len(), 1, "{a:#?}");
+    ((*a[0]).clone(), warnings, notes)
+}
+
+/// Does reopened envelope kind `got` have the shape of `want`: a warp's style, bend, distortions
+/// and orientation; a mesh's grid and the handles that draw (those inside the grid); the patch a top
+/// object's outline makes?
+fn same_envelope_kind(want: &vectorcraft_doc::live::EnvelopeKind, got: &vectorcraft_doc::live::EnvelopeKind) -> bool {
+    use vectorcraft_doc::live::{Coons, EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP, smooth_handles};
+    let near = |a: kurbo::Point, b: kurbo::Point| a.distance(b) < 1e-3;
+    match (want, got) {
+        (
+            EnvelopeKind::Warp { style, bend, h, v, horizontal, version },
+            EnvelopeKind::Warp { style: s, bend: b, h: dh, v: dv, horizontal: hz, version: ver },
+        ) => style == s && horizontal == hz && version == ver && [(bend, b), (h, dh), (v, dv)].iter().all(|(x, y)| (*x - *y).abs() < 1e-9),
+        (EnvelopeKind::Mesh { rows, cols, points, handles }, EnvelopeKind::Mesh { rows: r, cols: c, points: p, handles: hs }) => {
+            let own = if handles.is_empty() { smooth_handles(*rows, *cols, points) } else { handles.clone() };
+            let inside = |i: usize, slot: usize| {
+                let (row, col) = (i / (*cols as usize + 1), i % (*cols as usize + 1));
+                match slot {
+                    s if s == H_LEFT => col > 0,
+                    s if s == H_RIGHT => col < *cols as usize,
+                    s if s == H_UP => row > 0,
+                    s if s == H_DOWN => row < *rows as usize,
+                    _ => false,
+                }
+            };
+            (rows, cols) == (r, c)
+                && points.len() == p.len()
+                && points.iter().zip(p).all(|(a, b)| near(*a, *b))
+                && own.iter().zip(hs).enumerate().all(|(i, (a, b))| (0..4).all(|s| !inside(i, s) || near(a[s].to_point(), b[s].to_point())))
+        }
+        (EnvelopeKind::TopObject { path, corners }, EnvelopeKind::TopObject { path: p, corners: c }) => {
+            let (Some(a), Some(b)) = (Coons::from_top_object(path, *corners), Coons::from_top_object(p, *c)) else { return false };
+            (0..=8).all(|j| {
+                (0..=8).all(|i| a.eval(f64::from(i) / 8.0, f64::from(j) / 8.0).distance(b.eval(f64::from(i) / 8.0, f64::from(j) / 8.0)) < 1e-2)
+            })
+        }
+        _ => false,
+    }
+}
+
+/// A PDF-compatible `.ai`'s editing data keeps a warp, a mesh and a top object envelope live, with
+/// Edit Contents off and on: VectorCraft's reader opens each as the same envelope, its contents,
+/// Fidelity, Edit Contents, Envelope Options and shape as saved, and its name, the drawn art saved
+/// with it drawing as the envelope does.
+#[test]
+fn envelopes_are_read_back_live() {
+    use vectorcraft_doc::live::EnvelopeOptions;
+    for (name, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let doc = envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW);
+            let (back, warnings, notes) = envelope_back(&doc);
+            let what = format!("{name}, editing {editing}");
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            assert!(!notes.iter().any(|w| w == crate::import::ENVELOPE_DRAWN), "{what}: {notes:?}");
+            let NodeKind::Envelope { content, kind: got, fidelity, editing: e, options, frame } = &back.kind else { panic!("{what}: {back:#?}") };
+            assert_eq!((*fidelity, *e, *options, **frame), (50.0, editing, EnvelopeOptions::NEW, Affine::IDENTITY), "{what}");
+            assert!(same_envelope_kind(&kind, got), "{what}: {got:?}");
+            assert_eq!(back.name.as_deref(), Some("Bent"), "{what}");
+            let colors: Vec<Option<Color>> = content.iter().map(|c| c.appearance.fill_paint().color()).collect();
+            assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}");
+            // Saved again as it opened (a top object now with the corners the file gives it), it
+            // opens as the same envelope again.
+            let mut again = Document::new(200.0, 100.0);
+            let layer = again.layers[0].id;
+            again.insert(Some(layer), usize::MAX, back.clone()).unwrap();
+            let (twice, warnings, notes) = envelope_back(&again);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}, saved again: {warnings:?}");
+            let NodeKind::Envelope { kind: twice, .. } = &twice.kind else { panic!("{what}, saved again: {twice:#?} {notes:?}") };
+            assert!(same_envelope_kind(&kind, twice), "{what}, saved again: {twice:?}");
+        }
+    }
+}
+
+/// An envelope that is a symbol's art is written live in the symbol's definition, and the symbol
+/// opens with it as a live envelope.
+#[test]
+fn an_envelope_in_a_symbol_is_read_back_live() {
+    use vectorcraft_doc::live::EnvelopeOptions;
+    let kinds = live_envelope_kinds();
+    for (name, kind) in kinds {
+        let mut doc = Document::new(200.0, 100.0);
+        let art = envelope_node(&mut doc, kind.clone(), 50.0, false, EnvelopeOptions::NEW);
+        doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+        let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Bent".into(), xf: Affine::translate((10.0, 5.0)) });
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), usize::MAX, instance).unwrap();
+        let (p, warnings) = private_data(&doc, &opts()).unwrap();
+        assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{name}: {warnings:?}");
+        let (back, notes) = crate::ai_alone(&p.data).unwrap();
+        let symbol = back.symbols.iter().find(|s| s.name == "Bent").unwrap_or_else(|| panic!("{name}: {:?}", back.symbols));
+        let mut envelopes = vec![];
+        symbol.art.walk(&mut |n| {
+            if let NodeKind::Envelope { kind, .. } = &n.kind {
+                envelopes.push((**kind).clone());
+            }
+        });
+        assert!(matches!(envelopes.as_slice(), [k] if same_envelope_kind(&kind, k)), "{name}: {envelopes:?} {notes:?}");
+    }
+}
+
+/// An envelope with an opacity mask comes back live with its mask, and the plugin's `XP` follows
+/// the envelope's dictionary rather than its mask's art.
+#[test]
+fn an_envelope_with_an_opacity_mask_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut doc = Document::new(200.0, 100.0);
+    let mut envelope = envelope_node(&mut doc, kind.clone(), 50.0, false, EnvelopeOptions::NEW);
+    let gray = square(&mut doc, Rect::new(40.0, 20.0, 160.0, 80.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![gray], false);
+    envelope.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    let text = program(&doc);
+    let (xp, mask) = (text.find(") 1 0 0 XP").unwrap_or(0), text.find("(AI9_Mask)").unwrap_or(usize::MAX));
+    assert!(mask < xp, "{text}");
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { kind: got, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(same_envelope_kind(&kind, got), "{got:?}");
+    assert!(back.extras().mask.is_some(), "{back:#?}");
+}
+
+/// As many envelopes are written live as the reader checks in one file, and the ones after them
+/// as their art, with a warning.
+#[test]
+fn envelopes_past_the_readers_checks_are_written_as_their_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for _ in 0..=limit {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    let live = a.iter().filter(|n| matches!(n.kind, NodeKind::Envelope { .. })).count();
+    assert_eq!((a.len(), live), (limit + 1, limit), "{notes:?}");
+    assert!(!notes.iter().any(|n| n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
+}
+
+/// Every Envelope Options switch and the ends of Fidelity come back as saved.
+#[test]
+fn envelope_options_and_fidelity_are_read_back() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, PreserveShape};
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let new = EnvelopeOptions::NEW;
+    let all = [
+        (new, 50.0),
+        (EnvelopeOptions { anti_alias: false, ..new }, 0.0),
+        (EnvelopeOptions { preserve_shape: PreserveShape::Transparency, ..new }, 100.0),
+        (EnvelopeOptions { distort_linear_gradients: true, distort_pattern_fills: true, ..new }, 30.0),
+        (EnvelopeOptions { distort_appearance: false, ..new }, 50.0),
+    ];
+    for (options, fidelity) in all {
+        let (back, _, notes) = envelope_back(&envelope_doc(kind.clone(), fidelity, false, options));
+        let NodeKind::Envelope { options: o, fidelity: f, .. } = &back.kind else { panic!("{options:?}: {back:#?} {notes:?}") };
+        assert_eq!((*o, *f), (options, fidelity));
+    }
+}
+
+/// With Distort Appearance, an envelope whose contents map from their bounds with their strokes
+/// saves that box's size, and opens mapping from the same box.
+#[test]
+fn an_envelope_mapping_from_its_contents_strokes_is_read_back() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, envelope_content_boxes, envelope_stroke_margin};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut envelope = envelope_node(
+        &mut doc,
+        EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] },
+        50.0,
+        false,
+        EnvelopeOptions::NEW,
+    );
+    let NodeKind::Envelope { content, options, .. } = &mut envelope.kind else { unreachable_envelope() };
+    for c in content.iter_mut() {
+        let fill = Arc::make_mut(c).appearance.fill_paint();
+        Arc::make_mut(c).appearance = Appearance::basic(fill, solid(Color::BLACK), 8.0).into();
+    }
+    let (stroked, plain) = envelope_content_boxes(content, Affine::IDENTITY).unwrap();
+    options.bounds_margin = envelope_stroke_margin(stroked, plain).unwrap();
+    let margin = options.bounds_margin;
+    assert!(margin.iter().all(|m| *m > 0.0), "{margin:?}");
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { options, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(options.bounds_margin.iter().zip(margin).all(|(a, b)| (a - b).abs() < 1e-4), "{:?} {margin:?}", options.bounds_margin);
+}
+
+/// A test's stand-in for a node that must be an envelope.
+fn unreachable_envelope() -> ! {
+    panic!("not an envelope")
+}
+
+/// The record is written in the order the reader reads it: on `%_` lines the group holding the
+/// grid, its dictionary with the options, the contents' block and the kind, then the distorted art
+/// on plain lines and the plugin's `XP`. While the contents are edited, the group holds them and
+/// the dictionary the grid.
+#[test]
+fn an_envelope_is_written_in_the_order_the_reader_reads_it() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    for editing in [false, true] {
+        let text = program(&envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW));
+        let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} missing: {text}"));
+        let (group, mesh, dictionary, block, key, style, xp) = (
+            at("%_u\n"),
+            at("%_/Mesh X!"),
+            at("%_131073 /Int (AIDeformOptionsKey) ,\n%_50 /Int (AIDeformFidelityKey) ,\n"),
+            at("%_X=\n"),
+            at("%_ (AIDeformArtKey) ,\n"),
+            at("%_2 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\n"),
+            at("(Adobe Deform Plugin) 1 0 0 XP\n"),
+        );
+        assert!(group < dictionary && dictionary < block && block < key && key < style && style < xp, "{text}");
+        assert_eq!(block < mesh, editing, "{text}");
+        assert!(text.contains(&format!("%_{} /Bool (AIDeformEditModeKey) ,\n", u8::from(editing))), "{text}");
+        // The distorted art is one group on plain lines, named as the envelope, right before the `XP`.
+        let drawn = &text[style..xp];
+        assert!(drawn.contains("\nu\n") && drawn.contains("(Bent) ; (AI10_ArtUID) ,"), "{drawn}");
+        // The contents are on `%_` lines only: drawn once on plain lines, as the distorted art.
+        assert_eq!(text.matches("(Adobe Deform Plugin)").count(), 1, "{text}");
+    }
+}
+
+/// Envelopes the reader would open in another shape, or not at all, are written as their distorted
+/// art with a warning, and open as that art: an envelope of type, one in a turned frame, a warp drawn
+/// without its style's net, a mesh the reader would lay out the other way round, a top object
+/// whose sides don't pair up, a Fidelity that isn't a whole number and bounds margins kept with
+/// Distort Appearance off. Other live objects keep their own warning.
+#[test]
+fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let base =
+        || envelope_doc(EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] }, 50.0, false, EnvelopeOptions::NEW);
+    let change = |f: &dyn Fn(&mut NodeKind)| {
+        let mut doc = base();
+        let id = doc.layers[0].children().unwrap()[0].id;
+        f(&mut doc.node_mut(id).unwrap().kind);
+        doc
+    };
+    let typed = change(&|k| {
+        if let NodeKind::Envelope { content, .. } = k {
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "Type", vectorcraft_doc::CharStyle::default());
+            content.push(Arc::new(Node::new(vectorcraft_doc::NodeId(9_000), NodeKind::Text(Box::new(t)))));
+        }
+    });
+    let turned = change(&|k| {
+        if let NodeKind::Envelope { frame, .. } = k {
+            **frame = Affine::rotate(0.3);
+        }
+    });
+    let old_warp = change(&|k| {
+        if let NodeKind::Envelope { kind, .. } = k {
+            **kind = EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+        }
+    });
+    // Columns down the page and rows across: the reader turns the grid round.
+    let sideways = change(&|k| {
+        if let NodeKind::Envelope { kind, .. } = k {
+            let points =
+                (0..=3).flat_map(|r| (0..=2).map(move |c| kurbo::Point::new(30.0 + 70.0 * f64::from(c), 10.0 + 80.0 * f64::from(r) / 3.0))).collect();
+            **kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: transpose(points, 3, 2), handles: vec![] };
+        }
+    });
+    let mut uneven = kurbo::BezPath::new();
+    uneven.move_to((30.0, 10.0));
+    for p in [(100.0, 0.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
+        uneven.line_to(p);
+    }
+    uneven.close_path();
+    let lopsided = change(&|k| {
+        if let NodeKind::Envelope { kind, .. } = k {
+            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven), corners: None };
+        }
+    });
+    let fractional = change(&|k| {
+        if let NodeKind::Envelope { fidelity, .. } = k {
+            *fidelity = 50.5;
+        }
+    });
+    let margin_kept = change(&|k| {
+        if let NodeKind::Envelope { options, .. } = k {
+            options.distort_appearance = false;
+            options.bounds_margin = [0.5; 4];
+        }
+    });
+    let cases = [
+        ("type", typed),
+        ("turned", turned),
+        ("old warp", old_warp),
+        ("sideways mesh", sideways),
+        ("lopsided top object", lopsided),
+        ("fractional fidelity", fractional),
+        ("margin kept", margin_kept),
+    ];
+    for (what, doc) in cases {
+        let text = program(&doc);
+        assert!(!text.contains("AIDeformOptionsKey"), "{what}: {text}");
+        let (back, warnings, _) = envelope_back(&doc);
+        assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+        assert!(!warnings.iter().any(|w| w == writer::LIVE), "{what}: {warnings:?}");
+        assert!(matches!(back.kind, NodeKind::Group { .. }), "{what}: {back:#?}");
+    }
+    let blend = export_ai_editing(&blend_doc(), &opts()).unwrap();
+    assert!(blend.warnings.iter().any(|w| w == writer::LIVE) && !blend.warnings.iter().any(|w| w == writer::ENVELOPES), "{:?}", blend.warnings);
+}
+
+/// `points`, a grid of `rows + 1` rows of `cols + 1` points, as `cols + 1` rows of `rows + 1`.
+fn transpose(points: Vec<kurbo::Point>, rows: usize, cols: usize) -> Vec<kurbo::Point> {
+    (0..=cols).flat_map(|c| (0..=rows).map(move |r| (r, c))).map(|(r, c)| points[r * (cols + 1) + c]).collect()
+}
+
+/// An envelope with its contents in an opacity mask's art is written as its art there, and an
+/// envelope in a group stays live.
+#[test]
+fn envelopes_in_masks_are_written_as_their_art_and_in_groups_stay_live() {
+    let doc = envelopes_document();
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let mut live = 0;
+    back.walk(|n| live += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(live, 3, "{notes:?}");
+}
+
+/// A warp, a mesh envelope with its contents edited, a top object in a group, and an envelope in an
+/// opacity mask's art.
+fn envelopes_document() -> Document {
+    use vectorcraft_doc::live::EnvelopeOptions;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let kinds = live_envelope_kinds();
+    let kind = |name: &str| kinds.iter().find(|(n, _)| *n == name).map(|(_, k)| k.clone()).unwrap();
+    let warp = envelope_node(&mut doc, kind("arc"), 50.0, false, EnvelopeOptions::NEW);
+    let mesh = envelope_node(&mut doc, kind("mesh"), 50.0, true, EnvelopeOptions::NEW);
+    let top = envelope_node(&mut doc, kind("six-anchor top object"), 50.0, false, EnvelopeOptions::NEW);
+    let top = group(&mut doc, vec![top], false);
+    let mut masked = square(&mut doc, Rect::new(0.0, 0.0, 200.0, 100.0), Color::gray(0.5));
+    let mask_art = envelope_node(&mut doc, kind("twist"), 50.0, false, EnvelopeOptions::NEW);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+    for n in [warp, mesh, top, masked] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
 }

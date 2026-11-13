@@ -182,6 +182,8 @@ digits	Malayalam	マラヤーラム数字
 	Blend Vertically	上下にブレンド
 	Convert to CMYK	CMYK に変換
 	Convert to Grayscale	グレースケールに変換
+	Convert to Indexed Color	インデックスカラーに変換
+	Convert to Indexed Color…	インデックスカラーに変換…
 	Convert to RGB	RGB に変換
 	Invert Colors	カラー反転
 	Overprint Black…	オーバープリントブラック…
@@ -1992,6 +1994,8 @@ antiAlias	Sharp	シャープ
 	Objects on Path Tool	パス上のオブジェクトツール
 	Attach Objects on Path	パス上のオブジェクトをアタッチ
 	Expand Objects on Path	パス上のオブジェクトを拡張
+	Detach	切り離し
+	Detach Object from Path	オブジェクトをパスから切り離し
 	Release Live Paint	ライブペイントを解除
 	Release Repeat	リピートを解除
 	Release Slice	スライスを解除
@@ -2960,6 +2964,9 @@ mark-style	Japanese	日本式
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
 	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
+	Prominent Colors	主要カラー
+	Save All Colors	すべてのカラーを保存
+	Save Prominent Colors	主要カラーを保存
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット
@@ -3284,6 +3291,20 @@ mark-style	Japanese	日本式
 	Spot Color Objects	特色を使用したオブジェクト
 	Pattern Objects	パターンを使用したオブジェクト
 	Gradient Objects	グラデーションを使用したオブジェクト
+	Font Details	フォントの詳細
+	Linked Images	リンク画像
+	Embedded Images	埋め込み画像
+	Compound Paths	複合パス
+	Text Objects	テキストオブジェクト
+	Placed Documents	配置ドキュメント
+	Symbol Instances	シンボルインスタンス
+	Gradient Meshes	グラデーションメッシュ
+	Blends	ブレンド
+	Envelopes	エンベロープ
+	Intertwine Groups	織り交ぜグループ
+	Opacity Masks	不透明マスク
+	Objects with Effects	効果を使用したオブジェクト
+	Pattern Swatches	パターンスウォッチ
 	Spot Colors	特色
 	Spot Colors…	特色…
 	Spread:	拡散:
@@ -3364,6 +3385,8 @@ mark-style	Japanese	日本式
 	Rename Library Group	ライブラリグループ名を変更
 	Delete Library Group	ライブラリグループを削除
 	Move Library Item to Group	ライブラリ項目をグループに移動
+	Rename Library Item	ライブラリ項目名を変更
+	Add to Character Styles	文字スタイルに追加
 	Library	ライブラリ
 	Rename Library	ライブラリ名を変更
 	Show Library	ライブラリを表示
@@ -4143,6 +4166,10 @@ axis	Both	両方
 	Dock Panel	パネルをドッキング
 	Dock to Top	上部にドッキング
 	Dock to Bottom	下部にドッキング
+	Dock to Left	左側にドッキング
+	Dock to Right	右側にドッキング
+	Dock Toolbar	ツールバーをドッキング
+	Float Toolbar	ツールバーをフローティング
 	Control Bar Options	コントロールバーオプション
 	Tool Options	ツールオプション
 	Object Options	オブジェクトオプション
@@ -4491,6 +4518,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
+@msg	the library has another item of that kind named `{name}`	ライブラリには同じ種類の項目 `{name}` がすでにあります
 @msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
@@ -4553,6 +4581,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a repeat	リピートを選択してください
 @msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select an Objects on Path group	パス上のオブジェクトグループを選択してください
+@msg	choose the object to detach with its Select/Move widget	切り離すオブジェクトを選択/移動ウィジェットで選んでください
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合パス、ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のパスにはオブジェクトをアタッチできません
 @msg	a clipping path can't take objects	クリッピングパスにはオブジェクトをアタッチできません
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のオブジェクトはパスにアタッチできません
@@ -5155,10 +5184,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} を配置できませんでした: 配置先のドキュメントは閉じられています
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} を配置できませんでした: ドロップ先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} を配置できませんでした: 配置先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't paste: the document it was pasted in was reverted	貼り付けられませんでした: 貼り付け先のドキュメントは保存済みの状態に戻されました
 @msg	no files to place	配置するファイルがありません
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
 @msg	replace: the object to replace was changed or deleted	replace: 置き換えるオブジェクトは変更または削除されています
+@msg	the document it was prepared for is no longer active	準備したときのドキュメントがもうアクティブではありません
 @msg	Couldn't place {name}: {e}	{name} を配置できませんでした: {e}
 @msg	no print service	プリントサービスがありません
 @msg	the print job has no data	プリントジョブにデータがありません
@@ -5222,6 +5255,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5594,7 +5628,10 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
+	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
 @msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください
@@ -5971,7 +6008,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
-@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+	Hue Clockwise	時計回りの色相
+	Hue Counterclockwise	反時計回りの色相
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` には classic、perceptual、hue-clockwise または hue-counterclockwise を指定してください
 @msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます
@@ -6214,12 +6253,14 @@ axis	Y Axis	Y 軸
 	Continue	続行
 	Continue Action	アクションを続行
 	Delete Action Step	アクションステップを削除
+	Move Action Step	アクションステップを移動
 	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
 	Stop: {message}	停止: {message}
 @msg	no action is waiting at a stop	停止で待機中のアクションはありません
 @msg	message must be text	message にはテキストを指定してください
 @msg	allowContinue must be true or false	allowContinue には true または false を指定してください
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
+@msg	Batch cannot play an action with a View menu step	バッチでは表示メニューのステップを含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
 	Insert Select Path	パスの選択を挿入
@@ -6384,6 +6425,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+	Notched Ribbon	ノッチリボン
+	Double Line	二重線
+	Wave	波
+	Teardrop	しずく
+	Striped Ribbon	ストライプリボン
+	Fine Nib	細いペン先
+	Broad Nib	太いペン先
+	Chisel	平ノミ
+	Round Pen	丸ペン
+	Pressure Pen	筆圧ペン
+	Beads	ビーズ
+	Dash Dot	一点鎖線
+	Scallops	スカラップ
+	Stars	星
+	Triangles	三角形
+	Sparkles	きらめき
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)
@@ -6403,6 +6460,13 @@ axis	Y Axis	Y 軸
 	Area Text	エリア内文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	文字を字形の境界で測定
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	ピクセルにスナップのオプション
+	Pixel Snapping Options…	ピクセルにスナップのオプション…
+	Snap to Pixel While Drawing	描画時にピクセルにスナップ
+	Snap to Pixel While Moving	移動時にピクセルにスナップ
+	Snap to Pixel While Scaling	拡大・縮小時にピクセルにスナップ
+	These options take effect when View › Snap to Pixel is on.	これらのオプションは、表示 › ピクセルにスナップがオンのときに有効になります。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す
@@ -7034,6 +7098,19 @@ breakText	Glyphs	字形
 	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
+	View more	詳細を見る
+	Finish tutorial	チュートリアルを完了
+	Next Up	次へ
+	You finished the last tutorial in this skill.	このスキルの最後のチュートリアルを完了しました。
+	Back to skills	スキルに戻る
+	Open Tutorial Sample	チュートリアルのサンプルを開く
+	Finish Tutorial	チュートリアルを完了
+	Next Tutorial	次のチュートリアル
+	Back to Skills	スキルに戻る
+@msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
+@msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
+@msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)
+@msg	`{id}` is the last tutorial in its skill	`{id}` はこのスキルの最後のチュートリアルです
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新

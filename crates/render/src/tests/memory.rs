@@ -1716,7 +1716,8 @@ fn installing_a_plugin_keeps_what_is_kept_for_other_objects() {
 }
 
 /// The art drawn for an object's effects follows the plug-ins installed: in the next frame, a group
-/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), an
+/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), a group
+/// with a Transform effect holding a square with a plug-in effect, an
 /// instance of symbol `S` ([`symbol_art`]) and type, each with a plug-in effect, are drawn as the
 /// plug-in installed again with another shape draws them.
 #[test]
@@ -1738,6 +1739,13 @@ fn effect_art_follows_the_plugins_installed() {
     plugin_change_draws_as_new(group(vec![]), ID, small.clone(), big.clone());
     let feather = effect("stylize.feather", serde_json::json!({"radius": 2.0}));
     plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
+    // A group with a Transform effect holding a square with the plug-in effect: the group's art
+    // holds what the plug-in draws for the square.
+    let mut d = Document::new(200.0, 100.0);
+    let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+    let mut moved = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    moved.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveH": 10.0})));
+    plugin_change_draws_as_new(with_art(d, vec![moved]), ID, small.clone(), big.clone());
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });

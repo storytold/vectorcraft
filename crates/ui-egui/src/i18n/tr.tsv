@@ -608,6 +608,8 @@ font-technology	Variable	Değişken
 	Convert to Artboards	Çalışma Yüzeylerine Dönüştür
 	Convert to CMYK	CMYK'ye dönüştür
 	Convert to Grayscale	Gri Tonlamaya Dönüştür
+	Convert to Indexed Color	Dizinlenmiş Renge Dönüştür
+	Convert to Indexed Color…	Dizinlenmiş Renge Dönüştür…
 	Convert To Outlines	Anahatlara Dönüştür
 	Convert To Point Type	Nokta Türüne Dönüştür
 	Convert to RGB	RGB'ye dönüştür
@@ -2716,6 +2718,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
 	Color Theme Picker	Renk Teması Seçici
 	Click or drag across the art to pick its colors; Shift adds more	Renklerini almak için resme tıklayın veya üzerinde sürükleyin; Shift daha fazlasını ekler
+	Prominent Colors	Belirgin Renkler
+	Save All Colors	Tüm Renkleri Kaydet
+	Save Prominent Colors	Belirgin Renkleri Kaydet
 	Reset to Default	Varsayılana Sıfırla
 	Reset to White, Black	Beyaz, Siyah'a Sıfırla
 	Reset with Mesh	Mesh ile Sıfırla
@@ -3283,6 +3288,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Spot Renkli Nesneler
 	Pattern Objects	Desenli Nesneler
 	Gradient Objects	Degradeli Nesneler
+	Font Details	Yazı Tipi Ayrıntıları
+	Linked Images	Bağlantılı Görseller
+	Embedded Images	Gömülü Görseller
+	Compound Paths	Bileşik Yollar
+	Text Objects	Metin Nesneleri
+	Placed Documents	Yerleştirilen Belgeler
+	Symbol Instances	Sembol Örnekleri
+	Gradient Meshes	Degrade Örgüler
+	Blends	Karışımlar
+	Envelopes	Zarflar
+	Intertwine Groups	İç İçe Geçme Grupları
+	Opacity Masks	Opaklık Maskeleri
+	Objects with Effects	Efektli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -3394,6 +3412,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Kitaplık Grubunu Yeniden Adlandır
 	Delete Library Group	Kütüphane Grubunu Sil
 	Move Library Item to Group	Kitaplık Öğesini Gruba Taşı
+	Rename Library Item	Kitaplık Öğesini Yeniden Adlandır
+	Add to Character Styles	Karakter Stillerine Ekle
 	Library	Kütüphane
 	Rename Library	Kitaplığı Yeniden Adlandır
 	Show Library	Kitaplığı Göster
@@ -3950,6 +3970,10 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Dock to Left	Sola yerleştir
+	Dock to Right	Sağa yerleştir
+	Dock Toolbar	Araç çubuğunu yerleştir
+	Float Toolbar	Araç Çubuğunu Yüzer Yap
 	Control Bar Options	Kontrol Çubuğu Seçenekleri
 	Tool Options	Araç Seçenekleri
 	Object Options	Nesne Seçenekleri
@@ -3962,6 +3986,7 @@ axis	Both	Her İkisi
 	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
+@msg	the library has another item of that kind named `{name}`	kitaplıkta zaten bu türden `{name}` adlı başka bir öğe var
 @msg	select some type first	önce bir tür seçin
 @msg	kerning must be a number, "auto", or "optical"	kerning bir sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok
@@ -4106,6 +4131,9 @@ axis	Both	Her İkisi
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} yerleştirilemedi: bırakıldığı belge kapatıldı
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} yerleştirilemedi: yerleştirildiği belge kapatıldı
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} yerleştirilemedi: bırakıldığı belge geri döndürüldü
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} yerleştirilemedi: yerleştirildiği belge geri döndürüldü
+@msg	Couldn't paste: the document it was pasted in was reverted	Yapıştırılamadı: yapıştırıldığı belge geri döndürüldü
 @msg	Couldn't read {name}: {e}	{name} okunamadı: {e}
 @msg	Couldn't save recovery data: {e}	Kurtarma verileri kaydedilemedi: {e}
 @msg	Create Outlines: select text objects	Anahatlar Oluştur: metin nesnelerini seçin
@@ -4499,6 +4527,7 @@ axis	Both	Her İkisi
 @msg	paths contain invalid coordinates	yollar geçersiz koordinatlar içeriyor
 @msg	paths: give at least one file	yollar: en az bir dosya verin
 @msg	replace: the object to replace was changed or deleted	değiştir: değiştirilecek nesne değiştirildi veya silindi
+@msg	the document it was prepared for is no longer active	hazırlandığı belge artık etkin değil
 @msg	pattern missing	desen eksik
 @msg	patterns nested too deeply are filled with mid-grey	çok derin iç içe geçmiş desenler orta gri renkle dolu
 @msg	percent must be above 0 and at most 6400, not {p}	percent 0'ın üzerinde ve en fazla 6400 olmalıdır, {p} değil
@@ -4837,6 +4866,7 @@ axis	Both	Her İkisi
 @msg	every numbered name for it is taken in the Fonts folder	bunun için numaralandırılmış her ad Yazı Tipleri klasöründe alınır
 @msg	every numbered name for {name} is taken in the document's folder	{name} için numaralandırılmış her ad belgenin klasöründe alınır
 @msg	No linked files to look for	Aranacak bağlantılı dosya yok
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Bağlantı bir sembolün, grafik tasarımının, desenin veya opaklık maskesinin içinde ve tuvalde yeri yok
 	Services	Hizmetler
 	Hide VectorCraft	VectorCraft'ı gizle
 	Zoom	Yakınlaştır
@@ -5201,7 +5231,9 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafikler düz yüzlere eşlenir: Ekstrüzyon veya Düzlem nesne türünü kullan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
 @msg	The graphics are too complex: simplify the symbols' art	Grafikler çok karmaşık: sembollerin resmini basitleştir
@@ -5443,6 +5475,8 @@ lighting	Light	Işık
 	Pen	Kalem
 	Pentagram	Pentagram
 	Perceptual	algısal
+	Hue Clockwise	Renk tonu saat yönünde
+	Hue Counterclockwise	Renk tonu saat yönünün tersine
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -5974,6 +6008,7 @@ theme	Appearance	Görünüm
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
+@msg	choose the object to detach with its Select/Move widget	ayrılacak nesneyi Seç/Taşı denetimiyle seçin
 @msg	the Simplify slider is not open	Basitleştirme kaydırıcısı açık değil
 @msg	the Smooth slider is not open	Düzgünleştirme kaydırıcısı açık değil
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} bir dışa aktarma eklentisidir (Dosya › Dışa Aktar › Farklı Dışa Aktar…)
@@ -6006,6 +6041,8 @@ theme	Appearance	Görünüm
 	Chrome	Krom
 	Chrome…	Krom…
 	Expand Objects on Path	Yol Üzerindeki Nesneleri Genişlet
+	Detach	Ayır
+	Detach Object from Path	Nesneyi Yoldan Ayır
 	Graphic Pen	Grafik Kalemi
 	Graphic Pen…	Grafik Kalemi…
 	Move Anchor Point	Bağlantı Noktasını Taşı
@@ -6237,7 +6274,7 @@ axis	Y Axis	Y ekseni
 	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
-@msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise veya hue-counterclockwise olmalıdır
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
@@ -6480,12 +6517,14 @@ axis	Y Axis	Y ekseni
 	Continue	Devam Et
 	Continue Action	Eyleme Devam Et
 	Delete Action Step	Eylem Adımını Sil
+	Move Action Step	Eylem Adımını Taşı
 	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
 	Stop: {message}	Durak: {message}
 @msg	no action is waiting at a stop	durakta bekleyen eylem yok
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+@msg	Batch cannot play an action with a View menu step	Toplu işlem Görünüm menüsü adımı içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
 	Insert Select Path	Yol Seçimi Ekle
@@ -6650,6 +6689,22 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+	Notched Ribbon	Çentikli Şerit
+	Double Line	Çift Çizgi
+	Wave	Dalga
+	Teardrop	Gözyaşı
+	Striped Ribbon	Çizgili Şerit
+	Fine Nib	İnce Uç
+	Broad Nib	Geniş Uç
+	Chisel	Keski
+	Round Pen	Yuvarlak Kalem
+	Pressure Pen	Basınçlı Kalem
+	Beads	Boncuklar
+	Dash Dot	Çizgi Nokta
+	Scallops	Fistolar
+	Stars	Yıldızlar
+	Triangles	Üçgenler
+	Sparkles	Parıltılar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
@@ -6669,6 +6724,13 @@ axis	Y Axis	Y ekseni
 	Area Text	Alan Metni
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Piksel'e Yapışma Seçenekleri
+	Pixel Snapping Options…	Piksel'e Yapışma Seçenekleri…
+	Snap to Pixel While Drawing	Çizerken Piksel'e Yapış
+	Snap to Pixel While Moving	Taşırken Piksel'e Yapış
+	Snap to Pixel While Scaling	Ölçeklerken Piksel'e Yapış
+	These options take effect when View › Snap to Pixel is on.	Bu seçenekler Görünüm › Piksel'e Yapış açıkken etkili olur.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle
@@ -7296,6 +7358,19 @@ breakText	Glyphs	Glifler
 	Show where this tool is	Bu aracın nerede olduğunu göster
 @msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
+	View more	Daha fazlasını gör
+	Finish tutorial	Öğreticiyi bitir
+	Next Up	Sıradaki
+	You finished the last tutorial in this skill.	Bu becerinin son öğreticisini bitirdiniz.
+	Back to skills	Becerilere dön
+	Open Tutorial Sample	Öğretici Örneğini Aç
+	Finish Tutorial	Öğreticiyi Bitir
+	Next Tutorial	Sonraki Öğretici
+	Back to Skills	Becerilere Dön
+@msg	tutorial `{id}` has no practice sample	`{id}` öğreticisinin alıştırma örneği yok
+@msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	önce `{id}` öğreticisini bitirin (bkz. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}`, becerisinin son öğreticisidir
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile

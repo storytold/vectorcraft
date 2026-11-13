@@ -481,6 +481,12 @@ fn join_point(sp: &mut SubPath, ai: usize, smooth: bool) {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Anchors that [`merge_coincident`] moved to a lower index of their vector on this thread.
+    static ANCHOR_MOVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Merge each run of `picked` neighbours of `sp` that lie on one another into one anchor, which
 /// keeps the first one's incoming handle and the last one's outgoing handle. Returns how many
 /// anchors went.
@@ -501,21 +507,66 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
             join_point(sp, 0, smooth);
         }
     }
-    // Back to front, so the indices `picked` knows stay true for the anchors still to visit.
-    for i in (1..sp.anchors.len()).rev() {
+    // Back to front, so the indices `picked` knows stay true for the anchors still to visit. A
+    // merged anchor is only marked here; the marked anchors are removed in one pass at the end.
+    let closed = sp.closed;
+    let anchors = &mut sp.anchors;
+    let len = anchors.len();
+    let mut gone = vec![false; len];
+    // The anchor after `i` that is still on the path, and the last one still on it.
+    let mut next = None;
+    let mut last = len.saturating_sub(1);
+    for i in (1..len).rev() {
         if picked(i - 1)
             && picked(i)
-            && let Some([a, b]) = sp.anchors.get_mut(i - 1..=i)
+            && let Some([a, b]) = anchors.get_mut(i - 1..=i)
             && same(a, b)
         {
             a.h_out = b.h_out;
-            sp.anchors.remove(i);
-            if let Some(smooth) = join_kind {
-                join_point(sp, i - 1, smooth);
+            if let Some(slot) = gone.get_mut(i) {
+                *slot = true;
             }
+            if next.is_none() {
+                last = i - 1;
+            }
+            if let Some(smooth) = join_kind {
+                // The neighbors the anchor has on the path as it now stands, as `join_point` sees them.
+                let prev = if i > 1 { Some(i - 2) } else { closed.then_some(last) };
+                let after = next.or(closed.then_some(0));
+                join_point_between(anchors, i - 1, prev, after, smooth);
+            }
+        } else {
+            next = Some(i);
         }
     }
+    #[cfg(test)]
+    if let Some(first) = gone.iter().position(|&g| g) {
+        // `retain` moves each anchor it keeps after the first one it drops.
+        let dropped = gone.iter().filter(|&&g| g).count();
+        ANCHOR_MOVES.set(ANCHOR_MOVES.get() + (len - first - dropped));
+    }
+    if gone.contains(&true) {
+        let mut k = 0;
+        anchors.retain(|_| {
+            let keep = !gone.get(k).copied().unwrap_or(false);
+            k += 1;
+            keep
+        });
+    }
     before - sp.anchors.len()
+}
+
+/// [`join_point`] on anchor `ai` of `anchors` with its neighbors given by index.
+fn join_point_between(anchors: &mut [Anchor], ai: usize, prev: Option<usize>, next: Option<usize>, smooth: bool) {
+    let at = |j: Option<usize>| j.and_then(|j| anchors.get(j)).map(|a| a.p);
+    let (prev, next) = (at(prev), at(next));
+    if let Some(a) = anchors.get_mut(ai) {
+        if smooth {
+            a.smooth_between(prev, next);
+        } else {
+            a.retract();
+        }
+    }
 }
 
 /// Close subpath `si` of path `id`, merging coincident endpoints if present.
@@ -751,8 +802,19 @@ pub(super) fn join(s: &mut Session, p: &Value) -> Result<Value> {
         let mut merged = vec![];
         for (id, picked) in &st.selection.anchors {
             let Some(mut path) = st.doc.node(*id).and_then(|n| n.path_data()).cloned() else { continue };
-            let n: usize =
-                path.subpaths.iter_mut().enumerate().map(|(si, sp)| merge_coincident(sp, |ai| picked.contains(&(si, ai)), join_kind)).sum();
+            // One flag per anchor; references past the end of a subpath or to a missing one pick nothing.
+            let mut masks: Vec<Vec<bool>> = path.subpaths.iter().map(|sp| vec![false; sp.anchors.len()]).collect();
+            for &(si, ai) in picked {
+                if let Some(flag) = masks.get_mut(si).and_then(|m| m.get_mut(ai)) {
+                    *flag = true;
+                }
+            }
+            let n: usize = path
+                .subpaths
+                .iter_mut()
+                .zip(&masks)
+                .map(|(sp, mask)| merge_coincident(sp, |ai| mask.get(ai).copied().unwrap_or(false), join_kind))
+                .sum();
             if n > 0 {
                 merged.push((*id, path));
             }
@@ -1276,7 +1338,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
-                            let cuts = refs.iter().filter_map(|&(s, seg)| (s == si).then_some(seg)).collect();
+                            let cuts = subpath_refs(refs, si).collect();
                             without_segments(sp, &cuts)
                         })
                         .filter(|s| s.anchors.len() >= 2)
@@ -1288,7 +1350,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
-                            let gone = set.iter().filter_map(|&(s, ai)| (s == si).then_some(ai)).collect();
+                            let gone = subpath_refs(set, si).collect();
                             without_anchors(sp, &gone)
                         })
                         .filter(|s| s.anchors.len() >= 2)
@@ -1312,6 +1374,12 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// The anchor or segment indexes in `refs` that belong to subpath `si`, in index order.
+/// `refs` is ordered by subpath first, so this reads only that subpath's entries.
+pub(super) fn subpath_refs(refs: &BTreeSet<(usize, usize)>, si: usize) -> impl Iterator<Item = usize> + '_ {
+    refs.range((si, 0)..=(si, usize::MAX)).map(|&(_, i)| i)
 }
 
 /// Retain path `id` from `d` without copying its geometry before deletion takes its subpaths.
@@ -1722,7 +1790,7 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         let Some(pd) = st.doc.node(*id).and_then(|n| n.path_data()) else { continue };
         let (mut subs, mut starts) = (vec![], vec![]);
         for (si, sp) in pd.subpaths.iter().enumerate() {
-            let at: BTreeSet<usize> = set.iter().filter(|(s, _)| *s == si).map(|(_, a)| *a).collect();
+            let at: BTreeSet<usize> = subpath_refs(set, si).collect();
             let pieces = sp.cut_at(&at);
             // The pieces that start at a cut: every piece of an opened closed subpath, all but the
             // first of an open one.
@@ -1762,4 +1830,141 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         Ok(all)
     })?;
     Ok(super::draw2::ids_json(&ids))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `merge_coincident` removing each merged anchor from the vector straight away, kept as the
+    /// reference the one-pass version must match.
+    fn merge_coincident_by_removal(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind: Option<bool>) -> usize {
+        let same = |a: &Anchor, b: &Anchor| a.p.distance(b.p) < 1e-6;
+        let before = sp.anchors.len();
+        if sp.closed
+            && before > 2
+            && picked(0)
+            && picked(before - 1)
+            && let [first, .., last] = sp.anchors.as_mut_slice()
+            && same(first, last)
+        {
+            first.h_in = last.h_in;
+            sp.anchors.pop();
+            if let Some(smooth) = join_kind {
+                join_point(sp, 0, smooth);
+            }
+        }
+        for i in (1..sp.anchors.len()).rev() {
+            if picked(i - 1)
+                && picked(i)
+                && let Some([a, b]) = sp.anchors.get_mut(i - 1..=i)
+                && same(a, b)
+            {
+                a.h_out = b.h_out;
+                sp.anchors.remove(i);
+                if let Some(smooth) = join_kind {
+                    join_point(sp, i - 1, smooth);
+                }
+            }
+        }
+        before - sp.anchors.len()
+    }
+
+    /// Every field of every anchor, bit for bit.
+    fn bits(sp: &SubPath) -> (Vec<[u64; 6]>, Vec<AnchorKind>, bool) {
+        let b = |p: Point| [p.x.to_bits(), p.y.to_bits()];
+        let fields = sp.anchors.iter().map(|a| [b(a.p), b(a.h_in), b(a.h_out)].concat().try_into().unwrap()).collect();
+        (fields, sp.anchors.iter().map(|a| a.kind).collect(), sp.closed)
+    }
+
+    /// A small linear congruential generator, so the cases are the same on every run.
+    struct Lcg(u64);
+    impl Lcg {
+        fn below(&mut self, n: u64) -> u64 {
+            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (self.0 >> 33) % n
+        }
+    }
+
+    fn same_as_removal(sp: &SubPath, picked: &dyn Fn(usize) -> bool, join_kind: Option<bool>) {
+        let (mut ours, mut theirs) = (sp.clone(), sp.clone());
+        let n = merge_coincident(&mut ours, picked, join_kind);
+        let m = merge_coincident_by_removal(&mut theirs, picked, join_kind);
+        assert_eq!(n, m, "{sp:?} {join_kind:?}");
+        assert_eq!(bits(&ours), bits(&theirs), "{sp:?} {join_kind:?}");
+    }
+
+    /// Short paths with points on, near and just past the merge distance, selections with stale
+    /// indices, every anchor kind and every join kind give the same anchors, bit for bit, as
+    /// removing each merged anchor straight away.
+    #[test]
+    fn merging_coincident_anchors_matches_removing_them_one_by_one() {
+        let spots = [(0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (5e-7, 0.0), (0.0, 1.5e-6), (10.0, 0.0), (5.0, 5.0), (10.0, 0.0)];
+        let mut rng = Lcg(7);
+        for _ in 0..30_000 {
+            let n = rng.below(9) as usize;
+            let anchors = (0..n)
+                .map(|_| {
+                    let (x, y) = spots[rng.below(spots.len() as u64) as usize];
+                    let p = Point::new(x, y);
+                    let handle = |rng: &mut Lcg| match rng.below(3) {
+                        0 => p,
+                        _ => p + Vec2::new(rng.below(7) as f64 - 3.0, rng.below(7) as f64 - 3.0),
+                    };
+                    let (h_in, h_out) = (handle(&mut rng), handle(&mut rng));
+                    let kind = if rng.below(2) == 0 { AnchorKind::Corner } else { AnchorKind::Smooth };
+                    Anchor { p, h_in, h_out, kind }
+                })
+                .collect();
+            let sp = SubPath::new(anchors, rng.below(2) == 0);
+            let picks: Vec<bool> = (0..n + 2).map(|_| rng.below(4) != 0).collect();
+            let join_kind = [None, Some(false), Some(true)][rng.below(3) as usize];
+            same_as_removal(&sp, &|i| picks.get(i).copied().unwrap_or(false), join_kind);
+        }
+    }
+
+    /// A smooth join of three anchors on one another takes the outgoing handle the middle anchor
+    /// was given when it joined the right one: an already smooth left anchor keeps that handle.
+    #[test]
+    fn a_smooth_join_of_three_anchors_keeps_the_handle_the_middle_one_got() {
+        let o = Point::ZERO;
+        let left = Anchor { p: o, h_in: Point::new(-2.0, 0.0), h_out: o, kind: AnchorKind::Smooth };
+        let right = Anchor { p: o, h_in: o, h_out: Point::new(0.0, 5.0), kind: AnchorKind::Corner };
+        let mut sp = SubPath::new(vec![left, Anchor::corner(o), right, Anchor::corner(Point::new(10.0, 0.0))], false);
+        assert_eq!(merge_coincident(&mut sp, |i| i < 3, Some(true)), 2);
+        let a = sp.anchors[0];
+        assert_eq!((a.h_in, a.h_out, a.kind), (Point::new(-2.0, 0.0), Point::new(10.0 / 3.0, 0.0), AnchorKind::Smooth));
+        assert_eq!(sp.anchors.len(), 2);
+    }
+
+    /// One long run of selected anchors on one another, open or closed, becomes one anchor.
+    #[test]
+    fn a_long_run_of_anchors_on_one_another_becomes_one() {
+        for closed in [false, true] {
+            for join_kind in [None, Some(false), Some(true)] {
+                let anchors = (0..50_000).map(|i| Anchor::smooth(Point::ZERO, Point::new(1.0, i as f64))).collect();
+                let sp = SubPath::new(anchors, closed);
+                same_as_removal(&sp, &|_| true, join_kind);
+                let mut ours = sp.clone();
+                assert_eq!(merge_coincident(&mut ours, |_| true, join_kind), 49_999);
+                assert_eq!((ours.anchors.len(), ours.closed), (1, closed));
+            }
+        }
+    }
+
+    /// A long selected run at the start of a path followed by as many anchors that stay: each
+    /// anchor after the run moves once, not once per merged anchor.
+    #[test]
+    fn a_long_run_before_many_other_anchors_merges_in_one_pass() {
+        let run = 300_000;
+        let anchors = (0..run).map(|_| Anchor::corner(Point::ZERO)).chain((1..=run).map(|i| Anchor::corner(Point::new(i as f64, 1.0)))).collect();
+        let mut sp = SubPath::new(anchors, false);
+        ANCHOR_MOVES.set(0);
+        assert_eq!(merge_coincident(&mut sp, |i| i < run, Some(false)), run - 1);
+        assert_eq!(ANCHOR_MOVES.get(), run);
+        assert_eq!(sp.anchors.len(), run + 1);
+        assert_eq!(sp.anchors[0].p, Point::ZERO);
+        assert_eq!(sp.anchors[1].p, Point::new(1.0, 1.0));
+        assert_eq!(sp.anchors[run].p, Point::new(run as f64, 1.0));
+    }
 }

@@ -531,7 +531,7 @@ impl Cms {
         }
     }
 
-    /// Gamut warning: can this colour be printed in the working CMYK space?
+    /// Gamut warning: can this color be printed in this context's CMYK space?
     pub fn out_of_gamut(&self, c: &Color) -> bool {
         self.gamut_error(c) > GAMUT_THRESHOLD
     }
