@@ -1389,6 +1389,9 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
                 .collect()
         };
         let mut opacity_rows = top_opacity_changed(&before, d, &targets);
+        // A written row that had paint before the pick counts too when the pick left it without paint, as in
+        // `capture_series_writes`.
+        opacity_rows.extend(painted_rows(&before, written(opacities)));
         opacity_rows.extend(painted_rows(d, written(opacities)));
         let mut rows = top_paint_changed(&before, d, &targets);
         rows.extend(painted_rows(d, written(paints)));
