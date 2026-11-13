@@ -158,6 +158,62 @@ fn break_text_refuses_what_it_cannot_break() {
     assert!(matches!(r, Err(EngineError::BadParams { .. })), "{r:?}");
 }
 
+/// Two area frames threaded together, with `story` flowing through them → (first, second).
+fn threaded(s: &mut Session, story: &str) -> (NodeId, NodeId) {
+    let a = text(s, json!({"x": 10, "y": 300, "text": story, "size": 12, "area": {"width": 150, "height": 60}}));
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 300, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[a, b]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    (a, b)
+}
+
+fn thread_scans() -> usize {
+    super::THREAD_SCANS.with(|c| c.get())
+}
+
+/// Threaded frames in the selection stay as they are and are reported as skipped; the other type
+/// is broken. The document's threads are gone through once for the whole selection, not once
+/// per object.
+#[test]
+fn break_text_skips_threaded_frames_and_reads_the_threads_once() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "Threaded story text");
+    let mut plain = vec![];
+    for i in 0..6 {
+        plain.push(text(&mut s, json!({"x": 20, "y": 30 + 30 * i, "text": "Two words", "size": 14})));
+    }
+    let was = glyphs(&s, &plain);
+    let frames = (obj(&s, a), obj(&s, b));
+    let before = doc_json(&s);
+    let steps = undo_steps(&s);
+    let mut all = vec![a, b];
+    all.extend(&plain);
+    select(&mut s, &all);
+    let scans = thread_scans();
+    let r = s.execute("addon.cleanup.breakText", &json!({"by": "words"})).unwrap();
+    assert_eq!(thread_scans() - scans, 1, "the threads are gone through once");
+    assert_eq!(ids(&json!({"ids": r["skipped"]})), [a, b]);
+    assert_eq!((obj(&s, a), obj(&s, b)), frames, "the threaded frames stay as they are");
+    let pieces = ids(&r);
+    assert_eq!(pieces.len(), 12);
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 12, "the pieces are selected");
+    assert_same_places(&was, &glyphs(&s, &pieces));
+    assert_eq!(undo_steps(&s), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(doc_json(&s), before);
+}
+
+#[test]
+fn split_text_refuses_a_threaded_frame() {
+    let mut s = session();
+    let (a, _) = threaded(&mut s, "Threaded story text");
+    select(&mut s, &[a]);
+    edit_text(&mut s, a, 9, 9);
+    let before = doc_json(&s);
+    assert!(other(s.execute("addon.cleanup.splitText", &json!({}))).contains("point or area type"));
+    assert_eq!(doc_json(&s), before);
+}
+
 #[test]
 fn combine_puts_glyph_pieces_back_together_where_they_were() {
     let mut s = session();
@@ -298,6 +354,29 @@ fn remove_breaks_with_ids_null_in_the_characters_a_type_tool_selected() {
     edit_text(&mut s, id, 0, 2);
     s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": null})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "a b\nc");
+}
+
+/// Remove Breaks reads a threaded story whose frames are all selected as one text and each other
+/// object on its own, going through the document's threads once for the whole selection.
+#[test]
+fn remove_breaks_reads_the_threads_once() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "one\ntwo");
+    let mut plain = vec![];
+    for i in 0..6 {
+        plain.push(text(&mut s, json!({"x": 20, "y": 30 + 30 * i, "text": "a\nb", "size": 12})));
+    }
+    let mut all = vec![a, b];
+    all.extend(&plain);
+    select(&mut s, &all);
+    let scans = thread_scans();
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(thread_scans() - scans, 1, "the threads are gone through once");
+    assert_eq!(r["removed"], 7);
+    assert_eq!(obj(&s, a).plain_text(), "one two");
+    for id in plain {
+        assert_eq!(obj(&s, id).plain_text(), "a b");
+    }
 }
 
 #[test]

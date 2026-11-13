@@ -441,6 +441,98 @@ fn offset_open_path_whose_ends_meet_grows_the_shape() {
     assert_eq!(path_of(&s, r[0]).0.subpaths.len(), 1);
 }
 
+/// The ids of the objects in the first layer, back to front.
+fn first_layer(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect()
+}
+
+/// Offset Path of several objects at once: each result goes directly above its object and takes
+/// the next ids in the objects' order, a group gives a group of its paths' offsets with their
+/// styles, a compound path gives a compound path, an inset that leaves nothing and type give
+/// nothing, and one undo gives the objects back.
+#[test]
+fn offset_path_of_several_objects_keeps_their_order() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let c = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    set_fill(&mut s, b, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(&mut s, c, Color::rgb(0.0, 0.0, 1.0));
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let tiny = rect(&mut s, 100.0, 0.0, 4.0, 4.0);
+    let outer = rect(&mut s, 200.0, 0.0, 40.0, 40.0);
+    let inner = rect(&mut s, 210.0, 10.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    let cp = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = NodeId(s.execute("text.create", &json!({"x": 300, "y": 10, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let before = first_layer(&s);
+    assert_eq!(before, [a, g, tiny, cp, t]);
+    let first = s.doc().unwrap().doc.peek_next_id();
+    s.execute("select.set", &json!({"ids": [a.0, g.0, tiny.0, cp.0, t.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": -3, "joins": "miter"})).unwrap());
+    // a's offset, then b's and c's and their group, then the compound path and its two subpaths.
+    assert_eq!(r, [NodeId(first), NodeId(first + 3), NodeId(first + 4)]);
+    assert_eq!(first_layer(&s), [a, r[0], g, r[1], tiny, cp, r[2], t]);
+    assert_eq!(s.doc().unwrap().selection.objects, r);
+    assert!(close(bounds(&s, r[0]), Rect::new(3.0, 3.0, 17.0, 17.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    let group = node(&s, r[1]);
+    assert!(matches!(group.kind, NodeKind::Group { .. }), "{:?}", group.kind);
+    let kids = group.children().unwrap();
+    assert_eq!(kids.iter().map(|k| k.id).collect::<Vec<_>>(), [NodeId(first + 1), NodeId(first + 2)]);
+    assert_eq!(kids[0].appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(kids[1].appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let rings = node(&s, r[2]);
+    assert!(matches!(rings.kind, NodeKind::Compound { .. }), "{:?}", rings.kind);
+    assert!(close(bounds(&s, r[2]), Rect::new(203.0, 3.0, 237.0, 37.0), 1e-2), "{:?}", bounds(&s, r[2]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_layer(&s), before);
+}
+
+/// Offset Path works out the offsets of several paths on more than one thread, and gives the
+/// results in the paths' order.
+#[test]
+fn offset_path_works_on_several_threads_in_order() {
+    let seen = std::sync::Mutex::new(vec![]);
+    let items: Vec<usize> = (0..8).collect();
+    let work = |i: &usize| {
+        if let Ok(mut seen) = seen.lock() {
+            seen.push(std::thread::current().id());
+        }
+        i * 2
+    };
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 4, work, |_| false);
+    assert_eq!(out, (0..8).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    let threads: std::collections::HashSet<_> = seen.into_inner().unwrap().into_iter().collect();
+    assert_eq!(threads.len(), 4);
+    // A count just past the threads still uses every thread.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..5], 4, |i| i * 2, |_| false);
+    assert_eq!(out, (0..5).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    // One item, or one thread, is worked on here.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..1], 4, |i| i * 2, |_| false);
+    assert_eq!((out, used), (vec![Some(0)], 1));
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 1, |i| i * 2, |_| false);
+    assert_eq!(used, 1);
+    assert_eq!(out.len(), 8);
+}
+
+/// Once a result stops the work (an offset that fails), the paths after it are left out, and every
+/// path before it has its result, so the first failure in the paths' order is the one reported.
+#[test]
+fn offset_path_stops_after_the_first_failure() {
+    let items: Vec<usize> = (0..8).collect();
+    let (out, _) = crate::cmd::pathops::ordered_map(&items, 1, |i| *i, |r| *r == 2 || *r == 5);
+    assert_eq!(out, [Some(0), Some(1), Some(2), None, None, None, None, None]);
+    for threads in [2, 4, 8] {
+        let (out, _) = crate::cmd::pathops::ordered_map(&items, threads, |i| *i, |r| *r == 2 || *r == 5);
+        assert_eq!(out[..3], [Some(0), Some(1), Some(2)], "{threads} threads");
+        let first = out.iter().position(|r| r.is_some_and(|r| r == 2 || r == 5));
+        assert_eq!(first, Some(2), "{threads} threads");
+    }
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();

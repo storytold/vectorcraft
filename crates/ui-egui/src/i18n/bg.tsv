@@ -4147,6 +4147,10 @@ axis	Both	И двете
 @msg	Couldn't paste: the document it was pasted in was reverted	Неуспешно поставяне: документът, в който се поставяше, е върнат към запазеното
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти
 @msg	Create from Guides: the document has no artboard	Създаване от водачи: документът няма работна област
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Създаване от водачи: водачите правят повече от {MAX_PIECES} парчета
@@ -6845,3 +6849,9 @@ breakText	Glyphs	Глифи
 	Box	Рамка
 	Swatch	Образец
 	Direction	Посока
+	Banner Hems and Grommets…	Подгъви и капси за банер…
+	Banner Hems and Grommets	Подгъви и капси за банер
+	Hem	Подгъв
+	Grommets	Капси
+	Grommet Inset	Отстъп на капсите от ръба
+	Diameter	Диаметър
