@@ -6524,6 +6524,7 @@ axis	Y Axis	osa Y
 	Continue	Pokračovat
 	Continue Action	Pokračovat v akci
 	Delete Action Step	Odstranit krok akce
+	Move Action Step	Přesunout krok akce
 	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
 	Stop: {message}	Zastavení: {message}
 @msg	no action is waiting at a stop	žádná akce nečeká na zastavení

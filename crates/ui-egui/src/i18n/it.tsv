@@ -6149,6 +6149,7 @@ axis	Y Axis	Asse Y
 	Continue	Continua
 	Continue Action	Continua azione
 	Delete Action Step	Elimina passaggio dell’azione
+	Move Action Step	Sposta passaggio dell’azione
 	Press Play Current Selection in the Actions panel to go on.	Per continuare, premi Esegui selezione corrente nel pannello Azioni.
 	Stop: {message}	Interruzione: {message}
 @msg	no action is waiting at a stop	nessuna azione è in attesa a un'interruzione

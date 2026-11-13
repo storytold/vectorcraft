@@ -847,15 +847,26 @@ pub const STOP_RECORDING: &str = "ui.action.stop";
 /// The command that begins a plain recording ([`record`]).
 pub const START_RECORDING: &str = "ui.action.record";
 
-/// `ui.action.record {set?}`: begins recording an automatically named Action N in `set`, or in
-/// the current set (the first if none is current). With no sets, makes Set 1. Stop adds the action
-/// after the set's existing actions. An explicit invalid set, an existing recording, or a set whose
-/// new action would pass a limit of Load Actions… ([`edit_keeps_set_loadable`]: 1,000 actions,
-/// 8 MiB) is an error and leaves the panel unchanged. While it records, a command whose step does not fit in the action
-/// ([`recording_room`]) does not run. → {set, name}
+/// `ui.action.record {set?, action?, after?}`: begins recording an automatically named Action N in
+/// `set`, or in the current set (the first if none is current). With no sets, makes Set 1. Stop
+/// adds the action after the set's existing actions. With `action`, it records into the action at
+/// that index of set `set` instead: Stop puts the recorded steps after step `after` of that action,
+/// else after its last step, and the steps after them keep whether they are excluded. The Begin
+/// Recording button passes the selected action and step. `action` without `set`, `after` without
+/// `action`, an index past the last set, action or step, an explicit invalid set, an existing
+/// recording, or a set whose new action would pass a limit of Load Actions…
+/// ([`edit_keeps_set_loadable`]: 1,000 actions, 8 MiB) is an error and leaves the panel unchanged.
+/// While it records, a command whose step does not fit in the action ([`recording_room`]) does not
+/// run. → {set, name}, and with `action` {set, action, name}
 pub fn record(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if app.ui.recording.is_some() {
         return Err("an action is already recording".into());
+    }
+    if p.get("action").is_some() {
+        return record_into(app, p);
+    }
+    if p.get("after").is_some() {
+        return Err("no such action".into());
     }
     let set = match p.get("set") {
         Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|&i| i < app.ui.action_sets.len()).ok_or("no such action set")?,
@@ -884,8 +895,32 @@ pub fn record(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(json!({ "set": set, "name": name }))
 }
 
+/// [`record`] with `action`: records into the action at index `action` of set `set`, after step
+/// `after` or after its last step. The set becomes current and the only selected set, and the
+/// action stays selected. → {set, action, name}
+fn record_into(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let (set, at) =
+        index("set").zip(index("action")).filter(|&(s, a)| app.ui.action_sets.get(s).is_some_and(|s| a < s.actions.len())).ok_or("no such action")?;
+    let action = &app.ui.action_sets[set].actions[at];
+    let slot = match p.get("after") {
+        None => None,
+        Some(_) => Some(index("after").filter(|&s| s < action.steps.len()).ok_or("no such action step")? + 1),
+    };
+    let (id, name) = (action.id, action.name.clone());
+    app.ui.action_set = Some(set);
+    app.ui.action_sets_selected = vec![set];
+    start_recording(app, set, name.clone(), Some(id));
+    app.ui.recording_at = slot;
+    if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((set, at)));
+    }
+    Ok(json!({ "set": set, "action": at, "name": name }))
+}
+
 /// `ui.action.stop {}`: ends the recording in progress and keeps its steps, in the action New
-/// Action made for it, else in a new action after the last action of its set, as the bottom bar's
+/// Action made for it or the action [`record`] named, at the place it named, else in a new action
+/// after the last action of its set, as the bottom bar's
 /// Stop Playing/Recording does. It also ends a playback at Step by Step or Pause For, or one that
 /// waits at a stop, whose message box closes: the steps already played stay, and the rest do not
 /// run. With nothing recording or playing it changes nothing. Recorded steps past the limits of an
@@ -903,6 +938,10 @@ pub const INSERT_STOP: &str = "ui.action.insertStop";
 
 /// The panel state that holds the selected step as (the action's [`Action::id`], the step's index).
 const SELECTED_STEP: &str = "actions-selected-step";
+
+/// The panel state that holds the step being dragged as (the action's [`Action::id`], the step's
+/// index).
+const DRAGGED_STEP: &str = "actions-dragged-step";
 
 /// `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}`: inserts a stop. With `set`
 /// and `action`, it goes into that action, after step `step`, else after its last step. Without
@@ -1030,9 +1069,9 @@ fn recording_start(app: &VectorcraftApp) -> Option<usize> {
 }
 
 /// Where Stop Playing/Recording puts the steps of the recording in progress: the index of the set,
-/// and of the action New Action made for it, or None for the new action Stop adds after the set's
-/// last action. None when there is no recording, no set to put them in, or the action New Action
-/// made for it was deleted, so that Stop keeps none of them.
+/// and of the action it records into ([`crate::UiState::recording_into`]), or None for the new
+/// action Stop adds after the set's last action. None when there is no recording, no set to put
+/// them in, or the action it records into was deleted, so that Stop keeps none of them.
 fn recording_target(app: &VectorcraftApp) -> Option<(usize, Option<usize>)> {
     let (set, ..) = app.ui.recording.as_ref()?;
     let Some(id) = app.ui.recording_into else {
@@ -1054,7 +1093,7 @@ fn set_with_recorded(app: &VectorcraftApp, steps: Vec<(String, Value)>) -> Optio
             s.actions.len() - 1
         }
     };
-    extend_recorded(s.actions.get_mut(at)?, steps);
+    put_recorded(s.actions.get_mut(at)?, steps, app.ui.recording_at);
     Some((s, at))
 }
 
@@ -1091,7 +1130,7 @@ fn set_sizes(app: &VectorcraftApp, at: Option<usize>, set: &ActionSet) -> [usize
             let mut s = set.clone();
             let steps = app.session.journal_for_action(start);
             match app.ui.recording_into.and_then(|id| s.actions.iter().position(|a| a.id == id)) {
-                Some(i) => extend_recorded(&mut s.actions[i], steps),
+                Some(i) => put_recorded(&mut s.actions[i], steps, app.ui.recording_at),
                 None => s.actions.push(Action::new(name, steps)),
             }
             with = s;
@@ -1286,12 +1325,17 @@ fn insert(app: &mut VectorcraftApp, p: &Value, step: (String, Value)) -> Result<
     let excluded = action.excluded_steps.clone();
     action.insert_step(after, step);
     let id = action.id;
+    // The recording's steps stay after the steps that were before them.
+    let slot = match (&recorded, app.ui.recording_at) {
+        (Some(r), Some(slot)) if r.into == Some(at) && after <= slot => Some(slot + 1),
+        (_, slot) => slot,
+    };
     let file_len = match recorded {
         None => files::write_set(s).len(),
         Some(Recorded { into, name, steps }) => {
             let mut kept = s.clone();
             match into {
-                Some(into) => kept.actions[into].steps.extend(steps),
+                Some(into) => put_recorded(&mut kept.actions[into], steps, slot),
                 None => kept.actions.push(Action::new(name, steps)),
             }
             files::write_set(&kept).len()
@@ -1303,6 +1347,7 @@ fn insert(app: &mut VectorcraftApp, p: &Value, step: (String, Value)) -> Result<
         action.excluded_steps = excluded;
         return Err("the action set would be larger than 8 MiB".into());
     }
+    app.ui.recording_at = slot;
     app.ui.action_set = Some(set);
     app.ui.action_sets_selected = vec![set];
     if let Some(ctx) = app.ui_ctx.clone() {
@@ -1342,6 +1387,12 @@ pub fn delete_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     let step = index("step").filter(|&s| s < action.steps.len()).ok_or("no such action step")?;
     action.remove_step(step);
     let id = action.id;
+    // The recording's steps stay after the steps that were before them.
+    if app.ui.recording_into == Some(id)
+        && let Some(slot) = app.ui.recording_at.filter(|&slot| step < slot)
+    {
+        app.ui.recording_at = Some(slot - 1);
+    }
     if let Some(ctx) = app.ui_ctx.clone()
         && pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP).is_some_and(|(selected, _)| selected == id)
     {
@@ -1362,6 +1413,115 @@ pub fn delete_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         d.fields.insert("step".into(), json!(later - 1));
     }
     Ok(json!({"set": set, "action": at, "step": step}))
+}
+
+/// The command that moves one step of an action ([`move_step`]).
+pub const MOVE_STEP: &str = "ui.action.moveStep";
+
+/// `ui.action.moveStep {set, action, step, toSet?, toAction?, before}`: moves step `step`, a stop or
+/// a command, of the action at index `action` of set `set` into the action at index `toAction` of
+/// set `toSet` (default: the same set and action), before the step at index `before` there, or
+/// after its last step when `before` is its number of steps. `before` counts the steps as they are
+/// before the move. The step keeps its params and whether it is excluded, and the other steps keep
+/// theirs. A selected step stays selected: a moved selected step makes its new action the selected
+/// one and its set the current one. A Record Stop, Insert Menu Item or Set Selection dialog open on
+/// a step follows the step, and the steps a recording adds to either action stay after the steps
+/// that were before them. A step put back just before or just after itself does not move. A missing
+/// or invalid index, or a move that would give a set a file that Load Actions… refuses
+/// ([`edit_keeps_set_loadable`]: 10,000 steps in an action, 8 MiB), is an error, and then nothing
+/// changes. Undo does not move the step back. A drag of a step row in the panel runs this.
+/// → {set, action, step, moved}: where the step is now
+pub fn move_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let number = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    let index = |k: &str| p.get(k).and_then(number);
+    let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
+    let source = app.ui.action_sets.get(set).and_then(|s| s.actions.get(at)).ok_or("no such action")?;
+    let step = index("step").filter(|&s| s < source.steps.len()).ok_or("no such action step")?;
+    let source_id = source.id;
+    let to_set = match p.get("toSet") {
+        None => set,
+        Some(v) => number(v).filter(|&s| s < app.ui.action_sets.len()).ok_or("no such action set")?,
+    };
+    let to_action = match p.get("toAction") {
+        None => at,
+        Some(v) => number(v).ok_or("no such action")?,
+    };
+    let dest = app.ui.action_sets[to_set].actions.get(to_action).ok_or("no such action")?;
+    let dest_id = dest.id;
+    let before = index("before").filter(|&b| b <= dest.steps.len()).ok_or("no such action step")?;
+    let same = (set, at) == (to_set, to_action);
+    if same && (before == step || before == step + 1) {
+        return Ok(json!({"set": set, "action": at, "step": step, "moved": false}));
+    }
+    // The step's index once it is in place, counted without it in its own action.
+    let to = if same && before > step { before - 1 } else { before };
+    let mut from_edit = app.ui.action_sets[set].clone();
+    let moved = from_edit.actions[at].steps[step].clone();
+    let excluded = from_edit.actions[at].excluded_steps.contains(&step);
+    from_edit.actions[at].remove_step(step);
+    let put = |a: &mut Action| {
+        a.insert_step(to, moved);
+        if excluded {
+            a.excluded_steps.insert(to);
+        }
+    };
+    let to_edit = if to_set == set {
+        put(&mut from_edit.actions[to_action]);
+        None
+    } else {
+        let mut edit = app.ui.action_sets[to_set].clone();
+        put(&mut edit.actions[to_action]);
+        Some(edit)
+    };
+    edit_keeps_set_loadable(app, Some(set), &from_edit)?;
+    if let Some(edit) = &to_edit {
+        edit_keeps_set_loadable(app, Some(to_set), edit)?;
+    }
+    app.ui.action_sets[set] = from_edit;
+    if let Some(edit) = to_edit {
+        app.ui.action_sets[to_set] = edit;
+    }
+    // A step index in `source_id` or `dest_id` as (the action's id, the step) after the move.
+    let follow = |(id, s): (u64, usize)| -> (u64, usize) {
+        if (id, s) == (source_id, step) {
+            return (dest_id, to);
+        }
+        let s = if id == source_id && s > step { s - 1 } else { s };
+        (id, if id == dest_id && s >= to { s + 1 } else { s })
+    };
+    // The recording's steps stay after the steps that were before them.
+    if let Some(slot) = app.ui.recording_at {
+        let slot = if app.ui.recording_into == Some(source_id) && step < slot { slot - 1 } else { slot };
+        app.ui.recording_at = Some(if app.ui.recording_into == Some(dest_id) && to <= slot { slot + 1 } else { slot });
+    }
+    if let Some(ctx) = app.ui_ctx.clone()
+        && let Some(selected) = pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP)
+    {
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some(follow(selected)));
+        if selected == (source_id, step) {
+            set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((to_set, to_action)));
+            let mut expanded: BTreeSet<u64> = pstate(&ctx, "actions-expanded");
+            expanded.insert(dest_id);
+            set_pstate(&ctx, "actions-expanded", expanded);
+            app.ui.action_set = Some(to_set);
+            app.ui.action_sets_selected = vec![to_set];
+        }
+    }
+    // A Record Stop, Insert Menu Item or Set Selection dialog open on a step of either action follows it.
+    let either = |s: usize, a: usize| (s, a) == (set, at) || (s, a) == (to_set, to_action);
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_step(d))
+        && let (Some(ds), Some(da), Some(ds_step)) =
+            (d.fields.get("set").and_then(number), d.fields.get("action").and_then(number), d.fields.get("step").and_then(number))
+        && either(ds, da)
+    {
+        let id = if (ds, da) == (set, at) { source_id } else { dest_id };
+        let (id, s) = follow((id, ds_step));
+        let (ds, da) = if id == dest_id { (to_set, to_action) } else { (set, at) };
+        d.fields.insert("set".into(), json!(ds));
+        d.fields.insert("action".into(), json!(da));
+        d.fields.insert("step".into(), json!(s));
+    }
+    Ok(json!({"set": to_set, "action": to_action, "step": to, "moved": true}))
 }
 
 /// The command that `chord` runs under `km`, pressed once or pressed twice.
@@ -1398,6 +1558,7 @@ fn start_recording(app: &mut VectorcraftApp, set: usize, name: String, into: Opt
     app.session.journal.hold(Some(start));
     app.ui.recording = Some((set, name, start));
     app.ui.recording_into = into;
+    app.ui.recording_at = None;
     app.ui.recording_base = None;
     app.ui.recording_tail = None;
 }
@@ -1424,12 +1585,15 @@ fn steps_that_fit(app: &VectorcraftApp, steps: &[(String, Value)]) -> (usize, Op
     (keep, (keep < steps.len()).then_some("the action already has 10,000 steps"))
 }
 
-/// Adds the recorded `steps` after the steps of `action`, included in playback. An exclusion past
-/// the action's last step, which saved preferences can hold, goes.
-fn extend_recorded(action: &mut Action, steps: Vec<(String, Value)>) {
+/// Puts the recorded `steps` into `action` before its step at index `at`, or after its last step
+/// when `at` is None or past it, included in playback. The steps after them keep whether they are
+/// excluded. An exclusion past the action's last step, which saved preferences can hold, goes.
+fn put_recorded(action: &mut Action, steps: Vec<(String, Value)>, at: Option<usize>) {
     let len = action.steps.len();
-    action.excluded_steps.retain(|&i| i < len);
-    action.steps.extend(steps);
+    let at = at.map_or(len, |at| at.min(len));
+    let added = steps.len();
+    action.excluded_steps = action.excluded_steps.iter().filter(|&&i| i < len).map(|&i| if i >= at { i + added } else { i }).collect();
+    action.steps.splice(at..at, steps);
 }
 
 /// Stop Playing/Recording: ends the recording and keeps its steps (see [`start_recording`]). An
@@ -1447,10 +1611,16 @@ fn stop_recording(app: &mut VectorcraftApp) {
     app.ui.recording_base = None;
     app.ui.recording_tail = None;
     app.session.journal.hold(None);
+    let at = app.ui.recording_at.take();
     match app.ui.recording_into.take() {
         Some(id) => {
-            if let Some(a) = app.ui.action_sets.iter_mut().flat_map(|s| s.actions.iter_mut()).find(|a| a.id == id) {
-                extend_recorded(a, steps);
+            let found = app.ui.action_sets.iter().enumerate().find_map(|(s, set)| Some((s, set.actions.iter().position(|a| a.id == id)?)));
+            if let Some((s, a)) = found {
+                let action = &mut app.ui.action_sets[s].actions[a];
+                let len = action.steps.len();
+                let (from, added) = (at.map_or(len, |at| at.min(len)), steps.len());
+                put_recorded(action, steps, at);
+                follow_recorded(app, (s, a, id), from, added);
             }
         }
         None => {
@@ -1458,6 +1628,28 @@ fn stop_recording(app: &mut VectorcraftApp) {
                 s.actions.push(Action::new(name, steps));
             }
         }
+    }
+}
+
+/// After Stop Playing/Recording put `added` steps into the action at `place` (set, action, id)
+/// before its step at index `from`: the selected step and a Record Stop, Insert Menu Item or Set
+/// Selection dialog open on a later step of the action follow their step down.
+fn follow_recorded(app: &mut VectorcraftApp, (set, at, id): (usize, usize, u64), from: usize, added: usize) {
+    if added == 0 {
+        return;
+    }
+    if let Some(ctx) = app.ui_ctx.clone()
+        && let Some((step_id, step)) = pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP).filter(|&(step_id, step)| step_id == id && step >= from)
+    {
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((step_id, step + added)));
+    }
+    let number = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| holds_step(d))
+        && d.fields.get("set").and_then(number) == Some(set)
+        && d.fields.get("action").and_then(number) == Some(at)
+        && let Some(step) = d.fields.get("step").and_then(number).filter(|&step| step >= from)
+    {
+        d.fields.insert("step".into(), json!(step + added));
     }
 }
 
@@ -1598,6 +1790,7 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         if sets.contains(rec) {
             app.ui.recording = None;
             app.ui.recording_into = None;
+            app.ui.recording_at = None;
             app.session.journal.hold(None);
         } else {
             *rec -= sets.iter().filter(|&&s| s < *rec).count();
@@ -1851,6 +2044,34 @@ fn inclusion_box(
     (response.on_hover_text(if included { tl!("Exclude from playback") } else { tl!("Include in playback") }).clicked(), hit)
 }
 
+/// While a step is dragged over the list: where it goes as (set, action, `before` of [`MOVE_STEP`]),
+/// shown by a line in `color` on the row under the pointer, or None off every action's rows
+/// (`slots`, as [`show`] lists them). Near the list's top or bottom edge, the list scrolls.
+fn drop_target(ui: &mut egui::Ui, slots: &[(egui::Rect, usize, usize, usize, usize)], color: egui::Color32) -> Option<(usize, usize, usize)> {
+    let p = ui.ctx().pointer_interact_pos()?;
+    let clip = ui.clip_rect();
+    if !clip.contains(p) {
+        return None;
+    }
+    let edge = 12.0;
+    let scroll = if p.y < clip.top() + edge {
+        6.0
+    } else if p.y > clip.bottom() - edge {
+        -6.0
+    } else {
+        0.0
+    };
+    if scroll != 0.0 && ui.input(|i| i.pointer.any_down()) {
+        ui.scroll_with_delta(egui::vec2(0.0, scroll));
+        ui.ctx().request_repaint();
+    }
+    let half_gap = ui.spacing().item_spacing.y / 2.0;
+    let &(r, si, ai, upper, lower) = slots.iter().find(|(r, ..)| (r.top() - half_gap..r.bottom() + half_gap).contains(&p.y))?;
+    let (before, y) = if upper != lower && p.y < r.center().y { (upper, r.top()) } else { (lower, r.bottom()) };
+    ui.painter().line_segment([egui::pos2(r.left() + 42.0, y), egui::pos2(r.right(), y)], egui::Stroke::new(2.0, color));
+    Some((si, ai, before))
+}
+
 enum InclusionChange {
     Set(usize),
     Action(usize, usize),
@@ -1879,6 +2100,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut expanded: BTreeSet<u64> = pstate(ui.ctx(), "actions-expanded");
     let mut inclusion_changes = Vec::new();
     let mut play_req = None;
+    // The step being dragged, as (its action's id, the step), from the frame its drag started.
+    let dragging: Option<(u64, usize)> = pstate(ui.ctx(), DRAGGED_STEP);
+    let mut drag_started = None;
+    let mut drag_stopped = false;
+    // The rows a dragged step can be dropped on: (row, set, action, where it goes on the row's upper
+    // half, where on its lower half), as `before` of [`MOVE_STEP`].
+    let mut slots: Vec<(egui::Rect, usize, usize, usize, usize)> = Vec::new();
+    let mut drop = None;
     let list_height = widgets::panel_list_height(ui, 260.0, 0.0).min(260.0);
     egui::ScrollArea::vertical().max_height(list_height).min_scrolled_height(list_height.min(64.0)).show(ui, |ui| {
         for (si, set) in app.ui.action_sets.iter().enumerate() {
@@ -1964,9 +2193,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 if resp.double_clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
                     play_req = Some((si, ai));
                 }
+                // A step dropped on an action's row goes first when the action shows its steps, else
+                // after its last step.
+                let first = if open && !a.steps.is_empty() { 0 } else { a.steps.len() };
+                slots.push((r, si, ai, first, first));
                 if open {
                     for (step, (command, params)) in a.steps.iter().enumerate() {
-                        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
+                        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click_and_drag());
+                        slots.push((r, si, ai, step, step + 1));
+                        if resp.drag_started() {
+                            drag_started = Some((a.id, step));
+                        }
+                        drag_stopped |= resp.drag_stopped();
                         if step_selected == Some((a.id, step)) {
                             ui.painter().rect_filled(r, 0.0, t.row_selected);
                         } else if resp.hovered() {
@@ -2010,7 +2248,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 }
             }
         }
+        if dragging.is_some() {
+            drop = drop_target(ui, &slots, t.accent);
+        }
     });
+    // A released drag moves the step once, to where the line showed.
+    let move_req = drag_stopped.then_some(dragging.zip(drop)).flatten().and_then(|((id, step), (si, ai, before))| {
+        let (fs, fa) = app.ui.action_sets.iter().enumerate().find_map(|(fs, s)| Some((fs, s.actions.iter().position(|a| a.id == id)?)))?;
+        Some(json!({"set": fs, "action": fa, "step": step, "toSet": si, "toAction": ai, "before": before}))
+    });
+    let still_dragging = !drag_stopped && ui.input(|i| i.pointer.any_down());
+    set_pstate(ui.ctx(), DRAGGED_STEP, drag_started.or(dragging.filter(|_| still_dragging)));
     if waiting_at_stop(app) {
         dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
     }
@@ -2039,6 +2287,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     set_pstate(ui.ctx(), SELECTED_STEP, step_selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
+    if let Some(params) = move_req
+        && let Err(e) = app.run(MOVE_STEP, params)
+    {
+        app.status(e);
+    }
+    // Begin Recording records into the selected action, after its selected step.
+    let record_params = match selected.and_then(|(s, a)| Some((s, a, app.ui.action_sets.get(s)?.actions.get(a)?.id))) {
+        Some((s, a, id)) => match step_selected.filter(|&(step_id, _)| step_id == id) {
+            Some((_, step)) => json!({"set": s, "action": a, "after": step}),
+            None => json!({"set": s, "action": a}),
+        },
+        None => json!({}),
+    };
     if app.ui.action_sets.is_empty() {
         dim_label(ui, tl!("No actions. Press ● to record."));
     }
@@ -2054,7 +2315,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         ui.painter().circle_filled(r.center(), 6.0, if recording { egui::Color32::from_rgb(0xe0, 0x30, 0x30) } else { t.icon });
         if resp.on_hover_text(tl!("Begin Recording")).clicked()
             && !recording
-            && let Err(e) = app.run(START_RECORDING, json!({}))
+            && let Err(e) = app.run(START_RECORDING, record_params.clone())
         {
             app.status(e);
         }
@@ -5382,6 +5643,302 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().fields["step"], json!(1), "a deleted step above moves it up");
         app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 1})).unwrap();
         assert_eq!(open_kind(&app), None, "deleting its step closes it");
+    }
+
+    /// The steps of action `action` in set `set`: each command, with its `dx` when it has one.
+    fn step_names(app: &VectorcraftApp, set: usize, action: usize) -> Vec<String> {
+        app.ui.action_sets[set].actions[action]
+            .steps
+            .iter()
+            .map(|(c, p)| match p.get("dx") {
+                Some(dx) => format!("{c} {dx}"),
+                None => c.clone(),
+            })
+            .collect()
+    }
+
+    /// The bottom bar's Stop and Begin Recording buttons, as drawn last.
+    fn stop_and_record(ctx: &egui::Context, app: &mut VectorcraftApp) -> (egui::Pos2, egui::Pos2) {
+        super::super::tests_appearance::frame_events(ctx, app, vec![], show);
+        let mut bar = crate::toolbar::tests::widget_rects(ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [stop, record, ..] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        (stop.center(), record.center())
+    }
+
+    #[test]
+    fn begin_recording_selected_action_adds_steps_without_new_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        let (stop, record) = stop_and_record(&ctx, &mut app);
+        click(&ctx, &mut app, record, show);
+        app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+        click(&ctx, &mut app, stop, show);
+        assert_eq!(app.ui.action_sets[0].actions.len(), 1, "no new action");
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 2", "object.move 4", "object.move 8"], "added at the end");
+
+        // With a step selected, the recorded steps go after it.
+        click_first_step(&ctx, &mut app);
+        // The steps shown move the bottom bar down.
+        let (stop, record) = stop_and_record(&ctx, &mut app);
+        click(&ctx, &mut app, record, show);
+        app.run("object.move", json!({"dx": 16, "dy": 0})).unwrap();
+        click(&ctx, &mut app, stop, show);
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 16", "object.move 2", "object.move 4", "object.move 8"]);
+
+        // With no action selected, Begin Recording still adds a new action.
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "▾ Moves").center(), show);
+        let (stop, record) = stop_and_record(&ctx, &mut app);
+        click(&ctx, &mut app, record, show);
+        app.run("object.move", json!({"dx": 32, "dy": 0})).unwrap();
+        click(&ctx, &mut app, stop, show);
+        let names: Vec<&str> = app.ui.action_sets[0].actions.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["Three Moves", "Action 2"]);
+        assert_eq!(step_names(&app, 0, 1), ["object.move 32"]);
+    }
+
+    #[test]
+    fn begin_recording_after_selected_step_preserves_order_and_exclusions() {
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([0, 2]);
+        for (params, want) in [
+            (json!({"action": 0}), "no such action"),
+            (json!({"set": 0, "after": 0}), "no such action"),
+            (json!({"set": 1, "action": 0}), "no such action"),
+            (json!({"set": 0, "action": 1}), "no such action"),
+            (json!({"set": 0, "action": "0"}), "no such action"),
+            (json!({"set": 0, "action": 0, "after": 3}), "no such action step"),
+            (json!({"set": 0, "action": 0, "after": null}), "no such action step"),
+            (json!({"set": 0, "action": 0, "after": -1}), "no such action step"),
+        ] {
+            assert_eq!(app.run(START_RECORDING, params.clone()).unwrap_err(), want, "{params}");
+            assert!(app.ui.recording.is_none(), "{params}");
+        }
+        assert_eq!(
+            app.run(START_RECORDING, json!({"set": 0, "action": 0, "after": 0})).unwrap(),
+            json!({"set": 0, "action": 0, "name": "Three Moves"})
+        );
+        app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+        app.run("object.move", json!({"dx": 16, "dy": 0})).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions.len(), 1, "no new action");
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 8", "object.move 16", "object.move 2", "object.move 4"]);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([0, 4]), "the steps keep whether they are excluded");
+    }
+
+    #[test]
+    fn steps_recorded_into_the_middle_of_an_action_keep_the_selected_step_and_dialog_on_their_steps() {
+        let (mut app, _) = app_with_three_moves();
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let id = app.ui.action_sets[0].actions[0].id;
+        app.run(START_RECORDING, json!({"set": 0, "action": 0, "after": 0})).unwrap();
+        app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+        app.run("object.move", json!({"dx": 16, "dy": 0})).unwrap();
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((id, 2)));
+        crate::dialogs::action_stop::open_record(&mut app, Some((0, 0)), Some(1));
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 8", "object.move 16", "object.move 2", "object.move 4"]);
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), Some((id, 4)), "the move by 4 stays selected");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["step"], json!(3), "Record Stop stays after the move by 2");
+    }
+
+    #[test]
+    fn step_edits_while_recording_into_an_action_keep_the_recording_in_place() {
+        let (mut app, _) = app_with_three_moves();
+        // The recording goes between the moves by 2 and 4.
+        app.run(START_RECORDING, json!({"set": 0, "action": 0, "after": 1})).unwrap();
+        app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+        app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 2, "before": 0})).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(step_names(&app, 0, 0), ["object.move 4", "object.move 2", STOP_STEP, "object.move 8"]);
+
+        let (mut app, _) = app_with_three_moves();
+        app.run(START_RECORDING, json!({"set": 0, "action": 0, "after": 1})).unwrap();
+        app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+        app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(step_names(&app, 0, 0), ["object.move 2", "object.move 8", "object.move 4"], "a step deleted before the place");
+    }
+
+    #[test]
+    fn move_step_within_action_updates_order_exclusions_and_selection() {
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_sets[0].actions[0].steps.push(("object.move".into(), json!({"dx": 8, "dy": 0})));
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([1]);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let id = app.ui.action_sets[0].actions[0].id;
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((id, 3)));
+        let selected_step = |ctx: &egui::Context| pstate::<Option<(u64, usize)>>(ctx, SELECTED_STEP);
+        assert_eq!(
+            app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 1, "before": 4})).unwrap(),
+            json!({"set": 0, "action": 0, "step": 3, "moved": true})
+        );
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 4", "object.move 8", "object.move 2"]);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([3]), "the moved step stays excluded");
+        assert_eq!(selected_step(&ctx), Some((id, 2)), "the selected step stays selected");
+        assert_eq!(
+            app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 2, "before": 0})).unwrap(),
+            json!({"set": 0, "action": 0, "step": 0, "moved": true})
+        );
+        assert_eq!(step_names(&app, 0, 0), ["object.move 8", "object.move 1", "object.move 4", "object.move 2"]);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([3]));
+        assert_eq!(selected_step(&ctx), Some((id, 0)), "the moved selected step is selected where it went");
+        for before in [1, 2] {
+            assert_eq!(
+                app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 1, "before": before})).unwrap(),
+                json!({"set": 0, "action": 0, "step": 1, "moved": false})
+            );
+        }
+        assert_eq!(step_names(&app, 0, 0), ["object.move 8", "object.move 1", "object.move 4", "object.move 2"], "a drop on itself moves nothing");
+        crate::dialogs::action_stop::open_record(&mut app, Some((0, 0)), Some(3));
+        app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 3, "before": 0})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["step"], json!(0), "an open Record Stop follows its step");
+    }
+
+    #[test]
+    fn move_step_between_actions_and_sets_keeps_file_roundtrip() {
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([2]);
+        let rotate = ("object.rotate".to_string(), json!({"angle": 5}));
+        app.ui.action_sets.push(ActionSet::new("Other", vec![Action::new("Empty", vec![]), Action::new("One", vec![rotate])]));
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let (id, empty) = (app.ui.action_sets[0].actions[0].id, app.ui.action_sets[1].actions[0].id);
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((0, 0)));
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((id, 2)));
+        assert_eq!(
+            app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 2, "toSet": 1, "toAction": 0, "before": 0})).unwrap(),
+            json!({"set": 1, "action": 0, "step": 0, "moved": true})
+        );
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 2"]);
+        assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty());
+        assert_eq!(step_names(&app, 1, 0), ["object.move 4"], "an empty action takes a step");
+        assert_eq!(app.ui.action_sets[1].actions[0].excluded_steps, BTreeSet::from([0]), "the moved step stays excluded");
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), Some((empty, 0)));
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 0)));
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.as_slice()), (Some(1), &[1][..]));
+        assert!(pstate::<BTreeSet<u64>>(&ctx, "actions-expanded").contains(&empty), "the step's new action shows its steps");
+        app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 0, "toSet": 1, "toAction": 1, "before": 0})).unwrap();
+        assert_eq!(step_names(&app, 1, 1), ["object.move 1", "object.rotate"]);
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), Some((empty, 0)), "an unmoved selected step stays");
+        let loaded = files::read_set(&files::write_set(&app.ui.action_sets[1]), "Other").unwrap();
+        for (a, b) in loaded.actions.iter().zip(&app.ui.action_sets[1].actions) {
+            assert_eq!((&a.name, &a.steps, &a.excluded_steps), (&b.name, &b.steps, &b.excluded_steps));
+        }
+    }
+
+    #[test]
+    fn move_step_rejects_invalid_and_oversize_destinations_without_changes() {
+        let (mut app, _) = app_with_three_moves();
+        let full = Action::new("Full", vec![("object.move".to_string(), json!({"dx": 0})); files::MAX_ACTION_STEPS]);
+        let big = |text: String| ActionSet::new("Big", vec![Action::new("Big", vec![("document.note".to_string(), json!({ "s": text }))])]);
+        let room = files::MAX_SET_FILE - files::write_set(&big(String::new())).len() - 4;
+        app.ui.action_sets.push(ActionSet::new("Full", vec![full]));
+        app.ui.action_sets.push(big("x".repeat(room)));
+        assert!(files::write_set(&app.ui.action_sets[2]).len() <= files::MAX_SET_FILE);
+        let before: Vec<String> = app.ui.action_sets.iter().map(files::write_set).collect();
+        for (params, want) in [
+            (json!({}), "no such action"),
+            (json!({"set": 0, "action": 1, "step": 0, "before": 0}), "no such action"),
+            (json!({"set": 3, "action": 0, "step": 0, "before": 0}), "no such action"),
+            (json!({"set": 0, "action": 0, "step": 3, "before": 0}), "no such action step"),
+            (json!({"set": 0, "action": 0, "before": 0}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": 0}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": 0, "before": 4}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": 0, "before": "1"}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": 0, "toSet": 3, "before": 0}), "no such action set"),
+            (json!({"set": 0, "action": 0, "step": 0, "toSet": null, "before": 0}), "no such action set"),
+            (json!({"set": 0, "action": 0, "step": 0, "toSet": 1, "toAction": 1, "before": 0}), "no such action"),
+            (json!({"set": 0, "action": 0, "step": 0, "toSet": 1, "toAction": 0, "before": 0}), "the action already has 10,000 steps"),
+            (json!({"set": 0, "action": 0, "step": 0, "toSet": 2, "toAction": 0, "before": 1}), "the action set would be larger than 8 MiB"),
+        ] {
+            assert_eq!(app.run(MOVE_STEP, params.clone()).unwrap_err(), want, "{params}");
+            assert_eq!(app.ui.action_sets.iter().map(files::write_set).collect::<Vec<_>>(), before, "{params}");
+        }
+    }
+
+    #[test]
+    fn drag_step_shows_insertion_line_and_moves_once() {
+        use egui::{Event, PointerButton};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([app.ui.action_sets[0].actions[0].id]));
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], show);
+        let mut rows: Vec<egui::Rect> = texts.iter().filter(|(s, _)| s == "object.move").map(|(_, r)| *r).collect();
+        rows.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        let (from, to) = (rows[0].center(), egui::pos2(rows[0].center().x, rows[2].center().y + 4.0));
+        let accent = Tokens::get(&ctx).accent;
+        // Whether a frame with `events` draws the insertion line.
+        let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            fn line(s: &egui::Shape, accent: egui::Color32) -> bool {
+                match s {
+                    egui::Shape::LineSegment { stroke, .. } => stroke.width == 2.0 && stroke.color == accent,
+                    egui::Shape::Vec(v) => v.iter().any(|s| line(s, accent)),
+                    _ => false,
+                }
+            }
+            out.shapes.iter().any(|c| line(&c.shape, accent))
+        };
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        assert!(!frame(&mut app, vec![Event::PointerMoved(from)]), "no line before a drag");
+        frame(&mut app, vec![button(from, true)]);
+        frame(&mut app, vec![Event::PointerMoved(from + egui::vec2(0.0, 12.0))]);
+        assert!(frame(&mut app, vec![Event::PointerMoved(to)]), "the line shows where the step goes");
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 2", "object.move 4"], "nothing moves while dragging");
+        frame(&mut app, vec![button(to, false)]);
+        assert_eq!(step_names(&app, 0, 0), ["object.move 2", "object.move 4", "object.move 1"], "the release moves the step");
+        for _ in 0..3 {
+            assert!(!frame(&mut app, vec![]), "no line after the drop");
+        }
+        assert_eq!(step_names(&app, 0, 0), ["object.move 2", "object.move 4", "object.move 1"], "the step moves once");
+    }
+
+    #[test]
+    fn drag_step_released_off_the_rows_leaves_it_in_place_without_an_undo_step() {
+        use egui::{Event, PointerButton};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([app.ui.action_sets[0].actions[0].id]));
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], show);
+        let mut rows: Vec<egui::Rect> = texts.iter().filter(|(s, _)| s == "object.move").map(|(_, r)| *r).collect();
+        rows.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        let from = rows[0].center();
+        let over = egui::pos2(from.x, rows[2].center().y + 4.0);
+        let off = egui::pos2(from.x, rows[2].bottom() + 2_000.0);
+        let undo = undo_steps(&app);
+        let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![button(from, true)]);
+        frame(&mut app, vec![Event::PointerMoved(from + egui::vec2(0.0, 12.0))]);
+        frame(&mut app, vec![Event::PointerMoved(over)]);
+        frame(&mut app, vec![Event::PointerMoved(off)]);
+        frame(&mut app, vec![button(off, false)]);
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 2", "object.move 4"], "the step stays where it was");
+        assert_eq!(undo_steps(&app), undo, "no undo step");
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, DRAGGED_STEP), None, "the drag ends");
     }
 
     #[test]

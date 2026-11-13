@@ -6519,6 +6519,7 @@ axis	Y Axis	Axe Y
 	Continue	Continuer
 	Continue Action	Continuer le script
 	Delete Action Step	Supprimer l’étape du script
+	Move Action Step	Déplacer l’étape du script
 	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
 	Stop: {message}	Arrêt : {message}
 @msg	no action is waiting at a stop	aucun script n’attend à un arrêt

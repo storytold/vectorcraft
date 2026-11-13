@@ -6507,6 +6507,7 @@ axis	Y Axis	Y tengely
 	Continue	Folytatás
 	Continue Action	Művelet folytatása
 	Delete Action Step	Műveletlépés törlése
+	Move Action Step	Műveletlépés áthelyezése
 	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
 	Stop: {message}	Megállás: {message}
 @msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál

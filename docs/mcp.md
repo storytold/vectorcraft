@@ -3053,10 +3053,15 @@ already walks Image Trace. Short agent entry points:
   would give the set more than 1,000 actions (`the action set file holds more than 1,000 actions`) or a file larger
   than 8 MiB (`the action set would be larger than 8 MiB`), and then no recording starts. The panel's Create
   New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
-- Actions: `ui.action.record {set?}` starts recording a new action in the chosen set, or the current set when `set`
-  is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next available
-  `Action N` name in that set. The Actions panel's Begin Recording button runs this command. An invalid set or an
-  existing recording is an error and leaves the sets and recording unchanged, and so is a set where the new action
+- Actions: `ui.action.record {set?, action?, after?}` starts recording a new action in the chosen set, or the current
+  set when `set` is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next
+  available `Action N` name in that set. With `action`, it records into the action at `action` in set `set` instead
+  and returns `{set, action, name}`: `ui.action.stop` puts the recorded steps after step `after` of that action, or
+  after its last step when `after` is left out, and the steps after them keep whether they are excluded. The Actions
+  panel's Begin Recording button runs this command with the selected action and its selected step, and with neither
+  when no action is selected. `action` without `set`, `after` without `action`, an index past the last set, action or
+  step, an invalid set or an existing recording is an error and leaves the sets and recording unchanged, and so is a
+  set where the new action
   would give it more than 1,000 actions or an action set file larger than 8 MiB. While a recording (this one or
   `ui.action.new`'s) is in progress, a recorded command whose step would give the action more than 10,000 steps, or
   its set's action set file more than 8 MiB, is an error with the reason (`the action already has 10,000 steps`, `the
@@ -3169,6 +3174,20 @@ already walks Image Trace. Short agent entry points:
   they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one
   open on a later step of the action follows it up. A missing or invalid index is an error, and then nothing changes.
   Undo does not restore a deleted step. The panel's Delete Selection runs this for the selected step.
+- Actions: `ui.action.moveStep {set, action, step, toSet?, toAction?, before}` moves one step, a stop or a command, of
+  the action at `action` in set `set` into the action at `toAction` in set `toSet` (by default the same set and
+  action), before the step at index `before` there, or after its last step when `before` is its number of steps.
+  `before` counts the steps as they are before the move. It returns `{set, action, step, moved}` with the step's new
+  place. The step keeps its params and whether it is excluded, and the other steps keep theirs. A selected step stays
+  selected; a moved selected step makes its new action the selected one and its set the current one. A Record Stop
+  dialog open on a step follows the step, and the steps that the recording in progress adds to either action stay
+  after the steps that were before them. A step put back just before or just after itself does not move, and
+  `moved` is `false`. A missing or invalid index, or a move that would give the action more than 10,000 steps or its
+  set's action set file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an
+  error, and then nothing changes. Undo does not move the step back. In the Actions panel, dragging a step row moves
+  the step: a line shows where it goes, before or after the row under the pointer, or first in an action whose name
+  row it is over (after the last step when the action's steps are hidden), and releasing the button off those rows
+  leaves the step where it was.
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
@@ -3177,8 +3196,8 @@ already walks Image Trace. Short agent entry points:
   preferences. The panel menu's Playback Options… opens the `actionPlayback` dialog (`speed`, `seconds`), whose OK runs
   this. Batch… (`action.batch`) plays every step at once whatever the setting.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
-  for it, else in a new action after the last action of its set, and returns `{stopped}`. It also ends an action
-  playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
+  for it or the action `ui.action.record` named, at the place it named, else in a new action after the last action of
+  its set, and returns `{stopped}`. It also ends an action playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
   stay, and the rest do not play. With nothing
   recording or playing it changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes

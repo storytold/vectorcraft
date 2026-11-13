@@ -6167,6 +6167,7 @@ axis	Y Axis	Y 軸
 	Continue	繼續
 	Continue Action	繼續動作
 	Delete Action Step	刪除動作步驟
+	Move Action Step	移動動作步驟
 	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	沒有動作在停止處等待

@@ -6475,6 +6475,7 @@ axis	Y Axis	Άξονας Y
 	Continue	Συνέχεια
 	Continue Action	Συνέχεια ενέργειας
 	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Move Action Step	Μετακίνηση βήματος ενέργειας
 	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
 	Stop: {message}	Διακοπή: {message}
 @msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή

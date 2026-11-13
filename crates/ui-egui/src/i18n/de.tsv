@@ -6115,6 +6115,7 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
