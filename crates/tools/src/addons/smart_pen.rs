@@ -368,7 +368,7 @@ impl SmartPenTool {
             }
             Target::Close { id, si, first, mut anchor } => {
                 let out = Self::handle_to(cx, first, ev.pos, first, shift, false);
-                let act = close_drag(id, Some(si), first - (out - first), alt, anchor.as_mut());
+                let act = close_drag(id, Some(si), None, first - (out - first), alt, anchor.as_mut());
                 pr.what = Target::Close { id, si, first, anchor };
                 ("", act)
             }

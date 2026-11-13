@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Close Path",
             [],
             None,
-            "{id, subpath?: usize (the open subpath to close, 0 included; default: the last open one), in?: [x,y] (handle into the first anchor, placed as path.setHandle places it: a smooth first anchor keeps its outgoing handle in line at its own length, a corner keeps it where it is), out?: [x,y] (the first anchor's outgoing handle, placed after `in`; the anchor becomes a corner), independent?: bool (`in` makes the first anchor a corner and leaves its outgoing handle)}",
+            "{id, subpath?: usize (the open subpath to close, 0 included; default: the last open one), at?: [x,y] (move the first anchor there, its handles with it, before `in` and `out` are placed), in?: [x,y] (handle into the first anchor, placed as path.setHandle places it: a smooth first anchor keeps its outgoing handle in line at its own length, a corner keeps it where it is), out?: [x,y] (the first anchor's outgoing handle, placed after `in`; the anchor becomes a corner), independent?: bool (`in` makes the first anchor a corner and leaves its outgoing handle)}",
             has_doc,
             close
         ),
@@ -205,6 +205,7 @@ fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
 /// Close the active open subpath of `id`, optionally setting the handles of the first anchor. The
 /// incoming handle moves as Move Direction Handle moves it: the outgoing handle turns with it only
 /// on a smooth anchor, so the first segment of a path that starts at a corner keeps its shape.
+/// `at` first moves the anchor, its handles with it (the Pen's closing drag with Space held).
 fn close(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.close")?.ok_or_else(|| bad("path.close", "missing id"))?;
     let subpath = p.get("subpath").and_then(Value::as_u64).map(|u| u as usize);
@@ -212,6 +213,7 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
         None => Ok(None),
         Some(h) => finite_numbers(h).map(|[x, y]| Some(Point::new(x, y))).ok_or_else(|| bad("path.close", format!("`{key}` must be [x, y]"))),
     };
+    let at = handle("at")?;
     let h_in = handle("in")?;
     let h_out = handle("out")?;
     let independent = switch_or(p, "independent", false, "path.close")?;
@@ -223,6 +225,9 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
         };
         sp.closed = true;
         if let Some(first) = sp.anchors.first_mut() {
+            if let Some(to) = at {
+                first.translate(to - first.p);
+            }
             if let Some(h) = h_in {
                 first.set_handle(false, h, independent);
             }
