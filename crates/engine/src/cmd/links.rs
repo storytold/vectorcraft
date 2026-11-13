@@ -738,12 +738,16 @@ impl Nested<'_> {
         let mut slots: Vec<(usize, Arc<Node>)> = vec![];
         // The object a clip group that loses its clipping path holds alone.
         let mut declipped = None;
+        // The clipping path and object of a plain group holding just the object, which becomes a
+        // clip group again.
+        let mut reclipped = None;
         if let Some(children) = n.children() {
             // A clip group holding just the object: its clipping path changes.
             let clip_path = match (&n.kind, &children[..]) {
                 (NodeKind::Group { clip: true, .. }, [c, _]) if matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c),
                 _ => None,
             };
+            let plain = matches!((&n.kind, &children[..]), (NodeKind::Group { clip: false, .. }, [_]));
             for (i, c) in children.iter().enumerate() {
                 if !(nested && (self.pick)(c)) {
                     let mut new = Arc::clone(c);
@@ -769,6 +773,7 @@ impl Nested<'_> {
                         }
                         slots.extend([(0, Arc::new(path)), (1, new)]);
                     }
+                    (ClipTo::Path(clip), None) if plain => reclipped = Some((clip, new)),
                     (ClipTo::Path(clip) | ClipTo::Nest(clip), _) => {
                         let group = self.clip_group(new, clip);
                         slots.push((i, Arc::new(group)));
@@ -778,12 +783,20 @@ impl Nested<'_> {
                 }
             }
         }
-        if mask.is_none() && slots.is_empty() && declipped.is_none() {
+        if mask.is_none() && slots.is_empty() && declipped.is_none() && reclipped.is_none() {
             return;
         }
+        let reclipped = reclipped.map(|(clip, object)| (Arc::new(self.clipping_path(clip)), object));
         let n = Arc::make_mut(n);
         if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
             m.art = art;
+        }
+        // A plain group of just the object that becomes a clip group again.
+        if let Some((path, object)) = reclipped {
+            if let NodeKind::Group { children, clip } = &mut n.kind {
+                (*children, *clip) = (vec![path, object], true);
+            }
+            return;
         }
         // A clip group that stays as a plain group of just the object.
         if let Some(object) = declipped {
@@ -803,14 +816,17 @@ impl Nested<'_> {
 
     /// A clip group of `object` clipped to `clip`, as [`clip_image_to`] makes one in the layers.
     fn clip_group(&mut self, object: Arc<Node>, clip: PathData) -> Node {
-        let (path_id, group_id) = (NodeId(self.next), NodeId(self.next + 1));
-        self.next += 2;
-        let none = vectorcraft_color::Paint::None;
-        let mut path = Node::path(path_id, clip, Appearance::basic(none.clone(), none, 0.0));
-        if let NodeKind::Path { clipping, .. } = &mut path.kind {
-            *clipping = true;
-        }
+        let path = self.clipping_path(clip);
+        let group_id = NodeId(self.next);
+        self.next += 1;
         Node::new(group_id, NodeKind::Group { children: vec![Arc::new(path), object], clip: true })
+    }
+
+    /// A clipping path of `clip`, with the next node id.
+    fn clipping_path(&mut self, clip: PathData) -> Node {
+        let id = NodeId(self.next);
+        self.next += 1;
+        clipping_path(id, clip)
     }
 }
 
@@ -936,23 +952,40 @@ fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
 }
 
 /// Clip object `id` of `d` to `path`: the clipping path of the clip group holding just it changes,
-/// else it goes into a new clip group.
+/// a plain group holding just it (as [`unclip`] leaves one) becomes a clip group again, else it
+/// goes into a new clip group.
 fn clip_image_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     if set_clip_path(d, id, path.clone()) {
         return Ok(());
     }
-    new_clip_group(d, id, path)
+    let plain = d.parent_of(id).filter(|g| match d.node(*g).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => matches!(&children[..], [o] if o.id == id),
+        _ => false,
+    });
+    let Some(g) = plain else { return new_clip_group(d, id, path) };
+    let clip = clipping_path(d.alloc_id(), path);
+    d.insert(Some(g), 0, clip)?;
+    if let Some(Node { kind: NodeKind::Group { clip, .. }, .. }) = d.node_mut(g) {
+        *clip = true;
+    }
+    Ok(())
+}
+
+/// A clipping path `id` of `path`, unpainted.
+fn clipping_path(id: NodeId, path: PathData) -> Node {
+    let none = vectorcraft_color::Paint::None;
+    let mut clip = Node::path(id, path, Appearance::basic(none.clone(), none, 0.0));
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    clip
 }
 
 /// Put object `id` of `d` into a new clip group of `path`, where it is.
 fn new_clip_group(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     let image = d.remove(id)?;
-    let none = vectorcraft_color::Paint::None;
-    let mut clip = Node::path(d.alloc_id(), path, Appearance::basic(none.clone(), none, 0.0));
-    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
-        *clipping = true;
-    }
+    let clip = clipping_path(d.alloc_id(), path);
     let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), image], clip: true });
     d.insert(par, index, group)?;
     Ok(())
