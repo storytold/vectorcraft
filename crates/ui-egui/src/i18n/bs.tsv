@@ -4511,6 +4511,10 @@ imageTrace	Outline	Obris
 @msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte
 @msg	Create from Guides: the document has no artboard	Kreiraj iz vodilica: dokument nema radnu ploču
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Kreiraj iz vodilica: vodilice prave više od {MAX_PIECES} isječaka
@@ -6898,3 +6902,9 @@ shape	Open	Otvoren
 	Box	Okvir
 	Swatch	Uzorak boje
 	Direction	Smjer
+	Banner Hems and Grommets…	Porubi i ušice za baner…
+	Banner Hems and Grommets	Porubi i ušice za baner
+	Hem	Porub
+	Grommets	Ušice
+	Grommet Inset	Udaljenost ušica od ruba
+	Diameter	Prečnik

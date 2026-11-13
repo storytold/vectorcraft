@@ -79,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Fill to Stroke",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{ids?|id?, skipNone?: bool} each target's top stroke takes its own top fill, as it is (a colour in its model, a global or spot colour linked at its tint, a gradient or pattern with its placement, None); a stroke given paint at width 0 gets 1 pt, as Swap Fill and Stroke does. Type: each run's stroke takes its own fill, and while the Type tool has characters selected (no ids), only those. A graph's series marks and labels keep the paint when the graph is drawn again. skipNone: leave alone a target whose fill is None. A target whose stroke already has that paint is left as it is, and when nothing changes no undo step is recorded. The default stroke takes the default fill the same way → {objects}",
+            "{ids?|id?, skipNone?: bool} each target's top stroke takes its own top fill, as it is (a colour in its model, a global or spot colour linked at its tint, a gradient or pattern with its placement, None); a stroke given paint at width 0 gets 1 pt, as Swap Fill and Stroke does. Type: each run's stroke takes its own fill, and while the Type tool has characters selected (no ids), only those. A graph's labels keep the paint when the graph is drawn again. On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row (exceptions: docs/mcp.md). skipNone: leave alone a target whose fill is None. A target whose stroke already has that paint is left as it is, and when nothing changes no undo step is recorded. The default stroke takes the default fill the same way → {objects}",
             has_doc,
             |s, p| copy_paint(s, p, true)
         ),
@@ -226,6 +226,8 @@ fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
     if !ids.is_empty() {
         let before = s.doc()?.doc.clone();
         super::super::overprint::edit_counted(s, label, |d| {
+            // Each object with the row the paint went to, for the paint a graph stores for its series.
+            let mut written = Vec::new();
             for id in &ids {
                 let Some(node) = d.node_mut(*id) else { continue };
                 if let NodeKind::Text(t) = &mut node.kind {
@@ -239,19 +241,23 @@ fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
                 let (from, to) = if to_stroke { (ap.fill_paint(), ap.stroke_paint()) } else { (ap.stroke_paint(), ap.fill_paint()) };
                 // A missing item reads as None: copying None onto it would add an item that
                 // changes nothing.
-                if (skip_none && from.is_none()) || from == to {
+                if skip_none && from.is_none() {
                     continue;
                 }
-                if to_stroke {
-                    restore_unpainted_stroke(ap, None, &from);
-                    ap.set_stroke(from);
-                } else {
-                    ap.set_fill(from);
+                if from != to {
+                    if to_stroke {
+                        restore_unpainted_stroke(ap, None, &from);
+                        ap.set_stroke(from);
+                    } else {
+                        ap.set_fill(from);
+                    }
                 }
+                // A row that already had the paint counts as written with it, as for `paint.setFill`.
+                written.extend(ap.items.iter().rposition(|it| it.is_fill() != to_stroke).map(|at| (*id, at)));
             }
             objects = super::super::appearance::count_changed(d, &before, &ids);
             // The graph keeps the paint its series marks and labels now have.
-            let series = super::super::graph::capture_series_paints(d, &ids, !to_stroke);
+            let series = super::super::appearance::capture_series_paint_writes(&before, d, &ids, &written);
             let labels = super::super::graph::capture_label_styles(d, &ids, &copy_run);
             Ok(objects + usize::from(series || labels))
         })?;
