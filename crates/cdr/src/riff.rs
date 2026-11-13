@@ -226,10 +226,13 @@ impl<'a> Index<'a> {
         let mut at = p.start;
         let mut lists = Vec::new();
         while at < p.end {
-            let Some((read, next)) = self.read_chunk(p.src, at, p.end, p.pool) else {
+            let Some((read, next, cut)) = self.read_chunk(p.src, at, p.end, p.pool) else {
                 push(warn, Warning::Damaged);
                 break;
             };
+            if cut {
+                push(warn, Warning::Damaged);
+            }
             at = next;
             // A redirect record whose body can't be found counts as well, so that lists redirected
             // to again and again can't repeat such records past the limit.
@@ -288,8 +291,9 @@ impl<'a> Index<'a> {
 
     /// The chunk at `at` (before `end`) of source `src`, and where the next one starts. In a
     /// compressed stream the size field is an index into the size pool (R3); in a version 16+
-    /// package a chunk of 16 bytes outside one is a redirect record (R27).
-    fn read_chunk(&self, src: u32, at: usize, end: usize, pool: Option<(usize, usize)>) -> Option<(Read, usize)> {
+    /// package a chunk of 16 bytes outside one is a redirect record (R27). The flag is set for a
+    /// list cut short at `end`.
+    fn read_chunk(&self, src: u32, at: usize, end: usize, pool: Option<(usize, usize)>) -> Option<(Read, usize, bool)> {
         let head = self.span(src, at, at.checked_add(8)?.min(end))?;
         let id: [u8; 4] = head.get(..4)?.try_into().ok()?;
         let raw = u32_at(head, 4)? as usize;
@@ -302,17 +306,26 @@ impl<'a> Index<'a> {
             }
         };
         let body = at + 8;
-        let body_end = body.checked_add(size).filter(|&e| e <= end)?;
-        let next = (body_end + (size & 1)).min(end);
+        // A list cut short by the end of its parent keeps the bytes it has, so the children
+        // before the cut are read; the caller warns that it is damaged. Other chunks are lost.
+        let (size, cut) = match body.checked_add(size) {
+            Some(e) if e <= end => (size, false),
+            _ if id == LIST => (end.checked_sub(body)?, true),
+            _ => return None,
+        };
+        let next = (body + size + (size & 1)).min(end);
+        if cut {
+            return Some((self.chunk(id, src, body, size).map_or(Read::Lost, Read::Chunk), next, true));
+        }
         if self.streams.is_some() && pool.is_none() && size == REDIRECT {
             let read = match self.redirect(id, src, body) {
                 Some(read) => read,
                 None if self.redirect_past_limit(src, body) => Read::PastLimit,
                 None => Read::Lost,
             };
-            return Some((read, next));
+            return Some((read, next, false));
         }
-        Some((Read::Chunk(self.chunk(id, src, body, size)?), next))
+        Some((Read::Chunk(self.chunk(id, src, body, size)?), next, false))
     }
 
     /// Chunk `id` whose body is `len` bytes at `body` of source `src`; a list's body starts with

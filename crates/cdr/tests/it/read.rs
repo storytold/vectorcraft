@@ -1405,6 +1405,12 @@ fn a_file_cut_short_keeps_what_it_holds() {
     let cut = &full[..full.len() - 40];
     let d = read(cut, Limits::default()).unwrap();
     assert!(d.warnings.contains(&Warning::Damaged));
+    // The last page is cut inside its layer: the lists that hold the cut keep their whole
+    // children, so the rectangle, ellipse and curve before the cut are read.
+    assert_eq!(d.pages.len(), 1);
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert!(s.len() >= 3, "{}", s.len());
+    assert!(matches!(s[0].geometry, Geometry::Rect { .. }) && matches!(s[1].geometry, Geometry::Ellipse { .. }));
 }
 
 #[test]
