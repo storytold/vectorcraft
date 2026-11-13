@@ -933,6 +933,66 @@ fn wide_areas_stay_filled_and_lines_cross_at_junctions() {
 }
 
 #[test]
+fn thin_features_of_a_wide_shape_are_strokes_and_its_body_a_fill() {
+    // A disc (r = 20) with a 3 px wide arm from it out to x = 140 and a 5 px wide one up to y = 5.
+    let img = Raster::from_fn(160, 100, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let disc = (px - 50.0).hypot(py - 60.0) <= 20.0;
+        let across = (py - 60.0).abs() <= 1.5 && (50.0..=140.0).contains(&px);
+        let up = (px - 50.0).abs() <= 2.5 && (5.0..=60.0).contains(&py);
+        if disc || across || up { BLACK } else { WHITE }
+    });
+    let res = trace(&img, &strokes(true));
+    let fills: Vec<_> = res.paths.iter().filter(|p| p.stroke.is_none()).collect();
+    assert_eq!(fills.len(), 1, "the disc");
+    let a = net_area(&fills[0].path);
+    assert!((a - std::f64::consts::PI * 400.0).abs() < 90.0, "disc area {a}");
+    let b = fills[0].path.bounds().unwrap();
+    assert!(b.x1 < 76.0 && b.y0 > 34.0, "the fill stays the disc: {b:?}");
+    let lines = stroked(&res);
+    assert_eq!(lines.len(), 2, "{:?}", lines.iter().map(|(p, s)| (p.stroke, s.anchors.len())).collect::<Vec<_>>());
+    let ends = |s: &vectorcraft_geom::SubPath| (s.anchors[0].p, s.anchors[s.anchors.len() - 1].p);
+    let (across, up) = if ends(lines[0].1).0.y.min(ends(lines[0].1).1.y) > 50.0 { (lines[0], lines[1]) } else { (lines[1], lines[0]) };
+    // The arm across: its free end where the bar ends (less its cap), its other end at the disc, the
+    // cap closing the join.
+    let w = across.0.stroke.unwrap();
+    assert!((2.0..=4.0).contains(&w), "width {w}");
+    let (p, q) = ends(across.1);
+    let (near, far) = if p.x < q.x { (p, q) } else { (q, p) };
+    assert!(far.distance(Point::new(140.0, 60.0)) < 4.0, "free end {far:?}");
+    assert!((60.0..=72.5).contains(&near.x) && (near.y - 60.0).abs() < 1.5 && near.x - w / 2.0 <= 70.5, "joined end {near:?}");
+    // The arm up, 5 px wide.
+    let w = up.0.stroke.unwrap();
+    assert!((4.0..=6.0).contains(&w), "width {w}");
+    let (p, q) = ends(up.1);
+    let (top, low) = if p.y < q.y { (p, q) } else { (q, p) };
+    assert!(top.distance(Point::new(50.0, 5.0)) < 4.0, "free end {top:?}");
+    assert!((38.0..=48.0).contains(&low.y) && (low.x - 50.0).abs() < 1.5 && low.y + w / 2.0 >= 40.0 - 0.5, "joined end {low:?}");
+    // Strokes only: the disc is outlined and both arms stay strokes.
+    let res = trace(&img, &strokes(false));
+    assert!(res.paths.iter().all(|p| p.stroke.is_some()));
+    assert_eq!(res.paths.iter().filter(|p| p.stroke == Some(1.0) && p.path.subpaths[0].closed).count(), 1, "the disc's outline");
+    assert_eq!(stroked(&res).iter().filter(|(p, _)| p.stroke.is_some_and(|w| w > 1.5)).count(), 2, "the two arms");
+}
+
+#[test]
+fn wide_shapes_without_thin_features_stay_one_fill() {
+    // A square, a diamond and a disc: their corners and edges are not thin features.
+    let img = Raster::from_fn(240, 90, |x, y| {
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let square = (10.0..=70.0).contains(&px) && (15.0..=75.0).contains(&py);
+        let diamond = (px - 120.0).abs() + (py - 45.0).abs() <= 35.0;
+        let disc = (px - 200.0).hypot(py - 45.0) <= 30.0;
+        if square || diamond || disc { BLACK } else { WHITE }
+    });
+    for width in [3.0, 6.0, 12.0] {
+        let res = trace(&img, &TraceParams { stroke_width: width, ..strokes(true) });
+        assert_eq!(res.paths.len(), 3, "width {width}: {:?}", res.paths.iter().map(|p| p.stroke).collect::<Vec<_>>());
+        assert!(res.paths.iter().all(|p| p.stroke.is_none()), "width {width}");
+    }
+}
+
+#[test]
 fn create_settings_parse_with_defaults() {
     let p: TraceParams = serde_json::from_value(serde_json::json!({ "strokes": true, "strokeWidth": 4 })).unwrap();
     assert!(p.fills && p.strokes && p.stroke_width == 4.0);
