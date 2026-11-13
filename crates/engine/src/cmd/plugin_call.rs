@@ -734,7 +734,13 @@ mod tests {
         assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
         // object.setLiveShape takes no `path`; its description says "on any path:" in its prose.
         assert!(names_file("object.setLiveShape", &json!({"path": "/tmp/x"})));
-        // Image Trace's path fidelity setting, only inside its tracing settings.
+    }
+
+    /// Image Trace's path fidelity setting `paths` names no file, but only inside its tracing
+    /// settings.
+    #[test]
+    fn image_trace_paths_name_no_file_only_in_its_settings() {
+        use serde_json::json;
         for id in ["imageTrace.make", "imageTrace.makeAndExpand"] {
             assert!(!names_file(id, &json!({"preset": "Default", "params": {"mode": "color", "paths": 50}})));
             assert!(!names_file(id, &json!({"savedPreset": {"paths": 50, "corners": 75}})));
@@ -745,7 +751,12 @@ mod tests {
             assert!(names_file(id, &json!({"options": {"paths": 50}})));
         }
         assert!(names_file("object.move", &json!({"params": {"paths": 50}})));
-        // A custom arrowhead's outline in stroke.set, only where stroke.set takes one.
+    }
+
+    /// A custom arrowhead's outline `path` names no file, but only where stroke.set takes one.
+    #[test]
+    fn a_custom_arrowhead_outline_names_no_file_only_in_stroke_set() {
+        use serde_json::json;
         let outline = json!({"subpaths": []});
         assert!(!names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline}}})));
         assert!(!names_file("stroke.set", &json!({"startArrow": {"Custom": {"name": "A", "path": outline}}, "endArrow": "Triangle"})));
@@ -755,7 +766,12 @@ mod tests {
         assert!(names_file("stroke.set", &json!({"options": {"endArrow": {"Custom": {"path": "/tmp/x"}}}})));
         assert!(names_file("stroke.set", &json!({"endArrow": [{"Custom": {"path": "/tmp/x"}}]})));
         assert!(names_file("object.move", &json!({"endArrow": {"Custom": {"path": "/tmp/x"}}})));
-        // Deep nesting is walked without recursion.
+    }
+
+    /// A file key under deep nesting is found, and the walk doesn't recurse.
+    #[test]
+    fn a_file_key_is_found_under_deep_nesting() {
+        use serde_json::json;
         let mut deep = json!({"file": "/tmp/x"});
         for _ in 0..10_000 {
             deep = Value::Array(vec![deep]);
