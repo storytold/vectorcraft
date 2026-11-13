@@ -264,6 +264,24 @@ pub(crate) fn shared_tcy_offsets(app: &VectorcraftApp) -> (Option<f64>, Option<f
     (shared_effective(app, |s| s.tcy_up_down), shared_effective(app, |s| s.tcy_left_right))
 }
 
+/// The Warichu Settings the characters the panels act on share: Lines, Line Gap (document
+/// points), Scale (percent) and Alignment; `None` for each that differs, or with no type.
+pub(crate) struct SharedWarichu {
+    pub lines: Option<u8>,
+    pub gap: Option<f64>,
+    pub scale: Option<f64>,
+    pub align: Option<vectorcraft_doc::WarichuAlign>,
+}
+
+pub(crate) fn shared_warichu(app: &VectorcraftApp) -> SharedWarichu {
+    SharedWarichu {
+        lines: shared(app, |s| s.warichu_lines),
+        gap: shared_effective(app, |s| s.warichu_gap),
+        scale: shared(app, |s| s.warichu_scale),
+        align: shared(app, |s| s.warichu_align),
+    }
+}
+
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
 /// object when nothing is selected), else to the selected text objects.
 fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
@@ -1503,6 +1521,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         {
             app.status(e);
         }
+        // Warichu: the selected characters set smaller and stacked on lines inside their line.
+        // Checked when every selected character has it; a mixed selection turns it on.
+        let warichu = shared(app, |s| s.warichu) == Some(true);
+        if menu_item(ui, tl!("Warichu"), has, warichu) {
+            format(app, json!({"warichu": !warichu}));
+        }
+        // Warichu Settings…: the Lines, Line Gap, Scale and Alignment of a warichu block.
+        if menu_item(ui, tl!("Warichu Settings…"), has, false)
+            && let Err(e) = app.run("ui.warichuSettings", json!({}))
+        {
+            app.status(e);
+        }
         // Standard Vertical Roman Alignment: the selected half-width characters stand upright in
         // vertical type instead of being rotated. Checked when every selected character has it; a
         // mixed selection turns it on.
@@ -1580,8 +1610,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// method, and the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, Insert Aki Left and Right 0, the Default character direction,
+/// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
+/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, the Default character direction,
 /// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
@@ -1601,6 +1632,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
+            "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
+            "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),

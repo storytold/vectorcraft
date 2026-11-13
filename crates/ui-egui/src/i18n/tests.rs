@@ -136,10 +136,63 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
     assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
     let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
     assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+    assert_eq!(message(hi, "unknown align `left`"), "अज्ञात संरेखण `left`");
+    assert_eq!(tr(hi, "Delete Library Group"), "लाइब्रेरी ग्रुप हटाएँ");
+    assert_eq!(message(hi, "not editing an opacity mask"), "ओपेसिटी मास्क संपादित नहीं किया जा रहा है");
+    assert_eq!(
+        message(hi, "a page thumbnail must be RGB pixels, 1 to 256 a side (got 0 × 4)"),
+        "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
+    );
+    assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
     assert_eq!(tr(hi, "Desired"), "वांछित");
     let range = "न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए";
     assert_eq!(tr(hi, "Minimum must not exceed Desired, nor Desired Maximum."), format!("{range}।"));
     assert_eq!(message(hi, "`wordSpacing`: Minimum must not exceed Desired, nor Desired Maximum"), format!("`wordSpacing`: {range}"));
+}
+
+/// Hindi messages keep every `a|b|c` list of accepted values exactly as their English writes it.
+#[test]
+fn hindi_messages_keep_their_lists_of_accepted_values() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg") {
+        let lists = src.split(|c: char| !(c.is_ascii_alphabetic() || c == '|')).filter(|w| w.contains('|') && w.split('|').all(|v| !v.is_empty()));
+        for list in lists.filter(|list| !translation.contains(*list)) {
+            wrong.push(format!("{list} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi messages change a list of values:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi rows leave no English connecting word in their sentences. Text in backticks, quotes,
+/// braces and brackets is a name, value or placeholder and keeps its English.
+#[test]
+fn hindi_rows_keep_no_english_words_in_their_sentences() {
+    const ENGLISH: [&str; 13] = ["or", "and", "the", "must", "give", "see", "use", "most", "is", "of", "be", "not", "an"];
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let mut prose = String::new();
+        let mut close = None;
+        for c in translation.chars() {
+            match (close, c) {
+                (Some(end), _) if c == end => close = None,
+                (Some(_), _) => {}
+                (None, '`') => close = Some('`'),
+                (None, '"') => close = Some('"'),
+                (None, '“') => close = Some('”'),
+                (None, '{') => close = Some('}'),
+                (None, '[') => close = Some(']'),
+                (None, _) => prose.push(c),
+            }
+        }
+        if let Some(word) = prose.split(|c: char| !c.is_ascii_alphabetic()).find(|w| ENGLISH.contains(w)) {
+            wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows keep an English word:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// Locale tags name their language by region or script (in either case, with an encoding or
@@ -354,6 +407,22 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
 fn marquee_selection_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
+#[test]
+fn monitor_profile_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Use Monitor Profile for Canvas",
+            "The canvas is drawn in sRGB.",
+            "Canvas display profile:",
+            "The system matches the window to the display's colors.",
+            "No usable display profile was found: the canvas is drawn in sRGB.",
+        ] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -2354,6 +2423,10 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
     ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
     ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
     ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+    (
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 1 note: a note",
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 2 notes: a note",
+    ),
 ];
 
 /// The open, save and recovery status messages and the Global Edit options' Results line name a
@@ -2361,15 +2434,18 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
 /// translates both, in the form its plural rule picks.
 #[test]
 fn open_save_and_recovery_messages_take_the_plural_form() {
-    use crate::io::{opened_with_notes, saved_status};
+    use crate::dialogs::missing_links::changed_on_disk_status;
+    use crate::io::{opened_after_notice, opened_with_notes, saved_status};
     use crate::panels::properties::global_edit_results;
     use crate::recovery::recovered_status;
     let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let notice = changed_on_disk_status(1);
     let made = [
         (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
         (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
         (recovered_status(true, 1), recovered_status(true, 2)),
         (recovered_status(false, 1), recovered_status(false, 2)),
+        (opened_after_notice(&notice, 1, "a note"), opened_after_notice(&notice, 2, "a note")),
     ];
     for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
         assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
@@ -2381,7 +2457,18 @@ fn open_save_and_recovery_messages_take_the_plural_form() {
         for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
             assert_ne!(message(lang, s), *s, "{code}: {s}");
         }
+        // The line about linked files and the open's line are each shown as the catalog has them.
+        for n in [1, 2] {
+            let shown = message(lang, &opened_after_notice(&notice, n, "a note"));
+            let (link, open) = (message(lang, &notice), message(lang, &opened_with_notes(n, "a note")));
+            assert!(link != notice && shown.starts_with(&link) && shown.ends_with(&open), "{code}: {shown}");
+        }
     }
+    let unreadable = "2 linked files can't be read here: their previews show";
+    assert_eq!(
+        message(de(), &opened_after_notice(unreadable, 3, "a note")),
+        format!("{}. Mit 3 Hinweisen geöffnet: a note", message(de(), unreadable))
+    );
     for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
         let lang = Lang::from_code(l.code).expect("registered");
         for n in [1, 2] {

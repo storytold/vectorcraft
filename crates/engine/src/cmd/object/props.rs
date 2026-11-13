@@ -65,10 +65,11 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             })
     };
     let d = &s.doc()?.doc;
-    // A graph keeps the object opacity and blend mode set on a mark of a series for the whole series, so a value a mark
-    // already has still replaces the one another mark left on the graph.
+    // A graph keeps the object opacity and blend mode set on a mark of a series for the whole series, and set on a label
+    // for its kind of label, so a value a mark or label already has still replaces the one another left on the graph.
     let transparency = opacity.is_some() || blend.is_some();
-    let stores = || transparency && crate::cmd::graph::series_object_opacity_differs(d, &ids);
+    let stores =
+        || transparency && (crate::cmd::graph::series_object_opacity_differs(d, &ids) || crate::cmd::graph::label_object_opacity_differs(d, &ids));
     if ids.iter().all(|id| d.node(*id).is_some_and(has_values)) && !stores() {
         // Hidden or locked objects can't stay selected.
         if hides {
@@ -124,6 +125,7 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if transparency {
             crate::cmd::graph::capture_series_object_opacity(d, &ids);
+            crate::cmd::graph::capture_label_object_opacity(d, &ids);
         }
         // Hidden or locked objects can't stay selected.
         if hides {

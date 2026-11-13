@@ -206,11 +206,31 @@ struct Source {
     text: String,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`thread_index`] went through the document's threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Each object the document's text threads list, with the index of the first thread that lists it.
+fn thread_index(d: &Document) -> std::collections::HashMap<NodeId, usize> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
+    let mut out = std::collections::HashMap::new();
+    for (i, thread) in d.text_threads.iter().enumerate() {
+        for id in thread {
+            out.entry(*id).or_insert(i);
+        }
+    }
+    out
+}
+
 impl Source {
-    /// Horizontal point or area type that isn't threaded and whose text all fits; None otherwise.
-    fn of(d: &Document, id: NodeId) -> Option<Self> {
+    /// Horizontal point or area type that isn't threaded (`threaded` false) and whose text all
+    /// fits; None otherwise.
+    fn of(d: &Document, id: NodeId, threaded: bool) -> Option<Self> {
         let t = text_of(d, id)?;
-        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || d.text_threads.iter().any(|th| th.contains(&id)) {
+        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || threaded {
             return None;
         }
         let lay = layout(t);
@@ -376,8 +396,10 @@ fn break_text(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let d = &s.doc()?.doc;
     let (mut items, mut skipped, mut count) = (vec![], vec![], 0);
-    for id in texts_under(d, &checked_ids_or_selection(s, p, C)?)? {
-        let (Some(src), Some(node)) = (Source::of(d, id), d.node(id)) else {
+    let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
+    let threads = thread_index(d);
+    for id in ids {
+        let (Some(src), Some(node)) = (Source::of(d, id, threads.contains_key(&id)), d.node(id)) else {
             skipped.push(id);
             continue;
         };
@@ -405,7 +427,8 @@ fn split_text(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(EngineError::Other("Click in type with a Type tool to split it".into()));
     };
     let d = &s.doc()?.doc;
-    let (Some(src), Some(node)) = (Source::of(d, id), d.node(id).filter(|_| d.is_editable(id))) else {
+    let threaded = d.text_threads.iter().any(|th| th.contains(&id));
+    let (Some(src), Some(node)) = (Source::of(d, id, threaded), d.node(id).filter(|_| d.is_editable(id))) else {
         return Err(EngineError::Other("Select horizontal point or area type whose text fits".into()));
     };
     let text = &src.text;
@@ -821,13 +844,17 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
             let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
             // A threaded story whose frames are all among them is read as one text, once.
             let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+            let threads = thread_index(d);
             let mut done = std::collections::HashSet::new();
             let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
             for &id in &ids {
                 if !done.insert(id) {
                     continue;
                 }
-                let story = crate::cmd::threads::story_of(d, id);
+                let story = match threads.get(&id).and_then(|&i| d.text_threads.get(i)) {
+                    Some(thread) => crate::cmd::threads::story_in(d, thread, id),
+                    None => vec![],
+                };
                 if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
                     done.extend(story.iter().copied());
                     out.extend(story_cuts(d, &story, brk));

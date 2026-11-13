@@ -3265,6 +3265,11 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
+	Canvas display profile:	A vászon kijelzőprofilja:
+	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nem található használható kijelzőprofil: a vászon sRGB-ben jelenik meg.
 	Rearrange	Átrendezés
 	Select All Artboards	Összes rajztábla kijelölése
 	Switch Orientation	Tájolás váltása
@@ -4305,6 +4310,11 @@ mark-style	Japanese	Japán
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko beállításai…
 	Tate-chu-yoko Settings	Tate-chu-yoko beállításai
+	Warichu	Warichu
+	Warichu Settings…	Warichu beállításai…
+	Warichu Settings	Warichu beállításai
+	Lines:	Sorok:
+	Line Gap:	Sorköz:
 	Composite Fonts…	Összetett betűtípusok…
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
@@ -4862,6 +4872,9 @@ imageTrace	Outline	Körvonal
 @msg	`{keep}` is not a side of this axis	`{keep}` nem ennek a tengelynek az oldala
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`: `auto` vagy nyelvkód kell, például `en` vagy `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}`: #rrggbb szín kell
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`: #rrggbb szín vagy rétegszín neve kell
+@msg	unknown Live Paint option `{key}`	ismeretlen élő festés beállítás: `{key}`
+@msg	unknown Shape Builder option `{key}`	ismeretlen alakzatépítő beállítás: `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`: #rrggbb szín kell
 @msg	`{key}` must be a number	`{key}`: szám kell
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
@@ -5157,6 +5170,10 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
 @msg	Couldn't read {name}: {e}	Nem sikerült beolvasni: {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nem sikerült menteni a helyreállítási adatokat: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a(z) {title} helyreállítási adatait: {e}. A másolatok helye: {folder}, az alapértelmezett helyreállítási mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a(z) {title} helyreállítási adatait: {e}. A másolatok helye: {folder}, a Beállításokban megadott mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a helyreállítási adatokat: {e}. A másolatok helye: {folder}, az alapértelmezett helyreállítási mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a helyreállítási adatokat: {e}. A másolatok helye: {folder}, a Beállításokban megadott mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Létrehozás segédvonalakból: a dokumentumban nincs rajztábla
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Létrehozás segédvonalakból: a segédvonalak túl sok szeletet adnak (legfeljebb {MAX_PIECES})
 @msg	Create from Selection: the selection has no area	Létrehozás a kijelölésből: a kijelölésnek nincs területe
@@ -5233,6 +5250,7 @@ imageTrace	Outline	Körvonal
 @msg	invalid parameters for `{cmd}`: {msg}	érvénytelen paraméterek (`{cmd}`): {msg}
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják: kapcsolja be a „200 in-nél hosszabb oldalak írása teljes méretben, pontban” beállítást
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: a(z) {label} oldalak UserUnit nélkül, pontokban íródnak, és a korlátot betartó alkalmazások 200 in-re vágják az oldalt
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	a PDF 1.5-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van a mérete megtartásához: a fájl PDF 1.6-ként íródik
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	a PDF 1.4-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van, hogy a PDF/A-2 14 400 egységes oldalkorlátján belül maradjon: a fájl PDF 1.6-ként íródik
@@ -5474,6 +5492,7 @@ imageTrace	Outline	Körvonal
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})
@@ -6843,6 +6862,8 @@ anchor	Points:	Pontok:
 	Anchor Inspector	Horgonypont-vizsgáló
 	Add Points at Crossings	Pontok hozzáadása a kereszteződésekben
 	Split at Crossings	Felosztás a kereszteződésekben
+	Trim at Crossings Tool	Levágás a kereszteződésekben eszköz
+	Trim at Crossings	Levágás a kereszteződésekben
 	Extend Path	Útvonal meghosszabbítása
 	Measure & Inspect	Mérés és vizsgálat
 	Set Anchor	Horgonypont beállítása
@@ -7422,3 +7443,9 @@ breakText	Glyphs	Glifák
 	Margin	Margó
 	Box	Keret
 	Swatch	Színminta
+	Banner Hems and Grommets…	Molinó szegései és ringlijei…
+	Banner Hems and Grommets	Molinó szegései és ringlijei
+	Hem	Szegés
+	Grommets	Ringlik
+	Grommet Inset	Ringlik távolsága a széltől
+	Diameter	Átmérő
