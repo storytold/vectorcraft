@@ -246,7 +246,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done (2026-11-04):** a first frame the app is slow to build no longer costs the window its graphics adapter (#5160). The first-frame watchdog gave the frame 20 s from the app's start and then started again without the adapter, so a slow machine (antivirus reading every file, a large font library) ended with no adapter left and no window. A frame counts once its UI pass ends, before it is painted, so the 20 s now run from there; a frame still being built is waited for, with a note in the log (`a_first_frame_that_never_reaches_the_screen_hangs_its_adapter`; checked on Linux with the first frame held 35 s: the window opened with no restart). Estimate unchanged.
 - **Done (2026-11-04):** a large font library no longer keeps the window from opening (#5483). The menu bar's Type › Font, drawn in the first frame, waited for the scan of every installed font; when that took longer than the 20 s first-frame watchdog (thousands of fonts on a slow disk, or with each file checked by antivirus) the app took the graphics adapter for hung and started again without it until none was left. The menu now lists the fonts already loaded until the scan ends, then all of them (`the_menu_family_list_now_does_not_wait_for_the_scan`; checked on Linux with 3,923 extra font files, each open delayed 8 ms: the window opened in 1.5 s, where it never did before). Estimate unchanged.
 - **Done (2026-10-29):** the Linux Flatpak on GNOME no longer reconnects to the compositor and logs a warning every 250 ms when arboard has neither data-control nor X11 (267k warnings in 18 h filled the 16 MB log in 3 h): a clipboard that can't be opened is retried with a wait growing to a minute and logged once. Copy and Paste of text with other apps work there through the core Wayland protocol.
-- **Missing:** pictures (`image/png`) and SVG as `image/svg+xml` on the clipboard of the Flatpak on GNOME, where only text travels (smithay-clipboard 0.7 carries text only); the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
+- **Unconfirmed (2026-11-13):** pictures and SVG on the clipboard of the Flatpak on GNOME. Copy there offers the PNG as `image/png`, the SVG as `image/svg+xml` (with Include SVG Code on) and the text, all from one Copy; Paste takes SVG, then text, then the PNG (blank text, or text that only names a picture, gives way to the PNG), and the Paste menu item is enabled by the types offered. A read takes 64 MiB at most (`clipboard::wayland` tests; not yet run in the Flatpak on a GNOME session).
+- **Missing:** the app not starting or staying in the background on some Windows 11 machines (#858, #964 fixed
   2026-10-10, #620, #818), slow pointer on a Linux AppImage (#575), macOS paste from other apps (#954), a
   web-free crash/hang reporter, a field record.
 - **Evidence:** open issues; the never-crash lints and `guard` stop panics, not driver, windowing or packaging
@@ -620,6 +621,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
   on a group (#4939), the groups like it (the same objects at the same places, moved or scaled) take an edit
   made to an object inside it at the object in the same place ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html));
+  a group that holds type or an image is not taken, as Global Edit does not take images or text
+  ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
   with one such object or group selected with the Selection tool, the objects Start Global Edit would take are
   highlighted on the canvas before it starts (`selecting_one_object_highlights_the_similar_objects_before_global_edit_starts`);
   dynamic symbols (#4938): Symbol Options › Symbol Type (Dynamic Symbol / Static Symbol; `type` on
@@ -666,7 +669,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
-  Global Edit of groups holding type or images, and rotated copies as matches.
+  Global Edit of rotated copies as matches.
 - **Estimate:** 5–15 h.
 
 ## G3 3D and Materials

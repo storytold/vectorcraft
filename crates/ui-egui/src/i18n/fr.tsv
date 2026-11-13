@@ -630,6 +630,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en plans de travail
 	Convert to CMYK	Convertir en CMJN
 	Convert to Grayscale	Convertir en niveaux de gris
+	Convert to Indexed Color	Convertir en couleurs indexées
+	Convert to Indexed Color…	Convertir en couleurs indexées…
 	Convert To Outlines	Vectoriser
 	Convert To Point Type	Convertir en texte de point
 	Convert to RGB	Convertir en RVB
@@ -4330,6 +4332,9 @@ axis	Both	Les deux
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossible d’importer {name} : le document sur lequel il a été déposé a été fermé
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossible d’importer {name} : le document dans lequel il était importé a été fermé
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossible d’importer {name} : le document sur lequel il a été déposé a été rétabli à la version précédente
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossible d’importer {name} : le document dans lequel il était importé a été rétabli à la version précédente
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossible de coller, car le document de destination a été rétabli à la version précédente
 @msg	Couldn't read {name}: {e}	Impossible de lire {name} : {e}
 @msg	Couldn't save recovery data: {e}	Impossible d’enregistrer les données de récupération : {e}
 @msg	Create Outlines: select text objects	Vectoriser : sélectionnez des objets texte

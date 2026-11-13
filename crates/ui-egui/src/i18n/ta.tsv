@@ -1032,6 +1032,8 @@ antiAlias	Sharp	கூர்மையான
 	Convert to destination (preserve numbers)	இலக்குக்கு மாற்று (எண்களைப் பாதுகாக்க)
 	Convert to Global	பொதுவாக மாற்று
 	Convert to Grayscale	சாம்பல் அளவாக மாற்று
+	Convert to Indexed Color	அட்டவணையிடப்பட்ட நிறமாக மாற்று
+	Convert to Indexed Color…	அட்டவணையிடப்பட்ட நிறமாக மாற்று…
 	Convert To Outlines	வெளிரேகைகளாக மாற்று
 	Convert to Parametric Shape	அளவுரு சார்ந்த வடிவமாக மாற்று
 	Convert To Point Type	புள்ளி உரையாக மாற்று
@@ -6610,6 +6612,9 @@ antiAlias	Sharp	கூர்மையான
 @msg	Couldn't place {name}: {e}	{name} ஐ வைக்க முடியவில்லை: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} ஐ வைக்க முடியவில்லை: அது விடப்பட்ட ஆவணம் மூடப்பட்டது
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} ஐ இட முடியவில்லை: அது இடப்பட்ட ஆவணம் மூடப்பட்டுவிட்டது
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} ஐ வைக்க முடியவில்லை: அது விடப்பட்ட ஆவணம் முந்தைய நிலைக்குத் திருப்பப்பட்டது
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} ஐ இட முடியவில்லை: அது இடப்பட்ட ஆவணம் முந்தைய நிலைக்குத் திருப்பப்பட்டுவிட்டது
+@msg	Couldn't paste: the document it was pasted in was reverted	ஒட்ட முடியவில்லை: ஒட்டப்பட்ட ஆவணம் முந்தைய நிலைக்குத் திருப்பப்பட்டுவிட்டது
 @msg	Couldn't read {name}: {e}	{name} ஐப் படிக்க முடியவில்லை: {e}
 @msg	Couldn't save recovery data: {e}	மீட்பு தரவைச் சேமிக்க முடியவில்லை: {e}
 @msg	counterPer `{c}`: item or file	counterPer `{c}`: item அல்லது file ஆக இருக்க வேண்டும்

@@ -1178,3 +1178,44 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
 }
+
+/// A closed path of 30,000 curves along the x axis, 2 pt apart: drawn with about 420,000 lines,
+/// and with more than the effect budget's 8 million once scaled 1000 times.
+fn wavy() -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A Transform effect left out past the effect budget leaves the art where it is, and the drop
+/// shadow before it (the object's, or the fill's before the fill's own Transform effect) reaches
+/// as far as it is drawn: by its own offset, not by a thousand times it.
+#[test]
+fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 5, "blur": 0}));
+    let big = fx("distort.transform", json!({"scaleH": 100000, "scaleV": 100000}));
+    let path = wavy();
+    let art = path.bounds().unwrap();
+    let mut object = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let mut fill = object.clone();
+    object.appearance.effects = vec![shadow.clone(), big.clone()];
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow, big];
+    }
+    let d = Document::new(100.0, 100.0);
+    let symbols = d.symbol_boxes();
+    // Within the shadow's 10 pt on every side (the visual bounds grow each side by the most any
+    // side reaches).
+    let within = |b: Rect| b.x0 >= art.x0 - 11.0 && b.y0 >= art.y0 - 11.0 && b.x1 <= art.x1 + 11.0 && b.y1 <= art.y1 + 11.0;
+    for (what, n) in [("object", &object), ("fill", &fill)] {
+        let b = crate::fx::visual_bounds(&symbols, n).unwrap();
+        assert!(within(b), "{what}: visual {b:?} for art {art:?}");
+        let b = crate::fx::painted_reach(&symbols, n).unwrap();
+        assert!(within(b), "{what}: painted {b:?} for art {art:?}");
+    }
+}
