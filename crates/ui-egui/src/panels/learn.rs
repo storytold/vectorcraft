@@ -5,9 +5,10 @@
 //! tutorial previews its numbered steps. A tool's name in a step is a link that shows where the tool
 //! is ([`locate`]). Back goes up one level. Under the steps, View more opens the tutorial's practice
 //! sample as a new untitled document; Finish tutorial then marks it finished, and Next Up shows the
-//! next tutorial in the same skill. `learn.list` lists the tutorials, `learn.show` opens one,
-//! `learn.locateTool` shows where a tool is, `learn.openSample`, `learn.finish` and `learn.next` run
-//! the three practice controls, and `window.learn` shows or hides the panel.
+//! next tutorial in the same skill. `learn.list` lists the tutorials, `learn.skills` shows the list
+//! of skills, `learn.show` opens one tutorial, `learn.locateTool` shows where a tool is,
+//! `learn.openSample`, `learn.finish` and `learn.next` run the three practice controls, and
+//! `window.learn` shows or hides the panel.
 
 pub mod catalog;
 pub mod locate;
@@ -87,8 +88,10 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     let resp = ui.interact(card.response.rect, ui.scope_id().with("quick-skill-guide"), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Quick skill guide")));
-    if resp.clicked() {
-        app.ui.learn = View { tab: Tab::Skills, skill: None, tutorial: None };
+    if resp.clicked()
+        && let Err(e) = app.run("learn.skills", json!({}))
+    {
+        app.status(e);
     }
 }
 
@@ -182,15 +185,16 @@ fn tool_link(ui: &mut Ui, t: &Tokens, name: &str) -> egui::Response {
 fn practice(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::Tutorial) {
     let t = Tokens::get(ui.ctx());
     let id = tutorial.id;
+    let params = json!({ "tutorial": id });
     let mut run = None;
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
         if ui.button(tl!("View more")).clicked() {
-            run = Some("learn.openSample");
+            run = Some(("learn.openSample", params.clone()));
         }
         let done = &app.ui.learn_practice;
         if done.opened.contains(&id) && !done.finished.contains(&id) && ui.button(tl!("Finish tutorial")).clicked() {
-            run = Some("learn.finish");
+            run = Some(("learn.finish", params.clone()));
         }
     });
     if app.ui.learn_practice.finished.contains(&id) {
@@ -199,7 +203,7 @@ fn practice(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::T
             Some(next) => {
                 ui.horizontal_wrapped(|ui| {
                     if ui.button(tl!("Next Up")).clicked() {
-                        run = Some("learn.next");
+                        run = Some(("learn.next", params.clone()));
                     }
                     ui.add(egui::Label::new(egui::RichText::new(next.title).color(t.text)).wrap());
                 });
@@ -207,13 +211,13 @@ fn practice(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::T
             None => {
                 ui.add(egui::Label::new(egui::RichText::new(tl!("You finished the last tutorial in this skill.")).color(t.text_dim)).wrap());
                 if ui.button(tl!("Back to skills")).clicked() {
-                    app.ui.learn = View { tab: Tab::Skills, skill: None, tutorial: None };
+                    run = Some(("learn.skills", json!({})));
                 }
             }
         }
     }
-    if let Some(cmd) = run
-        && let Err(e) = app.run(cmd, json!({ "tutorial": id }))
+    if let Some((cmd, params)) = run
+        && let Err(e) = app.run(cmd, params)
     {
         app.status(e);
     }
@@ -247,12 +251,13 @@ fn row(ui: &mut Ui, title: &str, tutorials: Option<usize>) -> egui::Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// The Learn panel's UI commands: `window.learn`, `learn.list`, `learn.show`, `learn.locateTool`,
-/// `learn.openSample`, `learn.finish` and `learn.next`.
+/// The Learn panel's UI commands: `window.learn`, `learn.list`, `learn.skills`, `learn.show`,
+/// `learn.locateTool`, `learn.openSample`, `learn.finish` and `learn.next`.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     Some(match id {
         "window.learn" => toggle(app, p),
         "learn.list" => Ok(list()),
+        "learn.skills" => skills_list(app),
         "learn.show" => open(app, p),
         "learn.locateTool" => locate::locate_tool(app, p),
         "learn.openSample" => open_sample(app, p),
@@ -289,6 +294,14 @@ fn list() -> Value {
         json!({"id": s.id, "title": s.title, "tutorials": tutorials})
     });
     json!({ "skills": skills.collect::<Vec<_>>() })
+}
+
+/// `learn.skills`: Back to skills, and the Quick skill guide card. Show the panel on the Skills tab
+/// with the list of skills, with no skill and no tutorial open → what `learn.list` answers.
+fn skills_list(app: &mut VectorcraftApp) -> Result<Value, String> {
+    crate::panel_docking::reveal_panel(app, ID)?;
+    app.ui.learn = View { tab: Tab::Skills, skill: None, tutorial: None };
+    Ok(list())
 }
 
 /// `learn.show {tutorial}`: show the panel on the Skills tab with that tutorial's steps → the

@@ -6768,6 +6768,7 @@ breakText	Glyphs	Glif
 	Open Tutorial Sample	Buka contoh tutorial
 	Finish Tutorial	Selesaikan tutorial
 	Next Tutorial	Tutorial berikutnya
+	Back to Skills	Kembali ke keterampilan
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
 @msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)

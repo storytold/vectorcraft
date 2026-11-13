@@ -7204,6 +7204,7 @@ breakText	Glyphs	Glify
 	Open Tutorial Sample	Otwórz przykład samouczka
 	Finish Tutorial	Zakończ samouczek
 	Next Tutorial	Następny samouczek
+	Back to Skills	Powrót do umiejętności
 @msg	tutorial `{id}` has no practice sample	samouczek `{id}` nie ma przykładu do ćwiczeń
 @msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	najpierw zakończ `{id}` (patrz learn.finish)

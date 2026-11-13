@@ -6752,6 +6752,7 @@ breakText	Glyphs	Глифи
 	Open Tutorial Sample	Отваряне на примерния файл на урока
 	Finish Tutorial	Завършване на урок
 	Next Tutorial	Следващ урок
+	Back to Skills	Обратно към уменията
 @msg	tutorial `{id}` has no practice sample	урокът `{id}` няма примерен файл за упражнение
 @msg	open the practice sample of `{id}` first (see learn.openSample)	първо отворете примерния файл за упражнение на `{id}` (вижте learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	първо завършете `{id}` (вижте learn.finish)

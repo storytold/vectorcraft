@@ -648,6 +648,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
     ),
     (
+        "learn.skills",
+        "Back to Skills",
+        "",
+        "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",

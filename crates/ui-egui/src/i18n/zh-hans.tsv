@@ -7186,6 +7186,7 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	打开教程示例
 	Finish Tutorial	完成教程
 	Next Tutorial	下一个教程
+	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)

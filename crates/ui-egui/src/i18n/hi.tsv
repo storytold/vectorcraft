@@ -8741,6 +8741,7 @@ theme	Appearance	अपीयरेंस
 	Open Tutorial Sample	ट्यूटोरियल का नमूना खोलें
 	Finish Tutorial	ट्यूटोरियल पूरा करें
 	Next Tutorial	अगला ट्यूटोरियल
+	Back to Skills	कौशल पर वापस जाएँ
 @msg	tutorial `{id}` has no practice sample	ट्यूटोरियल `{id}` का कोई अभ्यास नमूना नहीं है
 @msg	open the practice sample of `{id}` first (see learn.openSample)	पहले `{id}` का अभ्यास नमूना खोलें (learn.openSample देखें)
 @msg	finish `{id}` first (see learn.finish)	पहले `{id}` पूरा करें (learn.finish देखें)

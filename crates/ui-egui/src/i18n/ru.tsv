@@ -7437,6 +7437,7 @@ shape	Open	Открытый
 	Open Tutorial Sample	Открыть пример урока
 	Finish Tutorial	Завершить урок
 	Next Tutorial	Следующий урок
+	Back to Skills	Назад к навыкам
 @msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
 @msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)

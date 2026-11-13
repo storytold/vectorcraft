@@ -7421,6 +7421,7 @@ swatch	Yellow Green	Verde-amarelado
 	Open Tutorial Sample	Abrir Amostra do Tutorial
 	Finish Tutorial	Concluir Tutorial
 	Next Tutorial	Próximo Tutorial
+	Back to Skills	Voltar às Habilidades
 @msg	tutorial `{id}` has no practice sample	o tutorial `{id}` não tem amostra de prática
 @msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	conclua primeiro `{id}` (veja learn.finish)

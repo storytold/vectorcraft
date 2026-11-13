@@ -6768,6 +6768,7 @@ breakText	Glyphs	Glyffer
 	Open Tutorial Sample	Åbn eksempel til vejledning
 	Finish Tutorial	Afslut vejledning
 	Next Tutorial	Næste vejledning
+	Back to Skills	Tilbage til færdigheder
 @msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
 @msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)

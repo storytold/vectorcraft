@@ -6977,6 +6977,7 @@ breakText	Glyphs	Glifi
 	Open Tutorial Sample	Apri l’esempio del tutorial
 	Finish Tutorial	Termina il tutorial
 	Next Tutorial	Tutorial successivo
+	Back to Skills	Torna alle competenze
 @msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
 @msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	termina prima `{id}` (vedi learn.finish)

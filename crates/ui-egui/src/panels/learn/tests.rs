@@ -421,6 +421,41 @@ fn learn_finish_and_learn_next_follow_the_practice() {
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("copy-colors") });
 }
 
+/// `learn.skills` shows the panel on the Skills tab with the list of skills and answers what
+/// `learn.list` answers. Back to skills and the Quick skill guide card run it: each one also shows
+/// a panel that was hidden, as the command does.
+#[test]
+fn learn_skills_shows_the_list_of_skills() {
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == "learn.skills"), "learn.skills is in the UI command catalog");
+    let mut app = app();
+    app.run("learn.show", json!({"tutorial": "gradient"})).unwrap();
+    app.run("window.learn", json!({"show": false})).unwrap();
+    assert!(!shown(&app));
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(app.run("learn.skills", json!({})).unwrap(), list);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app));
+
+    // Back to skills, after a skill's last tutorial.
+    let mut app = self::app();
+    let ctx = context();
+    app.run("learn.openSample", json!({"tutorial": "outline-type"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "outline-type"})).unwrap();
+    assert!(!shown(&app));
+    click(&mut app, &ctx, "Back to skills", show);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app), "Back to skills runs learn.skills");
+
+    // The Quick skill guide card on the For you tab.
+    let mut app = self::app();
+    let ctx = context();
+    assert!(!shown(&app));
+    click(&mut app, &ctx, "Quick skill guide", show);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app), "the Quick skill guide card runs learn.skills");
+}
+
 /// The practice commands reject a missing, mistyped or unknown tutorial id and change nothing.
 #[test]
 fn the_practice_commands_reject_a_missing_or_unknown_tutorial() {

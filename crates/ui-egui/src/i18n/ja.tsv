@@ -7042,6 +7042,7 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	チュートリアルのサンプルを開く
 	Finish Tutorial	チュートリアルを完了
 	Next Tutorial	次のチュートリアル
+	Back to Skills	スキルに戻る
 @msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
 @msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
 @msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)

@@ -6819,6 +6819,7 @@ breakText	Glyphs	Glyphs
 	Open Tutorial Sample	Oefenbestand van tutorial openen
 	Finish Tutorial	Tutorial voltooien
 	Next Tutorial	Volgende tutorial
+	Back to Skills	Terug naar vaardigheden
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` heeft geen oefenbestand
 @msg	open the practice sample of `{id}` first (see learn.openSample)	open eerst het oefenbestand van `{id}` (zie learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	voltooi eerst `{id}` (zie learn.finish)

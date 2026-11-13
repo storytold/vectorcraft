@@ -6958,6 +6958,7 @@ breakText	Glyphs	Glyph
 	Open Tutorial Sample	Mở tệp mẫu của hướng dẫn
 	Finish Tutorial	Hoàn tất hướng dẫn
 	Next Tutorial	Hướng dẫn tiếp theo
+	Back to Skills	Quay lại kỹ năng
 @msg	tutorial `{id}` has no practice sample	hướng dẫn `{id}` không có tệp mẫu thực hành
 @msg	open the practice sample of `{id}` first (see learn.openSample)	hãy mở tệp mẫu thực hành của `{id}` trước (xem learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	hãy hoàn tất `{id}` trước (xem learn.finish)

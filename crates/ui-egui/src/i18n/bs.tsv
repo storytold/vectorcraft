@@ -6806,6 +6806,7 @@ shape	Open	Otvoren
 	Open Tutorial Sample	Otvori uzorak tutorijala
 	Finish Tutorial	Završi tutorijal
 	Next Tutorial	Sljedeći tutorijal
+	Back to Skills	Nazad na vještine
 @msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
 @msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)

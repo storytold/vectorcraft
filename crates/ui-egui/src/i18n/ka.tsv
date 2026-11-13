@@ -7462,6 +7462,7 @@ font-script	Japanese	იაპონური
 	Open Tutorial Sample	გაკვეთილის ნიმუშის გახსნა
 	Finish Tutorial	გაკვეთილის დასრულება
 	Next Tutorial	შემდეგი გაკვეთილი
+	Back to Skills	უნარებზე დაბრუნება
 @msg	tutorial `{id}` has no practice sample	გაკვეთილს `{id}` არ აქვს სავარჯიშო ნიმუში
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ჯერ დაასრულეთ `{id}` (იხ. learn.finish)

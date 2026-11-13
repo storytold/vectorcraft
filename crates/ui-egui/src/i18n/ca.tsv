@@ -7329,6 +7329,7 @@ breakText	Glyphs	Glifs
 	Open Tutorial Sample	Obre la mostra del tutorial
 	Finish Tutorial	Acaba el tutorial
 	Next Tutorial	Tutorial següent
+	Back to Skills	Torna a les habilitats
 @msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
 @msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)

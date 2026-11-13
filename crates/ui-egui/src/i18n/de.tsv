@@ -6943,6 +6943,7 @@ breakText	Glyphs	Glyphen
 	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
 	Finish Tutorial	Lernprogramm abschließen
 	Next Tutorial	Nächstes Lernprogramm
+	Back to Skills	Zurück zu den Fertigkeiten
 @msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	schließen Sie zuerst `{id}` ab (siehe learn.finish)
