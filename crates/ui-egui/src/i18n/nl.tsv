@@ -5353,6 +5353,7 @@ imageTrace	Outline	Contour
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Geopend met {n} opmerking: {first}|Geopend met {n} opmerkingen: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Geopend met {n} opmerking: {first}|{notice}. Geopend met {n} opmerkingen: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} opgeslagen met {n} opmerking: {first}|{path} opgeslagen met {n} opmerkingen: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 @msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten

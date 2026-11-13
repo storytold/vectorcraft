@@ -2633,6 +2633,7 @@ file-filter	Templates	範本
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已捨棄 {n} 份復原的文件
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已還原 {n} 份復原的文件：請儲存以保留
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已開啟，附有 {n} 則註解：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已開啟，附有 {n} 則註解：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已儲存 {path}，附有 {n} 則註解：{first}
 @msg	Saving recovery data for {_1}	正在儲存 {_1} 的復原資料
 @msg	This shortcut file is in a form VectorCraft can't read.	VectorCraft 無法讀取此快速鍵檔案的格式。

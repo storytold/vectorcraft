@@ -5133,6 +5133,7 @@ theme	Appearance	외관
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	참고 {n}건과 함께 열었습니다: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. 참고 {n}건과 함께 열었습니다: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	참고 {n}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Saving recovery data for {_1}	{_1}의 복구 데이터를 저장하는 중
 @msg	bad shortcut	잘못된 단축키

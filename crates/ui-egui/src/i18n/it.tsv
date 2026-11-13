@@ -5089,6 +5089,7 @@ axis	Both	Entrambi
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Scartato {n} documento recuperato|Scartati {n} documenti recuperati
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Ripristinato {n} documento recuperato. Salvalo per conservarlo|Ripristinati {n} documenti recuperati. Salvali per conservarli
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aperto con {n} nota: {first}|Aperto con {n} note: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Aperto con {n} nota: {first}|{notice}. Aperto con {n} note: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Salvato {path} con {n} nota: {first}|Salvato {path} con {n} note: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Incorporata {n} immagine; mancanti: {missing} (ricollegale prima)|Incorporate {n} immagini; mancanti: {missing} (ricollegale prima)
 @msgplural	Embedded {n} image|Embedded {n} images	Incorporata {n} immagine|Incorporate {n} immagini

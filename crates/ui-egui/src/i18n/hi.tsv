@@ -8550,6 +8550,7 @@ antiAlias	Sharp	शार्प
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	डॉक्यूमेंट एक ब्लीड सेट करता है जिसे यह PDF/X फ़ाइल छोड़ देती है: "डॉक्यूमेंट की ब्लीड सेटिंग्स उपयोग करें" चालू करें
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} एक्सपोर्ट हुआ, {n} नोट के साथ: {first}|{what} एक्सपोर्ट हुआ, {n} नोट्स के साथ: {first}
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} नोट के साथ खुला: {first}|{n} नोट्स के साथ खुला: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}। {n} नोट के साथ खुला: {first}|{notice}। {n} नोट्स के साथ खुला: {first}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder} में {n} फ़ाइल ({note}) पैकेज हुई|{folder} में {n} फ़ाइलें ({note}) पैकेज हुईं
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} फ़ाइल पैकेज हुई {note}|{n} फ़ाइलें पैकेज हुईं {note}
 @msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder} में {n} फ़ाइल पैकेज हुई|{folder} में {n} फ़ाइलें पैकेज हुईं

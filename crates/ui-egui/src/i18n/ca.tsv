@@ -5926,6 +5926,7 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. S’ha obert amb {n} nota: {first}|{notice}. S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers

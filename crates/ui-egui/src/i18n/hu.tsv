@@ -5479,6 +5479,7 @@ imageTrace	Outline	Körvonal
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})

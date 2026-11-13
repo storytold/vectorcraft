@@ -5024,6 +5024,7 @@ axis	Both	Les deux
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} document récupéré supprimé|{n} documents récupérés supprimés
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} document récupéré restauré : enregistrez-le pour le conserver|{n} documents récupérés restaurés : enregistrez-les pour les conserver
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Ouvert avec {n} remarque : {first}|Ouvert avec {n} remarques : {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Ouvert avec {n} remarque : {first}|{notice}. Ouvert avec {n} remarques : {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} enregistré avec {n} remarque : {first}|{path} enregistré avec {n} remarques : {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} image incorporée ; il en manque {missing} : rétablissez d’abord leurs liens|{n} images incorporées ; il en manque {missing} : rétablissez d’abord leurs liens
 @msgplural	Embedded {n} image|Embedded {n} images	{n} image incorporée|{n} images incorporées
