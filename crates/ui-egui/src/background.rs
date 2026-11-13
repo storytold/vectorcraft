@@ -190,6 +190,19 @@ pub fn run_with_progress(
     then(app, r)
 }
 
+/// Run `f` on the UI thread once job `id` has finished, right after the job's own result is
+/// applied, with that applied result (an error when the work failed). Nothing runs when no job
+/// `id` is in progress.
+pub fn after(app: &mut VectorcraftApp, id: u64, f: impl FnOnce(&mut VectorcraftApp, &Result<Value, String>) + 'static) {
+    let Some(job) = app.background.jobs.iter_mut().find(|j| j.id == id) else { return };
+    let then = std::mem::replace(&mut job.then, Box::new(|_, r| r));
+    job.then = Box::new(move |app, r| {
+        let r = then(app, r);
+        f(app, &r);
+        r
+    });
+}
+
 /// Run `f` with every save and export it starts written at once, as with the preferences off, so
 /// its result is the written file or the error (a control client's `wait: true`). The jobs already
 /// running finish first, so none of them writes over its files afterwards.

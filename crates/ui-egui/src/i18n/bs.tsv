@@ -6030,6 +6030,13 @@ axis	Y Axis	Y osa
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
 	Insert Menu Item…	Umetni stavku menija…
 	Insert Menu Item	Umetni stavku menija
+	Insert Select Path	Umetni odabir putanje
+	Select Path	Odabir putanje
+@msg	select one whole path or compound path	odaberite jednu cijelu putanju ili složenu putanju
+@msg	select only one path	odaberite samo jednu putanju
+@msg	the path is hidden or locked, or cannot be selected here	putanja je skrivena ili zaključana, ili se ovdje ne može odabrati
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} nije sačuvana putanja: promijenjena je ili je dokument drugi
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` mora biti "v1:" i 16 malih heksadecimalnih cifara
 	Select Object…	Odaberi objekt…
 	Select Object	Odaberi objekt
 	Set Selection	Postavi odabir

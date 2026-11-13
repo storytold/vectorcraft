@@ -5349,6 +5349,65 @@ lighting	Light	Ljus
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan inte skapa en solid av en bild: kalkera den först med Objekt › Bildkalkering › Skapa.
 @msg	{label} requires a shape with at least two anchors	{label} kräver en form med minst två ankarpunkter
 @msg	The shape is too complex for a 3D effect	Formen är för komplex för en 3D-effekt
+@msg	Extrude & Bevel	Extrudera och fasa
+@msg	Revolve	Rotera runt axel
+@msg	Inflate	Blås upp
+@msg	Rotate	Rotera
+@msg	Extrude & Bevel (Classic)	Extrudera och fasa (klassisk)
+@msg	Revolve (Classic)	Rotera runt axel (klassisk)
+@msg	Rotate (Classic)	Rotera (klassisk)
+@msg	This effect	Den här effekten
+@msg	clipping paths	urklippsbanor
+@msg	other objects	andra objekt
+@msg	{label} requires a group holding a shape with at least two anchors	{label} kräver en grupp med en form med minst två ankarpunkter
+@msg	Revolve requires a group holding a shape with at least two anchors	Rotera runt axel kräver en grupp med en form med minst två ankarpunkter
+@msg	Revolve requires a shape with at least two anchors	Rotera runt axel kräver en form med minst två ankarpunkter
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} på en grupp kräver banor, sammansatta banor, text, grupper, urklippsgrupper, blandningar och symbolinstanser: frigör eller expandera först följande: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} på en grupp tar högst {MAX_MEMBERS} objekt
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	En 3D-effekt på en grupp eller ett lager hör till själva gruppen, inte till dess fyllning eller linje
+@msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
+@msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
+@msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
+@msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan inte bygga solider av den här teckningen: dess symbolinstanser, blandningar och urklippsgrupper innehåller för många objekt
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan inte bygga en solid av instansen av symbolen ”{symbol}”: symbolens teckning är inte tillgänglig
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: urklippsbanan är för komplex för att klippa teckningen med
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} tar högst {MAX_MEMBERS} objekt
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kan inte bygga solider av teckning som är kapslad mer än {MAX_DEPTH} nivåer djupt
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Färgen för Rotera runt axel är för komplex för den här ytan; minska Segment eller förenkla övertoningen
+@msg	Revolve edge must be left or right	Rotera runt axel: edge måste vara left eller right
+@msg	Revolve cap must be a boolean	Rotera runt axel: cap måste vara ett booleskt värde
+@msg	the revolved object has no fill or stroke	det roterade objektet har ingen fyllning eller linje
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor måste vara en ogenomskinlig RGB-färg i formen #rrggbb
+@msg	lights must contain one to ten lights	lights måste innehålla ett till tio ljus
+@msg	each light must be an object	varje ljus måste vara ett objekt
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	okänd ljusinställning: använd color, intensity, rotation, height, softness eller behind
+@msg	light {key} must be a number from {min} to {max}	ljus: {key} måste vara ett tal från {min} till {max}
+@msg	light color must use opaque #rrggbb	color för ett ljus måste vara en ogenomskinlig #rrggbb
+@msg	light behind must be true or false	behind för ett ljus måste vara true eller false
+@msg	shadow must be true or false	shadow måste vara true eller false
+@msg	shadowPosition must be behind or below	shadowPosition måste vara behind eller below
+@msg	{key} must be a number from {min} to {max}	{key} måste vara ett tal från {min} till {max}
+@msg	each of `{GRAPHICS}` must be an object	varje post i `{GRAPHICS}` måste vara ett objekt
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	posterna i `{GRAPHICS}` tar symbol, face, x, y, scale och rotation, inte `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	varje post i `{GRAPHICS}` behöver `symbol`, namnet på en symbol
+@msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafik placeras på plana sidor: använd objekttypen Extrudera eller Plan
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
+@msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
+@msg	The graphics are too complex: simplify the symbols' art	Grafiken är för komplex: förenkla symbolernas teckning
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	En grafiks teckning får vara kapslad högst {MAX_LEVELS} nivåer djupt: förenkla symbolens teckning
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	En grafiks teckning får kapsla symboler högst {MAX_NESTING} nivåer djupt: förenkla symbolens teckning
+@msg	A graphic's art holds too many objects: simplify the symbol's art	En grafiks teckning innehåller för många objekt: förenkla symbolens teckning
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	En grafik ritar högst {MAX_PIECES} fyllningar och linjer: förenkla symbolens teckning
+@msg	`surface` must be one of {_1}	`surface` måste vara något av {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} ritar källteckningen för det här objektet i stället för dess 3D-yta
+@msg	{label} draws no faces for this object	{label} ritar inga sidor för det här objektet
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	trådramen har fler än {MAX_WIRE_EDGES} kanter
 @msg	The 3D surface is too complex; simplify the shape	3D-ytan är för komplex; förenkla formen
 	Transform Objects	Transformera objekt
 @msg	unknown parameter `{key}`; did you mean `{near}`?	okänd parameter `{key}`; menade du `{near}`?
@@ -6415,6 +6474,13 @@ axis	Y Axis	Y-axel
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
+	Insert Select Path	Infoga markering av bana
+	Select Path	Markera bana
+@msg	select one whole path or compound path	markera en hel bana eller sammansatt bana
+@msg	select only one path	markera bara en bana
+@msg	the path is hidden or locked, or cannot be selected here	banan är dold eller låst, eller kan inte markeras här
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} är inte den sparade banan: den har ändrats, eller så är dokumentet ett annat
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` måste vara "v1:" och 16 hexadecimala siffror med gemener
 	Select Object…	Markera objekt…
 	Select Object	Markera objekt
 	Set Selection	Ange markering
