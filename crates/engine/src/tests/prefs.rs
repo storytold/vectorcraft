@@ -756,6 +756,9 @@ fn precise_cursors_replace_every_pen_state() {
         Cursor::LivePaintBucket,
         Cursor::LivePaintBucketFace,
         Cursor::LivePaintBucketEdge,
+        Cursor::LivePaintSelectFace,
+        Cursor::LivePaintSelectEdge,
+        Cursor::LivePaintSelectOutside,
     ] {
         assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
     }

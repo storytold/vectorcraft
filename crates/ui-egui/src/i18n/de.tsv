@@ -5903,7 +5903,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
@@ -6146,6 +6148,7 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
@@ -6317,6 +6320,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

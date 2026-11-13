@@ -5917,7 +5917,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` застосовується до градієнтних заливок (paint.setFill)
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
-@msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+	Hue Clockwise	Відтінок за годинниковою стрілкою
+	Hue Counterclockwise	Відтінок проти годинникової стрілки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` має бути classic, perceptual, hue-clockwise або hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
@@ -6160,6 +6162,7 @@ axis	Y Axis	Вісь Y
 	Continue	Продовжити
 	Continue Action	Продовжити дію
 	Delete Action Step	Видалити крок дії
+	Move Action Step	Перемістити крок дії
 	Press Play Current Selection in the Actions panel to go on.	Щоб продовжити, натисніть «Відтворити поточне виділення» на панелі «Дії».
 	Stop: {message}	Зупинка: {message}
 @msg	no action is waiting at a stop	жодна дія не очікує на зупинці
@@ -6331,6 +6334,22 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+	Notched Ribbon	Стрічка з насічками
+	Double Line	Подвійна лінія
+	Wave	Хвиля
+	Teardrop	Крапля
+	Striped Ribbon	Смугаста стрічка
+	Fine Nib	Тонке перо
+	Broad Nib	Широке перо
+	Chisel	Стамеска
+	Round Pen	Кругле перо
+	Pressure Pen	Перо з натиском
+	Beads	Намистини
+	Dash Dot	Штрихпунктир
+	Scallops	Фестони
+	Stars	Зірки
+	Triangles	Трикутники
+	Sparkles	Іскри
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

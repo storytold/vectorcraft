@@ -2478,7 +2478,7 @@ fn series_colours_survive_native_save_open_and_export() {
     let second = group(s.doc().unwrap().doc.node(id).unwrap(), "2025").id;
     s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#f00"})).unwrap();
     s.execute("paint.setFill", &json!({"ids": [second.0], "color": "#008080"})).unwrap();
-    let dir = vectorcraft_testkit::temp_dir("graph-palette");
+    let dir = vectorcraft_testkit::TempDir::new("graph-palette");
     let path = dir.join("palette.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
@@ -2892,7 +2892,8 @@ fn series_types_survive_save_and_open_and_older_files_have_none() {
     s.execute("file.new", &json!({})).unwrap();
     let id = graph(&mut s, "column");
     s.execute("graph.setType", &json!({"seriesIndexes": [1], "type": "line"})).unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-kinds").join("kinds.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-kinds");
+    let path = dir.join("kinds.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     assert_eq!(spec(&s, id).series_kinds, [None, Some(GraphKind::Line)]);
@@ -3020,7 +3021,8 @@ fn value_axis_options_survive_save_and_open_and_are_left_out_when_unset() {
     let id = two_scale_graph(&mut s);
     s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true, "rightAxisMin": 0, "rightAxisMax": 2000})).unwrap();
     s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-axes").join("axes.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-axes");
+    let path = dir.join("axes.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     let g = spec(&s, id);
@@ -3222,7 +3224,8 @@ fn tick_and_label_options_survive_save_and_open_and_are_left_out_when_unset() {
         &json!({"tickLength": "full", "tickMarks": 3, "categoryTickLength": "short", "ticksBetweenLabels": true, "suffix": "%"}),
     )
     .unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-ticks").join("ticks.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-ticks");
+    let path = dir.join("ticks.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     let g = spec(&s, id);
@@ -3461,7 +3464,8 @@ fn designs_and_markers_survive_save_and_open() {
     save_design(&mut s, "Pill");
     let id = graph(&mut s, "line");
     s.execute("graph.marker", &json!({"seriesIndexes": [0], "design": "Pill"})).unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-designs").join("designs.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-designs");
+    let path = dir.join("designs.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     assert_eq!(s.execute("graph.design", &json!({})).unwrap()["designs"], json!(["Pill"]));
@@ -3859,7 +3863,8 @@ fn column_designs_survive_save_and_open_and_follow_their_design() {
     assert!(series_parts(&s, id, 1).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })), "the line series");
     let v = s.execute("graph.column", &json!({"id": id.0, "seriesIndexes": [0]})).unwrap();
     assert_eq!(v, json!({"designs": ["Coin"], "design": "Coin", "columnType": "repeating", "each": 2.5, "fractions": "scale"}));
-    let path = vectorcraft_testkit::temp_dir("graph-column-designs").join("columns.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-column-designs");
+    let path = dir.join("columns.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     let options = ColumnDesign { design: "Coin".into(), column_type: ColumnType::Repeating, each: 2.5, fractions: Fractions::Scale };
@@ -4381,7 +4386,8 @@ fn legends_in_wedges_put_the_series_labels_inside_the_pie() {
     s.execute("graph.setType", &json!({"legend": true})).unwrap();
     assert!(!spec(&s, id).pie_legend_in_wedges);
     assert!(s.execute("graph.setType", &json!({"pieLegend": "inside"})).is_err());
-    let path = vectorcraft_testkit::temp_dir("graph-pie").join("pie.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-pie");
+    let path = dir.join("pie.vectorcraft");
     s.execute("graph.setType", &json!({"pieLegend": "wedges", "piePosition": "stacked", "pieSort": "all"})).unwrap();
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
@@ -4522,7 +4528,8 @@ fn the_legend_across_top_runs_in_rows_above_the_plot() {
     assert!(ys.iter().all(|y| *y + 8.0 <= 100.0 - 8.0 + 1e-6), "{ys:?}");
     let xs: Vec<f64> = (0..6).map(|i| swatch(&s, i).x1).collect();
     assert!(xs.iter().all(|x| *x <= 400.0), "{xs:?}");
-    let path = vectorcraft_testkit::temp_dir("graph-top").join("top.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-top");
+    let path = dir.join("top.vectorcraft");
     s.execute("graph.setType", &json!({"dropShadow": true})).unwrap();
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
@@ -4641,7 +4648,8 @@ fn filled_lines_are_bands_in_the_series_colour() {
     s.execute("paint.setFill", &json!({"ids": [grp.0], "color": "#ff0000"})).unwrap();
     s.execute("graph.setData", &json!({"id": id.0, "rows": [[2], [3], [2]]})).unwrap();
     assert_eq!(series_parts(&s, id, 0)[0].appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
-    let path = vectorcraft_testkit::temp_dir("graph-filled").join("filled.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-filled");
+    let path = dir.join("filled.vectorcraft");
     s.execute("graph.setType", &json!({"firstRowInFront": true, "firstColumnInFront": true})).unwrap();
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
@@ -4768,7 +4776,8 @@ fn a_graph_labels_anti_aliasing_method_survives_it_being_drawn_again() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(spec(&s, id).label_styles.categories_anti_alias, None);
     s.execute("edit.redo", &json!({})).unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-label-anti-alias").join("labels.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-label-anti-alias");
+    let path = dir.join("labels.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     assert_eq!(spec(&s, id).label_styles.categories_anti_alias, Some(TypeAntiAlias::Strong));
@@ -4811,7 +4820,8 @@ fn formatting_one_label_keeps_that_kind_of_label() {
     assert_eq!(look("0").2, "#0000ff", "every value axis number");
     assert_eq!(look("0").1, 9.0);
     // Kept through save and open; nothing written when unset.
-    let path = vectorcraft_testkit::temp_dir("graph-labels").join("labels.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-labels");
+    let path = dir.join("labels.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     assert_eq!(spec(&s, id).label_styles.categories.as_ref().unwrap().size, 14.0);
@@ -4980,7 +4990,8 @@ fn paragraph_formats_are_kept_when_the_graph_is_drawn_again() {
     let v = text_id(&s, col, "Axes", "4");
     s.execute("select.set", &json!({"ids": [v.0]})).unwrap();
     s.execute("text.setFormat", &json!({"composer": "singleLine"})).unwrap();
-    let path = vectorcraft_testkit::temp_dir("graph-label-paras").join("labels.vectorcraft");
+    let dir = vectorcraft_testkit::TempDir::new("graph-label-paras");
+    let path = dir.join("labels.vectorcraft");
     s.execute("document.save", &json!({"path": path})).unwrap();
     s.execute("document.open", &json!({"path": path})).unwrap();
     s.execute("select.set", &json!({"ids": [col.0]})).unwrap();

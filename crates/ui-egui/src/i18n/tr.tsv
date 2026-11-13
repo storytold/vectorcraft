@@ -5470,6 +5470,8 @@ lighting	Light	Işık
 	Pen	Kalem
 	Pentagram	Pentagram
 	Perceptual	algısal
+	Hue Clockwise	Renk tonu saat yönünde
+	Hue Counterclockwise	Renk tonu saat yönünün tersine
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6267,7 +6269,7 @@ axis	Y Axis	Y ekseni
 	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
-@msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise veya hue-counterclockwise olmalıdır
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
@@ -6510,6 +6512,7 @@ axis	Y Axis	Y ekseni
 	Continue	Devam Et
 	Continue Action	Eyleme Devam Et
 	Delete Action Step	Eylem Adımını Sil
+	Move Action Step	Eylem Adımını Taşı
 	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
 	Stop: {message}	Durak: {message}
 @msg	no action is waiting at a stop	durakta bekleyen eylem yok
@@ -6681,6 +6684,22 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+	Notched Ribbon	Çentikli Şerit
+	Double Line	Çift Çizgi
+	Wave	Dalga
+	Teardrop	Gözyaşı
+	Striped Ribbon	Çizgili Şerit
+	Fine Nib	İnce Uç
+	Broad Nib	Geniş Uç
+	Chisel	Keski
+	Round Pen	Yuvarlak Kalem
+	Pressure Pen	Basınçlı Kalem
+	Beads	Boncuklar
+	Dash Dot	Çizgi Nokta
+	Scallops	Fistolar
+	Stars	Yıldızlar
+	Triangles	Üçgenler
+	Sparkles	Parıltılar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

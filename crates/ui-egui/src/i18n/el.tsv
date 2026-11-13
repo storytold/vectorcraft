@@ -2748,6 +2748,8 @@ lighting	Light	Φως
 	Oval	Οβάλ
 	Pen	Πένα (Pen Tool)
 	Perceptual	Αντιληπτικό
+	Hue Clockwise	Απόχρωση δεξιόστροφα
+	Hue Counterclockwise	Απόχρωση αριστερόστροφα
 	Pixel	Εικονοστοιχείο
 	Points:	Σημεία:
 	Preserve	Διατήρηση
@@ -6263,7 +6265,7 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
-@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	Το `method` πρέπει να είναι classic, perceptual, hue-clockwise ή hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
@@ -6506,6 +6508,7 @@ axis	Y Axis	Άξονας Y
 	Continue	Συνέχεια
 	Continue Action	Συνέχεια ενέργειας
 	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Move Action Step	Μετακίνηση βήματος ενέργειας
 	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
 	Stop: {message}	Διακοπή: {message}
 @msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
@@ -6677,6 +6680,22 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+	Notched Ribbon	Οδοντωτή κορδέλα
+	Double Line	Διπλή γραμμή
+	Wave	Κύμα
+	Teardrop	Δάκρυ
+	Striped Ribbon	Ριγέ κορδέλα
+	Fine Nib	Λεπτή πένα
+	Broad Nib	Φαρδιά πένα
+	Chisel	Σμίλη
+	Round Pen	Στρογγυλή πένα
+	Pressure Pen	Πένα πίεσης
+	Beads	Χάντρες
+	Dash Dot	Παύλα-τελεία
+	Scallops	Φεστόνια
+	Stars	Αστέρια
+	Triangles	Τρίγωνα
+	Sparkles	Σπίθες
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
