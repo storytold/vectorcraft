@@ -4862,6 +4862,9 @@ imageTrace	Outline	轮廓
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
 @msg	Couldn't place {name}: the document it was placed in was closed	无法置入 {name}：要置入的文档已关闭
+@msg	Couldn't place {name}: the document it was dropped on was reverted	无法置入 {name}：将它拖放到的文档已恢复
+@msg	Couldn't place {name}: the document it was placed in was reverted	无法置入 {name}：要置入的文档已恢复
+@msg	Couldn't paste: the document it was pasted in was reverted	无法粘贴：要粘贴到的文档已恢复
 @msg	no files to place	没有要置入的文件
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文档、PDF 或 PDF 兼容的 .ai 文件
 @msg	paths: give at least one file	paths：请至少给出一个文件

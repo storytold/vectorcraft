@@ -4376,6 +4376,9 @@ axis	Both	Оба
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не удалось поместить {name}: документ, в который его перетащили, был закрыт
 @msg	Couldn't place {name}: the document it was placed in was closed	Не удалось поместить {name}: документ, в который его помещали, был закрыт
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не удалось поместить {name}: документ, в который его перетащили, был возвращён к сохранённой версии
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не удалось поместить {name}: документ, в который его помещали, был возвращён к сохранённой версии
+@msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты

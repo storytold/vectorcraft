@@ -4249,6 +4249,9 @@ axis	Both	Båda
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunde inte placera {name}: dokumentet det släpptes på har stängts
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunde inte placera {name}: dokumentet det placerades i har stängts
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunde inte placera {name}: dokumentet det släpptes på har återgått till sparad version
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunde inte placera {name}: dokumentet det placerades i har återgått till sparad version
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunde inte klistra in: dokumentet det klistrades in i har återgått till sparad version
 @msg	Couldn't read {name}: {e}	Kunde inte läsa {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunde inte spara återställningsdata: {e}
 @msg	Create Outlines: select text objects	Skapa konturer: markera textobjekt

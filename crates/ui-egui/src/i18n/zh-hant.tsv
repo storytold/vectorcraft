@@ -2611,6 +2611,9 @@ file-filter	Templates	範本
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
 @msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
+@msg	Couldn't place {name}: the document it was dropped on was reverted	無法置入 {name}：放置它的文件已回復
+@msg	Couldn't place {name}: the document it was placed in was reverted	無法置入 {name}：要置入的文件已回復
+@msg	Couldn't paste: the document it was pasted in was reverted	無法貼上：要貼上的文件已回復
 @msg	no files to place	沒有要置入的檔案
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案

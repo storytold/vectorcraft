@@ -4761,6 +4761,9 @@ imageTrace	Outline	Contour
 @msg	Couldn't open {name}: {e}	Kon {name} niet openen: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kon {name} niet plaatsen: het document waarop het werd neergezet, is gesloten
 @msg	Couldn't place {name}: the document it was placed in was closed	Kon {name} niet plaatsen: het document waarin het werd geplaatst, is gesloten
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kon {name} niet plaatsen: het document waarop het werd neergezet, is teruggezet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kon {name} niet plaatsen: het document waarin het werd geplaatst, is teruggezet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kon niet plakken: het document waarin werd geplakt, is teruggezet
 @msg	Couldn't read {name}: {e}	Kon {name} niet lezen: {e}
 @msg	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
 @msg	Create Outlines: select text objects	Contouren maken: selecteer tekstobjecten

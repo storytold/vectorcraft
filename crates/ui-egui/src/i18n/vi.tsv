@@ -4803,6 +4803,9 @@ theme	Appearance	Giao diện
 @msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Không thể đặt {name}: tài liệu mà nó được thả vào đã được hoàn về
+@msg	Couldn't place {name}: the document it was placed in was reverted	Không thể đặt {name}: tài liệu mà nó được đặt vào đã được hoàn về
+@msg	Couldn't paste: the document it was pasted in was reverted	Không thể dán: tài liệu mà nó được dán vào đã được hoàn về
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}

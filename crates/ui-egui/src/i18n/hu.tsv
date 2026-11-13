@@ -5145,6 +5145,9 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nem sikerült elhelyezni: {name}; a céldokumentumot visszaállították a mentett változatra
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, visszaállították a mentett változatra
+@msg	Couldn't paste: the document it was pasted in was reverted	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, visszaállították a mentett változatra
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
 @msg	Couldn't read {name}: {e}	Nem sikerült beolvasni: {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nem sikerült menteni a helyreállítási adatokat: {e}
