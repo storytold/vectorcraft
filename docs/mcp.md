@@ -1947,8 +1947,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   file). Its preprocessor lines are read as the script's are. `timeout` is a number of milliseconds from 0; the file
   is read at once and `timeout` is not waited on. The run's fuel and limits apply to the file. An empty path, a
   missing file and a refused path throw errors the script can catch.
-- `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
-  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`. `$.engineName` is
+- `$.fileName` is the file of the code that reads it: the script, a file it included with `#include`, or a file
+  `$.evalFile` ran, also when a function that file defined is called after `$.evalFile` returned. It is empty in code
+  from a script given as `source`. In code that `eval` or `Function` compiled it is the file being run, which is the
+  file `$.evalFile` is running while it runs. `$.includePath` is the current `#includepath` list, separated by `;`. `$.engineName` is
   the name `#targetengine` gave the engine the script runs in (`VectorCraft` without the line) and is read-only.
 - `alert(message[, title, errorIcon])`, `confirm(message[, noAsDflt, title])` and `prompt(message, preset[, title])`
   open a dialog, described below. `vc.api.has("dialogs")` is true.
@@ -2092,6 +2094,9 @@ no engines, and the engines it left are dropped when their own thread next uses 
   for 8 MiB of source maps, the oldest going first, and a run whose script does not compile keeps none. An error in
   code whose place is gone, or in code that `eval` or `Function` compiled, is reported without a line and column, and
   the code still runs.
+- `$.fileName` in code an earlier run compiled names the file that code is in, by the same places: the earlier run's
+  script, a file it included or a file its `$.evalFile` ran, not the calling run's file. It is empty in code from an
+  earlier script given as `source`, even when that run had a name, and in code whose place is gone.
 - `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
   global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
   holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
