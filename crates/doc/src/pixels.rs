@@ -11,9 +11,9 @@ use crate::ImageBlob;
 /// address and aborts when an allocation fails, so it keeps the decoder's own 512 MB.
 pub const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
 
-/// A box of an image to sample, in 0 to 1 units of its width and height (`None`: all of it), and
-/// the pixel centres to take from it ([`ImageBlob::sample_pixels`]).
-pub type PixelPick<'a> = (Option<[f64; 4]>, &'a dyn Fn(f64, f64) -> bool);
+/// A box of an image to sample, in 0 to 1 units of its width and height (`None`: all of it), the
+/// pixels to sample from it at most, and the pixel centres to take ([`ImageBlob::sample_pixels`]).
+pub type PixelPick<'a> = (Option<[f64; 4]>, usize, &'a dyn Fn(f64, f64) -> bool);
 
 /// The pixels of encoded image `bytes` as RGBA; `None` when they can't be decoded, would take
 /// more than `max` bytes as RGBA, or need more than `max` bytes to decode. The size is read from
@@ -65,13 +65,13 @@ impl ImageBlob {
         Some(Self::png(png))
     }
 
-    /// For each of `picks`, at most `budget` of the image's pixels (at least one), spread evenly
+    /// For each of `picks`, at most its budget of the image's pixels (at least one), spread evenly
     /// in rows and columns over the pick's box (`[u0, v0, u1, v1]`, where 0 to 1 spans the
     /// image's width and height from the top left; clipped to the image; `None`: the whole image),
     /// as straight RGBA. Only pixels whose centres the pick's function takes (in the same 0 to 1
-    /// units) are given. The image is decoded once for all the picks. `None` when it can't be
-    /// decoded within [`MAX_RASTER_ALLOC`].
-    pub fn sample_pixels(&self, picks: &[PixelPick<'_>], budget: usize) -> Option<Vec<Vec<[u8; 4]>>> {
+    /// units) are given, and the function is called once for each pixel sampled. The image is
+    /// decoded once for all the picks. `None` when it can't be decoded within [`MAX_RASTER_ALLOC`].
+    pub fn sample_pixels(&self, picks: &[PixelPick<'_>]) -> Option<Vec<Vec<[u8; 4]>>> {
         let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
         let (w, h) = img.dimensions();
         let (fw, fh) = (f64::from(w), f64::from(h));
@@ -79,7 +79,7 @@ impl ImageBlob {
             let (a, b) = (a.min(b), a.max(b));
             ((a * n).floor().clamp(0.0, n) as u32, (b * n).ceil().clamp(0.0, n) as u32)
         };
-        let sample = |area: Option<[f64; 4]>, keep: &dyn Fn(f64, f64) -> bool| {
+        let sample = |area: Option<[f64; 4]>, budget: usize, keep: &dyn Fn(f64, f64) -> bool| {
             let [u0, v0, u1, v1] = area.unwrap_or([0.0, 0.0, 1.0, 1.0]);
             let (x0, x1) = span(u0, u1, fw);
             let (y0, y1) = span(v0, v1, fh);
@@ -105,7 +105,7 @@ impl ImageBlob {
             }
             out
         };
-        Some(picks.iter().map(|(area, keep)| sample(*area, *keep)).collect())
+        Some(picks.iter().map(|(area, budget, keep)| sample(*area, *budget, *keep)).collect())
     }
 
     /// The image as a grayscale PNG: `f` gives each pixel's gray level from its (straight) RGB, and
@@ -331,7 +331,7 @@ mod tests {
         let (r, b) = ([255, 0, 0, 255], [0, 0, 255, 255]);
         let img = blob(&[r, r, b, b, r, r, b, b], 4, 2);
         let any = |_: f64, _: f64| true;
-        let one = |b: &ImageBlob, area: Option<[f64; 4]>, budget: usize| b.sample_pixels(&[(area, &any)], budget).unwrap().remove(0);
+        let one = |b: &ImageBlob, area: Option<[f64; 4]>, budget: usize| b.sample_pixels(&[(area, budget, &any)]).unwrap().remove(0);
         assert_eq!(one(&img, None, 100).len(), 8, "the budget covers every pixel");
         assert_eq!(one(&img, Some([0.5, 0.0, 1.0, 1.0]), 100), vec![b; 4], "the right half");
         assert_eq!(one(&img, Some([1.0, 1.0, 0.5, 0.0]), 100), vec![b; 4], "a box given backwards");
@@ -339,13 +339,15 @@ mod tests {
         assert_eq!(one(&img, None, 2).len(), 2, "every second pixel of every second row");
         assert_eq!(one(&img, None, 0), vec![r], "a budget of 0 counts as 1");
         let left = |u: f64, _: f64| u < 0.5;
-        let both = img.sample_pixels(&[(None, &left), (Some([0.5, 0.0, 1.0, 1.0]), &any)], 100).unwrap();
+        let both = img.sample_pixels(&[(None, 100, &left), (Some([0.5, 0.0, 1.0, 1.0]), 100, &any)]).unwrap();
         assert_eq!(both, vec![vec![r; 4], vec![b; 4]], "several picks, each with the centres its function takes");
+        let sizes: Vec<usize> = img.sample_pixels(&[(None, 2, &any), (None, 100, &any)]).unwrap().iter().map(Vec::len).collect();
+        assert_eq!(sizes, [2, 8], "each pick keeps to its own budget");
         // A narrow image keeps to the budget too.
         let tall = blob(&vec![r; 5000], 1, 5000);
         let n = one(&tall, None, 100).len();
         assert!((50..=100).contains(&n), "{n} pixels");
-        assert!(ImageBlob::png(b"not a png".to_vec()).sample_pixels(&[(None, &any)], 100).is_none());
+        assert!(ImageBlob::png(b"not a png".to_vec()).sample_pixels(&[(None, 100, &any)]).is_none());
     }
 
     /// A GIF whose `w` × `h` screen holds one opaque red pixel at the top left. The file holds no

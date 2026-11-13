@@ -11,6 +11,7 @@ pub mod blend;
 pub mod cancel;
 pub mod clipnest;
 pub mod cmyk;
+pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
 pub mod depth;
