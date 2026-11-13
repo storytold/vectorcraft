@@ -2009,15 +2009,21 @@ fn status_rank(status: &str) -> usize {
 /// holds them) or overlap an object that is, as Show DCS Transparency Interactions marks them.
 fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
     /// Each visible DCS image's id, bounds and whether it is transparent, and the bounds of each
-    /// other visible object with its own transparency.
-    fn walk(d: &Document, n: &Node, held: bool, images: &mut Vec<(NodeId, Rect, bool)>, see_through: &mut Vec<Rect>) {
+    /// other visible object with its own transparency; bounds are cut to `clip`, the bounds of the
+    /// clipping paths of the clip groups and layers holding the object.
+    fn walk(d: &Document, n: &Node, held: bool, clip: Option<Rect>, images: &mut Vec<(NodeId, Rect, bool)>, see_through: &mut Vec<Rect>) {
         if !n.visible {
             return;
         }
         let own = n.shows_own_transparency();
+        // The part of the object that shows through `clip`; none when it is clipped away.
+        let shown = n.geometric_bounds().and_then(|b| match clip {
+            Some(c) => Some(c.intersect(b)).filter(|i| i.area() > 0.0),
+            None => Some(b),
+        });
         match &n.kind {
             NodeKind::Image(im) if d.images.get(&im.key).is_some_and(ImageBlob::is_separated) => {
-                if let Some(b) = n.geometric_bounds() {
+                if let Some(b) = shown {
                     images.push((n.id, b, held || own));
                     // A transparent DCS image is an object with its own transparency for the
                     // others it overlaps.
@@ -2026,16 +2032,25 @@ fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
                     }
                 }
             }
-            _ if own => see_through.extend(n.geometric_bounds()),
+            _ if own => see_through.extend(shown),
             _ => {}
         }
-        for c in n.children().into_iter().flatten() {
-            walk(d, c, held || own, images, see_through);
+        let Some(children) = n.children() else { return };
+        // A clip group's or clipping layer's first child clips the others.
+        let clip = match &n.kind {
+            NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. } => match children.first().and_then(|c| c.geometric_bounds()) {
+                Some(c) => Some(clip.map_or(c, |o| o.intersect(c))),
+                None => clip,
+            },
+            _ => clip,
+        };
+        for c in children {
+            walk(d, c, held || own, clip, images, see_through);
         }
     }
     let (mut images, mut see_through) = (vec![], vec![]);
     for l in &d.layers {
-        walk(d, l, false, &mut images, &mut see_through);
+        walk(d, l, false, None, &mut images, &mut see_through);
     }
     images
         .into_iter()
