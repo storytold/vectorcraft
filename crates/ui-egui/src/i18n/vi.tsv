@@ -4823,6 +4823,10 @@ theme	Appearance	Giao diện
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Tạo từ đường căn: tài liệu không có bảng vẽ
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Tạo từ đường căn: các đường căn tạo ra hơn {MAX_PIECES} lát cắt
 @msg	Create from Selection: the selection has no area	Tạo từ vùng chọn: vùng chọn không có diện tích
