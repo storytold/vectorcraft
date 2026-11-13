@@ -533,6 +533,7 @@ fn structured_junk() {
         ("perspective.transform", json!({"matrix": [1, 0, 0, 1, 0, 0], "depth": -1e9, "plane": "left", "copy": true})),
         ("perspective.transform", json!({"matrix": [1, 0, 0, 1, 1e300, 0], "plane": "left"})),
         ("perspective.nudge", json!({"dx": 1e308, "dy": -1e308, "big": true, "copy": true})),
+        ("perspective.nudge", json!({"dx": 1e308, "dy": -1e308, "fine": true})),
         ("perspective.plane.move", json!({"plane": "ground", "offset": 1e308, "objects": "copy"})),
         ("perspective.plane.move", json!({"plane": "left", "by": -1e7, "objects": "move"})),
         ("perspective.plane.move", json!({"plane": "none", "offset": 0})),

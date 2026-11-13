@@ -41,4 +41,4 @@ pub(crate) use pixelgrid::{
     snap_if_aligned,
 };
 pub(super) use shape::recut;
-pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};
+pub(crate) use transform::{apply_transform, nudge_step, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};

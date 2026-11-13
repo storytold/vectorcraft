@@ -2205,6 +2205,28 @@ fn selected_vertical_area_and_path_type_use_vertical_spacing_chords() {
     }
 }
 
+/// #5258: Ctrl/Cmd+arrow nudges the selection by a tenth of the keyboard increment, and
+/// Shift+Ctrl/Cmd+arrow by one increment, one undo step each.
+#[test]
+fn command_arrows_nudge_by_a_tenth_of_the_keyboard_increment() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let x0 = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0;
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+
+    let press = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    let shift_command = Modifiers::SHIFT | Modifiers::COMMAND;
+    let before = undo(&app);
+    for (m, x, n) in [(Modifiers::COMMAND, 20.1, 1), (shift_command, 21.1, 2), (Modifiers::NONE, 22.1, 3)] {
+        frame(&mut app, vec![egui::Event::ModifiersChanged(m), press(Key::ArrowRight, m)]);
+        assert!((x0(&app) - x).abs() < 1e-9, "{m:?}: {}", x0(&app));
+        assert_eq!(undo(&app), before + n, "{m:?}");
+    }
+}
+
 /// #3786: Alt+arrows step a selected text object's spacing instead of copying and nudging it.
 #[test]
 fn alt_arrows_step_selected_type_object() {
