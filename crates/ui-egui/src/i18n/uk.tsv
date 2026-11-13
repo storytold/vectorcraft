@@ -5163,6 +5163,7 @@ axis	Both	Обидві
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Зв’язок міститься в символі, дизайні діаграми, візерунку або масці непрозорості й не має місця на полотні
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб

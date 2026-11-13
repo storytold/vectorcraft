@@ -7262,6 +7262,7 @@ antiAlias	Sharp	शार्प
 @msg	no library `{key}` (see {list})	कोई लाइब्रेरी `{key}` ({list} देखें)
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
 @msg	No linked files to look for	देखने के लिए कोई लिंक्ड फ़ाइल नहीं
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	लिंक किसी सिंबल, ग्राफ़ डिज़ाइन, पैटर्न या ओपेसिटी मास्क के अंदर है और कैनवास पर इसकी कोई जगह नहीं है
 @msg	no Live Paint edge near that point	उस बिंदु के पास कोई लाइव पेंट एज नहीं
 @msg	no Live Paint face at that point	उस बिंदु पर कोई लाइव पेंट फेस नहीं
 @msg	no metafile format	कोई मेटाफ़ाइल फ़ॉर्मैट

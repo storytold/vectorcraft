@@ -5051,6 +5051,7 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Die Verknüpfung befindet sich in einem Symbol, einem Diagrammdesign, einem Muster oder einer Deckkraftmaske und hat keinen Platz auf der Zeichenfläche
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste

@@ -4860,6 +4860,7 @@ axis	Both	Her İkisi
 @msg	every numbered name for it is taken in the Fonts folder	bunun için numaralandırılmış her ad Yazı Tipleri klasöründe alınır
 @msg	every numbered name for {name} is taken in the document's folder	{name} için numaralandırılmış her ad belgenin klasöründe alınır
 @msg	No linked files to look for	Aranacak bağlantılı dosya yok
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Bağlantı bir sembolün, grafik tasarımının, desenin veya opaklık maskesinin içinde ve tuvalde yeri yok
 	Services	Hizmetler
 	Hide VectorCraft	VectorCraft'ı gizle
 	Zoom	Yakınlaştır
