@@ -611,6 +611,100 @@ fn composition_tries_a_longer_line_that_gets_more_room() {
     assert_eq!(lines, Some(vec![(7, false)]));
 }
 
+/// A line measure for `compose_with` whose lines can't be set until they reach past glyph `from`
+/// (a line made taller there steps down the frame by its own leading, to a band the shorter
+/// line's steps miss), and are `wide` wide from there.
+struct Unplaced {
+    wide: f64,
+    from: usize,
+}
+
+impl crate::composer::Measure for Unplaced {
+    type State = usize;
+    fn first(&mut self) -> usize {
+        0
+    }
+    fn line(&mut self, _: &usize, _: usize, end: usize) -> Result<Option<(f64, usize)>, crate::composer::Exhausted> {
+        Ok((end > self.from).then_some((self.wide, end)))
+    }
+    fn may_widen(&mut self, _: &usize, _: usize, end: usize) -> bool {
+        end <= self.from
+    }
+}
+
+/// A line that can't be set does not end the composer's search from its start while a longer line
+/// may be placed elsewhere: the longer line is tried and set.
+#[test]
+fn composition_tries_a_longer_line_after_one_that_cannot_be_set() {
+    let text = "가나다 라마바";
+    let glyphs = korean(text, false);
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    // "가나다" finds no room; the whole paragraph reaches past glyph 4 and fits 100.
+    let mut measure = Unplaced { wide: 100.0, from: 4 };
+    let lines = crate::composer::compose_with(&glyphs, &mut measure, &|_| 0.0, &|_| 0.0, &cands, &[], &params);
+    assert_eq!(lines, Some(vec![(7, false)]));
+}
+
+/// A further span beside a wrap object goes to the line set in it with the room across that line's
+/// own height. A line taller than the one before it on the baseline keeps clear of an object the
+/// shorter line did not reach, and moves down when the span has no room for it.
+#[test]
+fn a_further_span_is_measured_across_the_height_of_its_line() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let frame = Rect::new(0.0, 0.0, 400.0, 400.0).to_path(0.1);
+    let wrap = |r: Rect| vectorcraft_doc::WrapShape {
+        path: PathData::from_bezpath(&r.to_path(0.1)),
+        wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert: false },
+    };
+    let small = breaking::Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
+    let tall = breaking::Metrics { asc: 30.0, desc: 9.0, lead: 42.0, cap: 21.0, xh: 15.0, top: 30.0 };
+    // An object down the middle of the frame splits every line in two, and `above` lies right of
+    // it over y 20 to 40. A small line after a baseline of 50 is set at 64, over y 54 to 67, clear
+    // of `above`; a tall line in the span right of it on that baseline covers y 34 to 73.
+    // The tall line starts with a word `word` wide.
+    let set = |above: Rect, word: f64| {
+        let regions = region::Region::cells(&frame, &LayoutOptions::default(), &[wrap(Rect::new(180.0, 0.0, 220.0, 400.0)), wrap(above)]);
+        let mut pen = breaking::Pen {
+            regions: Some(&regions),
+            ri: 0,
+            prev: Some(50.0),
+            pending: 0.0,
+            fb: FirstBaseline::Ascent,
+            fb_min: 0.0,
+            queued: vec![],
+            model: LeadingModel::RomanBaseline,
+            next_top: None,
+            no_room_for: f64::INFINITY,
+            steps_left: Rc::new(Cell::new(breaking::MAX_TOTAL_STEPS)),
+            search: Default::default(),
+        };
+        let left = pen.place(small, 0.0, 0.0, 0.0);
+        pen.settled(64.0, small);
+        let right = pen.place(tall, 0.0, 0.0, word);
+        (left, right)
+    };
+    let near = |got: Option<(f64, f64, f64, bool)>, want: (f64, f64, f64, bool)| {
+        got.is_some_and(|g| (g.0 - want.0).abs() < 0.01 && (g.1 - want.1).abs() < 0.01 && (g.2 - want.2).abs() < 0.01 && g.3 == want.3)
+    };
+    // `above` covers the right end of the span: the tall line gets the part left of it.
+    let (left, right) = set(Rect::new(300.0, 20.0, 400.0, 40.0), 0.0);
+    assert!(near(left, (64.0, 0.0, 180.0, false)), "{left:?}");
+    assert!(near(right, (64.0, 220.0, 300.0, true)), "{right:?}");
+    // That part is 80 wide: a tall line that starts with a wider word goes on the next baseline.
+    let (_, right) = set(Rect::new(300.0, 20.0, 400.0, 40.0), 100.0);
+    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    // `above` covers the whole span: the tall line goes on the next baseline, left of the object.
+    let (left, right) = set(Rect::new(220.0, 20.0, 400.0, 40.0), 0.0);
+    assert!(near(left, (64.0, 0.0, 180.0, false)), "{left:?}");
+    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    // `above` lies below the tall line: the span is as wide for it as for the small line, and it
+    // takes the span whatever its first word, as a further span always did.
+    let (_, right) = set(Rect::new(300.0, 300.0, 400.0, 320.0), 200.0);
+    assert!(near(right, (64.0, 220.0, 400.0, true)), "{right:?}");
+}
+
 /// The every-line composer's searches for the paragraphs of one frame share one budget: each takes
 /// the lines it tried and the baseline steps it spent from it, the layout's own steps stay as they
 /// were, and once the budget runs out the next paragraph's search stops (it is broken line by line).

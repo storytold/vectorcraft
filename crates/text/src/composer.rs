@@ -78,8 +78,9 @@ pub(crate) trait Measure {
     /// the search is to stop.
     fn line(&mut self, state: &Self::State, pos: usize, end: usize) -> Result<Option<(f64, Self::State)>, Exhausted>;
     /// Whether a line from `state` longer than `pos..end`, which [`Measure::line`] just measured,
-    /// may get more room than it. While it may, a line from `state` that is too long does not end
-    /// the reach of `state`. Lines from a state are all as wide by default.
+    /// may get more room than it. While it may, a line from `state` that is too long, or that
+    /// can't be set, does not end the reach of `state`. Lines from a state are all as wide by
+    /// default.
     fn may_widen(&mut self, _state: &Self::State, _pos: usize, _end: usize) -> bool {
         false
     }
@@ -235,8 +236,15 @@ pub(crate) fn compose_with<M: Measure>(
             // last glyph's advance, so a longer line from the same node is never narrower.
             let end = if hyphen || t <= a.pos { 0.0 } else { line_end_credit(t) };
             let natural = w[t] - w[a.pos] - credit - end + bp.hyphen;
-            // A line that can't be set (no room left in the frame) ends this node's reach.
-            let Some((lw, next)) = measure.line(&a.state, a.pos, bp.end).ok()? else { continue };
+            // A line that can't be set (no room left in the frame) ends this node's reach, unless a
+            // longer line may be placed elsewhere (a taller line steps down the frame by its own
+            // leading).
+            let Some((lw, next)) = measure.line(&a.state, a.pos, bp.end).ok()? else {
+                if measure.may_widen(&a.state, a.pos, bp.end) {
+                    keep.push(ai);
+                }
+                continue;
+            };
             // Adjustment ratio, badness and whether the line ends the active node's reach.
             let ratio = adjustment_ratio(natural, lw, st[t] - st[a.pos], sh[t] - sh[a.pos], last, p);
             let Some(ratio) = ratio.filter(|&r| r >= -1.0 || r.is_nan()) else {

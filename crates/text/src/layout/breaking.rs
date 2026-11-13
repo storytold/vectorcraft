@@ -110,9 +110,24 @@ impl Pen<'_> {
             let b = self.prev.map_or(0.0, |b| self.next_baseline(b, est));
             return Some((b, f64::NEG_INFINITY, f64::INFINITY, false));
         };
-        if !self.queued.is_empty() {
+        // A further span was measured across the height of the line set before it on its baseline.
+        // This line gets the part of it that is free across its own height: a taller line can
+        // reach a wrap object the line before it stayed clear of. A span with no such part is
+        // left empty, and so is a part the line's height made narrower than `min`.
+        while !self.queued.is_empty() {
             let (b, x0, x1) = self.queued.remove(0);
-            return Some((b, x0, x1, true));
+            let Some(r) = regions.get(self.ri) else { return Some((b, x0, x1, true)) };
+            let mut free = r.spans(b - est.asc, b + est.desc).into_iter().filter_map(|(s, e)| {
+                let (s, e) = (s.max(x0), e.min(x1));
+                let room = e - s - ind_l - ind_r;
+                let narrowed = s > x0 + EPS || e < x1 - EPS;
+                (room > est.asc.max(1.0) && (!narrowed || room + EPS >= min)).then_some((s, e))
+            });
+            let Some((s, e)) = free.next() else { continue };
+            // An object inside the span splits it: the parts after the first stay queued.
+            let rest: Vec<_> = free.map(|(s, e)| (b, s, e)).collect();
+            self.queued.splice(0..0, rest);
+            return Some((b, s, e, true));
         }
         loop {
             let r = regions.get(self.ri)?;
