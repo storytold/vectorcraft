@@ -4522,6 +4522,7 @@ axis	Both	Her İkisi
 @msg	paths contain invalid coordinates	yollar geçersiz koordinatlar içeriyor
 @msg	paths: give at least one file	yollar: en az bir dosya verin
 @msg	replace: the object to replace was changed or deleted	değiştir: değiştirilecek nesne değiştirildi veya silindi
+@msg	the document it was prepared for is no longer active	hazırlandığı belge artık etkin değil
 @msg	pattern missing	desen eksik
 @msg	patterns nested too deeply are filled with mid-grey	çok derin iç içe geçmiş desenler orta gri renkle dolu
 @msg	percent must be above 0 and at most 6400, not {p}	percent 0'ın üzerinde ve en fazla 6400 olmalıdır, {p} değil
@@ -5225,7 +5226,9 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafikler düz yüzlere eşlenir: Ekstrüzyon veya Düzlem nesne türünü kullan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
 @msg	The graphics are too complex: simplify the symbols' art	Grafikler çok karmaşık: sembollerin resmini basitleştir
@@ -5998,6 +6001,7 @@ theme	Appearance	Görünüm
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
+@msg	choose the object to detach with its Select/Move widget	ayrılacak nesneyi Seç/Taşı denetimiyle seçin
 @msg	the Simplify slider is not open	Basitleştirme kaydırıcısı açık değil
 @msg	the Smooth slider is not open	Düzgünleştirme kaydırıcısı açık değil
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} bir dışa aktarma eklentisidir (Dosya › Dışa Aktar › Farklı Dışa Aktar…)
@@ -6030,6 +6034,8 @@ theme	Appearance	Görünüm
 	Chrome	Krom
 	Chrome…	Krom…
 	Expand Objects on Path	Yol Üzerindeki Nesneleri Genişlet
+	Detach	Ayır
+	Detach Object from Path	Nesneyi Yoldan Ayır
 	Graphic Pen	Grafik Kalemi
 	Graphic Pen…	Grafik Kalemi…
 	Move Anchor Point	Bağlantı Noktasını Taşı

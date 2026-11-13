@@ -1539,6 +1539,16 @@ mod portable {
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         #[test]
+        fn quitting_waits_for_the_paste_checks_handle_as_long_as_its_reads_last() {
+            // The Paste check's handle is one of these: when the app quits, its unanswered X11 read
+            // ends `X11_READ_LIMIT` after it was sent, and an idle worker stops within `LOAD_WAIT`.
+            // Quitting waits for that handle until both are over.
+            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
+            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        #[test]
         fn a_bitmap_paste_waits_for_the_owner_off_the_ui_thread() {
             let (release, gate) = std::sync::mpsc::channel::<()>();
             // The app that copied sends its bitmap only when released.

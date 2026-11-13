@@ -542,7 +542,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Ease Out In), Ramp 0–100% and independent color Shift; easing is disabled without a spine.
   The original polynomial distributions approximate the public description. With the Selection or
   Blend tool, on-canvas widgets on a blend with a spine set the color Shift and, when the steps follow
-  that spine, the Ramp; a blend made without a spine shows neither widget. The Blend panel shows the
+  that spine, the Ramp; a blend made without a spine shows the color Shift widget alone. The Blend panel shows the
   values they set. [Public source](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html).
 
 - **Done:** gradient Dither (30.0): the Gradient panel's Dither box (`paint.editGradient` `dither`, also in `paint.setFill`'s

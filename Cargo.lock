@@ -6476,6 +6476,7 @@ dependencies = [
  "vectorcraft-text",
  "vectorcraft-three-d",
  "vectorcraft-trace",
+ "wat",
 ]
 
 [[package]]

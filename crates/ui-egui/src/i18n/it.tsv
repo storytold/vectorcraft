@@ -1623,6 +1623,8 @@ file-filter	Templates	Modelli
 	Objects on Path Tool	Strumento Oggetti su tracciato
 	Attach Objects on Path	Aggancia oggetti al tracciato
 	Expand Objects on Path	Espandi oggetti su tracciato
+	Detach	Sgancia
+	Detach Object from Path	Sgancia oggetto dal tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -4820,6 +4822,7 @@ axis	Both	Entrambi
 @msg	paths contain invalid coordinates	i tracciati contengono coordinate non valide
 @msg	paths: give at least one file	paths: specifica almeno un file
 @msg	replace: the object to replace was changed or deleted	replace: l’oggetto da sostituire è stato modificato o eliminato
+@msg	the document it was prepared for is no longer active	il documento per cui è stato preparato non è più attivo
 @msg	pattern missing	motivo mancante
 @msg	patterns nested too deeply are filled with mid-grey	i motivi annidati troppo in profondità vengono riempiti di grigio medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve essere maggiore di 0 e al massimo 6400, non {p}
@@ -4855,6 +4858,7 @@ axis	Both	Entrambi
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
+@msg	choose the object to detach with its Select/Move widget	scegli l’oggetto da sganciare con il suo controllo Seleziona/Sposta
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracciato all'interno di un tracciato composto, una fusione, un involucro, una ripetizione o un gruppo intrecciato non può ricevere oggetti
 @msg	a clipping path can't take objects	un tracciato di ritaglio non può ricevere oggetti
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	gli oggetti all'interno di una fusione, un involucro, una ripetizione o un gruppo intrecciato non possono essere agganciati a un tracciato
@@ -5577,7 +5581,9 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` face must be front or back	face di `{GRAPHICS}` deve essere front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Le grafiche si applicano a facce piane: usate il tipo di oggetto Estrusione o Piano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione
+@msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore
 @msg	The graphics are too complex: simplify the symbols' art	Le grafiche sono troppo complesse: semplificate il disegno dei simboli
