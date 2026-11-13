@@ -47,21 +47,20 @@ fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
 }
 
 /// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
-/// size): `None` leaves the symbol alone, `Some(None)` turns 9-slice off, `Some(Some(g))` turns it
-/// on with guides `g` (the symbol's current ones, else a quarter in from each edge, when none are
-/// given).
+/// size, below 0 or above 1 for a guide outside the art): `None` leaves the symbol alone,
+/// `Some(None)` turns 9-slice off, `Some(Some(g))` turns it on with guides `g` (the symbol's
+/// current ones, else a quarter in from each edge, when none are given).
 fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
     let on = match p.get("nineSlice") {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_bool().ok_or_else(|| bad(cmd, "nineSlice must be true or false"))?),
     };
-    let guides =
-        match p.get("nineSliceGuides") {
-            None | Some(Value::Null) => None,
-            Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
-                bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1")
-            })?),
-        };
+    let guides = match p.get("nineSliceGuides") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
+            bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1")
+        })?),
+    };
     Ok(match (on, guides) {
         (Some(false), _) => Some(None),
         (None, None) => None,

@@ -169,6 +169,44 @@ fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
     assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
 }
 
+/// Extrude & Bevel is refused, and nothing changes, on a path whose fill's and strokes' solids each
+/// fit but together pass the limit of their faces; with one stroke the effect applies.
+#[test]
+fn extrude_is_refused_when_its_solids_together_are_too_complex() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem};
+    let (mut s, id) = session_with_rect();
+    let points: Vec<vectorcraft_geom::Point> = (0..16_384)
+        .map(|k| {
+            let (sin, cos) = (k as f64 * std::f64::consts::TAU / 16_384.0).sin_cos();
+            vectorcraft_geom::Point::new(20_000.0 + 10_000.0 * cos, 20_000.0 + 10_000.0 * sin)
+        })
+        .collect();
+    let polygon = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    let painted = |strokes: usize| {
+        let mut items = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).items;
+        let stroke = AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::WHITE), 20.0));
+        items.extend(std::iter::repeat_n(stroke, strokes));
+        items
+    };
+    let set = |s: &mut Session, strokes: usize| {
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        let NodeKind::Path { path, live, .. } = &mut n.kind else { panic!("a path") };
+        *path = polygon.clone();
+        *live = None;
+        n.appearance.items = painted(strokes);
+    };
+    // The fill's solid and each stroke's fit on their own; sixty strokes' together do not.
+    set(&mut s, 60);
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("The 3D surface is too complex; simplify the shape"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    set(&mut s, 1);
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    assert!(effects::solid_art(&node(&s, id)).is_some());
+}
+
 /// A group of a clipping group (a rectangle clipped by an ellipse) and a rectangle: the session,
 /// the clipping group and the group.
 fn group_with_a_clipping_group() -> (Session, NodeId, NodeId) {
