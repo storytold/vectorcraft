@@ -1034,6 +1034,85 @@ fn an_opaque_pick_replaces_the_opacity_the_series_stores() {
     assert_eq!(spec(&s, id).series_paints[0].fill_opacity, None);
 }
 
+/// A column graph whose series 0 stores the 40% Multiply fill set on its first mark, and a mark of series 1 whose top fill
+/// row has no paint and is opaque and Normal: the session, the graph, series 0's marks and that source.
+fn marks_and_unpainted_source() -> (Session, NodeId, Vec<NodeId>, NodeId) {
+    let (mut s, id, _, marks) = column_marks();
+    let source = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[0].id;
+    s.execute("appearance.setItem", &json!({"ids": [source.0], "index": top_row(&s, source, true), "none": true})).unwrap();
+    let fill = top_row(&s, marks[0], true);
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": fill, "opacity": 40, "blend": "multiply"})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.fill_blend), (Some(0.4), Some(BlendMode::Multiply)));
+    (s, id, marks, source)
+}
+
+/// An Eyedropper pick from a fill row without paint onto a mark whose fill had paint replaces the fill opacity and blend
+/// mode another mark of the series stored: the series is drawn opaque and Normal again.
+#[test]
+fn an_eyedropper_pick_that_unpaints_a_series_fill_clears_its_stored_transparency() {
+    let (mut s, id, marks, source) = marks_and_unpainted_source();
+    let mark = s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.fill().unwrap().clone();
+    assert_eq!((mark.paint.is_none(), mark.opacity, mark.blend), (false, 1.0, BlendMode::Normal), "the target's fill row");
+    s.execute("appearance.copyFrom", &json!({"source": source.0, "ids": [marks[1].0]})).unwrap();
+    let picked = s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.fill().unwrap().clone();
+    assert_eq!((picked.paint.is_none(), picked.opacity, picked.blend), (true, 1.0, BlendMode::Normal));
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.fill_blend), (None, None));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let fills: Vec<_> = series(&n, 0).children().unwrap().iter().filter_map(|m| m.appearance.fill().map(|f| (f.opacity, f.blend))).collect();
+    assert!(fills.iter().all(|f| *f == (1.0, BlendMode::Normal)), "{fills:?}");
+}
+
+/// An Eyedropper pick from a fill row without paint onto a mark whose fill had no paint before the pick either leaves the
+/// fill opacity and blend mode another mark of the series stored.
+#[test]
+fn an_eyedropper_pick_of_an_already_unpainted_row_leaves_series_transparency() {
+    let (mut s, id, marks, source) = marks_and_unpainted_source();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "none": true})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.fill_blend), (Some(0.4), Some(BlendMode::Multiply)), "a color set to None writes no opacity");
+    s.execute("appearance.copyFrom", &json!({"source": source.0, "ids": [marks[1].0]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.fill_blend), (Some(0.4), Some(BlendMode::Multiply)));
+}
+
+/// A whole Eyedropper pick from a source with no fill row, or no stroke row, removes that row from the mark. Where the
+/// mark's row had paint, the pick replaces the opacity and blend mode another mark of the series stored for that kind
+/// of row. Where the mark's row had no paint, the stored values stay.
+#[test]
+fn a_whole_eyedropper_pick_that_removes_a_painted_row_clears_its_stored_transparency() {
+    let stored = |s: &Session, id: NodeId, fill: bool| {
+        let kept = spec(s, id).series_paints[0].clone();
+        if fill { (kept.fill_opacity, kept.fill_blend) } else { (kept.stroke_opacity, kept.stroke_blend) }
+    };
+    for (fill, painted) in [(true, true), (false, true), (false, false)] {
+        let (mut s, id, _, marks) = column_marks();
+        let row = top_row(&s, marks[0], fill);
+        if painted {
+            s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": row, "color": "#ff0000"})).unwrap();
+        }
+        s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": row, "color": "#ff0000", "opacity": 40, "blend": "multiply"})).unwrap();
+        assert_eq!(stored(&s, id, fill), (Some(0.4), Some(BlendMode::Multiply)), "fill {fill}, painted {painted}");
+        let source = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[0].id;
+        s.execute("appearance.removeItem", &json!({"ids": [source.0], "index": top_row(&s, source, fill)})).unwrap();
+        let was = spec(&s, id).series_paints;
+        s.execute("appearance.copyFrom", &json!({"source": source.0, "ids": [marks[1].0]})).unwrap();
+        let mark = s.doc().unwrap().doc.node(marks[1]).unwrap().clone();
+        assert!(!mark.appearance.items.iter().any(|it| it.is_fill() == fill), "the pick removed the row: fill {fill}");
+        let want = if painted { (None, None) } else { (Some(0.4), Some(BlendMode::Multiply)) };
+        assert_eq!(stored(&s, id, fill), want, "fill {fill}, painted {painted}");
+        if painted {
+            let after = spec(&s, id).series_paints;
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, was);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, after);
+        }
+    }
+}
+
 /// An appearance moved between two marks of one series leaves the series with the target's paint, not the source's
 /// empty one, and the series still shows when the graph is drawn again.
 #[test]
@@ -1245,6 +1324,45 @@ fn a_style_that_removes_a_marks_stroke_replaces_the_kept_stroke_opacity() {
         let kept = spec(&s, id).series_paints[0].clone();
         let want = if stroked { (None, None) } else { (Some(0.4), Some(BlendMode::Multiply)) };
         assert_eq!((kept.stroke_opacity, kept.stroke_blend), want, "stroked {stroked}");
+        redrawn_band(&mut s, id);
+        let st = series_parts(&s, id, 0)[0].appearance.stroke().unwrap().clone();
+        assert_eq!((Some(st.opacity).filter(|o| *o < 1.0), Some(st.blend).filter(|b| *b != BlendMode::Normal)), want, "stroked {stroked}");
+    }
+}
+
+/// An Eyedropper pick from a stroke row without paint onto a marker whose stroke had paint replaces the stroke opacity and
+/// blend mode the series' Filled Lines band left, in the pick's undo step: the band's outline is drawn opaque and Normal
+/// again. A pick onto a marker whose stroke had no paint before the pick leaves them as they are.
+#[test]
+fn an_eyedropper_pick_that_unpaints_a_series_stroke_clears_its_stored_transparency() {
+    for stroked in [true, false] {
+        let (mut s, id, band) = band_graph();
+        let parts = series_parts(&s, id, 0);
+        let (marker, source) = (parts[1].id, parts[2].id);
+        let st = parts[2].appearance.stroke().unwrap();
+        assert_eq!((st.paint.is_none(), st.opacity, st.blend), (true, 1.0, BlendMode::Normal), "the source's stroke row");
+        if stroked {
+            let row = top_row(&s, marker, false);
+            s.execute("appearance.setItem", &json!({"ids": [marker.0], "index": row, "color": "#ff0000"})).unwrap();
+        }
+        let row = top_row(&s, band, false);
+        s.execute("appearance.setItem", &json!({"ids": [band.0], "index": row, "opacity": 40, "blend": "multiply"})).unwrap();
+        let was = spec(&s, id).series_paints;
+        assert_eq!((was[0].stroke_opacity, was[0].stroke_blend), (Some(0.4), Some(BlendMode::Multiply)));
+        s.execute("appearance.copyFrom", &json!({"source": source.0, "ids": [marker.0]})).unwrap();
+        let picked = s.doc().unwrap().doc.node(marker).unwrap().appearance.stroke().unwrap().clone();
+        assert_eq!((picked.paint.is_none(), picked.opacity, picked.blend), (true, 1.0, BlendMode::Normal), "stroked {stroked}");
+        let kept = spec(&s, id).series_paints[0].clone();
+        let want = if stroked { (None, None) } else { (Some(0.4), Some(BlendMode::Multiply)) };
+        assert_eq!((kept.stroke_opacity, kept.stroke_blend), want, "stroked {stroked}");
+        if stroked {
+            let after = spec(&s, id).series_paints;
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, was);
+            assert!(!s.doc().unwrap().doc.node(marker).unwrap().appearance.stroke_paint().is_none(), "the undo took back the pick");
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(spec(&s, id).series_paints, after);
+        }
         redrawn_band(&mut s, id);
         let st = series_parts(&s, id, 0)[0].appearance.stroke().unwrap().clone();
         assert_eq!((Some(st.opacity).filter(|o| *o < 1.0), Some(st.blend).filter(|b| *b != BlendMode::Normal)), want, "stroked {stroked}");
