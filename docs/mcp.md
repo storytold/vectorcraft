@@ -3021,15 +3021,18 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1 to 5, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  `{"format": "vcactions", "version": 1 to 6, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
   `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
-  wholeWord}`, and a Select Path step is the command `select.storedPath` with `{id, fingerprint}`. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with Select Path steps use version 5, files with Select Object steps
-  and no Select Path step use version 4, files with stops and neither use version 3, and files with excluded steps and
-  none of these use version 2, so older builds refuse them instead of playing the excluded steps or failing at a stop, a
-  Select Object step or a Select Path step; other files use version 1, and version 1 to 4 files still load. A file with another `format` or a `version` other than
-  1 to 5, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  wholeWord}`, and a Select Path step is the command `select.storedPath` with `{id, fingerprint}`. A View menu step is
+  the id of a View menu command that the app runs itself (`view.outline`, `view.zoomIn`, `view.rotate` and the others
+  `ui.action.insertMenuItem` lists) with the item's params. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with View menu steps use version 6, files with Select Path steps and
+  no View menu step use version 5, files with Select Object steps and neither use version 4, files with stops and none
+  of these use version 3, and files with excluded steps and none of these use version 2, so older builds refuse them
+  instead of playing the excluded steps or failing at a stop, a Select Object step, a Select Path step or a View menu
+  step; other files use version 1, and version 1 to 5 files still load. A file with another `format` or a `version` other than
+  1 to 6, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a View menu step whose params are not an object, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
   less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
@@ -3094,7 +3097,12 @@ already walks Image Trace. Short agent entry points:
   here and in Batch…. An action with an included stop plays up to the stop at any speed and then waits, with its
   message box open, until `ui.action.continue` or `ui.action.stop`. At Accelerated the steps between two stops are one
   undoable batch each. The result is then `{results, pending, atStop?}`, with `atStop: true` when the action already
-  waits. Batch… refuses an action with an included stop, and a stop that is excluded does not hold playback.
+  waits. Batch… refuses an action with an included stop, and a stop that is excluded does not hold playback. A View
+  menu step (`ui.action.insertMenuItem`) plays at every speed in its place among the steps, as its menu item runs, and
+  adds no undo step. At Accelerated the steps before it and the steps after it are one undoable batch each, and the
+  result is `{results}` with every step's result in order. A step that fails ends the playback with its error: the
+  batch it is in changes nothing, and the steps before that batch stay done. While another action records, the View
+  menu step is recorded too. Batch… refuses an action with an included View menu step.
 - Actions: `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}` inserts a stop. With `set` and
   `action`, the stop goes into that action, after step `step`, else after its last step, and the command returns
   `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
@@ -3108,11 +3116,17 @@ already walks Image Trace. Short agent entry points:
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
 - Actions: `ui.action.insertMenuItem {set?, action?, step?, command, params?}` inserts a menu item's command as a step
   without running it. `command` and `params` (default: `{}`) must be those of an item in the menus that can be a step:
-  an item that runs a document command without opening a dialog first, outside the File, Window and Help menus, and
-  not Undo, Redo, a Paste command, Object › Align (its items add the Align To choice when clicked), Object › Image
+  an item that runs a document command, or a View menu item that the app runs itself (Outline, Pixel Preview, Trim
+  View, Presentation Mode, Screen Mode, the zoom, fit and Rotate View items, and the show, hide and snap items), without
+  opening a dialog first, outside the File, Window and Help menus, and not Undo, Redo, a Paste command, Object › Image
   Trace › Make or Make and Expand (the menu traces off the UI thread, with progress and Cancel), Object › Pattern ›
   Make or Edit Pattern (the menu also opens the Pattern Options panel), a preference
-  toggle, an Actions command or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. With `set` and `action`, the
+  toggle, an Actions command, a Perspective Grid preset of the preferences or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. An Object › Align item's step
+  keeps the `to` its click sends at insertion (`key` while the selection has a key object or key guide, `artboard` for one selected
+  object or with Align to Artboard, else `selection`), so a later Align To choice does not change it, and a step that
+  aligns to the key object fails in playback when the selection has no key then. With anchor points selected the click
+  sends no `to`, and neither does the step. These are VectorCraft's own rules. A
+  View menu step plays as `ui.action.play` describes. With `set` and `action`, the
   step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
   command returns `{set, action, step}`. Without them it goes into the recording in progress and returns
   `{recording: true}`. A command no such item runs, params that are not an object, an index past the last set, action

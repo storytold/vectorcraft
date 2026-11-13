@@ -3480,6 +3480,7 @@ antiAlias	Sharp	शार्प
 @msg	message must be text	message टेक्स्ट होना चाहिए
 @msg	allowContinue must be true or false	allowContinue true या false होना चाहिए
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
+@msg	Batch cannot play an action with a View menu step	बैच व्यू मेनू के चरण वाला एक्शन नहीं चला सकता
 	Insert Menu Item…	मेनू आइटम जोड़ें…
 	Insert Menu Item	मेनू आइटम जोड़ें
 	Insert Select Path	सिलेक्ट पाथ जोड़ें

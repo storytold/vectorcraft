@@ -6448,6 +6448,7 @@ axis	Y Axis	Eixo Y
 @msg	message must be text	message deve ser texto
 @msg	allowContinue must be true or false	allowContinue deve ser true ou false
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
+@msg	Batch cannot play an action with a View menu step	Lote não pode reproduzir uma ação com uma etapa do menu Exibir
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
 	Insert Select Path	Inserir Seleção de Caminho

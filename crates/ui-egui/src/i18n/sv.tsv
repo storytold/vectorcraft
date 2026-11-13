@@ -6514,6 +6514,7 @@ axis	Y Axis	Y-axel
 @msg	message must be text	message måste vara text
 @msg	allowContinue must be true or false	allowContinue måste vara true eller false
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
+@msg	Batch cannot play an action with a View menu step	Batch kan inte spela upp en åtgärd med ett steg från menyn Visa
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
 	Insert Select Path	Infoga markering av bana

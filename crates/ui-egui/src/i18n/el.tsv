@@ -6484,6 +6484,7 @@ axis	Y Axis	Άξονας Y
 @msg	message must be text	Το message πρέπει να είναι κείμενο
 @msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
+@msg	Batch cannot play an action with a View menu step	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με βήμα από το μενού Προβολή
 	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
 	Insert Menu Item	Εισαγωγή στοιχείου μενού
 	Insert Select Path	Εισαγωγή επιλογής διαδρομής
