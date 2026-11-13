@@ -3284,6 +3284,20 @@ mark-style	Japanese	日本式
 	Spot Color Objects	特色を使用したオブジェクト
 	Pattern Objects	パターンを使用したオブジェクト
 	Gradient Objects	グラデーションを使用したオブジェクト
+	Font Details	フォントの詳細
+	Linked Images	リンク画像
+	Embedded Images	埋め込み画像
+	Compound Paths	複合パス
+	Text Objects	テキストオブジェクト
+	Placed Documents	配置ドキュメント
+	Symbol Instances	シンボルインスタンス
+	Gradient Meshes	グラデーションメッシュ
+	Blends	ブレンド
+	Envelopes	エンベロープ
+	Intertwine Groups	織り交ぜグループ
+	Opacity Masks	不透明マスク
+	Objects with Effects	効果を使用したオブジェクト
+	Pattern Swatches	パターンスウォッチ
 	Spot Colors	特色
 	Spot Colors…	特色…
 	Spread:	拡散:
