@@ -168,6 +168,10 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        // Colors are drawn and converted through the profiles of the document in front now, also
+        // after an undone or redone Assign Profile, a failed or panicked command's documents put
+        // back, and a batch step, before the next step converts through them.
+        self.sync_front_profiles();
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
             // A failed or panicked command's documents are put back: type is drawn in their

@@ -1434,8 +1434,10 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
   there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
-  working spaces and the file stay as they are. The `workingCmyk` target of `view.proofSetup` simulates the working
-  CMYK space in such a document too.
+  working spaces and the file stay as they are. The profiles in use are those of the document in front, after
+  `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a
+  failed `command.batch` too; with none assigned, or no document open, the working spaces are. The `workingCmyk`
+  target of `view.proofSetup` simulates the working CMYK space in such a document too.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
