@@ -424,25 +424,45 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
              /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
         )
     };
+    // Styles of one paint (`/SimpleStyle`): a red 2 pt stroke and no fill, and a gradient fill,
+    // which isn't read, so it is left out rather than listed with no paint.
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
     let styles = format!(
-        "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n%AI9_EndArtStyleList\n",
+        "%AI9_BeginArtStyles\n{}{}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n(Red outline)\n(Sky fill)\n%AI9_EndArtStyleList\n",
         style("Blue", "0 0 0 0 0 0 1 Xa\n"),
         style("Green", "0 0 0 0 0 1 0 Xa\n"),
-        style("Red", "0 0 0 0 1 0 0 Xa\n")
+        style("Red", "0 0 0 0 1 0 0 Xa\n"),
+        one_paint("Red outline", "0 R\n0 1 1 0 K\n0 J 0 j 2 w 10 M []0 d\n1 0 Xd\n"),
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
     );
     let data = ai::editing_data(200.0, 100.0, &styles);
     let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let mut s = Session::new();
     let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
     let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
-    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(3)), "{r}");
-    let lib = s.execute("graphicStyle.library", &json!({"library": r["library"]})).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(4)), "{r}");
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
     let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Red", "Green", "Blue"], "{lib}");
+    assert_eq!(names, ["Red", "Green", "Blue", "Red outline"], "{lib}");
+    // The outline style strokes a rectangle red, 2 pt wide, and leaves it unfilled.
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["Red outline"], "apply": true, "ids": [id.0]})).unwrap();
+    assert_eq!(r["added"], json!(["Red outline"]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let look = &doc.node(id).unwrap().appearance;
+    assert!(look.fill().is_none(), "{look:?}");
+    let strokes: Vec<_> = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).collect();
+    assert_eq!(strokes.len(), 1, "{look:?}");
+    let stroke = look.stroke().unwrap();
+    assert_eq!((stroke.paint.color(), stroke.width), (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0), "{look:?}");
+    assert_eq!(doc.graphic_style("Red outline").map(|g| &g.appearance), Some(&**look));
     let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
     let doc = &s.doc().unwrap().doc;
     let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
-    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3), ("Red outline", 4)], "{r}");
 }
 
 /// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other

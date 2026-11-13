@@ -49,6 +49,42 @@ fn lp_part_at<'a>(doc: &'a Document, p: Point, tol: f64, edge: bool, takes: &dyn
     best.map(|(_, g, e)| (g, Some(e)))
 }
 
+/// The face and edge of a Live Paint group at `p`, among the groups `takes` takes, by the rules of
+/// [`lp_part_at`], in one walk of the document. Inside a visible face of a group, the face is the
+/// front-most such group's visible face under `p`, and with `edge` the edge is that group's visible
+/// edge nearest `p` within `tol`. Outside every visible face there is no face, and with `edge` the
+/// edge is the visible edge nearest `p` within `tol` among the groups (the front-most group's on a
+/// tie).
+fn lp_face_and_edge<'a>(
+    doc: &'a Document,
+    p: Point,
+    tol: f64,
+    edge: bool,
+    takes: &dyn Fn(NodeId) -> bool,
+) -> (Option<&'a Arc<Node>>, Option<&'a Arc<Node>>) {
+    let mut in_face: Option<(&Arc<Node>, Option<&Arc<Node>>)> = None;
+    let mut best: Option<(f64, &Arc<Node>)> = None;
+    doc.walk(|n| {
+        if !is_live_paint(n) || !takes(n.id) {
+            return;
+        }
+        let near = if edge { visible_edge_near(n, p, tol) } else { None };
+        if let Some(f) = visible_face_at(n, p) {
+            in_face = Some((f, near));
+        }
+        if let Some(e) = near
+            && let Some((.., d)) = e.path_data().and_then(|pd| pd.nearest(p))
+            && best.is_none_or(|b| d <= b.0)
+        {
+            best = Some((d, e));
+        }
+    });
+    match in_face {
+        Some((f, e)) => (Some(f), e),
+        None => (None, best.map(|b| b.1)),
+    }
+}
+
 /// Whether the Live Paint Bucket takes Live Paint group `id`: it is visible, with every layer and
 /// group around it.
 fn lp_visible(cx: &ToolContext, id: NodeId) -> bool {
@@ -62,17 +98,25 @@ fn lp_selectable(cx: &ToolContext, id: NodeId) -> bool {
     cx.doc.is_editable(id) && crate::direct::in_scope(cx.doc, cx.isolation, id)
 }
 
+/// Whether every selected object is a Live Paint group (true with nothing selected). A selection
+/// that also holds other paths has regions outside its groups' faces that a click fills, making
+/// one Live Paint group of the selection.
+fn lp_sel_all_live(cx: &ToolContext) -> bool {
+    cx.selection.objects.iter().all(|id| cx.doc.node(*id).is_some_and(is_live_paint))
+}
+
 /// What the Live Paint tools highlight at `p`: the part of a Live Paint group ([`lp_part_at`], among
-/// the groups `takes` takes), else with `cache` the region of the selection under `p`. A large
-/// selection's regions are found on another thread ([`RegionCache::ready`]), and until they are, no
-/// region is highlighted.
+/// the groups `takes` takes), else with `cache` the region of the selection under `p` when the
+/// selection is not only Live Paint groups ([`lp_sel_all_live`]). A large selection's regions are
+/// found on another thread ([`RegionCache::ready`]), and until they are, no region is highlighted.
 fn lp_hover(cx: &ToolContext, cache: Option<&mut RegionCache>, p: Point, edge: bool, takes: &dyn Fn(NodeId) -> bool) -> LpHover {
     if let Some((_, part)) = lp_part_at(cx.doc, p, cx.tol(4.0), edge, takes) {
         let path = part.and_then(|n| n.path_data()).map(|pd| pd.to_bezpath());
         return path.map(|bp| if edge { LpHover::Edge(bp) } else { LpHover::Part(bp) }).unwrap_or_default();
     }
-    let sel_is_live = cx.selection.objects.iter().any(|id| cx.doc.node(*id).is_some_and(is_live_paint));
-    if !sel_is_live && let Some(i) = cache.and_then(|c| c.ready(cx, true)).and_then(|m| m.region_at(p)) {
+    if !lp_sel_all_live(cx)
+        && let Some(i) = cache.and_then(|c| c.ready(cx, true)).and_then(|m| m.region_at(p))
+    {
         return LpHover::Region(i);
     }
     LpHover::None
@@ -125,7 +169,8 @@ enum LpPaint {
 /// Shift-click fills the face. With both on, a click paints the edge nearest the pointer when one
 /// is within 4 pixels, else it fills the face, and Shift-click fills the face. With both off, a
 /// click paints nothing. With Highlight off, the face or edge under the pointer is not
-/// highlighted.
+/// highlighted. The cursor is a filled bucket where a click fills a face, a brush where it paints
+/// an edge and an empty bucket where it paints nothing; with Alt it is the Eyedropper.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
@@ -202,21 +247,68 @@ impl LivePaintBucketTool {
     }
 
     /// The highlight at `p` for a pointer with Shift and Alt held as given: none with Alt or with
-    /// Highlight off, else the face or edge a click there paints.
+    /// Highlight off, else the face or edge a click there paints. With Highlight off the selection's
+    /// map is still made, for the cursor ([`Self::paints_at`]).
     fn hover_at(&mut self, cx: &ToolContext, p: Point, shift: bool, alt: bool) -> LpHover {
-        if alt || !self.highlight {
+        if alt {
             return LpHover::None;
         }
-        let takes = |id| lp_visible(cx, id);
-        match self.paints(shift) {
-            LpPaint::Nothing => LpHover::None,
-            LpPaint::Fills => lp_hover(cx, Some(&mut self.cache), p, false, &takes),
-            // A click paints no region of the selection, so none is highlighted.
-            LpPaint::Strokes => lp_hover(cx, None, p, true, &takes),
-            LpPaint::Both => match lp_part_at(cx.doc, p, cx.tol(4.0), true, &takes) {
-                Some((_, Some(e))) => e.path_data().map(|pd| LpHover::Edge(pd.to_bezpath())).unwrap_or_default(),
-                _ => lp_hover(cx, Some(&mut self.cache), p, false, &takes),
-            },
+        let target = self.target_at(cx, p, shift);
+        if self.highlight { target } else { LpHover::None }
+    }
+
+    /// What a click at `p` reaches, Shift held or not: whether it fills a face and paints an edge,
+    /// with the face and the edge of a Live Paint group there ([`lp_face_and_edge`]). The document
+    /// is walked once: the highlight and the cursor are asked for on every pointer update.
+    fn parts_at<'a>(&self, cx: &ToolContext<'a>, p: Point, shift: bool) -> (bool, Option<&'a Arc<Node>>, Option<&'a Arc<Node>>) {
+        let (wants_face, wants_edge) = match self.paints(shift) {
+            LpPaint::Nothing => return (false, None, None),
+            LpPaint::Fills => (true, false),
+            LpPaint::Strokes => (false, true),
+            LpPaint::Both => (true, true),
+        };
+        let (face, edge) = lp_face_and_edge(cx.doc, p, cx.tol(4.0), wants_edge, &|id| lp_visible(cx, id));
+        (wants_face, face, edge)
+    }
+
+    /// The face or edge a click at `p` paints, Shift held or not. With Paint Strokes alone, a click
+    /// paints no region of the selection, so none is highlighted.
+    fn target_at(&mut self, cx: &ToolContext, p: Point, shift: bool) -> LpHover {
+        let (wants_face, face, edge) = self.parts_at(cx, p, shift);
+        let path = |n: &Arc<Node>| n.path_data().map(|pd| pd.to_bezpath());
+        if let Some(e) = edge {
+            return path(e).map(LpHover::Edge).unwrap_or_default();
+        }
+        if !wants_face {
+            return LpHover::None;
+        }
+        if let Some(f) = face {
+            return path(f).map(LpHover::Part).unwrap_or_default();
+        }
+        if !lp_sel_all_live(cx)
+            && let Some(i) = self.cache.ready(cx, true).and_then(|m| m.region_at(p))
+        {
+            return LpHover::Region(i);
+        }
+        LpHover::None
+    }
+
+    /// The cursor for a click at `p`, Shift held or not: [`Cursor::LivePaintBucketEdge`] where it
+    /// paints an edge of a Live Paint group, [`Cursor::LivePaintBucketFace`] where it fills a face
+    /// of one or a region of the selected paths, else [`Cursor::LivePaintBucket`]. A region counts
+    /// once the selection's map is made (the pointer moving over it makes it), as it is highlighted.
+    fn paints_at(&self, cx: &ToolContext, p: Point, shift: bool) -> Cursor {
+        let (wants_face, face, edge) = self.parts_at(cx, p, shift);
+        let edge = edge.is_some();
+        let region =
+            || !lp_sel_all_live(cx) && self.cache.key.as_ref() == Some(&RegionCache::key_for(cx, true)) && self.cache.map.region_at(p).is_some();
+        let face = wants_face && !edge && (face.is_some() || region());
+        if edge {
+            Cursor::LivePaintBucketEdge
+        } else if face {
+            Cursor::LivePaintBucketFace
+        } else {
+            Cursor::LivePaintBucket
         }
     }
 }
@@ -315,8 +407,8 @@ impl Tool for LivePaintBucketTool {
         lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32)
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, m: Mods) -> Cursor {
-        if m.alt { Cursor::Eyedropper } else { Cursor::LivePaintBucket }
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        if m.alt { Cursor::Eyedropper } else { self.paints_at(cx, p, m.shift) }
     }
 
     fn options(&self) -> Value {
@@ -388,6 +480,8 @@ pub const LP_SELECT_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
 /// Select Strokes off, Alt-click selects the face under the pointer as a click does and a marquee
 /// takes no edges; with Select Fills off, a click selects the edge nearest the pointer as Alt-click
 /// does and a marquee takes no faces; with both off, a click or a marquee selects no face or edge.
+/// The pointer shows what a click at that point selects ([`LivePaintSelectionTool::pick_at`]): a
+/// face, an edge, or nothing. From the press to the release it keeps the look it had at the press.
 pub struct LivePaintSelectionTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
@@ -410,6 +504,8 @@ struct LpDrag {
     shift: bool,
     /// The face or edge under the press, which a click selects (or with Shift toggles).
     hit: Option<NodeId>,
+    /// The cursor at the press, which the drag keeps.
+    cursor: Cursor,
 }
 
 impl LpDrag {
@@ -445,6 +541,22 @@ impl LivePaintSelectionTool {
             (false, true) => Some(true),
             (false, false) => None,
         }
+    }
+
+    /// The face or edge a click at `p` selects, Alt held or not, with its cursor: the visible part of
+    /// the kind [`LivePaintSelectionTool::picks_edge`] asks for, of a Live Paint group the tool takes
+    /// ([`lp_part_at`], [`lp_selectable`]), and [`Cursor::LivePaintSelectFace`] or
+    /// [`Cursor::LivePaintSelectEdge`]; None and [`Cursor::LivePaintSelectOutside`] where a click
+    /// selects no face or edge.
+    fn pick_at(&self, cx: &ToolContext, p: Point, alt: bool) -> (Option<NodeId>, Cursor) {
+        let Some(edge) = self.picks_edge(alt) else { return (None, Cursor::LivePaintSelectOutside) };
+        let hit = lp_part_at(cx.doc, p, cx.tol(4.0), edge, &|id| lp_selectable(cx, id)).and_then(|(_, part)| part).map(|n| n.id);
+        let cursor = match (hit, edge) {
+            (None, _) => Cursor::LivePaintSelectOutside,
+            (Some(_), true) => Cursor::LivePaintSelectEdge,
+            (Some(_), false) => Cursor::LivePaintSelectFace,
+        };
+        (hit, cursor)
     }
 }
 
@@ -500,9 +612,8 @@ impl Tool for LivePaintSelectionTool {
                 vec![]
             }
             PointerKind::Down => {
-                let part = edge.and_then(|e| lp_part_at(cx.doc, p, cx.tol(4.0), e, &|id| lp_selectable(cx, id)));
-                let hit = part.and_then(|(_, part)| part).map(|n| n.id);
-                self.drag = Some(LpDrag { start: p, cur: p, shift: ev.mods.shift, hit });
+                let (hit, cursor) = self.pick_at(cx, p, ev.mods.alt);
+                self.drag = Some(LpDrag { start: p, cur: p, shift: ev.mods.shift, hit, cursor });
                 vec![]
             }
             PointerKind::Drag => {
@@ -560,8 +671,11 @@ impl Tool for LivePaintSelectionTool {
         lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, self.width as f32)
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Arrow
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        match &self.drag {
+            Some(d) => d.cursor,
+            None => self.pick_at(cx, p, m.alt).1,
+        }
     }
 
     fn options(&self) -> Value {

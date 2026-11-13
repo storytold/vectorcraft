@@ -630,6 +630,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en plans de travail
 	Convert to CMYK	Convertir en CMJN
 	Convert to Grayscale	Convertir en niveaux de gris
+	Convert to Indexed Color	Convertir en couleurs indexées
+	Convert to Indexed Color…	Convertir en couleurs indexées…
 	Convert To Outlines	Vectoriser
 	Convert To Point Type	Convertir en texte de point
 	Convert to RGB	Convertir en RVB
@@ -1036,6 +1038,7 @@ font-technology	Variable	Variables
 	Enable Rubber Band for	Activer l’élastique pour
 	Enable text access for screen readers	Autoriser l’accès au texte pour les lecteurs d’écran
 	Enable Touch Gestures	Activer les gestes tactiles
+	Switch Selection and Drawing Modes	Basculer entre les modes sélection et dessin
 	Enable Touch Workspace	Activer l’espace de travail tactile
 	Encoding	Codage
 	Encoding:	Codage :
@@ -1585,6 +1588,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Outil Objets sur tracé
 	Attach Objects on Path	Attacher des objets au tracé
 	Expand Objects on Path	Décomposer les objets sur tracé
+	Detach	Détacher
+	Detach Object from Path	Détacher l’objet du tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -2903,6 +2908,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
 	Color Theme Picker	Sélecteur de thème de couleurs
 	Click or drag across the art to pick its colors; Shift adds more	Cliquez ou faites glisser sur l’illustration pour prélever ses couleurs ; Maj en ajoute d’autres
+	Prominent Colors	Couleurs dominantes
+	Save All Colors	Enregistrer toutes les couleurs
+	Save Prominent Colors	Enregistrer les couleurs dominantes
 	Reset to Default	Rétablir les valeurs par défaut
 	Reset to White, Black	Réinitialiser à blanc, noir
 	Reset with Mesh	Réinitialiser avec un filet
@@ -3453,6 +3461,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Objets avec tons directs
 	Pattern Objects	Objets avec motifs
 	Gradient Objects	Objets avec dégradés
+	Font Details	Détails des polices
+	Linked Images	Images liées
+	Embedded Images	Images incorporées
+	Compound Paths	Tracés transparents
+	Text Objects	Objets texte
+	Placed Documents	Documents importés
+	Symbol Instances	Instances de symbole
+	Gradient Meshes	Filets de dégradé
+	Blends	Dégradés de formes
+	Envelopes	Enveloppes
+	Intertwine Groups	Groupes entrelacés
+	Opacity Masks	Masques d’opacité
+	Objects with Effects	Objets avec effets
 	Spot Colors	Tons directs
 	Spot Colors…	Tons directs…
 	Spread:	Étendue :
@@ -3574,6 +3595,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Renommer le groupe de bibliothèque
 	Delete Library Group	Supprimer le groupe de bibliothèque
 	Move Library Item to Group	Déplacer l’élément de la bibliothèque vers un groupe
+	Rename Library Item	Renommer l’élément de la bibliothèque
+	Add to Character Styles	Ajouter aux styles de caractère
 	Library	Bibliothèque
 	Rename Library	Renommer la bibliothèque
 	Show Library	Afficher la bibliothèque
@@ -4138,6 +4161,10 @@ axis	Both	Les deux
 	Dock Panel	Ancrer le panneau
 	Dock to Top	Ancrer en haut
 	Dock to Bottom	Ancrer en bas
+	Dock to Left	Ancrer à gauche
+	Dock to Right	Ancrer à droite
+	Dock Toolbar	Ancrer la barre d’outils
+	Float Toolbar	Rendre la barre d’outils flottante
 	Control Bar Options	Options de la barre de contrôle
 	Tool Options	Options de l’outil
 	Object Options	Options de l’objet
@@ -4155,6 +4182,7 @@ axis	Both	Les deux
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	aucune bibliothèque `{id}`
+@msg	the library has another item of that kind named `{name}`	la bibliothèque a déjà un autre élément de ce type nommé `{name}`
 @msg	select some type first	sélectionnez d’abord du texte
 @msg	kerning must be a number, "auto", or "optical"	kerning doit être un nombre, « auto » ou « optical »
 @msg	the selection has no gradient fill	la sélection n’a pas de dégradé de fond
@@ -4304,6 +4332,9 @@ axis	Both	Les deux
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossible d’importer {name} : le document sur lequel il a été déposé a été fermé
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossible d’importer {name} : le document dans lequel il était importé a été fermé
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossible d’importer {name} : le document sur lequel il a été déposé a été rétabli à la version précédente
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossible d’importer {name} : le document dans lequel il était importé a été rétabli à la version précédente
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossible de coller, car le document de destination a été rétabli à la version précédente
 @msg	Couldn't read {name}: {e}	Impossible de lire {name} : {e}
 @msg	Couldn't save recovery data: {e}	Impossible d’enregistrer les données de récupération : {e}
 @msg	Create Outlines: select text objects	Vectoriser : sélectionnez des objets texte
@@ -4733,6 +4764,7 @@ axis	Both	Les deux
 @msg	paths contain invalid coordinates	les tracés contiennent des coordonnées non valides
 @msg	paths: give at least one file	paths : indiquez au moins un fichier
 @msg	replace: the object to replace was changed or deleted	replace : l’objet à remplacer a été modifié ou supprimé
+@msg	the document it was prepared for is no longer active	le document pour lequel il a été préparé n’est plus actif
 @msg	pattern missing	motif manquant
 @msg	patterns nested too deeply are filled with mid-grey	les motifs imbriqués trop profondément sont remplis de gris moyen
 @msg	percent must be above 0 and at most 6400, not {p}	percent doit être supérieur à 0 et au plus égal à 6400, pas {p}
@@ -4768,6 +4800,7 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	choose the object to detach with its Select/Move widget	choisissez l’objet à détacher avec sa commande Sélectionner/Déplacer
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
 @msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé
@@ -5090,6 +5123,7 @@ axis	Both	Les deux
 @msg	every numbered name for it is taken in the Fonts folder	tous les noms numérotés pour ce fichier sont déjà pris dans le dossier Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5516,7 +5550,9 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Les graphiques s'appliquent sur des faces planes : utilisez le type d'objet Extrusion ou Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s'appliquent aux types d'objet Plan, Extrusion et Révolution
+@msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l'illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n'a qu'une face : appliquez ses graphiques sur la face avant
 @msg	The graphics are too complex: simplify the symbols' art	Les graphiques sont trop complexes : simplifiez l'illustration des symboles
@@ -5758,6 +5794,8 @@ lighting	Light	Lumière
 	Pen	Plume
 	Pentagram	Pentagramme
 	Perceptual	Perceptif
+	Hue Clockwise	Teinte en sens horaire
+	Hue Counterclockwise	Teinte en sens antihoraire
 	Phone 360×800	Téléphone 360×800
 	Phone 375×667	Téléphone 375×667
 	Phone 375×812	Téléphone 375×812
@@ -6287,7 +6325,7 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` s’applique aux fonds en dégradé (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
-@msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` doit être classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange
@@ -6400,6 +6438,35 @@ axis	Y Axis	Axe Y
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
+@msg	a number >= {_1}	un nombre >= {_1}
+@msg	a number > {_1}	un nombre > {_1}
+@msg	a number <= {_1}	un nombre <= {_1}
+@msg	a number < {_1}	un nombre < {_1}
+@msg	a number {_1} to {_2}	un nombre de {_1} à {_2}
+@msg	a number >= {_1} and < {_2}	un nombre >= {_1} et < {_2}
+@msg	a number > {_1} and <= {_2}	un nombre > {_1} et <= {_2}
+@msg	a number > {_1} and < {_2}	un nombre > {_1} et < {_2}
+@msg	a number ({_1})	un nombre ({_1})
+@msg	a number >= {_1} ({_2})	un nombre >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un nombre > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un nombre <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un nombre < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un nombre de {_1} à {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un nombre >= {_1} et < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un nombre > {_1} et <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un nombre > {_1} et < {_2} ({_3})
+@msg	an integer	un entier
+@msg	an integer >= {_1}	un entier >= {_1}
+@msg	an integer <= {_1}	un entier <= {_1}
+@msg	an integer {_1} to {_2}	un entier de {_1} à {_2}
+@msg	one of {_1}	l’une des valeurs {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` doit être l’une des valeurs {_1}, pas {got}
+@msg	an object id (a non-negative integer)	un identifiant d’objet (un entier positif ou nul)
+@msg	a list of object ids	une liste d’identifiants d’objet
+@msg	a color (a string, [r, g, b] or an object)	une couleur (une chaîne, [r, g, b] ou un objet)
+@msg	[x, y] (two numbers)	[x, y] (deux nombres)
+@msg	an object	un objet
+@msg	a list	une liste
 @msg	unknown key `{k}`; the keys here are {_1}	clé inconnue `{k}` ; les clés ici sont {_1}
 @msg	{_1} is listed twice	{_1} figure deux fois
 @msg	{_1} is not the id of an input object	{_1} n’est pas l’identifiant d’un objet d’entrée
@@ -6501,12 +6568,14 @@ axis	Y Axis	Axe Y
 	Continue	Continuer
 	Continue Action	Continuer le script
 	Delete Action Step	Supprimer l’étape du script
+	Move Action Step	Déplacer l’étape du script
 	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
 	Stop: {message}	Arrêt : {message}
 @msg	no action is waiting at a stop	aucun script n’attend à un arrêt
 @msg	message must be text	message doit être du texte
 @msg	allowContinue must be true or false	allowContinue doit valoir true ou false
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
+@msg	Batch cannot play an action with a View menu step	Le traitement par lots ne peut pas exécuter un script comportant une étape du menu Affichage
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
 	Insert Select Path	Insérer une sélection de tracé
@@ -6671,6 +6740,22 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+	Notched Ribbon	Ruban cranté
+	Double Line	Double ligne
+	Wave	Vague
+	Teardrop	Goutte
+	Striped Ribbon	Ruban rayé
+	Fine Nib	Plume fine
+	Broad Nib	Plume large
+	Chisel	Ciseau
+	Round Pen	Plume ronde
+	Pressure Pen	Plume à pression
+	Beads	Perles
+	Dash Dot	Tiret-point
+	Scallops	Festons
+	Stars	Étoiles
+	Triangles	Triangles
+	Sparkles	Étincelles
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
@@ -6690,6 +6775,13 @@ axis	Y Axis	Axe Y
 	Area Text	Texte captif
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesurer le texte d’après les limites du glyphe
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Options de magnétisme du pixel
+	Pixel Snapping Options…	Options de magnétisme du pixel…
+	Snap to Pixel While Drawing	Magnétisme du pixel lors du dessin
+	Snap to Pixel While Moving	Magnétisme du pixel lors du déplacement
+	Snap to Pixel While Scaling	Magnétisme du pixel lors de la mise à l’échelle
+	These options take effect when View › Snap to Pixel is on.	Ces options s’appliquent lorsque Affichage › Magnétisme du pixel est activé.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Afficher les options de magnétisme du glyphe
 	Hide Snap to Glyph Options	Masquer les options de magnétisme du glyphe
@@ -7317,6 +7409,19 @@ breakText	Glyphs	Glyphes
 	Show where this tool is	Afficher l'emplacement de cet outil
 @msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
+	View more	Voir plus
+	Finish tutorial	Terminer le tutoriel
+	Next Up	À suivre
+	You finished the last tutorial in this skill.	Vous avez terminé le dernier tutoriel de cette compétence.
+	Back to skills	Retour aux compétences
+	Open Tutorial Sample	Ouvrir le fichier d’exercice du tutoriel
+	Finish Tutorial	Terminer le tutoriel
+	Next Tutorial	Tutoriel suivant
+	Back to Skills	Retour aux compétences
+@msg	tutorial `{id}` has no practice sample	le tutoriel `{id}` n’a pas de fichier d’exercice
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	terminez d’abord `{id}` (voir learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` est le dernier tutoriel de sa compétence
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés

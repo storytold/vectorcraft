@@ -524,9 +524,10 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), its
-/// fills and strokes carrying the geometry effects of the instance's active fill and stroke
-/// ([`add_instance_row_effects`]).
+/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), as
+/// the art its members draw when the instance has geometry effects of its own
+/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry effects of the
+/// instance's active fill and stroke ([`add_instance_row_effects`]).
 /// `None` for other kinds (images, paths, containers), and for an instance whose art placed
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
@@ -562,20 +563,16 @@ fn outline_art_with(
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
-        _ if has_transform_art(n) || (apart && has_transform_copies(n)) => {
-            let mut one = n.clone();
-            one.opacity = 1.0;
-            one.blend = Default::default();
-            one.isolate = false;
-            one.extras_mut().mask = None;
-            one.appearance.effects.clear();
-            Node::group(n.id, vec![Arc::new(one)])
-        }
+        _ if has_transform_art(n) || (apart && has_transform_copies(n)) => one_piece(n),
         _ if vectorcraft_doc::live::is_live(n) => evaluated_with(symbols, n, outline, nodes),
         _ => return None,
     };
     outline_nested_text(paint_doc, &mut art, false);
     if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        // The instance's own geometry effects reshape what the symbol's members draw.
+        if !geometry_effects(n).is_empty() {
+            crate::group::members_as_drawn(paint_doc, &mut art);
+        }
         add_instance_row_effects(symbols, n, &mut art);
     }
     art.opacity = 1.0;
@@ -843,18 +840,71 @@ fn as_art_opts(
     }
     // The art is a group with `n`'s id (for an image without fills or strokes that paint, a clip
     // group).
-    let mut out = art;
-    out.name = n.name.clone();
-    out.visible = n.visible;
-    out.opacity = n.opacity;
-    out.blend = n.blend;
-    out.isolate = n.isolate;
+    Some(dressed(art, n))
+}
+
+/// `art`, the art made of `n`, with `n`'s name, visibility, transparency, opacity mask and
+/// remaining (raster) effects.
+fn dressed(mut art: Node, n: &Node) -> Node {
+    art.name = n.name.clone();
+    art.visible = n.visible;
+    art.opacity = n.opacity;
+    art.blend = n.blend;
+    art.isolate = n.isolate;
     // One element: its pieces never knock each other out.
-    out.knockout = vectorcraft_doc::Knockout::Off;
-    out.knockout_shape = n.knockout_shape;
-    out.extras_mut().mask = n.extras().mask.clone();
-    out.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
-    Some(out)
+    art.knockout = vectorcraft_doc::Knockout::Off;
+    art.knockout_shape = n.knockout_shape;
+    art.extras_mut().mask = n.extras().mask.clone();
+    art.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
+    art
+}
+
+/// A group with `n`'s id holding `n` without its transparency, opacity mask and effects: the one
+/// piece that `n`'s own geometry effects reshape.
+fn one_piece(n: &Node) -> Node {
+    let mut one = n.clone();
+    one.opacity = 1.0;
+    one.blend = Default::default();
+    one.isolate = false;
+    one.extras_mut().mask = None;
+    one.appearance.effects.clear();
+    Node::group(n.id, vec![Arc::new(one)])
+}
+
+/// Path or compound path `n` with its own geometry effects applied, as the art it draws: with
+/// geometry effects in a visible fill or stroke of its own, a group of one path for each fill and
+/// stroke, its effects and that fill's or stroke's applied ([`crate::bake_type_appearance`]);
+/// otherwise a group with `n`'s id holding the path reshaped by its effects ([`reshape_leaves`]).
+/// The art keeps `n`'s id, name, visibility, transparency, opacity mask and raster effects. `None`
+/// for a guide, for other kinds of objects, for a path with a linked opacity mask or a 3D effect,
+/// and when `n` has no visible geometry effect of its own or in a visible fill or stroke.
+pub(crate) fn own_effects_art(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        || n.extras().mask.as_ref().is_some_and(|m| m.linked)
+        || crate::has_solid(n)
+        || crate::has_revolve(n)
+    {
+        return None;
+    }
+    if n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects())) {
+        // One element: its pieces never knock each other out.
+        return crate::bake_type_appearance(doc, n).map(|art| Node { knockout: vectorcraft_doc::Knockout::Off, ..art });
+    }
+    let fx = geometry_effects(n);
+    if fx.is_empty() {
+        return None;
+    }
+    let mut art = one_piece(n);
+    let carry = reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
+    transform_items(&mut art, doc);
+    let mut art = dressed(art, n);
+    // The raster effects before a Transform effect the path did not take stay as the path does.
+    if carry.skipped() {
+        let mut ran = n.appearance.effects.clone();
+        carry.hide_skipped(&mut ran);
+        art.appearance.effects = crate::raster::without_geometry(&ran);
+    }
+    Some(art)
 }
 
 /// Map every path under `art` (and its gradients), and every path in the art of the linked opacity
@@ -954,7 +1004,8 @@ fn hoist_copies(art: &mut Node) {
 /// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them. A live-effect
 /// plug-in that paints what it returns makes each path a group of its pieces ([`paint_leaf`]),
 /// whose swatches and patterns must be in `doc` (without one, pieces that name one are refused).
-/// Returns how gradients that paint the art as a whole follow the effects. A deferred live-effect
+/// Returns how gradients that paint the art as a whole follow the effects, and the Transform
+/// effects that nothing in the art took past the budget ([`crate::Carry::skipped`]). A deferred live-effect
 /// plug-in is listed by its index in `owner`, the effect list `fx` was taken from, or in `fx` when
 /// `owner` does not hold it. The art of the linked opacity masks of the objects in `art` (not of
 /// `art` itself) takes each effect as the paths it masks do ([`Step::reshape_masks`]), with the
@@ -1010,6 +1061,16 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
             used = cost;
             continue;
         }
+        // A Transform effect that moves the art once and that nothing in it took (past the budget)
+        // is left out ([`crate::Carry::hide_skipped`]), listed by its index in `owner`.
+        if ran.kept
+            && !ran.took
+            && e.id == "distort.transform"
+            && !crate::raster::holds_back(e)
+            && let Some(i) = owner.iter().position(|x| std::ptr::eq(x, *e))
+        {
+            whole.skip(i);
+        }
         if let Some(carry) = ran.whole {
             whole.push(carry);
         }
@@ -1041,6 +1102,8 @@ struct Step<'a> {
 struct Ran {
     /// A path in the art kept its shape (past the budget).
     kept: bool,
+    /// A path, image or symbol instance in the art took the effect.
+    took: bool,
     /// The linked opacity mask of an object in the art stayed as it was while the paths it masks
     /// took the effect, or could have ([`Step::reshape_masks`]).
     masks: bool,
@@ -1080,7 +1143,7 @@ impl Step<'_> {
         depth: usize,
     ) -> Ran {
         let (e, params, bounds, seed) = (self.e, self.params, self.bounds, self.seed);
-        let stayed = Ran { kept: false, masks: true, short: false, whole: None };
+        let stayed = Ran { kept: false, took: false, masks: true, short: false, whole: None };
         if let Some(plugin) = painted_plugin(e) {
             if own || has_linked_mask(art, false) {
                 return stayed;
@@ -1094,7 +1157,7 @@ impl Step<'_> {
                     *used = used.minus(before).plus(made);
                 }
             });
-            return Ran { kept: false, masks: false, short: false, whole: None };
+            return Ran { kept: false, took: true, masks: false, short: false, whole: None };
         }
         // A Warp effect that bends images ([`mark_warped_images`]) bends an image's pixels, not the
         // art of its linked mask.
@@ -1147,7 +1210,7 @@ impl Step<'_> {
         // ([`transform_placed`]): a mask's art that holds one can't take another effect as the art
         // it masks does.
         if own && transform.is_none() && (is_placed(art) || placed_count(art) > 0) {
-            return Ran { kept: false, masks: true, short: false, whole: None };
+            return Ran { kept: false, took: false, masks: true, short: false, whole: None };
         }
         // Art of several objects is copied whole, so the copies don't interleave member by member.
         // The copies of its members carry their linked masks, moved with them.
@@ -1157,7 +1220,7 @@ impl Step<'_> {
         {
             if !own {
                 *used = copy_art(art, m, copies, copy_scaling(options), max);
-                return Ran { kept: false, masks: false, short: false, whole: None };
+                return Ran { kept: false, took: true, masks: false, short: false, whole: None };
             }
             // A mask's art: its copies keep to what the rest of the art leaves of `max`, and the
             // linked mask of the art itself takes them too. That mask's art stays in `used`, as
@@ -1169,7 +1232,7 @@ impl Step<'_> {
             let short = art.children().is_some_and(|c| c.iter().filter(|c| !c.is_guide()).count() <= copies);
             let none = HashSet::new();
             let masks = self.reshape_own_mask(art, &Skip { moved: &none, kept: &none }, max, used, depth);
-            return Ran { kept: false, masks, short, whole: None };
+            return Ran { kept: false, took: true, masks, short, whole: None };
         }
         // A shortfall in the copies matters for the objects a linked mask above them covers, which
         // the mask would take a different number of copies than, and anywhere in a mask's art.
@@ -1180,6 +1243,7 @@ impl Step<'_> {
         }
         let counts = |id: NodeId| watch && (own || covered.contains(&id));
         let mut short = false;
+        let mut took = false;
         for_each_leaf(art, &mut |leaf| {
             let at = leaf_at;
             leaf_at += 1;
@@ -1204,6 +1268,7 @@ impl Step<'_> {
                 if options.reach_appearance() {
                     let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some(), None);
                     *used = used.minus(before).plus(made);
+                    took |= moved;
                     if moved {
                         // With Transform Objects off the path stays, and its mask takes the
                         // effect's stroke and pattern changes as its own art.
@@ -1220,6 +1285,7 @@ impl Step<'_> {
                     let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
                     let made = copy_leaf(leaf, &path, m, copies, scaling, room, None);
                     *used = used.minus(before).plus(made);
+                    took = true;
                     moved_ids.insert(leaf.id);
                     short |= counts(leaf.id) && copied(leaf) <= copies;
                     return;
@@ -1231,6 +1297,7 @@ impl Step<'_> {
                 kept_leaves.insert(at);
                 return;
             };
+            took = true;
             // A Transform effect's copies of a path are subpaths of it, each with the path's anchors.
             if counts(leaf.id)
                 && let Some((_, copies, _, _)) = transform
@@ -1272,6 +1339,8 @@ impl Step<'_> {
                 *art = Node::group(id, vec![Arc::new(one)]);
             }
             let placed = if watch { masked_placed(art, own) } else { 0 };
+            // Images and symbol instances take the effect whatever the budget.
+            took = took || placed_count(art) > 0;
             // Scale Strokes & Effects leaves the raster effects that follow the effect to
             // [`follow_art`].
             let mut scaling = copy_scaling(options);
@@ -1305,7 +1374,7 @@ impl Step<'_> {
         }
         let drawn = warped.as_deref().map_or_else(|| art.geometric_bounds(), |w| w.bounds(art));
         let whole = (follows && !held).then(|| crate::Carry::of(&e.id, params, bounds, Some(bounds), drawn, seed));
-        Ran { kept: !kept_ids.is_empty(), masks, short, whole }
+        Ran { kept: !kept_ids.is_empty(), took, masks, short, whole }
     }
 
     /// Run the effect over the art of the linked opacity mask of `n` (with `own`) and of each path,
@@ -1858,22 +1927,30 @@ fn paint_leaf(
 /// effects' budget for the object it becomes, so that a budget of [`Budget::EFFECTS`] holds at most
 /// [`MAX_OBJECTS`](vectorcraft_plugins::objects::MAX_OBJECTS) pieces however small their paths.
 fn piece_cost(path: &PathData) -> Budget {
+    Budget::of(path).plus(piece_share())
+}
+
+/// The share of the effects' budget each painted piece costs besides its path ([`piece_cost`]).
+fn piece_share() -> Budget {
     let max = vectorcraft_plugins::objects::MAX_OBJECTS;
-    Budget::of(path).plus(Budget { anchors: Budget::EFFECTS.anchors / max, lines: Budget::EFFECTS.lines / max })
+    Budget { anchors: Budget::EFFECTS.anchors / max, lines: Budget::EFFECTS.lines / max }
 }
 
 /// Live-effect plug-in `plugin` (one that paints what it returns) with `params`, a later effect of
-/// `item`, run on `leaf`, a path of [`transform_piece`] painted by copies of `item`, with reference
-/// box `bounds`: `leaf` becomes a group of one path for each piece returned, in order. A piece that
-/// gives fills (on a fill) or strokes (on a stroke) is painted by copies of `item`, the leaf's first
-/// fill or stroke, with those paints ([`vectorcraft_plugins::painted::items`]), under the leaf's
-/// other fills and strokes; one that gives none keeps the leaf's. Returns
+/// `item`, run on `leaf`, a path of [`transform_piece`] painted by `item` (its first fill or stroke),
+/// with reference box `bounds`: `leaf` becomes a group of one path for each piece returned, in
+/// order. The plug-in is given `appearance`'s fills and strokes and told that it is on item `index`
+/// of them. A piece that gives fills (on a fill) or strokes (on a stroke) is painted by copies of
+/// `item` with those paints ([`vectorcraft_plugins::painted::items`]), under the leaf's other fills
+/// and strokes; one that gives none keeps the leaf's. Returns
 /// what the paths cost ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails,
 /// the pieces are refused (a swatch or pattern not in `doc`, or any without one), or they would pass
 /// `budget`. A deferred run is listed by `at`.
+#[allow(clippy::too_many_arguments)]
 fn paint_piece(
     leaf: &mut Node,
     item: &AppearanceItem,
+    (appearance, index): (&Appearance, usize),
     (plugin, params): (&str, &serde_json::Value),
     bounds: Rect,
     budget: Budget,
@@ -1881,7 +1958,7 @@ fn paint_piece(
     at: Option<vectorcraft_plugins::deferred::Stage>,
 ) -> Option<Budget> {
     let (path, rule) = leaf_geometry(leaf)?;
-    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: Some(0), at };
+    let paints = vectorcraft_plugins::effect::Paints { appearance: Some(appearance), item: Some(index), at };
     let pieces = vectorcraft_plugins::effect::apply_painted(plugin, params, &path, bounds, rule, paints, doc)?;
     let made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
     if !budget.fits(made) {
@@ -2023,9 +2100,14 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         // effects before this one back from every Transform effect ([`crate::raster::followed`]).
         let held_later = fx.get(at + 1..).unwrap_or_default().iter().any(crate::raster::holds_back);
         // The effects before the Transform effect that it keeps, each raster effect following the
-        // geometry effects before it ([`crate::raster::without_geometry`]) unless held back.
+        // geometry effects before it that moved the geometry ([`crate::raster::without_geometry`],
+        // [`crate::Carry::hide_skipped`]) unless held back.
+        let mut ran = std::borrow::Cow::Borrowed(before);
+        if carry.skipped() {
+            carry.hide_skipped(ran.to_mut());
+        }
         let kept_before: Vec<Effect> =
-            if held_later { before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect() } else { crate::without_geometry(before) };
+            if held_later { before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect() } else { crate::without_geometry(&ran) };
         if let Some(plugin) = painted_plugin(&fx[at]) {
             let mut it = item.clone();
             let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
@@ -2050,7 +2132,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 group.push(Arc::new(p));
             }
             let mut p = Node::group(leaf.id, group);
-            transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), limit, used, doc);
+            transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), true, limit, used, doc);
             pieces.push(Arc::new(p));
             continue;
         }
@@ -2073,7 +2155,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         if moved && !held_later {
             follow_piece(&mut p, kept_before.get(from..).unwrap_or_default(), from, &fx[at]);
         }
-        transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(&fx[..=at]), limit, used, doc);
+        transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(&fx[..=at]), false, limit, used, doc);
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
@@ -2086,7 +2168,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
     leaf.kind = NodeKind::Group { children: pieces, clip: false };
 }
 
-/// Apply the visible geometry effects left on the one fill or stroke of each path under `p` (a
+/// Apply the visible geometry effects left on the fills or strokes of each path under `p` (a
 /// transformed piece of [`transform_item_leaf`] and its copies) to all of `p`'s paths as one piece:
 /// each effect takes the bounds of all the paths as its reference box and `seed`, as an object's
 /// own effects reshape all its paths ([`reshape_leaves_carrying`]). Each path applies its own copy of
@@ -2095,19 +2177,32 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
 /// the effects after it, and with Transform Objects off those before it, as they are
 /// ([`keep_listed`]).
 /// A live-effect plug-in that paints what it returns ([`painted_plugin`]) makes each path one path
-/// for each piece it returns ([`paint_piece`]). The raster effects before a Transform effect
-/// follow it ([`follow_piece`]), except the first `held` effects, which a Transform effect before
-/// the piece's effects that makes copies or moves at random holds back, and the effects before
-/// such a Transform effect among the piece's effects. The geometry effects then
+/// for each piece it returns ([`paint_piece`]). A path with several fills or strokes (those a
+/// painted plug-in returned) takes such an effect, a live-effect plug-in or a geometry effect on
+/// strokes once for each of them, in paint order, given its own place among them
+/// ([`shares_stage`]): each run's pieces replace only that fill or stroke, and a run that fails or
+/// would pass the budget leaves that fill or stroke on the path as it was. The raster effects
+/// before a Transform effect follow it ([`follow_piece`]), except the first `held` effects, which
+/// a Transform effect before the piece's effects that makes copies or moves at random holds back,
+/// and the effects before such a Transform effect among the piece's effects. The geometry effects then
 /// leave the fills and strokes; their other effects stay. The paths keep to `max` together with
 /// the rest of the art (`used`), and the swatches and patterns painted pieces name must be in
 /// `doc`. `(seed, source, kept)`: the object's seed, the index in the object's appearance of the
 /// fill or stroke the piece was made from, and the index among that item's effects of each effect
-/// the piece kept, which a deferred live-effect plug-in is listed by.
-fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), held: usize, max: Budget, used: &mut Budget, doc: Option<&Document>) {
+/// the piece kept, which a deferred live-effect plug-in is listed by. `painted`: `p`'s paths are
+/// the pieces of a painted run, each of which `used` counts at [`piece_cost`].
+fn transform_piece(
+    p: &mut Node,
+    (seed, source, kept): (u64, usize, &[usize]),
+    held: usize,
+    painted: bool,
+    max: Budget,
+    used: &mut Budget,
+    doc: Option<&Document>,
+) {
     let mut count = 0;
     for_each_leaf(p, &mut |l| {
-        if let Some(item) = l.appearance.items.first() {
+        for item in &l.appearance.items {
             count = count.max(item.effects().len());
         }
     });
@@ -2115,60 +2210,207 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
     // random are held back from the Transform effects before it too.
     let mut held = held;
     for_each_leaf(p, &mut |l| {
-        if let Some(last) = l.appearance.items.first().and_then(|item| item.effects().iter().rposition(crate::raster::holds_back)) {
-            held = held.max(last);
+        for item in &l.appearance.items {
+            if let Some(last) = item.effects().iter().rposition(crate::raster::holds_back) {
+                held = held.max(last);
+            }
         }
     });
+    // Whether `used` counts each path under `p`, in the order `for_each_leaf` visits them, at
+    // [`piece_cost`] (its geometry and a painted piece's share) rather than at its geometry alone.
+    // The pieces of a painted run are counted so, and so is the first path an effect makes of one
+    // that was: the paths of a Transform effect's copies share their original's share.
+    let mut shares = vec![painted; leaf_count(p)];
     for j in 0..count {
         let Some(bounds) = p.geometric_bounds() else { break };
         let from = held.min(j);
         let mut holds = false;
-        for_each_leaf(p, &mut |leaf| {
-            let Some(item) = leaf.appearance.items.first().cloned() else { return };
-            let Some(e) = item.effects().get(j).filter(|e| e.visible && is_geometry(&e.id)).cloned() else { return };
-            holds |= crate::raster::holds_back(&e);
-            // The effects before this one as they were before it moved the path.
-            let was = item.effects().get(from..j).unwrap_or_default();
-            let Some((path, rule)) = leaf_geometry(leaf) else { return };
-            // What the other paths leave of the budget.
-            let before = Budget::of(&path);
-            let room = max.minus(used.minus(before));
-            let stage = vectorcraft_plugins::deferred::Stage { object: seed, effect: kept.get(j).copied().unwrap_or(j), item: Some(source) };
-            if let Some(plugin) = painted_plugin(&e) {
-                if let Some(made) = paint_piece(leaf, &item, (plugin, &merged_params(&e.id, &e.params)), bounds, room, doc, Some(stage)) {
-                    *used = used.minus(before).plus(made);
-                }
-                return;
-            }
-            if reaches_appearance(&e) {
-                let params = merged_params(&e.id, &e.params);
-                let (_, copies) = crate::distort::transform_map(bounds, &params, seed);
-                let options = crate::distort::TransformOptions::of(&params);
-                let map = crate::distort::transform_affine(bounds, &params, seed);
-                let keep = |k: usize| k > j || (k < j && !options.objects);
-                let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, false, Some((item.effects(), &keep)));
+        let stage = vectorcraft_plugins::deferred::Stage { object: seed, effect: kept.get(j).copied().unwrap_or(j), item: Some(source) };
+        let at = PieceStage { j, from, seed, bounds, doc, stage };
+        // Stage `j` on `leaf`, a path `used` counts at `piece_cost` when `share`: whether `used`
+        // counts each path it became so, or `None` when it stays as it was.
+        let mut on_leaf = |leaf: &mut Node, share: bool| -> Option<Vec<bool>> {
+            let effect = |item: &AppearanceItem| item.effects().get(j).filter(|e| e.visible && is_geometry(&e.id)).cloned();
+            let items = &leaf.appearance.items;
+            let first = items.first()?;
+            let (path, _) = leaf_geometry(leaf)?;
+            // What `used` counts the path at; what the other paths leave of the budget is the rest.
+            let geometry = Budget::of(&path);
+            let counted = if share { piece_cost(&path) } else { geometry };
+            if shares_stage(items, j) {
+                let e = effect(first)?;
+                holds |= crate::raster::holds_back(&e);
+                let appearance = leaf.appearance.clone();
+                // A painted run's pieces each cost a share of their own ([`paint_piece`]); the
+                // paths of any other effect keep the leaf's.
+                let painted = painted_plugin(&e).is_some();
+                let before = if painted { counted } else { geometry };
+                let room = max.minus(used.minus(before));
+                let made = piece_stage(leaf, &e, &at, (&appearance, 0), room)?;
                 *used = used.minus(before).plus(made);
-                if moved {
-                    follow_piece(leaf, was, from, &e);
-                }
-                return;
+                return Some((0..leaf_count(leaf)).map(|k| painted || (share && k == 0)).collect());
             }
+            // Each fill or stroke takes the effect on its own path, given the leaf's fills and
+            // strokes and its own place among them; those left with the same path as the one
+            // before them stay on it. Each path costs its geometry and a painted piece's share.
+            // Each run is first given all the room the art leaves. When a fill or stroke that keeps
+            // the leaf's path then finds no room for its copy of it, the results are placed again,
+            // each but the last leaving room for one more copy of the leaf's own path; a result
+            // that does not fit that room is left out. Only a fill or stroke that keeps the leaf's
+            // path right after one that changed costs such a copy (the ones after it stay on that
+            // copy), so every copy fits but the first fill's or stroke's, when the art leaves no
+            // room for it: the leaf then stays as it was. A live-effect plug-in is given all the
+            // room the art leaves, and each placing checks that its result fits; a built-in effect
+            // builds within the room of each placing.
             let appearance = leaf.appearance.clone();
-            let stroke = match &item {
-                AppearanceItem::Stroke(s) => Some(s),
-                AppearanceItem::Fill(_) => None,
+            let one = piece_cost(&path);
+            let n = appearance.items.len();
+            let base = used.minus(counted);
+            let alone = |item: &AppearanceItem| {
+                let mut sub = leaf.clone();
+                sub.appearance.items = vec![item.clone()];
+                sub
             };
-            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0), doc, stage: Some(stage) };
-            let mut carry = crate::Carry::default();
-            let out = crate::geometry::apply_geometry_carrying_within(std::slice::from_ref(&e), &path, bounds, &ctx, room, Some(&mut carry));
-            *used = used.minus(before).plus(Budget::of(&out));
-            // The fill's or stroke's gradient follows the effect as the object's does.
-            if carry.moves(&leaf.appearance) {
-                carry.apply(&mut leaf.appearance);
-            }
-            set_geometry(leaf, out, rule);
-            follow_piece(leaf, was, from, &e);
+            // `item`, the `k`th fill or stroke, alone on the leaf's path with effect `e` applied
+            // within `room`, and what its paths cost; `None` when it failed or found no room.
+            let apply = |item: &AppearanceItem, k: usize, e: &Effect, room: Budget| {
+                let painted = painted_plugin(e).is_some();
+                let room = if painted { room } else { room.minus(piece_share()) };
+                let mut sub = alone(item);
+                let made = piece_stage(&mut sub, e, &at, (&appearance, k), room)?;
+                Some((sub, if painted { made } else { made.plus(piece_share()) }))
+            };
+            // Each fill's or stroke's live-effect plug-in run. A result is kept only while a
+            // placing places it on a path of its own; one that does not fit is dropped, with what
+            // it cost, and the plug-in runs again in the second placing only when that much room
+            // is left there (a result small enough to cache comes back from the cache). A result
+            // with the same path as the one before it costs nothing: it is placed on that path
+            // whatever room is left, and dropped once its fill or stroke is moved there. The
+            // results kept at once cost at most what the two placings place.
+            let mut runs: Vec<PluginRun> = vec![PluginRun::Not; n];
+            let mut kept_cost = Budget { anchors: 0, lines: 0 };
+            // Each placing gives the paths, whether `used` counts each of the paths they hold at
+            // `piece_cost` (all of a painted run's, and the first of any other result's), and what
+            // the art then spends.
+            let mut split = |reserve: bool| -> Option<(Vec<Node>, Vec<bool>, Budget)> {
+                let mut spent = base;
+                let mut out: Vec<Node> = vec![];
+                let mut counts: Vec<bool> = vec![];
+                for (k, (item, ran)) in appearance.items.iter().zip(runs.iter_mut()).enumerate() {
+                    let room = if reserve && k + 1 < n { max.minus(spent).minus(one) } else { max.minus(spent) };
+                    let e = effect(item);
+                    let paints = e.as_ref().is_some_and(|e| painted_plugin(e).is_some());
+                    // Does `sub` stay on the path of the result before it, at no cost?
+                    let merges = |sub: &Node| out.last().is_some_and(|last| same_path(last, sub));
+                    // What the kept plug-in result this fill or stroke takes cost.
+                    let mut taken = None;
+                    let result = match e {
+                        None => None,
+                        Some(e) => {
+                            holds |= crate::raster::holds_back(&e);
+                            if vectorcraft_plugins::effect::plugin_id(&e.id).is_some() {
+                                let again = match ran {
+                                    PluginRun::Not | PluginRun::Merged => true,
+                                    PluginRun::Left(cost) => room.fits(*cost),
+                                    PluginRun::Kept(..) | PluginRun::Failed => false,
+                                };
+                                if again {
+                                    #[cfg(test)]
+                                    PLUGIN_RUNS.with(|n| n.set(n.get() + 1));
+                                    *ran = match apply(item, k, &e, max.minus(base)) {
+                                        None => PluginRun::Failed,
+                                        Some((sub, cost)) if !room.fits(cost) && !merges(&sub) => PluginRun::Left(cost),
+                                        Some((sub, cost)) => {
+                                            kept_cost = kept_cost.plus(cost);
+                                            PluginRun::Kept(sub, cost)
+                                        }
+                                    };
+                                }
+                                match ran {
+                                    PluginRun::Kept(sub, cost) if room.fits(*cost) || merges(sub) => {
+                                        taken = Some(*cost);
+                                        Some((sub.clone(), *cost))
+                                    }
+                                    PluginRun::Kept(_, cost) => {
+                                        let cost = *cost;
+                                        kept_cost = kept_cost.minus(cost);
+                                        *ran = PluginRun::Left(cost);
+                                        None
+                                    }
+                                    PluginRun::Not | PluginRun::Merged | PluginRun::Left(_) | PluginRun::Failed => None,
+                                }
+                            } else {
+                                // A built-in effect that finds no room within `room` leaves the
+                                // leaf's path. When its result is not on the path before it, it
+                                // is built again with all the room the art leaves and taken only
+                                // when that result is on the path before it, which costs nothing.
+                                let made = apply(item, k, &e, room);
+                                let short = match &made {
+                                    None => true,
+                                    Some((sub, cost)) => !merges(sub) && (!room.fits(*cost) || same_path(sub, leaf)),
+                                };
+                                match out.last() {
+                                    Some(_) if short => match apply(item, k, &e, max.minus(base)) {
+                                        Some((sub, cost)) if merges(&sub) => Some((sub, cost)),
+                                        _ => made,
+                                    },
+                                    _ => made,
+                                }
+                            }
+                        }
+                    };
+                    let placed = match result {
+                        Some((sub, cost)) if room.fits(cost) || merges(&sub) => Some((sub, cost, paints)),
+                        _ => None,
+                    };
+                    // A fill or stroke whose result is not placed stays on the leaf's path, which
+                    // is copied only when the path before it is another.
+                    let (mut sub, cost, all) = match placed {
+                        Some(placed) => placed,
+                        None => match out.last_mut() {
+                            Some(last) if same_path(last, leaf) => {
+                                last.appearance.items.push(item.clone());
+                                continue;
+                            }
+                            _ => (alone(item), one, true),
+                        },
+                    };
+                    match out.last_mut() {
+                        Some(last) if same_path(last, &sub) => {
+                            last.appearance.items.append(&mut sub.appearance.items);
+                            if let Some(cost) = taken {
+                                kept_cost = kept_cost.minus(cost);
+                                *ran = PluginRun::Merged;
+                            }
+                        }
+                        _ if !max.minus(spent).fits(cost) => return None,
+                        _ => {
+                            spent = spent.plus(cost);
+                            counts.extend((0..leaf_count(&sub)).map(|k| all || k == 0));
+                            out.push(sub);
+                        }
+                    }
+                    #[cfg(test)]
+                    HELD_PEAK.with(|p| p.set(p.get().at_least(kept_cost)));
+                }
+                Some((out, counts, spent))
+            };
+            let (mut out, counts, spent) = split(false).or_else(|| split(true))?;
+            *used = spent;
+            *leaf = match out.len() {
+                1 => out.pop().unwrap_or_else(|| leaf.clone()),
+                _ => Node::group(leaf.id, out.into_iter().map(Arc::new).collect()),
+            };
+            Some(counts)
+        };
+        let mut next: Vec<bool> = vec![];
+        let mut visited = 0;
+        for_each_leaf(p, &mut |leaf| {
+            let share = shares.get(visited).copied().unwrap_or(false);
+            visited += 1;
+            next.extend(on_leaf(leaf, share).unwrap_or_else(|| vec![share]));
         });
+        shares = next;
         if holds {
             held = held.max(j);
         }
@@ -2178,6 +2420,137 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
             item.effects_mut().retain(|e| !(e.visible && is_geometry(&e.id)));
         }
     });
+}
+
+/// A fill's or stroke's live-effect plug-in run in a placing of [`transform_piece`]: not run yet,
+/// its result and what that costs while a placing places it on a path of its own, what a result
+/// that did not fit cost (the result itself is dropped), a result dropped once its fill or stroke
+/// was placed on the path before it, or failed.
+#[derive(Clone)]
+enum PluginRun {
+    Not,
+    Kept(Node, Budget),
+    Left(Budget),
+    Merged,
+    Failed,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The most the live-effect plug-in results [`transform_piece`] keeps from one fill or stroke
+    /// to the next have cost at once on this thread.
+    pub(crate) static HELD_PEAK: std::cell::Cell<Budget> = const { std::cell::Cell::new(Budget { anchors: 0, lines: 0 }) };
+    /// How many times [`transform_piece`] has run a fill's or stroke's live-effect plug-in on this
+    /// thread when they did not share the stage.
+    pub(crate) static PLUGIN_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Where a stage of [`transform_piece`] runs: `j`, the index of its effect among the piece's
+/// effects; `from`, the first of the effects before it whose raster effects follow a Transform
+/// effect; the object's `seed`; the reference box `bounds` of all the piece's paths; the document
+/// that painted pieces' swatches and patterns must be in; and the `stage` a deferred live-effect
+/// plug-in is listed by.
+struct PieceStage<'a> {
+    j: usize,
+    from: usize,
+    seed: u64,
+    bounds: Rect,
+    doc: Option<&'a Document>,
+    stage: vectorcraft_plugins::deferred::Stage,
+}
+
+/// Can stage `j` of [`transform_piece`] run once for all of a path's `items`: there is at most one,
+/// or they hold the same effects and the effect at `j` is not a visible geometry effect, is a
+/// Transform effect, or is a built-in geometry effect and they are all fills (an effect that
+/// changes a fill's path does not depend on which fill it is on)?
+fn shares_stage(items: &[AppearanceItem], j: usize) -> bool {
+    let Some(first) = items.first() else { return true };
+    if items.len() == 1 {
+        return true;
+    }
+    if !items.iter().all(|i| i.effects() == first.effects()) {
+        return false;
+    }
+    match first.effects().get(j) {
+        Some(e) if e.visible && is_geometry(&e.id) => {
+            vectorcraft_plugins::effect::plugin_id(&e.id).is_none() && (reaches_appearance(e) || items.iter().all(AppearanceItem::is_fill))
+        }
+        _ => true,
+    }
+}
+
+/// Effect `e`, a visible geometry effect at stage `at` of [`transform_piece`], applied to `leaf`, a
+/// path painted by its first fill or stroke (and, when they share the stage, [`shares_stage`], the
+/// others): `appearance` is what the effect is given of the path's fills and strokes and `index`
+/// which of them it is on. A live-effect plug-in that paints what it returns makes `leaf` a group
+/// of its pieces ([`paint_piece`]), and a Transform effect that reaches its appearance transforms
+/// it ([`transform_leaf`]). Returns what the new paths cost, within `room`; `None` when `leaf`
+/// stays as it is.
+fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index): (&Appearance, usize), room: Budget) -> Option<Budget> {
+    let item = leaf.appearance.items.first()?.clone();
+    // The effects before this one as they were before it moved the path.
+    let was = item.effects().get(at.from..at.j).unwrap_or_default();
+    let (path, rule) = leaf_geometry(leaf)?;
+    if let Some(plugin) = painted_plugin(e) {
+        let params = merged_params(&e.id, &e.params);
+        return paint_piece(leaf, &item, (appearance, index), (plugin, &params), at.bounds, room, at.doc, Some(at.stage));
+    }
+    if reaches_appearance(e) {
+        let params = merged_params(&e.id, &e.params);
+        let (_, copies) = crate::distort::transform_map(at.bounds, &params, at.seed);
+        let options = crate::distort::TransformOptions::of(&params);
+        let map = crate::distort::transform_affine(at.bounds, &params, at.seed);
+        let j = at.j;
+        let keep = |k: usize| k > j || (k < j && !options.objects);
+        let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, false, Some((item.effects(), &keep)));
+        if moved {
+            follow_piece(leaf, was, at.from, e);
+        }
+        return Some(made);
+    }
+    let stroke = match &item {
+        AppearanceItem::Stroke(s) => Some(s),
+        AppearanceItem::Fill(_) => None,
+    };
+    let ctx = GeomContext { stroke, rule, seed: at.seed, appearance: Some(appearance), item: Some(index), doc: at.doc, stage: Some(at.stage) };
+    let mut carry = crate::Carry::default();
+    let out = crate::geometry::apply_geometry_carrying_within(std::slice::from_ref(e), &path, at.bounds, &ctx, room, Some(&mut carry));
+    let made = Budget::of(&out);
+    // The fill's or stroke's gradient follows the effect as the object's does.
+    if carry.moves(&leaf.appearance) {
+        carry.apply(&mut leaf.appearance);
+    }
+    set_geometry(leaf, out, rule);
+    // A Transform effect left out (past the budget) leaves the path and its raster effects as they were.
+    if !carry.skipped() {
+        follow_piece(leaf, was, at.from, e);
+    }
+    Some(made)
+}
+
+/// Are `a` and `b` paths or compound paths that differ only in their fills and strokes?
+fn same_path(a: &Node, b: &Node) -> bool {
+    let leaf = |n: &Node| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+    if !leaf(a) || !leaf(b) {
+        return false;
+    }
+    // Every field but the fills and strokes, compared in place; the geometry last.
+    let Node { id, name, visible, locked, opacity, blend, isolate, knockout, knockout_shape, appearance, kind, bbox_angle, extras } = a;
+    let Appearance { items: _, effects, contents_index } = &**appearance;
+    *id == b.id
+        && *name == b.name
+        && *visible == b.visible
+        && *locked == b.locked
+        && *opacity == b.opacity
+        && *blend == b.blend
+        && *isolate == b.isolate
+        && *knockout == b.knockout
+        && *knockout_shape == b.knockout_shape
+        && *bbox_angle == b.bbox_angle
+        && *extras == b.extras
+        && *effects == b.appearance.effects
+        && *contents_index == b.appearance.contents_index
+        && *kind == b.kind
 }
 
 /// The effects a Transform effect in a fill's or stroke's own list leaves as they were

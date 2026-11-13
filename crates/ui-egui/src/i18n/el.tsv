@@ -588,6 +588,8 @@ font-technology	Variable	Μεταβλητές
 	Convert to Artboards	Μετατροπή σε πίνακες σχεδίασης
 	Convert to CMYK	Μετατροπή σε CMYK
 	Convert to Grayscale	Μετατροπή σε κλίμακα του γκρι
+	Convert to Indexed Color	Μετατροπή σε χρώματα με ευρετήριο
+	Convert to Indexed Color…	Μετατροπή σε χρώματα με ευρετήριο…
 	Convert To Outlines	Μετατροπή σε περιγράμματα
 	Convert To Point Type	Μετατροπή σε κείμενο σημείου
 	Convert to RGB	Μετατροπή σε RGB
@@ -988,6 +990,7 @@ font-technology	Variable	Μεταβλητές
 	Enable Rubber Band for	Ενεργοποίηση δυναμικής προεπισκόπησης γραμμής για
 	Enable text access for screen readers	Ενεργοποίηση πρόσβασης κειμένου για αναγνώστες οθόνης
 	Enable Touch Gestures	Ενεργοποίηση χειρονομιών αφής
+	Switch Selection and Drawing Modes	Εναλλαγή λειτουργιών επιλογής και σχεδίασης
 	Enable Touch Workspace	Ενεργοποίηση χώρου εργασίας αφής
 	Encoding	Κωδικοποίηση
 	Encoding:	Κωδικοποίηση:
@@ -1511,6 +1514,8 @@ font-technology	Variable	Μεταβλητές
 	Objects on Path Tool	Αντικείμενα σε διαδρομή (Objects on Path Tool)
 	Attach Objects on Path	Προσάρτηση αντικειμένων σε διαδρομή
 	Expand Objects on Path	Επέκταση αντικειμένων σε διαδρομή
+	Detach	Αποσύνδεση
+	Detach Object from Path	Αποσύνδεση αντικειμένου από διαδρομή
 	Release Live Paint	Αποδέσμευση δυναμικής βαφής
 	Release Repeat	Αποδέσμευση επανάληψης
 	Release Slice	Αποδέσμευση τομής
@@ -2256,6 +2261,10 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Dock to Left	Αγκύρωση αριστερά
+	Dock to Right	Αγκύρωση δεξιά
+	Dock Toolbar	Αγκύρωση γραμμής εργαλείων
+	Float Toolbar	Αιωρούμενη γραμμή εργαλείων
 	Control Bar Options	Επιλογές γραμμής ελέγχου
 	Tool Options	Επιλογές εργαλείου
 	Object Options	Επιλογές αντικειμένου
@@ -2265,6 +2274,7 @@ axis	Both	Και τα δύο
 	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
+@msg	the library has another item of that kind named `{name}`	η βιβλιοθήκη έχει ήδη άλλο στοιχείο αυτού του είδους με όνομα `{name}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
 @msg	kerning must be a number, "auto", or "optical"	το kerning πρέπει να είναι αριθμός, «auto» ή «optical»
 @msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
@@ -2413,6 +2423,9 @@ axis	Both	Και τα δύο
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο έκλεισε
 @msg	Couldn't place {name}: the document it was placed in was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο έκλεισε
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't place {name}: the document it was placed in was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't paste: the document it was pasted in was reverted	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση επανήλθε στην αποθηκευμένη έκδοση
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
@@ -2740,6 +2753,8 @@ lighting	Light	Φως
 	Oval	Οβάλ
 	Pen	Πένα (Pen Tool)
 	Perceptual	Αντιληπτικό
+	Hue Clockwise	Απόχρωση δεξιόστροφα
+	Hue Counterclockwise	Απόχρωση αριστερόστροφα
 	Pixel	Εικονοστοιχείο
 	Points:	Σημεία:
 	Preserve	Διατήρηση
@@ -3596,6 +3611,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
 	Color Theme Picker	Επιλογέας χρωματικού θέματος
 	Click or drag across the art to pick its colors; Shift adds more	Κάντε κλικ ή σύρετε πάνω στο σχέδιο για να πάρετε τα χρώματά του· το Shift προσθέτει κι άλλα
+	Prominent Colors	Κυρίαρχα χρώματα
+	Save All Colors	Αποθήκευση όλων των χρωμάτων
+	Save Prominent Colors	Αποθήκευση κυρίαρχων χρωμάτων
 	Reset to White, Black	Επαναφορά σε λευκό και μαύρο
 	Reset with Mesh	Επαναφορά με πλέγμα
 	Reset with Mesh…	Επαναφορά με πλέγμα…
@@ -3964,6 +3982,20 @@ digits	Malayalam	Μαλαγιάλαμ
 	Spot Color Objects	Αντικείμενα με χρώματα spot
 	Pattern Objects	Αντικείμενα με μοτίβα
 	Gradient Objects	Αντικείμενα με ντεγκραντέ
+	Font Details	Λεπτομέρειες γραμματοσειρών
+	Linked Images	Συνδεδεμένες εικόνες
+	Embedded Images	Ενσωματωμένες εικόνες
+	Compound Paths	Σύνθετες διαδρομές
+	Text Objects	Αντικείμενα κειμένου
+	Placed Documents	Τοποθετημένα έγγραφα
+	Symbol Instances	Στιγμιότυπα συμβόλων
+	Gradient Meshes	Πλέγματα ντεγκραντέ
+	Blends	Αναμείξεις
+	Envelopes	Περιβλήματα
+	Intertwine Groups	Ομάδες διαπλοκής
+	Opacity Masks	Μάσκες αδιαφάνειας
+	Objects with Effects	Αντικείμενα με εφέ
+	Path Length	Μήκος διαδρομής
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)
@@ -4050,6 +4082,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rename Library Group	Μετονομασία ομάδας βιβλιοθήκης
 	Delete Library Group	Διαγραφή ομάδας βιβλιοθήκης
 	Move Library Item to Group	Μετακίνηση στοιχείου βιβλιοθήκης σε ομάδα
+	Rename Library Item	Μετονομασία στοιχείου βιβλιοθήκης
+	Add to Character Styles	Προσθήκη στα στυλ χαρακτήρων
 	Rename Library	Μετονομασία βιβλιοθήκης
 	Show Library	Εμφάνιση βιβλιοθήκης
 	Use Library Item	Χρήση στοιχείου βιβλιοθήκης
@@ -4697,6 +4731,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	paths contain invalid coordinates	οι διαδρομές περιέχουν μη έγκυρες συντεταγμένες
 @msg	paths: give at least one file	διαδρομές: δώστε τουλάχιστον ένα αρχείο
 @msg	replace: the object to replace was changed or deleted	αντικατάσταση: το αντικείμενο προς αντικατάσταση άλλαξε ή διαγράφηκε
+@msg	the document it was prepared for is no longer active	το έγγραφο για το οποίο προετοιμάστηκε δεν είναι πλέον ενεργό
 @msg	pattern missing	λείπει το μοτίβο
 @msg	patterns nested too deeply are filled with mid-grey	τα πολύ βαθιά ένθετα μοτίβα γεμίζονται με μέτριο γκρι
 @msg	percent must be above 0 and at most 6400, not {p}	το percent πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
@@ -5050,6 +5085,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for it is taken in the Fonts folder	όλα τα αριθμημένα ονόματά του χρησιμοποιούνται ήδη στον φάκελο γραμματοσειρών
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -5305,7 +5341,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{GRAPHICS}` face must be front or back	το face του `{GRAPHICS}` πρέπει να είναι front ή back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Τα γραφικά αντιστοιχίζονται σε επίπεδες όψεις: χρησιμοποιήστε τον τύπο αντικειμένου Εξώθηση ή Επίπεδο
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
+@msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη
 @msg	The graphics are too complex: simplify the symbols' art	Τα γραφικά είναι πολύ σύνθετα: απλοποιήστε το σχέδιο των συμβόλων
@@ -6024,6 +6062,7 @@ effect	Points	Σημεία
 @msg	no bound object reports a value (locked objects and embedded images report none)	κανένα συνδεδεμένο αντικείμενο δεν αναφέρει τιμή (τα κλειδωμένα αντικείμενα και οι ενσωματωμένες εικόνες δεν αναφέρουν καμία)
 @msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής
 @msg	select an Objects on Path group	επιλέξτε μια ομάδα αντικειμένων σε διαδρομή
+@msg	choose the object to detach with its Select/Move widget	επιλέξτε το αντικείμενο προς αποσύνδεση με το στοιχείο ελέγχου Επιλογή/Μετακίνηση
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	μια διαδρομή μέσα σε σύνθετη διαδρομή, ανάμειξη, περίβλημα, επανάληψη ή ομάδα διαπλοκής δεν μπορεί να δεχτεί αντικείμενα
 @msg	a clipping path can't take objects	μια διαδρομή αποκοπής δεν μπορεί να δεχτεί αντικείμενα
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	τα αντικείμενα μέσα σε ανάμειξη, περίβλημα, επανάληψη ή ομάδα διαπλοκής δεν μπορούν να προσαρτηθούν σε διαδρομή
@@ -6243,7 +6282,7 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
-@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	Το `method` πρέπει να είναι classic, perceptual, hue-clockwise ή hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
@@ -6356,6 +6395,35 @@ axis	Y Axis	Άξονας Y
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
+@msg	a number >= {_1}	αριθμός >= {_1}
+@msg	a number > {_1}	αριθμός > {_1}
+@msg	a number <= {_1}	αριθμός <= {_1}
+@msg	a number < {_1}	αριθμός < {_1}
+@msg	a number {_1} to {_2}	αριθμός από {_1} έως {_2}
+@msg	a number >= {_1} and < {_2}	αριθμός >= {_1} και < {_2}
+@msg	a number > {_1} and <= {_2}	αριθμός > {_1} και <= {_2}
+@msg	a number > {_1} and < {_2}	αριθμός > {_1} και < {_2}
+@msg	a number ({_1})	αριθμός ({_1})
+@msg	a number >= {_1} ({_2})	αριθμός >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	αριθμός > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	αριθμός <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	αριθμός < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	αριθμός από {_1} έως {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	αριθμός >= {_1} και < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	αριθμός > {_1} και <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	αριθμός > {_1} και < {_2} ({_3})
+@msg	an integer	ακέραιος
+@msg	an integer >= {_1}	ακέραιος >= {_1}
+@msg	an integer <= {_1}	ακέραιος <= {_1}
+@msg	an integer {_1} to {_2}	ακέραιος από {_1} έως {_2}
+@msg	one of {_1}	μία από τις τιμές {_1}
+@msg	`{path}` must be one of {_1}, not {got}	Το `{path}` πρέπει να είναι μία από τις τιμές {_1}, όχι {got}
+@msg	an object id (a non-negative integer)	αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
+@msg	a list of object ids	λίστα αναγνωριστικών αντικειμένων
+@msg	a color (a string, [r, g, b] or an object)	χρώμα (συμβολοσειρά, [r, g, b] ή αντικείμενο)
+@msg	[x, y] (two numbers)	[x, y] (δύο αριθμοί)
+@msg	an object	αντικείμενο
+@msg	a list	λίστα
 @msg	unknown key `{k}`; the keys here are {_1}	άγνωστο κλειδί `{k}`· τα κλειδιά εδώ είναι {_1}
 @msg	{_1} is listed twice	το {_1} αναφέρεται δύο φορές
 @msg	{_1} is not the id of an input object	το {_1} δεν είναι αναγνωριστικό αντικειμένου εισόδου
@@ -6457,12 +6525,14 @@ axis	Y Axis	Άξονας Y
 	Continue	Συνέχεια
 	Continue Action	Συνέχεια ενέργειας
 	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Move Action Step	Μετακίνηση βήματος ενέργειας
 	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
 	Stop: {message}	Διακοπή: {message}
 @msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
 @msg	message must be text	Το message πρέπει να είναι κείμενο
 @msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
+@msg	Batch cannot play an action with a View menu step	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με βήμα από το μενού Προβολή
 	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
 	Insert Menu Item	Εισαγωγή στοιχείου μενού
 	Insert Select Path	Εισαγωγή επιλογής διαδρομής
@@ -6627,6 +6697,22 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+	Notched Ribbon	Οδοντωτή κορδέλα
+	Double Line	Διπλή γραμμή
+	Wave	Κύμα
+	Teardrop	Δάκρυ
+	Striped Ribbon	Ριγέ κορδέλα
+	Fine Nib	Λεπτή πένα
+	Broad Nib	Φαρδιά πένα
+	Chisel	Σμίλη
+	Round Pen	Στρογγυλή πένα
+	Pressure Pen	Πένα πίεσης
+	Beads	Χάντρες
+	Dash Dot	Παύλα-τελεία
+	Scallops	Φεστόνια
+	Stars	Αστέρια
+	Triangles	Τρίγωνα
+	Sparkles	Σπίθες
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
@@ -6646,6 +6732,13 @@ axis	Y Axis	Άξονας Y
 	Area Text	Κείμενο περιοχής
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Επιλογές προσκόλλησης σε εικονοστοιχείο
+	Pixel Snapping Options…	Επιλογές προσκόλλησης σε εικονοστοιχείο…
+	Snap to Pixel While Drawing	Προσκόλληση σε εικονοστοιχείο κατά τη σχεδίαση
+	Snap to Pixel While Moving	Προσκόλληση σε εικονοστοιχείο κατά τη μετακίνηση
+	Snap to Pixel While Scaling	Προσκόλληση σε εικονοστοιχείο κατά την αλλαγή κλίμακας
+	These options take effect when View › Snap to Pixel is on.	Αυτές οι επιλογές ισχύουν όταν είναι ενεργή η επιλογή Προβολή › Προσκόλληση σε εικονοστοιχείο.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή
@@ -7274,6 +7367,19 @@ breakText	Glyphs	Γλύφοι
 	Show where this tool is	Εμφάνιση της θέσης αυτού του εργαλείου
 @msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
+	View more	Προβολή περισσότερων
+	Finish tutorial	Ολοκλήρωση οδηγού
+	Next Up	Επόμενο
+	You finished the last tutorial in this skill.	Ολοκληρώσατε τον τελευταίο οδηγό εκμάθησης αυτής της δεξιότητας.
+	Back to skills	Πίσω στις δεξιότητες
+	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
+	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
+	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Back to Skills	Πίσω στις δεξιότητες
+@msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
+@msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή

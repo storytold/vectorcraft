@@ -116,6 +116,7 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            settled_warnings: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,
@@ -220,11 +221,21 @@ impl Session {
             self.active = Some(index);
             if switched {
                 self.sync_front_composite_fonts();
+                self.sync_front_profiles();
             }
             true
         } else {
             false
         }
+    }
+
+    /// Make the profiles the document in front is assigned the ones colors are drawn and converted
+    /// through, in place of the working spaces (with no document open, or none assigned: the working
+    /// spaces), after a switch, an open, a close, a revert or a restored document brought another
+    /// document or another assignment to the front. The open documents redraw when the active color
+    /// settings change.
+    pub(crate) fn sync_front_profiles(&mut self) {
+        cmd::colormgmt::use_front_profiles(self);
     }
 
     /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
@@ -316,6 +327,7 @@ impl Session {
         let i = self.docs.len() - 1;
         self.active = Some(i);
         self.sync_opened_composite_fonts(i);
+        self.sync_front_profiles();
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -358,6 +370,8 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        // Work started for the content being thrown away is dropped when it finishes.
+        st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
@@ -384,16 +398,26 @@ impl Session {
         }
         match back_names {
             Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
-            None => self.sync_opened_composite_fonts(index),
+            None => {
+                self.sync_opened_composite_fonts(index);
+                self.sync_front_profiles();
+            }
         }
         true
     }
 
+    /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one
+    /// keeps the current document current, and its tool keeps its state: no document is switched
+    /// to. Closing the current document makes the tab now at `index` current, or the last tab when
+    /// it was the last one. False, changing nothing, when `index` is past the last document.
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {
             return false;
         }
-        self.reset_tool_for_doc_switch();
+        let front = self.active().map(|d| d.uid).filter(|_| self.active != Some(index));
+        if front.is_none() {
+            self.reset_tool_for_doc_switch();
+        }
         // Closed (saved or discarded): nothing left to recover.
         let uid = self.docs[index].uid;
         cmd::recovery::forget(self, uid);
@@ -401,8 +425,13 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
+        if let Some(uid) = front {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+            return true;
+        }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         self.sync_front_composite_fonts();
+        self.sync_front_profiles();
         true
     }
 

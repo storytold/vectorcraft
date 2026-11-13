@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
 use super::findfiles::{self, Limits, Visitor};
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, checked_ids_param, cmd};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, cmd, ids_param};
 
 /// The most linked files one search looks for.
 const MAX_LINKS: usize = 1_000;
@@ -143,8 +143,14 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = match p.get("ids") {
         None | Some(Value::Null) => None,
         Some(_) => {
-            let ids = checked_ids_param(s, p, "ids", C)?;
-            let linkable = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)));
+            // Images and placed documents in opacity-mask art and in the art of symbols, graph
+            // designs and patterns are named by their ids too (`links.list`).
+            let ids = ids_param(p, "ids", C)?.unwrap_or_default();
+            let kind = |id: &NodeId| st.doc.stored_node(*id).map(|(n, _)| &n.kind);
+            if let Some(value) = ids.iter().find(|id| kind(id).is_none()).map(|id| id.0) {
+                return Err(bad(C, format!("no such object id {value}")));
+            }
+            let linkable = |id: &NodeId| matches!(kind(id), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)));
             if let Some(id) = ids.iter().find(|id| !linkable(id)) {
                 return Err(bad(C, format!("object {} is not an image or a linked file", id.0)));
             }

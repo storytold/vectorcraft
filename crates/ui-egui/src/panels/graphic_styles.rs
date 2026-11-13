@@ -465,9 +465,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = selected(ui.ctx(), &doc);
     let view: View = pstate(ui.ctx(), "gs-view");
     let mut ev = Events::default();
+    // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
+    // does; elsewhere it keeps its 220 pt.
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, 220.0, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let out = egui::ScrollArea::vertical().id_salt("gs-scroll").max_height(220.0).show(ui, |ui| {
-            ui.set_min_height(120.0);
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt("gs-scroll")
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        let out = scroll.show(ui, |ui| {
+            ui.set_min_height(if fixed { list_height.min(120.0) } else { 120.0 });
             ui.set_width(ui.available_width());
             if doc.graphic_styles.is_empty() {
                 super::empty_state(ui, "dc-graphic-styles", tl!("No graphic styles"), tl!("Select styled art and click New Graphic Style."));
@@ -717,7 +726,7 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibStyle>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
     }
@@ -845,6 +854,36 @@ mod tests {
 
     fn names(app: &VectorcraftApp) -> Vec<String> {
         app.session.active().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect()
+    }
+
+    /// In a panel made taller the list fills the space above its footer instead of staying 220 pt
+    /// tall with blank space below it (#2992); outside a sized panel it keeps that height.
+    #[test]
+    fn the_list_fills_a_tall_panel_above_its_footer() {
+        let mut app = app();
+        for i in 0..30 {
+            app.session.execute("graphicStyle.new", &json!({"name": format!("Style {i:02}")})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gs-view", View::LargeList);
+        // The clip rect of the first style's name: the list's visible area.
+        let mut list = |bottom: Option<f32>| {
+            let mut clip = None;
+            for _ in 0..3 {
+                let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 700.0))), ..Default::default() };
+                let mut out = ctx.run_ui(raw, |ui| {
+                    let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                    ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| show(&mut app, ui));
+                });
+                out.textures_delta.clear();
+                clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Style 00")).map(|c| c.clip_rect);
+            }
+            clip.expect("the first style's row is drawn")
+        };
+        let tall = list(Some(650.0));
+        assert!(tall.height() > 400.0 && tall.bottom() <= 650.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+        let loose = list(None);
+        assert!(loose.height() <= 220.5, "unsized, the list keeps its height: {loose:?}");
     }
 
     #[test]

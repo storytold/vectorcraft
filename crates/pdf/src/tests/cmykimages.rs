@@ -687,6 +687,26 @@ fn dithered_and_perceptual_gradients_of_cmyk_stops_are_written_as_cmyk_images() 
     assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
 }
 
+/// The colors between two stops mixed around the hue wheel are not mixes of the stops' inks: a
+/// gradient of CMYK stops mixed that way is an RGB image, in a linear, radial, conic or diamond
+/// gradient.
+#[test]
+fn hue_wheel_gradients_of_cmyk_stops_are_written_as_rgb_images() {
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        for mode in [ColorMode::Cmyk, ColorMode::Rgb] {
+            for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond] {
+                let stops = vec![GradientStop::new(0.0, Color::cmyk(0.0, 1.0, 1.0, 0.0)), GradientStop::new(1.0, Color::cmyk(1.0, 1.0, 0.0, 0.0))];
+                let d = gradient_doc(mode, Gradient { method, ..Gradient::new(kind, stops) });
+                let out = export_with_report(&d, &opts(json!({}))).unwrap();
+                let w = written(&out.bytes);
+                assert_eq!(w.len(), 1, "{method:?} {mode:?} {kind:?}: one opaque image: {w:?}");
+                assert_eq!(w[0].space, "DeviceRGB", "{method:?} {mode:?} {kind:?}");
+                assert!(out.warnings.iter().any(|m| m.contains("exported as images")), "{method:?} {mode:?} {kind:?}: {:?}", out.warnings);
+            }
+        }
+    }
+}
+
 /// A stop in another model, or linked to a spot swatch, keeps the RGB image.
 #[test]
 fn gradients_with_a_stop_that_is_not_process_cmyk_stay_rgb_images() {

@@ -946,7 +946,7 @@ pub(crate) fn outlined_stroke(
 /// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, reshape, without_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, has_transform_art, reshape, without_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
@@ -983,11 +983,16 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = st.clone();
-                plain.effects = without_geometry(&st.effects);
                 let stroked = match path.bounds() {
-                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    Some(b) if has_geometry(&st.effects) => {
+                        let (stroked, carry) = apply_geometry_carrying(&st.effects, &path, b, &ctx.item(item));
+                        // Its raster effects follow only the Transform effects that moved it.
+                        carry.hide_skipped(&mut plain.effects);
+                        stroked
+                    }
                     _ => path.clone(),
                 };
+                plain.effects = without_geometry(&plain.effects);
                 parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
@@ -1228,7 +1233,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         Some(l) => po::simplify_level_tolerance(l),
         None => given_tolerance.unwrap_or(1.0),
     };
-    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, smooth: 0.0 };
+    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, ..Default::default() };
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
     // other anchors it had selected) direct-selected.
     let roots = selected_roots(s)?;
