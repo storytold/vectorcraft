@@ -488,6 +488,61 @@ fn simplify_keeps_the_join_at_the_start_of_a_smoothed_loop_smooth() {
     }
 }
 
+/// The degrees between the x axis and the direction `sp` leaves its first anchor along.
+fn start_angle(sp: &SubPath) -> f64 {
+    let c = sp.segment(0);
+    let d = [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or_default();
+    d.y.atan2(d.x).to_degrees()
+}
+
+/// With `free_start` and `free_end`, a smoothed open subpath leaves its first anchor and arrives at
+/// its last one along the smoothed path, not along a jagged first or last segment, and its end points
+/// stay. Only a flagged end turns, and a closed subpath, Object › Path › Smooth's selected segments
+/// (`simplify_part`) and a refit without smoothing give the same result with the flags as without.
+#[test]
+fn free_ends_turn_only_open_smoothed_ends() {
+    let pts: Vec<Point> = (0..=40).map(|i| Point::new(5.0 * f64::from(i), if i == 1 || i == 39 { 1.5 } else { 0.0 })).collect();
+    let path = PathData::single(SubPath::polyline(&pts, false));
+    let base = SimplifyOptions { tolerance: 2.5, corner_angle_deg: 179.0, smooth: 4.0, smooth_moved_only: true, ..Default::default() };
+    let both = SimplifyOptions { free_start: true, free_end: true, ..base };
+    let s = simplify_with(&path, &both);
+    let sp = &s.subpaths[0];
+    assert_eq!((sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p), (pts[0], pts[40]), "{s:?}");
+    let mut back = sp.clone();
+    back.reverse();
+    assert!(start_angle(sp).abs() <= 5.0 && (start_angle(&back).abs() - 180.0).abs() <= 5.0, "{s:?}");
+    let start_only = simplify_with(&path, &SimplifyOptions { free_start: true, ..base });
+    let plain = simplify_with(&path, &base);
+    assert!(start_angle(&start_only.subpaths[0]).abs() <= 5.0, "{start_only:?}");
+    assert!(start_angle(&plain.subpaths[0]) > 16.0, "{plain:?}");
+    let (mut a, mut b) = (start_only.subpaths[0].clone(), plain.subpaths[0].clone());
+    a.reverse();
+    b.reverse();
+    assert!((start_angle(&a) - start_angle(&b)).abs() <= 1e-9, "the last anchor keeps its direction: {start_only:?}");
+    // Flags that must have no effect.
+    let ring = PathData::single(SubPath::polyline(&pts[..39], true));
+    assert_eq!(simplify_with(&ring, &both), simplify_with(&ring, &base));
+    let unsmoothed = SimplifyOptions { smooth: 0.0, ..base };
+    assert_eq!(simplify_with(&path, &SimplifyOptions { free_start: true, free_end: true, ..unsmoothed }), simplify_with(&path, &unsmoothed));
+    let picked: std::collections::BTreeSet<(usize, usize)> = (0..20).map(|i| (0, i)).collect();
+    assert_eq!(simplify_part(&path, &picked, &both).path, simplify_part(&path, &picked, &base).path);
+}
+
+/// A free end whose smoothed path turns back by more than 90° from its first segment keeps that
+/// segment's direction: a path that leaves its start along x for 2 pt, then turns by 170°.
+#[test]
+fn a_free_end_that_turns_back_keeps_its_first_direction() {
+    let back = kurbo::Vec2::from_angle(170f64.to_radians());
+    let mut pts = vec![Point::ORIGIN, Point::new(2.0, 0.0)];
+    pts.extend((1..=10).map(|i| Point::new(2.0, 0.0) + back * (3.0 * f64::from(i))));
+    let path = PathData::single(SubPath::polyline(&pts, false));
+    let opts =
+        SimplifyOptions { tolerance: 2.5, corner_angle_deg: 179.0, smooth: 4.0, smooth_moved_only: true, free_start: true, ..Default::default() };
+    let s = simplify_with(&path, &opts);
+    let angle = start_angle(&s.subpaths[0]);
+    assert!(angle.abs() <= 1.0, "the path leaves its start at {angle}°: {s:?}");
+}
+
 #[test]
 fn simplify_straight_lines_option() {
     let c = dense_circle(50.0, 200);
