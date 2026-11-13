@@ -1331,14 +1331,17 @@ pub(crate) fn refresh_placed(s: &mut Session, saved: u64, path: &str) {
     if targets.is_empty() {
         return;
     }
-    // Each document is updated as the active one, without switching tools.
+    // Each document is updated as the active one, through its own profiles, without switching
+    // tools.
     let back = s.active;
     for i in targets {
         s.active = Some(i);
+        s.sync_front_profiles();
         // A file that can't be read leaves what its objects show: links.check reports it.
         let _ = update_where(s, None, Some(&path));
     }
     s.active = back;
+    s.sync_front_profiles();
 }
 
 // ---------- relative paths ----------

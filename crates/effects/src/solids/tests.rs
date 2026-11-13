@@ -253,6 +253,468 @@ fn a_fills_walls_are_drawn_before_the_stroke_faces_over_them() {
     }
 }
 
+/// The faces of the solids effect `id` with `params` builds for `n`, in the order they are drawn,
+/// as [`surfaces_for`] orders them, each with the index of the part ([`solid_parts`]) it was built
+/// from and whether it is a stroke's.
+fn drawn_parts(n: &Node, id: &str, params: &Value) -> Vec<(Facet, usize, bool)> {
+    let (path, rule) = profile(n).unwrap();
+    let shapes = [Profile { path, rule, items: solid_paints(n), opacity: 1.0, scopes: vec![] }];
+    let p = crate::merged_params(id, params);
+    let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
+    let mut solids = vec![];
+    for (part, ((item, _, _, _, _, member), f)) in parts.iter().zip(built_solids(id, &p, &parts, bounds, MAX_OBJECT_FACES)).enumerate() {
+        let Some(f) = f.unwrap() else { continue };
+        let closed = holds_edge(id, &shapes[*member].path);
+        solids.push((Paints::of(item, closed), *member, f, part, matches!(item, AppearanceItem::Stroke(_))));
+    }
+    let mut cuts: Vec<(Paints, usize, &mut Vec<Facet>)> = solids.iter_mut().map(|(paints, member, f, _, _)| (*paints, *member, f)).collect();
+    cut_stroke_faces(&mut cuts, MAX_OBJECT_FACES);
+    let (mut placed, mut all) = (vec![], vec![]);
+    for (paints, member, f, part, stroke) in solids {
+        for facet in f {
+            placed.push(Placed::of(&facet, member, paints));
+            all.push((facet, part, stroke));
+        }
+    }
+    let sealed = match id {
+        INFLATE => inflate_options(&p).cap,
+        CLASSIC_EXTRUDE => classic_extrude_options(&p).cap,
+        _ => extrude_options(&p).cap,
+    };
+    draw_order(&placed, sealed).into_iter().map(|k| all[k].clone()).collect()
+}
+
+/// Is `p` inside the polygon of `f` (nonzero winding)?
+fn facet_contains(f: &Facet, p: Point) -> bool {
+    let mut winding = 0i32;
+    for c in &f.contours {
+        for (a, b) in c.iter().zip(c.iter().cycle().skip(1)).take(c.len()) {
+            let cross = (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y);
+            if a.y <= p.y && b.y > p.y && cross > 0.0 {
+                winding += 1;
+            } else if a.y > p.y && b.y <= p.y && cross < 0.0 {
+                winding -= 1;
+            }
+        }
+    }
+    winding != 0
+}
+
+/// The points of a 1 pt grid over `faces` (drawn in that order, each with whether it is a stroke's)
+/// where the face drawn on top is the fill's while a face of the stroke turned toward the viewer is
+/// nearer the viewer there by more than 0.5 pt, or the other way round. Points within 0.3 pt of an
+/// edge are left out.
+fn wrong_on_top(faces: &[(Facet, bool)]) -> Vec<Point> {
+    let polygons: Vec<&Facet> = faces.iter().map(|(f, _)| f).collect();
+    let extent =
+        polygons.iter().flat_map(|f| f.contours.iter().flatten()).fold(Rect::new(f64::MAX, f64::MAX, f64::MIN, f64::MIN), |r, p| r.union_pt(*p));
+    let mut wrong = vec![];
+    let mut y = extent.y0.floor() + 0.5;
+    while y < extent.y1 {
+        let mut x = extent.x0.floor() + 0.5;
+        while x < extent.x1 {
+            let p = Point::new(x, y);
+            let well_inside = |f: &Facet| {
+                [(-0.3, -0.3), (0.3, -0.3), (-0.3, 0.3), (0.3, 0.3), (0.0, 0.0)].iter().all(|(dx, dy)| facet_contains(f, Point::new(x + dx, y + dy)))
+            };
+            let top = faces.iter().rposition(|(f, _)| facet_contains(f, p));
+            if let Some((f, stroke)) = top.and_then(|k| faces.get(k)).filter(|(f, _)| !f.away && well_inside(f)) {
+                let nearest = |of_stroke: bool| {
+                    faces.iter().filter(|(g, s)| *s == of_stroke && !g.away && well_inside(g)).filter_map(|(g, _)| g.depth_at(p)).reduce(f64::max)
+                };
+                if let (Some(ds), Some(df)) = (nearest(true), nearest(false))
+                    && (ds - df).abs() > 0.5
+                    && (ds > df) != *stroke
+                    && f.depth_at(p).is_some()
+                {
+                    wrong.push(p);
+                }
+            }
+            x += 1.0;
+        }
+        y += 1.0;
+    }
+    wrong
+}
+
+/// The points of a 1 pt grid over `faces` (drawn in that order) where the face drawn on top is
+/// farther from the viewer than another face turned toward the viewer, of any part, by more than
+/// 0.5 pt. Points within 0.3 pt of an edge, and faces without a plane, are left out.
+fn misdrawn(faces: &[(Facet, usize, bool)]) -> Vec<Point> {
+    let extent =
+        faces.iter().flat_map(|(f, ..)| f.contours.iter().flatten()).fold(Rect::new(f64::MAX, f64::MAX, f64::MIN, f64::MIN), |r, p| r.union_pt(*p));
+    let mut wrong = vec![];
+    let mut y = extent.y0.floor() + 0.5;
+    while y < extent.y1 {
+        let mut x = extent.x0.floor() + 0.5;
+        while x < extent.x1 {
+            let p = Point::new(x, y);
+            let well_inside = |f: &Facet| {
+                [(-0.3, -0.3), (0.3, -0.3), (-0.3, 0.3), (0.3, 0.3), (0.0, 0.0)].iter().all(|(dx, dy)| facet_contains(f, Point::new(x + dx, y + dy)))
+            };
+            let top = faces.iter().rposition(|(f, ..)| facet_contains(f, p)).and_then(|k| faces.get(k)).filter(|(f, ..)| !f.away && well_inside(f));
+            if let Some(on_top) = top.and_then(|(f, ..)| f.depth_at(p)) {
+                let nearest = faces.iter().filter(|(g, ..)| !g.away && well_inside(g)).filter_map(|(g, ..)| g.depth_at(p)).reduce(f64::max);
+                if nearest.is_some_and(|d| d - on_top > 0.5) {
+                    wrong.push(p);
+                }
+            }
+            x += 1.0;
+        }
+        y += 1.0;
+    }
+    wrong
+}
+
+/// The faces of a shape's fill and strokes are drawn in the order of their depths where they
+/// overlap: on a turned C, with or without perspective, under a stroke that does not cover the
+/// fill's whole edge (dashed, with a width profile, or with a brush), under a plain stroke and
+/// under two strokes whose faces pass through each other, no point shows a face farther from the
+/// viewer than another, in Extrude & Bevel and Extrude & Bevel (Classic), and only a few in
+/// Inflate, where curved puffs cross.
+#[test]
+fn fill_walls_and_strokes_that_leave_gaps_draw_in_the_order_of_their_depths_where_they_overlap() {
+    use vectorcraft_doc::{Dash, WidthProfile};
+    let views = [
+        json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0}),
+        json!({"rotationX": 25, "rotationY": -55, "rotationZ": 10}),
+        json!({"rotationX": -30, "rotationY": 50, "rotationZ": 5, "perspectiveAngle": 40}),
+        json!({"rotationX": -30, "rotationY": 20, "rotationZ": 5, "perspectiveAngle": 40}),
+    ];
+    type Style<'a> = (&'a str, &'a dyn Fn(&mut Node));
+    let first = |n: &mut Node, set: &dyn Fn(&mut StrokeLayer)| {
+        if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            set(s);
+        }
+    };
+    let dash = |pattern: Vec<f64>, offset: f64| Some(Dash { pattern, offset, align_corners: false });
+    let styles: [Style; 6] = [
+        ("plain", &|_| {}),
+        ("dashed", &|n| first(n, &|s| s.dash = dash(vec![12.0, 12.0], 0.0))),
+        ("profiled", &|n| first(n, &|s| s.profile = Some(WidthProfile::lens()))),
+        ("brushed", &|n| first(n, &|s| s.brush = Some("brush".into()))),
+        ("dashed with perspective", &|n| first(n, &|s| s.dash = dash(vec![20.0, 6.0], 3.0))),
+        ("two strokes", &|n| {
+            first(n, &|s| s.dash = dash(vec![12.0, 12.0], 0.0));
+            let mut wide = StrokeLayer::new(Paint::solid(RED), 14.0);
+            wide.profile = Some(WidthProfile::lens());
+            n.appearance.items.push(AppearanceItem::Stroke(wide));
+        }),
+    ];
+    for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
+        for (v, view) in views.iter().enumerate() {
+            for (style, set) in &styles {
+                // The last two views, for the plain and the two strokes only.
+                if v >= 2 && !["plain", "two strokes"].contains(style) {
+                    continue;
+                }
+                let mut params = view.clone();
+                params["depth"] = json!(60);
+                if style.contains("perspective") {
+                    params["perspectiveAngle"] = json!(40);
+                }
+                let mut n = stroked(&letter_c());
+                set(&mut n);
+                let parts = drawn_parts(&n, id, &params);
+                let faces: Vec<(Facet, bool)> = parts.iter().map(|(f, _, s)| (f.clone(), *s)).collect();
+                assert!(faces.iter().any(|(_, s)| *s) && faces.iter().any(|(_, s)| !*s), "{id} {view} {style}: faces of both");
+                // Inflate's curved puffs cross each other along curves its flat facets only follow
+                // roughly: a few points next to those crossings may still show the farther face.
+                let allowed = if id == INFLATE { 5 } else { 0 };
+                let wrong = wrong_on_top(&faces);
+                assert!(wrong.len() <= allowed, "{id} {view} {style}: {} points drawn in the wrong paint, first {:?}", wrong.len(), wrong.first());
+                let wrong = misdrawn(&parts);
+                assert!(wrong.len() <= allowed, "{id} {view} {style}: {} points show a farther face, first {:?}", wrong.len(), wrong.first());
+            }
+        }
+    }
+}
+
+/// The paths of `art`'s faces in drawing order, leaving out the graphics (clip groups).
+fn face_paths(art: &Node) -> Vec<PathData> {
+    fn walk(n: &Node, out: &mut Vec<PathData>) {
+        match &n.kind {
+            NodeKind::Group { clip: true, .. } => {}
+            NodeKind::Group { children, .. } => children.iter().for_each(|c| walk(c, out)),
+            _ => out.extend(n.path_data().cloned()),
+        }
+    }
+    let mut out = vec![];
+    walk(art, &mut out);
+    out
+}
+
+/// A member of a 3D group with an opacity mask or a blending mode of its own draws its fill's and
+/// its strokes' faces in one order inside that mask, the order the same member draws them in
+/// without it, its dashes cut where they pass through the fill's walls. A member whose stroke is
+/// translucent still draws each surface whole.
+#[test]
+fn a_masked_members_fill_and_stroke_faces_go_in_one_order() {
+    let mut member = stroked(&letter_c());
+    if let Some(AppearanceItem::Stroke(s)) = member.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+        s.dash = Some(vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+    }
+    let solid = |member: Node| {
+        let mut g = Node::group(NodeId(2), vec![Arc::new(member)]);
+        g.appearance.effects.push(fx(EXTRUDE, json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0, "depth": 60})));
+        solid_art(&g).unwrap()
+    };
+    let cover = Node::path(
+        NodeId(900),
+        vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 400.0, 400.0)),
+        Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0),
+    );
+    let mut masked = member.clone();
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(cover, true)));
+    let mut multiplied = member.clone();
+    multiplied.blend = BlendMode::Multiply;
+    let unmasked = face_paths(&solid(member.clone()));
+    for (what, scoped) in [("masked", masked.clone()), ("multiplied", multiplied)] {
+        let art = solid(scoped);
+        let mut scopes = 0;
+        art.walk(&mut |n| scopes += usize::from(n.extras().mask.is_some() || n.blend == BlendMode::Multiply));
+        assert!(scopes > 0, "{what}: drawn in its scope");
+        assert_eq!(face_paths(&art), unmasked, "{what}: the faces in the member's one order");
+    }
+    // A translucent stroke keeps its surface whole: the fill's faces, then the stroke's.
+    if let Some(AppearanceItem::Stroke(s)) = masked.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+        s.opacity = 0.5;
+    }
+    let art = solid(masked);
+    let mut groups = vec![];
+    art.walk(&mut |n| {
+        if n.opacity == 0.5 {
+            groups.push(n.children().map_or(0, Vec::len));
+        }
+    });
+    assert_eq!(groups.len(), 1, "the stroke's surface is one translucent group");
+}
+
+/// Under a light that is not white, Inflate in gradients, whose faces are drawn one by one, draws the
+/// fill's and the dashed stroke's faces in one order, as it does under a white light. A solid color,
+/// drawn as one composite of each surface's facets, still draws each surface whole.
+#[test]
+fn a_colored_inflate_in_gradients_draws_its_faces_in_one_order() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let gradient = |c: Color| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+            GradientKind::Linear,
+            vec![GradientStop::new(0.0, c), GradientStop::new(1.0, Color::WHITE)],
+        ))))
+    };
+    let mut n = stroked(&letter_c());
+    for item in &mut n.appearance.items {
+        match item {
+            AppearanceItem::Fill(f) => f.paint = gradient(RED),
+            AppearanceItem::Stroke(s) => {
+                s.paint = gradient(BLUE);
+                s.dash = Some(vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+            }
+        }
+    }
+    // How many surfaces the art draws, and how many faces the first holds.
+    let drawn = |n: &Node, lights: Option<Value>| {
+        let mut n = n.clone();
+        let mut p = json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0, "depth": 60});
+        if let Some(lights) = lights {
+            p["lights"] = lights;
+        }
+        n.appearance.effects.push(fx(INFLATE, p));
+        let art = solid_art(&n).unwrap();
+        let surfaces = art.children().unwrap();
+        (surfaces.len(), surfaces[0].children().map_or(0, Vec::len))
+    };
+    let colored = json!([{"color": "#ff8080"}]);
+    let white = drawn(&n, None);
+    assert_eq!(white.0, 1, "one order");
+    let cut = drawn_parts(&n, INFLATE, &json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0, "depth": 60})).len();
+    assert_eq!(white.1, cut, "the white light's faces, cut");
+    assert_eq!(drawn(&n, Some(colored.clone())).0, 1, "one order under the colored light");
+    // A solid color under the colored light: a composite for each of the fill and the stroke.
+    let solid = stroked(&letter_c());
+    assert_eq!(drawn(&solid, Some(colored)).0, 2);
+}
+
+/// A face of a stroke that leaves gaps passing through the plane of its fill's wall where they
+/// overlap is cut along the line where their depths meet, into the piece in front of the wall and
+/// the piece behind it; a face on one side of the wall, another shape's stroke, a covering stroke
+/// and a cut past the room left are left whole.
+#[test]
+fn a_stroke_face_through_a_fill_wall_is_cut_where_their_depths_meet() {
+    let facet = |x: f64, normal: [f64; 3], offset: f64| Facet {
+        contours: vec![vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)]],
+        depth: 0.0,
+        brightness: 1.0,
+        illumination: [1.0; 3],
+        normal,
+        rgb_gradient: None,
+        outline: None,
+        side: true,
+        away: false,
+        end: None,
+        plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+    };
+    let wall = facet(0.0, [0.0, 0.0, 1.0], 0.0);
+    // z = x - 8: behind the wall left of x = 8, in front of it right of it.
+    let r = std::f64::consts::FRAC_1_SQRT_2;
+    let mut through = facet(5.0, [-r, 0.0, r], -8.0 * r);
+    // Its curved outline: the top edge bows up to y = -2.
+    let mut curved = BezPath::new();
+    curved.move_to((5.0, 0.0));
+    curved.curve_to((8.0, -8.0 / 3.0), (12.0, -8.0 / 3.0), (15.0, 0.0));
+    curved.line_to((15.0, 10.0));
+    curved.line_to((5.0, 10.0));
+    curved.close_path();
+    through.outline = Some(PathData::from_bezpath(&curved));
+    let extent = |f: &Facet| polygon_bounds(&f.contours[0]);
+    let cut_with = |paints: Paints, member: usize, room: usize| {
+        let (mut fill, mut stroke) = (vec![wall.clone()], vec![through.clone()]);
+        let mut solids: Vec<(Paints, usize, &mut Vec<Facet>)> = vec![(Paints::Fill, 0, &mut fill), (paints, member, &mut stroke)];
+        cut_stroke_faces(&mut solids, room);
+        stroke
+    };
+    let pieces = cut_with(Paints::Other, 0, 10);
+    assert_eq!(pieces.len(), 2);
+    let (near, far) = (extent(&pieces[0]), extent(&pieces[1]));
+    assert!((near.x0 - 8.0).abs() < 1e-9 && near.x1 == 15.0 && far.x0 == 5.0 && (far.x1 - 8.0).abs() < 1e-9, "{near:?} {far:?}");
+    assert!(pieces[0].depth > 0.0 && pieces[1].depth < 0.0);
+    // Each piece keeps its side of the curved outline, the bowed edge included.
+    let curve = |f: &Facet| f.outline.as_ref().and_then(PathData::bounds).unwrap();
+    let (near, far) = (curve(&pieces[0]), curve(&pieces[1]));
+    assert!((near.x0 - 8.0).abs() < 1e-6 && (near.x1 - 15.0).abs() < 1e-6 && near.y0 < -1.5, "{near:?}");
+    assert!((far.x0 - 5.0).abs() < 1e-6 && (far.x1 - 8.0).abs() < 1e-6 && far.y0 < -1.5, "{far:?}");
+    let whole = std::slice::from_ref(&through);
+    assert_eq!(cut_with(Paints::Other, 1, 10), whole, "another shape's stroke");
+    assert_eq!(cut_with(Paints::Stroke, 0, 10), whole, "a covering stroke");
+    assert_eq!(cut_with(Paints::Other, 0, 0), whole, "no room");
+    let (mut fill, mut stroke) = (vec![wall.clone()], vec![facet(5.0, [0.0, 0.0, 1.0], 1.0)]);
+    cut_stroke_faces(&mut [(Paints::Fill, 0, &mut fill), (Paints::Other, 0, &mut stroke)], 10);
+    assert_eq!(stroke.len(), 1, "in front of the wall wherever they overlap");
+    // Of two of a shape's strokes whose faces pass through each other, the later stroke's face is
+    // cut against the earlier one's; a covering stroke's face is never cut, and the other stroke's
+    // face is cut against it. Two shapes' strokes are left whole.
+    for (case, (first, second, cut_first)) in
+        [(Paints::Other, Paints::Other, false), (Paints::Stroke, Paints::Other, false), (Paints::Other, Paints::Stroke, true)].into_iter().enumerate()
+    {
+        let (mut a, mut b) = (vec![wall.clone()], vec![through.clone()]);
+        cut_stroke_faces(&mut [(first, 0, &mut a), (second, 0, &mut b)], 10);
+        assert_eq!((a.len(), b.len()), if cut_first { (2, 1) } else { (1, 2) }, "case {case}");
+    }
+    let (mut a, mut b) = (vec![wall.clone()], vec![through.clone()]);
+    cut_stroke_faces(&mut [(Paints::Other, 0, &mut a), (Paints::Other, 1, &mut b)], 10);
+    assert_eq!((a.len(), b.len()), (1, 1), "two shapes");
+}
+
+/// A small polygon far from the origin keeps its area and centroid.
+#[test]
+fn a_small_polygon_far_away_has_a_centroid() {
+    let far = 100_000_000.0;
+    let square = [Point::new(far, far), Point::new(far + 1.0, far), Point::new(far + 1.0, far + 1.0), Point::new(far, far + 1.0)];
+    let c = centroid(&square).unwrap();
+    assert!((c.x - far - 0.5).abs() < 1e-6 && (c.y - far - 0.5).abs() < 1e-6, "{c:?}");
+    assert!(centroid(&[]).is_none() && centroid(&square[..2]).is_none());
+}
+
+/// Cutting adds no more faces than the object's face limit and the paint-copy allowance leave room
+/// for, so an effect that draws with its faces uncut still draws.
+#[test]
+fn cutting_stays_within_the_face_limit_and_the_paint_allowance() {
+    let items = stroked(&letter_c()).appearance.items.clone();
+    let stroke = items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).unwrap();
+    let mut one = 0usize;
+    crate::revolve::paint_copies_add(&mut one, 6, paint_ref(stroke));
+    let max = crate::revolve::MAX_PAINT_COPIES;
+    assert_eq!(cut_room(items.iter(), 10, 0), (MAX_OBJECT_FACES - 10).min(max / one));
+    assert_eq!(cut_room(items.iter(), MAX_OBJECT_FACES + 5, 0), 0);
+    assert_eq!(cut_room(items.iter(), 10, max - 3 * one), 3);
+    assert_eq!(cut_room(items.iter(), 10, max + 1), 0);
+}
+
+/// Where a shape's fill wall and a face of its stroke that leaves gaps overlap, the one nearer the
+/// viewer there is drawn after the other, whichever their depths put first; a stroke face that
+/// overlaps no fill wall keeps its place.
+#[test]
+fn local_order_puts_overlapping_fill_walls_and_stroke_faces_in_depth_order() {
+    let square = |x: f64| vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)];
+    let at = |depth: f64, x: f64, z: f64, paints: Paints| Placed {
+        depth,
+        side: true,
+        away: false,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member: 0,
+        paints,
+        outline: square(x),
+        plane: Some(DepthPlane { normal: [0.0, 0.0, 1.0], offset: z, center: Point::ZERO, eye: None }),
+    };
+    // 0 a fill wall at z 0; 1 a stroke face over half of it, nearer, sorted before it; 2 a stroke
+    // face elsewhere; 3 a stroke face over it, farther, sorted after it.
+    let faces =
+        [at(5.0, 0.0, 0.0, Paints::Fill), at(2.0, 5.0, 1.0, Paints::Other), at(1.0, 20.0, 1.0, Paints::Other), at(6.0, 2.0, -1.0, Paints::Other)];
+    assert_eq!(draw_order(&faces, true), [2, 3, 0, 1]);
+    assert_eq!(draw_order(&faces, false), [2, 3, 0, 1]);
+    // A covering stroke's faces keep the wall's own rule.
+    let covering: Vec<Placed> = faces
+        .iter()
+        .map(|f| Placed { paints: if f.paints == Paints::Other { Paints::Stroke } else { f.paints }, outline: vec![], plane: None, ..*f })
+        .collect();
+    assert_eq!(draw_order(&covering, false), [2, 1, 0, 3]);
+    // Another shape's stroke, and a stroke face at the same depth where they overlap, move nothing.
+    let other_shape: Vec<Placed> =
+        faces[..3].iter().map(|f| Placed { member: usize::from(f.paints == Paints::Other), outline: f.outline.clone(), ..*f }).collect();
+    assert_eq!(draw_order(&other_shape, true), [2, 1, 0]);
+    let level = [at(5.0, 0.0, 0.0, Paints::Fill), at(2.0, 5.0, 0.0, Paints::Other)];
+    assert_eq!(draw_order(&level, true), [1, 0]);
+    // A stroke face moved after its fill's wall does not pass a nearer face of another shape that
+    // it overlaps: 0 a stroke face, 1 another shape's face in front of both, 2 the fill's wall.
+    let in_front = Placed { member: 1, ..at(2.0, 5.0, 2.0, Paints::Fill) };
+    let shapes = [at(1.0, 5.0, 1.0, Paints::Other), in_front, at(3.0, 0.0, 0.0, Paints::Fill)];
+    assert_eq!(draw_order(&shapes, true), [2, 0, 1]);
+    // A shape with a covering stroke as well keeps its fill wall before the covering stroke's face,
+    // even where that face is the farther: 0 the fill's wall, 1 the covering stroke's face behind
+    // it, 2 the other stroke's face in front.
+    let both = [at(3.0, 0.0, 0.0, Paints::Fill), at(3.0, 0.0, -1.0, Paints::Stroke), at(2.0, 5.0, 1.0, Paints::Other)];
+    assert_eq!(draw_order(&both, true), [0, 1, 2]);
+    // Faces of a shape's strokes go in the order of their depths where they overlap too, with no
+    // fill face among them: 1 is nearer than 0 there, though sorted before it.
+    for (case, (back, front)) in
+        [(Paints::Other, Paints::Other), (Paints::Stroke, Paints::Other), (Paints::Stroke, Paints::Stroke)].into_iter().enumerate()
+    {
+        let strokes = [at(5.0, 0.0, 0.0, back), at(2.0, 5.0, 1.0, front)];
+        assert_eq!(draw_order(&strokes, true), [0, 1], "case {case}");
+    }
+}
+
+/// A cycle of overlapping stroke faces is broken at the face that comes first by depth, and a cap
+/// drawn last stays after every wall: 0 at x 0 to 10, flat at z 0; 1 at x 4 to 14, z = x - 8; 2 at
+/// x 8 to 18, flat at z 1. Where they overlap, 0 is nearer than 1, 1 nearer than 2 and 2 nearer
+/// than 0. 3 is the cap.
+#[test]
+fn a_depth_cycle_keeps_the_cap_last() {
+    let square = |x: f64| vec![Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0), Point::new(x, 10.0)];
+    let at = |depth: f64, x: f64, normal: [f64; 3], offset: f64| Placed {
+        depth,
+        side: true,
+        away: false,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member: 0,
+        paints: Paints::Other,
+        outline: square(x),
+        plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
+    };
+    let cap = Placed {
+        depth: f64::MAX,
+        side: false,
+        away: false,
+        bounds: Rect::new(0.0, 0.0, 18.0, 10.0),
+        member: 0,
+        paints: Paints::Other,
+        outline: vec![],
+        plane: None,
+    };
+    let faces = [at(1.0, 0.0, [0.0, 0.0, 1.0], 0.0), at(2.0, 4.0, [-1.0, 0.0, 1.0], -8.0), at(3.0, 8.0, [0.0, 0.0, 1.0], 1.0), cap];
+    assert_eq!(draw_order(&faces, true), [0, 2, 1, 3]);
+}
+
 /// The order keeps depths except where a shape's fill wall turned toward the viewer overlaps a
 /// face of the same shape's stroke drawn before it: the wall then goes just before that face. A
 /// cap, a face turned away, another shape's stroke, a stroke face the wall does not overlap and an
@@ -266,6 +728,8 @@ fn the_draw_order_moves_a_fill_wall_before_the_stroke_faces_it_overlaps() {
         bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
         member,
         paints,
+        outline: vec![],
+        plane: None,
     };
     // 0 the fill's wall; 1 the stroke's wall over it; 2 another shape's stroke over it; 3 a stroke
     // wall elsewhere; 4 a stroke face turned away; 5 a fill cap; 6 the stroke's cap, nearer; 7 a
@@ -292,6 +756,9 @@ fn the_draw_order_moves_a_fill_wall_before_the_stroke_faces_it_overlaps() {
     };
     assert!(Paints::of(&stroke(&|_| {}), true) == Paints::Stroke);
     assert!(Paints::of(&stroke(&|_| {}), false) == Paints::Other, "an open shape");
+    let closed = profile(&stroked(&letter_c())).unwrap().0;
+    assert!(holds_edge(EXTRUDE, &closed) && holds_edge(CLASSIC_EXTRUDE, &closed));
+    assert!(!holds_edge(INFLATE, &closed), "an inflated fill can rise in front of its stroke");
     assert!(Paints::of(&stroke(&|s| s.width = 0.0), true) == Paints::Other, "no width");
     let dash = vectorcraft_doc::Dash { pattern: vec![4.0, 4.0], offset: 0.0, align_corners: false };
     assert!(Paints::of(&stroke(&|s| s.dash = Some(dash.clone())), true) == Paints::Other, "dashes");

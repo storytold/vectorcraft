@@ -41,7 +41,7 @@ use super::obj::Obj;
 use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compare_scale, differ, differ_in_colour, differ_on_black};
 
 /// The plugin that writes envelopes.
-pub(super) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
+pub(crate) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
 /// The note for an envelope that keeps its drawn art.
 pub(crate) const DRAWN: &str = "an envelope VectorCraft couldn't read as a live envelope comes in as its drawn art";
 /// The note for an envelope of type, which keeps its drawn art with its type hidden (unless the
@@ -366,12 +366,12 @@ fn only_mesh(n: &Node) -> Option<&GradientMesh> {
 }
 
 /// A grid point and its handles.
-type GridPoint = (Point, [Vec2; 4]);
+pub(crate) type GridPoint = (Point, [Vec2; 4]);
 
 /// The points of mesh `m` as a `rows`×`cols` grid with its first row at the top and its first
 /// column at the left (y down), as an envelope's mesh lays them out; `None` for a grid out of range
 /// or with points that aren't finite.
-fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
+pub(crate) fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
     let (mut rows, mut cols) = (m.rows, m.cols);
     if rows == 0 || cols == 0 || rows > MAX_GRID || cols > MAX_GRID {
         return None;
@@ -451,7 +451,7 @@ fn upright(m: &GradientMesh) -> Option<(u32, u32, Vec<GridPoint>)> {
 }
 
 /// The outline of an upright grid: its edge, clockwise from the top left corner.
-fn outline(rows: u32, cols: u32, pts: &[GridPoint]) -> Option<PathData> {
+pub(crate) fn outline(rows: u32, cols: u32, pts: &[GridPoint]) -> Option<PathData> {
     let at = |r: u32, c: u32| pts.get((r * (cols + 1) + c) as usize).copied();
     // Each edge: from a point by one of its handles to the next point by one of its handles.
     type Edge = ((u32, u32), usize, (u32, u32), usize);
