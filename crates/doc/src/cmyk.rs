@@ -140,6 +140,21 @@ pub fn tiff_orientation(bytes: &[u8]) -> Option<u16> {
     d.find_tag_unsigned::<u16>(tiff::tags::Tag::Orientation).ok().flatten()
 }
 
+/// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
+/// it leaves them as stored, or the image has none. A TIFF the image decoder can't open (one with
+/// extra samples) has its Orientation tag read from its first image ([`tiff_orientation`]). Reads
+/// only the image's header and metadata; `None` for an [`oversized_tiff`], which no decoder opens.
+pub fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
+    use image::ImageDecoder as _;
+    use image::metadata::Orientation;
+    if oversized_tiff(bytes).is_some() {
+        return None;
+    }
+    let decoded = || image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?.orientation().ok();
+    let tagged = || tiff_orientation(bytes).and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?));
+    decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
+}
+
 /// Does the TIFF `d` reads store one plane per channel (PlanarConfiguration 2)?
 fn planar(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
     d.find_tag_unsigned::<u16>(tiff::tags::Tag::PlanarConfiguration).ok().flatten().is_some_and(|p| p != 1)
