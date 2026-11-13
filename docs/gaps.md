@@ -775,7 +775,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Evidence:** Brazilian Portuguese catalog complete under the tests (menus, literals, messages; one|other plurals; #1914). Vietnamese catalog complete under the tests (menus, literals, messages; one plural form). Czech render-site bypasses reduced in file dialogs, diagnostics, preset names and contributor tooltips; gradient grammar and printer-mark context corrected (see [localization-parity.md](localization-parity.md)). Native review and the remaining missing-language work remain.
 
 - **Missing:** Arabic catalog and right-to-left layout; current gaps in other catalogs and native
-  review; Hindi wording/layout review and a web Devanagari font; a Korean UI font for the web.
+  review; Hindi wording/layout review. The web build fetches NanumGothic for Korean and Noto Sans
+  Devanagari for Hindi when the interface needs them (`crates/text/web-fonts.txt`, `demand`).
   Hindi now has a catalog and the pinned egui fork shapes Devanagari. Indonesian already has a
   catalog (see [localization-parity.md](localization-parity.md)); it is not an absent language.
 - **Estimate:** 50–85 h plus human review (Brazilian Portuguese completed 2026-10-14).

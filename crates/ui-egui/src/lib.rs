@@ -127,6 +127,7 @@ pub use services::{
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
+pub use ui_fonts::on_missing_glyphs;
 
 pub struct VectorcraftApp {
     pub session: Session,

@@ -6,52 +6,95 @@
 //! don't have, an installed font covering it is looked for (in the background on native) and added
 //! to egui's families as their last fallback, on the baseline of each family's first face, from
 //! the next frame on. Text the UI fonts cover costs no font loading or memory. On the web, which
-//! has no system fonts, such characters stay missing-glyph boxes (Japanese too, unless built with
-//! craft-fonts).
+//! has no system fonts, the shell is told which characters no loaded font covers
+//! ([`on_missing_glyphs`]) and fetches a face for them (Korean, Devanagari) when it has one; until
+//! a face arrives they stay missing-glyph boxes (Japanese too, unless built with craft-fonts).
+//! Characters no font covered are looked for again whenever the font database changes.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use egui::epaint::Shape;
 use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 use egui::{FontData, FontDefinitions, FontFamily, FontId, FontTweak, LayerId};
 use vectorcraft_text::{FontDb, FontFace};
 
+/// Called with the painted characters no loaded or installed font covers.
+static MISSING_GLYPHS: OnceLock<fn(&[char])> = OnceLock::new();
+
+/// Have `f` called (on the UI thread, after a frame) with the characters the interface painted
+/// that no loaded or installed font covers, so it can load a font for them: the web shell fetches
+/// its `demand` craft-fonts faces. A character is reported again only after the fonts change and it
+/// is still not covered. The first call sets it; later calls are ignored.
+pub fn on_missing_glyphs(f: fn(&[char])) {
+    let _ = MISSING_GLYPHS.set(f);
+}
+
+/// What one search for fallback faces found.
+struct Found {
+    /// The faces covering the characters looked for, each once.
+    faces: Vec<Arc<FontFace>>,
+    /// The characters no face covers.
+    uncovered: Vec<char>,
+    /// [`FontDb::generation`] when the search ended.
+    generation: u64,
+}
+
 #[derive(Default)]
 pub(crate) struct UiFonts {
     /// Characters looked at already: the UI fonts have them, a fallback was added (or is being
     /// looked for), or no font has them.
     seen: HashSet<char>,
+    /// Characters no font covered at the last search: looked for again once the font database's
+    /// generation is no longer [`UiFonts::searched`].
+    uncovered: HashSet<char>,
+    /// The font database's generation when the last search ended.
+    searched: u64,
     /// The fonts added to egui, by name.
     added: HashSet<String>,
     /// The faces covering the characters being looked for (native: looked for on a thread).
     #[cfg(not(target_arch = "wasm32"))]
-    pending: Option<std::sync::mpsc::Receiver<Vec<Arc<FontFace>>>>,
+    pending: Option<std::sync::mpsc::Receiver<Found>>,
 }
 
 impl UiFonts {
     /// After a frame is laid out: add the fallback fonts found since the last frame, and look for
     /// fonts covering the characters this frame painted that the UI fonts lack.
     pub(crate) fn frame(&mut self, ctx: &egui::Context) {
+        self.frame_in(ctx, FontDb::global(), MISSING_GLYPHS.get().copied().unwrap_or(|_| {}));
+    }
+
+    /// [`UiFonts::frame`] looking through `db`, reporting uncovered characters to `report`.
+    fn frame_in(&mut self, ctx: &egui::Context, db: &'static FontDb, report: fn(&[char])) {
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(faces) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        if let Some(found) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.pending = None;
-            self.install(ctx, &faces);
+            self.found(ctx, found, report);
         }
-        let missing = self.missing(ctx);
+        let mut missing = self.missing(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        let idle = self.pending.is_none();
+        #[cfg(target_arch = "wasm32")]
+        let idle = true;
+        // A font added since (a web face fetched for them) may cover them now.
+        if idle && !self.uncovered.is_empty() && db.generation() != self.searched {
+            missing.extend(self.uncovered.drain());
+            missing.sort_unstable();
+            missing.dedup();
+        }
         if missing.is_empty() {
             return;
         }
         let find = move || {
-            let mut faces: Vec<Arc<FontFace>> = vec![];
+            let (mut faces, mut uncovered): (Vec<Arc<FontFace>>, Vec<char>) = (vec![], vec![]);
             for c in missing {
-                if let Some(f) = FontDb::global().face_covering(c)
-                    && !faces.iter().any(|x| x.id() == f.id())
-                {
-                    faces.push(f);
+                match db.face_covering(c) {
+                    Some(f) if !faces.iter().any(|x| x.id() == f.id()) => faces.push(f),
+                    Some(_) => {}
+                    None => uncovered.push(c),
                 }
             }
-            faces
+            Found { faces, uncovered, generation: db.generation() }
         };
         // Native: the installed fonts are read off the UI thread. Characters met meanwhile wait for
         // the next search (they aren't marked seen until then).
@@ -70,7 +113,17 @@ impl UiFonts {
         }
         // The web has only the loaded fonts to look through: quick, on this thread.
         #[cfg(target_arch = "wasm32")]
-        self.install(ctx, &find());
+        self.found(ctx, find(), report);
+    }
+
+    /// Add the faces a search found, and keep (and report) the characters it found no face for.
+    fn found(&mut self, ctx: &egui::Context, found: Found, report: fn(&[char])) {
+        self.install(ctx, &found.faces);
+        self.searched = found.generation;
+        if !found.uncovered.is_empty() {
+            report(&found.uncovered);
+            self.uncovered.extend(found.uncovered);
+        }
     }
 
     /// Characters painted this frame that the UI fonts lack and haven't been looked for, now
@@ -135,8 +188,14 @@ impl UiFonts {
     /// Wait for the font search running, if any, and add what it found (tests).
     #[cfg(test)]
     pub(crate) fn finish(&mut self, ctx: &egui::Context) {
-        if let Some(faces) = self.pending.take().and_then(|rx| rx.recv().ok()) {
-            self.install(ctx, &faces);
+        self.finish_with(ctx, |_| {});
+    }
+
+    /// [`UiFonts::finish`], reporting uncovered characters to `report` (tests).
+    #[cfg(test)]
+    fn finish_with(&mut self, ctx: &egui::Context, report: fn(&[char])) {
+        if let Some(found) = self.pending.take().and_then(|rx| rx.recv().ok()) {
+            self.found(ctx, found, report);
         }
     }
 }
@@ -399,8 +458,53 @@ mod tests {
         for c in installed {
             assert!(has_glyph(&ctx, c), "{c} has a glyph");
         }
-        // Looked for once: a later frame starts no search.
+        // Looked for once: a later frame starts no search, unless characters no font covered are
+        // looked for again because the fonts changed (other tests add fonts meanwhile).
+        let searched = fonts.searched;
         frame(&ctx, &mut fonts, text);
-        assert!(fonts.pending.is_none());
+        assert!(fonts.pending.is_none() || FontDb::global().generation() != searched, "a search with the fonts unchanged");
+    }
+
+    thread_local! {
+        static REPORTED: std::cell::RefCell<Vec<char>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    fn report(chars: &[char]) {
+        REPORTED.with(|r| r.borrow_mut().extend_from_slice(chars));
+    }
+
+    /// Run a frame painting `text` with fallbacks looked for in `db`, then wait for the search.
+    fn frame_in(ctx: &egui::Context, fonts: &mut UiFonts, text: &str, db: &'static FontDb) {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.label(text);
+            fonts.frame_in(ui.ctx(), db, report);
+        });
+        out.textures_delta.clear();
+        fonts.finish_with(ctx, report);
+    }
+
+    /// A character painted while no font covers it is reported once, and draws once a font that
+    /// covers it is added (as the web fetches one), with no further search while the fonts stay
+    /// the same.
+    #[test]
+    fn a_font_added_later_draws_characters_painted_before_it() {
+        use vectorcraft_text::test_fonts::{TALL_IDEOGRAPH_FAMILY, tall_ideograph_font};
+        let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![])));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut fonts = UiFonts::default();
+        frame_in(&ctx, &mut fonts, "Layer 编", db);
+        assert!(!has_glyph(&ctx, '编'), "no font covers 编 yet");
+        assert_eq!(REPORTED.with(|r| r.borrow().clone()), ['编'], "reported once");
+        frame_in(&ctx, &mut fonts, "Layer 编", db);
+        assert!(fonts.pending.is_none() && REPORTED.with(|r| r.borrow().len()) == 1, "no new search while the fonts are the same");
+        db.add_font(tall_ideograph_font().expect("the test face builds"));
+        assert!(db.face(TALL_IDEOGRAPH_FAMILY, "Regular").is_some());
+        // The next frame looks again and adds the face; the one after draws with it.
+        frame_in(&ctx, &mut fonts, "Layer 编", db);
+        frame_in(&ctx, &mut fonts, "Layer 编", db);
+        assert!(has_glyph(&ctx, '编'), "the added face draws 编");
+        assert!(fonts.uncovered.is_empty());
+        assert_eq!(REPORTED.with(|r| r.borrow().len()), 1, "a covered character is not reported again");
     }
 }

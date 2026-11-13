@@ -125,16 +125,19 @@ fn web_font_entries(dir: &Path) -> Result<(String, Vec<String>), String> {
             missing.push(format!("{} {}", e.family, e.style));
             continue;
         };
-        let (Some(file), Some(sha)) = (row.get(2), row.get(6)) else {
+        let (Some(file), Some(scripts), Some(sha)) = (row.get(2), row.get(3), row.get(6)) else {
             return Err(format!("malformed manifest row for {} {}", e.family, e.style));
         };
         let integrity = web_fonts::sri(sha).ok_or_else(|| format!("bad sha256 for {} {}", e.family, e.style))?;
+        let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
         let _ = writeln!(
             out,
-            "    WebFont {{ family: {:?}, style: {:?}, startup: {}, url: {:?}, integrity: {:?} }},",
+            "    WebFont {{ family: {:?}, style: {:?}, startup: {}, demand: {}, scripts: &[{}], url: {:?}, integrity: {:?} }},",
             e.family,
             e.style,
             e.startup,
+            e.demand,
+            scripts.join(", "),
             web_fonts::url(sha, file),
             integrity,
         );

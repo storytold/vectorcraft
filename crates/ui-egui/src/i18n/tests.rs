@@ -631,6 +631,36 @@ fn bundled_fonts_cover_the_catalogs() {
     assert!(missing.is_empty(), "characters without a glyph: {missing:#?}");
 }
 
+/// The faces the web build fetches on demand (`web-fonts.txt`: NanumGothic for Korean, Noto Sans
+/// Devanagari for Hindi) cover every character of their scripts that a catalog or a language name
+/// uses. Checked where the craft-fonts checkout has them (the desktop build embeds every face).
+#[test]
+fn web_demand_fonts_cover_the_catalogs() {
+    use vectorcraft_text::craft_fonts::demand_script;
+    let demand: Vec<_> = vectorcraft_text::WEB_FONTS.iter().filter(|w| w.demand).collect();
+    if demand.is_empty() {
+        eprintln!("skipped: built without craft-fonts, or one without NanumGothic and Noto Sans Devanagari");
+        return;
+    }
+    let mut chars: std::collections::BTreeSet<char> = LANGUAGES.iter().flat_map(|l| l.name.chars()).collect();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        chars.extend(entries.iter().flat_map(|(_, _, tr)| tr.chars()));
+    }
+    let mut missing = std::collections::BTreeMap::new();
+    for w in demand {
+        let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.family == w.family && f.style == w.style) else { continue };
+        let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+        db.add_font(f.bytes.to_vec());
+        let face = db.face(f.family, f.style).expect("the craft-fonts face loads");
+        let gone: String = chars.iter().filter(|c| demand_script(**c).is_some_and(|s| w.scripts.contains(&s)) && !face.covers(**c)).collect();
+        if !gone.is_empty() {
+            missing.insert(w.family, gone);
+        }
+    }
+    assert!(missing.is_empty(), "characters the web's demand faces lack: {missing:#?}");
+}
+
 /// The Traditional Chinese catalog holds no Simplified-only characters (a translation written
 /// in the wrong script would read as a typo to every user).
 #[test]
