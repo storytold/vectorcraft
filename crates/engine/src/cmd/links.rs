@@ -609,9 +609,13 @@ fn clip_shape((frame, room): Clip) -> PathData {
 enum ClipTo {
     /// It stays as it is.
     Keep,
-    /// It is clipped to this path: the clipping path of the clip group holding just it changes,
-    /// else it goes into a new clip group.
+    /// It is clipped to this path (Placement Options' clip): the clipping path of the clip group
+    /// holding just it changes, else it goes into a new clip group.
     Path(PathData),
+    /// It is clipped to this path, the clipping path its DCS file draws it through: as [`ClipTo::Path`],
+    /// except that a plain group holding just it (as [`ClipTo::Off`] leaves one) becomes a clip group
+    /// again.
+    File(PathData),
     /// It goes into a new clip group of this path, inside the clip group that holds it.
     Nest(PathData),
     /// The clipping path of the clip group holding just it goes (a DCS file's clipping path that
@@ -673,7 +677,7 @@ fn clip_to(
     match img.clip.as_ref().map(|path| path.transformed(new_xf)) {
         // A clipping mask made in the document stays, with the file's clip group inside it.
         Some(path) if held.is_some() && !file_held => ClipTo::Nest(path),
-        Some(path) => ClipTo::Path(path),
+        Some(path) => ClipTo::File(path),
         None if file_held => ClipTo::Off,
         None => ClipTo::Keep,
     }
@@ -722,7 +726,7 @@ impl Nested<'_> {
         let mut new = Arc::new(new);
         self.update(&mut new, true);
         *n = match clip {
-            ClipTo::Path(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
+            ClipTo::Path(path) | ClipTo::File(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
             ClipTo::Keep | ClipTo::Off => new,
         };
     }
@@ -766,15 +770,15 @@ impl Nested<'_> {
                 self.update(&mut new, true);
                 match (clip, clip_path) {
                     (ClipTo::Keep, _) => slots.push((i, new)),
-                    (ClipTo::Path(clip), Some(path)) if i == 1 => {
+                    (ClipTo::Path(clip) | ClipTo::File(clip), Some(path)) if i == 1 => {
                         let mut path = Node::clone(path);
                         if let NodeKind::Path { path: p, .. } = &mut path.kind {
                             *p = clip;
                         }
                         slots.extend([(0, Arc::new(path)), (1, new)]);
                     }
-                    (ClipTo::Path(clip), None) if plain => reclipped = Some((clip, new)),
-                    (ClipTo::Path(clip) | ClipTo::Nest(clip), _) => {
+                    (ClipTo::File(clip), None) if plain => reclipped = Some((clip, new)),
+                    (ClipTo::Path(clip) | ClipTo::File(clip) | ClipTo::Nest(clip), _) => {
                         let group = self.clip_group(new, clip);
                         slots.push((i, Arc::new(group)));
                     }
@@ -952,9 +956,18 @@ fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
 }
 
 /// Clip object `id` of `d` to `path`: the clipping path of the clip group holding just it changes,
-/// a plain group holding just it (as [`unclip`] leaves one) becomes a clip group again, else it
-/// goes into a new clip group.
+/// else it goes into a new clip group.
 fn clip_image_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
+    if set_clip_path(d, id, path.clone()) {
+        return Ok(());
+    }
+    new_clip_group(d, id, path)
+}
+
+/// Clip object `id` of `d` to `path`, the clipping path its DCS file draws it through: the clipping
+/// path of the clip group holding just it changes, a plain group holding just it (as [`unclip`]
+/// leaves one) becomes a clip group again, else it goes into a new clip group.
+fn clip_file_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     if set_clip_path(d, id, path.clone()) {
         return Ok(());
     }
@@ -1050,6 +1063,7 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
     clips.into_iter().try_for_each(|(id, clip)| match clip {
         ClipTo::Keep => Ok(()),
         ClipTo::Path(path) => clip_image_to(d, id, path),
+        ClipTo::File(path) => clip_file_to(d, id, path),
         ClipTo::Nest(path) => new_clip_group(d, id, path),
         ClipTo::Off => unclip(d, id),
     })
