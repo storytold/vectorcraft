@@ -1799,6 +1799,11 @@ parameter error, ``invalid parameters for `<id>`: `<path>` is nested too deeply`
 value. A schema that is wrong in itself, such as one that nests past 16 levels or puts a list of ids or a point
 inside 16 lists, is an internal error in the command, and the command does not run.
 
+The command API returns these errors in English. The desktop app's status bar shows them in the interface language,
+the requirement after "must be" included (a number and its range and unit, an integer, a list of names, an object id,
+a color, a point, an object or a list); the parameter's path, the refused value, the bounds, the unit and the names stay
+as the English gives them.
+
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
 more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3

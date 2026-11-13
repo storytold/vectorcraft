@@ -659,7 +659,8 @@ const MESSAGE_DEPTH: usize = 5;
 
 /// Translate a status or error message for display (see the module docs). Unknown messages, and
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
-/// `{"objects": [...]}`), stay as they are.
+/// `{"objects": [...]}`), stay as they are. A part that starts with `{` or `[` is translated only
+/// when it is a whole message with an exact entry, such as `[x, y] (two numbers)`.
 pub fn message(lang: Lang, s: &str) -> String {
     message_at(lang, s, MESSAGE_DEPTH)
 }
@@ -669,9 +670,16 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
     let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
     let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
     let Some(template) = forms.get(form) else { return s.to_string() };
-    let nested = |v: &str| depth > 1 && !v.starts_with(['{', '[']);
-    let values: Vec<(&str, String)> =
-        caps.into_iter().map(|(k, v)| (k, if nested(v) { message_at(lang, v, depth - 1) } else { v.to_string() })).collect();
+    let nested = |v: &str| {
+        if depth <= 1 {
+            v.to_string()
+        } else if v.starts_with(['{', '[']) {
+            lang.catalog().exact_message(v).unwrap_or(v).to_string()
+        } else {
+            message_at(lang, v, depth - 1)
+        }
+    };
+    let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, nested(v))).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
 }

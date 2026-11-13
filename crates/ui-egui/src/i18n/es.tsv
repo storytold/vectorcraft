@@ -6265,6 +6265,35 @@ axis	Y Axis	Eje Y
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
 @msg	true or false	true o false
+@msg	a number >= {_1}	un número >= {_1}
+@msg	a number > {_1}	un número > {_1}
+@msg	a number <= {_1}	un número <= {_1}
+@msg	a number < {_1}	un número < {_1}
+@msg	a number {_1} to {_2}	un número de {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	un número >= {_1} y < {_2}
+@msg	a number > {_1} and <= {_2}	un número > {_1} y <= {_2}
+@msg	a number > {_1} and < {_2}	un número > {_1} y < {_2}
+@msg	a number ({_1})	un número ({_1})
+@msg	a number >= {_1} ({_2})	un número >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un número > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un número <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un número < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un número de {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un número >= {_1} y < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un número > {_1} y <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un número > {_1} y < {_2} ({_3})
+@msg	an integer	un entero
+@msg	an integer >= {_1}	un entero >= {_1}
+@msg	an integer <= {_1}	un entero <= {_1}
+@msg	an integer {_1} to {_2}	un entero de {_1} a {_2}
+@msg	one of {_1}	uno de {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` debe ser uno de {_1}, no {got}
+@msg	an object id (a non-negative integer)	un id. de objeto (un entero no negativo)
+@msg	a list of object ids	una lista de id. de objeto
+@msg	a color (a string, [r, g, b] or an object)	un color (una cadena, [r, g, b] o un objeto)
+@msg	[x, y] (two numbers)	[x, y] (dos números)
+@msg	an object	un objeto
+@msg	a list	una lista
 @msg	unknown key `{k}`; the keys here are {_1}	clave desconocida `{k}`; las claves aquí son {_1}
 @msg	{_1} is listed twice	{_1} aparece dos veces
 @msg	{_1} is not the id of an input object	{_1} no es el id de un objeto de entrada

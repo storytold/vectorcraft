@@ -4553,6 +4553,7 @@ imageTrace	Outline	Obris
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` mora biti cijeli broj između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` mora biti između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be one of {_1}	`{key}` mora biti jedno od {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` mora biti jedno od {_1}, a ne {got}
 @msg	`{key}` must be true or false	`{key}` mora biti true ili false
 @msg	`top` and `below` can't both be true	`top` i `below` ne mogu oba biti true
 @msg	`select` must be true or false	`select` mora biti true ili false

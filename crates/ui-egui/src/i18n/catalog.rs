@@ -230,6 +230,12 @@ impl Catalog {
         self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
     }
 
+    /// The translation of a status or error message that has an exact `@msg` entry; templates are
+    /// not tried.
+    pub fn exact_message(&self, s: &str) -> Option<&str> {
+        self.messages.get(s).map(String::as_str)
+    }
+
     /// The plural form `index` of the message whose English forms are `one|other`.
     pub fn plural(&self, one: &str, other: &str, index: usize) -> Option<&str> {
         let forms = self.plurals.get(&format!("{one}|{other}"))?;

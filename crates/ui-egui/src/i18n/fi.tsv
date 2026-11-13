@@ -6353,6 +6353,35 @@ axis	Y Axis	Y-akseli
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})
 @msg	true or false	true tai false
+@msg	a number >= {_1}	luku >= {_1}
+@msg	a number > {_1}	luku > {_1}
+@msg	a number <= {_1}	luku <= {_1}
+@msg	a number < {_1}	luku < {_1}
+@msg	a number {_1} to {_2}	luku, joka on vähintään {_1} ja enintään {_2}
+@msg	a number >= {_1} and < {_2}	luku >= {_1} ja < {_2}
+@msg	a number > {_1} and <= {_2}	luku > {_1} ja <= {_2}
+@msg	a number > {_1} and < {_2}	luku > {_1} ja < {_2}
+@msg	a number ({_1})	luku ({_1})
+@msg	a number >= {_1} ({_2})	luku >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	luku > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	luku <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	luku < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	luku, joka on vähintään {_1} ja enintään {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	luku >= {_1} ja < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	luku > {_1} ja <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	luku > {_1} ja < {_2} ({_3})
+@msg	an integer	kokonaisluku
+@msg	an integer >= {_1}	kokonaisluku >= {_1}
+@msg	an integer <= {_1}	kokonaisluku <= {_1}
+@msg	an integer {_1} to {_2}	kokonaisluku, joka on vähintään {_1} ja enintään {_2}
+@msg	one of {_1}	jokin arvoista {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` on oltava jokin arvoista {_1}, ei {got}
+@msg	an object id (a non-negative integer)	objektitunnus (ei-negatiivinen kokonaisluku)
+@msg	a list of object ids	objektitunnusten luettelo
+@msg	a color (a string, [r, g, b] or an object)	väri (merkkijono, [r, g, b] tai objekti)
+@msg	[x, y] (two numbers)	[x, y] (kaksi lukua)
+@msg	an object	objekti
+@msg	a list	luettelo
 @msg	unknown key `{k}`; the keys here are {_1}	tuntematon avain `{k}`; tässä käytettävät avaimet ovat {_1}
 @msg	{_1} is listed twice	{_1} on luettelossa kahdesti
 @msg	{_1} is not the id of an input object	{_1} ei ole syöteobjektin tunnus
