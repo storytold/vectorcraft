@@ -1125,6 +1125,10 @@ antiAlias	Sharp	கூர்மையான
 	Corner Color	மூலை நிறம்
 	Contiguous	தொடர்ச்சியான
 	Each Channel	ஒவ்வொரு சேனலும்
+	Color Mask…	நிற மறைப்பு…
+	Color Mask	நிற மறைப்பு
+	Remove Color Mask	நிற மறைப்பை அகற்று
+	Apply Color Mask	நிற மறைப்பைப் பயன்படுத்து
 	Crop Marks	வெட்டிச் சுருக்குக் குறிகள்
 	Crop To	இதற்கு வெட்டிச் சுருக்கு
 	Cross	சிலுவை
@@ -2313,6 +2317,7 @@ antiAlias	Sharp	கூர்மையான
 	Include in playback	இயக்கத்தில் சேர்
 	Include Linked Files	இணைக்கப்பட்ட கோப்புகளைச் சேர்
 	Include Metadata	மெட்டாடேட்டாவைச் சேர்
+	Include Variable Data	மாறித் தரவைச் சேர்
 	Include non-printing layers	அச்சிடாத அடுக்குகளைச் சேர்
 	Write pages longer than 200 in at full size in points	200 in ஐ விட நீளமான பக்கங்களை முழு அளவில் புள்ளிகளில் எழுது
 	Include Objects On Canvas	கேன்வாஸில் உள்ள பொருட்களையும் சேர்
@@ -3333,6 +3338,7 @@ antiAlias	Sharp	கூர்மையான
 	Pattern	வடிவமாதிரி
 	Pattern Borders	வடிவமாதிரி எல்லைகள்
 	Pattern Brush	வடிவமாதிரித் தூரிகை
+	missing from the Brushes panel	தூரிகைகள் பலகத்தில் இல்லை
 	Pattern Brush Options	வடிவமாதிரித் தூரிகை விருப்பங்கள்
 	Pattern Editing	வடிவமாதிரித் திருத்தம்
 	Pattern Options	வடிவமாதிரி விருப்பங்கள்
@@ -3442,6 +3448,16 @@ antiAlias	Sharp	கூர்மையான
 @msg	Batch cannot play an action with a stop	நிறுத்தம் உள்ள செயலைத் தொகுதிச் செயலால் இயக்க முடியாது
 	Insert Menu Item…	பட்டி உருப்படியைச் செருகு…
 	Insert Menu Item	மெனு உருப்படியைச் செருகு
+	Select Object…	பொருளைத் தேர்ந்தெடு…
+	Select Object	பொருளைத் தேர்ந்தெடு
+	Set Selection	தேர்வை அமை
+	Case Sensitive	பெரிய/சிறிய எழுத்தை வேறுபடுத்து
+	Whole Word	முழுச் சொல்
+	Select Object: {note}	பொருளைத் தேர்ந்தெடு: {note}
+	Select by Note	குறிப்பின்படி தேர்ந்தெடு
+@msg	the note is empty	குறிப்பு காலியாக உள்ளது
+@msg	the note is longer than 1,024 bytes	குறிப்பு 1,024 பைட்டுகளை விட நீளமானது
+@msg	no object that can be selected has a note matching “{query}”	தேர்ந்தெடுக்கக்கூடிய எந்தப் பொருளிலும் “{query}” உடன் பொருந்தும் குறிப்பு இல்லை
 	Menu Item:	மெனு உருப்படி:
 	No menu item matches.	பொருந்தும் மெனு உருப்படி இல்லை.
 	Several menu items match. Choose one from the list.	பல மெனு உருப்படிகள் பொருந்துகின்றன. பட்டியலிலிருந்து ஒன்றைத் தேர்வுசெய்யவும்.
@@ -3584,6 +3600,8 @@ antiAlias	Sharp	கூர்மையான
 	Properties	பண்புகள்
 	Proportional Lining	விகிதாசார நேர்கோட்டு எண்கள்
 	Proportional Metrics	விகித அளவீடுகள்
+	Insert Aki Left	இடது Aki ஐச் செருகு
+	Insert Aki Right	வலது Aki ஐச் செருகு
 	Proportional Oldstyle	விகிதாசார பழைய பாணி எண்கள்
 	Protect Corners	மூலைகளைப் பாதுகாத்திடு
 	Proximity Guides	அருகாமை வழிகாட்டிகள்
@@ -3894,12 +3912,18 @@ antiAlias	Sharp	கூர்மையான
 	No settings found	அமைப்புகள் எதுவும் கிடைக்கவில்லை
 	Reset Printing and Proofing	Printing and Proofing ஐ மீட்டமை
 	Reset Profiles	சுயவிவரங்களை மீட்டமை
+	Arrowheads	அம்புத் தலைகள்
+	Edit Arrowheads	அம்புத் தலைகளைத் திருத்து
+	Edit Arrowheads…	அம்புத் தலைகளைத் திருத்து…
+	Reload Arrowheads	அம்புத் தலைகளை மீண்டும் ஏற்று
 	Reset Rotate View	சுழற்சிக் காட்சியை மீட்டமை
 	Reset Ruler Origin	அளவுகோல் தொடக்கப் புள்ளியை மீட்டமை
 	Reset Symbol Instance	சின்ன நிகழ்வை மீட்டமை
 	Reset Text Transform	உரை உருமாற்றத்தை மீட்டமை
 	Reset Text Transform and Scale	உரை உருமாற்றத்தையும் அளவீட்டையும் மீட்டமை
 	Reset the rows to the artwork's colors	வரிசைகளை ஓவியத்தின் நிறங்களுக்கு மீட்டமை
+	Color Theme Picker	நிறத் தீம் தேர்வி
+	Click or drag across the art to pick its colors; Shift adds more	ஓவியத்தின் நிறங்களை எடுக்க அதன் மீது சொடுக்கவும் அல்லது இழுக்கவும்; Shift மேலும் சேர்க்கும்
 	Reset to default	இயல்புநிலைக்கு மீட்டமை
 	Reset to Default	இயல்புநிலைக்கு மீட்டமை
 	Reset to Defaults	இயல்புநிலைகளுக்கு மீட்டமை
@@ -4473,6 +4497,7 @@ antiAlias	Sharp	கூர்மையான
 	Show Note	குறிப்பைக் காட்டு
 	Show Options	விருப்பங்களைக் காட்டு
 	Show Recent Colors	சமீபத்திய நிறங்களைக் காட்டு
+	Toggle RGB Percent	RGB சதவீதத்தை மாற்று
 	Show Original Path	அசல் பாதையைக் காட்டு
 	Show Package	தொகுப்பைக் காட்டு
 	Show Panel	பலகத்தைக் காட்டு
@@ -5414,6 +5439,72 @@ antiAlias	Sharp	கூர்மையான
 @id	pathfinder.add	.சேர்
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” அதிக இயக்க ஒதுக்கீட்டைக் கேட்கிறது (ஒவ்வொரு இயக்கத்துக்கும் அதிகபட்சம் {minutes} நிமிடங்களும் வழக்கத்தைவிட {times} மடங்கு அறிவுறுத்தல்களும்): ஒருவர் அதை டெஸ்க்டாப் பயன்பாட்டில் அங்கீகரிக்க வேண்டும், அல்லது --allow-plugin-grants உடன் தொடங்கிய அமர்வில் `allowHeavy: true` என அனுப்பவும்
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ஒரு நிறம் அல்ல: இதை #rrggbb வடிவில் எழுதவும்
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	ஒப்புதல் தேவை: இது {0} ஐக் கேட்கிறது; பயனர் இதைத் தனியாக நிறுவும்போது அதற்கு அனுமதி வழங்குவார்
+@msg	`angle` must be a number	`angle` ஓர் எண்ணாக இருக்க வேண்டும்
+@msg	`aspect` must be from 0.01 to 100	`aspect` 0.01 முதல் 100 வரை இருக்க வேண்டும்
+@msg	`cap` must be "butt", "round" or "square"	`cap` "butt", "round" அல்லது "square" ஆக இருக்க வேண்டும்
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` "nonzero" அல்லது "evenodd" ஆக இருக்க வேண்டும்
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` அதிகபட்சம் {MAX_HELP_URL} பைட்டுகள் கொண்ட https:// முகவரியாக இருக்க வேண்டும்
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` 1-{MAX_HELP} அச்சிடக்கூடிய எழுத்துகளாக இருக்க வேண்டும்
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` 1-{MAX_EFFECT_ID} பைட்டுகள் கொண்ட விளைவு ஐடியாக இருக்க வேண்டும்
+@msg	`id` must be the id of an input object	`id` ஓர் உள்ளீட்டுப் பொருளின் ஐடியாக இருக்க வேண்டும்
+@msg	`join` must be "miter", "round" or "bevel"	`join` "miter", "round" அல்லது "bevel" ஆக இருக்க வேண்டும்
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label`, `group` ஆகியவை 1-{MAX_LABEL} அச்சிடக்கூடிய எழுத்துகளாக இருக்க வேண்டும்
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` 1-{MAX_TEXT} ஆக இருக்க வேண்டும், இயல்புநிலை உரை அதை விட நீளமாக இருக்கக்கூடாது
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`, `maxItems` ஆகியவை 0-{MAX_LIST} ஆக இருக்க வேண்டும், `maxItems` குறைந்தது 1 ஆக இருக்க வேண்டும், இயல்புநிலைப் பட்டியலில் அந்த எண்ணிக்கையிலான உருப்படிகள் இருக்க வேண்டும்
+@msg	`name` must be a string	`name` ஓர் உரைச்சரமாக இருக்க வேண்டும்
+@msg	`opacity` must be a number	`opacity` ஓர் எண்ணாக இருக்க வேண்டும்
+@msg	`type` must be "path" or "compound"	`type` "path" அல்லது "compound" ஆக இருக்க வேண்டும்
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} அச்சிடக்கூடிய எழுத்துகளாக இருக்க வேண்டும்
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` `{other}` க்கு 1 முதல் {MAX_CONDITION_VALUES} மதிப்புகளைப் பட்டியலிட வேண்டும்
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` `{other}` ஐக் குறிப்பிடுகிறது, ஆனால் அது இதற்கு முன் அறிவிக்கப்பட்ட அளவுரு அல்ல
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` அதிகபட்சம் {MAX_CONDITIONS} அளவுருக்களை மட்டுமே குறிப்பிடலாம்
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` ஒரு தேர்வுப்பெட்டி அல்லது தேர்வுப் பட்டியலான `{other}` இன் மதிப்புகளை மட்டுமே ஏற்கும்
+@msg	`visible` must be true or false	`visible` true அல்லது false ஆக இருக்க வேண்டும்
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` {_1} முதல் {_2} வரையிலான எண்ணாக இருக்க வேண்டும்
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` அதிகபட்சம் {MAX_ITEMS} உருப்படிகள் கொண்ட வரிசையாக இருக்க வேண்டும்
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	நிற இயல்புநிலை மதிப்பு ஒரு நிறப் பொருளாகவோ "#3a7bd5" போன்ற hex உரைச்சரமாகவோ இருக்க வேண்டும்
+@msg	a color object or a hex string such as "#3a7bd5"	ஒரு நிறப் பொருள் அல்லது "#3a7bd5" போன்ற hex உரைச்சரம்
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	கட்டற்ற சாய்வில் அதிகபட்சம் {MAX_ITEMS} புள்ளிகளும் கோடுகளும் இருக்கலாம்
+@msg	a freeform gradient line names a point it doesn't have	கட்டற்ற சாய்வின் ஒரு கோடு, அந்தச் சாய்வில் இல்லாத ஒரு புள்ளியைக் குறிப்பிடுகிறது
+@msg	a gradient needs 1-{MAX_ITEMS} stops	ஒரு சாய்வுக்கு 1-{MAX_ITEMS} நிறுத்தங்கள் தேவை
+@msg	a list of numbers	எண்களின் பட்டியல்
+@msg	a list of {min_items} to {max_items} numbers	{min_items} முதல் {max_items} எண்கள் கொண்ட பட்டியல்
+@msg	a new object needs a `path`	புதிய பொருளுக்கு ஒரு `path` தேவை
+@msg	a number	ஓர் எண்
+@msg	a painted live effect returns only `objects`	வண்ணம் தீட்டும் நேரடி விளைவு `objects` ஐ மட்டுமே திருப்பித் தரும்
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	வண்ணம் தீட்டும் நேரடி விளைவின் ஒரு துண்டில் `path`, `fillRule`, `fills`, `strokes` மட்டுமே இருக்கும்
+@msg	a read-only object was left out	படிக்க மட்டுமேயான ஒரு பொருள் விடுபட்டுள்ளது
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	படிக்க மட்டுமேயான ஒரு பொருள் விடுபட்டுள்ளது: அதை {"id"} மட்டுமாகவோ கொடுக்கப்பட்டபடியோ திருப்பித் தரவும்
+@msg	a string	ஓர் உரைச்சரம்
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ஒரு கோட்டில் `paint`, `width`, `join`, `cap`, `miterLimit` மட்டுமே இருக்கும்
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ஒரு கோடு {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} ஆக இருக்க வேண்டும்
+@msg	an effect must be {"id", "params"?, "visible"?}	ஒரு விளைவு {"id", "params"?, "visible"?} ஆக இருக்க வேண்டும்
+@msg	an effect on a fill returns only `fills`	நிரப்பின் மீதான விளைவு `fills` ஐ மட்டுமே திருப்பித் தரும்
+@msg	an effect on a stroke returns only `strokes`	கோட்டின் மீதான விளைவு `strokes` ஐ மட்டுமே திருப்பித் தரும்
+@msg	an object must be a JSON object	ஒவ்வொரு பொருளும் ஒரு JSON பொருளாக இருக்க வேண்டும்
+@msg	bad range	தவறான வரம்பு
+@msg	choices must be 1-64 non-empty, printable strings	தேர்வுகள் 1-64 காலியல்லாத, அச்சிடக்கூடிய உரைச்சரங்களாக இருக்க வேண்டும்
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	ஆயத்தொலைவு வரம்பிற்கு வெளியே உள்ளது (வரம்பு ±{MAX_COORD} pt)
+@msg	default is not one of the options	இயல்புநிலை மதிப்பு விருப்பங்களில் ஒன்றல்ல
+@msg	each piece needs a `path`	ஒவ்வொரு துண்டுக்கும் ஒரு `path` தேவை
+@msg	is listed twice	இருமுறை பட்டியலிடப்பட்டுள்ளது
+@msg	pattern transform out of range	வடிவமாதிரி உருமாற்றம் வரம்பிற்கு வெளியே உள்ளது
+@msg	read-only field '{field}' changed	படிக்க மட்டுமேயான புலம் '{field}' மாற்றப்பட்டது
+@msg	stops must be in order of `offset`	நிறுத்தங்கள் `offset` இன் வரிசைப்படி இருக்க வேண்டும்
+@msg	the document has no pattern {pattern}	ஆவணத்தில் {pattern} என்ற வடிவமாதிரி இல்லை
+@msg	the document has no swatch {n}	ஆவணத்தில் {n} என்ற வண்ண மாதிரி இல்லை
+@msg	the output	வெளியீடு
+@msg	the path has no anchor points	பாதையில் நங்கூரப் புள்ளிகள் இல்லை
+@msg	too many anchor points (limit {MAX_ANCHORS})	மிக அதிகமான நங்கூரப் புள்ளிகள் (வரம்பு {MAX_ANCHORS})
+@msg	true or false	true அல்லது false
+@msg	unknown key `{k}`; the keys here are {_1}	அறியப்படாத திறவுச்சொல் `{k}`; இங்குள்ள திறவுச்சொற்கள்: {_1}
+@msg	{_1} is listed twice	{_1} இருமுறை பட்டியலிடப்பட்டுள்ளது
+@msg	{_1} is not the id of an input object	{_1} எந்த உள்ளீட்டுப் பொருளின் ஐடியும் அல்ல
+@msg	{_1} is read-only	{_1} படிக்க மட்டுமேயானது
+@msg	{what} must be from {lo} to {hi}	{what} {lo} முதல் {hi} வரை இருக்க வேண்டும்
+@msg	a color component	ஒரு நிறக் கூறு
+@msg	a plate	ஒரு தகடு
 	Install “{name}”, which asks for these permissions?	இந்த அனுமதிகளைக் கோரும் “{name}” ஐ நிறுவவா?
 	ID: {id}	அடையாளம்: {id}
 	Version: {version}	பதிப்பு: {version}
@@ -6339,6 +6430,85 @@ antiAlias	Sharp	கூர்மையான
 @msg	the script's run is no longer available	ஸ்கிரிப்டின் இயக்கம் இனி கிடைக்காது
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	தோல்வியடைந்த ஒரு கட்டளை, மீட்டமைக்க முடியாத செயல்தவிர் படிகளை மாற்றிவிட்டது; எனவே ஸ்கிரிப்ட் நிறுத்தப்பட்டது
 @msg	a recovery copy could not be written, so the script was not run	மீட்பு நகலை எழுத முடியவில்லை; எனவே ஸ்கிரிப்ட் இயக்கப்படவில்லை
+@msg	Script file access denied	ஸ்கிரிப்ட் கோப்பு அணுகல் மறுக்கப்பட்டது
+@msg	Script file exceeds 8 MiB	ஸ்கிரிப்ட் கோப்பு 8 MiB ஐத் தாண்டுகிறது
+@msg	Script file is not open	ஸ்கிரிப்ட் கோப்பு திறக்கப்படவில்லை
+@msg	Script file cannot be decoded	ஸ்கிரிப்ட் கோப்பைக் குறிவிலக்க முடியாது
+@msg	Script file is not a regular file	ஸ்கிரிப்ட் கோப்பு ஒரு சாதாரணக் கோப்பு அல்ல
+@msg	Script file does not exist	ஸ்கிரிப்ட் கோப்பு இல்லை
+@msg	Script file could not be read	ஸ்கிரிப்ட் கோப்பைப் படிக்க முடியவில்லை
+@msg	Script folder has more than 2,048 entries	ஸ்கிரிப்ட் கோப்புறையில் 2,048 க்கும் அதிகமான உள்ளீடுகள் உள்ளன
+@msg	Script file open mode must be r, w, e or a	ஸ்கிரிப்ட் கோப்பைத் திறக்கும் பயன்முறை r, w, e அல்லது a ஆக இருக்க வேண்டும்
+@msg	Script file writing is not available	ஸ்கிரிப்ட் கோப்பு எழுதும் வசதி கிடைக்கவில்லை
+@msg	Script file dialogs are not available	ஸ்கிரிப்ட் கோப்பு உரையாடல் பெட்டிகள் கிடைக்கவில்லை
+@msg	Script files cannot be opened in another application	ஸ்கிரிப்ட் கோப்புகளை வேறொரு பயன்பாட்டில் திறக்க முடியாது
+@msg	Script file access is unavailable on the web	இணையத்தில் ஸ்கிரிப்ட் கோப்பு அணுகல் கிடைக்காது
+@msg	Script has 256 files open	ஸ்கிரிப்டில் ஏற்கெனவே 256 கோப்புகள் திறந்துள்ளன
+@msg	Script file path exceeds 32,767 characters	ஸ்கிரிப்ட் கோப்புப் பாதை 32,767 எழுத்துகளைத் தாண்டுகிறது
+@msg	Script folder mask takes too many steps to match	ஸ்கிரிப்ட் கோப்புறையின் கோப்புப் பெயர் வடிகட்டியைப் பொருத்த மிக அதிகமான படிகள் தேவைப்படுகின்றன
+@msg	the script opened more file data than one run may open (32 MiB)	ஓர் இயக்கம் திறக்கக்கூடியதை விட அதிகமான கோப்புத் தரவை ஸ்கிரிப்ட் திறந்தது (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: ஓர் இடநிலையையும் ஒரு பயன்முறையையும் ஏற்கும்
+@msg	vc.run: give a command id, as a string	vc.run: ஒரு கட்டளை அடையாளத்தை உரைச்சரமாகக் கொடுக்கவும்
+@msg	vc.run: takes a command id and an object of parameters	vc.run: ஒரு கட்டளை அடையாளத்தையும் அளவுருக்களின் ஒரு பொருளையும் ஏற்கும்
+@msg	vc.run: the parameters must be an object	vc.run: அளவுருக்கள் ஒரு பொருளாக இருக்க வேண்டும்
+@msg	vc.run: the result{place} is too large for a script	vc.run: முடிவு{place} ஒரு ஸ்கிரிப்டுக்கு மிகப் பெரியது
+@msg	$.evalFile requires a file path	$.evalFile க்கு ஒரு கோப்புப் பாதை தேவை
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: காலக்கெடு 0 அல்லது அதற்கு மேற்பட்ட, முடிவுள்ள மில்லிவினாடிகளின் எண்ணாக இருக்க வேண்டும்
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: ஒரு கோப்புப் பாதையையும் ஒரு காலக்கெடுவையும் ஏற்கும்
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (எறியப்பட்ட பிழை)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (எறியப்பட்ட பிழை)
+@msg	{name}: {e} (thrown)	{name}: {e} (எறியப்பட்ட பிழை)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (வரம்பு மீறல்)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (வரம்பு மீறல்)
+@msg	{name}: {e} (limit)	{name}: {e} (வரம்பு மீறல்)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (தொடரியல் பிழை)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (தொடரியல் பிழை)
+@msg	{name}: {e} (syntax)	{name}: {e} (தொடரியல் பிழை)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (நிறுத்தப்பட்டது)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (நிறுத்தப்பட்டது)
+@msg	{name}: {e} (stopped)	{name}: {e} (நிறுத்தப்பட்டது)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (உள் பிழை)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (உள் பிழை)
+@msg	{name}: {e} (internal)	{name}: {e} (உள் பிழை)
+@msg	{e} (these files stay written: {paths})	{e} (இந்தக் கோப்புகள் எழுதப்பட்டபடியே இருக்கும்: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: ஒரு பெயரை உரைச்சரமாகக் கொடுக்கவும்
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: "en" அல்லது "de_DE" போன்ற ஒரு மொழி-வட்டார அமைப்பைக் கொடுக்கவும், அல்லது இடைமுகத்தின் மொழி-வட்டார அமைப்புக்கு null ஐக் கொடுக்கவும்
+@msg	$.localize: give true or false	$.localize: true அல்லது false ஐக் கொடுக்கவும்
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: 512 (உள்ளூர்மயமாக்கலை இயக்கும்) அல்லது 0 ஐ மட்டுமே அமைக்க முடியும்
+@msg	$.flags: give a number	$.flags: ஓர் எண்ணைக் கொடுக்கவும்
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: இங்கே ஸ்கிரிப்ட்கள் UTF-8 ஐ மட்டுமே படிக்கும், எழுதும்
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: ஒரு குறியாக்கத்தின் பெயரை உரைச்சரமாகக் கொடுக்கவும்
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: நினைவகத் தற்காலிகச் சேமிப்பின் அளவை அமைக்க முடியாது
+@msg	$.setenv: give a value, as a string	$.setenv: ஒரு மதிப்பை உரைச்சரமாகக் கொடுக்கவும்
+@msg	$.setenv: only {_1} can be set	$.setenv: {_1} ஐ மட்டுமே அமைக்க முடியும்
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: ஒரு மதிப்பில் அதிகபட்சம் {MAX_ENV_BYTES} எழுத்துகள், இலக்கங்கள், _ . - @ மட்டுமே இருக்கலாம்
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: 0 முதல் {MAX_SLEEP_MS} வரையிலான மில்லிவினாடிகளின் எண்ணிக்கையைக் கொடுக்கவும்
+@msg	$.sleep: give a number of milliseconds	$.sleep: மில்லிவினாடிகளின் எண்ணிக்கையைக் கொடுக்கவும்
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: ஓர் உள்ளமைந்த செயல்பாட்டின் callback, ஒரு getter, ஒரு வகை மாற்றம் அல்லது $.evalFile இயக்கும் ஒரு கோப்பு ஆகியவற்றுக்குள் இயக்கம் காத்திருக்க முடியாது; ஸ்கிரிப்டின் சொந்தக் குறியீட்டிலிருந்து இதை அழைக்கவும்
+@msg	$.bp: scripts here have no debugger	$.bp: இங்கே ஸ்கிரிப்ட்களுக்குப் பிழைத்திருத்தி இல்லை
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: ஸ்கிரிப்ட்களால் இன்னும் உரையாடல் பெட்டியைக் காட்ட முடியாது
+@msg	{name}: give a message	{name}: ஒரு செய்தியைக் கொடுக்கவும்
+@msg	{name}: give the text the field starts with	{name}: புலம் தொடங்கும் உரையைக் கொடுக்கவும்
+@msg	{name}: the message is longer than 16 KiB	{name}: செய்தி 16 KiB ஐ விட நீளமானது
+@msg	{name}: the title is longer than 256 bytes	{name}: தலைப்பு 256 பைட்டுகளை விட நீளமானது
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: புலம் தொடங்கும் உரை 16 KiB ஐ விட நீளமானது
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ஓர் உள்ளமைந்த செயல்பாட்டின் callback, ஒரு getter, ஒரு வகை மாற்றம் அல்லது $.evalFile இயக்கும் ஒரு கோப்பு ஆகியவற்றுக்குள் உரையாடல் பெட்டியைத் திறக்க முடியாது; ஸ்கிரிப்டின் சொந்தக் குறியீட்டிலிருந்து இதை அழைக்கவும்
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` இல் உள்ள அடுத்த பதில் {name} க்கானது அல்ல, {_1} க்கானது
+@msg	{name}: `answers` has no answer left for this dialog	{name}: இந்த உரையாடல் பெட்டிக்கு `answers` இல் பதில் எதுவும் மீதமில்லை
+@msg	vc.document{place} is too large for a script	vc.document{place} ஒரு ஸ்கிரிப்டுக்கு மிகப் பெரியது
+@msg	vc.log: the log of this run is full	vc.log: இந்த இயக்கத்தின் பதிவு நிரம்பிவிட்டது
+@msg	this function's script run has ended	இந்தச் செயல்பாட்டுக்குரிய ஸ்கிரிப்ட் இயக்கம் முடிந்துவிட்டது
+@msg	the script made more host calls than one run may make	ஓர் இயக்கம் செய்யக்கூடியதை விட அதிகமான ஹோஸ்ட் அழைப்புகளை ஸ்கிரிப்ட் செய்தது
+@msg	the script passed more data to and from commands than one run may pass	ஓர் இயக்கம் கட்டளைகளுக்கு அனுப்பவும் அவற்றிடமிருந்து பெறவும் கூடியதை விட அதிகமான தரவை ஸ்கிரிப்ட் பரிமாறியது
+@msg	the script added more objects and data to the documents than one run may add	ஓர் இயக்கம் சேர்க்கக்கூடியதை விட அதிகமான பொருட்களையும் தரவையும் ஸ்கிரிப்ட் ஆவணங்களில் சேர்த்தது
+@msg	{what}: the object is not a File or a Folder	{what}: பொருள் ஒரு File அல்லது Folder அல்ல
+@msg	{what}: the count must be a finite number, 0 or more	{what}: எண்ணிக்கை 0 அல்லது அதற்கு மேற்பட்ட, முடிவுள்ள எண்ணாக இருக்க வேண்டும்
+@msg	File.seek: the position must be a finite number	File.seek: இடநிலை ஒரு முடிவுள்ள எண்ணாக இருக்க வேண்டும்
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: பயன்முறை 0, 1 அல்லது 2 ஆக இருக்க வேண்டும்
+@msg	script file is compiled: {value}	ஸ்கிரிப்ட் கோப்பு தொகுக்கப்பட்ட வடிவில் உள்ளது: {value}
+@msg	`name` must be the name of a script engine	`name` ஒரு ஸ்கிரிப்ட் எஞ்சினின் பெயராக இருக்க வேண்டும்
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	முதன்மை ஸ்கிரிப்ட் எஞ்சின் ஒவ்வோர் இயக்கத்துக்கும் புதிதாக உருவாகிறது, ஒருபோதும் வைத்திருக்கப்படுவதில்லை; எனவே அதைக் கைவிட முடியாது
+@msg	there is no script engine named {name}	{name} என்ற பெயரில் ஸ்கிரிப்ட் எஞ்சின் எதுவும் இல்லை
 @msg	Running a script	ஸ்கிரிப்ட் இயங்குகிறது
 @msg	Copied the script report	ஸ்கிரிப்ட் அறிக்கை நகலெடுக்கப்பட்டது
 @msg	copy needs path: the file to copy into the document's folder	copy க்கு path தேவை: ஆவணத்தின் கோப்புறைக்குள் நகலெடுக்க வேண்டிய கோப்பு
@@ -7462,6 +7632,10 @@ antiAlias	Sharp	கூர்மையான
 @msg	a CMYK image has no transparency to set	CMYK படத்தில் அமைக்கக்கூடிய வெளிப்படைத்தன்மை இல்லை
 @msg	every pixel matches the background: no image would be left	ஒவ்வொரு பிக்சலும் பின்னணியுடன் பொருந்துகிறது: படம் எதுவும் மிஞ்சாது
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} பிக்சல் படம் மாற்ற முடியாத அளவுக்குப் பெரியது
+@msg	select an image with a color mask	நிற மறைப்பு உள்ள ஒரு படத்தைத் தேர்ந்தெடுக்கவும்
+@msg	the color mask's settings are out of range	நிற மறைப்பின் அமைப்புகள் வரம்பிற்கு வெளியே உள்ளன
+@msg	a CMYK image can't take a color mask	CMYK படத்துக்கு நிற மறைப்பை இட முடியாது
+@msg	the mask would hide every pixel	மறைப்பு எல்லாப் பிக்சல்களையும் மறைத்துவிடும்
 @msg	select an image (or an Image Trace group)	ஒரு படத்தை (அல்லது ஒரு படக் கண்டறிதல் குழுவை) தேர்ந்தெடுக்கவும்
 @msg	select an Image Trace object	ஒரு படக் கண்டறிதல் பொருளைத் தேர்ந்தெடுக்கவும்
 @msg	select an image, or pass id	ஒரு படத்தைத் தேர்ந்தெடுக்கவும், அல்லது id ஐக் கொடுக்கவும்
@@ -8024,6 +8198,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	unknown overprints `{v}` (preserve, simulate or discard)	அறியப்படாத மேல்அச்சு அமைப்பு `{v}` (preserve, simulate அல்லது discard)
 @msg	unknown panel	அறியப்படாத பலகம்
 @msg	unknown panel `{raw}`	அறியப்படாத பலகம் `{raw}`
+@msg	panels can't be shown in Presentation Mode	விளக்கப் பயன்முறையில் பலகங்களைக் காட்ட முடியாது
 @msg	unknown parameter `{key}`; did you mean `{near}`?	அறியப்படாத அளவுரு `{key}`; நீங்கள் `{near}` என்று கருதினீர்களா?
 @msg	unknown parameter `{key}`; the command takes no parameters	அறியப்படாத அளவுரு `{key}`; கட்டளைக்கு அளவுருக்கள் இல்லை
 @msg	unknown parameter `{key}`; the command takes: {keys}	அறியப்படாத அளவுரு `{key}`; கட்டளை ஏற்பவை: {keys}
@@ -8032,6 +8207,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	unknown parameter `{path}`; it takes: {keys}	தெரியாத அளவுரு `{path}`; இது ஏற்பவை: {keys}
 @msg	missing `{path}`	`{path}` காணவில்லை
 @msg	`{path}` must be {expected}, not {got}	`{path}` {got} ஆக அல்ல, {expected} ஆக இருக்க வேண்டும்
+@msg	`{path}` is nested too deeply	`{path}` மிக ஆழமாக உள்ளமைக்கப்பட்டுள்ளது
 @msg	unknown PDF preset `{name}` (presets: {_1})	தெரியாத PDF முன்னமைவு `{name}` (முன்னமைவுகள்: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	அறியப்படாத pieLegend `{v}` (none, standard அல்லது wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	அறியப்படாத piePosition `{v}` (even, ratio அல்லது stacked)
@@ -8397,6 +8573,8 @@ theme	Appearance	தோற்றப்பாணி
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	அத்தியாவசியக் கருவிகளுக்கான சிறிய நேரடிப் பயிற்சிகள், திறன் வாரியாகக் குழுவாக்கப்பட்டுள்ளன. ஒரு திறனின் பயிற்சிகளைக் காண அதைத் தேர்ந்தெடுக்கவும்.
 	List Tutorials	பயிற்சிகளைப் பட்டியலிடு
 	Show Tutorial	பயிற்சியைக் காட்டு
+	Show Tool Location	கருவியின் இடத்தைக் காட்டு
+	Show where this tool is	இந்தக் கருவி எங்கே உள்ளது எனக் காட்டு
 @msg	missing `tutorial` (see learn.list)	`tutorial` காணவில்லை (learn.list ஐப் பார்க்கவும்)
 @msg	unknown tutorial `{id}` (see learn.list)	அறியப்படாத பயிற்சி `{id}` (learn.list ஐப் பார்க்கவும்)
 	Refresh Deferred Effects	ஒத்திவைக்கப்பட்ட விளைவுகளை மீள்புதுப்பி
@@ -8476,6 +8654,7 @@ theme	Appearance	தோற்றப்பாணி
 	East Asian Composition Settings	கிழக்கு ஆசிய வரியமைப்பு அமைப்புகள்
 	Korean Composition Settings	கொரிய வரியமைப்பு அமைப்புகள்
 	Korean Line Break Anywhere	கொரிய உரையில் எங்கும் வரி முறிவு
+	Bunri-Kinshi	Bunri-Kinshi
 	Dry Media	உலர் ஊடகங்கள்
 	Optical Effects	ஒளியியல் விளைவுகள்
 	Center on Top	மேற்புறத்தில் மையப்படுத்து
