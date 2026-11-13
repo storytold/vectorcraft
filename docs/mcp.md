@@ -4941,6 +4941,18 @@ used, as a transform's does.
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Free Distort on a turned bounding box
+
+`object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
+`angle` (counter-clockwise degrees), `from` is a box in the frame turned by that angle, as a rotated object's bounding
+box is; without `from`, that box is the selection's bounds measured in the turned frame. An `angle` that is not a
+number is an error. Without `angle`, `from` is a box on the page, as before. The Free Transform tool's Perspective Distort and Free Distort send the selection's turned box
+this way, so after a rotation they start from the corners the canvas shows.
+
+```json
+{"name":"run_command","arguments":{"command":"object.distort","params":{"from":[-100,0,0,100],"angle":90,"corners":[[0,100],[0,0],[120,-20],[100,100]]}}}
+```
+
 ## Transform Each: Relative and Absolute
 
 `object.transformEach` scales by percentages of each object's size (the dialog's Relative, the default), or with
