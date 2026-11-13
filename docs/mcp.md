@@ -593,7 +593,10 @@ space. RGB edits preserve the other native channels; HSB uses those same working
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
 opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
 the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
-applied colors still join the list while it is hidden.
+applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPercent": true}` shows the Color panel's
+RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
+`ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
+and answers true when the fields show in percent.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -3665,6 +3668,27 @@ the library's colors. Colors that no row holds, such as preserved White and Blac
 {"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#ff0000","#0000ff":"#0000ff"},"globalAdjust":{"saturation":-40,"temperature":25}}}}
 ```
 
+`recolor.pickTheme {picks, colors?}` is the dialog's Color Theme Picker: it returns the color palette of the art picked
+as `colors` (keys, the most used first) and `objects` (how many objects it read), and changes nothing. Each pick is
+`{at: [x, y]}`, a click that reads the object a Selection tool click there takes with everything inside it, or
+`{rect: [x0, y0, x1, y1]}`, a marquee that reads every painted object it touches and the part of each image inside it
+(document points; 1 to 256 picks, which add up). It reads visible fills and strokes, gradient stops, text, mesh points,
+pattern tiles (with the patterns they use), the art of symbol instances (placed through their 9-slice guides), the
+colorize color of an image it applies to and the pixels of other images: at most 65,536 pixels of each pick of an
+image, spread evenly, and 1,048,576 pixels of at most 64 images in all, leaving out pixels less than half opaque and
+images it can't decode; each image is decoded once for all its picks. In a clip group, or under an opacity mask that
+clips, it reads only what shows inside the clipping path or the mask art, and a blend, envelope or repeat that a
+marquee touches is read whole. Hidden or fully transparent objects and fill or stroke items are left out, and locked
+objects are read. As VectorCraft's own rule, each object read weighs the same, shared among its colors (an image's
+among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
+its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
+most used color in its own model. Picks that touch no art return no colors. In the Recolor Artwork dialog the picks are the `themePicks` field: the rows that aren't
+excluded take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
+```
+
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
 error for an unknown library or method. Other wrong-form parameters get an error that names them.
 `includeImages`, `includePatterns`, a row's `exclude`, `order`, `saturationBrightness` and the `white`, `black` and
@@ -5069,8 +5093,9 @@ the Align To choice, and while there is a key object or a key guide they send th
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
 Align To then offers Align to Selection and Align to Artboard. Align to Artboard sends `to: "artboard"`, which keeps the
-tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`. Align
-to Selection sends `to: "selection"`. The Distribute buttons need two or more selected artboards.
+tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`, which
+can then be negative. Align to Selection sends `to: "selection"`. The Distribute buttons need two or more selected
+artboards with Align to Artboard, and three or more with Align to Selection.
 
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
@@ -6037,7 +6062,8 @@ artboard it names is locked. When no artboard changes, the command records no un
 Align and distribute artboards ([Align and distribute artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/align-and-distribute-artboards.html)):
 three commands move whole artboards, by default those the Artboard tool has selected, else its active one. Each takes
 `index? | indices?`, `to?: "selection"|"artboard"`, `artboard?: n`, `moveArt?`, `patterns?` and `lockedAndHidden?`, and
-returns `{moved: [index…]}`.
+returns `{moved: [index…]}`. With `moveArt`, art inside two of the artboards goes with the one first in artboard order, and stays when that one
+stays.
 
 - `artboard.align {horizontal?: "left"|"center"|"right", vertical?: "top"|"center"|"bottom"}` moves each artboard until
   the named edge or center is on that edge or center of the bounds of all the artboards named. One of the two
@@ -6647,7 +6673,8 @@ swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Fr
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
-stops of a gradient with a stop above opacity 0, at a tint above 0, and every grayscale image colorized with one, by
+stops of a gradient with a stop above opacity 0, at a tint above 0, leaving out fills and strokes at an opacity of 0,
+and every grayscale image colorized with one, by
 the same rules as `patternObjects`, with the spot colors it uses; a process
 color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
@@ -10180,9 +10207,10 @@ selected art and weeding lines across the box, so the waste vinyl around the art
 VectorCraft's own. The weed box is a rectangle `margin` points (0 to 100000, default 9) outside the art's bounds;
 `box: false` leaves it out. The weeding lines run `"horizontal"`, `"vertical"` or `"both"` ways (default `"both"`) from
 one side of the box to the other and divide it evenly: `count` lines each way (a whole number from 0 to 1000, default 1),
-or with `spacing` instead, as few lines as keep them at most that far apart. A line is left out over the art's area and
-within `gap` points of its outlines (0 to 100000, default 0: the lines stop at the outlines), so it ends in several
-pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
+or with `spacing` points instead (more than 0 and at most 100000), as few lines as keep them at most that far apart. A
+`spacing` that needs more than 1000 lines each way is refused, and so is a request that gives both `count` and
+`spacing`. A line is left out over the art's area and within `gap` points of its outlines (0 to 100000, default 0: the
+lines stop at the outlines), so it ends in several pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
 color swatch `swatch` (default `"[Registration]"`), with no fill.
 
 The art is measured by the outlines a cutter cuts. Closed paths enclose their area by their fill rule, so the hole of a

@@ -1515,6 +1515,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
 	Show Recent Colors	Tampilkan warna terbaru
+	Toggle RGB Percent	Alihkan RGB dalam persen
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -2660,6 +2661,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Ubah saturasi dan kecerahan secara acak
 	Recolor this row	Warnai ulang baris ini
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
+	Color Theme Picker	Pemilih tema warna
+	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
 	Separate colors into rows	Pisahkan warna ke dalam baris
 	Unlink harmony colors	Lepaskan tautan warna harmoni
 	1 Color Job	Pekerjaan 1 warna

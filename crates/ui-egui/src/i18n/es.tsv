@@ -2896,6 +2896,8 @@ digits	Malayalam	Malayálam
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
+	Color Theme Picker	Selector de tema de color
+	Click or drag across the art to pick its colors; Shift adds more	Haga clic o arrastre sobre la ilustración para tomar sus colores; Mayús añade más
 	Reset to Default	Restablecer valores predeterminados
 	Reset to White, Black	Restablecer a blanco, negro
 	Reset with Mesh	Restablecer con malla
@@ -3303,6 +3305,7 @@ digits	Malayalam	Malayálam
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
 	Show Recent Colors	Mostrar colores recientes
+	Toggle RGB Percent	Alternar RGB en porcentaje
 	Show Original Path	Mostrar trazado original
 	Open this dialog with these settings next time	Abrir este cuadro de diálogo con estos ajustes la próxima vez
 	Auto-Simplify	Simplificar automáticamente
@@ -4213,6 +4216,85 @@ axis	Both	Ambos
 @msg	the script's run is no longer available	la ejecución del script ya no está disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando fallido cambió pasos de deshacer que no se pudieron restaurar, así que el script se detuvo
 @msg	a recovery copy could not be written, so the script was not run	no se pudo escribir una copia de recuperación, así que el script no se ejecutó
+@msg	Script file access denied	Acceso denegado al archivo de script
+@msg	Script file exceeds 8 MiB	El archivo de script supera los 8 MiB
+@msg	Script file is not open	El archivo de script no está abierto
+@msg	Script file cannot be decoded	No se puede descodificar el archivo de script
+@msg	Script file is not a regular file	El archivo de script no es un archivo normal
+@msg	Script file does not exist	El archivo de script no existe
+@msg	Script file could not be read	No se pudo leer el archivo de script
+@msg	Script folder has more than 2,048 entries	La carpeta de script tiene más de 2048 entradas
+@msg	Script file open mode must be r, w, e or a	El modo de apertura del archivo de script debe ser r, w, e o a
+@msg	Script file writing is not available	La escritura de archivos de script no está disponible
+@msg	Script file dialogs are not available	Los cuadros de diálogo de archivos de script no están disponibles
+@msg	Script files cannot be opened in another application	Los archivos de script no se pueden abrir en otra aplicación
+@msg	Script file access is unavailable on the web	El acceso a archivos de script no está disponible en la web
+@msg	Script has 256 files open	El script tiene 256 archivos abiertos
+@msg	Script file path exceeds 32,767 characters	La ruta del archivo de script supera los 32 767 caracteres
+@msg	Script folder mask takes too many steps to match	La máscara de carpeta de script requiere demasiados pasos para coincidir
+@msg	the script opened more file data than one run may open (32 MiB)	el script abrió más datos de archivo de los que puede abrir una ejecución (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: recibe una posición y un modo
+@msg	vc.run: give a command id, as a string	vc.run: indique un id de comando, como cadena
+@msg	vc.run: takes a command id and an object of parameters	vc.run: recibe un id de comando y un objeto de parámetros
+@msg	vc.run: the parameters must be an object	vc.run: los parámetros deben ser un objeto
+@msg	vc.run: the result{place} is too large for a script	vc.run: el resultado{place} es demasiado grande para un script
+@msg	$.evalFile requires a file path	$.evalFile requiere una ruta de archivo
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el tiempo de espera debe ser un número finito de milisegundos, 0 o más
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: recibe una ruta de archivo y un tiempo de espera
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línea {line}, columna {column} de {file}: {e} (lanzado)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línea {line}, columna {column}: {e} (lanzado)
+@msg	{name}: {e} (thrown)	{name}: {e} (lanzado)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: línea {line}, columna {column} de {file}: {e} (límite)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: línea {line}, columna {column}: {e} (límite)
+@msg	{name}: {e} (limit)	{name}: {e} (límite)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: línea {line}, columna {column} de {file}: {e} (error de sintaxis)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: línea {line}, columna {column}: {e} (error de sintaxis)
+@msg	{name}: {e} (syntax)	{name}: {e} (error de sintaxis)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: línea {line}, columna {column} de {file}: {e} (detenido)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: línea {line}, columna {column}: {e} (detenido)
+@msg	{name}: {e} (stopped)	{name}: {e} (detenido)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: línea {line}, columna {column} de {file}: {e} (error interno)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: línea {line}, columna {column}: {e} (error interno)
+@msg	{name}: {e} (internal)	{name}: {e} (error interno)
+@msg	{e} (these files stay written: {paths})	{e} (estos archivos quedan escritos: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indique un nombre, como cadena
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indique una configuración regional como "en" o "de_DE", o null para la de la interfaz
+@msg	$.localize: give true or false	$.localize: indique true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: solo se puede establecer 512, que activa la localización, o 0
+@msg	$.flags: give a number	$.flags: indique un número
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: aquí los scripts solo leen y escriben UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indique el nombre de una codificación, como cadena
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: no se puede establecer el tamaño de la caché de memoria
+@msg	$.setenv: give a value, as a string	$.setenv: indique un valor, como cadena
+@msg	$.setenv: only {_1} can be set	$.setenv: solo se pueden establecer {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valor tiene como máximo {MAX_ENV_BYTES} letras, dígitos y _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indique un número de milisegundos de 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indique un número de milisegundos
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: una ejecución no puede esperar dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
+@msg	$.bp: scripts here have no debugger	$.bp: aquí los scripts no tienen depurador
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: los scripts aún no pueden mostrar un cuadro de diálogo
+@msg	{name}: give a message	{name}: indique un mensaje
+@msg	{name}: give the text the field starts with	{name}: indique el texto con el que empieza el campo
+@msg	{name}: the message is longer than 16 KiB	{name}: el mensaje ocupa más de 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: el título ocupa más de 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: el texto con el que empieza el campo ocupa más de 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un cuadro de diálogo no puede abrirse dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la siguiente respuesta de `answers` es para {_1}, no para {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no le quedan respuestas para este cuadro de diálogo
+@msg	vc.document{place} is too large for a script	vc.document{place} es demasiado grande para un script
+@msg	vc.log: the log of this run is full	vc.log: el registro de esta ejecución está lleno
+@msg	this function's script run has ended	la ejecución del script de esta función ha terminado
+@msg	the script made more host calls than one run may make	el script hizo más llamadas al anfitrión de las que puede hacer una ejecución
+@msg	the script passed more data to and from commands than one run may pass	el script pasó más datos a los comandos y desde ellos de los que puede pasar una ejecución
+@msg	the script added more objects and data to the documents than one run may add	el script añadió a los documentos más objetos y datos de los que puede añadir una ejecución
+@msg	{what}: the object is not a File or a Folder	{what}: el objeto no es un File ni un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: la cantidad debe ser un número finito, 0 o más
+@msg	File.seek: the position must be a finite number	File.seek: la posición debe ser un número finito
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: el modo debe ser 0, 1 o 2
+@msg	script file is compiled: {value}	el archivo de script está compilado: {value}
+@msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
+@msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado

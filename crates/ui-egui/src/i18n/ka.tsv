@@ -1453,6 +1453,7 @@ digits	Malayalam	მალაიალამური
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Show Options	პარამეტრების ჩვენება
 	Show Recent Colors	ბოლოდროინდელი ფერების ჩვენება
+	Toggle RGB Percent	RGB-ის პროცენტებში ჩვენების გადართვა
 	Small Caps	პატარა მთავრული
 	Small Caps (on the roadmap)	პატარა მთავრული (სამომავლო გეგმაშია)
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
@@ -2576,6 +2577,8 @@ digits	Malayalam	მალაიალამური
 	Randomly change saturation and brightness	გაჯერებისა და სიკაშკაშის შემთხვევითი შეცვლა
 	Recolor this row	ამ სტრიქონის ხელახლა შეფერადება
 	Reset the rows to the artwork's colors	სტრიქონებისთვის ნახატის ფერების დაბრუნება
+	Color Theme Picker	ფერთა თემის ამრჩევი
+	Click or drag across the art to pick its colors; Shift adds more	დააწკაპუნეთ ან გადაატარეთ ნახატზე მისი ფერების ასაღებად; Shift ამატებს კიდევ
 	Separate colors into rows	ფერების სტრიქონებად დაყოფა
 	Unlink harmony colors	ჰარმონიის ფერების კავშირის გაწყვეტა
 	1 Color Job	1-ფერიანი ბეჭდვა
@@ -5351,6 +5354,85 @@ imageTrace	Outline	კონტური
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	წარუმატებელმა ბრძანებამ დაბრუნების ნაბიჯები შეცვალა და მათი პირვანდელ მდგომარეობაში მოყვანა ვერ მოხერხდა, ამიტომ სკრიპტი შეჩერდა
 @msg	a recovery copy could not be written, so the script was not run	აღდგენის ასლის ჩაწერა ვერ მოხერხდა, ამიტომ სკრიპტი არ გაეშვა
+@msg	Script file access denied	სკრიპტის ფაილზე წვდომა აკრძალულია
+@msg	Script file exceeds 8 MiB	სკრიპტის ფაილი 8 MiB-ს აღემატება
+@msg	Script file is not open	სკრიპტის ფაილი გახსნილი არ არის
+@msg	Script file cannot be decoded	სკრიპტის ფაილის დეკოდირება შეუძლებელია
+@msg	Script file is not a regular file	სკრიპტის ფაილი ჩვეულებრივი ფაილი არ არის
+@msg	Script file does not exist	სკრიპტის ფაილი არ არსებობს
+@msg	Script file could not be read	სკრიპტის ფაილის წაკითხვა ვერ მოხერხდა
+@msg	Script folder has more than 2,048 entries	სკრიპტის საქაღალდეში 2048-ზე მეტი ჩანაწერია
+@msg	Script file open mode must be r, w, e or a	სკრიპტის ფაილის გახსნის რეჟიმი უნდა იყოს r, w, e ან a
+@msg	Script file writing is not available	სკრიპტის ფაილების ჩაწერა მიუწვდომელია
+@msg	Script file dialogs are not available	სკრიპტის ფაილის დიალოგები მიუწვდომელია
+@msg	Script files cannot be opened in another application	სკრიპტის ფაილების სხვა აპლიკაციაში გახსნა შეუძლებელია
+@msg	Script file access is unavailable on the web	ვებში სკრიპტის ფაილებზე წვდომა მიუწვდომელია
+@msg	Script has 256 files open	სკრიპტს 256 ფაილი აქვს გახსნილი
+@msg	Script file path exceeds 32,767 characters	სკრიპტის ფაილის მისამართი 32 767 სიმბოლოს აღემატება
+@msg	Script folder mask takes too many steps to match	სკრიპტის საქაღალდის ნიღბის შედარებას ზედმეტად ბევრი ნაბიჯი სჭირდება
+@msg	the script opened more file data than one run may open (32 MiB)	სკრიპტმა გახსნა იმაზე მეტი ფაილის მონაცემი, ვიდრე ერთ გაშვებას შეუძლია (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: იღებს პოზიციას და რეჟიმს
+@msg	vc.run: give a command id, as a string	vc.run: მიუთითეთ ბრძანების id სტრიქონის სახით
+@msg	vc.run: takes a command id and an object of parameters	vc.run: იღებს ბრძანების id-ს და პარამეტრების ობიექტს
+@msg	vc.run: the parameters must be an object	vc.run: პარამეტრები უნდა იყოს ობიექტი
+@msg	vc.run: the result{place} is too large for a script	vc.run: შედეგი{place} ზედმეტად დიდია სკრიპტისთვის
+@msg	$.evalFile requires a file path	$.evalFile-ს სჭირდება ფაილის მისამართი
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: დროის ლიმიტი უნდა იყოს მილიწამების სასრული რიცხვი, 0 ან მეტი
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: იღებს ფაილის მისამართს და დროის ლიმიტს
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
+@msg	{name}: {e} (thrown)	{name}: {e} (გამონაკლისი)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (ლიმიტი)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (ლიმიტი)
+@msg	{name}: {e} (limit)	{name}: {e} (ლიმიტი)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (სინტაქსური შეცდომა)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (სინტაქსური შეცდომა)
+@msg	{name}: {e} (syntax)	{name}: {e} (სინტაქსური შეცდომა)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (შეჩერდა)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (შეჩერდა)
+@msg	{name}: {e} (stopped)	{name}: {e} (შეჩერდა)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (შიდა შეცდომა)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (შიდა შეცდომა)
+@msg	{name}: {e} (internal)	{name}: {e} (შიდა შეცდომა)
+@msg	{e} (these files stay written: {paths})	{e} (ეს ფაილები ჩაწერილი რჩება: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: მიუთითეთ სახელი სტრიქონის სახით
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: მიუთითეთ ლოკალი, მაგალითად "en" ან "de_DE", ან null ინტერფეისის ლოკალისთვის
+@msg	$.localize: give true or false	$.localize: მიუთითეთ true ან false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: შეიძლება დაყენდეს მხოლოდ 512, რომელიც ლოკალიზაციას რთავს, ან 0
+@msg	$.flags: give a number	$.flags: მიუთითეთ რიცხვი
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: აქ სკრიპტები მხოლოდ UTF-8-ს კითხულობენ და წერენ
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: მიუთითეთ კოდირების სახელი სტრიქონის სახით
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: მეხსიერების ქეშის ზომის დაყენება შეუძლებელია
+@msg	$.setenv: give a value, as a string	$.setenv: მიუთითეთ მნიშვნელობა სტრიქონის სახით
+@msg	$.setenv: only {_1} can be set	$.setenv: შეიძლება დაყენდეს მხოლოდ {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: მნიშვნელობაში არის არაუმეტეს {MAX_ENV_BYTES} ასო, ციფრი და _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: მიუთითეთ მილიწამების რაოდენობა 0-დან {MAX_SLEEP_MS}-მდე
+@msg	$.sleep: give a number of milliseconds	$.sleep: მიუთითეთ მილიწამების რაოდენობა
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: გაშვებას არ შეუძლია ლოდინი ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
+@msg	$.bp: scripts here have no debugger	$.bp: აქ სკრიპტებს გამმართველი არ აქვთ
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: სკრიპტებს ჯერ არ შეუძლიათ დიალოგის ჩვენება
+@msg	{name}: give a message	{name}: მიუთითეთ შეტყობინება
+@msg	{name}: give the text the field starts with	{name}: მიუთითეთ ტექსტი, რომლითაც ველი იწყება
+@msg	{name}: the message is longer than 16 KiB	{name}: შეტყობინება 16 KiB-ზე გრძელია
+@msg	{name}: the title is longer than 256 bytes	{name}: სათაური 256 ბაიტზე გრძელია
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: ტექსტი, რომლითაც ველი იწყება, 16 KiB-ზე გრძელია
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
+@msg	vc.document{place} is too large for a script	vc.document{place} ზედმეტად დიდია სკრიპტისთვის
+@msg	vc.log: the log of this run is full	vc.log: ამ გაშვების ჟურნალი სავსეა
+@msg	this function's script run has ended	ამ ფუნქციის სკრიპტის გაშვება დასრულდა
+@msg	the script made more host calls than one run may make	სკრიპტმა იმაზე მეტი მასპინძლის გამოძახება შეასრულა, ვიდრე ერთ გაშვებას შეუძლია
+@msg	the script passed more data to and from commands than one run may pass	სკრიპტმა ბრძანებებს და ბრძანებებიდან იმაზე მეტი მონაცემი გადასცა, ვიდრე ერთ გაშვებას შეუძლია
+@msg	the script added more objects and data to the documents than one run may add	სკრიპტმა დოკუმენტებს იმაზე მეტი ობიექტი და მონაცემი დაამატა, ვიდრე ერთ გაშვებას შეუძლია
+@msg	{what}: the object is not a File or a Folder	{what}: ობიექტი არც File-ია და არც Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: რაოდენობა უნდა იყოს სასრული რიცხვი, 0 ან მეტი
+@msg	File.seek: the position must be a finite number	File.seek: პოზიცია უნდა იყოს სასრული რიცხვი
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: რეჟიმი უნდა იყოს 0, 1 ან 2
+@msg	script file is compiled: {value}	სკრიპტის ფაილი კომპილირებულია: {value}
+@msg	`name` must be the name of a script engine	`name` უნდა იყოს სკრიპტის ძრავის სახელი
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	მთავარი სკრიპტის ძრავა ყოველი გაშვებისთვის ახალია და არასოდეს ინახება, ამიტომ მისი მოცილება შეუძლებელია
+@msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)

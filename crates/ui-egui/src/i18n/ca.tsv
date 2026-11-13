@@ -3599,6 +3599,8 @@ digits	Malayalam	Malaiàlam
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
+	Color Theme Picker	Selector de tema de colors
+	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
 	Reset to Default	Restableix el valor predeterminat
 	Reset to default	Restableix el valor predeterminat
 	Reset to Defaults	Restableix els valors predeterminats
@@ -4175,6 +4177,7 @@ digits	Malayalam	Malaiàlam
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
 	Show Recent Colors	Mostra els colors recents
+	Toggle RGB Percent	Commuta RGB en percentatge
 	Show Original Path	Mostra el traçat original
 	Show Package	Mostra el paquet
 	Show Panel	Mostra el panell
@@ -5375,6 +5378,85 @@ digits	Malayalam	Malaiàlam
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
+@msg	Script file access denied	S'ha denegat l'accés al fitxer de l'script
+@msg	Script file exceeds 8 MiB	El fitxer de l'script supera els 8 MiB
+@msg	Script file is not open	El fitxer de l'script no està obert
+@msg	Script file cannot be decoded	No es pot descodificar el fitxer de l'script
+@msg	Script file is not a regular file	El fitxer de l'script no és un fitxer normal
+@msg	Script file does not exist	El fitxer de l'script no existeix
+@msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
+@msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
+@msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
+@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
+@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
+@msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
+@msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
+@msg	Script has 256 files open	L'script té 256 fitxers oberts
+@msg	Script file path exceeds 32,767 characters	El camí del fitxer de l'script supera els 32.767 caràcters
+@msg	Script folder mask takes too many steps to match	La màscara de carpeta de l'script requereix massa passos per coincidir
+@msg	the script opened more file data than one run may open (32 MiB)	l'script ha obert més dades de fitxer de les que pot obrir una execució (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: rep una posició i un mode
+@msg	vc.run: give a command id, as a string	vc.run: indiqueu un id d'ordre, com a cadena
+@msg	vc.run: takes a command id and an object of parameters	vc.run: rep un id d'ordre i un objecte de paràmetres
+@msg	vc.run: the parameters must be an object	vc.run: els paràmetres han de ser un objecte
+@msg	vc.run: the result{place} is too large for a script	vc.run: el resultat{place} és massa gran per a un script
+@msg	$.evalFile requires a file path	$.evalFile requereix un camí de fitxer
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el temps d'espera ha de ser un nombre finit de mil·lisegons, 0 o més
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: rep un camí de fitxer i un temps d'espera
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línia {line}, columna {column} de {file}: {e} (llançat)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línia {line}, columna {column}: {e} (llançat)
+@msg	{name}: {e} (thrown)	{name}: {e} (llançat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: línia {line}, columna {column} de {file}: {e} (límit)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: línia {line}, columna {column}: {e} (límit)
+@msg	{name}: {e} (limit)	{name}: {e} (límit)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: línia {line}, columna {column} de {file}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: línia {line}, columna {column}: {e} (error de sintaxi)
+@msg	{name}: {e} (syntax)	{name}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: línia {line}, columna {column} de {file}: {e} (aturat)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: línia {line}, columna {column}: {e} (aturat)
+@msg	{name}: {e} (stopped)	{name}: {e} (aturat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: línia {line}, columna {column} de {file}: {e} (error intern)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: línia {line}, columna {column}: {e} (error intern)
+@msg	{name}: {e} (internal)	{name}: {e} (error intern)
+@msg	{e} (these files stay written: {paths})	{e} (aquests fitxers continuen escrits: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indiqueu un nom, com a cadena
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indiqueu una configuració regional com "en" o "de_DE", o null per a la de la interfície
+@msg	$.localize: give true or false	$.localize: indiqueu true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: només es pot establir 512, que activa la localització, o 0
+@msg	$.flags: give a number	$.flags: indiqueu un nombre
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: aquí els scripts només llegeixen i escriuen UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indiqueu el nom d'una codificació, com a cadena
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: no es pot establir la mida de la memòria cau
+@msg	$.setenv: give a value, as a string	$.setenv: indiqueu un valor, com a cadena
+@msg	$.setenv: only {_1} can be set	$.setenv: només es poden establir {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valor té com a màxim {MAX_ENV_BYTES} lletres, xifres i _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indiqueu un nombre de mil·lisegons de 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indiqueu un nombre de mil·lisegons
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: una execució no pot esperar dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-la des del codi propi de l'script
+@msg	$.bp: scripts here have no debugger	$.bp: aquí els scripts no tenen depurador
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: els scripts encara no poden mostrar un quadre de diàleg
+@msg	{name}: give a message	{name}: indiqueu un missatge
+@msg	{name}: give the text the field starts with	{name}: indiqueu el text amb què comença el camp
+@msg	{name}: the message is longer than 16 KiB	{name}: el missatge ocupa més de 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: el títol ocupa més de 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: el text amb què comença el camp ocupa més de 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
+@msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
+@msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
+@msg	the script made more host calls than one run may make	l'script ha fet més crides a l'amfitrió de les que pot fer una execució
+@msg	the script passed more data to and from commands than one run may pass	l'script ha passat més dades a les ordres i des de les ordres de les que pot passar una execució
+@msg	the script added more objects and data to the documents than one run may add	l'script ha afegit als documents més objectes i dades dels que pot afegir una execució
+@msg	{what}: the object is not a File or a Folder	{what}: l'objecte no és un File ni un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: el recompte ha de ser un nombre finit, 0 o més
+@msg	File.seek: the position must be a finite number	File.seek: la posició ha de ser un nombre finit
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: el mode ha de ser 0, 1 o 2
+@msg	script file is compiled: {value}	el fitxer de l'script està compilat: {value}
+@msg	`name` must be the name of a script engine	`name` ha de ser el nom d'un motor d'scripts
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor d'scripts principal és nou a cada execució i no es conserva mai, per tant no es pot descartar
+@msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat

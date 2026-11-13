@@ -1418,6 +1418,43 @@ mod tests {
         assert_eq!(i["objects"]["spots"].as_u64(), Some(1), "{}", i["objects"]);
     }
 
+    /// Spot Color Objects leaves out a fill or stroke at an opacity of 0, which prints no ink, and
+    /// keeps the object while another of its fills or strokes prints the spot color. Gradient
+    /// Objects leaves out a clear gradient fill as well.
+    #[test]
+    fn spot_color_objects_skip_clear_fills_and_strokes() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
+        let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [rect], "swatch": "Ink"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [rect], "swatch": "Ink"})).unwrap();
+        let ramp = s.execute("shape.rectangle", &json!({"x": 50, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let stops = json!([{"offset": 0, "color": "#000", "swatch": "Ink"}, {"offset": 1, "color": "#fff", "swatch": "Ink"}]);
+        s.execute("paint.setFill", &json!({"ids": [ramp], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [ramp], "none": true})).unwrap();
+        let items = |s: &Session, id: &Value| s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().appearance.items.clone();
+        let spots = |s: &mut Session| {
+            let i = s.execute("document.info", &json!({})).unwrap();
+            let mut ids: Vec<u64> = i["spotObjects"].as_array().unwrap().iter().map(|o| o["id"].as_u64().unwrap()).collect();
+            ids.sort_unstable();
+            (ids, i["objects"]["spots"].as_u64(), i["objects"]["gradients"].as_u64())
+        };
+        // The rectangle's fill at an opacity of 0: its stroke still prints the spot color.
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        let fill = items(&s, &rect).iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+        s.execute("appearance.setItem", &json!({"index": fill, "opacity": 0})).unwrap();
+        assert_eq!(spots(&mut s), (vec![rect.as_u64().unwrap(), ramp.as_u64().unwrap()], Some(2), Some(1)));
+        // Every fill and stroke of both objects at an opacity of 0.
+        for id in [&rect, &ramp] {
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            for index in 0..items(&s, id).len() {
+                s.execute("appearance.setItem", &json!({"index": index, "opacity": 0})).unwrap();
+            }
+        }
+        assert_eq!(spots(&mut s), (vec![], None, None));
+    }
+
     /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
     /// its stroke once, and with Selection Only a selection that holds a group and an object inside
     /// it counts that object once.

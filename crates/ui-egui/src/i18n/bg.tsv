@@ -2817,6 +2817,8 @@ digits	Malayalam	Малаялам
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
+	Color Theme Picker	Избор на цветова тема
+	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
 	Reset to Default	Връщане към стандартните
 	Reset to White, Black	Нулиране към бяло, черно
 	Reset with Mesh	Нулиране с мрежа
@@ -3212,6 +3214,7 @@ digits	Malayalam	Малаялам
 	Show Note	Показване на бележка
 	Show Options	Показване на опциите
 	Show Recent Colors	Показване на скорошните цветове
+	Toggle RGB Percent	Превключване на RGB в проценти
 	Show Original Path	Показване на оригиналния път
 	Open this dialog with these settings next time	Отваряне на този прозорец с тези настройки следващия път
 	Auto-Simplify	Автоматично опростяване
