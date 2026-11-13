@@ -9793,6 +9793,11 @@ active the active artboard (the navigator's and the Artboards panel's).
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
 ```
 
+The Pencil's, the Paintbrush's and the Smooth tool's `fidelity` is in screen pixels: the tools send `path.freehand` and
+`path.smoothRegion` the option divided by the zoom, so a stroke keeps as many points and a Smooth drag smooths as much
+at any zoom. The Smooth tool's `fidelity` (0.05 to 100 px, 2.5 by default) is also the one an Alt smoothing drag with
+the Pencil, Paintbrush or Blob Brush uses. The Blob Brush's `fidelity` is in points.
+
 `tool.options {tool}` opens what double-clicking the tool's button opens (its params doc lists every tool), in the
 desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`): `diameter` and `pathLength` (pt),
 `opacity`, `brightness`, `growth`, `fuzziness`, `longest`, `rayFuzziness` and `largest` (%), `rays`, `rings`,
