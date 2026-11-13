@@ -124,6 +124,21 @@ fn a_path_cut_into_too_many_lines_is_skipped() {
     assert_eq!(read.skipped, [("Wild".to_string(), "its path is too detailed for a bevel".to_string())]);
 }
 
+/// Simplifying the paths of one file measures at most a fixed number of point-to-line distances:
+/// a path that needs more than are left is skipped as too detailed, and a short one still reads.
+#[test]
+fn simplifying_the_bevels_of_a_file_has_a_work_limit() {
+    let mut d = Document::new(100.0, 100.0);
+    let wavy: Vec<(f64, f64)> = (0..=3000).map(|i| (i as f64 / 30.0, i as f64 / 30.0 + 5.0 * (i as f64 / 50.0).sin())).collect();
+    add_symbol(&mut d, "Wavy", line(&wavy, false));
+    add_symbol(&mut d, "Notch", line(&[(0.0, 0.0), (20.0, 60.0), (70.0, 40.0), (100.0, 100.0)], false));
+    let read = bevels::bevels_within(&d, 5_000);
+    let names: Vec<&str> = read.bevels.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Notch"]);
+    assert_eq!(read.skipped, [("Wavy".to_string(), "its path is too detailed for a bevel".to_string())]);
+    assert_eq!(bevels_of(&d).bevels.len(), 2);
+}
+
 fn rect(s: &mut Session, x: u32) -> NodeId {
     NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap())
 }

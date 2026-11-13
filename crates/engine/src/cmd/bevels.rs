@@ -27,6 +27,9 @@ pub const MAX_BEVELS: usize = 256;
 pub const MAX_ANCHORS: usize = 4096;
 /// The most points a bevel's path is cut into before it is simplified; a symbol past it is skipped.
 pub const MAX_LINE_POINTS: usize = 8192;
+/// The most point-to-line distances simplifying the bevels of one file may measure; a symbol that
+/// needs more than is left is skipped as too detailed.
+pub const MAX_SIMPLIFY_WORK: u64 = 40_000_000;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -111,6 +114,11 @@ pub struct Read {
 
 /// The bevels of document `doc`: one per symbol, up to [`MAX_BEVELS`] (see the module docs).
 pub fn bevels_of(doc: &Document) -> Read {
+    bevels_within(doc, MAX_SIMPLIFY_WORK)
+}
+
+/// [`bevels_of`] with `work` point-to-line distances to simplify the paths with.
+pub fn bevels_within(doc: &Document, mut work: u64) -> Read {
     let mut out = Read::default();
     for (i, sym) in doc.symbols.iter().enumerate() {
         if i >= MAX_BEVELS {
@@ -121,7 +129,7 @@ pub fn bevels_of(doc: &Document) -> Read {
             out.skipped.push((sym.name.clone(), "another symbol has this name".into()));
             continue;
         }
-        match points_of(&sym.art) {
+        match points_of(&sym.art, &mut work) {
             Ok(points) => out.bevels.push(CustomBevel { name: sym.name.clone(), points }),
             Err(why) => out.skipped.push((sym.name.clone(), why.into())),
         }
@@ -138,8 +146,9 @@ fn open_path(n: &Node) -> Option<&PathData> {
     }
 }
 
-/// The profile points of a bevel symbol's art `n` (see the module docs).
-fn points_of(n: &Node) -> std::result::Result<Vec<(f64, f64)>, &'static str> {
+/// The profile points of a bevel symbol's art `n` (see the module docs), simplified within `work`
+/// point-to-line distances, which it uses up.
+fn points_of(n: &Node, work: &mut u64) -> std::result::Result<Vec<(f64, f64)>, &'static str> {
     let path = open_path(n).ok_or("its art is not one open path")?;
     if path.anchor_count() > MAX_ANCHORS {
         return Err("its path has too many anchors for a bevel");
@@ -180,35 +189,38 @@ fn points_of(n: &Node) -> std::result::Result<Vec<(f64, f64)>, &'static str> {
     // The ends map to the corners exactly.
     let last = pts.len() - 1;
     (pts[0], pts[last]) = ((0.0, 0.0), (1.0, 1.0));
-    let pts = simplified(&pts);
+    let pts = simplified(&pts, work).ok_or("its path is too detailed for a bevel")?;
     BevelProfile::new(&pts).ok_or("its path is too detailed for a bevel")?;
     Ok(pts)
 }
 
 /// `pts` with the fewest points the Ramer-Douglas-Peucker rule keeps at a tolerance (from a
 /// thousandth of the bevel, doubled until they fit) that leaves at most
-/// [`BevelProfile::MAX_POINTS`]. The first and last points are always kept.
-fn simplified(pts: &[(f64, f64)]) -> Vec<(f64, f64)> {
+/// [`BevelProfile::MAX_POINTS`]. The first and last points are always kept. `None` when that
+/// measures more point-to-line distances than `work` has left.
+fn simplified(pts: &[(f64, f64)], work: &mut u64) -> Option<Vec<(f64, f64)>> {
     let mut eps = 1e-3;
     loop {
-        let out = rdp(pts, eps);
+        let out = rdp(pts, eps, work)?;
         if out.len() <= BevelProfile::MAX_POINTS || eps > 2.0 {
-            return out;
+            return Some(out);
         }
         eps *= 2.0;
     }
 }
 
-/// The points of `pts` Ramer-Douglas-Peucker keeps at tolerance `eps`.
-fn rdp(pts: &[(f64, f64)], eps: f64) -> Vec<(f64, f64)> {
+/// The points of `pts` Ramer-Douglas-Peucker keeps at tolerance `eps`; `None` when that measures
+/// more point-to-line distances than `work` has left.
+fn rdp(pts: &[(f64, f64)], eps: f64, work: &mut u64) -> Option<Vec<(f64, f64)>> {
     if pts.len() < 3 {
-        return pts.to_vec();
+        return Some(pts.to_vec());
     }
     let mut keep = vec![false; pts.len()];
     keep[0] = true;
     keep[pts.len() - 1] = true;
     let mut stack = vec![(0, pts.len() - 1)];
     while let Some((a, b)) = stack.pop() {
+        *work = work.checked_sub((b - a).saturating_sub(1) as u64)?;
         let (p, q) = (pts[a], pts[b]);
         let (vx, vy) = (q.0 - p.0, q.1 - p.1);
         let len = vx.hypot(vy);
@@ -227,7 +239,7 @@ fn rdp(pts: &[(f64, f64)], eps: f64) -> Vec<(f64, f64)> {
             stack.push((i, b));
         }
     }
-    pts.iter().zip(keep).filter_map(|(p, k)| k.then_some(*p)).collect()
+    Some(pts.iter().zip(keep).filter_map(|(p, k)| k.then_some(*p)).collect())
 }
 
 /// The document a missing bevels file starts as: one example bevel, a chamfer with a notch.

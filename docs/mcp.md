@@ -3521,7 +3521,8 @@ first anchor at the cap's edge to its last at the side wall, across the page acr
 page along its height, and curves are cut into straight lines of at most 64 points. The file is read when the app
 starts and again each time VectorCraft saves it; `threeD.bevels.reload` reads it again. A file larger than 64 MB is
 not read, at most 256 symbols are read, and a symbol that is not one open path, has more than 4,096 anchors, is cut
-into more than 8,192 straight lines, has ends that are not apart both across and down, or repeats an earlier name is
+into more than 8,192 straight lines, needs more point-to-line distances to simplify than are left of the 40,000,000
+the file may take, has ends that are not apart both across and down, or repeats an earlier name is
 listed in `skipped`. `threeD.bevels.list`
 returns each bevel's `name` and `points`, the `file` path, the `skipped` symbols and any read `error`.
 
