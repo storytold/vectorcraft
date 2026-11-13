@@ -256,6 +256,25 @@ fn band_cover(polys: &[Vec<Point>], top: f64, bottom: f64, admit: bool) -> Vec<(
     union_intervals(iv)
 }
 
+/// [`band_cover`] with `admit`, plus the x of every horizontal edge that lies along the top or
+/// bottom of the band (`top < bottom`), counted by parity as in [`band_boundaries`]: the x at which
+/// the shape or its outline meets the closed band.
+fn band_cover_closed(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f64)> {
+    let mut iv = band_cover(polys, top, bottom, true);
+    for y in [top, bottom] {
+        let mut xs: Vec<f64> = polys
+            .iter()
+            .flat_map(|poly| poly.iter().zip(poly.iter().cycle().skip(1)))
+            .filter(|(a, b)| a.y == y && b.y == y)
+            .flat_map(|(a, b)| [a.x, b.x])
+            .collect();
+        xs.sort_by(f64::total_cmp);
+        iv.extend(xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])));
+    }
+    iv.retain(|e| e.1 > e.0);
+    union_intervals(iv)
+}
+
 /// Every x at which an edge of `polys` bounds the shape within the band `top..bottom`
 /// (`top <= bottom`), sorted and disjoint, leaving out edges that only touch the top or bottom of
 /// the band, stretches of edges that an even number of edges cover, and vertical edges. The flag is
@@ -341,11 +360,30 @@ impl Region {
                 // offset of every height from `y1` less the offset to `y0` plus the offset, so an x
                 // the shape holds at any of them is. Text within the offset of such an x, for every
                 // piece, stays inside the grown shape; finer pieces give it more of that room.
+                //
+                // The band is also cut at every height an offset above or below an anchor of the
+                // shape (when there are at most [`INVERT_WRAP_PIECES`] of them). Within a piece
+                // between such cuts, no anchor enters or leaves the offset window of any of its
+                // heights, so where two parts of the shape bridge a gap together (one within the
+                // offset above and one below), the heights from `y1` less the offset to `y0` plus
+                // the offset reach from one to the other, and the horizontal edges they end at
+                // count.
                 let pieces = if *off > 0.0 { ((bottom - top) * 4.0 / off).ceil().clamp(1.0, INVERT_WRAP_PIECES) } else { 1.0 };
-                for k in 0..pieces as usize {
-                    let at = |k: usize| top + (bottom - top) * k as f64 / pieces;
-                    let (a, b) = (at(k) + off, at(k + 1) - off);
-                    let held = if a <= b { band_intervals(polys, a, b) } else { band_cover(polys, b, a, true) };
+                let mut cuts: Vec<f64> = (0..=pieces as usize).map(|k| top + (bottom - top) * k as f64 / pieces).collect();
+                if *off > 0.0 {
+                    let mut anchors: Vec<f64> =
+                        polys.iter().flatten().flat_map(|p| [p.y - off, p.y + off]).filter(|&y| y > top && y < bottom).collect();
+                    anchors.sort_by(f64::total_cmp);
+                    anchors.dedup();
+                    if anchors.len() <= INVERT_WRAP_PIECES as usize {
+                        cuts.extend(anchors);
+                        cuts.sort_by(f64::total_cmp);
+                        cuts.dedup();
+                    }
+                }
+                for w in cuts.windows(2) {
+                    let (a, b) = (w[0] + off, w[1] - off);
+                    let held = if a <= b { band_intervals(polys, a, b) } else { band_cover_closed(polys, b, a) };
                     iv = intersect_intervals(&iv, &grow(held));
                     if iv.is_empty() {
                         break;
@@ -478,6 +516,18 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0), &[(40.0, 45.0)]);
+    // An Invert Wrap shape of two parts whose offsets meet across the gap between them (45.25 + 5
+    // reaches past 55.125 - 5) keeps the whole line.
+    let upper: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 0.0), (100.0, 45.25), (0.0, 45.25)];
+    let lower: &[(f64, f64)] = &[(0.0, 55.125), (100.0, 55.125), (100.0, 100.0), (0.0, 100.0)];
+    let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
+    assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0), &[(0.0, 100.0)]);
+    // A gap the offsets do not bridge (45 + 5 stops short of 55.125 - 5) holds no line.
+    let upper: &[(f64, f64)] = &[(0.0, 0.0), (100.0, 0.0), (100.0, 45.0), (0.0, 45.0)];
+    let path = PathData::from_bezpath(&polygon_path(&[upper, lower]));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
+    assert!(Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0).is_empty());
 }
 
 /// A hole that starts and ends inside a line's band splits the line, and a band below the hole, or
