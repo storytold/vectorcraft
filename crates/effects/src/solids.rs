@@ -6,7 +6,7 @@ use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::{FillRule, PathData, Rect};
-use vectorcraft_three_d::{Bevel, BevelShape, Extrude, Facet, Inflate, Mesh, View};
+use vectorcraft_three_d::{Bevel, BevelShape, Extrude, Facet, Inflate, Mesh, PlanarFace, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -19,6 +19,15 @@ pub use classic::{CLASSIC_EXTRUDE, CLASSIC_ROTATE, ROTATE_SURFACES, SHADING_COLO
 
 mod source;
 pub(crate) use source::{resolve, resolve_for};
+
+mod graphics;
+pub use graphics::{
+    GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, graphic_symbols, mapped_graphics, missing_symbol, names_graphic_symbol,
+    rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
+};
+pub use graphics::{
+    MAX_OFFSET as GRAPHIC_MAX_OFFSET, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, rename_appearance_graphic_symbol,
+};
 
 pub(crate) mod shadow;
 
@@ -69,6 +78,12 @@ pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
                 out.insert(key.into(), serde_json::json!((a + 180.0).rem_euclid(360.0) - 180.0));
             }
         }
+    }
+    // A plane has only a front, so graphics on the back cap are dropped.
+    if to == ROTATE
+        && let Some(Value::Array(list)) = out.get_mut(GRAPHICS)
+    {
+        list.retain(|g| g.get("face").and_then(Value::as_str) != Some(PlanarFace::Back.id()));
     }
     Value::Object(out)
 }
@@ -212,6 +227,7 @@ fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
     }
     crate::lighting::validate(p)?;
     shadow::validate(p)?;
+    graphics::validate(id, p)?;
     if let Some(v) = p.get("bevel")
         && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
     {
@@ -241,6 +257,9 @@ pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) 
 /// `item`, whose shadow is cast by that item's solid alone.
 fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, item: Option<usize>) -> Result<(), String> {
     validate_solid_params(id, p)?;
+    if let Some(doc) = doc {
+        graphics::validate_symbols(doc, p)?;
+    }
     let label = label_of(id);
     let n = &*source::resolve_for(doc, n, label, is_plane(id))?;
     if is_container(n) {
@@ -434,6 +453,7 @@ pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
 
 /// [`validate_three_d`] with the symbols of `doc` ([`validate_solid_in`]).
 pub fn validate_three_d_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    graphics::validate(id, p)?;
     if crate::revolve::is_revolve(id) { crate::revolve::validate_in(doc, n, id, p) } else { validate_solid_in(doc, n, id, p) }
 }
 
@@ -449,6 +469,7 @@ pub fn validate_three_d_at(n: &Node, id: &str, p: &Value, at: Option<(usize, usi
 /// [`validate_three_d_at`] with the symbols of `doc` ([`validate_solid_in`]). A symbol instance, a
 /// blend and a clipping group take a 3D effect as groups do: on the object itself.
 pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: Option<(usize, usize)>) -> Result<(), String> {
+    graphics::validate(id, p)?;
     match at {
         Some(_) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
@@ -463,6 +484,7 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
 /// build the art, for an edit that hides the effect: hidden, it draws nothing, so its object does
 /// not need to fit.
 pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
+    graphics::validate(id, p)?;
     if crate::revolve::is_revolve(id) { crate::revolve::validate_params_of(id, p) } else { validate_solid_params(id, p) }
 }
 
@@ -709,8 +731,8 @@ type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
 /// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
 /// ([`masked`]). The art comes in two parts: the effect's shadow ([`cast_shadow`], none with it
 /// off), to be drawn behind every surface of the object, and the surfaces.
-fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<ShadowAndSurfaces> {
-    let art = surfaces_for(n, fx, shapes)?;
+fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<ShadowAndSurfaces> {
+    let art = surfaces_for(doc, n, fx, shapes)?;
     // A shadow past the limits draws the source path, as a solid past them does; commands report
     // the error ([`validate_solid_in`]).
     let shadow = match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes).ok()? {
@@ -786,8 +808,139 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
 /// its member's scopes and ink ([`cast_shadow`]).
 type Cast<'a> = (vectorcraft_three_d::ShadowCaster, vectorcraft_three_d::Shadow, Vec<shadow::Cast<'a>>);
 
-/// [`art_for`] without the shadow: the solids' surfaces.
-fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
+/// The graphics of a 3D effect with parameters `p`, drawn on its faces ([`graphics::face_art`]):
+/// for each planar face with a graphic, the art and the face. `caps` are the faces the viewer sees
+/// of the ends of the object's solids, each with its end; `bounds` are the bounds the solids were
+/// built with; `opacity` is the opacity of the fill or stroke those solids are painted with, which
+/// the graphics take too. `elements` is the effect's count of drawn path elements, shared by every
+/// call for one effect ([`graphics::face_art`]).
+fn graphic_art(
+    doc: Option<&Document>,
+    id: NodeId,
+    (effect, p): (&str, &Value),
+    bounds: Rect,
+    caps: &[&Facet],
+    opacity: f32,
+    elements: &mut usize,
+) -> Vec<(PlanarFace, Arc<Node>)> {
+    let list = graphics::mapped_graphics(p);
+    if list.is_empty() || !takes_graphics(effect) {
+        return vec![];
+    }
+    let view = view_options(p);
+    PlanarFace::ALL
+        .into_iter()
+        .filter_map(|face| {
+            let on: Vec<&Facet> = caps.iter().copied().filter(|f| f.end == Some(face)).collect();
+            let map = if effect == ROTATE {
+                vectorcraft_three_d::plane_face_map(bounds, view)
+            } else {
+                vectorcraft_three_d::extrude_face_map(bounds, extrude_options(p), view, face)
+            }?;
+            graphics::face_art(doc, id, &list, (face, &map), bounds.center(), &on, elements).map(|mut art| {
+                art.opacity *= opacity;
+                (face, Arc::new(art))
+            })
+        })
+        .collect()
+}
+
+/// A solid (a fill's or a stroke's) with ends the viewer sees: the index of its surface, its
+/// member, the ends, the opacity and blending mode of its fill or stroke, and whether its surface
+/// carries an opacity mask (a gradient's transparency under a colored light, [`surface`]).
+struct Filled {
+    at: usize,
+    member: usize,
+    caps: Vec<Facet>,
+    opacity: f32,
+    blend: BlendMode,
+    masked: bool,
+}
+
+/// Does a surface in `paint` carry an opacity mask ([`surface`])?
+fn masks_surface(paint: &Paint, colored: bool) -> bool {
+    colored && crate::lighting::opaque_paint(paint).1.is_some()
+}
+
+/// The graphics of the solids `filled` ([`graphic_art`]), each with the index of the surface it is
+/// drawn right after (the last of those solids holding its face) and its face. With `per_member`
+/// (a member's opacity mask or blending mode applies to its surfaces) each member's solids get
+/// graphics of their own, clipped to that member's caps, so they stay in that member's scopes.
+/// All the groups share one limit on the path elements drawn: once it is reached, later groups
+/// draw no graphics.
+fn placed_graphics(
+    doc: Option<&Document>,
+    id: NodeId,
+    effect: (&str, &Value),
+    bounds: Rect,
+    filled: &[Filled],
+    per_member: bool,
+) -> Vec<(usize, PlanarFace, Arc<Node>)> {
+    let mut groups: Vec<Vec<&Filled>> = vec![];
+    for f in filled {
+        // Solids whose fills or strokes differ in opacity or blending mode get graphics of their
+        // own, each drawn as its fill or stroke is. A solid whose surface carries an opacity mask
+        // gets its own too, which takes that mask ([`with_graphics`]).
+        let joins = |first: &Filled| {
+            (!per_member || first.member == f.member) && first.opacity == f.opacity && first.blend == f.blend && !first.masked && !f.masked
+        };
+        match groups.iter_mut().find(|g| g.first().is_some_and(|first| joins(first))) {
+            Some(g) => g.push(f),
+            None => groups.push(vec![f]),
+        }
+    }
+    let mut out = vec![];
+    let mut elements = 0usize;
+    for group in groups {
+        let caps: Vec<&Facet> = group.iter().flat_map(|f| &f.caps).collect();
+        let opacity = group.first().map_or(1.0, |f| f.opacity);
+        let blend = group.first().map_or(BlendMode::Normal, |f| f.blend);
+        for (face, mut art) in graphic_art(doc, id, effect, bounds, &caps, opacity, &mut elements) {
+            if let Some(f) = group.iter().rev().find(|f| f.caps.iter().any(|c| c.end == Some(face))) {
+                Arc::make_mut(&mut art).blend = blend;
+                out.push((f.at, face, art));
+            }
+        }
+    }
+    out
+}
+
+/// One solid's surface as [`surfaces_for`] builds it: its faces' depths, its art, its member's
+/// scopes, and for each face the end of a solid it is, when the viewer sees it.
+type BuiltSurface<'s> = (Vec<Placed>, Node, &'s [Scope], Vec<Option<PlanarFace>>);
+
+/// [`with_graphics`] of built surfaces, each drawn whole.
+fn whole_surfaces<'s>(surfaces: Vec<BuiltSurface<'s>>, arts: &[(usize, PlanarFace, Arc<Node>)]) -> Vec<(&'s [Scope], Arc<Node>)> {
+    with_graphics(surfaces.into_iter().map(|(_, s, scopes, _)| (scopes, Arc::new(s))).collect(), arts)
+}
+
+/// `surfaces` drawn whole, each with its scopes, and the graphics `arts` ([`placed_graphics`]) each
+/// right after its surface, with that surface's scopes and its opacity mask (a gradient's
+/// transparency), so a graphic is hidden where its cap is.
+fn with_graphics<'s>(surfaces: Vec<(&'s [Scope], Arc<Node>)>, arts: &[(usize, PlanarFace, Arc<Node>)]) -> Vec<(&'s [Scope], Arc<Node>)> {
+    let mut out = Vec::with_capacity(surfaces.len() + arts.len());
+    for (k, (scopes, s)) in surfaces.into_iter().enumerate() {
+        let mask = s.extras().mask.clone();
+        out.push((scopes, s));
+        out.extend(arts.iter().filter(|(at, ..)| *at == k).map(|(.., art)| {
+            let mut art = art.clone();
+            if let Some(mask) = &mask {
+                Arc::make_mut(&mut art).extras_mut().mask = Some(mask.clone());
+            }
+            (scopes, art)
+        }));
+    }
+    out
+}
+
+/// The ends of `f` the viewer sees, for a fill's solid or a stroke's: where its graphics go.
+fn seen_ends(f: &[Facet]) -> impl Iterator<Item = &Facet> {
+    f.iter().filter(|f| f.end.is_some() && !f.away)
+}
+
+/// [`art_for`] without the shadow: the solids' surfaces, with the graphics mapped onto their planar
+/// faces drawn right after the last of the solids' surfaces that holds that face.
+fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let classic = fx.id == CLASSIC_EXTRUDE || fx.id == CLASSIC_ROTATE;
@@ -795,11 +948,14 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
     let masks = has_masks(shapes);
     // The paint copies of every solid together: past the allowance the source path is drawn.
     let mut paint_bytes = 0usize;
+    // The caps are copied only when the effect has graphics to draw on them.
+    let graphics_on = !classic && takes_graphics(&fx.id) && !mapped_graphics(&p).is_empty();
     if is_plane(&fx.id) {
         // Every part turns about the centre of the object's own bounds (a group's members about
         // the centre of theirs), so they stay together.
         let mut out = vec![];
-        for s in shapes {
+        let mut filled = vec![];
+        for (member, s) in shapes.iter().enumerate() {
             for item in &s.items {
                 let (paint, opacity, blend) = paint_of(item, s.opacity);
                 let (area, rule) = region(&s.path, s.rule, item);
@@ -807,10 +963,18 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
                 if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, &paint, colored), &paint) {
                     return None;
                 }
+                if graphics_on {
+                    let caps: Vec<Facet> = seen_ends(&f).cloned().collect();
+                    if !caps.is_empty() {
+                        filled.push(Filled { at: out.len(), member, caps, opacity, blend, masked: masks_surface(&paint, colored) });
+                    }
+                }
                 let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
                 out.push((s.scopes.as_slice(), Arc::new(art)));
             }
         }
+        let arts = placed_graphics(doc, n.id, (ROTATE, &p), b, &filled, masks);
+        let out = with_graphics(out, &arts);
         return Some(if masks { masked(n.id, out) } else { out.into_iter().map(|(_, s)| s).collect() });
     }
     let (parts, bounds) = solid_parts(shapes, b);
@@ -842,36 +1006,56 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
         let (_, opacity, blend) = paint_of(item, *member);
         opacity >= 1.0 && blend == BlendMode::Normal
     });
-    let surfaces: Vec<(Vec<Placed>, Node, &[Scope])> = solids
+    let arts = if !graphics_on {
+        vec![]
+    } else {
+        let filled: Vec<Filled> = solids
+            .iter()
+            .enumerate()
+            .filter_map(|(at, (item, member, _, f, shape))| {
+                let caps: Vec<Facet> = seen_ends(f).cloned().collect();
+                let (paint, opacity, blend) = paint_of(item, *member);
+                let masked = masks_surface(&paint, colored);
+                (!caps.is_empty()).then_some(Filled { at, member: *shape, caps, opacity, blend, masked })
+            })
+            .collect();
+        placed_graphics(doc, n.id, (&fx.id, &p), bounds, &filled, masks)
+    };
+    let surfaces: Vec<BuiltSurface> = solids
         .into_iter()
         .map(|(item, member, scopes, f, shape)| {
             let closed = shapes.get(shape).is_some_and(|s| s.path.subpaths.iter().all(|p| p.closed));
             let paints = Paints::of(item, closed);
             let depths: Vec<Placed> = f.iter().map(|f| Placed::of(f, shape, paints)).collect();
+            let ends = f.iter().map(|f| f.end.filter(|_| !f.away)).collect();
             let (paint, opacity, blend) = paint_of(item, member);
             let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
-            (depths, art, scopes)
+            (depths, art, scopes, ends)
         })
         .collect();
     if masks {
-        return Some(masked(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect()));
+        return Some(masked(n.id, whole_surfaces(surfaces, &arts)));
     }
     // One order takes a plain group of faces from each solid, one face for each facet. With
     // colored lights a surface can instead be one clipped composite of all its facets. A composite
     // has no faces to order, so when any surface is one, every surface of the solid, masked ones
     // included, draws whole in member order.
-    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
-    if !opaque || !plain {
-        return Some(surfaces.into_iter().map(|(_, s, _)| Arc::new(s)).collect());
-    }
+    let plain =
+        surfaces.iter().all(|(depths, s, _, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
     // A surface in a gradient with transparent stops carries an opacity mask: its faces go in runs
-    // ([`in_runs`]), and each run carries the mask.
-    let masks: Vec<Option<Box<OpacityMask>>> = surfaces.iter().map(|(_, s, _)| s.extras().mask.clone()).collect();
-    let (mut placed, mut faces) = (vec![], vec![]);
-    for (surface, (depths, s, _)) in surfaces.into_iter().enumerate() {
+    // ([`in_runs`]), and each run carries the mask. With graphics as well, the surfaces draw whole,
+    // each graphic right after its surface.
+    let masks: Vec<Option<Box<OpacityMask>>> = surfaces.iter().map(|(_, s, _, _)| s.extras().mask.clone()).collect();
+    let masked_faces = masks.iter().any(Option::is_some);
+    if !opaque || !plain || (masked_faces && !arts.is_empty()) {
+        return Some(whole_surfaces(surfaces, &arts).into_iter().map(|(_, s)| s).collect());
+    }
+    let (mut placed, mut faces, mut ends) = (vec![], vec![], vec![]);
+    for (surface, (depths, s, _, e)) in surfaces.into_iter().enumerate() {
         if let NodeKind::Group { children, .. } = s.kind {
             placed.extend(depths);
             faces.extend(children.into_iter().map(|face| Some((surface, face))));
+            ends.extend(e);
         }
     }
     let sealed = match fx.id.as_str() {
@@ -880,8 +1064,18 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
         _ => extrude_options(&p).cap,
     };
     let order = draw_order(&placed, sealed);
-    let faces: Vec<(usize, Arc<Node>)> = order.into_iter().filter_map(|k| faces.get_mut(k).and_then(Option::take)).collect();
-    let children = if masks.iter().all(Option::is_none) { faces.into_iter().map(|(_, face)| face).collect() } else { in_runs(n.id, faces, &masks) };
+    if masked_faces {
+        let faces: Vec<(usize, Arc<Node>)> = order.into_iter().filter_map(|k| faces.get_mut(k).and_then(Option::take)).collect();
+        return Some(vec![Arc::new(Node::group(n.id, in_runs(n.id, faces, &masks)))]);
+    }
+    // Each face's graphics go right after the last of the faces they are drawn on.
+    let last: Vec<Option<usize>> =
+        arts.iter().map(|(_, face, _)| order.iter().rposition(|k| ends.get(*k).copied().flatten() == Some(*face))).collect();
+    let mut children = Vec::with_capacity(order.len() + arts.len());
+    for (at, k) in order.into_iter().enumerate() {
+        children.extend(faces.get_mut(k).and_then(Option::take).map(|(_, face)| face));
+        children.extend(last.iter().zip(&arts).filter(|(l, _)| **l == Some(at)).map(|(_, (.., art))| art.clone()));
+    }
     Some(vec![Arc::new(Node::group(n.id, children))])
 }
 
@@ -966,7 +1160,7 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     let n = &*resolve(doc, n, "").ok()?;
     if is_container(n) {
-        return group_solid_art(n);
+        return group_solid_art(doc, n);
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
@@ -975,7 +1169,7 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
     let remaining: Vec<Effect>;
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
-        let (shadow, surfaces) = art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }])?;
+        let (shadow, surfaces) = art_for(doc, n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }])?;
         children.extend(shadow.into_iter().chain(surfaces));
         // Later geometry effects act on the projected art as a whole.
         remaining = past_effect(&n.appearance.effects, index);
@@ -991,7 +1185,7 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
         for item in &paints {
             if let Some((index, fx)) = solid(item.effects()) {
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
-                let (shadow, surfaces) = art_for(n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
+                let (shadow, surfaces) = art_for(doc, n, fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
                 let later: Vec<Effect> = item.effects().iter().skip(index + 1).filter(|e| !is_three_d(&e.id)).cloned().collect();
                 let with_later = |mut art: Arc<Node>| {
                     Arc::make_mut(&mut art).appearance.effects = later.clone();
@@ -1015,17 +1209,88 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// geometry effects before it reshape the members, those after it bend the result as a whole; the
 /// group's own fills and strokes are not drawn. `None` when the effect is only on one of the
 /// group's own fills or strokes, or when its members can't become solids.
-fn group_solid_art(n: &Node) -> Option<Node> {
+fn group_solid_art(doc: Option<&Document>, n: &Node) -> Option<Node> {
     let (index, fx) = solid(&n.appearance.effects)?;
     let mut shapes = members(n, "").ok()?;
     reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
-    let (shadow, surfaces) = art_for(n, fx, &shapes)?;
+    let (shadow, surfaces) = art_for(doc, n, fx, &shapes)?;
     let children = shadow.into_iter().chain(surfaces).collect();
     let remaining = past_effect(&n.appearance.effects, index);
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();
     Some(art)
+}
+
+/// Where the graphics of the 3D effect of `n` (on the object itself with `item` `None`, else on its
+/// fill or stroke `item`) are drawn: the bounds its solids are built with and the maps of their
+/// planar faces ([`graphics::GraphicFrame`]). `None` when `n` has no visible Extrude & Bevel or
+/// Rotate there, or its art can't be built.
+pub fn graphic_frame(doc: Option<&Document>, n: &Node, item: Option<usize>) -> Option<graphics::GraphicFrame> {
+    frame_of(doc, n, item, &solid)
+}
+
+/// [`graphic_frame`] of the 3D effect at `index` in that list, which must be a visible Extrude &
+/// Bevel or Rotate.
+pub fn graphic_frame_at(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<graphics::GraphicFrame> {
+    frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && SOLIDS.contains(&e.id.as_str())).map(|e| (index, e)))
+}
+
+/// Does a visible geometry effect come after the 3D effect at `index` in the effects of `n` (on the
+/// object itself with `item` `None`, else on its fill or stroke `item`)? Such an effect moves or
+/// bends the drawn art, graphics included, while [`graphic_frame_at`] places the graphics on the
+/// art before it.
+pub fn graphics_reshaped_after(n: &Node, item: Option<usize>, index: usize) -> bool {
+    n.appearance.effects_at(item).and_then(|fx| fx.get(index + 1..)).is_some_and(crate::has_geometry)
+}
+
+/// Finds a 3D effect in a list of effects, with its index there.
+type Pick<'p> = dyn for<'e> Fn(&'e [Effect]) -> Option<(usize, &'e Effect)> + 'p;
+
+/// [`graphic_frame`] of the 3D effect `pick` finds in the effects of `n` or its `item`.
+fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'_>) -> Option<graphics::GraphicFrame> {
+    let n = &*resolve(doc, n, "").ok()?;
+    let (fx, shapes) = if is_container(n) {
+        let (index, fx) = pick(&n.appearance.effects).filter(|_| item.is_none())?;
+        let mut shapes = members(n, "").ok()?;
+        reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
+        (fx, shapes)
+    } else {
+        let (path, rule) = profile(n)?;
+        let ctx = GeomContext::of(n);
+        match item {
+            None => {
+                let (index, fx) = pick(&n.appearance.effects)?;
+                let path = geometry(&path, n.appearance.effects.get(..index)?, &ctx);
+                (fx, vec![Profile { path, rule, items: solid_paints(n), opacity: 1.0, scopes: vec![] }])
+            }
+            Some(k) => {
+                let it = n.appearance.items.get(k)?;
+                let (index, fx) = pick(it.effects())?;
+                let path = geometry(&geometry(&path, &n.appearance.effects, &ctx), it.effects().get(..index)?, &ctx.item(it));
+                (fx, vec![Profile { path, rule, items: vec![it.clone()], opacity: 1.0, scopes: vec![] }])
+            }
+        }
+    };
+    if !takes_graphics(&fx.id) {
+        return None;
+    }
+    let p = crate::merged_params(&fx.id, &fx.params);
+    let b = union_bounds(&shapes)?;
+    let view = view_options(&p);
+    if fx.id == ROTATE {
+        let plane = vectorcraft_three_d::plane_face_map(b, view);
+        return Some(graphics::GraphicFrame::new(b, plane, None));
+    }
+    let (_, bounds) = solid_parts(&shapes, b);
+    let options = extrude_options(&p);
+    let map = |face| vectorcraft_three_d::extrude_face_map(bounds, options, view, face);
+    Some(graphics::GraphicFrame::new(bounds, map(PlanarFace::Front), map(PlanarFace::Back)))
+}
+
+/// The bounds of the art symbol `name` of `doc` draws as a graphic, in the symbol's coordinates.
+pub fn graphic_bounds(doc: &Document, name: &str) -> Option<Rect> {
+    graphics::art_bounds(doc, name)
 }
 
 /// `effects` without the 3D effect at `index` and the geometry effects before it, which shape the
