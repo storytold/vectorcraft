@@ -69,6 +69,17 @@ fn update_editing_hash(svg: &mut String) {
     }
 }
 
+/// Format physical dimensions (inches, mm, cm) with enough precision and significant digits
+/// that small nonzero sizes do not round to zero or distort relative aspect ratio.
+fn physical_num(v: f64) -> String {
+    if !v.is_finite() || v <= 0.0 {
+        return "0".into();
+    }
+    let leading_zeros = (-v.log10().floor() as i32).max(0);
+    let decimals = (leading_zeros + 3).clamp(3, 8) as u8;
+    fmt_num(v, decimals)
+}
+
 /// `doc` as SVG with `opts`, the native file `native` embedded for Preserve Editing, its generated
 /// ids starting with `id_prefix`.
 fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix: &str) -> Output {
@@ -170,7 +181,13 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        if let Some(suffix) = doc.units.svg_suffix() {
+            let w_val = physical_num(doc.units.from_pt(rect.width()));
+            let h_val = physical_num(doc.units.from_pt(rect.height()));
+            out.push_str(&format!(" width=\"{w_val}{suffix}\" height=\"{h_val}{suffix}\""));
+        } else {
+            out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        }
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
