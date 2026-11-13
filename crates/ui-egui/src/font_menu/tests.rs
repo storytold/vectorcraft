@@ -790,6 +790,108 @@ fn a_modified_turn_that_starts_a_stream_keeps_it_off_the_field() {
     assert_eq!((left, notches), (1, 0), "the stream began as a modified turn");
 }
 
+/// The font menus of two panels (other ids, other scopes) share their filters: a filter chosen in
+/// one menu is on when the other opens, and it lists its rows by it.
+#[test]
+fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
+    use vectorcraft_text::FontClass;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let fields = [("character", "character-font", 10.0), ("control-bar", "control-font", 60.0)];
+    let field = |top: f32| egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(200.0, 30.0));
+    // Draws both fields (and the open menu), and returns the texts drawn with their centers and
+    // each menu's state.
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0))), ..Default::default() };
+        let mut ids = [egui::Id::NULL; 2];
+        let mut out = ctx.run_ui(input, |ui| {
+            for (i, (scope, id, top)) in fields.into_iter().enumerate() {
+                ui.push_id(scope, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(field(top)), |ui| {
+                        ids[i] = ui.scope_id().with(id).with("font-menu");
+                        super::font_menu(ui, id, "Inter", 200.0, None, super::MenuLook { samples: false, ..Default::default() });
+                    });
+                });
+            }
+        });
+        out.textures_delta.clear();
+        let texts: Vec<(String, egui::Pos2)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => None,
+            })
+            .collect();
+        let states = ids.map(|id| ctx.data(|d| d.get_temp::<super::MenuState>(id)).unwrap_or_default());
+        (texts, states)
+    };
+    let press = |at: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(vec![button(false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    let open = |i: usize| press(field(fields[i].2).min + egui::vec2(10.0, 10.0));
+    let close = || {
+        let escape = [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+        frame(escape.to_vec());
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    // The topmost text `label`: a filter chip, above the rows.
+    let chip = |label: &str| {
+        let (texts, _) = frame(vec![]);
+        texts
+            .into_iter()
+            .filter(|(t, _)| t == label)
+            .map(|(_, at)| at)
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap_or_else(|| panic!("{label} is drawn"))
+    };
+    let families = |st: &super::MenuState| st.rows.iter().filter(|r| matches!(r, Row::Family(_))).count();
+    let filters = |st: &super::MenuState| (st.script, st.class, st.variable_only, st.favorites_only);
+    frame(vec![]);
+    // Favorites only, chosen in the first panel's menu, with no favorites: the second lists nothing.
+    open(0);
+    press(chip("★"));
+    close();
+    let (_, [first, second]) = frame(vec![]);
+    assert!(first.favorites_only && second.favorites_only, "the second menu has the filter before it opens");
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert!(second.favorites_only);
+    assert_eq!(families(&second), 0, "no favorites, so the second menu lists no family");
+    // A script, a kind and Variable chosen in the second panel's menu are on in the first.
+    press(chip(super::script_label(3)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(0);
+    let (_, [first, _]) = frame(vec![]);
+    assert_eq!(filters(&first), (3, Some(FontClass::Monospaced), true, true));
+    // Every filter, turned off in the first menu, is off in the second, which lists families again.
+    press(chip("★"));
+    press(chip(super::script_label(0)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert_eq!(filters(&second), (0, None, false, false));
+    assert!(families(&second) > 0, "every family is listed again");
+}
+
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
 #[test]
 fn the_variable_filter_is_named_as_fonts_are() {
