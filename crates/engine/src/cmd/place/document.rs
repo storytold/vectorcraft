@@ -118,6 +118,7 @@ pub(crate) fn document_art(
     document_art_opened(name, bytes, None, path, page, bounding, page_box, cmd)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn document_art_opened(
     name: &str,
     bytes: &[u8],
@@ -243,6 +244,7 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
     source_with_blob(name, bytes, None, path, page, bounding, page_box, cmd)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn source_with_blob(
     name: &str,
     bytes: &[u8],
@@ -268,11 +270,10 @@ pub(crate) fn source_with_blob(
             return Ok(cached.clone());
         }
         if existing_bytes.is_none() && !hash_prefix.is_empty() {
-            if let Some((_, same_file)) =
-                guard.iter().find(|(at, s)| (at.as_deref() == path || at.is_none()) && s.key.split('-').next().is_some_and(|h| h == hash_prefix))
-            {
-                existing_bytes = Some(Arc::clone(&same_file.blob.bytes));
-            }
+            existing_bytes = guard
+                .iter()
+                .find(|(at, s)| (at.as_deref() == path || at.is_none()) && s.key.split('-').next().is_some_and(|h| h == hash_prefix))
+                .map(|(_, same_file)| Arc::clone(&same_file.blob.bytes));
         }
     }
 

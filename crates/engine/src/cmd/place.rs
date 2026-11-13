@@ -167,11 +167,9 @@ fn resolve_pdf_pages(p: &Value, cmd: &str, single_only: bool, total_pages: Optio
 
     if let Some(v) = p.get("page").filter(|v| !v.is_null()) {
         let n = v.as_u64().filter(|n| (1..=100_000).contains(n)).ok_or_else(|| bad(cmd, "page must be a whole number from 1"))? as usize;
-        if let Some(total) = total_pages {
-            if n > total {
-                let pages = if total == 1 { "page" } else { "pages" };
-                return Err(bad(cmd, format!("page {n}: has {total} {pages}")));
-            }
+        if let Some(total) = total_pages.filter(|&total| n > total) {
+            let pages = if total == 1 { "page" } else { "pages" };
+            return Err(bad(cmd, format!("page {n}: has {total} {pages}")));
         }
         return Ok(vec![n]);
     }
@@ -224,6 +222,7 @@ fn resolve_pdf_pages(p: &Value, cmd: &str, single_only: bool, total_pages: Optio
 
 fn parse_page_range_strict(raw: &str, total_pages: Option<usize>, cmd: &str) -> Result<Vec<usize>> {
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for part in raw.split(',') {
         let token = part.trim();
         if token.is_empty() {
@@ -235,13 +234,11 @@ fn parse_page_range_strict(raw: &str, total_pages: Option<usize>, cmd: &str) -> 
             if start == 0 || end < start || end > 100_000 {
                 return Err(bad(cmd, format!("invalid page range \"{token}\"")));
             }
-            if let Some(total) = total_pages {
-                if end > total {
-                    return Err(bad(cmd, format!("page range \"{token}\" exceeds PDF page count ({total})")));
-                }
+            if let Some(total) = total_pages.filter(|&total| end > total) {
+                return Err(bad(cmd, format!("page range \"{token}\" exceeds PDF page count ({total})")));
             }
             for page in start..=end {
-                if !out.contains(&page) {
+                if seen.insert(page) {
                     out.push(page);
                 }
             }
@@ -250,12 +247,10 @@ fn parse_page_range_strict(raw: &str, total_pages: Option<usize>, cmd: &str) -> 
             if page == 0 || page > 100_000 {
                 return Err(bad(cmd, format!("invalid page number \"{token}\"")));
             }
-            if let Some(total) = total_pages {
-                if page > total {
-                    return Err(bad(cmd, format!("page {page} exceeds PDF page count ({total})")));
-                }
+            if let Some(total) = total_pages.filter(|&total| page > total) {
+                return Err(bad(cmd, format!("page {page} exceeds PDF page count ({total})")));
             }
-            if !out.contains(&page) {
+            if seen.insert(page) {
                 out.push(page);
             }
         }
@@ -442,7 +437,7 @@ fn load_pages_mode(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool, si
                 });
             } else {
                 let a = pdf_art(src.name, &src.bytes, src.path, page_num, opts.clone(), !crop, cmd)?;
-                total_nodes = total_nodes.saturating_add(a.nodes.len());
+                total_nodes = total_nodes.saturating_add(a.nodes.iter().map(|n| n.count()).sum::<usize>());
                 if total_nodes > MAX_PLACE_TOTAL_NODES {
                     return Err(bad(cmd, format!("multipage PDF placement exceeded the {MAX_PLACE_TOTAL_NODES}-node budget on page {page_num}")));
                 }
@@ -516,6 +511,7 @@ pub(crate) fn pdf_art(
     pdf_art_opened(src, bytes, None, path, page, opts, bounding, cmd)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn pdf_art_opened(
     src: &str,
     bytes: &[u8],
