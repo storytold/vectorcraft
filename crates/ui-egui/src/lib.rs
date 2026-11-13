@@ -91,8 +91,8 @@ pub mod workspaces;
 mod document_drag;
 #[cfg(test)]
 use tests::{
-    background as tests_background, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors, svg as tests_svg,
-    synthetic as tests_synthetic, sysclip as tests_sysclip,
+    background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
+    svg as tests_svg, synthetic as tests_synthetic, sysclip as tests_sysclip,
 };
 #[cfg(test)]
 mod tests;

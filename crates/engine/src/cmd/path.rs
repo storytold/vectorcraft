@@ -1276,7 +1276,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
-                            let cuts = refs.iter().filter_map(|&(s, seg)| (s == si).then_some(seg)).collect();
+                            let cuts = subpath_refs(refs, si).collect();
                             without_segments(sp, &cuts)
                         })
                         .filter(|s| s.anchors.len() >= 2)
@@ -1288,7 +1288,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                         .into_iter()
                         .enumerate()
                         .flat_map(|(si, sp)| {
-                            let gone = set.iter().filter_map(|&(s, ai)| (s == si).then_some(ai)).collect();
+                            let gone = subpath_refs(set, si).collect();
                             without_anchors(sp, &gone)
                         })
                         .filter(|s| s.anchors.len() >= 2)
@@ -1312,6 +1312,12 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// The anchor or segment indexes in `refs` that belong to subpath `si`, in index order.
+/// `refs` is ordered by subpath first, so this reads only that subpath's entries.
+pub(super) fn subpath_refs(refs: &BTreeSet<(usize, usize)>, si: usize) -> impl Iterator<Item = usize> + '_ {
+    refs.range((si, 0)..=(si, usize::MAX)).map(|&(_, i)| i)
 }
 
 /// Retain path `id` from `d` without copying its geometry before deletion takes its subpaths.
@@ -1722,7 +1728,7 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         let Some(pd) = st.doc.node(*id).and_then(|n| n.path_data()) else { continue };
         let (mut subs, mut starts) = (vec![], vec![]);
         for (si, sp) in pd.subpaths.iter().enumerate() {
-            let at: BTreeSet<usize> = set.iter().filter(|(s, _)| *s == si).map(|(_, a)| *a).collect();
+            let at: BTreeSet<usize> = subpath_refs(set, si).collect();
             let pieces = sp.cut_at(&at);
             // The pieces that start at a cut: every piece of an opened closed subpath, all but the
             // first of an open one.

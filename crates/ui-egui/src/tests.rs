@@ -8,6 +8,7 @@ mod cut;
 mod distortkeys;
 mod docsetup;
 mod document_drag;
+pub(super) mod folder;
 mod font_menu;
 mod fonts;
 mod guide_escape;
