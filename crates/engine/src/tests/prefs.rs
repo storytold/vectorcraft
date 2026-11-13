@@ -464,6 +464,34 @@ fn linux_display_server_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.linux_display_server, "automatic");
 }
 
+/// Performance › Use Monitor Profile for Canvas: on by default and for preference files written
+/// before it, a boolean only, saved, listed under Performance, and set without changing the
+/// document.
+#[test]
+fn monitor_profile_display_is_on_by_default_and_changes_no_document() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(old.monitor_profile_display);
+    let (revision, doc) = (s.active().unwrap().revision, s.active().unwrap().doc.clone());
+    s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": false})).unwrap();
+    assert!(!s.prefs.monitor_profile_display);
+    assert_eq!(s.prefs.to_json()["monitorProfileDisplay"], false);
+    for bad in [json!("off"), json!(0), json!(null)] {
+        assert!(s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": bad})).is_err(), "{bad}");
+        assert!(!s.prefs.monitor_profile_display);
+    }
+    assert_eq!(s.active().unwrap().revision, revision);
+    assert!(std::sync::Arc::ptr_eq(&s.active().unwrap().doc, &doc), "the document is not edited");
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "monitorProfileDisplay").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["label"].as_str()), (Some("Performance"), Some("Use Monitor Profile for Canvas")));
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
+}
+
 /// Linux Display Server's pen choice (#2028): set by value or by label, saved, and off by default.
 #[test]
 fn linux_display_server_has_a_choice_for_an_attached_pen() {
@@ -756,6 +784,9 @@ fn precise_cursors_replace_every_pen_state() {
         Cursor::LivePaintBucket,
         Cursor::LivePaintBucketFace,
         Cursor::LivePaintBucketEdge,
+        Cursor::LivePaintSelectFace,
+        Cursor::LivePaintSelectEdge,
+        Cursor::LivePaintSelectOutside,
     ] {
         assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
     }
@@ -2797,4 +2828,34 @@ fn snap_to_glyph_options_read_set_and_reset() {
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+}
+
+/// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving
+/// and While Scaling, all on by default, kept as the `pixelSnap` preference group; bad keys and
+/// values change nothing, preferences saved without the group read it as all on, and resetting the
+/// preferences turns them all back on.
+#[test]
+fn pixel_snapping_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"drawing": true, "moving": true, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
+    let set = json!({"drawing": true, "moving": false, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({"moving": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pixelSnap"})).unwrap(), set);
+    assert!(!s.prefs.pixel_snap.moving && s.prefs.pixel_snap.drawing && s.prefs.pixel_snap.scaling);
+    for bad in [json!({"moving": 1}), json!({"rotating": false})] {
+        assert!(s.execute("view.snapToPixel.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "pixelSnap", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), set, "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "pixelSnap", "value": {"scaling": false}})).unwrap();
+    let both = json!({"drawing": true, "moving": false, "scaling": false});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), both);
+    // Preferences written before the group existed, and a group that names only some options.
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert_eq!(older.pixel_snap, vectorcraft_tools::PixelSnap::default());
+    let partial: Prefs = serde_json::from_value(json!({"pixelSnap": {"drawing": false}})).unwrap();
+    assert_eq!(partial.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: true });
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
 }

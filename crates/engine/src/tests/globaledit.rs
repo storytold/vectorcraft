@@ -330,18 +330,103 @@ fn global_edit_needs_one_supported_object() {
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
     assert!(e.contains("no similar objects") && e.contains("rotated"), "{e}");
     assert!(s.doc().unwrap().global_edit.is_none());
-    // A group holding type is refused, though another such group exists.
+    // A group holding type is not offered, though another such group exists.
     let group = |s: &mut Session, x: f64| {
         let p = rect(s, x, 100.0, 10.0, 10.0);
         let t = NodeId(s.execute("text.create", &json!({"x": x, "y": 150, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
         group_of(s, &[p, t])
     };
     let (g, _) = (group(&mut s, 600.0), group(&mut s, 700.0));
+    assert_not_offered(&mut s, g, "a group holding type");
+}
+
+fn enabled(s: &Session, id: &str) -> bool {
+    command_specs().iter().find(|c| c.id == id).is_some_and(|c| (c.enabled)(s).is_ok())
+}
+
+/// With `id` selected, Start Global Edit is disabled, and running it changes nothing.
+fn assert_not_offered(s: &mut Session, id: NodeId, what: &str) {
+    sel(s, &[id]);
+    assert!(!enabled(s, "select.globalEdit"), "{what}");
+    let r = s.execute("select.globalEdit", &json!({}));
+    assert!(matches!(&r, Err(EngineError::Disabled(_, why)) if why.contains("symbol instances and groups of them")), "{what}: {r:?}");
+    assert!(s.doc().unwrap().global_edit.is_none(), "{what}");
+}
+
+/// An embedded 4 × 4 image at `x`, in `parent` (the default layer when `None`) → its id. The
+/// selection stays as it is.
+fn image(s: &mut Session, x: f64, parent: Option<NodeId>) -> NodeId {
+    s.edit("Place", |d, _| {
+        let id = d.alloc_id();
+        let im = vectorcraft_doc::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::translate((x, 0.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(parent.or(d.default_layer()), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+        Ok(id)
+    })
+    .unwrap()
+}
+
+#[test]
+fn the_enabled_check_follows_edits_to_the_selected_group() {
+    let mut s = session();
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    card(&mut s, 300.0, 1.0);
     sel(&mut s, &[g]);
-    // The menu only checks that it is a group; starting refuses its contents.
-    let e = s.execute("select.globalEdit", &json!({})).unwrap_err();
-    assert!(e.to_string().contains("symbol instances and groups of them"), "{e}");
-    assert!(s.doc().unwrap().global_edit.is_none());
+    assert!(enabled(&s, "select.globalEdit"));
+    // The answer is kept between frames, and an edit of the selected group changes it.
+    assert!(enabled(&s, "select.globalEdit"));
+    image(&mut s, 0.0, Some(g));
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    assert!(!enabled(&s, "select.globalEdit"), "an image put into the selected group");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    assert!(enabled(&s, "select.globalEdit"), "after Undo");
+}
+
+#[test]
+fn start_global_edit_is_offered_only_for_a_group_of_supported_objects() {
+    let mut s = session();
+    // Groups holding an image, groups holding a group that holds type, and empty groups; two of
+    // each, so that each would have a group like it.
+    for x in [0.0, 300.0] {
+        let p = rect(&mut s, x, 100.0, 10.0, 10.0);
+        let i = image(&mut s, x, None);
+        let g = group_of(&mut s, &[p, i]);
+        assert_not_offered(&mut s, g, "a group holding an image");
+        let (p, q) = (rect(&mut s, x, 200.0, 10.0, 10.0), rect(&mut s, x + 20.0, 200.0, 10.0, 10.0));
+        let t = NodeId(s.execute("text.create", &json!({"x": x, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        let inner = group_of(&mut s, &[q, t]);
+        let g = group_of(&mut s, &[p, inner]);
+        assert_not_offered(&mut s, g, "a group holding a group that holds type");
+        let empty = s
+            .edit("Group", |d, _| {
+                let id = d.alloc_id();
+                d.insert(d.default_layer(), 0, Node::group(id, vec![]))?;
+                Ok(id)
+            })
+            .unwrap();
+        assert_not_offered(&mut s, empty, "an empty group");
+    }
+    // A group of supported objects is offered and starts; while on, Stop is offered whatever is
+    // selected.
+    let p = rect(&mut s, 600.0, 400.0, 10.0, 10.0);
+    let t = NodeId(s.execute("text.create", &json!({"x": 600, "y": 450, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let typed = group_of(&mut s, &[p, t]);
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    sel(&mut s, &[g]);
+    assert!(enabled(&s, "select.globalEdit"));
+    assert_eq!(start(&mut s, g, json!({})), [g, copy]);
+    sel(&mut s, &[typed]);
+    assert!(enabled(&s, "select.globalEdit"), "Stop");
+    assert_eq!(s.execute("select.globalEdit", &json!({})).unwrap()["active"], false);
 }
 
 #[test]

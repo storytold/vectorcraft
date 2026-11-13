@@ -96,6 +96,8 @@
 	Blend Vertically	Bland lodret
 	Convert to CMYK	Konvertér til CMYK
 	Convert to Grayscale	Konvertér til gråtoner
+	Convert to Indexed Color	Konvertér til indekserede farver
+	Convert to Indexed Color…	Konvertér til indekserede farver…
 	Convert to RGB	Konvertér til RGB
 	Invert Colors	Invertér farver
 	Overprint Black…	Overprint sort…
@@ -1540,6 +1542,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Indstillinger for Warichu…
+	Warichu Settings	Indstillinger for Warichu
+	Lines:	Linjer:
+	Line Gap:	Linjeafstand:
 	Composite Fonts…	Sammensatte skrifttyper…
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
@@ -3606,6 +3613,11 @@ theme	Appearance	Udseende
 	Primary	Primær
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
+	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
+	Canvas display profile:	Canvassets skærmprofil:
+	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.
+	No usable display profile was found: the canvas is drawn in sRGB.	Der blev ikke fundet nogen brugbar skærmprofil: canvasset tegnes i sRGB.
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
 	Export Preferences…	Eksportér præferencer…
@@ -4246,8 +4258,15 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunne ikke placere {name}: dokumentet, den blev sluppet på, var lukket
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunne ikke placere {name}: dokumentet, den blev placeret i, var lukket
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunne ikke placere {name}: dokumentet, den blev sluppet på, blev gendannet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunne ikke placere {name}: dokumentet, den blev placeret i, blev gendannet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunne ikke indsætte: dokumentet, der blev indsat i, blev gendannet
 @msg	Couldn't read {name}: {e}	Kunne ikke læse {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata for {title}: {e}. Kopierne gemmes i {folder}, standardmappen til gendannelse; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata for {title}: {e}. Kopierne gemmes i {folder}, mappen angivet i Præferencer; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata: {e}. Kopierne gemmes i {folder}, standardmappen til gendannelse; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata: {e}. Kopierne gemmes i {folder}, mappen angivet i Præferencer; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
 @msg	Create Outlines: select text objects	Opret konturer: markér tekstobjekter
 @msg	Create from Guides: the document has no artboard	Opret ud fra hjælpelinjer: dokumentet har ingen tegneflade
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Opret ud fra hjælpelinjer: hjælpelinjerne danner mere end {MAX_PIECES} udsnit
@@ -4614,6 +4633,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	stierne indeholder ugyldige koordinater
 @msg	paths: give at least one file	stier: angiv mindst én fil
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
+@msg	the document it was prepared for is no longer active	dokumentet, det blev forberedt til, er ikke længere aktivt
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
 @msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
@@ -4827,6 +4847,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Åbnede med {n} note: {first}|{notice}. Åbnede med {n} noter: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
 @msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
@@ -5176,6 +5197,8 @@ imageTrace	Outline	Kontur
 	Vivid	Intens
 	Spectrum	Spektrum
 	Perceptual	Perceptuel
+	Hue Clockwise	Farvetone med uret
+	Hue Counterclockwise	Farvetone mod uret
 	Relative Colorimetric	Relativ kolorimetrisk
 	Absolute Colorimetric	Absolut kolorimetrisk
 	Exact	Eksakt
@@ -5841,6 +5864,8 @@ swatch	Bright Violet	Kraftig violet
 	Objects on Path Tool	Objekter på kurve-værktøj
 	Attach Objects on Path	Tilknyt objekter til kurve
 	Expand Objects on Path	Udvid objekter på kurve
+	Detach	Frigør
+	Detach Object from Path	Frigør objekt fra kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -5988,7 +6013,7 @@ axis	Y Axis	Y-akse
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gælder for gradientfyld (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gælder for gradientfyld (paint.setFill)
 @msg	`dither` must be true or false	`dither` skal være true eller false
-@msg	`method` must be classic or perceptual	`method` skal være classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` skal være classic, perceptual, hue-clockwise eller hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installér »{name}«, som beder om et stort beregningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Hver kørsel kan tage op til {minutes} minutter og udføre {times} gange så meget arbejde, som andre plug-ins må. Den kører i baggrunden, og du kan annullere den.
@@ -6029,6 +6054,7 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop
@@ -6189,6 +6215,22 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+	Notched Ribbon	Takket bånd
+	Double Line	Dobbelt linje
+	Wave	Bølge
+	Teardrop	Dråbe
+	Striped Ribbon	Stribet bånd
+	Fine Nib	Fin pen
+	Broad Nib	Bred pen
+	Chisel	Mejsel
+	Round Pen	Rund pen
+	Pressure Pen	Trykpen
+	Beads	Perler
+	Dash Dot	Streg-prik
+	Scallops	Bølgekant
+	Stars	Stjerner
+	Triangles	Trekanter
+	Sparkles	Gnister
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6200,6 +6242,13 @@ axis	Y Axis	Y-akse
 	Area Text	Områdetekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Indstillinger for fastgørelse til pixel
+	Pixel Snapping Options…	Indstillinger for fastgørelse til pixel…
+	Snap to Pixel While Drawing	Fastgør til pixel ved tegning
+	Snap to Pixel While Moving	Fastgør til pixel ved flytning
+	Snap to Pixel While Scaling	Fastgør til pixel ved skalering
+	These options take effect when View › Snap to Pixel is on.	Disse indstillinger virker, når Vis › Fastgør til pixel er slået til.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6285,6 +6334,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankerpunktinspektør
 	Add Points at Crossings	Tilføj punkter ved krydsninger
 	Split at Crossings	Opdel ved krydsninger
+	Trim at Crossings Tool	Værktøj til trimning ved krydsninger
+	Trim at Crossings	Trim ved krydsninger
 	Extend Path	Forlæng sti
 	Measure & Inspect	Mål og undersøg
 	Set Anchor	Angiv ankerpunkt
@@ -6813,3 +6864,9 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+	Banner Hems and Grommets…	Bannersømme og maljer…
+	Banner Hems and Grommets	Bannersømme og maljer
+	Hem	Søm
+	Grommets	Maljer
+	Grommet Inset	Maljernes afstand fra kanten
+	Diameter	Diameter

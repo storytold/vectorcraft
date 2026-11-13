@@ -627,6 +627,8 @@ font-technology	Variable	Вариативные
 	Convert to Artboards	Преобразовать в монтажные области
 	Convert to CMYK	Преобразовать в CMYK
 	Convert to Grayscale	Преобразовать в оттенки серого
+	Convert to Indexed Color	Преобразовать в индексированные цвета
+	Convert to Indexed Color…	Преобразовать в индексированные цвета…
 	Convert To Outlines	Преобразовать в контуры
 	Convert To Point Type	Преобразовать в точечный текст
 	Convert to RGB	Преобразовать в RGB
@@ -1612,6 +1614,8 @@ file-filter	Templates	Шаблоны
 	Objects on Path Tool	Инструмент «Объекты на контуре»
 	Attach Objects on Path	Прикрепить объекты к контуру
 	Expand Objects on Path	Разобрать объекты на контуре
+	Detach	Открепить
+	Detach Object from Path	Открепить объект от контура
 	Release Live Paint	Освободить быструю заливку
 	Release Repeat	Освободить повтор
 	Release Slice	Освободить фрагмент
@@ -2728,6 +2732,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -3666,6 +3675,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметры Warichu…
+	Warichu Settings	Параметры Warichu
+	Lines:	Строки:
+	Line Gap:	Интервал между строками:
 	Composite Fonts…	Составные шрифты…
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
@@ -4376,8 +4390,15 @@ axis	Both	Оба
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не удалось поместить {name}: документ, в который его перетащили, был закрыт
 @msg	Couldn't place {name}: the document it was placed in was closed	Не удалось поместить {name}: документ, в который его помещали, был закрыт
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не удалось поместить {name}: документ, в который его перетащили, был возвращён к сохранённой версии
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не удалось поместить {name}: документ, в который его помещали, был возвращён к сохранённой версии
+@msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты
 @msg	Create from Guides: the document has no artboard	Создание из направляющих: в документе нет монтажной области
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Создание из направляющих: направляющие образуют более {MAX_PIECES} фрагментов
@@ -4463,6 +4484,9 @@ axis	Both	Оба
 @msg	`{keep}` is not a side of this axis	`{keep}` не является стороной этой оси
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` должно быть `auto` или кодом языка, например `en` или `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` должно быть цветом #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` должно быть цветом #rrggbb или названием цвета слоя
+@msg	unknown Live Paint option `{key}`	неизвестный параметр быстрой заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	неизвестный параметр создания фигур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
@@ -4622,6 +4646,7 @@ axis	Both	Оба
 @msg	internal error: {msg} (please report this bug)	внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше: включите «Записывать страницы длиннее 200 in в полном размере, в пунктах»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	в PDF 1.4 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы уложиться в предел страницы PDF/A-2 в 14 400 единиц: файл записывается как PDF 1.6
@@ -4805,6 +4830,7 @@ axis	Both	Оба
 @msg	paths contain invalid coordinates	контуры содержат недопустимые координаты
 @msg	paths: give at least one file	paths: укажите как минимум один файл
 @msg	replace: the object to replace was changed or deleted	replace: заменяемый объект был изменён или удалён
+@msg	the document it was prepared for is no longer active	документ, для которого это было подготовлено, больше не активен
 @msg	pattern missing	узор отсутствует
 @msg	patterns nested too deeply are filled with mid-grey	слишком глубоко вложенные узоры заполняются серым
 @msg	percent must be above 0 and at most 6400, not {p}	percent должен быть больше 0 и не более 6400, а не {p}
@@ -4840,6 +4866,7 @@ axis	Both	Оба
 @msg	select a repeat	выделите повтор
 @msg	select an Intertwine group	выделите группу переплетения
 @msg	select an Objects on Path group	выделите группу объектов на контуре
+@msg	choose the object to detach with its Select/Move widget	выберите открепляемый объект его элементом «Выбрать/Переместить»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	к контуру внутри составного контура, перехода, оболочки, повтора или группы переплетения нельзя прикрепить объекты
 @msg	a clipping path can't take objects	к контуру обрезки нельзя прикрепить объекты
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	объекты внутри перехода, оболочки, повтора или группы переплетения нельзя прикрепить к контуру
@@ -5060,6 +5087,7 @@ axis	Both	Оба
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Открыто с {n} примечанием: {first}|{notice}. Открыто с {n} примечаниями: {first}|{notice}. Открыто с {n} примечаниями: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
@@ -5164,6 +5192,7 @@ axis	Both	Оба
 @msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -5561,7 +5590,9 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` должен быть front или back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графика наносится на плоские грани: используйте тип объекта «Выдавливание» или «Плоскость»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
 @msg	The graphics are too complex: simplify the symbols' art	Графика слишком сложна: упростите иллюстрации символов
@@ -5915,7 +5946,9 @@ axis	Y Axis	Ось Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` применяется к градиентным заливкам (paint.setFill)
 @msg	`dither` must be true or false	`dither` должно быть true или false
 	Perceptual	Перцепционный
-@msg	`method` must be classic or perceptual	`method` должен быть classic или perceptual
+	Hue Clockwise	Оттенок по часовой стрелке
+	Hue Counterclockwise	Оттенок против часовой стрелки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` должен быть classic, perceptual, hue-clockwise или hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` должен быть pad, repeat или reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` должен быть целым числом от 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` применяется к линейным, радиальным, коническим и ромбовидным градиентам
@@ -6158,6 +6191,7 @@ axis	Y Axis	Ось Y
 	Continue	Продолжить
 	Continue Action	Продолжить действие
 	Delete Action Step	Удалить шаг действия
+	Move Action Step	Переместить шаг действия
 	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
 	Stop: {message}	Остановка: {message}
 @msg	no action is waiting at a stop	ни одно действие не ожидает на остановке
@@ -6329,6 +6363,22 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+	Notched Ribbon	Лента с насечками
+	Double Line	Двойная линия
+	Wave	Волна
+	Teardrop	Капля
+	Striped Ribbon	Полосатая лента
+	Fine Nib	Тонкое перо
+	Broad Nib	Широкое перо
+	Chisel	Стамеска
+	Round Pen	Круглое перо
+	Pressure Pen	Перо с нажимом
+	Beads	Бусины
+	Dash Dot	Штрихпунктир
+	Scallops	Фестоны
+	Stars	Звёзды
+	Triangles	Треугольники
+	Sparkles	Искры
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
@@ -6714,6 +6764,13 @@ theme	Appearance	Оформление
 	Area Text	Текст в области
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Измерять текст по границам глифа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметры привязки к пикселю
+	Pixel Snapping Options…	Параметры привязки к пикселю…
+	Snap to Pixel While Drawing	Привязать к пикселю при рисовании
+	Snap to Pixel While Moving	Привязать к пикселю при перемещении
+	Snap to Pixel While Scaling	Привязать к пикселю при масштабировании
+	These options take effect when View › Snap to Pixel is on.	Эти параметры действуют, когда включено Просмотр › Привязать к пикселю.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу
@@ -6799,6 +6856,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор опорных точек
 	Add Points at Crossings	Добавить точки на пересечениях
 	Split at Crossings	Разрезать на пересечениях
+	Trim at Crossings Tool	Инструмент «Подрезка на пересечениях»
+	Trim at Crossings	Подрезать на пересечениях
 	Extend Path	Продлить контур
 	Measure & Inspect	Измерение и анализ
 	Set Anchor	Задать опорную точку
@@ -7489,3 +7548,9 @@ shape	Open	Открытый
 	Margin	Поле
 	Box	Рамка
 	Swatch	Образец
+	Banner Hems and Grommets…	Подгибы и люверсы баннера…
+	Banner Hems and Grommets	Подгибы и люверсы баннера
+	Hem	Подгиб
+	Grommets	Люверсы
+	Grommet Inset	Отступ люверсов от края
+	Diameter	Диаметр

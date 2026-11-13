@@ -592,6 +592,8 @@ font-technology	Variable	可變
 	Convert to Artboards	轉換為工作區域
 	Convert to CMYK	轉換為 CMYK
 	Convert to Grayscale	轉換為灰階
+	Convert to Indexed Color	轉換為索引色彩
+	Convert to Indexed Color…	轉換為索引色彩…
 	Convert To Outlines	轉換為外框
 	Convert To Point Type	轉換為點狀文字
 	Convert to RGB	轉換為 RGB
@@ -1589,6 +1591,8 @@ file-filter	Templates	範本
 	Objects on Path Tool	路徑上的物件工具
 	Attach Objects on Path	附加路徑上的物件
 	Expand Objects on Path	展開路徑上的物件
+	Detach	分離
+	Detach Object from Path	將物件從路徑分離
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -2022,6 +2026,7 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	choose the object to detach with its Select/Move widget	請用物件的「選取/移動」控制項選取要分離的物件
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
 @msg	a clipping path can't take objects	剪裁路徑無法附加物件
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑
@@ -2234,6 +2239,7 @@ file-filter	Templates	範本
 @msg	cannot read PDF: {0}	無法讀取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 設定無效：{0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數：請開啟「以實際尺寸（點）寫入長於 200 in 的頁面」
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持在 PDF/A-2 的 14,400 單位頁面上限之內：檔案將以 PDF 1.6 寫入
@@ -2612,19 +2618,28 @@ file-filter	Templates	範本
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
 @msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
+@msg	Couldn't place {name}: the document it was dropped on was reverted	無法置入 {name}：放置它的文件已回復
+@msg	Couldn't place {name}: the document it was placed in was reverted	無法置入 {name}：要置入的文件已回復
+@msg	Couldn't paste: the document it was pasted in was reverted	無法貼上：要貼上的文件已回復
 @msg	no files to place	沒有要置入的檔案
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
 @msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
+@msg	the document it was prepared for is no longer active	為其準備的文件已不再處於使用中
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
 @msg	there are no printer settings to open here	此處沒有可開啟的印表機設定
 @msg	Couldn't save recovery data: {e}	無法儲存復原資料：{e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	無法儲存 {title} 的復原資料：{e}。拷貝存放在 {folder}（預設的復原資料夾）；若要使用其他資料夾，請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	無法儲存 {title} 的復原資料：{e}。拷貝存放在 {folder}（在「偏好設定」中設定的資料夾）；若要使用其他資料夾，請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	無法儲存復原資料：{e}。拷貝存放在 {folder}（預設的復原資料夾）；若要使用其他資料夾，請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	無法儲存復原資料：{e}。拷貝存放在 {folder}（在「偏好設定」中設定的資料夾）；若要使用其他資料夾，請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
 @msg	Saved recovery data for {title}	已儲存 {title} 的復原資料
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已捨棄 {n} 份復原的文件
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已還原 {n} 份復原的文件：請儲存以保留
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已開啟，附有 {n} 則註解：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已開啟，附有 {n} 則註解：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已儲存 {path}，附有 {n} 則註解：{first}
 @msg	Saving recovery data for {_1}	正在儲存 {_1} 的復原資料
 @msg	This shortcut file is in a form VectorCraft can't read.	VectorCraft 無法讀取此快速鍵檔案的格式。
@@ -2676,6 +2691,7 @@ file-filter	Templates	範本
 @msg	every numbered name for it is taken in the Fonts folder	字體資料夾中所有編號名稱都已被使用
 @msg	every numbered name for {name} is taken in the document's folder	文件所在資料夾中 {name} 的所有編號名稱都已被使用
 @msg	No linked files to look for	沒有要尋找的連結檔案
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	此連結位於符號、圖表設計、圖樣或不透明度遮色片中，在畫布上沒有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
@@ -2806,6 +2822,9 @@ file-filter	Templates	範本
 @msg	a mask has more than one art block	遮色片含有多個圖稿區塊
 @msg	mask art ends outside a mask dictionary	遮色片圖稿在遮色片字典之外結束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必須是 #rrggbb 格式的顏色
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必須是 #rrggbb 格式的顏色或圖層顏色名稱
+@msg	unknown Live Paint option `{key}`	未知的即時上色選項 `{key}`
+@msg	unknown Shape Builder option `{key}`	未知的形狀建立選項 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	連結的影像無法轉換為漸層網格：請先內嵌
 @msg	the image has no usable size or position	影像沒有可用的尺寸或位置
 @msg	the image's pixels can't be read	無法讀取影像的像素
@@ -3797,6 +3816,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Rating:	評等：
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
+	Use Monitor Profile for Canvas	畫布使用顯示器描述檔
+	The canvas is drawn in sRGB.	畫布以 sRGB 繪製。
+	Canvas display profile:	畫布顯示描述檔：
+	The system matches the window to the display's colors.	系統會讓視窗符合顯示器的色彩。
+	No usable display profile was found: the canvas is drawn in sRGB.	找不到可用的顯示器描述檔：畫布以 sRGB 繪製。
 	Rearrange All Artboards	重新排列所有工作區域
 	Rearrange	重新排列
 	Select All Artboards	選取所有工作區域
@@ -4734,6 +4758,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Tate-chu-yoko	縱中橫
 	Tate-chu-yoko Settings…	縱中橫設定…
 	Tate-chu-yoko Settings	縱中橫設定
+	Warichu	割註
+	Warichu Settings…	割註設定…
+	Warichu Settings	割註設定
+	Lines:	行數：
+	Line Gap:	行間距：
 	Composite Fonts…	複合字體…
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
@@ -5665,7 +5694,10 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必須是 front 或 back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	圖形會對應到平坦的面：請使用「突出」或「平面」物件類型
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
+	Graphics map onto the Plane, Extrude and Revolve object types.	圖形會對應到「平面」、「突出」與「迴轉」物件類型。
+@msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
 @msg	The graphics are too complex: simplify the symbols' art	圖形過於複雜：請簡化符號的圖稿
@@ -5949,7 +5981,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
-@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+	Hue Clockwise	色相順時針
+	Hue Counterclockwise	色相逆時針
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必須是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
@@ -6192,6 +6226,7 @@ axis	Y Axis	Y 軸
 	Continue	繼續
 	Continue Action	繼續動作
 	Delete Action Step	刪除動作步驟
+	Move Action Step	移動動作步驟
 	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	沒有動作在停止處等待
@@ -6363,6 +6398,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口緞帶
+	Double Line	雙線
+	Wave	波浪
+	Teardrop	淚滴
+	Striped Ribbon	條紋緞帶
+	Fine Nib	細筆尖
+	Broad Nib	寬筆尖
+	Chisel	鑿形
+	Round Pen	圓頭筆
+	Pressure Pen	壓感筆
+	Beads	珠串
+	Dash Dot	點劃線
+	Scallops	扇貝邊
+	Stars	星形
+	Triangles	三角形
+	Sparkles	閃光
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -6382,6 +6433,13 @@ axis	Y Axis	Y 軸
 	Area Text	區域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	依字符邊界測量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	靠齊像素選項
+	Pixel Snapping Options…	靠齊像素選項…
+	Snap to Pixel While Drawing	繪製時靠齊像素
+	Snap to Pixel While Moving	移動時靠齊像素
+	Snap to Pixel While Scaling	縮放時靠齊像素
+	These options take effect when View › Snap to Pixel is on.	這些選項會在「檢視 › 靠齊像素」開啟時生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
@@ -6467,6 +6525,8 @@ anchor	Points:	點：
 	Anchor Inspector	錨點檢查器
 	Add Points at Crossings	在交叉處增加錨點
 	Split at Crossings	在交叉處分割
+	Trim at Crossings Tool	在交叉處修剪工具
+	Trim at Crossings	在交叉處修剪
 	Extend Path	延長路徑
 	Measure & Inspect	測量與檢查
 	Set Anchor	設定錨點
@@ -7046,3 +7106,9 @@ breakText	Glyphs	字符
 	Margin	邊距
 	Box	框
 	Swatch	色票
+	Banner Hems and Grommets…	橫幅折邊與扣眼…
+	Banner Hems and Grommets	橫幅折邊與扣眼
+	Hem	折邊
+	Grommets	扣眼
+	Grommet Inset	扣眼邊距
+	Diameter	直徑

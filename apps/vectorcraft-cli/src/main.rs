@@ -418,10 +418,18 @@ fn convert(args: &[String]) -> Result<(), String> {
         // Save as Template writes every artboard, with the .ai options.
         ("file.saveAsTemplate", json!({"path": output, "format": "ait", "outlineText": outline_text, "acknowledgeLoss": replace_lossy}))
     } else {
-        // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
-        // PSD).
-        let params = json!({"path": output, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+        let params = json!({"path": output, "artboard": artboard, "range": range, "acknowledgeLoss": replace_lossy});
         let mut params = with_pixel_scale(params, &output, scale, ppi);
+        // An option the format doesn't read comes back in the warnings, so each goes out only
+        // when it was asked for: `outlineText` with --outline-text, and `hiddenLayers` to the
+        // formats that have it (SVG, PSD), where a conversion keeps hidden layers and objects,
+        // written hidden.
+        if outline_text {
+            params["outlineText"] = json!(true);
+        }
+        if vectorcraft_engine::cmd::fileio::writable_format(None, Some(&output)).is_ok_and(|f| f.options.iter().any(|o| o.name == "hiddenLayers")) {
+            params["hiddenLayers"] = json!(true);
+        }
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
         }
