@@ -5,7 +5,7 @@
 //! tint (`Paint::Solid.swatch` / `.tint`, `GradientStop.swatch` / `.tint`); a tint swatch is a
 //! swatch whose own paint links to its base that way. [`Document::map_solid_paints`] rewrites
 //! those links (and colours) wherever art and swatches hold them, copying only the nodes that
-//! change.
+//! change; [`Document::map_paints`] replaces whole paints of any kind in the same places.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -124,6 +124,52 @@ impl Document {
     /// ([`Paint::map_links`]). Only nodes holding a changed paint (and the paths to them) are
     /// copied. Returns the number of changed paints.
     pub fn map_solid_paints(&mut self, f: &mut LinkFn) -> usize {
+        let mut n = self.map_art_paints(&mut relink(f));
+        for gs in &mut self.graphic_styles {
+            for it in &mut gs.appearance.items {
+                n += usize::from(item_paint_mut(it).map_links(f));
+            }
+        }
+        for w in self.swatches_iter_mut() {
+            n += usize::from(w.paint.map_links(f));
+        }
+        let mut g = relink(f);
+        for def in &mut self.char_styles {
+            for key in ["fill", "stroke"] {
+                n += usize::from(map_style_paint(&mut def.attrs, key, &mut g));
+            }
+        }
+        n
+    }
+
+    /// Visit every paint in the places [`Document::map_solid_paints`] visits (fills, strokes, text
+    /// runs, image colorize paints, dynamic symbol instances' own paints and graphs' stored series and
+    /// label paints in the art, opacity masks included, symbol definitions, graph designs, pattern tiles and the tile that pattern
+    /// editing's Cancel puts back; graphic styles; the swatches; character styles' fill and
+    /// stroke), whatever its kind. `f(paint)` gives the paint to put in its place, or `None` to keep
+    /// it. Only nodes holding a changed paint (and the paths to them) are copied. Returns the number
+    /// of changed paints.
+    pub fn map_paints(&mut self, f: &mut PaintFn) -> usize {
+        let mut n = self.map_art_paints(f);
+        for gs in &mut self.graphic_styles {
+            for it in &mut gs.appearance.items {
+                n += usize::from(replace_paint(item_paint_mut(it), f));
+            }
+        }
+        for w in self.swatches_iter_mut() {
+            n += usize::from(replace_paint(&mut w.paint, f));
+        }
+        for def in &mut self.char_styles {
+            for key in ["fill", "stroke"] {
+                n += usize::from(map_style_paint(&mut def.attrs, key, f));
+            }
+        }
+        n
+    }
+
+    /// [`Document::map_paints`] limited to the node trees: the art, symbol definitions, graph
+    /// designs, pattern tiles and the tile that pattern editing's Cancel puts back.
+    fn map_art_paints(&mut self, f: &mut PaintFn) -> usize {
         let mut n = map_trees(&mut self.layers, f);
         for s in &mut self.symbols {
             n += map_tree(&mut s.art, f);
@@ -134,19 +180,6 @@ impl Document {
         for p in self.patterns.iter_mut().chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut())) {
             n += map_trees(&mut p.art, f);
         }
-        for gs in &mut self.graphic_styles {
-            for it in &mut gs.appearance.items {
-                n += usize::from(item_paint_mut(it).map_links(f));
-            }
-        }
-        for w in self.swatches_iter_mut() {
-            n += usize::from(w.paint.map_links(f));
-        }
-        for def in &mut self.char_styles {
-            for key in ["fill", "stroke"] {
-                n += usize::from(map_style_paint(&mut def.attrs, key, f));
-            }
-        }
         n
     }
 
@@ -156,9 +189,10 @@ impl Document {
         let roots: Vec<NodeId> =
             ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
         let mut n = 0;
+        let mut g = relink(f);
         for id in roots {
             let Some(node) = self.node(id) else { continue };
-            if let Some((new, count)) = map_node(node, f)
+            if let Some((new, count)) = map_node(node, &mut g)
                 && let Some(slot) = self.node_mut(id)
             {
                 *slot = new;
@@ -176,7 +210,7 @@ impl Document {
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).chain(graph_paints(m)).for_each(&mut *f);
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -258,14 +292,39 @@ impl FreeSwatchNames {
 /// true when it changed them.
 pub type LinkFn<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
 
-/// Apply `f` to the paint a character style's attribute `key` holds, as [`Paint::map_links`]
-/// does, and store the result in the attribute. True when it changed.
-fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: &str, f: &mut LinkFn) -> bool {
-    let Some(value) = attrs.get_mut(key) else { return false };
-    let Ok(mut paint) = serde_json::from_value::<Paint>(value.clone()) else { return false };
-    if !paint.map_links(f) {
-        return false;
+/// What [`Document::map_paints`] applies to each paint: the paint to put in its place, or `None`
+/// to keep it.
+pub type PaintFn<'a> = dyn FnMut(&Paint) -> Option<Paint> + 'a;
+
+/// `f` as a [`PaintFn`]: a solid or gradient paint with `f` applied ([`Paint::map_links`]) when
+/// `f` changed it, `None` for every other paint.
+fn relink<'a>(f: &'a mut LinkFn<'_>) -> impl FnMut(&Paint) -> Option<Paint> + 'a {
+    move |p| match p {
+        Paint::Solid { .. } | Paint::Gradient(_) => {
+            let mut q = p.clone();
+            q.map_links(f).then_some(q)
+        }
+        _ => None,
     }
+}
+
+/// Put `f(p)` in place of `p` when it gives a paint. True when it did.
+fn replace_paint(p: &mut Paint, f: &mut PaintFn) -> bool {
+    match f(p) {
+        Some(q) => {
+            *p = q;
+            true
+        }
+        None => false,
+    }
+}
+
+/// Apply `f` to the paint a character style's attribute `key` holds and store the result in the
+/// attribute. An attribute that is not a paint stays as it is. True when it changed.
+fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: &str, f: &mut PaintFn) -> bool {
+    let Some(value) = attrs.get_mut(key) else { return false };
+    let Ok(paint) = serde_json::from_value::<Paint>(value.clone()) else { return false };
+    let Some(paint) = f(&paint) else { return false };
     match serde_json::to_value(&paint) {
         Ok(changed) => {
             *value = changed;
@@ -323,6 +382,23 @@ pub fn override_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     n.extras().symbol_overrides.iter().flat_map(|o| [o.fill.as_ref(), o.stroke.as_ref()]).flatten()
 }
 
+/// The paints a graph keeps for its series and its labels ([`crate::graph::GraphSpec`]), which its
+/// marks and labels take each time it is drawn again and which [`node_paints`] leaves out.
+pub fn graph_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+    let g = n.extras().graph.as_deref();
+    let series = g.into_iter().flat_map(|g| &g.series_paints).flat_map(|s| [s.fill.as_ref(), s.stroke.as_ref()]).flatten();
+    let labels = g.into_iter().flat_map(|g| [&g.label_styles.values, &g.label_styles.categories, &g.label_styles.legend]).flatten();
+    series.chain(labels.flat_map(|st| [&st.fill, &st.stroke]))
+}
+
+/// Mutable [`graph_paints`] of graph `g`, in the same order.
+fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mut Paint> {
+    let series = g.series_paints.iter_mut().flat_map(|s| [s.fill.as_mut(), s.stroke.as_mut()]).flatten();
+    let l = &mut g.label_styles;
+    let labels = [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten();
+    series.chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
+}
+
 /// Mutable [`node_paints`], in the same order.
 pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     let runs = match &mut n.kind {
@@ -333,20 +409,11 @@ pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke])).chain(colorize)
 }
 
-/// `n` with `f` applied to its subtree's linkable colours, or `None` when nothing changed (then
-/// nothing was copied). Also returns the number of changed paints.
-fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
-    // Try each own solid or gradient paint on a scratch copy first, so unchanged nodes are never
-    // cloned.
-    let mut changes: Vec<(usize, Paint)> = vec![];
-    for (i, p) in node_paints(n).enumerate() {
-        if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) {
-            let mut q = p.clone();
-            if q.map_links(f) {
-                changes.push((i, q));
-            }
-        }
-    }
+/// `n` with `f` applied to its subtree's paints, or `None` when nothing changed (then nothing was
+/// copied). Also returns the number of changed paints.
+fn map_node(n: &Node, f: &mut PaintFn) -> Option<(Node, usize)> {
+    // `f` gives each own paint's replacement first, so unchanged nodes are never cloned.
+    let changes: Vec<(usize, Paint)> = node_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
     let mut count = changes.len();
     let mut out: Option<Node> = None;
     if !changes.is_empty() {
@@ -366,13 +433,27 @@ fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
         let mut overrides = n.extras().symbol_overrides.clone();
         let mut k = 0;
         for p in overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
-            if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) && p.map_links(f) {
-                k += 1;
-            }
+            k += usize::from(replace_paint(p, f));
         }
         if k > 0 {
             out.get_or_insert_with(|| n.clone()).extras_mut().symbol_overrides = overrides;
             count += k;
+        }
+    }
+    // A graph's series and label paints, which its marks and labels take when it is drawn again.
+    let graph: Vec<(usize, Paint)> = graph_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
+    if !graph.is_empty() {
+        count += graph.len();
+        let m = out.get_or_insert_with(|| n.clone());
+        if let Some(spec) = m.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            let mut graph = graph.into_iter().peekable();
+            for (i, p) in graph_paints_mut(spec).enumerate() {
+                if graph.peek().is_some_and(|c| c.0 == i)
+                    && let Some((_, q)) = graph.next()
+                {
+                    *p = q;
+                }
+            }
         }
     }
     if let Some(ch) = n.children() {
@@ -415,6 +496,13 @@ pub fn walk_with_masks<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
 /// brush: `f` applied to the linkable colors of `n` and its subtree (opacity masks included). Only
 /// the nodes holding a changed paint are copied. Returns the number of changed paints.
 pub fn map_node_solid_paints(n: &mut Node, f: &mut LinkFn) -> usize {
+    map_node_paints(n, &mut relink(f))
+}
+
+/// [`Document::map_paints`] for art a document keeps outside its trees, such as the art of a brush:
+/// `f` applied to every paint of `n` and its subtree (opacity masks included). Only the nodes
+/// holding a changed paint are copied. Returns the number of changed paints.
+pub fn map_node_paints(n: &mut Node, f: &mut PaintFn) -> usize {
     match map_node(n, f) {
         Some((new, count)) => {
             *n = new;
@@ -424,7 +512,7 @@ pub fn map_node_solid_paints(n: &mut Node, f: &mut LinkFn) -> usize {
     }
 }
 
-fn map_tree(n: &mut Arc<Node>, f: &mut LinkFn) -> usize {
+fn map_tree(n: &mut Arc<Node>, f: &mut PaintFn) -> usize {
     match map_node(n, f) {
         Some((new, count)) => {
             *n = Arc::new(new);
@@ -434,7 +522,7 @@ fn map_tree(n: &mut Arc<Node>, f: &mut LinkFn) -> usize {
     }
 }
 
-fn map_trees(v: &mut [Arc<Node>], f: &mut LinkFn) -> usize {
+fn map_trees(v: &mut [Arc<Node>], f: &mut PaintFn) -> usize {
     v.iter_mut().map(|n| map_tree(n, f)).sum()
 }
 
@@ -591,6 +679,35 @@ mod tests {
         assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 1);
         assert_eq!(loose.appearance.fill_paint(), linked(blue, "Brand"));
         assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 0, "nothing left to change");
+    }
+
+    #[test]
+    fn mapping_reaches_the_series_and_label_paints_a_graph_keeps() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            series_paints: vec![crate::SeriesPaint { fill: Some(red.clone()), stroke: Some(red.clone()), ..Default::default() }],
+            label_styles: crate::graph::LabelStyles {
+                legend: Some(crate::CharStyle { fill: red.clone(), stroke: Paint::None, ..Default::default() }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut seen = 0;
+        d.visit_paints(&mut |p| seen += usize::from(*p == red));
+        assert_eq!(seen, 4, "the fill and the graph's series fill, series stroke and legend fill");
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
+        assert_eq!(d.map_solid_paints(&mut to_blue), 4);
+        let g = d.node(a).unwrap().extras().graph.clone().unwrap();
+        assert_eq!(g.series_paints[0].fill, Some(linked(blue, "Brand")));
+        assert_eq!(g.series_paints[0].stroke, Some(linked(blue, "Brand")));
+        let legend = g.label_styles.legend.unwrap();
+        assert_eq!((legend.fill, legend.stroke), (linked(blue, "Brand"), Paint::None));
+        let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
+        assert_eq!(d.map_paints(&mut cleared), 4, "the fill and the graph's three");
+        assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
     }
 
     #[test]

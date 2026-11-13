@@ -196,7 +196,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.pixelPreview", "Pixel Preview", "Cmd+Alt+Y", "{}"),
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
-    ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
+    (
+        "view.snapToPixel",
+        "Snap to Pixel",
+        "",
+        "{} toggle: drawing, moving and scaling land on whole pixels, each while its option in view.snapToPixel.options is on",
+    ),
     (
         "view.snapToGlyph",
         "Snap to Glyph",
@@ -564,7 +569,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name: string} delete the toolbar made with New Toolbar called `name`, and the groups torn off it, from the current workspace, as Manage Toolbars' trash can does",
     ),
-    ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
+    (
+        "window.toolbar.dock",
+        "Dock Toolbar",
+        "",
+        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` in the lane along the window's left or right edge (omitted: the edge it docked at last, the left at first), as Dock to Left and Dock to Right in its title bar's context menu and dropping its title bar on that edge do; `order` is its place in that edge's stack, 0 at the top (omitted: the end, or where it is when it is docked at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.float",
+        "Float Toolbar",
+        "",
+        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in screen points (both or neither; omitted: where it floated last), as Float Toolbar in its title bar's context menu and dragging its title bar out of its lane do; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.list",
+        "List Toolbars",
+        "",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its place in that edge's stack while docked (else null)",
+    ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
         "window.pathfinder.compoundShapes",
@@ -648,6 +670,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
     ),
     (
+        "learn.skills",
+        "Back to Skills",
+        "",
+        "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",
@@ -658,6 +686,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show Tool Location",
         "",
         "{tool: a tool id, as tool.select takes} mark where that tool is for 3 seconds without choosing it, as the link on a tool's name in a Learn tutorial step does: its toolbar button, a row of its collapsed group's flyout (which opens), its group's torn-off strip (which comes to the front), or, when no shown toolbar holds it, its row in the All Tools drawer (which opens); a Tools panel hidden with Window › Tools shows again; Escape or the next locate removes the mark; a missing, non-string or unknown id is an error and changes nothing; returns {tool, location: toolbar|flyout|strip|allTools|unavailable, toolbar: the name of the toolbar made with New Toolbar that holds it, or null}, with reason when Presentation Mode or Tab hides the toolbars",
+    ),
+    (
+        "learn.openSample",
+        "Open Tutorial Sample",
+        "",
+        "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
+    ),
+    (
+        "learn.finish",
+        "Finish Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+    ),
+    (
+        "learn.next",
+        "Next Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
@@ -731,6 +777,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Tool Option",
         "",
         "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+    ),
+    (
+        crate::touch::TOGGLE_MODE,
+        "Switch Selection and Drawing Modes",
+        "",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
     ),
     (
         "effect.dialog",
@@ -895,6 +947,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
     ),
     (
+        "ui.indexedColorDialog",
+        "Convert to Indexed Color…",
+        "",
+        "{} open Convert to Indexed Color for the selection (dialog `indexedColor`, fields `reduction`, `colors` 2..256, `dither`, `ditherAmount` 0..100, `preview`): previews live, OK runs edit.colors.toIndexed as one undo step",
+    ),
+    (
         "window.swatchLibrary",
         "Swatch Library",
         "",
@@ -945,6 +1003,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Options for Selection…",
         "",
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
+    ),
+    (
+        "ui.layerDelete",
+        "Delete Selection",
+        "",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",
@@ -1201,7 +1265,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth opens it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",
@@ -1232,6 +1296,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Tate-chu-yoko Settings…",
         "",
         "{} open Tate-chu-yoko Settings (the Character panel menu's Tate-chu-yoko Settings…, with Show East Asian Options) on the characters the Character panel acts on, filled in with the values they share (dialog `tateChuYokoSettings`: tcyUpDown, tcyLeftRight (pt, -1296..1296)): OK runs text.setFormat (text.setRangeStyle while the Type tool edits text) with the values that changed, as one undo step; an error with no type selected",
+    ),
+    (
+        "ui.warichuSettings",
+        "Warichu Settings…",
+        "",
+        "{} open Warichu Settings (the Character panel menu's Warichu Settings…, with Show East Asian Options) on the characters the Character panel acts on, filled in with the values they share (dialog `warichuSettings`: warichuLines 1..6, warichuGap (pt, 0..100), warichuScale (%, 10..100), warichuAlign): OK runs text.setFormat (text.setRangeStyle while the Type tool edits text) with the values that changed, as one undo step, and leaves Warichu itself as it is; an error with no type selected",
     ),
     (
         "ui.colorGuideLimit",
@@ -1420,13 +1490,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::START_RECORDING,
         "Begin Recording",
         "",
-        "{set?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. An explicit invalid set, an existing recording, or a set where the new action would give it more than 1,000 actions or an action set file larger than 8 MiB is an error and changes nothing. While an action records, a recorded command whose step would give the action more than 10,000 steps or its set's action set file more than 8 MiB is an error and does not run, and the recording goes on. A recorded command whose step passes a limit only as it runs, from values it adds to its step, keeps its edit and result; the status bar names the limit, later recorded commands are an error and do not run, and ui.action.stop leaves its step out → {set, name}",
+        "{set?: index, action?: index, after?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. With action, record into the action at action in set instead: ui.action.stop puts the recorded steps after step after of that action, else after its last step, and the steps after them keep whether they are excluded. The panel's Begin Recording button passes the selected action and its selected step. action without set, after without action, an index past the last set, action or step, an explicit invalid set, an existing recording, or a set where the new action would give it more than 1,000 actions or an action set file larger than 8 MiB is an error and changes nothing. While an action records, a recorded command whose step would give the action more than 10,000 steps or its set's action set file more than 8 MiB is an error and does not run, and the recording goes on. A recorded command whose step passes a limit only as it runs, from values it adds to its step, keeps its edit and result; the status bar names the limit, later recorded commands are an error and do not run, and ui.action.stop leaves its step out → {set, name}, or with action {set, action, name}",
     ),
     (
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",
-        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. Recorded steps still past 10,000 in the action, or past 8 MiB in its set's action set file, are left out, and the status bar names the limit. With nothing recording or playing it changes nothing → {stopped}",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it or the action ui.action.record named, at the place it named, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. Recorded steps still past 10,000 in the action, or past 8 MiB in its set's action set file, are left out, and the status bar names the limit. With nothing recording or playing it changes nothing → {stopped}",
     ),
     (
         crate::panels::actions::INSERT_STOP,
@@ -1463,6 +1533,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Delete Action Step",
         "",
         "{set: index, action: index, step: index} delete one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step). The steps after it keep whether they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one open on a later step of the action follows it up. A missing or invalid index is an error and changes nothing. Undo does not bring the step back. The panel's Delete Selection runs this for the selected step → {set, action, step}",
+    ),
+    (
+        crate::panels::actions::MOVE_STEP,
+        "Move Action Step",
+        "",
+        "{set: index, action: index, step: index, toSet?: index, toAction?: index, before: index} move one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step) into the action at toAction in toSet (default: the same set and action), before the step at index before there, or after its last step when before is its number of steps; before counts the steps as they are before the move. The step keeps its params and whether it is excluded, and the other steps keep theirs. A selected step stays selected, and a moved selected step makes its new action the selected one and its set the current one. A Record Stop dialog open on a step follows the step, and the steps that the recording in progress adds to either action stay after the steps that were before them. A step put back just before or just after itself does not move. A missing or invalid index, or a move that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. Undo does not move the step back. Dragging a step row in the panel runs this → {set, action, step, moved}",
     ),
     (
         "ui.batchDialog",

@@ -79,6 +79,11 @@ struct SeriesRef {
     index: usize,
 }
 
+/// How many series groups `spec`'s graph has: a group whose index is past it (the index comes from the file) is not one.
+fn series_count(spec: &GraphSpec) -> usize {
+    spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES)
+}
+
 /// Every node in a graph's series groups (the groups too), found in one pass over the document.
 /// Axes, the legend and groups whose index is past the graph's series (the index comes from the
 /// file) are left out.
@@ -86,7 +91,7 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
     let mut out = HashMap::new();
     doc.walk(|n| {
         let Some(spec) = n.extras().graph.as_deref() else { return };
-        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+        let count = series_count(spec);
         for group in n.children().into_iter().flatten() {
             let Some(index) = group.extras().series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
             let r = SeriesRef { graph: n.id, group: group.id, index };
@@ -95,6 +100,25 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
             });
         }
     });
+    out
+}
+
+/// The objects directly in a series group among `roots` and inside them, for an edit that reaches graph series marks
+/// without naming them. They may include objects of groups that only look like series groups; the capture functions
+/// check each one.
+pub(crate) fn series_marks_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut out = Vec::new();
+    for id in roots {
+        if doc.parent_of(*id).and_then(|p| doc.node(p)).is_some_and(|g| g.extras().series_index.is_some()) {
+            out.push(*id);
+        }
+        let Some(root) = doc.node(*id) else { continue };
+        root.walk(&mut |n| {
+            if n.extras().series_index.is_some() {
+                out.extend(n.children().into_iter().flatten().map(|c| c.id));
+            }
+        });
+    }
     out
 }
 
@@ -121,6 +145,38 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     }
     out.sort_unstable();
     out.dedup();
+    out
+}
+
+/// `ids` with each graph series group replaced by the paths directly inside it, as [`paint_targets`] reads a series
+/// group: the graph draws its series groups again with no rows of their own. A series group with no such path, other
+/// ids and the art of a graph design pass through, and the order of `ids` is kept.
+pub(crate) fn series_group_marks(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    series_group_marks_where(doc, ids, |_| true)
+}
+
+/// [`series_group_marks`] for the series groups `stands` accepts; the others pass through.
+pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: impl Fn(&Node) -> bool) -> Vec<NodeId> {
+    // A series group is a child of a graph with one of the graph's series indexes ([`series_members`]). Each id is
+    // looked up through its parent, with no pass over the document: the panels call this while they draw.
+    let is_series_group = |n: &Node| {
+        let Some(index) = n.extras().series_index.and_then(|i| usize::try_from(i).ok()) else { return false };
+        let graph = doc.parent_of(n.id).and_then(|parent| doc.node(parent)).and_then(|parent| parent.extras().graph.as_deref());
+        graph.is_some_and(|spec| index < series_count(spec))
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for id in ids {
+        match doc.node(*id) {
+            Some(group) if is_series_group(group) && stands(group) => {
+                let marks: Vec<NodeId> =
+                    group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id).collect();
+                if marks.is_empty() { out.push(*id) } else { out.extend(marks) }
+            }
+            _ => out.push(*id),
+        }
+    }
+    out.retain(|id| seen.insert(*id));
     out
 }
 

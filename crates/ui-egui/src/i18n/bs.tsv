@@ -103,6 +103,8 @@
 	Blend Vertically	Stopi okomito
 	Convert to CMYK	Pretvori u CMYK
 	Convert to Grayscale	Pretvori u nijanse sive
+	Convert to Indexed Color	Pretvori u indeksirane boje
+	Convert to Indexed Color…	Pretvori u indeksirane boje…
 	Convert to RGB	Pretvori u RGB
 	Invert Colors	Obrni boje
 	Overprint Black…	Pretisak crne…
@@ -908,6 +910,10 @@
 	Dock Panel	Usidri panel
 	Dock to Top	Usidri na vrh
 	Dock to Bottom	Usidri na dno
+	Dock to Left	Usidri lijevo
+	Dock to Right	Usidri desno
+	Dock Toolbar	Usidri traku s alatima
+	Float Toolbar	Odvoji traku s alatima
 	Control Bar Options	Opcije kontrolne trake
 	Tool Options	Opcije alata
 	Object Options	Opcije objekta
@@ -1601,6 +1607,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
 	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Postavke za Warichu…
+	Warichu Settings	Postavke za Warichu
+	Lines:	Redovi:
+	Line Gap:	Razmak između redova:
 	Composite Fonts…	Kompozitni fontovi…
 	Composite Fonts	Kompozitni fontovi
 	Export Composite Fonts	Izvezi kompozitne fontove
@@ -1809,6 +1820,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Alat objekti na putanji
 	Attach Objects on Path	Priloži objekte na putanju
 	Expand Objects on Path	Proširi objekte na putanji
+	Detach	Odvoji
+	Detach Object from Path	Odvoji objekat s putanje
 	Release Live Paint	Oslobodi živo bojenje
 	Release Repeat	Oslobodi ponavljanje
 	Release Slice	Oslobodi isječak
@@ -2006,6 +2019,10 @@ digits	Malayalam	Malajalam
 	Long	Dugo
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku skup
 	Kinsoku Shori Type	Vrsta Kinsoku Shori
 	Push In First	Prvo uvlačenje
@@ -2141,6 +2158,8 @@ digits	Malayalam	Malajalam
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}
+	Delete the selected items and their artwork?	Izbrisati odabrane stavke zajedno s njihovim crtežom?
+	Delete this layer and its artwork?	Izbrisati ovaj sloj zajedno s njegovim crtežom?
 	Delete “{name}”?	Izbrisati „{name}”?
 	Document Swatches	Uzorci boja dokumenta
 	Edit or Apply Color Group	Uredi ili primijeni grupu boja
@@ -2849,6 +2868,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
 	Color Theme Picker	Birač teme boja
 	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
+	Prominent Colors	Istaknute boje
+	Save All Colors	Sačuvaj sve boje
+	Save Prominent Colors	Sačuvaj istaknute boje
 	Separate colors into rows	Razdvoji boje u redove
 	Unlink harmony colors	Prekini vezu boja harmonije
 	1 Color Job	Posao s 1 bojom
@@ -3544,6 +3566,8 @@ theme	Appearance	Izgled
 	Rename Library Group	Preimenuj grupu biblioteke
 	Delete Library Group	Izbriši grupu biblioteke
 	Move Library Item to Group	Premjesti stavku biblioteke u grupu
+	Rename Library Item	Preimenuj stavku biblioteke
+	Add to Character Styles	Dodaj u stilove znakova
 	Rename Library	Preimenuj biblioteku
 	Show Library	Prikaži biblioteku
 	Use Library Item	Koristi stavku biblioteke
@@ -3729,9 +3753,11 @@ theme	Appearance	Izgled
 	Enable Background Export	Omogući izvoz u pozadini
 	Enable Background Save	Omogući čuvanje u pozadini
 	Enable in-menu font previews	Omogući preglede fontova u meniju
+	Show samples on white	Prikaži uzorke na bijeloj podlozi
 	Enable Missing Glyph Protection	Omogući zaštitu od nedostajućih glifova
 	Enable Rubber Band for	Omogući gumenu traku za
 	Enable Touch Gestures	Omogući pokrete dodirom
+	Switch Selection and Drawing Modes	Prebaci između načina odabira i crtanja
 	Enable Touch Workspace	Omogući radni prostor za dodir
 	English: UK	Engleski: UK
 	Every (minutes)	Svakih (minuta)
@@ -3814,6 +3840,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…
@@ -3946,6 +3977,19 @@ theme	Appearance	Izgled
 	Spot Color Objects	Objekti sa spot bojama
 	Pattern Objects	Objekti s uzorcima
 	Gradient Objects	Objekti s gradijentima
+	Font Details	Detalji fontova
+	Linked Images	Povezane slike
+	Embedded Images	Ugrađene slike
+	Compound Paths	Složene putanje
+	Text Objects	Tekstualni objekti
+	Placed Documents	Postavljeni dokumenti
+	Symbol Instances	Instance simbola
+	Gradient Meshes	Gradijentne mreže
+	Blends	Stapanja
+	Envelopes	Omotnice
+	Intertwine Groups	Grupe isprepletanja
+	Opacity Masks	Maske neprozirnosti
+	Objects with Effects	Objekti s efektima
 	Spot Colors	Spot boje
 	Spot Colors (0)	Spot boje (0)
 	Swatch Options	Opcije uzorka boje
@@ -4408,6 +4452,7 @@ imageTrace	Outline	Obris
 @plural	{n} step|{n} steps	{n} korak|{n} koraka|{n} koraka
 @plural	{n} stroke|{n} strokes	{n} potez|{n} poteza|{n} poteza
 @msg	no library `{id}`	nema biblioteke `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteka već ima drugu stavku te vrste s imenom `{name}`
 @msg	select some type first	prvo odaberite tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning mora biti broj, „auto” ili „optical”
 @msg	the selection has no gradient fill	odabir nema ispunu gradijentom
@@ -4461,6 +4506,9 @@ imageTrace	Outline	Obris
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nije moguće postaviti {name}: dokument na koji je ispušten je zatvoren
 @msg	Couldn't place {name}: the document it was placed in was closed	Nije moguće postaviti {name}: dokument u koji je postavljen je zatvoren
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nije moguće postaviti {name}: dokument na koji je ispušten je vraćen na sačuvano
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nije moguće postaviti {name}: dokument u koji je postavljen je vraćen na sačuvano
+@msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte
@@ -4555,6 +4603,7 @@ imageTrace	Outline	Obris
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` mora biti cijeli broj između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` mora biti između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be one of {_1}	`{key}` mora biti jedno od {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` mora biti jedno od {_1}, a ne {got}
 @msg	`{key}` must be true or false	`{key}` mora biti true ili false
 @msg	`top` and `below` can't both be true	`top` i `below` ne mogu oba biti true
 @msg	`select` must be true or false	`select` mora biti true ili false
@@ -4877,6 +4926,7 @@ imageTrace	Outline	Obris
 @msg	paths contain invalid coordinates	putanje sadrže nevažeće koordinate
 @msg	paths: give at least one file	paths: navedite barem jednu datoteku
 @msg	replace: the object to replace was changed or deleted	replace: objekat za zamjenu je promijenjen ili izbrisan
+@msg	the document it was prepared for is no longer active	dokument za koji je pripremljeno više nije aktivan
 @msg	pattern missing	uzorak nedostaje
 @msg	patterns nested too deeply are filled with mid-grey	previše duboko ugniježđeni uzorci ispunjavaju se srednje sivom
 @msg	percent must be above 0 and at most 6400, not {p}	percent mora biti iznad 0 i najviše 6400, a ne {p}
@@ -4912,6 +4962,7 @@ imageTrace	Outline	Obris
 @msg	select a repeat	odaberite ponavljanje
 @msg	select an Intertwine group	odaberite Intertwine grupu
 @msg	select an Objects on Path group	odaberite grupu objekata na putanji
+@msg	choose the object to detach with its Select/Move widget	odaberite objekat koji želite odvojiti njegovom ručicom Odaberi/Pomjeri
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	putanja unutar složene putanje, stapanja, omotnice, ponavljanja ili Intertwine grupe ne može primiti objekte
 @msg	a clipping path can't take objects	putanja isijecanja ne može primiti objekte
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekti unutar stapanja, omotnice, ponavljanja ili Intertwine grupe ne mogu se priložiti putanji
@@ -5110,6 +5161,7 @@ imageTrace	Outline	Obris
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otvoreno s {n} bilješkom: {first}|{notice}. Otvoreno s {n} bilješke: {first}|{notice}. Otvoreno s {n} bilješki: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
@@ -5467,6 +5519,8 @@ imageTrace	Outline	Obris
 	Vivid	Živo
 	Spectrum	Spektar
 	Perceptual	Perceptivno
+	Hue Clockwise	Nijansa u smjeru kazaljke na satu
+	Hue Counterclockwise	Nijansa suprotno od kazaljke na satu
 	Relative Colorimetric	Relativna kolorimetrija
 	Absolute Colorimetric	Apsolutna kolorimetrija
 	Exact	Tačno
@@ -5958,7 +6012,7 @@ axis	Y Axis	Y osa
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se primjenjuje na gradijentne ispune (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se primjenjuje na gradijentne ispune (paint.setFill)
 @msg	`dither` must be true or false	`dither` mora biti true ili false
-@msg	`method` must be classic or perceptual	`method` mora biti classic ili perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` mora biti classic, perceptual, hue-clockwise ili hue-counterclockwise
 	Install “{name}”, which asks for a heavy budget?	Instalirati „{name}”, koji traži veliki budžet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Svako pokretanje može trajati do {minutes} minuta i obaviti {times} puta više posla nego drugi dodaci. Radi u pozadini i možete ga otkazati.
 	It may take minutes, so it runs in the background, where you can cancel it.	Može trajati minutama, pa radi u pozadini, gdje ga možete otkazati.
@@ -6022,12 +6076,14 @@ axis	Y Axis	Y osa
 	Continue	Nastavi
 	Continue Action	Nastavi akciju
 	Delete Action Step	Izbriši korak akcije
+	Move Action Step	Premjesti korak akcije
 	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
 	Stop: {message}	Zaustavljanje: {message}
 @msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+@msg	Batch cannot play an action with a View menu step	Paketna obrada ne može reprodukovati akciju s korakom iz menija Prikaz
 	Insert Menu Item…	Umetni stavku menija…
 	Insert Menu Item	Umetni stavku menija
 	Insert Select Path	Umetni odabir putanje
@@ -6192,6 +6248,22 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+	Notched Ribbon	Zarezana traka
+	Double Line	Dvostruka linija
+	Wave	Talas
+	Teardrop	Suza
+	Striped Ribbon	Prugasta traka
+	Fine Nib	Tanki vrh
+	Broad Nib	Široki vrh
+	Chisel	Dlijeto
+	Round Pen	Okruglo pero
+	Pressure Pen	Pero na pritisak
+	Beads	Perle
+	Dash Dot	Crta-tačka
+	Scallops	Festoni
+	Stars	Zvijezde
+	Triangles	Trouglovi
+	Sparkles	Iskrice
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
@@ -6209,6 +6281,12 @@ axis	Y Axis	Y osa
 	Area Text	Tekst u oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
+	Pixel Snapping Options	Opcije prianjanja uz piksel
+	Pixel Snapping Options…	Opcije prianjanja uz piksel…
+	Snap to Pixel While Drawing	Prilijepi uz piksel pri crtanju
+	Snap to Pixel While Moving	Prilijepi uz piksel pri pomjeranju
+	Snap to Pixel While Scaling	Prilijepi uz piksel pri skaliranju
+	These options take effect when View › Snap to Pixel is on.	Ove opcije djeluju kada je uključeno Prikaz › Prilijepi uz piksel.
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif
@@ -6287,6 +6365,8 @@ anchor	Points:	Tačke:
 	Anchor Inspector	Pregled sidara
 	Add Points at Crossings	Dodaj tačke na presjecima
 	Split at Crossings	Razdvoji na presjecima
+	Trim at Crossings Tool	Alat obreži na presjecima
+	Trim at Crossings	Obreži na presjecima
 	Extend Path	Produži putanju
 	Measure & Inspect	Mjeri i pregledaj
 	Set Anchor	Postavi sidro
@@ -6789,6 +6869,19 @@ shape	Open	Otvoren
 	Show where this tool is	Prikaži gdje je ovaj alat
 @msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
+	View more	Prikaži više
+	Finish tutorial	Završi tutorijal
+	Next Up	Sljedeće
+	You finished the last tutorial in this skill.	Završili ste posljednji tutorijal u ovoj vještini.
+	Back to skills	Nazad na vještine
+	Open Tutorial Sample	Otvori uzorak tutorijala
+	Finish Tutorial	Završi tutorijal
+	Next Tutorial	Sljedeći tutorijal
+	Back to Skills	Nazad na vještine
+@msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
+@msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je posljednji tutorijal u svojoj vještini
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

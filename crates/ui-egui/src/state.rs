@@ -424,6 +424,10 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
+    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
+    /// app runs.
+    #[serde(skip)]
+    pub learn_practice: crate::panels::learn::Practice,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -565,6 +569,10 @@ pub struct UiState {
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
+    /// The drawing tool last chosen in this window, which a two-finger tap in the Touch workspace
+    /// returns to from the Selection tool ([`crate::touch::toggle_mode`]). Not saved.
+    #[serde(skip)]
+    pub touch_drawing_tool: Option<String>,
     pub status: String,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
@@ -613,11 +621,16 @@ pub struct UiState {
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
-    /// The id of the action New Action made for the recording in progress
-    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
-    /// adds a new action, as after Begin Recording.
+    /// The id of the action the recording in progress records into, the one New Action made or the
+    /// one selected when Begin Recording started it ([`crate::panels::actions::Action::id`]): Stop
+    /// gives it the recorded steps. None when Stop adds a new action, as after Begin Recording with
+    /// no action selected.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// Where in the action [`UiState::recording_into`] names Stop puts the recorded steps: before
+    /// the step at this index, or None after its last step.
+    #[serde(skip)]
+    pub recording_at: Option<usize>,
     /// The length of the action set file that Stop Playing/Recording would leave without the steps
     /// recorded so far, once measured; None until then, and again after an app command, which may
     /// change the sets.
@@ -628,6 +641,10 @@ pub struct UiState {
     /// ([`vectorcraft_engine::Journal::rewrites`]).
     #[serde(skip)]
     pub recording_tail: Option<(u64, usize, usize, usize)>,
+    /// The journal as the recording in progress last checked it against the limits of an action
+    /// set file: (its rewrites, its length) ([`crate::panels::actions::after_journaled_edit`]).
+    #[serde(skip)]
+    pub recording_checked: Option<(u64, usize)>,
     /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
     #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
     pub action_playback: crate::panels::actions::PlaybackOptions,
@@ -860,7 +877,8 @@ impl FloatingFlyout {
 }
 
 /// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
-/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// own or docks along the window's left or right edge, filled with tools from the All Tools drawer,
+/// and is kept with the workspace it was made in.
 /// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
 /// (`UiState::floating_flyouts`) hold none of them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -873,8 +891,16 @@ pub struct CustomToolbar {
     /// It shows (Window › Toolbars › its name toggles it).
     #[serde(default = "yes")]
     pub shown: bool,
-    /// Top-left corner in screen points.
+    /// Top-left corner in screen points while it floats; while it is docked, where it floated last.
     pub pos: [f32; 2],
+    /// Its place in the stack of toolbars docked along one of the window's edges (0 at the top),
+    /// while it is docked there; none while it floats at `pos`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dock: Option<u32>,
+    /// It docks along the window's right edge, not the left: the edge it is docked at, or while it
+    /// floats the edge it docked at last.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dock_right: bool,
     /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -1085,6 +1111,7 @@ impl Default for UiState {
             find_font_in: String::new(),
             learn: Default::default(),
             learn_locate: None,
+            learn_practice: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
@@ -1129,6 +1156,7 @@ impl Default for UiState {
             answering_control: false,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
+            touch_drawing_tool: None,
             status: String::new(),
             replace_font_warning: None,
             status_notes: None,
@@ -1145,8 +1173,10 @@ impl Default for UiState {
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
+            recording_at: None,
             recording_base: None,
             recording_tail: None,
+            recording_checked: None,
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),

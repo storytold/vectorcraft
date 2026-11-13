@@ -627,6 +627,8 @@ font-technology	Variable	Вариативные
 	Convert to Artboards	Преобразовать в монтажные области
 	Convert to CMYK	Преобразовать в CMYK
 	Convert to Grayscale	Преобразовать в оттенки серого
+	Convert to Indexed Color	Преобразовать в индексированные цвета
+	Convert to Indexed Color…	Преобразовать в индексированные цвета…
 	Convert To Outlines	Преобразовать в контуры
 	Convert To Point Type	Преобразовать в точечный текст
 	Convert to RGB	Преобразовать в RGB
@@ -810,6 +812,8 @@ font-technology	Variable	Вариативные
 	Delete Width Point	Удалить точку ширины
 	Delete Workspace	Удалить рабочую среду
 	Delete {kind} Style	Удалить стиль {kind}
+	Delete the selected items and their artwork?	Удалить выбранные элементы вместе с графикой?
+	Delete this layer and its artwork?	Удалить этот слой вместе с графикой?
 	Delete “{name}”?	Удалить «{name}»?
 	Depth:	Глубина:
 	Description	Описание
@@ -1030,12 +1034,14 @@ font-technology	Variable	Вариативные
 	Enable Contextual Task Bar	Включить контекстную панель задач
 	Enable copying of text, images and other content	Разрешить копирование текста, изображений и другого содержимого
 	Enable in-menu font previews	Включить предварительный просмотр шрифтов в меню
+	Show samples on white	Показывать образцы на белом
 	Enable Missing Glyph Protection	Включить защиту отсутствующих глифов
 	Enable Opacity Mask	Включить непрозрачную маску
 	Enable plaintext metadata	Включить метаданные в виде простого текста
 	Enable Rubber Band for	Включить «резиновую полосу» для
 	Enable text access for screen readers	Разрешить доступ к тексту для программ чтения с экрана
 	Enable Touch Gestures	Включить сенсорные жесты
+	Switch Selection and Drawing Modes	Переключить режимы выделения и рисования
 	Enable Touch Workspace	Включить сенсорную рабочую среду
 	Encoding	Кодировка
 	Encoding:	Кодировка:
@@ -1608,6 +1614,8 @@ file-filter	Templates	Шаблоны
 	Objects on Path Tool	Инструмент «Объекты на контуре»
 	Attach Objects on Path	Прикрепить объекты к контуру
 	Expand Objects on Path	Разобрать объекты на контуре
+	Detach	Открепить
+	Detach Object from Path	Открепить объект от контура
 	Release Live Paint	Освободить быструю заливку
 	Release Repeat	Освободить повтор
 	Release Slice	Освободить фрагмент
@@ -2068,6 +2076,10 @@ file-filter	Templates	Шаблоны
 	Long	Длинные
 	Stylistic	Стилистические
 	Mojikumi Set	Набор mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
 	Push In First	Сначала втягивать
@@ -2720,6 +2732,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -2934,6 +2951,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
 	Color Theme Picker	Выбор цветовой темы
 	Click or drag across the art to pick its colors; Shift adds more	Щёлкните или проведите по рисунку, чтобы взять его цвета; Shift добавляет ещё
+	Prominent Colors	Преобладающие цвета
+	Save All Colors	Сохранить все цвета
+	Save Prominent Colors	Сохранить преобладающие цвета
 	Reset to Default	Сбросить к значениям по умолчанию
 	Reset to White, Black	Сбросить к белому, чёрному
 	Reset with Mesh	Сбросить с сеткой
@@ -3486,6 +3506,19 @@ digits	Malayalam	Малаялам
 	Spot Color Objects	Объекты с плашечными цветами
 	Pattern Objects	Объекты с узорами
 	Gradient Objects	Объекты с градиентами
+	Font Details	Сведения о шрифтах
+	Linked Images	Связанные изображения
+	Embedded Images	Внедрённые изображения
+	Compound Paths	Составные контуры
+	Text Objects	Текстовые объекты
+	Placed Documents	Размещённые документы
+	Symbol Instances	Экземпляры символов
+	Gradient Meshes	Градиентные сетки
+	Blends	Переходы
+	Envelopes	Оболочки
+	Intertwine Groups	Группы переплетения
+	Opacity Masks	Непрозрачные маски
+	Objects with Effects	Объекты с эффектами
 	Spot Colors	Плашечные цвета
 	Spot Colors…	Плашечные цвета…
 	Spread:	Разворот:
@@ -3607,6 +3640,8 @@ digits	Malayalam	Малаялам
 	Rename Library Group	Переименовать группу библиотеки
 	Delete Library Group	Удалить группу библиотеки
 	Move Library Item to Group	Переместить элемент библиотеки в группу
+	Rename Library Item	Переименовать элемент библиотеки
+	Add to Character Styles	Добавить в стили символов
 	Library	Библиотека
 	Rename Library	Переименовать библиотеку
 	Show Library	Показать библиотеку
@@ -3640,6 +3675,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметры Warichu…
+	Warichu Settings	Параметры Warichu
+	Lines:	Строки:
+	Line Gap:	Интервал между строками:
 	Composite Fonts…	Составные шрифты…
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
@@ -4179,6 +4219,10 @@ axis	Both	Оба
 	Dock Panel	Прикрепить панель
 	Dock to Top	Прикрепить сверху
 	Dock to Bottom	Прикрепить снизу
+	Dock to Left	Прикрепить слева
+	Dock to Right	Прикрепить справа
+	Dock Toolbar	Прикрепить панель инструментов
+	Float Toolbar	Сделать панель инструментов плавающей
 	Control Bar Options	Параметры панели управления
 	Tool Options	Параметры инструмента
 	Object Options	Параметры объекта
@@ -4196,6 +4240,7 @@ axis	Both	Оба
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	нет библиотеки `{id}`
+@msg	the library has another item of that kind named `{name}`	в библиотеке уже есть другой элемент этого вида с именем `{name}`
 @msg	select some type first	сначала выделите текст
 @msg	kerning must be a number, "auto", or "optical"	kerning должен быть числом, «auto» или «optical»
 @msg	the selection has no gradient fill	у выделения нет градиентной заливки
@@ -4345,6 +4390,9 @@ axis	Both	Оба
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не удалось поместить {name}: документ, в который его перетащили, был закрыт
 @msg	Couldn't place {name}: the document it was placed in was closed	Не удалось поместить {name}: документ, в который его помещали, был закрыт
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не удалось поместить {name}: документ, в который его перетащили, был возвращён к сохранённой версии
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не удалось поместить {name}: документ, в который его помещали, был возвращён к сохранённой версии
+@msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты
@@ -4743,6 +4791,7 @@ axis	Both	Оба
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
 @msg	not an HP-GL file	не является файлом HP-GL
+@msg	not a PICT file	не является файлом PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` должен быть массивом из 1–255 цветов #rrggbb
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора
@@ -4773,6 +4822,7 @@ axis	Both	Оба
 @msg	paths contain invalid coordinates	контуры содержат недопустимые координаты
 @msg	paths: give at least one file	paths: укажите как минимум один файл
 @msg	replace: the object to replace was changed or deleted	replace: заменяемый объект был изменён или удалён
+@msg	the document it was prepared for is no longer active	документ, для которого это было подготовлено, больше не активен
 @msg	pattern missing	узор отсутствует
 @msg	patterns nested too deeply are filled with mid-grey	слишком глубоко вложенные узоры заполняются серым
 @msg	percent must be above 0 and at most 6400, not {p}	percent должен быть больше 0 и не более 6400, а не {p}
@@ -4808,6 +4858,7 @@ axis	Both	Оба
 @msg	select a repeat	выделите повтор
 @msg	select an Intertwine group	выделите группу переплетения
 @msg	select an Objects on Path group	выделите группу объектов на контуре
+@msg	choose the object to detach with its Select/Move widget	выберите открепляемый объект его элементом «Выбрать/Переместить»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	к контуру внутри составного контура, перехода, оболочки, повтора или группы переплетения нельзя прикрепить объекты
 @msg	a clipping path can't take objects	к контуру обрезки нельзя прикрепить объекты
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	объекты внутри перехода, оболочки, повтора или группы переплетения нельзя прикрепить к контуру
@@ -5028,6 +5079,7 @@ axis	Both	Оба
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Открыто с {n} примечанием: {first}|{notice}. Открыто с {n} примечаниями: {first}|{notice}. Открыто с {n} примечаниями: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
@@ -5125,12 +5177,14 @@ axis	Both	Оба
 @msg	choose the font files to add	выберите файлы шрифтов для добавления
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифта
+@msg	the active document changed while the question was open; nothing was deleted	активный документ сменился, пока был открыт вопрос; ничего не удалено
 @msg	that document is no longer open	этот документ больше не открыт
 @msg	larger than 256 MB	больше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файлы занимают больше 1 ГБ: добавляйте меньше за раз
 @msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -5528,7 +5582,9 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` должен быть front или back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графика наносится на плоские грани: используйте тип объекта «Выдавливание» или «Плоскость»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
 @msg	The graphics are too complex: simplify the symbols' art	Графика слишком сложна: упростите иллюстрации символов
@@ -5882,7 +5938,9 @@ axis	Y Axis	Ось Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` применяется к градиентным заливкам (paint.setFill)
 @msg	`dither` must be true or false	`dither` должно быть true или false
 	Perceptual	Перцепционный
-@msg	`method` must be classic or perceptual	`method` должен быть classic или perceptual
+	Hue Clockwise	Оттенок по часовой стрелке
+	Hue Counterclockwise	Оттенок против часовой стрелки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` должен быть classic, perceptual, hue-clockwise или hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` должен быть pad, repeat или reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` должен быть целым числом от 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` применяется к линейным, радиальным, коническим и ромбовидным градиентам
@@ -5995,6 +6053,35 @@ axis	Y Axis	Ось Y
 @msg	the path has no anchor points	у контура нет опорных точек
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})
 @msg	true or false	true или false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число от {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} и < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} и <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} и < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число от {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} и < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} и <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} и < {_2} ({_3})
+@msg	an integer	целое число
+@msg	an integer >= {_1}	целое число >= {_1}
+@msg	an integer <= {_1}	целое число <= {_1}
+@msg	an integer {_1} to {_2}	целое число от {_1} до {_2}
+@msg	one of {_1}	одно из значений {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` должно быть одним из значений {_1}, а не {got}
+@msg	an object id (a non-negative integer)	идентификатор объекта (неотрицательное целое число)
+@msg	a list of object ids	список идентификаторов объектов
+@msg	a color (a string, [r, g, b] or an object)	цвет (строка, [r, g, b] или объект)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	объект
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	неизвестный ключ `{k}`; здесь допустимы ключи {_1}
 @msg	{_1} is listed twice	{_1} указан дважды
 @msg	{_1} is not the id of an input object	{_1} не является идентификатором входного объекта
@@ -6096,12 +6183,14 @@ axis	Y Axis	Ось Y
 	Continue	Продолжить
 	Continue Action	Продолжить действие
 	Delete Action Step	Удалить шаг действия
+	Move Action Step	Переместить шаг действия
 	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
 	Stop: {message}	Остановка: {message}
 @msg	no action is waiting at a stop	ни одно действие не ожидает на остановке
 @msg	message must be text	message должно быть текстом
 @msg	allowContinue must be true or false	allowContinue должно быть true или false
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
+@msg	Batch cannot play an action with a View menu step	Пакет не может воспроизвести действие с шагом из меню Просмотр
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
 	Insert Select Path	Вставить выделение контура
@@ -6266,6 +6355,22 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+	Notched Ribbon	Лента с насечками
+	Double Line	Двойная линия
+	Wave	Волна
+	Teardrop	Капля
+	Striped Ribbon	Полосатая лента
+	Fine Nib	Тонкое перо
+	Broad Nib	Широкое перо
+	Chisel	Стамеска
+	Round Pen	Круглое перо
+	Pressure Pen	Перо с нажимом
+	Beads	Бусины
+	Dash Dot	Штрихпунктир
+	Scallops	Фестоны
+	Stars	Звёзды
+	Triangles	Треугольники
+	Sparkles	Искры
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)
@@ -6651,6 +6756,13 @@ theme	Appearance	Оформление
 	Area Text	Текст в области
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Измерять текст по границам глифа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметры привязки к пикселю
+	Pixel Snapping Options…	Параметры привязки к пикселю…
+	Snap to Pixel While Drawing	Привязать к пикселю при рисовании
+	Snap to Pixel While Moving	Привязать к пикселю при перемещении
+	Snap to Pixel While Scaling	Привязать к пикселю при масштабировании
+	These options take effect when View › Snap to Pixel is on.	Эти параметры действуют, когда включено Просмотр › Привязать к пикселю.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу
@@ -6736,6 +6848,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор опорных точек
 	Add Points at Crossings	Добавить точки на пересечениях
 	Split at Crossings	Разрезать на пересечениях
+	Trim at Crossings Tool	Инструмент «Подрезка на пересечениях»
+	Trim at Crossings	Подрезать на пересечениях
 	Extend Path	Продлить контур
 	Measure & Inspect	Измерение и анализ
 	Set Anchor	Задать опорную точку
@@ -7309,7 +7423,9 @@ shape	Open	Открытый
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» открывает файлы {_1}, а не `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` является модулем вида `{_2}`, а не модулем импорта
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` является модулем вида `{_2}`, а не модулем экспорта
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` — модуль экспорта: экспортируйте с помощью document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` — динамический эффект: примените его с помощью effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	модуль импорта не вернул ни одного объекта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль импорта возвращает `objects` и `warnings`, а не `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл больше {MAX_INPUT_BYTES} байт, которые читает модуль импорта
@@ -7388,6 +7504,19 @@ shape	Open	Открытый
 	Show where this tool is	Показать, где находится этот инструмент
 @msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
+	View more	Подробнее
+	Finish tutorial	Завершить урок
+	Next Up	Далее
+	You finished the last tutorial in this skill.	Вы завершили последний урок этого навыка.
+	Back to skills	Назад к навыкам
+	Open Tutorial Sample	Открыть пример урока
+	Finish Tutorial	Завершить урок
+	Next Tutorial	Следующий урок
+	Back to Skills	Назад к навыкам
+@msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
+@msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` является последним уроком своего навыка
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты

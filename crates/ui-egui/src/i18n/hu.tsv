@@ -820,6 +820,8 @@ font-technology	Variable	Változó
 	Convert to destination (preserve numbers)	Átalakítás a célprofilra (az értékek megőrzésével)
 	Convert to Global	Átalakítás globálissá
 	Convert to Grayscale	Átalakítás szürkeárnyalatossá
+	Convert to Indexed Color	Átalakítás indexelt színűvé
+	Convert to Indexed Color…	Átalakítás indexelt színűvé…
 	Convert To Outlines	Átalakítás útvonallá
 	Convert To Point Type	Átalakítás pontszöveggé
 	Convert to RGB	Átalakítás RGB-re
@@ -1042,6 +1044,8 @@ font-technology	Variable	Változó
 	Delete Width Point	Szélességi pont törlése
 	Delete Workspace	Munkaterület törlése
 	Delete {kind} Style	Stílus törlése: {kind}
+	Delete the selected items and their artwork?	Törlöd a kijelölt elemeket a grafikájukkal együtt?
+	Delete this layer and its artwork?	Törlöd ezt a réteget a grafikájával együtt?
 	Delete “{name}”?	Törlöd ezt: „{name}”?
 	Depth:	Színmélység:
 	Descender	Lenyúló szár
@@ -1112,6 +1116,10 @@ font-technology	Variable	Változó
 	Dock Panel	Panel dokkolása
 	Dock to Top	Dokkolás felülre
 	Dock to Bottom	Dokkolás alulra
+	Dock to Left	Dokkolás balra
+	Dock to Right	Dokkolás jobbra
+	Dock Toolbar	Eszköztár dokkolása
+	Float Toolbar	Eszköztár lebegtetése
 	Control Bar Options	Vezérlősáv beállításai
 	Tool Options	Eszközbeállítások
 	Object Options	Objektumbeállítások
@@ -1308,12 +1316,14 @@ font-technology	Variable	Változó
 	Enable Contextual Task Bar	Helyzetérzékeny műveletsáv bekapcsolása
 	Enable copying of text, images and other content	Szöveg, képek és más tartalom másolásának engedélyezése
 	Enable in-menu font previews	Betűtípus-előnézet a menüben
+	Show samples on white	Minták fehér alapon
 	Enable Missing Glyph Protection	Hiányzó glifák elleni védelem
 	Enable Opacity Mask	Átlátszósági maszk bekapcsolása
 	Enable plaintext metadata	Titkosítatlan metaadatok engedélyezése
 	Enable Rubber Band for	Gumiszalag-előnézet ehhez:
 	Enable text access for screen readers	Szöveghozzáférés engedélyezése képernyőolvasóknak
 	Enable Touch Gestures	Érintési kézmozdulatok
+	Switch Selection and Drawing Modes	Váltás a kijelölési és a rajzolási mód között
 	Enable Touch Workspace	Érintőképernyős munkaterület
 	Encoding	Kódolás
 	Encoding:	Kódolás:
@@ -1995,6 +2005,8 @@ file-filter	Templates	Sablonok
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
+	Detach	Leválasztás
+	Detach Object from Path	Objektum leválasztása az útvonalról
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -2567,6 +2579,10 @@ file-filter	Templates	Sablonok
 	Long	Hosszú
 	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	Monitor-RGB
 	Mono	Egyszínű
 	Monochromatic	Egyszínű
@@ -2597,6 +2613,8 @@ file-filter	Templates	Sablonok
 	Move Guide to Layer	Segédvonal áthelyezése rétegre
 	Move in Perspective	Áthelyezés perspektívában
 	Move Library Item to Group	Könyvtárelem áthelyezése csoportba
+	Rename Library Item	Könyvtárelem átnevezése
+	Add to Character Styles	Hozzáadás a karakterstílusokhoz
 	Move Locked and Hidden Artwork with Artboard	Zárolt és rejtett grafika mozgatása a rajztáblával
 	Move Mesh Point	Hálópont áthelyezése
 	Move Mesh Points	Hálópontok áthelyezése
@@ -3016,6 +3034,8 @@ file-filter	Templates	Sablonok
 	per slice	szeletenként
 	Percent:	Százalék:
 	Perceptual	Észlelési
+	Hue Clockwise	Színárnyalat az óramutató járásával megegyezően
+	Hue Counterclockwise	Színárnyalat az óramutató járásával ellentétesen
 	Perceptual Scales	Észlelési skálák
 	Performance	Teljesítmény
 diagnostics	render	renderelés
@@ -3245,6 +3265,11 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
+	Canvas display profile:	A vászon kijelzőprofilja:
+	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nem található használható kijelzőprofil: a vászon sRGB-ben jelenik meg.
 	Rearrange	Átrendezés
 	Select All Artboards	Összes rajztábla kijelölése
 	Switch Orientation	Tájolás váltása
@@ -3454,6 +3479,9 @@ mark-style	Japanese	Japán
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
 	Color Theme Picker	Színtéma-választó
 	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
+	Prominent Colors	Domináns színek
+	Save All Colors	Összes szín mentése
+	Save Prominent Colors	Domináns színek mentése
 	Reset to default	Alapérték visszaállítása
 	Reset to Default	Alapérték visszaállítása
 	Reset to Defaults	Alapértékek visszaállítása
@@ -4106,6 +4134,19 @@ mark-style	Japanese	Japán
 	Spot Color Objects	Direkt színeket használó objektumok
 	Pattern Objects	Mintázatokat használó objektumok
 	Gradient Objects	Színátmeneteket használó objektumok
+	Font Details	Betűtípus-részletek
+	Linked Images	Csatolt képek
+	Embedded Images	Beágyazott képek
+	Compound Paths	Összetett útvonalak
+	Text Objects	Szövegobjektumok
+	Placed Documents	Elhelyezett dokumentumok
+	Symbol Instances	Szimbólumpéldányok
+	Gradient Meshes	Színátmenetes hálók
+	Blends	Összemosások
+	Envelopes	Burkolók
+	Intertwine Groups	Összefonási csoportok
+	Opacity Masks	Átlátszósági maszkok
+	Objects with Effects	Effektusokat használó objektumok
 	Spot Colors	Direktszínek
 	Spot Colors (0)	Direktszínek (0)
 	Spot Colors…	Direktszínek…
@@ -4269,6 +4310,11 @@ mark-style	Japanese	Japán
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko beállításai…
 	Tate-chu-yoko Settings	Tate-chu-yoko beállításai
+	Warichu	Warichu
+	Warichu Settings…	Warichu beállításai…
+	Warichu Settings	Warichu beállításai
+	Lines:	Sorok:
+	Line Gap:	Sorköz:
 	Composite Fonts…	Összetett betűtípusok…
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
@@ -5115,6 +5161,9 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nem sikerült elhelyezni: {name}; a céldokumentumot visszaállították a mentett változatra
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, visszaállították a mentett változatra
+@msg	Couldn't paste: the document it was pasted in was reverted	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, visszaállították a mentett változatra
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
 @msg	Couldn't read {name}: {e}	Nem sikerült beolvasni: {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nem sikerült menteni a helyreállítási adatokat: {e}
@@ -5141,6 +5190,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -5306,6 +5356,7 @@ imageTrace	Outline	Körvonal
 @msg	no interaction in progress	nincs folyamatban lévő művelet
 @msg	no key object	nincs kulcsobjektum
 @msg	no library `{id}`	nincs ilyen könyvtár: `{id}`
+@msg	the library has another item of that kind named `{name}`	a könyvtárban már van egy másik ilyen fajta elem `{name}` néven
 @msg	no library `{key}` (see {list})	nincs ilyen könyvtár: `{key}` (lásd: {list})
 @msg	no Live Paint edge near that point	annál a pontnál nincs élőfestés-él
 @msg	no Live Paint face at that point	annál a pontnál nincs élőfestés-felület
@@ -5391,6 +5442,7 @@ imageTrace	Outline	Körvonal
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not an HP-GL file	nem HP-GL-fájl
+@msg	not a PICT file	nem PICT-fájl
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`: 1–255 #rrggbb szín tömbje kell
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
@@ -5432,6 +5484,7 @@ imageTrace	Outline	Körvonal
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})
@@ -5445,6 +5498,7 @@ imageTrace	Outline	Körvonal
 @msg	paths contain invalid coordinates	az útvonalakban érvénytelen koordináták vannak
 @msg	paths: give at least one file	paths: legalább egy fájlt adj meg
 @msg	replace: the object to replace was changed or deleted	replace: a cserélendő objektumot módosították vagy törölték
+@msg	the document it was prepared for is no longer active	az a dokumentum, amelyhez előkészítették, már nem aktív
 @msg	pattern missing	hiányzik a mintázat
 @msg	patterns nested too deeply are filled with mid-grey	a túl mélyen egymásba ágyazott mintázatok helyén középszürke kitöltés áll
 @msg	PDF settings are not an object	a PDF-beállítások nem objektumot alkotnak
@@ -5527,6 +5581,7 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	choose the object to detach with its Select/Move widget	válaszd ki a leválasztandó objektumot a Kijelölés/Mozgatás vezérlőjével
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
 @msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz
@@ -5598,6 +5653,7 @@ imageTrace	Outline	Körvonal
 @msg	SVG parse error: {0}	SVG-elemzési hiba: {0}
 @msg	Targa files are RGB: colorModel rgb	a Targa-fájlok RGB-k: colorModel rgb
 @msg	Text Wrap: select a wrap object	Szöveg körbefuttatása: jelölj ki egy körbefuttató objektumot
+@msg	the active document changed while the question was open; nothing was deleted	az aktív dokumentum megváltozott, amíg a kérdés nyitva volt; semmi sem lett törölve
 @msg	that document is no longer open	az a dokumentum már nincs megnyitva
 @msg	the art could not be sampled	a grafikából nem sikerült mintát venni
 @msg	the art has no bounds	a grafikának nincsenek határai
@@ -5908,7 +5964,9 @@ imageTrace	Outline	Körvonal
 @msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	A grafikák sík lapokra kerülnek: használja a Kihúzás vagy a Sík objektumtípust
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
+@msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
 @msg	The graphics are too complex: simplify the symbols' art	A grafikák túl összetettek: egyszerűsítse a szimbólumok rajzát
@@ -6254,7 +6312,7 @@ axis	Y Axis	Y tengely
 @msg	`dither` applies to gradient fills (stroke: false)	A `dither` színátmenetes kitöltésekre vonatkozik (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	A `dither` színátmenetes kitöltésekre vonatkozik (paint.setFill)
 @msg	`dither` must be true or false	`dither`: true vagy false kell
-@msg	`method` must be classic or perceptual	a `method` értéke classic vagy perceptual lehet
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	a `method` értéke classic, perceptual, hue-clockwise vagy hue-counterclockwise lehet
 @msg	`spread` must be pad, repeat or reflect	a `spread` értéke pad, repeat vagy reflect lehet
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	a `repeats` értéke 1 és {MAX_REPEATS} közötti egész szám lehet
 @msg	`spread` applies to linear, radial, conic and diamond gradients	a `spread` a lineáris, sugaras, kúpos és rombusz színátmenetekre vonatkozik
@@ -6367,6 +6425,35 @@ axis	Y Axis	Y tengely
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
 @msg	true or false	true vagy false
+@msg	a number >= {_1}	szám >= {_1}
+@msg	a number > {_1}	szám > {_1}
+@msg	a number <= {_1}	szám <= {_1}
+@msg	a number < {_1}	szám < {_1}
+@msg	a number {_1} to {_2}	{_1} és {_2} közötti szám
+@msg	a number >= {_1} and < {_2}	szám >= {_1} és < {_2}
+@msg	a number > {_1} and <= {_2}	szám > {_1} és <= {_2}
+@msg	a number > {_1} and < {_2}	szám > {_1} és < {_2}
+@msg	a number ({_1})	szám ({_1})
+@msg	a number >= {_1} ({_2})	szám >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	szám > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	szám <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	szám < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} és {_2} közötti szám ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	szám >= {_1} és < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	szám > {_1} és <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	szám > {_1} és < {_2} ({_3})
+@msg	an integer	egész szám
+@msg	an integer >= {_1}	egész szám >= {_1}
+@msg	an integer <= {_1}	egész szám <= {_1}
+@msg	an integer {_1} to {_2}	{_1} és {_2} közötti egész szám
+@msg	one of {_1}	{_1} közül az egyik
+@msg	`{path}` must be one of {_1}, not {got}	`{path}`: {_1} közül az egyik kell, nem ez: {got}
+@msg	an object id (a non-negative integer)	objektumazonosító (nemnegatív egész szám)
+@msg	a list of object ids	objektumazonosítók listája
+@msg	a color (a string, [r, g, b] or an object)	szín (karakterlánc, [r, g, b] vagy objektum)
+@msg	[x, y] (two numbers)	[x, y] (két szám)
+@msg	an object	objektum
+@msg	a list	lista
 @msg	unknown key `{k}`; the keys here are {_1}	ismeretlen kulcs: `{k}`; az itt használható kulcsok: {_1}
 @msg	{_1} is listed twice	{_1} kétszer szerepel
 @msg	{_1} is not the id of an input object	{_1} nem egy bemeneti objektum azonosítója
@@ -6468,12 +6555,14 @@ axis	Y Axis	Y tengely
 	Continue	Folytatás
 	Continue Action	Művelet folytatása
 	Delete Action Step	Műveletlépés törlése
+	Move Action Step	Műveletlépés áthelyezése
 	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
 	Stop: {message}	Megállás: {message}
 @msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
 @msg	message must be text	message: szöveg kell
 @msg	allowContinue must be true or false	allowContinue: true vagy false kell
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
+@msg	Batch cannot play an action with a View menu step	A kötegelt feldolgozás nem játszhat le Nézet menübeli lépést tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
 	Insert Select Path	Útvonal kijelölésének beszúrása
@@ -6638,6 +6727,22 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+	Notched Ribbon	Csipkézett szalag
+	Double Line	Dupla vonal
+	Wave	Hullám
+	Teardrop	Csepp
+	Striped Ribbon	Csíkos szalag
+	Fine Nib	Finom tollhegy
+	Broad Nib	Széles tollhegy
+	Chisel	Véső
+	Round Pen	Kerek toll
+	Pressure Pen	Nyomásérzékeny toll
+	Beads	Gyöngyök
+	Dash Dot	Pont-vonal
+	Scallops	Hullámos szegély
+	Stars	Csillagok
+	Triangles	Háromszögek
+	Sparkles	Szikrák
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -6657,6 +6762,13 @@ axis	Y Axis	Y tengely
 	Area Text	Területszöveg
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pixelhez illesztés beállításai
+	Pixel Snapping Options…	Pixelhez illesztés beállításai…
+	Snap to Pixel While Drawing	Illesztés pixelhez rajzoláskor
+	Snap to Pixel While Moving	Illesztés pixelhez mozgatáskor
+	Snap to Pixel While Scaling	Illesztés pixelhez méretezéskor
+	These options take effect when View › Snap to Pixel is on.	Ezek a beállítások akkor érvényesek, ha a Nézet › Illesztés pixelhez be van kapcsolva.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
@@ -6742,6 +6854,8 @@ anchor	Points:	Pontok:
 	Anchor Inspector	Horgonypont-vizsgáló
 	Add Points at Crossings	Pontok hozzáadása a kereszteződésekben
 	Split at Crossings	Felosztás a kereszteződésekben
+	Trim at Crossings Tool	Levágás a kereszteződésekben eszköz
+	Trim at Crossings	Levágás a kereszteződésekben
 	Extend Path	Útvonal meghosszabbítása
 	Measure & Inspect	Mérés és vizsgálat
 	Set Anchor	Horgonypont beállítása
@@ -7204,7 +7318,9 @@ breakText	Glyphs	Glifák
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” {_1} fájlokat nyit meg, nem `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`: `{_2}` fajtájú bővítmény, nem importáló bővítmény
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`: `{_2}` fajtájú bővítmény, nem exportáló bővítmény
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer"}"}} paranccsal
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer": "{_2}"}} paranccsal
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` exportáló bővítmény: exportáljon a document.export {{"format": "{_2}"}} paranccsal
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` élő effektus: alkalmazza az effect.apply {{"effect": "{_2}"}} paranccsal
 @msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
 @msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	a fájl nagyobb annál a {MAX_INPUT_BYTES} bájtnál, amit egy importáló bővítmény beolvas
@@ -7283,6 +7399,19 @@ breakText	Glyphs	Glifák
 	Show where this tool is	Megmutatja, hol van ez az eszköz
 @msg	missing `tutorial` (see learn.list)	hiányzik: `tutorial` (lásd: learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ismeretlen oktatóanyag: `{id}` (lásd: learn.list)
+	View more	Továbbiak
+	Finish tutorial	Oktatóanyag befejezése
+	Next Up	Következő
+	You finished the last tutorial in this skill.	Befejezte a készség utolsó oktatóanyagát.
+	Back to skills	Vissza a készségekhez
+	Open Tutorial Sample	Oktatóanyag mintafájljának megnyitása
+	Finish Tutorial	Oktatóanyag befejezése
+	Next Tutorial	Következő oktatóanyag
+	Back to Skills	Vissza a készségekhez
+@msg	tutorial `{id}` has no practice sample	nincs gyakorló mintafájl ehhez az oktatóanyaghoz: `{id}`
+@msg	open the practice sample of `{id}` first (see learn.openSample)	előbb nyissa meg a gyakorló mintafájlt ehhez: `{id}` (lásd: learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	előbb fejezze be ezt: `{id}` (lásd: learn.finish)
+@msg	`{id}` is the last tutorial in its skill	a készsége utolsó oktatóanyaga: `{id}`
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Elhalasztott effektusok frissítése

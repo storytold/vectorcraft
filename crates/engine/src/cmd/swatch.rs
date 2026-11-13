@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientStop, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
-use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_colors};
+use vectorcraft_doc::swatches::{LinkFn, PaintFn, color_name, map_node_paints, map_node_solid_paints, node_colors};
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
@@ -410,6 +410,8 @@ fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
     let method = match g.method {
         GradientMethod::Classic => 0,
         GradientMethod::Perceptual => 1,
+        GradientMethod::HueClockwise => 2,
+        GradientMethod::HueCounterclockwise => 3,
     };
     Some((kind, method, g.dither, g.painted_spread(), g.stops.iter().map(stop_key).collect::<Option<_>>()?))
 }
@@ -681,32 +683,16 @@ pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
 /// paint changed is merged into its entry ([`merge_stored`]), so fields the brush definition does
 /// not read are kept at every level.
 pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
-    use vectorcraft_brush::{Brush, BrushKind, Colorization};
-    let mut n = d.map_solid_paints(f);
-    // Each stored entry, its brush when it parses, the brush as written before the edit (only
-    // when its paint changed), and whether its paint changed.
-    let mut lib: Vec<(Value, Option<Brush>, Value, bool)> = match d.unknown.get(vectorcraft_brush::DOC_KEY) {
-        Some(v) => v.as_array().into_iter().flatten().map(|e| (e.clone(), Brush::from_json(e.clone()).ok(), Value::Null, false)).collect(),
-        None => {
-            vectorcraft_brush::library(d).into_iter().map(|b| (serde_json::to_value(&b).unwrap_or_default(), Some(b), Value::Null, false)).collect()
-        }
-    };
-    let mut in_brushes = 0;
-    for (_, b, base, changed) in lib.iter_mut() {
-        let Some(b) = b else { continue };
-        let before_edit = serde_json::to_value(&*b).unwrap_or_default();
+    use vectorcraft_brush::{BrushKind, Colorization};
+    let n = d.map_solid_paints(f);
+    n + edit_brush_library(d, &mut |b| {
         let key = match b.kind.colorization() {
             Colorization::HueShift { key } => Some(key),
             _ => None,
         };
         let before = key.map(|_| art_paint_colors(b.art()));
-        let in_brush = b.art_mut().into_iter().map(|art| map_node_solid_paints(art, f)).sum::<usize>();
-        *changed = in_brush > 0;
-        if *changed {
-            *base = before_edit;
-        }
-        in_brushes += in_brush;
-        let (Some(key), Some(before)) = (key, before) else { continue };
+        let in_brush = b.art_mut().into_iter().map(|art| map_node_solid_paints(art, &mut *f)).sum::<usize>();
+        let (Some(key), Some(before)) = (key, before) else { return in_brush };
         // Colors are compared by hex value, as `art_colors` (Brush Options' key colors) lists them.
         let same = |a: &Color, b: &Color| a.to_hex() == b.to_hex();
         let after = art_paint_colors(b.art());
@@ -719,10 +705,47 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
                 BrushKind::Art(a) => &mut a.colorization,
                 BrushKind::Scatter(s) => &mut s.colorization,
                 BrushKind::Pattern(p) => &mut p.colorization,
-                BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => continue,
+                BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => return in_brush,
             };
             *c = Colorization::HueShift { key };
         }
+        in_brush
+    })
+}
+
+/// Apply a paint rewrite ([`Document::map_paints`]) to the document and to the art of the brushes
+/// in its library ([`edit_brush_library`]). Returns the number of changed paints.
+pub(super) fn map_all_paints(d: &mut Document, f: &mut PaintFn) -> usize {
+    let n = d.map_paints(f);
+    n + edit_brush_library(d, &mut |b| b.art_mut().into_iter().map(|art| map_node_paints(art, &mut *f)).sum())
+}
+
+/// Apply `edit` to each brush of the document's library, the stored entries or, with none stored,
+/// the built-in library; `edit` returns how many paints of the brush's art it changed. The library
+/// is stored again only when a brush's paint changed. Stored entries are stored again as they were
+/// read, except that a brush whose paint changed is merged into its entry ([`merge_stored`]), so
+/// fields the brush definition does not read are kept at every level. Returns the number of
+/// changed paints.
+fn edit_brush_library(d: &mut Document, edit: &mut dyn FnMut(&mut vectorcraft_brush::Brush) -> usize) -> usize {
+    use vectorcraft_brush::Brush;
+    // Each stored entry, its brush when it parses, the brush as written before the edit (only
+    // when its paint changed), and whether its paint changed.
+    let mut lib: Vec<(Value, Option<Brush>, Value, bool)> = match d.unknown.get(vectorcraft_brush::DOC_KEY) {
+        Some(v) => v.as_array().into_iter().flatten().map(|e| (e.clone(), Brush::from_json(e.clone()).ok(), Value::Null, false)).collect(),
+        None => {
+            vectorcraft_brush::library(d).into_iter().map(|b| (serde_json::to_value(&b).unwrap_or_default(), Some(b), Value::Null, false)).collect()
+        }
+    };
+    let mut in_brushes = 0;
+    for (_, b, base, changed) in lib.iter_mut() {
+        let Some(b) = b else { continue };
+        let before_edit = serde_json::to_value(&*b).unwrap_or_default();
+        let in_brush = edit(b);
+        *changed = in_brush > 0;
+        if *changed {
+            *base = before_edit;
+        }
+        in_brushes += in_brush;
     }
     if in_brushes > 0 {
         let lib = lib
@@ -733,9 +756,8 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
             })
             .collect();
         d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(lib));
-        n += in_brushes;
     }
-    n
+    in_brushes
 }
 
 /// `new` (a definition as written after an edit) with the parts of `raw` (its stored entry) that

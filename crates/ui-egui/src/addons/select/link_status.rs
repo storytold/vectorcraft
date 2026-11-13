@@ -52,10 +52,17 @@ pub struct Present {
     pub has: [bool; 4],
 }
 
-/// The statuses the `links.list` result `list` holds, in [`STATUSES`] order.
+/// The statuses the rows of the `links.list` result `list` that can be selected hold, in
+/// [`STATUSES`] order.
 pub(crate) fn statuses_in(list: &Value) -> [bool; 4] {
-    let rows = list["links"].as_array().map_or(&[][..], Vec::as_slice);
+    let rows = canvas_rows(list);
     STATUSES.map(|(status, ..)| rows.iter().any(|r| command_status(r) == status))
+}
+
+/// The rows of the `links.list` result `list` of objects in the layer tree, which can be
+/// selected (a row with an `owner` is in a symbol, graph design, pattern or opacity mask).
+fn canvas_rows(list: &Value) -> Vec<Value> {
+    list["links"].as_array().into_iter().flatten().filter(|r| r["owner"].is_null()).cloned().collect()
 }
 
 /// The status of a `links.list` row as the command names it (`ok` is `linked`).
@@ -154,11 +161,11 @@ pub(crate) fn message(statuses: &[&str], count: u64, reasons: &[&str]) -> String
     crate::i18n::msg_n(reasons.len() as u64, one, other, &[("selected", &selected)])
 }
 
-/// The dialog's fields to start with: every image and placed document (`__rows`, as `links.list`
-/// lists them, read once), those selected chosen, All shown, Zoom to Selection on.
+/// The dialog's fields to start with: every image and placed document in the layer tree (`__rows`,
+/// as `links.list` lists them, read once), those selected chosen, All shown, Zoom to Selection on.
 pub(crate) fn fields(app: &mut VectorcraftApp) -> Value {
     let list = app.session.execute("links.list", &json!({})).unwrap_or_default();
-    let rows: Vec<Value> = list["links"].as_array().cloned().unwrap_or_default();
+    let rows = canvas_rows(&list);
     let selected: Vec<u64> = app.session.active().map(|st| st.selection.objects.iter().map(|id| id.0).collect()).unwrap_or_default();
     let chosen: Vec<u64> = rows.iter().filter_map(|r| r["id"].as_u64()).filter(|id| selected.contains(id)).collect();
     json!({ "__rows": rows, "ids": chosen, "show": "all", "zoom": true })

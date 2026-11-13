@@ -96,6 +96,8 @@
 	Blend Vertically	Bland lodret
 	Convert to CMYK	Konvertér til CMYK
 	Convert to Grayscale	Konvertér til gråtoner
+	Convert to Indexed Color	Konvertér til indekserede farver
+	Convert to Indexed Color…	Konvertér til indekserede farver…
 	Convert to RGB	Konvertér til RGB
 	Invert Colors	Invertér farver
 	Overprint Black…	Overprint sort…
@@ -853,6 +855,10 @@
 	Dock Panel	Dok panel
 	Dock to Top	Dok øverst
 	Dock to Bottom	Dok nederst
+	Dock to Left	Dok til venstre
+	Dock to Right	Dok til højre
+	Dock Toolbar	Dok værktøjslinjen
+	Float Toolbar	Flydende værktøjslinje
 	Control Bar Options	Indstillinger for kontrollinjen
 	Tool Options	Værktøjsindstillinger
 	Object Options	Objektindstillinger
@@ -1536,6 +1542,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Indstillinger for Warichu…
+	Warichu Settings	Indstillinger for Warichu
+	Lines:	Linjer:
+	Line Gap:	Linjeafstand:
 	Composite Fonts…	Sammensatte skrifttyper…
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
@@ -1839,6 +1850,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-sæt
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Skub ind først
@@ -1974,6 +1989,8 @@ digits	Malayalam	Malayalam
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
+	Delete the selected items and their artwork?	Slet de valgte elementer og deres grafik?
+	Delete this layer and its artwork?	Slet dette lag og dets grafik?
 	Delete “{name}”?	Slet »{name}«?
 	Document Swatches	Dokumentfarveprøver
 	Edit or Apply Color Group	Redigér eller anvend farvegruppe
@@ -2669,6 +2686,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
 	Color Theme Picker	Farvetemavælger
 	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
+	Prominent Colors	Fremtrædende farver
+	Save All Colors	Gem alle farver
+	Save Prominent Colors	Gem fremtrædende farver
 	Separate colors into rows	Opdel farver i rækker
 	Unlink harmony colors	Fjern sammenkædning af harmonifarver
 	1 Color Job	1-farvejob
@@ -3331,6 +3351,8 @@ theme	Appearance	Udseende
 	Rename Library Group	Omdøb biblioteksgruppe
 	Delete Library Group	Slet biblioteksgruppe
 	Move Library Item to Group	Flyt bibliotekselement til gruppe
+	Rename Library Item	Omdøb bibliotekselement
+	Add to Character Styles	Føj til tegnstile
 	Rename Library	Omdøb bibliotek
 	Show Library	Vis bibliotek
 	Use Library Item	Brug bibliotekselement
@@ -3516,9 +3538,11 @@ theme	Appearance	Udseende
 	Enable Background Export	Aktivér eksport i baggrunden
 	Enable Background Save	Aktivér lagring i baggrunden
 	Enable in-menu font previews	Aktivér skrifttypeforhåndsvisning i menuer
+	Show samples on white	Vis eksempler på hvidt
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
+	Switch Selection and Drawing Modes	Skift mellem markerings- og tegnetilstand
 	Enable Touch Workspace	Aktivér touch-arbejdsområde
 	English: UK	Engelsk: UK
 	Every (minutes)	Hvert (minut)
@@ -3589,6 +3613,11 @@ theme	Appearance	Udseende
 	Primary	Primær
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
+	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
+	Canvas display profile:	Canvassets skærmprofil:
+	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.
+	No usable display profile was found: the canvas is drawn in sRGB.	Der blev ikke fundet nogen brugbar skærmprofil: canvasset tegnes i sRGB.
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
 	Export Preferences…	Eksportér præferencer…
@@ -3721,6 +3750,19 @@ theme	Appearance	Udseende
 	Spot Color Objects	Objekter med spotfarver
 	Pattern Objects	Objekter med mønstre
 	Gradient Objects	Objekter med gradienter
+	Font Details	Skrifttypedetaljer
+	Linked Images	Linkede billeder
+	Embedded Images	Indlejrede billeder
+	Compound Paths	Sammensatte kurver
+	Text Objects	Tekstobjekter
+	Placed Documents	Placerede dokumenter
+	Symbol Instances	Symbolforekomster
+	Gradient Meshes	Gradientnet
+	Blends	Blandinger
+	Envelopes	Konvolutter
+	Intertwine Groups	Sammenfletningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekter med effekter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
@@ -4175,6 +4217,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} trin|{n} trin
 @plural	{n} stroke|{n} strokes	{n} kontur|{n} konturer
 @msg	no library `{id}`	intet bibliotek `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteket har allerede et andet element af den type med navnet `{name}`
 @msg	select some type first	markér først noget tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning skal være et tal, „auto“ eller „optical“
 @msg	{_1} has no {_2} style	{_1} har ingen {_2}-stil
@@ -4215,6 +4258,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunne ikke placere {name}: dokumentet, den blev sluppet på, var lukket
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunne ikke placere {name}: dokumentet, den blev placeret i, var lukket
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunne ikke placere {name}: dokumentet, den blev sluppet på, blev gendannet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunne ikke placere {name}: dokumentet, den blev placeret i, blev gendannet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunne ikke indsætte: dokumentet, der blev indsat i, blev gendannet
 @msg	Couldn't read {name}: {e}	Kunne ikke læse {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
 @msg	Create Outlines: select text objects	Opret konturer: markér tekstobjekter
@@ -4301,6 +4347,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` skal være et heltal mellem {min} og {max} (fik {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` skal være mellem {min} og {max} (fik {x})
 @msg	`{key}` must be one of {_1}	`{key}` skal være en af {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` skal være en af {_1}, ikke {got}
 @msg	`{key}` must be true or false	`{key}` skal være true eller false
 @msg	`{k}` must be [x, y]	`{k}` skal være [x, y]
 @msg	`{name}` has no options	`{name}` har ingen indstillinger
@@ -4582,6 +4629,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	stierne indeholder ugyldige koordinater
 @msg	paths: give at least one file	stier: angiv mindst én fil
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
+@msg	the document it was prepared for is no longer active	dokumentet, det blev forberedt til, er ikke længere aktivt
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
 @msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
@@ -4795,6 +4843,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Åbnede med {n} note: {first}|{notice}. Åbnede med {n} noter: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
 @msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
@@ -5144,6 +5193,8 @@ imageTrace	Outline	Kontur
 	Vivid	Intens
 	Spectrum	Spektrum
 	Perceptual	Perceptuel
+	Hue Clockwise	Farvetone med uret
+	Hue Counterclockwise	Farvetone mod uret
 	Relative Colorimetric	Relativ kolorimetrisk
 	Absolute Colorimetric	Absolut kolorimetrisk
 	Exact	Eksakt
@@ -5809,6 +5860,8 @@ swatch	Bright Violet	Kraftig violet
 	Objects on Path Tool	Objekter på kurve-værktøj
 	Attach Objects on Path	Tilknyt objekter til kurve
 	Expand Objects on Path	Udvid objekter på kurve
+	Detach	Frigør
+	Detach Object from Path	Frigør objekt fra kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -5956,7 +6009,7 @@ axis	Y Axis	Y-akse
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gælder for gradientfyld (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gælder for gradientfyld (paint.setFill)
 @msg	`dither` must be true or false	`dither` skal være true eller false
-@msg	`method` must be classic or perceptual	`method` skal være classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` skal være classic, perceptual, hue-clockwise eller hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installér »{name}«, som beder om et stort beregningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Hver kørsel kan tage op til {minutes} minutter og udføre {times} gange så meget arbejde, som andre plug-ins må. Den kører i baggrunden, og du kan annullere den.
@@ -5997,12 +6050,14 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop
 @msg	message must be text	message skal være tekst
 @msg	allowContinue must be true or false	allowContinue skal være true eller false
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
+@msg	Batch cannot play an action with a View menu step	Batch kan ikke afspille en handling med et trin fra menuen Vis
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
 	Insert Select Path	Indsæt kurvemarkering
@@ -6156,6 +6211,22 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+	Notched Ribbon	Takket bånd
+	Double Line	Dobbelt linje
+	Wave	Bølge
+	Teardrop	Dråbe
+	Striped Ribbon	Stribet bånd
+	Fine Nib	Fin pen
+	Broad Nib	Bred pen
+	Chisel	Mejsel
+	Round Pen	Rund pen
+	Pressure Pen	Trykpen
+	Beads	Perler
+	Dash Dot	Streg-prik
+	Scallops	Bølgekant
+	Stars	Stjerner
+	Triangles	Trekanter
+	Sparkles	Gnister
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6167,6 +6238,13 @@ axis	Y Axis	Y-akse
 	Area Text	Områdetekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Indstillinger for fastgørelse til pixel
+	Pixel Snapping Options…	Indstillinger for fastgørelse til pixel…
+	Snap to Pixel While Drawing	Fastgør til pixel ved tegning
+	Snap to Pixel While Moving	Fastgør til pixel ved flytning
+	Snap to Pixel While Scaling	Fastgør til pixel ved skalering
+	These options take effect when View › Snap to Pixel is on.	Disse indstillinger virker, når Vis › Fastgør til pixel er slået til.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6252,6 +6330,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankerpunktinspektør
 	Add Points at Crossings	Tilføj punkter ved krydsninger
 	Split at Crossings	Opdel ved krydsninger
+	Trim at Crossings Tool	Værktøj til trimning ved krydsninger
+	Trim at Crossings	Trim ved krydsninger
 	Extend Path	Forlæng sti
 	Measure & Inspect	Mål og undersøg
 	Set Anchor	Angiv ankerpunkt
@@ -6751,6 +6831,19 @@ breakText	Glyphs	Glyffer
 	Show where this tool is	Vis, hvor dette værktøj er
 @msg	missing `tutorial` (see learn.list)	`tutorial` mangler (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ukendt vejledning `{id}` (se learn.list)
+	View more	Vis mere
+	Finish tutorial	Afslut vejledning
+	Next Up	Næste
+	You finished the last tutorial in this skill.	Du har afsluttet den sidste vejledning i denne færdighed.
+	Back to skills	Tilbage til færdigheder
+	Open Tutorial Sample	Åbn eksempel til vejledning
+	Finish Tutorial	Afslut vejledning
+	Next Tutorial	Næste vejledning
+	Back to Skills	Tilbage til færdigheder
+@msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` er den sidste vejledning i sin færdighed
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter

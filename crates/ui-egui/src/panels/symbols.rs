@@ -496,7 +496,7 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibSymbol>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
     }
@@ -837,6 +837,23 @@ mod tests {
         app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
         assert!(app.ui.dialog.as_ref().unwrap().bool("nineSlice"));
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("sliceLeft", 0.0), 20.0);
+        app.ui.dialog = None;
+        // Guides outside the art, and ones that are not whole percents, open as they are and come
+        // back unchanged from OK; a field changed to a value past 100 % puts that guide outside.
+        let guides = [-0.123456789, 1.5, 0.013, -2.75];
+        app.run("symbol.options", json!({"name": "Mark", "nineSliceGuides": guides})).unwrap();
+        app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
+        let dialog = app.ui.dialog.as_ref().unwrap();
+        for (key, want) in [("sliceLeft", -12.3456789), ("sliceTop", 150.0), ("sliceRight", 1.3), ("sliceBottom", -275.0)] {
+            assert!((dialog.f64(key, 0.0) - want).abs() < 1e-9, "{key}: {}", dialog.f64(key, 0.0));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][1]["nineSlice"], json!(guides));
+        app.run("ui.symbolOptions", json!({"edit": true, "name": "Mark"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("sliceRight".into(), json!(-125.5));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let nine = app.run("symbol.list", json!({})).unwrap()["symbols"][1]["nineSlice"].clone();
+        assert_eq!(nine, json!([-0.123456789, 1.5, -1.255, -2.75]));
     }
 
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8

@@ -508,6 +508,21 @@ pub enum Mojikumi {
     /// Consecutive punctuation shares one half-em space (JLREQ 3.1.4), and a closing bracket,
     /// comma or full stop ending a line is set half width.
     LineEndHalf,
+    /// YakumonoHankaku: every opening and closing bracket, comma and full stop is set half width,
+    /// a middle dot loses a quarter em on each side, and a quarter em separates Japanese and Latin
+    /// letters or digits.
+    YakumonoHankaku,
+    /// GyomatsuYakumonoHankaku: punctuation keeps its full width, except that an opening bracket
+    /// starting a line is set flush with the line's start, a closing bracket, comma or full stop
+    /// ending a line is set half width and a middle dot ending a line loses the quarter em after
+    /// it; a quarter em separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoHankaku,
+    /// GyomatsuYakumonoZenkaku: punctuation keeps its full width at a line's end too; a quarter em
+    /// separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoZenkaku,
+    /// YakumonoZenkaku: punctuation keeps its full width, with no added space between Japanese and
+    /// Latin text.
+    YakumonoZenkaku,
 }
 
 impl Mojikumi {

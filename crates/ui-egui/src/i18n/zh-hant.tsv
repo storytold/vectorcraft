@@ -591,6 +591,8 @@ font-technology	Variable	可變
 	Convert to Artboards	轉換為工作區域
 	Convert to CMYK	轉換為 CMYK
 	Convert to Grayscale	轉換為灰階
+	Convert to Indexed Color	轉換為索引色彩
+	Convert to Indexed Color…	轉換為索引色彩…
 	Convert To Outlines	轉換為外框
 	Convert To Point Type	轉換為點狀文字
 	Convert to RGB	轉換為 RGB
@@ -774,6 +776,8 @@ font-technology	Variable	可變
 	Delete Width Point	刪除寬度點
 	Delete Workspace	刪除工作區
 	Delete {kind} Style	刪除{kind}樣式
+	Delete the selected items and their artwork?	要刪除所選項目及其圖稿嗎？
+	Delete this layer and its artwork?	要刪除此圖層及其圖稿嗎？
 	Delete “{name}”?	要刪除「{name}」嗎？
 	Depth:	深度：
 	Description	描述
@@ -1003,12 +1007,14 @@ font-technology	Variable	可變
 	Enable Contextual Task Bar	啟用快捷工作列
 	Enable copying of text, images and other content	啟用複製文字、影像與其他內容
 	Enable in-menu font previews	啟用選單內字體預覽
+	Show samples on white	在白色背景上顯示樣本
 	Enable Missing Glyph Protection	啟用遺失字符保護
 	Enable Opacity Mask	啟用不透明度遮色片
 	Enable plaintext metadata	啟用純文字中繼資料
 	Enable Rubber Band for	啟用橡皮筋預覽，適用於
 	Enable text access for screen readers	啟用螢幕閱讀器的文字存取
 	Enable Touch Gestures	啟用觸控手勢
+	Switch Selection and Drawing Modes	切換選取與繪圖模式
 	Enable Touch Workspace	啟用觸控工作區
 	Encoding	編碼
 	Encoding:	編碼：
@@ -1584,6 +1590,8 @@ file-filter	Templates	範本
 	Objects on Path Tool	路徑上的物件工具
 	Attach Objects on Path	附加路徑上的物件
 	Expand Objects on Path	展開路徑上的物件
+	Detach	分離
+	Detach Object from Path	將物件從路徑分離
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -1955,6 +1963,7 @@ file-filter	Templates	範本
 @msg	the layer to flatten into is hidden	要平面化到的圖層已隱藏
 @msg	there are no objects to release	沒有可釋放的物件
 @msg	no library `{id}`	沒有資料庫 `{id}`
+@msg	the library has another item of that kind named `{name}`	資料庫中已有另一個同類項目名為 `{name}`
 @msg	{path}: not a file	{path}：不是檔案
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	無法寫入 .{ext} 影像
@@ -2016,6 +2025,7 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	choose the object to detach with its Select/Move widget	請用物件的「選取/移動」控制項選取要分離的物件
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
 @msg	a clipping path can't take objects	剪裁路徑無法附加物件
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑
@@ -2212,6 +2222,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	not a PICT file	不是 PICT 檔案
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
@@ -2605,10 +2616,14 @@ file-filter	Templates	範本
 @msg	no user library folder here	此處沒有使用者資料庫資料夾
 @msg	Couldn't place {name}: the document it was dropped on was closed	無法置入 {name}：放置它的文件已關閉
 @msg	Couldn't place {name}: the document it was placed in was closed	無法置入 {name}：要置入的文件已關閉
+@msg	Couldn't place {name}: the document it was dropped on was reverted	無法置入 {name}：放置它的文件已回復
+@msg	Couldn't place {name}: the document it was placed in was reverted	無法置入 {name}：要置入的文件已回復
+@msg	Couldn't paste: the document it was pasted in was reverted	無法貼上：要貼上的文件已回復
 @msg	no files to place	沒有要置入的檔案
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文件、PDF 或 PDF 相容的 .ai 檔案
 @msg	paths: give at least one file	paths：請提供至少一個檔案
 @msg	replace: the object to replace was changed or deleted	replace：要取代的物件已被變更或刪除
+@msg	the document it was prepared for is no longer active	為其準備的文件已不再處於使用中
 @msg	Couldn't place {name}: {e}	無法置入 {name}：{e}
 @msg	no print service	沒有列印服務
 @msg	the print job has no data	列印工作沒有資料
@@ -2618,6 +2633,7 @@ file-filter	Templates	範本
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已捨棄 {n} 份復原的文件
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已還原 {n} 份復原的文件：請儲存以保留
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已開啟，附有 {n} 則註解：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已開啟，附有 {n} 則註解：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已儲存 {path}，附有 {n} 則註解：{first}
 @msg	Saving recovery data for {_1}	正在儲存 {_1} 的復原資料
 @msg	This shortcut file is in a form VectorCraft can't read.	VectorCraft 無法讀取此快速鍵檔案的格式。
@@ -2662,12 +2678,14 @@ file-filter	Templates	範本
 @msg	choose the font files to add	請選擇要加入的字體檔案
 @msg	not a file	不是檔案
 @msg	not a font file	不是字體檔案
+@msg	the active document changed while the question was open; nothing was deleted	問題開啟期間作用中文件已變更；未刪除任何內容
 @msg	that document is no longer open	該文件已不再開啟
 @msg	larger than 256 MB	大於 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	檔案總計超過 1 GB：請每次少加入一些
 @msg	every numbered name for it is taken in the Fonts folder	字體資料夾中所有編號名稱都已被使用
 @msg	every numbered name for {name} is taken in the document's folder	文件所在資料夾中 {name} 的所有編號名稱都已被使用
 @msg	No linked files to look for	沒有要尋找的連結檔案
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	此連結位於符號、圖表設計、圖樣或不透明度遮色片中，在畫布上沒有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
@@ -3111,6 +3129,10 @@ file-filter	Templates	範本
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
 	Push In First	先推入
@@ -3785,6 +3807,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Rating:	評等：
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
+	Use Monitor Profile for Canvas	畫布使用顯示器描述檔
+	The canvas is drawn in sRGB.	畫布以 sRGB 繪製。
+	Canvas display profile:	畫布顯示描述檔：
+	The system matches the window to the display's colors.	系統會讓視窗符合顯示器的色彩。
+	No usable display profile was found: the canvas is drawn in sRGB.	找不到可用的顯示器描述檔：畫布以 sRGB 繪製。
 	Rearrange All Artboards	重新排列所有工作區域
 	Rearrange	重新排列
 	Select All Artboards	選取所有工作區域
@@ -3999,6 +4026,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
+	Prominent Colors	主要顏色
+	Save All Colors	儲存所有顏色
+	Save Prominent Colors	儲存主要顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設
@@ -4549,6 +4579,20 @@ digits	Malayalam	馬來亞拉姆數字
 	Spot Color Objects	使用特別色的物件
 	Pattern Objects	使用圖樣的物件
 	Gradient Objects	使用漸層的物件
+	Font Details	字體詳細資訊
+	Linked Images	已連結的影像
+	Embedded Images	嵌入的影像
+	Compound Paths	複合路徑
+	Text Objects	文字物件
+	Placed Documents	已置入的文件
+	Symbol Instances	符號範例
+	Gradient Meshes	漸層網格
+	Blends	漸變
+	Envelopes	封套
+	Intertwine Groups	交織群組
+	Opacity Masks	不透明度遮色片
+	Objects with Effects	使用效果的物件
+	Pattern Swatches	圖樣色票
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：
@@ -4670,6 +4714,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Rename Library Group	重新命名資料庫群組
 	Delete Library Group	刪除資料庫群組
 	Move Library Item to Group	將資料庫項目移至群組
+	Rename Library Item	重新命名資料庫項目
+	Add to Character Styles	新增至字元樣式
 	Library	資料庫
 	Rename Library	重新命名資料庫
 	Show Library	顯示資料庫
@@ -4703,6 +4749,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Tate-chu-yoko	縱中橫
 	Tate-chu-yoko Settings…	縱中橫設定…
 	Tate-chu-yoko Settings	縱中橫設定
+	Warichu	割註
+	Warichu Settings…	割註設定…
+	Warichu Settings	割註設定
+	Lines:	行數：
+	Line Gap:	行間距：
 	Composite Fonts…	複合字體…
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
@@ -5256,6 +5307,10 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Dock to Left	停駐到左側
+	Dock to Right	停駐到右側
+	Dock Toolbar	停駐工具列
+	Float Toolbar	浮動工具列
 	Control Bar Options	控制列選項
 	Tool Options	工具選項
 	Object Options	物件選項
@@ -5630,7 +5685,10 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必須是 front 或 back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	圖形會對應到平坦的面：請使用「突出」或「平面」物件類型
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
+	Graphics map onto the Plane, Extrude and Revolve object types.	圖形會對應到「平面」、「突出」與「迴轉」物件類型。
+@msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面
 @msg	The graphics are too complex: simplify the symbols' art	圖形過於複雜：請簡化符號的圖稿
@@ -5914,7 +5972,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
-@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+	Hue Clockwise	色相順時針
+	Hue Counterclockwise	色相逆時針
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必須是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
@@ -6027,6 +6087,35 @@ axis	Y Axis	Y 軸
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
+@msg	a number >= {_1}	大於或等於 {_1} 的數字
+@msg	a number > {_1}	大於 {_1} 的數字
+@msg	a number <= {_1}	小於或等於 {_1} 的數字
+@msg	a number < {_1}	小於 {_1} 的數字
+@msg	a number {_1} to {_2}	介於 {_1} 到 {_2} 之間的數字
+@msg	a number >= {_1} and < {_2}	大於或等於 {_1} 且小於 {_2} 的數字
+@msg	a number > {_1} and <= {_2}	大於 {_1} 且小於或等於 {_2} 的數字
+@msg	a number > {_1} and < {_2}	大於 {_1} 且小於 {_2} 的數字
+@msg	a number ({_1})	數字（{_1}）
+@msg	a number >= {_1} ({_2})	大於或等於 {_1} 的數字（{_2}）
+@msg	a number > {_1} ({_2})	大於 {_1} 的數字（{_2}）
+@msg	a number <= {_1} ({_2})	小於或等於 {_1} 的數字（{_2}）
+@msg	a number < {_1} ({_2})	小於 {_1} 的數字（{_2}）
+@msg	a number {_1} to {_2} ({_3})	介於 {_1} 到 {_2} 之間的數字（{_3}）
+@msg	a number >= {_1} and < {_2} ({_3})	大於或等於 {_1} 且小於 {_2} 的數字（{_3}）
+@msg	a number > {_1} and <= {_2} ({_3})	大於 {_1} 且小於或等於 {_2} 的數字（{_3}）
+@msg	a number > {_1} and < {_2} ({_3})	大於 {_1} 且小於 {_2} 的數字（{_3}）
+@msg	an integer	整數
+@msg	an integer >= {_1}	大於或等於 {_1} 的整數
+@msg	an integer <= {_1}	小於或等於 {_1} 的整數
+@msg	an integer {_1} to {_2}	介於 {_1} 到 {_2} 之間的整數
+@msg	one of {_1}	{_1} 其中之一
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` 必須是 {_1} 其中之一，而不是 {got}
+@msg	an object id (a non-negative integer)	物件 ID（非負整數）
+@msg	a list of object ids	物件 ID 清單
+@msg	a color (a string, [r, g, b] or an object)	顏色（字串、[r, g, b] 或物件）
+@msg	[x, y] (two numbers)	[x, y]（兩個數字）
+@msg	an object	物件
+@msg	a list	清單
 @msg	unknown key `{k}`; the keys here are {_1}	未知的鍵 `{k}`；此處可用的鍵：{_1}
 @msg	{_1} is listed twice	{_1} 列出了兩次
 @msg	{_1} is not the id of an input object	{_1} 不是輸入物件的 ID
@@ -6128,12 +6217,14 @@ axis	Y Axis	Y 軸
 	Continue	繼續
 	Continue Action	繼續動作
 	Delete Action Step	刪除動作步驟
+	Move Action Step	移動動作步驟
 	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	沒有動作在停止處等待
 @msg	message must be text	message 必須是文字
 @msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
+@msg	Batch cannot play an action with a View menu step	批次無法播放含有檢視選單步驟的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
 	Insert Select Path	插入選取路徑
@@ -6298,6 +6389,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口緞帶
+	Double Line	雙線
+	Wave	波浪
+	Teardrop	淚滴
+	Striped Ribbon	條紋緞帶
+	Fine Nib	細筆尖
+	Broad Nib	寬筆尖
+	Chisel	鑿形
+	Round Pen	圓頭筆
+	Pressure Pen	壓感筆
+	Beads	珠串
+	Dash Dot	點劃線
+	Scallops	扇貝邊
+	Stars	星形
+	Triangles	三角形
+	Sparkles	閃光
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -6317,6 +6424,13 @@ axis	Y Axis	Y 軸
 	Area Text	區域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	依字符邊界測量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	靠齊像素選項
+	Pixel Snapping Options…	靠齊像素選項…
+	Snap to Pixel While Drawing	繪製時靠齊像素
+	Snap to Pixel While Moving	移動時靠齊像素
+	Snap to Pixel While Scaling	縮放時靠齊像素
+	These options take effect when View › Snap to Pixel is on.	這些選項會在「檢視 › 靠齊像素」開啟時生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	顯示靠齊字符選項
 	Hide Snap to Glyph Options	隱藏靠齊字符選項
@@ -6402,6 +6516,8 @@ anchor	Points:	點：
 	Anchor Inspector	錨點檢查器
 	Add Points at Crossings	在交叉處增加錨點
 	Split at Crossings	在交叉處分割
+	Trim at Crossings Tool	在交叉處修剪工具
+	Trim at Crossings	在交叉處修剪
 	Extend Path	延長路徑
 	Measure & Inspect	測量與檢查
 	Set Anchor	設定錨點
@@ -6867,7 +6983,9 @@ breakText	Glyphs	字符
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer": "{_2}"}} 開啟檔案
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是匯出增效模組：請用 document.export {{"format": "{_2}"}} 匯出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是即時效果：請用 effect.apply {{"effect": "{_2}"}} 套用
 @msg	the importer returned no objects	匯入增效模組未傳回任何物件
 @msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組
@@ -6943,6 +7061,19 @@ breakText	Glyphs	字符
 	Show where this tool is	顯示此工具的位置
 @msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+	View more	檢視更多
+	Finish tutorial	完成教學課程
+	Next Up	接下來
+	You finished the last tutorial in this skill.	你已完成此技能的最後一個教學課程。
+	Back to skills	返回技能
+	Open Tutorial Sample	開啟教學課程範例
+	Finish Tutorial	完成教學課程
+	Next Tutorial	下一個教學課程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	請先完成 `{id}` (請參閱 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最後一個教學課程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果

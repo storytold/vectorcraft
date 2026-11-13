@@ -141,8 +141,21 @@ pub enum Cursor {
     Knife,
     /// The Shaper tool.
     Shaper,
-    /// The Live Paint Bucket.
+    /// The Live Paint Bucket where a click paints nothing: an empty paint bucket.
     LivePaintBucket,
+    /// The Live Paint Bucket where a click fills a face (of a Live Paint group, or a region of
+    /// the selected paths): a filled paint bucket.
+    LivePaintBucketFace,
+    /// The Live Paint Bucket where a click paints an edge of a Live Paint group: a brush.
+    LivePaintBucketEdge,
+    /// Live Paint Selection over a face of a Live Paint group that a click selects: the arrow with a
+    /// filled square.
+    LivePaintSelectFace,
+    /// Live Paint Selection over an edge of a Live Paint group that a click selects: the arrow with
+    /// a short line.
+    LivePaintSelectEdge,
+    /// Live Paint Selection where a click selects no face or edge: the arrow with an x.
+    LivePaintSelectOutside,
     /// The Measure tool.
     Measure,
     /// The Print Tiling tool.
@@ -243,7 +256,8 @@ impl Cursor {
     }
 
     /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
-    /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools') become a plain crosshair at the hotspot.
+    /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools', the Live
+    /// Paint tools') become a plain crosshair at the hotspot.
     pub fn precise(self) -> Self {
         match self {
             Cursor::Pen
@@ -280,6 +294,11 @@ impl Cursor {
             | Cursor::Knife
             | Cursor::Shaper
             | Cursor::LivePaintBucket
+            | Cursor::LivePaintBucketFace
+            | Cursor::LivePaintBucketEdge
+            | Cursor::LivePaintSelectFace
+            | Cursor::LivePaintSelectEdge
+            | Cursor::LivePaintSelectOutside
             | Cursor::Measure
             | Cursor::PrintTiling
             | Cursor::SymbolSprayer
@@ -320,7 +339,6 @@ impl Cursor {
             | Cursor::Join
             | Cursor::Knife
             | Cursor::Shaper
-            | Cursor::LivePaintBucket
             | Cursor::Measure
             | Cursor::ObjectsOnPath
             | Cursor::PrintTiling

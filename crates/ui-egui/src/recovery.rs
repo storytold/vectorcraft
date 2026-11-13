@@ -133,7 +133,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         match app.run(id, json!({ "file": file })) {
             Ok(r) => {
                 if let Some(restored) = r["restored"].as_array().and_then(|v| v.first()) {
-                    crate::dialogs::missing_links::after_open(app, restored);
+                    crate::dialogs::missing_links::after_open(app, restored, Vec::new());
                 }
                 done.push(r);
             }
