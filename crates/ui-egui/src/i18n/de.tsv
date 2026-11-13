@@ -2154,6 +2154,29 @@ file-filter	Templates	Vorlagen
 	Bristle Brush	Borstenpinsel
 	Pattern Brush	Musterpinsel
 	missing from the Brushes panel	fehlt im Bedienfeld „Pinsel“
+	built in	integriert
+	embedding not allowed	Einbetten nicht erlaubt
+	embedding for editing	Einbetten zum Bearbeiten
+	embedding for preview and print	Einbetten für Vorschau und Druck
+	embedding allowed	Einbetten erlaubt
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersetzt: angezeigt in {family} {style} ({detail})
+	missing: shown in {family} {style}	fehlt: angezeigt in {family} {style}
+	missing	fehlt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearer Verlauf
+	Radial gradient	Radialer Verlauf
+	Conic gradient	Konischer Verlauf
+	Diamond gradient	Rautenverlauf
+	Freeform gradient	Freiformverlauf
+@plural	{n} instance|{n} instances	{n} Instanz|{n} Instanzen
+@plural	{n} row|{n} rows	{n} Zeile|{n} Zeilen
+@plural	{n} column|{n} columns	{n} Spalte|{n} Spalten
 	Select art to make a scatter, art or pattern brush.	Wählen Sie eine Grafik aus, um einen Spezial-, Bild- oder Musterpinsel zu erstellen.
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel

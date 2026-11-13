@@ -2826,6 +2826,29 @@ digits	Hindi	Hindi
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
 	missing from the Brushes panel	không có trong bảng Cọ
+	built in	tích hợp sẵn
+	embedding not allowed	không cho phép nhúng
+	embedding for editing	nhúng để chỉnh sửa
+	embedding for preview and print	nhúng để xem trước và in
+	embedding allowed	cho phép nhúng
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	đã thay thế: hiển thị bằng {family} {style} ({detail})
+	missing: shown in {family} {style}	thiếu: hiển thị bằng {family} {style}
+	missing	thiếu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Chuyển sắc tuyến tính
+	Radial gradient	Chuyển sắc hướng tâm
+	Conic gradient	Chuyển sắc hình nón
+	Diamond gradient	Chuyển sắc hình thoi
+	Freeform gradient	Chuyển sắc tự do
+@plural	{n} instance|{n} instances	{n} phiên bản
+@plural	{n} row|{n} rows	{n} hàng
+@plural	{n} column|{n} columns	{n} cột
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết

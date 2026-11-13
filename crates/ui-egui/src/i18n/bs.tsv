@@ -3356,6 +3356,29 @@ theme	Appearance	Izgled
 	Bristle Brush	Četkica s čekinjama
 	Pattern Brush	Četkica uzorka
 	missing from the Brushes panel	nedostaje u panelu Četkice
+	built in	ugrađen
+	embedding not allowed	ugrađivanje nije dozvoljeno
+	embedding for editing	ugrađivanje za uređivanje
+	embedding for preview and print	ugrađivanje za pregled i štampu
+	embedding allowed	ugrađivanje dozvoljeno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
+	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
+	missing	nedostaje
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearni gradijent
+	Radial gradient	Radijalni gradijent
+	Conic gradient	Konusni gradijent
+	Diamond gradient	Rombni gradijent
+	Freeform gradient	Gradijent slobodnog oblika
+@plural	{n} instance|{n} instances	{n} instanca|{n} instance|{n} instanci
+@plural	{n} row|{n} rows	{n} red|{n} reda|{n} redova
+@plural	{n} column|{n} columns	{n} kolona|{n} kolone|{n} kolona
 	Select art to make a scatter, art or pattern brush.	Odaberite crtež da napravite raspršenu, umjetničku četkicu ili četkicu uzorka.
 	Brush Art	Crtež četkice
 	New Symbol	Novi simbol

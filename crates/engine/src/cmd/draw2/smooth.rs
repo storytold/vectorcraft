@@ -15,15 +15,27 @@ const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
 
 /// The options the Smooth tool refits with: the path smoothed along its length by a Gaussian of
 /// spread `sigma` (none at 0), then refitted within `tol` of that and within twice the distance the
-/// smoothing moved it, keeping a corner only where the path turns back on itself.
-fn refit_options(tol: f64, sigma: f64) -> SimplifyOptions {
-    SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, smooth: sigma, smooth_moved_only: true }
+/// smoothing moved it, keeping a corner only where the path turns back on itself. `free` says whether
+/// the start and the end of the stretch refitted are ends of an open path, whose direction then
+/// follows the smoothed path within the reach rather than the first or last segment.
+fn refit_options(tol: f64, sigma: f64, free: [bool; 2]) -> SimplifyOptions {
+    SimplifyOptions {
+        tolerance: tol,
+        corner_angle_deg: 179.0,
+        straight_lines: false,
+        smooth: sigma,
+        smooth_moved_only: true,
+        free_start: free[0],
+        free_end: free[1],
+    }
 }
 
 /// Smooth and refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
-fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64) -> Vec<Anchor> {
+/// `free` says whether its first and last anchors are ends of an open path: the curve leaving or
+/// arriving at such an end can turn.
+fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<Anchor> {
     let piece = PathData::single(SubPath::new(anchors.to_vec(), false));
-    let fitted = po::simplify_with(&piece, &refit_options(tol, sigma));
+    let fitted = po::simplify_with(&piece, &refit_options(tol, sigma, free));
     let Some(mut out) = fitted.subpaths.into_iter().next().map(|s| s.anchors).filter(|a| a.len() >= 2) else { return anchors.to_vec() };
     let (f, l) = (anchors[0], anchors[anchors.len() - 1]);
     let last = out.len() - 1;
@@ -228,7 +240,7 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     if sp.closed {
         let Some(k) = marked.iter().position(|m| !m) else {
             // Everything is in range: smooth the whole closed path, across its start too.
-            let f = po::simplify_with(&PathData::single(sp.clone()), &refit_options(tol, sigma));
+            let f = po::simplify_with(&PathData::single(sp.clone()), &refit_options(tol, sigma, [false; 2]));
             return f.subpaths.into_iter().next();
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
@@ -239,14 +251,14 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
         open.anchors.push(open.anchors[0]);
         m.push(false);
         open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma);
+        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma, false);
         let l = res.pop()?;
         if let Some(r0) = res.first_mut() {
             r0.h_in = l.h_in;
         }
         return Some(SubPath::new(res, true));
     }
-    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol, sigma), false))
+    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol, sigma, true), false))
 }
 
 /// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
@@ -278,8 +290,10 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
 /// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
 /// within `tol`, together with the stretch of the segments leading into the run that is in the
 /// drag's reach (`near`): a short drag smooths what is under it, and the rest of a long segment next
-/// to it stays as it was (#1512).
-fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Vec<Anchor> {
+/// to it stays as it was (#1512). With `open`, `anchors` are an open path, and the curve at its first
+/// or last anchor turns with the smoothing when a run's refit reaches that anchor; a run's other ends,
+/// and those of the open run a closed path is cut into, keep their direction.
+fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64, open: bool) -> Vec<Anchor> {
     let n = anchors.len();
     let mut runs = vec![];
     let mut i = 0;
@@ -319,7 +333,8 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
             head = Some(Anchor { h_out: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, far.p2, reach.p1);
         }
-        let new = refit_run(&piece, tol, sigma);
+        let free = [open && lo == 0 && head.is_none(), open && hi == n - 1 && tail.is_none()];
+        let new = refit_run(&piece, tol, sigma, free);
         out.splice(lo..=hi, head.into_iter().chain(new).chain(tail));
     }
     out

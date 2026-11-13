@@ -6137,6 +6137,29 @@ theme	Appearance	Görünüm
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
 	missing from the Brushes panel	Fırçalar panelinde yok
+	built in	yerleşik
+	embedding not allowed	gömmeye izin verilmiyor
+	embedding for editing	düzenleme için gömme
+	embedding for preview and print	önizleme ve yazdırma için gömme
+	embedding allowed	gömmeye izin veriliyor
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
+	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
+	missing	eksik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Doğrusal degrade
+	Radial gradient	Radyal degrade
+	Conic gradient	Konik degrade
+	Diamond gradient	Elmas degrade
+	Freeform gradient	Serbest biçimli degrade
+@plural	{n} instance|{n} instances	{n} örnek
+@plural	{n} row|{n} rows	{n} satır
+@plural	{n} column|{n} columns	{n} sütun
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.

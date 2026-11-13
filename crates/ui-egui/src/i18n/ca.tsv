@@ -3115,6 +3115,29 @@ digits	Malayalam	Malaiàlam
 	Pattern Borders	Vores de motiu
 	Pattern Brush	Pinzell de motiu
 	missing from the Brushes panel	absent del tauler Pinzells
+	built in	integrat
+	embedding not allowed	incrustació no permesa
+	embedding for editing	incrustació per a l’edició
+	embedding for preview and print	incrustació per a la visualització i la impressió
+	embedding allowed	incrustació permesa
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
+	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
+	missing	absent
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradat lineal
+	Radial gradient	Degradat radial
+	Conic gradient	Degradat cònic
+	Diamond gradient	Degradat de rombe
+	Freeform gradient	Degradat de forma lliure
+@plural	{n} instance|{n} instances	{n} instància|{n} instàncies
+@plural	{n} row|{n} rows	{n} fila|{n} files
+@plural	{n} column|{n} columns	{n} columna|{n} columnes
 	Pattern Brush Options	Opcions del pinzell de motiu
 	Pattern Editing	Edició de motius
 	Pattern Options	Opcions del motiu

@@ -2222,6 +2222,29 @@ file-filter	Templates	Шаблони
 	Bristle Brush	Щетинний пензель
 	Pattern Brush	Візерунковий пензель
 	missing from the Brushes panel	відсутній у панелі «Пензлі»
+	built in	вбудований
+	embedding not allowed	вбудовування заборонено
+	embedding for editing	вбудовування для редагування
+	embedding for preview and print	вбудовування для перегляду й друку
+	embedding allowed	вбудовування дозволено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	замінено: показано шрифтом {family} {style} ({detail})
+	missing: shown in {family} {style}	відсутній: показано шрифтом {family} {style}
+	missing	відсутній
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Лінійний градієнт
+	Radial gradient	Радіальний градієнт
+	Conic gradient	Конічний градієнт
+	Diamond gradient	Ромбоподібний градієнт
+	Freeform gradient	Довільний градієнт
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляри|{n} екземплярів
+@plural	{n} row|{n} rows	{n} рядок|{n} рядки|{n} рядків
+@plural	{n} column|{n} columns	{n} стовпець|{n} стовпці|{n} стовпців
 	Select art to make a scatter, art or pattern brush.	Виділіть малюнок, щоб створити пензель-розпорошення, художній або візерунковий пензель.
 	Brush Art	Малюнок пензля
 	New Calligraphic Brush	Новий каліграфічний пензель
