@@ -3379,6 +3379,10 @@ imageTrace	Outline	Contorno
 	Dock Panel	Encaixar Painel
 	Dock to Top	Encaixar na Parte Superior
 	Dock to Bottom	Encaixar na Parte Inferior
+	Dock to Left	Encaixar à Esquerda
+	Dock to Right	Encaixar à Direita
+	Dock Toolbar	Encaixar Barra de Ferramentas
+	Float Toolbar	Flutuar Barra de Ferramentas
 	Control Bar Options	Opções da Barra de Controle
 	Tool Options	Opções de Ferramenta
 	Object Options	Opções de Objeto

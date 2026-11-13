@@ -1247,6 +1247,10 @@ antiAlias	Sharp	Nítid
 	Dock Panel	Acobla el panell
 	Dock to Top	Acobla a dalt
 	Dock to Bottom	Acobla a baix
+	Dock to Left	Acobla a l’esquerra
+	Dock to Right	Acobla a la dreta
+	Dock Toolbar	Acobla la barra d’eines
+	Float Toolbar	Flota la barra d’eines
 	Control Bar Options	Opcions de la barra de control
 	Tool Options	Opcions de l’eina
 	Object Options	Opcions de l’objecte

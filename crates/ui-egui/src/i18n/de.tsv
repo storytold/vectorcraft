@@ -4074,6 +4074,10 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Dock to Left	Links andocken
+	Dock to Right	Rechts andocken
+	Dock Toolbar	Werkzeugleiste andocken
+	Float Toolbar	Werkzeugleiste ablösen
 	Control Bar Options	Optionen der Steuerungsleiste
 	Tool Options	Werkzeugoptionen
 	Object Options	Objektoptionen

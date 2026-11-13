@@ -5266,6 +5266,10 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Dock to Left	停駐到左側
+	Dock to Right	停駐到右側
+	Dock Toolbar	停駐工具列
+	Float Toolbar	浮動工具列
 	Control Bar Options	控制列選項
 	Tool Options	工具選項
 	Object Options	物件選項

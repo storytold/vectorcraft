@@ -46,6 +46,13 @@ pub(crate) fn escape_cancelled_move(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(escape_cancel_id())) == Some(ctx.cumulative_frame_nr_for(ctx.viewport_id()))
 }
 
+/// This frame's Escape put a moved bar back ([`escape_cancelled_move`]): a toolbar made with New
+/// Toolbar ([`crate::custom_toolbars::cancel_move_on_escape`]) as well as the Tools panel.
+pub(crate) fn mark_escape_cancelled(ctx: &egui::Context) {
+    let frame = ctx.cumulative_frame_nr_for(ctx.viewport_id());
+    ctx.data_mut(|d| d.insert_temp(escape_cancel_id(), frame));
+}
+
 /// The strip along the canvas's left edge where the Tools panel docks while Keep Tools Beside the
 /// Canvas is on, as last laid out.
 pub(crate) fn tools_zone_id() -> Id {
@@ -194,7 +201,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// The `x`, `y` params: a top-left corner in screen points, if given.
-fn position(p: &Value) -> Result<Option<Pos2>, String> {
+pub(crate) fn position(p: &Value) -> Result<Option<Pos2>, String> {
     let coord = |k: &str| match p.get(k) {
         None | Some(Value::Null) => Some(None),
         Some(v) => v.as_f64().filter(|f| f.abs() < 1e6).map(|f| Some(f as f32)),

@@ -4150,6 +4150,10 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Dock to Left	Anclar a la izquierda
+	Dock to Right	Anclar a la derecha
+	Dock Toolbar	Anclar barra de herramientas
+	Float Toolbar	Hacer flotar la barra de herramientas
 	Control Bar Options	Opciones de la barra de control
 	Tool Options	Opciones de herramienta
 	Object Options	Opciones de objeto

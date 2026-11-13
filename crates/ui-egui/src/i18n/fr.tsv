@@ -4139,6 +4139,10 @@ axis	Both	Les deux
 	Dock Panel	Ancrer le panneau
 	Dock to Top	Ancrer en haut
 	Dock to Bottom	Ancrer en bas
+	Dock to Left	Ancrer à gauche
+	Dock to Right	Ancrer à droite
+	Dock Toolbar	Ancrer la barre d’outils
+	Float Toolbar	Rendre la barre d’outils flottante
 	Control Bar Options	Options de la barre de contrôle
 	Tool Options	Options de l’outil
 	Object Options	Options de l’objet
