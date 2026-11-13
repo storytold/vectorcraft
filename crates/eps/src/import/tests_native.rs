@@ -3432,6 +3432,25 @@ fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
 }
 
 #[test]
+fn type_keeps_its_manual_kerning() {
+    // GUARDS: the text document's manual kerning (key 8 of a story's text: runs of characters, each
+    // with its value or none) wasn't read, so type the file kerns by hand came in spaced by the
+    // font alone and drifted from the page from each kerned pair on. "Wave": "W" kerned by -140,
+    // "av" automatic, "e" by 60.
+    let doc = text_document(&[("Wave\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let run = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 5 >>";
+    assert!(doc.contains(run));
+    let kerns = "/8 << /0 [ << /0 << /0 -140 >> /1 1 >> << /0 << >> /1 2 >> << /0 << /0 60 >> /1 1 >> << /0 << >> /1 1 >> ] >>";
+    let doc = doc.replacen(run, &format!("{run} ] >> {kerns}"), 1).replacen(&format!("{kerns} ] >> >>"), &format!("{kerns} >>"), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let runs: Vec<(String, Option<f64>)> = texts[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("W".to_string(), Some(-140.0)), ("av".to_string(), None), ("e".to_string(), Some(60.0))]);
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
@@ -5904,6 +5923,84 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         }
     });
     assert_eq!(margin, Some(options.bounds_margin));
+}
+
+/// What the type in `content` paints, measured apart from the import: each piece of its outlines
+/// filled, and outlined by kurbo's stroker with each of its strokes' weight, join and miter limit.
+fn painted_by_kurbo(content: &[std::sync::Arc<Node>]) -> kurbo::Rect {
+    use kurbo::Shape;
+    let mut out: Option<kurbo::Rect> = None;
+    for n in content {
+        let outlines = vectorcraft_effects::outline_text(n).unwrap();
+        for piece in outlines.children().unwrap() {
+            let bp = piece.stroke_path().unwrap();
+            out = vectorcraft_geom::union_opt(out, Some(bp.bounding_box()));
+            for s in piece.appearance.painted_strokes() {
+                let join = match s.join {
+                    vectorcraft_doc::LineJoin::Miter => kurbo::Join::Miter,
+                    vectorcraft_doc::LineJoin::Round => kurbo::Join::Round,
+                    vectorcraft_doc::LineJoin::Bevel => kurbo::Join::Bevel,
+                };
+                let stroke = kurbo::Stroke::new(s.width).with_join(join).with_miter_limit(s.miter_limit);
+                let outline = kurbo::stroke(bp.iter(), &stroke, &kurbo::StrokeOpts::default(), 1e-4);
+                out = vectorcraft_geom::union_opt(out, Some(outline.bounding_box()));
+            }
+        }
+    }
+    out.unwrap()
+}
+
+/// A warp of type stroked with miter joins, Distort Appearance on, whose drawn art maps the type from
+/// what it paints, the miter tips at the sharp corners of its X past half the stroke's weight
+/// included, as users' files map some such type, opens live as a mesh envelope on its saved grid
+/// mapping from that box, where its glyphs grown by half the weight don't draw as that art (#6824).
+#[test]
+fn a_warp_of_mitred_type_maps_from_what_its_stroke_paints_where_its_drawn_art_does() {
+    use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 4 points wide in black, with miter joins at a limit of 10.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /62 0 /63 4.0 /64 10.0";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(
+        matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_join == vectorcraft_doc::LineJoin::Miter && t.runs[0].style.stroke_miter_limit == 10.0),
+        "{text:?}"
+    );
+    let content = vec![std::sync::Arc::new(text)];
+    let (half, glyphs) = envelope_content_boxes(&content, kurbo::Affine::IDENTITY).unwrap();
+    let painted = painted_by_kurbo(&content);
+    assert!(painted.x0 < half.x0 - 0.5 || painted.x1 > half.x1 + 0.5, "{painted:?} {half:?}");
+    let mut options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+    options.bounds_margin = envelope_stroke_margin(painted, glyphs).unwrap();
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
+    );
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    // It maps from what the type paints, within a hundredth of a point on each side.
+    let mut margin = None;
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { options, .. } = &n.kind {
+            margin = Some(options.bounds_margin);
+        }
+    });
+    let [top, bottom, left, right] = margin.unwrap().map(f64::from);
+    let from = kurbo::Rect::new(
+        glyphs.x0 - left * glyphs.width(),
+        glyphs.y0 - top * glyphs.height(),
+        glyphs.x1 + right * glyphs.width(),
+        glyphs.y1 + bottom * glyphs.height(),
+    );
+    let off = [from.x0 - painted.x0, from.y0 - painted.y0, from.x1 - painted.x1, from.y1 - painted.y1];
+    assert!(off.iter().all(|d| d.abs() < 0.01), "{from:?} {painted:?}");
 }
 
 /// The drawn art of `envelope` (on the page axes), an envelope of type stroked by its characters,

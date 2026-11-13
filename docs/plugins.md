@@ -734,8 +734,9 @@ For an **object filter**, the output is the new state of the input objects:
 The host validates everything before the document changes: coordinates must be finite and within ±4,000,000 pt, at
 most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops; colours, opacities and offsets are
 clamped into range, stroke weights to 0–1,000 pt and miter limits to 1–500; a pattern must exist in the document. A
-paint returned unchanged keeps its swatch link; any other paint is unlinked. One refused effect record refuses the
-whole output.
+gradient stop's four process `plates` are clamped to 0–1 as well: a value that is not a number becomes 0, and an
+infinite one becomes 0 or 1 by its sign. A paint returned unchanged keeps its swatch link; any other paint is
+unlinked. One refused effect record refuses the whole output.
 
 A filter's output may also hold `documentData`: any JSON of at most 1 MiB, which replaces what the plug-in keeps with
 the document (`null` removes it), in the same undo step as its objects. Settings that belong to the whole document

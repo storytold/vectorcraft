@@ -1754,6 +1754,23 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// A placeholder that occurs twice in a template matches the same text both times, so a template
+/// that ends with the name it starts with does not swallow a line that wraps its message.
+#[test]
+fn a_repeated_placeholder_matches_the_same_text() {
+    let c = Catalog::parse(concat!(
+        "@msg\t{name}: the next answer is for {_1}, not {name}\tnext {name} {_1}\n",
+        "@msg\t{file}: line {line}: {e} (thrown)\tthrown {file} {line} {e}\n",
+    ));
+    let (form, caps) = c.message("confirm: the next answer is for prompt, not confirm").expect("matches");
+    assert_eq!((form, caps), ("next {name} {_1}", vec![("name", "confirm"), ("_1", "prompt"), ("name", "confirm")]));
+    let line = "t.js: line 3: Error: confirm: the next answer is for prompt, not confirm (thrown)";
+    let (form, caps) = c.message(line).expect("matches");
+    assert_eq!(form, "thrown {file} {line} {e}");
+    assert_eq!(caps.last(), Some(&("e", "Error: confirm: the next answer is for prompt, not confirm")));
+    assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
+}
+
 /// A template that starts with text matches a message it wraps before a template that starts
 /// with a placeholder, even one with more literal text, so the wrapped reason is translated by
 /// its own row.
@@ -2181,6 +2198,73 @@ fn wrong(&self) -> String { String::new() }
     assert_eq!(found.iter().collect::<Vec<_>>(), want);
 }
 
+/// A constant's name reads the text the file declares under it, else every text the files of its
+/// own crate declare under it, else every text any scanned crate declares under it: an engine
+/// reader's error does not read the Scripts menu's headers, which are constants of the same names
+/// in another crate.
+#[test]
+fn message_scan_reads_constants_of_the_file_and_its_crate() {
+    use std::collections::{BTreeMap, BTreeSet};
+    let jxl = str_consts(r#"const TRUNCATED: &str = "the JPEG XL file is cut short"; const LIMIT: &str = "the image is too large";"#);
+    let pcx = str_consts(r#"const TRUNCATED: &str = "the PCX file is cut short";"#);
+    let menu = str_consts(r#"const TRUNCATED: &str = "Some scripts were not listed"; const SHARED: &str = "a message of another crate";"#);
+    let gather = |files: &[&Vec<(String, String)>]| {
+        let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (name, value) in files.iter().copied().flatten() {
+            map.entry(name.clone()).or_default().push(value.clone());
+        }
+        map
+    };
+    let engine = gather(&[&jxl, &pcx]);
+    let everywhere = gather(&[&jxl, &pcx, &menu]);
+    let code =
+        "fn f() -> Result<()> { Err(TRUNCATED.into()) }\nfn g() -> Result<()> { Err(LIMIT.into()) }\nfn h() -> Result<()> { Err(SHARED.into()) }";
+    let found = |own: &[(String, String)], in_crate: &BTreeMap<String, Vec<String>>| -> BTreeSet<String> {
+        source_messages(code, &[], &scoped_consts(own, in_crate, &everywhere)).into_iter().collect()
+    };
+    let in_jxl = ["a message of another crate", "the JPEG XL file is cut short", "the image is too large"];
+    assert_eq!(found(&jxl, &engine).iter().collect::<Vec<_>>(), in_jxl);
+    let in_engine = ["a message of another crate", "the JPEG XL file is cut short", "the PCX file is cut short", "the image is too large"];
+    assert_eq!(found(&[], &engine).iter().collect::<Vec<_>>(), in_engine);
+    assert_eq!(found(&[], &BTreeMap::new()).len(), 5);
+    let scanned = message_literals();
+    for header in [crate::scripts_menu::TRUNCATED, crate::scripts_menu::UNREADABLE] {
+        assert!(!scanned.contains(header), "{header}");
+    }
+}
+
+/// The scan reads the errors the script interpreter throws at a script with a method of any
+/// receiver, `&format!` strings included, and not a call of a longer name.
+#[test]
+fn message_scan_reads_script_interpreter_errors() {
+    let code = r#"
+fn f(i: &mut Interp, interp: &mut Interp) -> JsResult<Value> {
+    let _ = i.type_error(&format!("{what}: the object is not a File or a Folder"));
+    let _ = interp.throw(ErrorType::Range, "File.seek: the mode must be 0, 1 or 2");
+    let _ = self.error("the path has an empty step");
+    let _ = self.throw_host(t, "not an error: a longer name");
+    let _ = throw_type_error(interp, "not an error: a function");
+    Ok(Value::Undefined)
+}
+"#;
+    let js: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "js").map(|&(_, call, before)| (call, before)).collect();
+    let found = source_messages(code, &js, &Default::default());
+    assert_eq!(found, ["{what}: the object is not a File or a Folder", "File.seek: the mode must be 0, 1 or 2", "the path has an empty step"]);
+}
+
+/// The scan stops at a test module whose `cfg` is `test` or `all(test, …)`, and reads on past a
+/// declaration of a test file and a module that is not only for tests.
+#[test]
+fn message_scan_skips_test_modules_with_any_test_cfg() {
+    let code = "fn a() {}\n#[cfg(test)]\nmod tests_x;\n#[cfg(any(test, feature = \"x\"))]\nmod extra {}\nfn b() {}\n";
+    for module in ["#[cfg(test)]\nmod tests {", "#[cfg(all(test, not(target_arch = \"wasm32\")))]\nmod tests {", "#[cfg(all( test , unix))] mod t {"]
+    {
+        let text = format!("{code}{module} fn c() {{}} }}\n");
+        assert_eq!(without_test_module(&text), code, "{module}");
+    }
+    assert_eq!(without_test_module(code), code);
+}
+
 /// The limits a plug-in run can exceed, and the error of a removal that leaves the plug-in's grant
 /// in the plug-in store, are translated in every language that translates every message, as the
 /// status bar shows them.
@@ -2216,6 +2300,244 @@ fn plugin_limit_errors_are_translated() {
         let shown = message(lang, limits[3]);
         assert!(shown.contains("9000") && shown.contains("4096") && !shown.contains("output size"), "{code}: {shown}");
         assert_ne!(message(lang, grant), grant, "{code}");
+    }
+}
+
+/// The errors a script's `File` and `Folder` objects, `vc.run` and `$.evalFile` raise are
+/// translated in every language of [`COMPLETE_MESSAGES`], and so is the status bar's line for a run
+/// that ends with one: the script's name, its place, the command ids and what the script itself
+/// threw stay as they are.
+#[test]
+fn script_errors_are_translated() {
+    use serde_json::json;
+    let scanned = message_literals();
+    let templates = [
+        "Script file access denied",
+        "Script file exceeds 8 MiB",
+        "Script file is not open",
+        "Script file cannot be decoded",
+        "Script file is not a regular file",
+        "Script file does not exist",
+        "Script file could not be read",
+        "Script folder has more than 2,048 entries",
+        "Script file open mode must be r, w, e or a",
+        "Script file writing is not available",
+        "Script file dialogs are not available",
+        "Script files cannot be opened in another application",
+        "Script file access is unavailable on the web",
+        "Script has 256 files open",
+        "Script file path exceeds 32,767 characters",
+        "Script folder mask takes too many steps to match",
+        "the script opened more file data than one run may open (32 MiB)",
+        "File.seek: takes a position and a mode",
+        "vc.run: give a command id, as a string",
+        "vc.run: takes a command id and an object of parameters",
+        "vc.run: the parameters must be an object",
+        "vc.run: the result{place} is too large for a script",
+        "$.evalFile requires a file path",
+        "$.evalFile: the timeout must be a finite number of milliseconds, 0 or more",
+        "$.evalFile: takes a file path and a timeout",
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let messages: Vec<String> = templates.iter().map(|t| t.replace("{place}", ".layers[2]")).collect();
+    // The status bar's lines for runs that end with one of these errors, each with the message it holds.
+    let mut s = vectorcraft_engine::Session::new();
+    let mut lines = vec![];
+    for (source, inner) in [
+        ("vc.run()", messages[18].as_str()),
+        ("vc.run('view.capsLock', {}, 1)", &messages[19]),
+        ("vc.run('view.capsLock', 1)", &messages[20]),
+        ("$.evalFile()", &messages[22]),
+        ("$.evalFile('a.jsx', -1)", &messages[23]),
+        ("$.evalFile('a.jsx', 0, 1)", &messages[24]),
+    ] {
+        let e = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_err().to_string();
+        assert!(e.starts_with("t.js: line ") && e.contains(inner) && e.ends_with(" (thrown)"), "{source}: {e}");
+        lines.push((e, Some(inner.to_string())));
+    }
+    // A `File` gives why it could not open as its `error`, which the script throws.
+    let source = "var f = new File('/vc-no-such-folder/a.txt');\nif (!f.open('r')) throw new Error(f.error);";
+    let e = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_err().to_string();
+    let inner = messages[..17].iter().find(|m| e.ends_with(&format!(": Error: {m} (thrown)"))).unwrap_or_else(|| panic!("{e}"));
+    lines.push((e, Some(inner.clone())));
+    let thrown = s.execute("script.run", &json!({"source": "throw new Error('mine')", "name": "t.js"})).unwrap_err().to_string();
+    assert_eq!(thrown, "t.js: line 1, column 1: Error: mine (thrown)");
+    lines.push((thrown, None));
+    // A script that does not compile, and an error raised in code `eval` compiled, which has no place.
+    let syntax = s.execute("script.run", &json!({"source": "var = 1;", "name": "t.js"})).unwrap_err().to_string();
+    assert!(syntax.starts_with("t.js: line 1, column ") && syntax.ends_with(" (syntax)"), "{syntax}");
+    lines.push((syntax, None));
+    let source = format!("eval(\"throw new Error('{}')\");", messages[18]);
+    let placeless = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_err().to_string();
+    assert_eq!(placeless, format!("t.js: Error: {} (thrown)", messages[18]));
+    lines.push((placeless, Some(messages[18].clone())));
+    lines.push((format!("t.js: line 7, column 2: {} (stopped)", messages[16]), Some(messages[16].clone())));
+    lines.push((format!("t.js: line 7, column 2 of lib.jsx: {} (internal)", messages[16]), Some(messages[16].clone())));
+    lines.push((format!("t.js: {} (internal)", messages[16]), Some(messages[16].clone())));
+    // A run that ends at a limit, in a file another one included, with files left written.
+    lines.push((format!("t.js: line 4, column 9 of lib.jsx: {} (limit)", messages[16]), Some(messages[16].clone())));
+    lines.push((format!("t.js: {} (limit)", messages[16]), Some(messages[16].clone())));
+    lines.push((format!("t.js: line 3, column 1 of lib.jsx: TypeError: {} (thrown)", messages[0]), Some(messages[0].clone())));
+    lines.push((format!("t.js: TypeError: {} (thrown)", messages[0]), Some(messages[0].clone())));
+    let kept = format!("t.js: line 2, column 5: Error: {} (thrown) (these files stay written: /tmp/a.txt, /tmp/b.txt)", messages[13]);
+    lines.push((kept, Some(messages[13].clone())));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in &messages {
+            let shown = message(lang, m);
+            assert_ne!(shown, *m, "{code}");
+            assert!(["vc.run", "$.evalFile", "File.seek"].iter().all(|id| !m.contains(id) || shown.contains(id)), "{code}: {shown}");
+        }
+        assert!(message(lang, &messages[21]).contains(".layers[2]"), "{code}");
+        for (line, inner) in &lines {
+            let shown = message(lang, line);
+            let kinds = ["(thrown)", "(limit)", "(syntax)", "(stopped)", "(internal)", "stay written"];
+            assert!(kinds.iter().all(|k| !shown.contains(k)), "{code}: {shown}");
+            let numbers: Vec<&str> = line.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+            assert!(shown.starts_with("t.js") && numbers.iter().all(|n| shown.contains(n)), "{code}: {line} -> {shown}");
+            match inner {
+                Some(inner) => assert!(shown.contains(&message(lang, inner)), "{code}: {line} -> {shown}"),
+                None if line.ends_with("(syntax)") => assert_ne!(shown, *line, "{code}"),
+                None => assert!(shown.contains("Error") && shown.contains("mine"), "{code}: {shown}"),
+            }
+            for kept in ["lib.jsx", "/tmp/a.txt, /tmp/b.txt"] {
+                assert!(!line.contains(kept) || shown.contains(kept), "{code}: {shown}");
+            }
+        }
+    }
+}
+
+/// The errors a script's `$` object, its `alert`, `confirm` and `prompt` dialogs, `vc.document`,
+/// `vc.log`, the methods of its `File` and `Folder` objects and a run's limits give, and the errors
+/// of the script engine commands, are translated in every language of [`COMPLETE_MESSAGES`], on
+/// their own and in the status bar's line for a run that ends with one. Names, numbers and the
+/// ids of functions stay as they are.
+#[test]
+fn script_host_errors_are_translated() {
+    use serde_json::json;
+    let scanned = message_literals();
+    let templates = [
+        "$.{name}: give a name, as a string",
+        "$.locale: give a locale such as \"en\" or \"de_DE\", or null for the interface's",
+        "$.localize: give true or false",
+        "$.flags: only 512, which turns localization on, or 0 can be set",
+        "$.flags: give a number",
+        "$.appEncoding: scripts here read and write UTF-8 only",
+        "$.appEncoding: give an encoding's name, as a string",
+        "$.memCache: the memory cache size cannot be set",
+        "$.setenv: give a value, as a string",
+        "$.setenv: only {_1} can be set",
+        "$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @",
+        "$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}",
+        "$.sleep: give a number of milliseconds",
+        "$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code",
+        "$.bp: scripts here have no debugger",
+        "$.colorPicker: scripts cannot show a dialog yet",
+        "{name}: give a message",
+        "{name}: give the text the field starts with",
+        "{name}: the message is longer than 16 KiB",
+        "{name}: the title is longer than 256 bytes",
+        "{name}: the text the field starts with is longer than 16 KiB",
+        "{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code",
+        "{name}: the next answer in `answers` is for {_1}, not {name}",
+        "{name}: `answers` has no answer left for this dialog",
+        "vc.document{place} is too large for a script",
+        "vc.log: the log of this run is full",
+        "this function's script run has ended",
+        "the script made more host calls than one run may make",
+        "the script passed more data to and from commands than one run may pass",
+        "the script added more objects and data to the documents than one run may add",
+        "{what}: the object is not a File or a Folder",
+        "{what}: the count must be a finite number, 0 or more",
+        "File.seek: the position must be a finite number",
+        "File.seek: the mode must be 0, 1 or 2",
+        "script file is compiled: {value}",
+        "`name` must be the name of a script engine",
+        "the main script engine is new for each run and is never kept, so it cannot be dropped",
+        "there is no script engine named {name}",
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let mut s = vectorcraft_engine::Session::new();
+    // (what the line holds, what that is as the script's error, what the catalogs must keep)
+    let mut lines: Vec<(String, String, Vec<&str>)> = vec![];
+    for (source, inner, kept) in [
+        ("$.getenv(1)", "$.getenv: give a name, as a string", vec!["$.getenv"]),
+        ("$.setenv('LANG', 1)", "$.setenv: give a value, as a string", vec!["$.setenv"]),
+        ("$.setenv('HOME', 'x')", "$.setenv: only LANG, LC_MESSAGES, LC_ALL, OS can be set", vec!["$.setenv", "LANG, LC_MESSAGES, LC_ALL, OS"]),
+        ("$.setenv('LANG', 'a b')", "$.setenv: a value has at most 64 letters, digits and _ . - @", vec!["$.setenv", "64", "_ . - @"]),
+        ("$.sleep('x')", "$.sleep: give a number of milliseconds", vec!["$.sleep"]),
+        ("$.sleep(5000)", "$.sleep: give a number of milliseconds from 0 to 1000", vec!["$.sleep", "1000"]),
+        ("$.flags = 3", "$.flags: only 512, which turns localization on, or 0 can be set", vec!["$.flags", "512"]),
+        ("$.flags = 'x'", "$.flags: give a number", vec!["$.flags"]),
+        ("$.localize = 1", "$.localize: give true or false", vec!["$.localize"]),
+        ("$.locale = 1", templates[1], vec!["$.locale", "\"en\"", "\"de_DE\""]),
+        ("$.appEncoding = 'latin1'", templates[5], vec!["$.appEncoding", "UTF-8"]),
+        ("$.appEncoding = 1", templates[6], vec!["$.appEncoding"]),
+        ("$.memCache = 1", templates[7], vec!["$.memCache"]),
+        ("$.bp()", templates[14], vec!["$.bp"]),
+        ("$.colorPicker()", templates[15], vec!["$.colorPicker"]),
+        ("File.prototype.seek.call({})", "seek: the object is not a File or a Folder", vec!["seek", "File"]),
+        ("new File('a.txt').seek(NaN)", templates[32], vec!["File.seek"]),
+        ("new File('a.txt').seek(0, 5)", templates[33], vec!["File.seek", "0, 1", "2"]),
+        ("new File('a.txt').read(-1)", "File.read: the count must be a finite number, 0 or more", vec!["File.read", "0"]),
+    ] {
+        let e = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_err().to_string();
+        assert!(e.starts_with("t.js: ") && e.contains(&format!(": {inner} (")), "{source}: {e}");
+        lines.push((e, inner.to_string(), kept));
+    }
+    let in_callback = templates[21].replace("{name}", "alert");
+    for (inner, kept) in [
+        ("alert: give a message", vec!["alert"]),
+        ("prompt: give the text the field starts with", vec!["prompt"]),
+        ("confirm: the message is longer than 16 KiB", vec!["confirm", "16"]),
+        ("alert: the title is longer than 256 bytes", vec!["alert", "256"]),
+        ("prompt: the text the field starts with is longer than 16 KiB", vec!["prompt", "16"]),
+        (in_callback.as_str(), vec!["alert", "$.evalFile"]),
+        ("confirm: the next answer in `answers` is for prompt, not confirm", vec!["`answers`", "prompt", "confirm"]),
+        ("alert: `answers` has no answer left for this dialog", vec!["`answers`", "alert"]),
+        (templates[13], vec!["$.sleep", "$.evalFile"]),
+        ("vc.document.layers[0] is too large for a script", vec!["vc.document.layers[0]"]),
+        (templates[25], vec!["vc.log"]),
+        (templates[26], vec![]),
+        (templates[27], vec![]),
+        (templates[28], vec![]),
+        (templates[29], vec![]),
+        ("script file is compiled: lib.jsxbin", vec!["lib.jsxbin"]),
+    ] {
+        let line = format!("t.js: line 3, column 7: Error: {inner} (thrown)");
+        lines.push((line, inner.to_string(), kept));
+    }
+    let mut commands = vec![];
+    for (id, params) in
+        [("script.engine.drop", json!({})), ("script.engine.drop", json!({"name": "main"})), ("script.engine.drop", json!({"name": "kept"}))]
+    {
+        commands.push(s.execute(id, &params).unwrap_err().to_string());
+    }
+    assert!(commands[0].contains(templates[35]) && commands[1].contains(templates[36]), "{commands:?}");
+    assert!(commands[2].contains("there is no script engine named \"kept\""), "{commands:?}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (line, inner, kept) in &lines {
+            let shown = message(lang, inner);
+            assert_ne!(shown, *inner, "{code}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {inner} -> {shown}");
+            let whole = message(lang, line);
+            let kinds = ["(thrown)", "(limit)", "(syntax)", "(stopped)", "(internal)"];
+            assert!(whole.starts_with("t.js") && whole.contains(&shown) && kinds.iter().all(|k| !whole.contains(k)), "{code}: {line} -> {whole}");
+        }
+        for e in &commands {
+            let shown = message(lang, e);
+            assert_ne!(shown, *e, "{code}");
+            assert!(
+                !shown.contains("must be the name") && !shown.contains("is never kept") && !shown.contains("there is no script engine"),
+                "{code}: {shown}"
+            );
+        }
+        assert!(message(lang, &commands[2]).contains("\"kept\""), "{code}");
     }
 }
 
@@ -2918,23 +3240,30 @@ const COMPLETE_MESSAGES: &[&str] = &[
 ];
 
 /// Crates whose error and status messages reach the status bar.
-const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
+const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace", "js"];
 
 /// Where a message literal starts: a status, an error value, a `thiserror` message.
 const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Other(", "Err(", "ok_or(", "ok_or_else(|| ", "#[error("];
 
 /// Helpers that make an error from a message, by crate, with the number of arguments before the
 /// message: the engine's `bad(cmd, msg)` (`EngineError::BadParams`), `err(msg)` (`cmd/fileio`)
-/// and `error(msg)` (`cmd/dimension.rs`), the PDF writer's `bad(why)` (`forms.rs`) and
-/// `failed(why)` (`encrypt.rs`, `linearize.rs`), and the plug-in host's `bad(what)` (a parameter's
-/// spec and dialog keys), `wrong(what)` (a parameter's value), `out_err(at, msg)` (plug-in output),
-/// `in_range(x, lo, hi, at, what)` and `unit(x, at, what)` (a painted effect's numbers) and
-/// `.read_packed(packed, what, max)` (the block a plug-in returned). A helper that starts with
-/// `.` is a method.
+/// and `error(msg)` (`cmd/dimension.rs`), the script host's `fail(msg)` (`script/files.rs`,
+/// `script/dollar.rs`) and `value(msg)`, which gives the messages the script `File` object's own
+/// code throws (`script/files.rs`), and `.over(limit)` for a limit a run passes (`script/mod.rs`),
+/// the PDF writer's `bad(why)` (`forms.rs`) and `failed(why)` (`encrypt.rs`, `linearize.rs`), the
+/// plug-in host's `bad(what)` (a parameter's spec and dialog keys), `wrong(what)` (a parameter's
+/// value), `out_err(at, msg)` (plug-in output), `in_range(x, lo, hi, at, what)` and
+/// `unit(x, at, what)` (a painted effect's numbers) and `.read_packed(packed, what, max)` (the block
+/// a plug-in returned), and the script interpreter's methods that throw an error at a script:
+/// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`. A helper that
+/// starts with `.` is a method of any receiver.
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
     ("engine", "err(", 0),
     ("engine", "error(", 0),
+    ("engine", "fail(", 0),
+    ("engine", "value(", 0),
+    ("engine", ".over(", 0),
     ("pdf", "bad(", 0),
     ("pdf", "failed(", 0),
     ("plugins", "bad(", 0),
@@ -2943,6 +3272,9 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("plugins", "in_range(", 4),
     ("plugins", "unit(", 2),
     ("plugins", ".read_packed(", 1),
+    ("js", ".type_error(", 0),
+    ("js", ".throw(", 1),
+    ("js", ".error(", 0),
 ];
 
 /// Error variants whose first argument is a name, not a message: a command id
@@ -2977,7 +3309,11 @@ fn message_literals_in(names: &[&str]) -> std::collections::BTreeSet<String> {
                 if name != "tests" {
                     stack.push(path);
                 }
-            } else if name.ends_with(".rs") && !name.starts_with("tests") && !(d == crates.join("ui-egui").join("src") && name == "control.rs") {
+            } else if name.ends_with(".rs")
+                && !name.starts_with("tests")
+                && !name.ends_with("_tests.rs")
+                && !(d == crates.join("ui-egui").join("src") && name == "control.rs")
+            {
                 // Control replies are English protocol data, never status-bar messages
                 // (see i18n's module contract). Engine messages are scanned in their own crates.
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
@@ -2985,18 +3321,57 @@ fn message_literals_in(names: &[&str]) -> std::collections::BTreeSet<String> {
             }
         }
     }
-    let mut consts = std::collections::BTreeMap::new();
-    for (_, text) in &files {
-        for (name, value) in str_consts(without_test_module(text)) {
-            consts.entry(name).or_insert_with(Vec::new).push(value);
+    let crate_of = |path: &std::path::Path| names.iter().copied().find(|c| path.starts_with(crates.join(c))).unwrap_or("");
+    let declared: Vec<_> = files.iter().map(|(path, text)| (crate_of(path), str_consts(without_test_module(text)))).collect();
+    let mut by_crate: std::collections::BTreeMap<&str, std::collections::BTreeMap<String, Vec<String>>> = std::collections::BTreeMap::new();
+    let mut everywhere: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    for (krate, consts) in &declared {
+        let in_crate = by_crate.entry(*krate).or_default();
+        for (name, value) in consts {
+            in_crate.entry(name.clone()).or_default().push(value.clone());
+            everywhere.entry(name.clone()).or_default().push(value.clone());
         }
     }
-    for (path, text) in &files {
+    let none = std::collections::BTreeMap::new();
+    let crate_consts: std::collections::BTreeMap<&str, _> =
+        by_crate.iter().map(|(krate, in_crate)| (*krate, scoped_consts(&[], in_crate, &everywhere).into_owned())).collect();
+    for ((path, text), (krate, own)) in files.iter().zip(&declared) {
         let helpers: Vec<_> =
             ERROR_HELPERS.iter().filter(|(c, _, _)| path.starts_with(crates.join(c))).map(|&(_, call, before)| (call, before)).collect();
+        let consts = scoped_consts(own, crate_consts.get(krate).unwrap_or(&none), &none);
         out.extend(source_messages(without_test_module(text), &helpers, &consts));
     }
     out
+}
+
+/// The `&str` constants a file can name, from the constants it declares (`own`), those the files
+/// of its crate declare (`in_crate`) and those every scanned crate declares (`everywhere`): a name
+/// the file declares has the file's own text only, a name its crate declares has every text the
+/// crate's files give it, and any other name has every text the scanned crates give it.
+fn scoped_consts<'a>(
+    own: &[(String, String)],
+    in_crate: &'a std::collections::BTreeMap<String, Vec<String>>,
+    everywhere: &std::collections::BTreeMap<String, Vec<String>>,
+) -> std::borrow::Cow<'a, std::collections::BTreeMap<String, Vec<String>>> {
+    let elsewhere = everywhere.keys().any(|name| !in_crate.contains_key(name));
+    let own_differs = own.iter().any(|(name, _)| {
+        let mine: Vec<&String> = own.iter().filter(|(n, _)| n == name).map(|(_, v)| v).collect();
+        in_crate.get(name).is_none_or(|values| values.iter().collect::<Vec<_>>() != mine)
+    });
+    if !elsewhere && !own_differs {
+        return std::borrow::Cow::Borrowed(in_crate);
+    }
+    let mut consts = everywhere.clone();
+    for (name, values) in in_crate {
+        consts.insert(name.clone(), values.clone());
+    }
+    for (name, _) in own {
+        consts.remove(name);
+    }
+    for (name, value) in own {
+        consts.entry(name.clone()).or_default().push(value.clone());
+    }
+    std::borrow::Cow::Owned(consts)
 }
 
 /// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`), with
@@ -3103,11 +3478,17 @@ fn skip_args(args: &str, n: usize) -> Option<&str> {
     None
 }
 
-/// Source up to its inline test module (`#[cfg(test)] mod tests {`); declarations of test files
-/// (`#[cfg(test)] mod tests_x;`) don't end it.
+/// Source up to its inline test module (`#[cfg(test)] mod tests {`, or a `cfg(all(test, …))` one);
+/// declarations of test files (`#[cfg(test)] mod tests_x;`) don't end it.
 fn without_test_module(text: &str) -> &str {
-    for (at, m) in text.match_indices("#[cfg(test)]") {
-        let after = text[at + m.len()..].trim_start();
+    for (at, m) in text.match_indices("#[cfg(") {
+        let rest = &text[at + m.len()..];
+        let Some(end) = rest.find(")]") else { continue };
+        let cond: String = rest[..end].chars().filter(|c| !c.is_whitespace()).collect();
+        if cond != "test" && !cond.starts_with("all(test,") {
+            continue;
+        }
+        let after = rest[end + 2..].trim_start();
         if let Some(rest) = after.strip_prefix("mod ")
             && rest.trim_start_matches(|c: char| c.is_alphanumeric() || c == '_').trim_start().starts_with('{')
         {
