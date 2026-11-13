@@ -10310,9 +10310,9 @@ type and evening out horizontal scales are not there yet.
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
 (`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
-and in seven tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
-`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor` and
-`sharedEdge`.
+and in eight tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
+`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
+`sharedEdge` and `trimAtCrossings`.
 None has a shortcut. Each edit is one undo step, and an edit that changes nothing makes no step.
 
 Tools:
@@ -10361,6 +10361,11 @@ Tools:
   different in length, or at over 120° at an end, are left alone. Options (`tool.setOption`, or the panel, kept with the
   preferences): `diameter` (0.25 to 200 pt, 20), `tolerance` (how near two anchors count as coincident, 0 to 3 pt,
   0.002) and `together` (Keep Shared Points Together).
+- **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
+  on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
+  screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release. An Alt-drag draws a
+  freehand line and runs it with `points` on release; a line of more than 65,536 points is dropped. Nothing changes
+  while dragging, and Escape during a drag removes nothing. The tool has no options.
 
 Commands:
 
@@ -10392,7 +10397,9 @@ Commands:
   straight segment (`straight`) or with both ends made smooth (`smooth`).
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
-  path per piece. Paths that meet at a shared anchor don't cross there; at most 10,000 segments at once.
+  path per piece. Segments that meet at an anchor they share, or with only segments of no length between them, don't
+  cross there, and they cross where they meet again elsewhere. With `selfCrossings`, a curved segment that loops over
+  itself crosses itself. At most 10,000 segments at once.
 - `addon.pathtools.divideDashes {dash?, gap?, fit?, removeGaps?}` cuts the selected paths into separate open paths
   along the curve, each `dash` long (0.01 to 1,000,000 pt, 10 by default) with `gap` between them (0 to 1,000,000 pt,
   0 by default: the pieces touch), every piece keeping the path's appearance, as one undo step. The gap pieces are left
@@ -10444,6 +10451,26 @@ Commands:
   one that `addon.pathtools.slideAnchor`, `extend` or `setAnchor` moves go with it, in the same undo step; an Extend Path
   that adds an anchor leaves the old end, and what shares it, where they are. Nothing else in the app changes. It is the
   `together` option of tool `sharedEdge`, off by default. → `{enabled}`.
+- `addon.pathtools.trim {at, tolerance?}`, `{rect}` or `{points}` removes stretches of paths. A stretch runs between two
+  neighboring places where the path is crossed, by another path or by itself, or from such a place to an open end.
+  `at` ([x, y]) removes the stretch at that point of the nearest path within `tolerance` (0 to 100 pt, default 3; of
+  paths equally near, the one on top), and a point where two stretches meet is on the one that starts there. `rect`
+  ([x, y, width, height]) removes every stretch the rectangle touches. `points` (2 to 100,000 points) removes every
+  stretch the line through them crosses. Exactly one of the three is given, with coordinates within ±10,000,000 pt.
+  Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
+  guides and clipping paths are not trimmed and do not count as crossing; type, images and symbol instances take no
+  part. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
+  stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
+  the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
+  removed, and a live shape becomes a plain path. No anchor is added where a stretch that stays meets another. The
+  pieces of a selected path are selected, and anchors and segments direct-selected on a trimmed path are deselected;
+  the rest of the selection stays as it was. One undo step, none when nothing is removed. Only a path that `at`,
+  `rect` or `points` reaches is searched for crossings. The command is refused when such a path has more than 10,000
+  segments, when more than 200,000 segments of other paths lie in its box, when the paths it trims make more than about
+  60,000,000 pairs of segments to compare in all, when the curves are too tangled to find where they cross, or when
+  checking `points` against the paths would take more than 60,000,000 comparisons. These rules are VectorCraft's own.
+  → `{ids, removed}`: the paths left of those trimmed, and the stretches removed.
 - `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?}` draws a parametric
   shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon` (default), `star`, `ring`, `arrow`,
   `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height` are 0.01 to 16,384 pt (100);

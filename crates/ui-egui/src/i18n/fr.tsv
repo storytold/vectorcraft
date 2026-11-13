@@ -6825,6 +6825,8 @@ anchor	Points:	Points :
 	Anchor Inspector	Inspecteur de points d’ancrage
 	Add Points at Crossings	Ajouter des points aux croisements
 	Split at Crossings	Scinder aux croisements
+	Trim at Crossings Tool	Outil Rogner aux croisements
+	Trim at Crossings	Rogner aux croisements
 	Extend Path	Prolonger le tracé
 	Measure & Inspect	Mesurer et inspecter
 	Set Anchor	Définir le point d’ancrage

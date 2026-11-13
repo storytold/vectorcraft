@@ -6437,6 +6437,8 @@ anchor	Points:	Điểm:
 	Anchor Inspector	Trình kiểm tra điểm neo
 	Add Points at Crossings	Thêm điểm tại chỗ giao nhau
 	Split at Crossings	Tách tại chỗ giao nhau
+	Trim at Crossings Tool	Công cụ Cắt xén tại chỗ giao nhau
+	Trim at Crossings	Cắt xén tại chỗ giao nhau
 	Extend Path	Kéo dài đường dẫn
 	Measure & Inspect	Đo và kiểm tra
 	Set Anchor	Đặt điểm neo

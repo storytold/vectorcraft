@@ -6860,6 +6860,8 @@ anchor	Points:	Pisteet:
 	Anchor Inspector	Ankkuripisteiden tarkastelu
 	Add Points at Crossings	Lisää pisteet risteyskohtiin
 	Split at Crossings	Jaa risteyskohdista
+	Trim at Crossings Tool	Risteyskohdista katkaisun työkalu
+	Trim at Crossings	Katkaise risteyskohdista
 	Extend Path	Jatka polkua
 	Measure & Inspect	Mittaa ja tarkastele
 	Set Anchor	Aseta ankkuripiste

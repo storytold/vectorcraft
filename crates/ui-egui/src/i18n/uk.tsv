@@ -6436,6 +6436,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Інспектор опорних точок
 	Add Points at Crossings	Додати точки на перетинах
 	Split at Crossings	Розрізати на перетинах
+	Trim at Crossings Tool	Інструмент «Підрізання на перетинах»
+	Trim at Crossings	Підрізати на перетинах
 	Extend Path	Подовжити контур
 	Measure & Inspect	Вимірювання й аналіз
 	Set Anchor	Задати опорну точку

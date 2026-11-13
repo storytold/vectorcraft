@@ -6799,6 +6799,8 @@ anchor	Points:	Punts:
 	Anchor Inspector	Inspector de punts d’ancoratge
 	Add Points at Crossings	Afegeix punts als encreuaments
 	Split at Crossings	Divideix als encreuaments
+	Trim at Crossings Tool	Eina de retallar als encreuaments
+	Trim at Crossings	Retalla als encreuaments
 	Extend Path	Allarga el traçat
 	Measure & Inspect	Mesura i inspecciona
 	Set Anchor	Defineix el punt d’ancoratge

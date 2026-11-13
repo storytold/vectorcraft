@@ -6668,6 +6668,8 @@ anchor	Points:	点：
 	Anchor Inspector	锚点检查器
 	Add Points at Crossings	在交叉处添加锚点
 	Split at Crossings	在交叉处分割
+	Trim at Crossings Tool	在交叉处修剪工具
+	Trim at Crossings	在交叉处修剪
 	Extend Path	延长路径
 	Measure & Inspect	测量与检查
 	Set Anchor	设置锚点

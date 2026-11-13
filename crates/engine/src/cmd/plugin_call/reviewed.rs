@@ -58,6 +58,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.pathtools.shape.set",
     "addon.pathtools.slideAnchor",
     "addon.pathtools.smooth",
+    "addon.pathtools.trim",
     "addon.pen.append",
     "addon.pen.close",
     "addon.pen.closeJoin",
