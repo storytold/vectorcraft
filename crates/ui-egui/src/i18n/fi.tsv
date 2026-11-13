@@ -5760,6 +5760,7 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
 @msg	missing `{path}`	`{path}` puuttuu
 @msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
+@msg	`{path}` is nested too deeply	`{path}` on liian syvällä sisäkkäin
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
@@ -6453,6 +6454,16 @@ axis	Y Axis	Y-akseli
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
+	Select Object…	Valitse objekti…
+	Select Object	Valitse objekti
+	Set Selection	Määritä valinta
+	Case Sensitive	Kirjainkoko merkitsevä
+	Whole Word	Koko sana
+	Select Object: {note}	Valitse objekti: {note}
+	Select by Note	Valitse huomautuksen mukaan
+@msg	the note is empty	huomautus on tyhjä
+@msg	the note is longer than 1,024 bytes	huomautus on pidempi kuin 1 024 tavua
+@msg	no object that can be selected has a note matching “{query}”	millään valittavissa olevalla objektilla ei ole huomautusta, joka vastaa hakua ”{query}”
 	Menu Item:	Valikkokohta:
 	No menu item matches.	Mikään valikkokohta ei vastaa hakua.
 	Several menu items match. Choose one from the list.	Useampi valikkokohta vastaa hakua. Valitse yksi luettelosta.

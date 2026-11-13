@@ -1,5 +1,6 @@
 //! Artboards panel: numbered list with inline rename (double-click the name, or the panel menu's
-//! Rename; while several artboards are selected, the name typed goes to all of them, numbered),
+//! Rename; while several artboards are selected, the name typed goes to all of them, numbered), a
+//! row menu (right-click) whose Rename opens the Rename dialog for the selected artboards,
 //! move up / down (or drag a row above or below another), new
 //! (Alt-click: Artboard Options for the new artboard first), delete; a row dragged onto New
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
@@ -541,7 +542,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let scrolled = scroll.show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
-                if resp.drag_started() {
+                // Only the primary button drags a row; a right-button drag reorders nothing.
+                if resp.drag_started_by(egui::PointerButton::Primary) {
                     egui::DragAndDrop::set_payload(ui.ctx(), RowDrag(i));
                 }
                 if all.contains(&i) {
@@ -648,6 +650,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.double_clicked() {
                     start_rename(ui.ctx(), app, i);
                 }
+                // A right-click on a row that isn't selected makes its artboard the active one and
+                // the only selected one ([`select`] sets the Artboard tool's `active` option, which
+                // clears the rest of its selection); on a selected row the selection stays. The row
+                // menu then acts on the selection.
+                if resp.secondary_clicked() && !picked(app, abs.len()).contains(&i) {
+                    select(app, i);
+                }
+                resp.context_menu(|ui| row_menu(app, ui));
                 // Another row dragged over this one lands above or below it by the pointer's half,
                 // a line showing where.
                 if let Some(from) = resp.dnd_hover_payload::<RowDrag>().map(|d| d.0).filter(|from| *from != i) {
@@ -705,6 +715,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             delete_selected(app);
         }
     });
+}
+
+/// A row's menu: Rename opens the Rename dialog for the selected artboards ([`picked`]), whose OK
+/// runs `artboard.rename` in one undo step, numbering the name when there are several.
+fn row_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if menu_item(ui, tl!("Rename"), true, false) {
+        crate::menus::invoke(app, "artboard.rename", json!({}));
+    }
 }
 
 /// Open Rearrange All Artboards (#681).
