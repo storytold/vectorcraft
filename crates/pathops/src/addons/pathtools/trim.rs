@@ -83,6 +83,8 @@ pub fn span_at(sp: &SubPath, stretches: &[Span], seg: usize, t: f64) -> Option<u
         return None;
     }
     let u = (seg as f64 + t.clamp(0.0, 1.0)).min(nf);
+    // On a closed subpath the closing segment's end is the first anchor.
+    let u = if sp.closed && u >= nf { u - nf } else { u };
     let on = |&(from, to): &Span| (from <= u && u < to) || (sp.closed && from <= u + nf && u + nf < to);
     stretches.iter().position(on).or_else(|| (!sp.closed && u >= nf).then(|| stretches.len().checked_sub(1)).flatten())
 }

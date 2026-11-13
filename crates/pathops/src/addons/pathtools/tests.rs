@@ -585,6 +585,10 @@ fn spans_divide_a_subpath_at_its_places() {
     assert_eq!(span_at(&open, &three, 0, f64::NAN), None);
     let two = spans(&ring, &[(3, 0.5), (0, 0.5)]);
     assert_eq!((span_at(&ring, &two, 0, 0.25), span_at(&ring, &two, 3, 0.75), span_at(&ring, &two, 2, 0.0)), (Some(1), Some(1), Some(0)));
+    // The closing segment's end is the first anchor: on the stretch that starts there, or runs through it.
+    let at_first = spans(&ring, &[(0, 0.0), (2, 0.0)]);
+    assert_eq!((span_at(&ring, &at_first, 3, 1.0), span_at(&ring, &at_first, 0, 0.0)), (Some(0), Some(0)));
+    assert_eq!((span_at(&ring, &two, 3, 1.0), span_at(&ring, &spans(&ring, &[]), 3, 1.0)), (Some(1), Some(0)));
 }
 
 #[test]
