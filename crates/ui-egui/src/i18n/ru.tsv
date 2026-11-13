@@ -708,6 +708,10 @@ font-technology	Variable	Вариативные
 	Corner Color	Цвет углов
 	Contiguous	Смежные
 	Each Channel	Каждый канал
+	Color Mask…	Цветовая маска…
+	Color Mask	Цветовая маска
+	Remove Color Mask	Удалить цветовую маску
+	Apply Color Mask	Применить цветовую маску
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -2297,6 +2301,8 @@ file-filter	Templates	Шаблоны
 	Normal Screen Mode	Обычный режим экрана
 	Note:	Примечание:
 	Nothing matches the Show filter.	Ничего не соответствует фильтру «Показать».
+	Show DCS Transparency Interactions	Показывать взаимодействия DCS с прозрачностью
+	Transparent, or overlaps transparent objects: check its separations	Прозрачно или перекрывает прозрачные объекты: проверьте цветоделение
 	Nothing to print	Нечего печатать
 	Nudge	Сдвинуть
 	Nudge in Perspective	Сдвинуть в перспективе
@@ -4825,6 +4831,10 @@ axis	Both	Оба
 @msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
 @msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
 @msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
+@msg	select an image with a color mask	выделите изображение с цветовой маской
+@msg	the color mask's settings are out of range	настройки цветовой маски вне допустимого диапазона
+@msg	a CMYK image can't take a color mask	к изображению CMYK нельзя применить цветовую маску
+@msg	the mask would hide every pixel	маска скрыла бы все пиксели
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}

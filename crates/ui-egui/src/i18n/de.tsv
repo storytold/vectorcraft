@@ -689,6 +689,10 @@ font-technology	Variable	Variabel
 	Corner Color	Eckfarbe
 	Contiguous	Zusammenhängend
 	Each Channel	Jeder Kanal
+	Color Mask…	Farbmaske…
+	Color Mask	Farbmaske
+	Remove Color Mask	Farbmaske entfernen
+	Apply Color Mask	Farbmaske anwenden
 	Edit Path	Pfad bearbeiten
 	Mask	Maske
 	Crop Marks	Schnittmarken
@@ -2234,6 +2238,8 @@ file-filter	Templates	Vorlagen
 	Normal Screen Mode	Normaler Bildschirmmodus
 	Note:	Notiz:
 	Nothing matches the Show filter.	Nichts entspricht dem Filter „Anzeigen“.
+	Show DCS Transparency Interactions	DCS-Transparenzinteraktionen anzeigen
+	Transparent, or overlaps transparent objects: check its separations	Transparent oder überlappt transparente Objekte: Separationen prüfen
 	Nothing to print	Nichts zu drucken
 	Nudge	Schrittweise verschieben
 	Nudge in Perspective	In Perspektive schrittweise verschieben
@@ -4713,6 +4719,10 @@ theme	Appearance	Erscheinungsbild
 @msg	a CMYK image has no transparency to set	ein CMYK-Bild hat keine Transparenz, die festgelegt werden kann
 @msg	every pixel matches the background: no image would be left	jedes Pixel entspricht dem Hintergrund: Es würde kein Bild übrig bleiben
 @msg	an image of {w} × {h} pixels is too large to change	ein Bild mit {w} × {h} Pixeln ist zu groß, um geändert zu werden
+@msg	select an image with a color mask	wählen Sie ein Bild mit einer Farbmaske aus
+@msg	the color mask's settings are out of range	die Einstellungen der Farbmaske liegen außerhalb des zulässigen Bereichs
+@msg	a CMYK image can't take a color mask	ein CMYK-Bild kann keine Farbmaske erhalten
+@msg	the mask would hide every pixel	die Maske würde jedes Pixel ausblenden
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}

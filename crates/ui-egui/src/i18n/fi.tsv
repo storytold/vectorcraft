@@ -219,6 +219,10 @@
 	Corner Color	Kulmien väri
 	Contiguous	Yhtenäinen
 	Each Channel	Jokainen kanava
+	Color Mask…	Värimaski…
+	Color Mask	Värimaski
+	Remove Color Mask	Poista värimaski
+	Apply Color Mask	Käytä värimaskia
 	Edit Path	Muokkaa polkua
 	Mask	Maski
 	Rasterize…	Rasteroi…
@@ -1917,6 +1921,8 @@ digits	Malayalam	Malajalam
 	Modified since it was read: {path}	Muokattu lukemisen jälkeen: {path}
 	No Thumbnails	Ei pikkukuvia
 	Nothing matches the Show filter.	Mikään ei vastaa Näytä-suodinta.
+	Show DCS Transparency Interactions	Näytä DCS-läpinäkyvyyden vuorovaikutukset
+	Transparent, or overlaps transparent objects: check its separations	Läpinäkyvä tai läpinäkyvien objektien päällä: tarkista sen erottelut
 	PPI	PPI
 	Relink…	Linkitä uudelleen…
 	Find Linked Files	Etsi linkitetyt tiedostot
@@ -4996,6 +5002,10 @@ imageTrace	Outline	Ääriviiva
 @msg	a CMYK image has no transparency to set	CMYK-kuvalla ei ole asetettavaa läpinäkyvyyttä
 @msg	every pixel matches the background: no image would be left	jokainen pikseli vastaa taustaa: kuvaa ei jäisi jäljelle
 @msg	an image of {w} × {h} pixels is too large to change	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri muutettavaksi
+@msg	select an image with a color mask	valitse kuva, jossa on värimaski
+@msg	the color mask's settings are out of range	värimaskin asetukset ovat sallitun alueen ulkopuolella
+@msg	a CMYK image can't take a color mask	CMYK-kuvalla ei voi olla värimaskia
+@msg	the mask would hide every pixel	maski piilottaisi jokaisen pikselin
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}

@@ -959,3 +959,33 @@ fn show_recent_colors_hides_and_shows_the_swatches_row() {
     };
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
 }
+
+/// In a panel made taller the swatch list fills the space above the panel's footer instead of
+/// scrolling inside 150 or 200 pt (#1638); outside a sized panel it keeps those heights.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    for i in 0..60 {
+        app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
+    }
+    let ctx = context();
+    set_pstate(&ctx, "swatch-view", View::SmallList);
+    // The clip rect of the first swatch row's name: the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 760.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| show(&mut app, ui));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Tone 00")).map(|c| c.clip_rect);
+        }
+        clip.expect("the first new swatch's row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
+}

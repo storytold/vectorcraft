@@ -636,6 +636,10 @@ antiAlias	Sharp	Nítido
 	Corner Color	Cor dos Cantos
 	Contiguous	Contíguo
 	Each Channel	Cada Canal
+	Color Mask…	Máscara de Cor…
+	Color Mask	Máscara de Cor
+	Remove Color Mask	Remover Máscara de Cor
+	Apply Color Mask	Aplicar Máscara de Cor
 	Edit Path	Editar caminho
 	Mask	Máscara
 	Crop Marks	Marcas de Corte
@@ -1873,6 +1877,8 @@ antiAlias	Sharp	Nítido
 	Normal Screen Mode	Modo de Tela Normal
 	Note:	Nota:
 	Nothing matches the Show filter.	Nada corresponde ao filtro Mostrar.
+	Show DCS Transparency Interactions	Mostrar interações de transparência DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparente ou sobrepõe objetos transparentes: verifique as separações
 	Nothing to print	Nada para imprimir
 	Nudge	Nudge
 	Nudge in Perspective	Nudge em Perspectiva
@@ -4244,6 +4250,10 @@ axis	Both	Ambos
 @msg	a CMYK image has no transparency to set	uma imagem CMYK não tem transparência para definir
 @msg	every pixel matches the background: no image would be left	todos os pixels correspondem ao fundo: nenhuma imagem restaria
 @msg	an image of {w} × {h} pixels is too large to change	uma imagem de {w} × {h} pixels é grande demais para ser alterada
+@msg	select an image with a color mask	selecione uma imagem com uma máscara de cor
+@msg	the color mask's settings are out of range	as configurações da máscara de cor estão fora do intervalo
+@msg	a CMYK image can't take a color mask	uma imagem CMYK não pode ter uma máscara de cor
+@msg	the mask would hide every pixel	a máscara ocultaria todos os pixels
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}

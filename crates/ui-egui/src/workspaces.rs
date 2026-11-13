@@ -24,6 +24,13 @@ pub struct Workspace {
     /// The Control bar is docked to the bottom of the window (built-in workspaces, and workspaces
     /// saved without this field: the top).
     pub control_bar_bottom: bool,
+    /// The Control bar floats at `control_bar_float_pos` (built-in workspaces, and workspaces saved
+    /// without this field: docked at the edge `control_bar_bottom` names).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub control_bar_floating: bool,
+    /// Where the Control bar floats, or last floated (built-in workspaces: none, the first position).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub control_bar_float_pos: Option<[f32; 2]>,
     /// The groups of the Control bar's options its panel menu has off (built-in workspaces, and
     /// workspaces saved without this field: none).
     #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty", deserialize_with = "crate::chrome::read_hidden_groups")]
@@ -190,6 +197,8 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         name: name.into(),
         control_bar: ui.control_bar,
         control_bar_bottom: ui.control_bar_bottom,
+        control_bar_floating: ui.control_bar_floating,
+        control_bar_float_pos: ui.control_bar_float_pos,
         control_bar_hidden_groups: ui.control_bar_hidden_groups.clone(),
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
@@ -221,6 +230,13 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
 pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.control_bar = w.control_bar;
     ui.control_bar_bottom = w.control_bar_bottom;
+    ui.control_bar_floating = w.control_bar_floating;
+    // A floating workspace floats the bar where it was saved (none: the first position); a docked
+    // one without a floating position keeps the one the bar last floated at.
+    if w.control_bar_floating || w.control_bar_float_pos.is_some() {
+        ui.control_bar_float_pos = w.control_bar_float_pos;
+        crate::state::sanitize_toolbar_pos(&mut ui.control_bar_float_pos);
+    }
     ui.control_bar_hidden_groups = w.control_bar_hidden_groups.clone();
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
@@ -811,6 +827,43 @@ mod tests {
         let old: Workspace = serde_json::from_value(old).unwrap();
         apply(&mut ui, &old);
         assert!(ui.control_bar && !ui.control_bar_bottom, "an older workspace docks the bar at the top");
+    }
+
+    /// A workspace keeps a floating Control bar and where it floats, through the preferences' JSON
+    /// too; switching to a docked workspace docks it and keeps that position for the next float.
+    /// Reset floats the bar where the workspace was saved floating. A workspace or preferences saved
+    /// before floating keep their top or bottom edge, and a position that is not a number is
+    /// dropped.
+    #[test]
+    fn saved_workspaces_restore_floating_control_bar_position() {
+        let mut ui = UiState { control_bar: true, control_bar_floating: true, control_bar_float_pos: Some([220.0, 140.0]), ..Default::default() };
+        save_as(&mut ui, "Floating").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(!ui.control_bar_floating && !ui.control_bar_bottom, "Essentials docks the bar at the top");
+        assert_eq!(ui.control_bar_float_pos, Some([220.0, 140.0]), "the last floating position is kept while docked");
+        switch(&mut ui, "Floating").unwrap();
+        assert!(ui.control_bar_floating, "the saved workspace floats the bar again");
+        assert_eq!(ui.control_bar_float_pos, Some([220.0, 140.0]));
+        let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
+        assert!(back.control_bar_floating && back.custom_workspaces[0].control_bar_floating, "both survive the preferences' JSON");
+        assert_eq!(back.custom_workspaces[0].control_bar_float_pos, Some([220.0, 140.0]));
+        // Saved before the bar floated: the edge it was docked to, top or bottom.
+        for bottom in [false, true] {
+            let old: Workspace = serde_json::from_value(json!({"name": "Old", "controlBar": true, "controlBarBottom": bottom})).unwrap();
+            apply(&mut ui, &old);
+            assert!(!ui.control_bar_floating && ui.control_bar_bottom == bottom, "an older workspace docks the bar at its edge, bottom: {bottom}");
+            let old: UiState = serde_json::from_value(json!({"control_bar": true, "control_bar_bottom": bottom})).unwrap();
+            assert!(!old.control_bar_floating && old.control_bar_bottom == bottom, "older preferences dock it at their edge, bottom: {bottom}");
+        }
+        // Saved floating at the first position: Reset after a move floats it there again.
+        let mut ui = UiState { control_bar: true, control_bar_floating: true, ..Default::default() };
+        save_as(&mut ui, "First").unwrap();
+        ui.control_bar_float_pos = Some([300.0, 90.0]);
+        reset(&mut ui);
+        assert!(ui.control_bar_floating, "Reset floats the bar");
+        assert_eq!(ui.control_bar_float_pos, None, "at the first position, as the workspace was saved");
+        let odd: UiState = serde_json::from_value(json!({"control_bar_floating": true, "control_bar_float_pos": [1e39, 5.0]})).unwrap();
+        assert_eq!(odd.sanitized().control_bar_float_pos, None, "a position out of range is dropped");
     }
 
     /// A workspace keeps the groups of Control bar options its panel menu has off: switching

@@ -786,7 +786,8 @@ art's colours (by default as global swatches the art links to).
 them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
 The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
-names Select All Unused selects), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
+its ink), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
 `swatch.sortByKind`.
 `brush.move {name | names, to?, type?}` reorders brushes among the brushes of their type, as dragging one onto
 another of its type in the Brushes panel does. `to` is an index among the brushes of that type in `brush.list`
@@ -1131,11 +1132,10 @@ page) opens from its editing data alone: its type is made from the file's text d
 area type and type on a path), and what can't be is left out with a warning. Non-native art (the content of a placed
 PDF, which Illustrator shows but doesn't edit and keeps as a PDF inside the editing data) is drawn by the PDF importer,
 as a group named "Non-native art" fitted to the object's box; one whose PDF can't be read is left out with a warning.
-Without editing data it says it can't be opened. `pages` that name every page of a file saved without PDF compatibility also open it from its
-editing data.
-Without editing data it says it can't be opened. `pages` that name every page of such a file also open it from its
-editing data. `file.place` reads it from its editing data too and places the art of the layers that show on artboard
-`page`, clipped to that artboard unless `crop` is `bounding`. `clipboard.importPdf` takes every object of its editing
+Without editing data it says it can't be opened. `pages` that name every page of a file saved without PDF compatibility
+also open it from its editing data. `file.place` reads it from its editing data too and places the art of the layers
+that show on artboard `page`, clipped to that artboard unless `crop` is `bounding`. `clipboard.importPdf` takes every
+object of its editing data.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -3706,7 +3706,9 @@ colorize color of an image it applies to and the pixels of other images: at most
 image, spread evenly, and 1,048,576 pixels of at most 64 images in all, leaving out pixels less than half opaque and
 images it can't decode; each image is decoded once for all its picks. In a clip group, or under an opacity mask that
 clips, it reads only what shows inside the clipping path or the mask art, and a blend, envelope or repeat that a
-marquee touches is read whole. Hidden or fully transparent objects and fill or stroke items are left out, and locked
+marquee touches is read whole. The symbol instances read place at most 16,000,000 objects in all, as on the canvas,
+and an instance whose art would pass that is left out. The pixels read inside clip groups are tested against at most
+4,000,000 clipping-path elements in all; the picks of an image inside clip groups that would pass that are left out. Hidden or fully transparent objects and fill or stroke items are left out, and locked
 objects are read. As VectorCraft's own rule, each object read weighs the same, shared among its colors (an image's
 among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
 its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
@@ -4697,13 +4699,15 @@ an `anchor` or `segment` in the same way. The document does not change and no un
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
 the selection in one step.
-`path.close {id, subpath?, in?, out?, independent?}` closes an open subpath (by default the last open one). `in` places
+`path.close {id, subpath?, at?, in?, out?, independent?}` closes an open subpath (by default the last open one). `at`
+moves the first anchor to `[x, y]`, its handles with it, before `in` and `out` are placed. `in` places
 the first anchor's incoming handle as `path.setHandle` places a handle: a smooth anchor turns its outgoing handle to
 stay in line and keeps that handle's length, and a corner keeps its outgoing handle where it is. With
 `independent: true` the anchor becomes a corner first, so its outgoing handle does not move. `out`, placed after `in`,
 is the first anchor's outgoing handle, and makes the anchor a corner. A Pen press on the first anchor sends `in` at
 the anchor with `independent: true`. The Pen's and the Smart Pen's closing drags send the mirror of the pointer as
-`in`, and once Alt is held they also send `out` at the outgoing handle's position when Alt went down.
+`in`, and once Alt is held they also send `out` at the outgoing handle's position when Alt went down. Once Space held
+during the Pen's closing drag has moved the first anchor, the drag also sends `at` at the anchor's new position.
 
 `path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
 anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
@@ -4752,7 +4756,7 @@ an `x` without a `y`, or a `y` without an `x`, with "x and y must be given toget
 `path.blob` refuse a point in `points` whose x or y is not a number, such as `["10", 10]` or a point written as a
 string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt or
 rotation that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
-(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `in` or `out` that is not `[x, y]`
+(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
 These commands refuse a string, a number or another value that is not true or false with
@@ -5853,11 +5857,18 @@ through the views in tab order and add `view` to their reply for a document with
 reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
 `view`. Views are not saved.
 `window.control.dock {edge}` (desktop app) docks the Control bar to the top of the window, under the menu bar
-(`edge: "top"`, the default), or to its bottom (`"bottom"`), and returns `{edge}`. The bar's panel menu runs it with
-Dock to Top and Dock to Bottom, the edge in use checked, and so does a drag of the bar's gripper, which docks the bar at
-the edge the pointer is released nearer and shows a band along that edge while it moves. The edge is kept with the
-workspace, and a workspace saved without it docks the bar at the top. Another `edge`, or none, fails with "`edge` must
-be one of top, bottom" and leaves the bar where it is.
+(`edge: "top"`, the default), or to its bottom (`"bottom"`), or floats it over the window (`"float"`), and returns
+`{edge}`. A floating bar floats where it last floated; the first time, its top-left corner is at 60, 80 in window
+points. It is 800 points wide, or as wide as the window when that is narrower, takes no room from the canvas, and is
+kept inside the window below the menu bar. The bar's panel menu runs the command with Dock to Top and Dock to Bottom,
+the edge in use checked and neither while the bar floats. So does a drag of the bar's gripper: released within 24
+points of the top (under the menu bar) or the bottom of the window it docks the bar at that edge, showing a band along
+that edge while it moves, and released farther from both edges it floats the bar there, showing the bar's outline while
+it moves. In a window too short for a floating bar between those two zones, the release docks the bar at the nearer
+edge. Escape cancels the drag, and a release outside the window leaves the bar where it was. The edge, whether the bar
+floats and where it floats are kept with the workspace, and a workspace saved without them docks the bar at the edge it
+names, or at the top. Another `edge`, or none, fails with "`edge` must be one of top, bottom, float" and leaves the bar
+where it is.
 `window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
 true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
 menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
@@ -5935,6 +5946,40 @@ of its art, as one clipped group. A PDF, `.ai` or `.ait` page read from `path` (
 `textAs: "outlines"`) is a placed document the same way, showing page `page` clipped to its `crop` box (or its
 art's bounds); with `link: false` it is placed as one clipped group. EPS and PostScript `.ai` files are embedded. `at` centres it, `rect` fits it, `replace`
 swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
+A DCS file (Desktop Color Separation, version 1.0 or 2.0: an EPS file whose header names one EPS program per printing
+plate, <http://www.telegraphics.net/doc/DCS.txt>) is placed only from its `path` with link, as one linked image
+([Import DCS files](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/import-dcs-files.html)).
+`file.place` with `link: false` or from `dataBase64`, `document.open` and `links.embed` fail with "DCS files can only
+be placed linked" and change nothing. The plates are read from the file (`%%PlateFile: (name) EPS #offset size`) or
+from the plate files it names (`%%PlateFile: (name) EPS Local file`, and the `%%CyanPlate:`, `%%MagentaPlate:`,
+`%%YellowPlate:` and `%%BlackPlate:` comments of DCS 1.0), which are looked for by file name in the DCS file's folder.
+Each plate is the one image its program draws, and a dark pixel is ink; a plate program that draws more than one
+image, art besides its image, or its image through a clipping path is an error naming the plate. Each spot plate adds a spot swatch (when
+the file is placed, and when `links.update` or `links.relink` reads it) in the
+CMYK values of the file's `%%CMYKCustomColor:` comment (else `%%RGBCustomColor:`; black, with a warning, when the file
+gives neither). A swatch of the same name that the document already has is kept, with a warning (in `warnings` of
+`file.place`, `links.update` and `links.relink`) when it is not a spot color of the same values; Separations Preview
+and `file.print` separations then show and print the plate in that swatch's color, and a plate whose name is a
+process swatch prints as process inks in that swatch's color. `swatch.unused` does not list a spot or process swatch
+while such an image that the art shows has a plate of its name; deleting the swatch makes the plate print as its CMYK values. The clipping path the
+file's composite is drawn through clips the image (a clipping group, its path under the nonzero fill rule, an even-odd
+clipping path kept as the same area), and `file.place` answers the image's id as
+`image`, since the Links commands take the image and not the group. `links.update` and `links.relink` clip the image
+by the file's clipping path again (in a new clipping group when none holds it, and inside a clipping mask made in the
+document, whose path is kept), unless Placement Options clip the image, the same way for the images in symbols, graph designs, patterns and opacity masks; when the new file has no
+clipping path, a clipping group holding just the image whose path is the old file's clipping path loses that path and
+stays as a plain group of the image, with its id, name, visibility and transparency (one whose path was given the
+even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes
+or is gone, as it does when the DCS file changes, and the app's link watch acts on a changed plate file as on a
+changed DCS file. `links.relink {copy: true}` fails for a DCS file that reads plate files of its own, and copies
+nothing. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
+mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
+Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
+of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
+mean of the plate pixels each shown pixel covers. A file may name 64 plates, a plate file may be 1 GB, and the plates together may hold 512 MB of
+ink amounts; a plate that can't be read is an error naming the plate, and nothing is placed. The plates go on the first
+plate's pixel grid, grown to hold every plate where it prints; a plate of another size or position is resampled onto
+it, and a file naming more than 64 plates is an error. `file.place.info` answers `plates` (the ink names) for a DCS file.
 The art's bounds are the bounds of the art that shows, with its strokes and effects, as an export measures them:
 hidden objects, guides and template layers do not count, and symbol instances are measured by their art. A page or artboard holds the objects
 whose shown art lies on it; a hidden object on it is still placed and stays hidden, as do the hidden members of the groups placed.
@@ -6654,6 +6699,14 @@ allowance has bytes, drawn as a crossed gray box on the canvas and left out of e
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
 With automation read roots, a file outside them has no `path` or `found` in `links.list` and `links.check`, and no
 `link`, `path`, `location`, `fileSize` or `modified` in `links.info`; its row keeps the file's name.
+An image placed from a DCS file has the `format` `DCS`. `links.list {dcsTransparency: true}` (the panel menu's Show
+DCS Transparency Interactions, off by default) adds `dcsTransparency: true` to the rows of such images that
+[are transparent or overlap transparent objects](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/eps-and-dcs-file-import-in-illustrator.html),
+and the panel shows a warning mark on them. VectorCraft's rule for it: the image, or a group or layer holding it, has
+an opacity below 100%, a blend mode other than Normal, an opacity mask or an effect, or its bounds overlap the
+bounds of another visible object that has one of those or a gradient with a transparent stop (in a fill, a stroke or
+a character's fill or stroke); a DCS image with transparency of its own counts as such an object. The check looks at
+every object in the layers each time the list is read. A `dcsTransparency` that is not true or false is an error.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
@@ -6902,7 +6955,11 @@ visible type that fits its frame or path, on the layers `printLayers` picks, on 
 that print, and the type in the symbols, patterns, scatter brushes, opacity masks and placed documents of the art that
 prints. The warnings also give the ids of the area type and type on a path that print and whose text doesn't fit
 (objects of the document only, not type in the art of symbols, patterns, brushes, opacity masks or placed documents;
-see [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)).
+see [Fitting area type](#fitting-area-type-auto-size-shrink-text-to-fit-overflow)). The warnings of `file.print`
+and `print.preview` list what the job leaves out of the document or prints differently first (art outside the
+imageable area, type in a fallback font, transparency flattened for PostScript). The notes on the options follow: an
+option not applied or applied another way, such as halftone screens, a fixed flatness or copies per sheet that don't
+fit. Each kind keeps the order it is given in.
 
 ```json
 {"name":"run_command","arguments":{"command":"print.setup","params":{"settings":{"media":"a4","scaling":"fit","marks":{"trim":true}}}}}
@@ -9688,7 +9745,10 @@ right/left/down/up; none stored means the smooth mesh through the points, as old
 `object.envelope.setMeshPoint {id, index, x, y, handle?}` and `object.mesh.movePoint`, `object.mesh.addLine` and
 `object.mesh.deletePoint` edit them like a gradient mesh's (one undo step each). On the canvas a selected envelope
 shows its mesh; the Mesh tool and Direct Selection drag its points and the clicked point's handles, and the Mesh tool
-adds a row and a column where it clicks inside. `press_key` Escape during a drag of a point or handle of a mesh
+adds a row and a column where it clicks inside. `object.mesh.addLine`, and `object.mesh.create` with `at`, take a point exactly on
+the mesh's outline (within a millionth of a point) on any side without `tolerance`; a point outside needs `tolerance`. `object.mesh.addLine` at a point that is already a mesh
+point adds no line and records no undo step unless its `color` changes a gradient mesh's point (a mesh envelope's points
+have no color). `press_key` Escape during a drag of a point or handle of a mesh
 envelope or a gradient mesh cancels it: the point goes back and no undo step is added. The Control bar shows Edit Envelope / Edit Contents, the warp's
 style, orientation, bend and distortions (or the mesh's rows and columns), Reset (an unbent warp, a flat mesh) and
 Envelope Options.
@@ -10556,8 +10616,9 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 
 ## Image Tools add-on
 
-Image Tools is a built-in add-on for placed images: its command is `addon.image.removeBackground`, and in the desktop
-app it lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
+Image Tools is a built-in add-on for placed images: its commands are `addon.image.removeBackground`,
+`addon.image.colorMask`, `addon.image.removeColorMask` and `addon.image.applyColorMask`, and in the desktop app it
+lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
 
 ### Remove Background
 
@@ -10602,6 +10663,59 @@ a preview step does not keep them.
 ```json
 {"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"colors","colors":["#ffffff","#f0f0f0"],"tolerance":5,"softness":15}}}
 {"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"corners","contiguous":false,"match":"channels","tolerance":12.55,"softness":0}}}
+```
+
+### Color Mask
+
+`addon.image.colorMask` hides colors of the selected images, or of the images in `ids`, and leaves their pixels as
+they are. It takes `background`, `colors`, `contiguous`, `match`, `tolerance` and `softness` with the same values,
+defaults and refusals as `addon.image.removeBackground`, and matches colors the same way. The image keeps its own
+pixels. The mask is kept with the image object and saved with the document: its settings, and a PNG of the image's
+pixels with the hidden colors made clear (16-bit and gray images keep their depth and channels, with the source's color
+profile and resolution). PDF's color key masking hides chosen colors of an image in a similar way
+([ISO 32000-1 §8.9.6.4](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)).
+
+- The canvas, printing and separations, PDF (PDF/X-1a and PDF/X-3 flatten the hidden pixels as transparency), SVG,
+  EPS, the raster formats, DXF, EMF, WMF, the legacy .ai, the .ai editing data, copy and paste, and placing a document
+  show the masked pixels. A linked image stays linked. An output that refers to linked files instead of embedding them
+  (SVG with `images: "link"`) writes the masked pixels in place of the link.
+- A grayscale image's masked pixels have an alpha channel when the mask hides pixels. A colorize color on such an image
+  follows the rule for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a mask
+  that hides pixels of a grayscale image colorized with a process color. A mask that hides no pixels shows the image's
+  own pixels, so a grayscale image with such a mask takes a process color. Each image is checked on the pixels its new
+  mask shows, whatever other images in the document hold. Remove Background checks the image's own pixels, which it
+  clears.
+- A click anywhere in the image's frame selects it, hidden pixels included, as it does for an image with clear pixels.
+  The Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels,
+  hidden colors included.
+- Running the command again on a masked image replaces its mask. All the images change in one undo step. An image whose
+  mask does not change is left as it is, and when none changes the command adds no undo step and returns `changed: 0`.
+  `hidden` counts the pixels made fully clear in the images that changed.
+- When the image's own pixels are replaced later (Update Link, Relink, Crop Image, a recolor, or a linked file read
+  again when the document opens), the mask is made again for the new pixels. When the new pixels can't be masked (CMYK
+  pixels, missing pixels, every pixel would be hidden, or the image is grayscale and colorized with a process color
+  and the mask would hide some of its pixels), the mask keeps its settings and hides nothing.
+- The command refuses, and changes nothing, when an object in `ids` is not an image, an image is CMYK, a linked image
+  shows its preview (embed or relink it first), an image would need more than the decode allowance, or the mask would
+  hide every pixel of an image.
+- With none of `background`, `colors`, `contiguous`, `match`, `tolerance` and `softness` given, nothing changes, and
+  the command returns the mask settings of the first image (the defaults when it has no mask) with `masked`. Color
+  Mask… opens the command's dialog on those settings, with a Preview that works as Remove Background's does.
+
+→ `{changed, ids, hidden}`, or without settings `{background, colors, contiguous, match, tolerance, softness, masked}`
+
+`addon.image.removeColorMask` takes the mask off the selected images, or the images in `ids`, in one undo step, and
+the images show their own pixels again. `addon.image.applyColorMask` makes each mask part of its image: the masked
+pixels become the image's own, embedded as a PNG with an alpha channel (a linked image is embedded), and the mask is
+taken off, in one undo step. A mask that hides nothing is only taken off, and the image keeps its pixels and its link.
+Images without a mask are left as they are, and an object in `ids` that is not an image is refused. Apply Color Mask
+also refuses, and changes nothing, when a mask made again for new pixels would give a grayscale image colorized with a
+process color an alpha channel. Both commands are
+enabled only when a selected image has a mask. → `{changed, ids}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.image.colorMask","params":{"background":"colors","colors":"#00ff00","contiguous":false,"tolerance":15,"softness":10}}}
+{"name":"run_command","arguments":{"command":"addon.image.applyColorMask","params":{}}}
 ```
 
 ## Type Tools add-on

@@ -199,6 +199,10 @@
 	Corner Color	Hjørnefarve
 	Contiguous	Sammenhængende
 	Each Channel	Hver kanal
+	Color Mask…	Farvemaske…
+	Color Mask	Farvemaske
+	Remove Color Mask	Fjern farvemaske
+	Apply Color Mask	Anvend farvemaske
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
@@ -1771,6 +1775,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Ændret siden den blev læst: {path}
 	No Thumbnails	Ingen miniaturer
 	Nothing matches the Show filter.	Intet matcher Vis-filteret.
+	Show DCS Transparency Interactions	Vis DCS-gennemsigtighedsinteraktioner
+	Transparent, or overlaps transparent objects: check its separations	Gennemsigtig eller overlapper gennemsigtige objekter: kontrollér dens separationer
 	PPI	PPI
 	Relink…	Sammenkæd igen…
 	Find Linked Files	Find sammenkædede filer

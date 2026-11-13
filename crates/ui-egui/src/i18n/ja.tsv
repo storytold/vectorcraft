@@ -243,6 +243,10 @@ digits	Malayalam	マラヤーラム数字
 	Corner Color	角の色
 	Contiguous	隣接
 	Each Channel	各チャンネル
+	Color Mask…	カラーマスク…
+	Color Mask	カラーマスク
+	Remove Color Mask	カラーマスクを削除
+	Apply Color Mask	カラーマスクを適用
 	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
@@ -2489,6 +2493,8 @@ antiAlias	Sharp	シャープ
 	Normal	通常
 	Note:	メモ:
 	Nothing matches the Show filter.	表示フィルターに一致する項目がありません。
+	Show DCS Transparency Interactions	DCS の透明の相互作用を表示
+	Transparent, or overlaps transparent objects: check its separations	透明、または透明なオブジェクトと重なっています：分版を確認してください
 	Nothing to print	プリントするものがありません
 	Nudge	微調整
 	Nudge in Perspective	遠近で微調整
@@ -4963,6 +4969,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a CMYK image has no transparency to set	CMYK 画像には設定できる透明部分がありません
 @msg	every pixel matches the background: no image would be left	すべてのピクセルが背景に一致します: 画像が残りません
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} ピクセルの画像は大きすぎて変更できません
+@msg	select an image with a color mask	カラーマスクのある画像を選択してください
+@msg	the color mask's settings are out of range	カラーマスクの設定が範囲外です
+@msg	a CMYK image can't take a color mask	CMYK 画像にはカラーマスクを設定できません
+@msg	the mask would hide every pixel	マスクがすべてのピクセルを隠してしまいます
 @msg	the document has no artboards	ドキュメントにアートボードがありません
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです

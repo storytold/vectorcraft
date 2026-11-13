@@ -696,6 +696,10 @@ font-technology	Variable	Променливи
 	Corner Color	Цвят на ъглите
 	Contiguous	Съседни
 	Each Channel	Всеки канал
+	Color Mask…	Цветова маска…
+	Color Mask	Цветова маска
+	Remove Color Mask	Премахване на цветовата маска
+	Apply Color Mask	Прилагане на цветовата маска
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
@@ -2200,6 +2204,8 @@ font-technology	Variable	Променливи
 	Normal Screen Mode	Нормален режим на екран
 	Note:	Забележка:
 	Nothing matches the Show filter.	Нищо не отговаря на филтъра за показване.
+	Show DCS Transparency Interactions	Показване на взаимодействията на DCS с прозрачност
+	Transparent, or overlaps transparent objects: check its separations	Прозрачно е или се припокрива с прозрачни обекти: проверете цветоотделянето му
 	Nothing to print	Няма нищо за отпечатване
 	Nudge	Преместване
 	Nudge in Perspective	Преместване в перспектива

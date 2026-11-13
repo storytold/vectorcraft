@@ -863,7 +863,8 @@ fn masks_surface(paint: &Paint, colored: bool) -> bool {
 }
 
 /// The graphics of the solids `filled` ([`graphic_art`]), each with the index of the surface it is
-/// drawn right after (the last of those solids holding its face) and its face. With `per_member`
+/// drawn right after (the last of those solids holding its face) and its face. Solids in a run
+/// with the same opacity and blending mode share their graphics. With `per_member`
 /// (a member's opacity mask or blending mode applies to its surfaces) each member's solids get
 /// graphics of their own, clipped to that member's caps, so they stay in that member's scopes.
 /// All the groups share one limit on the path elements drawn: once it is reached, later groups
@@ -880,11 +881,12 @@ fn placed_graphics(
     for f in filled {
         // Solids whose fills or strokes differ in opacity or blending mode get graphics of their
         // own, each drawn as its fill or stroke is. A solid whose surface carries an opacity mask
-        // gets its own too, which takes that mask ([`with_graphics`]).
+        // gets its own too, which takes that mask ([`with_graphics`]). A solid joins only the
+        // group of the solid before it, so a graphic is never drawn past a solid painted between.
         let joins = |first: &Filled| {
             (!per_member || first.member == f.member) && first.opacity == f.opacity && first.blend == f.blend && !first.masked && !f.masked
         };
-        match groups.iter_mut().find(|g| g.first().is_some_and(|first| joins(first))) {
+        match groups.last_mut().filter(|g| g.first().is_some_and(|first| joins(first))) {
             Some(g) => g.push(f),
             None => groups.push(vec![f]),
         }

@@ -213,6 +213,10 @@
 	Corner Color	Hoekkleur
 	Contiguous	Aaneengesloten
 	Each Channel	Elk kanaal
+	Color Mask…	Kleurmasker…
+	Color Mask	Kleurmasker
+	Remove Color Mask	Kleurmasker verwijderen
+	Apply Color Mask	Kleurmasker toepassen
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…
@@ -1785,6 +1789,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Gewijzigd sinds het is ingelezen: {path}
 	No Thumbnails	Geen miniaturen
 	Nothing matches the Show filter.	Niets komt overeen met het weergavefilter.
+	Show DCS Transparency Interactions	DCS-transparantie-interacties weergeven
+	Transparent, or overlaps transparent objects: check its separations	Transparant of overlapt transparante objecten: controleer de scheidingen
 	PPI	PPI
 	Relink…	Opnieuw koppelen…
 	Find Linked Files	Gekoppelde bestanden zoeken

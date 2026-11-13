@@ -704,6 +704,10 @@ font-technology	Variable	Варіативні
 	Corner Color	Колір кутів
 	Contiguous	Суміжні
 	Each Channel	Кожен канал
+	Color Mask…	Колірна маска…
+	Color Mask	Колірна маска
+	Remove Color Mask	Видалити колірну маску
+	Apply Color Mask	Застосувати колірну маску
 	Edit Path	Редагувати контур
 	Mask	Маска
 	Crop Marks	Мітки обрізання
@@ -2302,6 +2306,8 @@ file-filter	Templates	Шаблони
 	Normal Screen Mode	Звичайний режим екрану
 	Note:	Примітка:
 	Nothing matches the Show filter.	Нічого не відповідає фільтру "Показати".
+	Show DCS Transparency Interactions	Показувати взаємодії DCS із прозорістю
+	Transparent, or overlaps transparent objects: check its separations	Прозоре або перекриває прозорі об'єкти: перевірте кольороподіл
 	Nothing to print	Нема чого друкувати
 	Nudge	Зрушити
 	Nudge in Perspective	Зрушити у перспективі
@@ -4823,6 +4829,10 @@ axis	Both	Обидві
 @msg	a CMYK image has no transparency to set	зображення CMYK не має прозорості, яку можна задати
 @msg	every pixel matches the background: no image would be left	кожен піксель збігається з фоном: від зображення нічого не залишилося б
 @msg	an image of {w} × {h} pixels is too large to change	зображення розміром {w} × {h} пікселів завелике для зміни
+@msg	select an image with a color mask	виділіть зображення з колірною маскою
+@msg	the color mask's settings are out of range	параметри колірної маски поза допустимим діапазоном
+@msg	a CMYK image can't take a color mask	до зображення CMYK не можна застосувати колірну маску
+@msg	the mask would hide every pixel	маска приховала б усі пікселі
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}
