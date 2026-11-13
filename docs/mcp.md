@@ -1100,7 +1100,10 @@ ignore `UserUnit` show such a page at its full size. The option applies
 only to files without a standard: PDF/X files write such a page in points anyway, and PDF/A files keep the `UserUnit`, which
 keeps their page boundaries within PDF/A-2's limit of 14,400 units (ISO 19005-2, 6.1.13), a PDF/A file at PDF 1.4
 included (written as PDF 1.6). The dialog disables the
-checkbox when a standard is chosen. In PDF 1.3 and 1.4 files, PDF/X-1a and PDF/X-3 among them, a real number can
+checkbox when a standard is chosen. In a PDF without a standard (the option
+off, PDF 1.5 or later), the warning for a page written with a `UserUnit` above 1 ends by naming the option; in PDF/A
+files and `.ai` saves it does not.
+In PDF 1.3 and 1.4 files, PDF/X-1a and PDF/X-3 among them, a real number can
 be at most 32,767, and whole numbers are written as integers: a page longer than 32,767 pt whose sides aren't whole
 numbers of points fails the export with an error naming the page before the thumbnails are drawn and the transparency is
 flattened, and one whose art needs a real number past 32,767 fails with the same error when the file is written. A page whose short side is 3 pt or longer but would be under 3 units at that
