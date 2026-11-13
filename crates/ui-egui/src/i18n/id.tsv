@@ -4263,6 +4263,10 @@ imageTrace	Outline	Kontur
 @msg	Couldn't paste: the document it was pasted in was reverted	Tidak dapat menempel: dokumen tempatnya ditempel sudah dikembalikan
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks
 @msg	Create from Guides: the document has no artboard	Buat dari panduan: dokumen tidak memiliki artboard
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Buat dari panduan: panduan menghasilkan lebih dari {MAX_PIECES} irisan
@@ -6860,3 +6864,9 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
+	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
+	Hem	Lipatan
+	Grommets	Mata ayam
+	Grommet Inset	Jarak mata ayam dari tepi
+	Diameter	Diameter

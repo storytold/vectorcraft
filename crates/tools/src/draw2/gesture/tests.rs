@@ -627,7 +627,7 @@ fn blob_brush_alt_switches_to_the_smooth_tool() {
     let acts = drag_held(&mut t, &cx, &stroke, alt);
     assert!(acts[..acts.len() - 1].iter().all(|a| a.is_empty()), "{acts:?}");
     let v = smoothed(&acts).unwrap_or_else(|| panic!("{acts:?}"));
-    assert_eq!(v, json!({"points": [[50.0, 150.0], [150.0, 150.0], [250.0, 160.0]], "radius": cx.tol(12.0), "fidelity": SMOOTH_FIDELITY}));
+    assert_eq!(v, json!({"points": [[50.0, 150.0], [150.0, 150.0], [250.0, 160.0]], "radius": cx.tol(12.0), "fidelity": cx.tol(SMOOTH_FIDELITY)}));
     // Mid-drag the cursor stays the Smooth tool's when Alt is let go, and the line is thin with
     // no length label.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
@@ -1538,6 +1538,37 @@ fn alt_smoothing_uses_the_smooth_tools_fidelity() {
         // Drawing keeps the tool's own Fidelity; Smooth's setting stays out of its options.
         assert_eq!(t.options()["fidelity"], json!(10.0), "{id}");
         assert!(t.options().get("smoothFidelity").is_none(), "{id}");
+    }
+}
+
+/// The Smooth tool's Fidelity is in screen pixels: the Smooth tool and an Alt smoothing drag with
+/// the Pencil, Paintbrush or Blob Brush send it in points at Fidelity / zoom, so a drag smooths as
+/// much on screen at any zoom.
+#[test]
+fn smooth_fidelity_is_in_screen_pixels_at_any_zoom() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let fidelity = |acts: &[Vec<Action>]| match acts.last().and_then(|a| a.first()) {
+        Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["fidelity"].as_f64().unwrap(),
+        a => panic!("expected path.smoothRegion, got: {a:?}"),
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    for zoom in [0.25, 1.0, 8.0] {
+        cx.zoom = zoom;
+        let mut t = GestureTool::new("smooth");
+        t.set_option("fidelity", &json!(4.0));
+        assert_eq!(fidelity(&drag(&mut t, &cx, &pts, Mods::default())), 4.0 / zoom, "smooth at {zoom}x");
+        for (id, alt_smooth) in [("pencil", true), ("blobBrush", false), ("paintbrush", false)] {
+            let mut t = GestureTool::new(id);
+            t.set_option("altSmooth", &json!(alt_smooth));
+            t.set_option("smoothFidelity", &json!(4.0));
+            assert_eq!(fidelity(&drag_held(&mut t, &cx, &pts, alt)), 4.0 / zoom, "{id} at {zoom}x");
+        }
     }
 }
 
