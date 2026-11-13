@@ -810,9 +810,13 @@ color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit
 `addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
 commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
 leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
-them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
-placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
-profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+them sets what the graph stores. While Global Edit is on, a path directly in a series that takes an edit from another
+match (a graph's paths are matches only while the graph is isolated) has what changed on it stored for its series: the
+paint, weight, opacity and blend mode of the topmost visible fill and stroke, and the object's opacity and blend mode.
+`addon.arrange.randomizeOpacity` and `addon.arrange.sort` with `apply: "opacity"` store the object opacity, with the
+blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement, and
+every path of the series takes that placement when the graph is drawn again. The graph does not store a stroke's
+dashes, caps, joins, arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
