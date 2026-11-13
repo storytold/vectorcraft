@@ -37,6 +37,87 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64) -> Vec<Anchor> {
     out
 }
 
+/// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
+/// instead of at a new one split in beside it.
+const START_SNAP: f64 = 1e-3;
+
+/// Distance (points) within which two points of a smoothed closed path count as equally near its
+/// old start.
+const START_TIE: f64 = 1e-6;
+
+/// Where `p` lies along the closed `orig` from its first anchor: the segment index and parameter of
+/// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
+/// when there is none.
+fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
+    let mut best: Option<(f64, usize, f64)> = None;
+    for j in 0..orig.anchors.len() {
+        let hit = orig.segment(j).nearest(p, 1e-9);
+        if hit.distance_sq.is_finite() && hit.t.is_finite() && best.is_none_or(|(d, ..)| hit.distance_sq < d) {
+            best = Some((hit.distance_sq, j, hit.t));
+        }
+    }
+    best.map_or((usize::MAX, f64::INFINITY), |(_, j, t)| (j, t))
+}
+
+/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
+/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
+/// `start`, the one earliest along `orig` (the path before smoothing) from its first anchor is used,
+/// then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest point,
+/// is returned as it is.
+fn start_nearest(mut sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
+    let n = sp.anchors.len();
+    if !sp.closed || n < 2 {
+        return sp;
+    }
+    // (distance, place along `orig` once a tie needs it, segment of `sp`, parameter)
+    type Best = (f64, Option<(usize, f64)>, usize, f64);
+    let mut best: Option<Best> = None;
+    for i in 0..n {
+        let c = sp.segment(i);
+        let hit = c.nearest(start, 1e-9);
+        if !hit.distance_sq.is_finite() || !hit.t.is_finite() {
+            continue;
+        }
+        let d = hit.distance_sq.sqrt();
+        match &mut best {
+            None => best = Some((d, None, i, hit.t)),
+            Some((bd, bplace, bi, bt)) if (d - *bd).abs() <= START_TIE => {
+                let held = *bplace.get_or_insert_with(|| place_along(orig, sp.segment(*bi).eval(*bt)));
+                let place = place_along(orig, c.eval(hit.t));
+                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
+                    best = Some((d, Some(place), i, hit.t));
+                }
+            }
+            Some((bd, ..)) if d < *bd => best = Some((d, None, i, hit.t)),
+            Some(_) => {}
+        }
+    }
+    let Some((_, _, i, t)) = best else { return sp };
+    let c = sp.segment(i);
+    let at = c.eval(t);
+    let first = if at.distance(c.p0) <= START_SNAP {
+        i
+    } else if at.distance(c.p3) <= START_SNAP {
+        (i + 1) % n
+    } else {
+        let mid = if sp.segment_is_line(i) {
+            Anchor::corner(at)
+        } else {
+            let (l, r) = (c.subsegment(0.0..t), c.subsegment(t..1.0));
+            sp.anchors[i].h_out = l.p1;
+            sp.anchors[(i + 1) % n].h_in = r.p2;
+            Anchor::with_handles(at, l.p2, r.p1)
+        };
+        sp.anchors.insert(i + 1, mid);
+        i + 1
+    };
+    sp.anchors.rotate_left(first);
+    sp
+}
+
+/// `sp` with the anchors in the drag's reach (`near`) smoothed and refitted, `None` when none are
+/// in reach. A closed path whose first anchor is in reach starts at the point of the refitted path
+/// nearest that anchor's place (VectorCraft's own rule).
 fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Option<SubPath> {
     let n = sp.anchors.len();
     let marked: Vec<bool> = sp.anchors.iter().map(|a| near(a.p)).collect();
@@ -44,10 +125,11 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64, sigma: f
         return None;
     }
     if sp.closed {
+        let start = sp.anchors[0].p;
         let Some(k) = marked.iter().position(|m| !m) else {
             // Everything is in range: smooth the whole closed path, across its start too.
             let f = po::simplify_with(&PathData::single(sp.clone()), &refit_options(tol, sigma));
-            return f.subpaths.into_iter().next();
+            return f.subpaths.into_iter().next().map(|r| start_nearest(r, start, sp));
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
         let mut open = sp.clone();
@@ -62,7 +144,9 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64, sigma: f
         if let Some(r0) = res.first_mut() {
             r0.h_in = l.h_in;
         }
-        return Some(SubPath::new(res, true));
+        // With k = 0 the first anchor is out of reach and still starts the result.
+        let res = SubPath::new(res, true);
+        return Some(if k == 0 { res } else { start_nearest(res, start, sp) });
     }
     Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol, sigma), false))
 }
@@ -413,4 +497,92 @@ pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": ida.0 }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A closed ring of four smooth anchors round (100, 100) with radius 50.
+    fn ring() -> SubPath {
+        let k = 0.5523 * 50.0;
+        let a = |x: f64, y: f64, dx: f64, dy: f64| Anchor::with_handles(Point::new(x, y), Point::new(x - dx, y - dy), Point::new(x + dx, y + dy));
+        SubPath::new(vec![a(150.0, 100.0, 0.0, k), a(100.0, 150.0, -k, 0.0), a(50.0, 100.0, 0.0, -k), a(100.0, 50.0, k, 0.0)], true)
+    }
+
+    /// A start between two anchors of a curve splits that curve there into two that trace it, and the
+    /// new anchor comes first.
+    #[test]
+    fn start_nearest_splits_a_curve_where_it_passes_the_start() {
+        let sp = ring();
+        let old = sp.segment(0);
+        let start = old.eval(0.3) + (old.eval(0.3) - Point::new(100.0, 100.0)) * 0.1;
+        let out = start_nearest(sp.clone(), start, &sp);
+        assert!(out.closed && out.anchors.len() == 5, "{out:?}");
+        let t = old.nearest(start, 1e-9).t;
+        assert!(out.anchors[0].p.distance(old.eval(t)) < 1e-9, "{out:?}");
+        let (head, rest) = (out.segment(4), out.segment(0));
+        for k in 0..=8 {
+            let u = f64::from(k) / 8.0;
+            assert!(head.eval(u).distance(old.eval(t * u)) < 1e-9);
+            assert!(rest.eval(u).distance(old.eval(t + (1.0 - t) * u)) < 1e-9);
+        }
+        for i in 1..4 {
+            assert_eq!(out.segment(i), sp.segment(i), "segment {i} stays");
+        }
+    }
+
+    /// A start within [`START_SNAP`] of an anchor starts the ring at that anchor, with no anchor added.
+    #[test]
+    fn start_nearest_starts_at_an_anchor_near_the_start() {
+        let sp = ring();
+        let out = start_nearest(sp.clone(), Point::new(50.0, 100.0 + START_SNAP / 2.0), &sp);
+        let mut want = sp.anchors.clone();
+        want.rotate_left(2);
+        assert_eq!(out.anchors, want);
+    }
+
+    /// A start on a straight side of a triangle adds a corner point there without handles, and the
+    /// sides stay straight.
+    #[test]
+    fn start_nearest_splits_a_line_with_a_corner_point() {
+        let sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(50.0, 80.0)], true);
+        let out = start_nearest(sp.clone(), Point::new(40.0, -5.0), &sp);
+        let want: Vec<Point> = [(40.0, 0.0), (100.0, 0.0), (50.0, 80.0), (0.0, 0.0)].map(|(x, y)| Point::new(x, y)).to_vec();
+        assert!(out.anchors.len() == 4 && out.anchors.iter().zip(&want).all(|(a, w)| a.p.distance(*w) < 1e-9), "{out:?}");
+        assert!((0..4).all(|i| out.segment_is_line(i)), "{out:?}");
+    }
+
+    /// A ring whose last anchor lies on its first keeps its first anchor first, and gets no third
+    /// anchor at that place.
+    #[test]
+    fn start_nearest_keeps_the_first_of_two_anchors_on_one_place() {
+        let p = [(0.0, 0.0), (100.0, 0.0), (50.0, 80.0), (0.0, 0.0)].map(|(x, y)| Point::new(x, y));
+        let sp = SubPath::polyline(&p, true);
+        assert_eq!(start_nearest(sp.clone(), p[0], &sp), sp);
+    }
+
+    /// Of points equally near the start, the one earliest along the path before smoothing from its
+    /// first anchor comes first, whatever the smoothed path's order. The center of a square is equally
+    /// near the middle of each side. The square before smoothing starts at (-50, -50), so the middle
+    /// of its first side, (0, -50), comes first, though the smoothed copy starts at (50, 50).
+    #[test]
+    fn start_nearest_breaks_a_tie_by_the_order_before_smoothing() {
+        let p = [(-50.0, -50.0), (50.0, -50.0), (50.0, 50.0), (-50.0, 50.0)].map(|(x, y)| Point::new(x, y));
+        let orig = SubPath::polyline(&p, true);
+        let mut sp = orig.clone();
+        sp.anchors.rotate_left(2);
+        let out = start_nearest(sp, Point::new(0.0, 0.0), &orig);
+        assert!(out.closed && out.anchors.len() == 5, "{out:?}");
+        assert!(out.anchors[0].p.distance(Point::new(0.0, -50.0)) < 1e-9, "{out:?}");
+        assert!(out.anchors[1].p.distance(p[1]) < 1e-9, "{out:?}");
+    }
+
+    /// An open path, and a start that is not a number, leave the path as it is.
+    #[test]
+    fn start_nearest_leaves_an_open_path_or_a_start_without_a_place() {
+        let open = SubPath { closed: false, ..ring() };
+        assert_eq!(start_nearest(open.clone(), Point::new(100.0, 50.0), &ring()), open);
+        assert_eq!(start_nearest(ring(), Point::new(f64::NAN, 0.0), &ring()), ring());
+    }
 }
