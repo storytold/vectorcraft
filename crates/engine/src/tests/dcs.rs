@@ -684,6 +684,62 @@ fn dcs_transparency_looks_only_at_the_part_of_an_image_its_clipping_path_shows()
 }
 
 #[test]
+fn dcs_transparency_skips_a_transparent_object_its_own_clipping_paths_hide() {
+    let dir = temp_dir("transparency-clipped-over");
+    let path = write(&dir, "pic.eps", &two_plates());
+    // A session with the file placed, and the top-left corner of the image, inside the part its
+    // clipping path shows.
+    let placed = || {
+        let mut s = session();
+        let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+        let b = image_of(&s, &r["ids"][0]).geometric_bounds().unwrap();
+        (s, b.x0, b.y0)
+    };
+    let rect = |s: &mut Session, x: f64, y: f64, width: f64| {
+        s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": width, "height": 2})).unwrap()["id"].as_u64().unwrap()
+    };
+    let make = |s: &mut Session, ids: [u64; 2]| {
+        s.execute("select.set", &json!({ "ids": ids })).unwrap();
+        s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap()
+    };
+    let marked = |s: &mut Session| s.execute("links.list", &json!({ "dcsTransparency": true })).unwrap()["links"][0]["dcsTransparency"] == true;
+    // A half-transparent square over the part of the image that shows.
+    let square = |s: &mut Session, x: f64, y: f64| {
+        let id = rect(s, x, y, 2.0);
+        s.execute("transparency.set", &json!({"ids": [id], "opacity": 50})).unwrap();
+        assert!(marked(s), "the square over the image");
+        id
+    };
+
+    // Its own clip group's clipping path is beside it.
+    let (mut s, x, y) = placed();
+    let over = square(&mut s, x, y);
+    let beside = rect(&mut s, x + 5.0, y, 2.0);
+    make(&mut s, [over, beside]);
+    assert!(!marked(&mut s), "a clip group that hides the square");
+
+    // Its layer's clipping path is beside it.
+    let (mut s, x, y) = placed();
+    s.execute("layer.new", &json!({})).unwrap();
+    square(&mut s, x, y);
+    rect(&mut s, x + 5.0, y, 2.0);
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("layer.clippingMask.toggle", &json!({})).unwrap()["clip"].as_bool().unwrap());
+    assert!(!marked(&mut s), "a clipping layer that hides the square");
+
+    // Each of two nested clipping paths shows part of the inner group, and only the inner one
+    // covers the square.
+    let (mut s, x, y) = placed();
+    let over = square(&mut s, x, y);
+    let inner = rect(&mut s, x, y, 40.0);
+    let group = make(&mut s, [over, inner]);
+    assert!(marked(&mut s), "the inner clipping path shows the square");
+    let outer = rect(&mut s, x + 10.0, y, 20.0);
+    make(&mut s, [group, outer]);
+    assert!(!marked(&mut s), "the two clipping paths together hide the square");
+}
+
+#[test]
 fn dcs_transparency_counts_a_transparent_dcs_image_over_another() {
     let dir = temp_dir("transparency-two");
     let path = write(&dir, "pic.eps", &two_plates());
