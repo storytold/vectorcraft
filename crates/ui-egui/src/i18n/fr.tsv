@@ -1027,6 +1027,7 @@ font-technology	Variable	Variables
 	Enable Contextual Task Bar	Activer la barre des tâches contextuelle
 	Enable copying of text, images and other content	Autoriser la copie de texte, d’images et d’autres contenus
 	Enable in-menu font previews	Activer l’aperçu des polices dans les menus
+	Show samples on white	Afficher les échantillons sur fond blanc
 	Enable Missing Glyph Protection	Activer la protection des glyphes manquants
 	Enable Opacity Mask	Activer le masque d’opacité
 	Enable plaintext metadata	Activer les métadonnées en texte brut

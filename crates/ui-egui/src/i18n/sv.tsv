@@ -1011,6 +1011,7 @@ font-technology	Variable	Variabla
 	Enable Contextual Task Bar	Aktivera sammanhangsberoende aktivitetsfält
 	Enable copying of text, images and other content	Tillåt kopiering av text, bilder och annat innehåll
 	Enable in-menu font previews	Aktivera förhandsgranskning av typsnitt i menyer
+	Show samples on white	Visa exempel på vitt
 	Enable Missing Glyph Protection	Aktivera skydd mot saknade glyfer
 	Enable Opacity Mask	Aktivera opacitetsmask
 	Enable plaintext metadata	Aktivera metadata i klartext

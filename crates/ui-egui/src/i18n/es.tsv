@@ -1032,6 +1032,7 @@ font-technology	Variable	Variables
 	Enable Contextual Task Bar	Activar barra de tareas contextual
 	Enable copying of text, images and other content	Permitir copiar texto, imágenes y otro contenido
 	Enable in-menu font previews	Activar vista previa de fuentes en el menú
+	Show samples on white	Mostrar muestras sobre blanco
 	Enable Missing Glyph Protection	Activar protección de glifos ausentes
 	Enable Opacity Mask	Activar máscara de opacidad
 	Enable plaintext metadata	Activar metadatos en texto sin formato

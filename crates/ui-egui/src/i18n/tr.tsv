@@ -1003,6 +1003,7 @@ font-technology	Variable	Değişken
 	Enable Contextual Task Bar	Bağlamsal Görev Çubuğunu Etkinleştir
 	Enable copying of text, images and other content	Metin, resim ve diğer içeriklerin kopyalanmasını etkinleştirin
 	Enable in-menu font previews	Menü içi yazı tipi önizlemelerini etkinleştir
+	Show samples on white	Örnekleri beyaz üzerinde göster
 	Enable Missing Glyph Protection	Eksik Glif Korumasını Etkinleştir
 	Enable Opacity Mask	Opaklık Maskesini Etkinleştir
 	Enable plaintext metadata	Düz metin meta verilerini etkinleştir

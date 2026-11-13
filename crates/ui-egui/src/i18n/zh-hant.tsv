@@ -1003,6 +1003,7 @@ font-technology	Variable	可變
 	Enable Contextual Task Bar	啟用快捷工作列
 	Enable copying of text, images and other content	啟用複製文字、影像與其他內容
 	Enable in-menu font previews	啟用選單內字體預覽
+	Show samples on white	在白色背景上顯示樣本
 	Enable Missing Glyph Protection	啟用遺失字符保護
 	Enable Opacity Mask	啟用不透明度遮色片
 	Enable plaintext metadata	啟用純文字中繼資料

@@ -1472,6 +1472,7 @@ antiAlias	Sharp	Nítid
 	Enable copying of text, images and other content	Activa la còpia de text, imatges i altre contingut
 	Enable Guides for 9-Slice Scaling	Activa les guies per a l’escalat de 9 talls
 	Enable in-menu font previews	Activa les previsualitzacions de tipus de lletra als menús
+	Show samples on white	Mostra les mostres sobre fons blanc
 	Enable Missing Glyph Protection	Activa la protecció de glifs absents
 	Enable Opacity Mask	Activa la màscara d’opacitat
 	Enable plaintext metadata	Activa les metadades en text pla

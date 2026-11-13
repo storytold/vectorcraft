@@ -1011,6 +1011,7 @@ font-technology	Variable	Variabel
 	Enable Contextual Task Bar	Kontextbezogene Taskleiste aktivieren
 	Enable copying of text, images and other content	Kopieren von Text, Bildern und anderen Inhalten zulassen
 	Enable in-menu font previews	Schriftvorschau im Menü aktivieren
+	Show samples on white	Muster auf Weiß anzeigen
 	Enable Missing Glyph Protection	Schutz vor fehlenden Glyphen aktivieren
 	Enable Opacity Mask	Deckkraftmaske aktivieren
 	Enable plaintext metadata	Klartext-Metadaten zulassen

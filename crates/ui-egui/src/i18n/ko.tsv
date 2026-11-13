@@ -1632,6 +1632,7 @@ antiAlias	Sharp	날카롭게
 	Enable Touch Workspace	터치 작업 영역 사용
 	Enable copying of text, images and other content	텍스트, 이미지 및 기타 콘텐츠 복사 허용
 	Enable in-menu font previews	메뉴에서 글꼴 미리 보기 사용
+	Show samples on white	흰색 바탕에 샘플 표시
 	Enable plaintext metadata	일반 텍스트 메타데이터 사용
 	Enable text access for screen readers	화면 읽기 프로그램의 텍스트 접근 허용
 	Encoding	인코딩
