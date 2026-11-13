@@ -6344,6 +6344,35 @@ axis	Y Axis	Y ღერძი
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
+@msg	a number >= {_1}	რიცხვი >= {_1}
+@msg	a number > {_1}	რიცხვი > {_1}
+@msg	a number <= {_1}	რიცხვი <= {_1}
+@msg	a number < {_1}	რიცხვი < {_1}
+@msg	a number {_1} to {_2}	რიცხვი {_1}-დან {_2}-მდე
+@msg	a number >= {_1} and < {_2}	რიცხვი >= {_1} და < {_2}
+@msg	a number > {_1} and <= {_2}	რიცხვი > {_1} და <= {_2}
+@msg	a number > {_1} and < {_2}	რიცხვი > {_1} და < {_2}
+@msg	a number ({_1})	რიცხვი ({_1})
+@msg	a number >= {_1} ({_2})	რიცხვი >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	რიცხვი > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	რიცხვი <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	რიცხვი < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	რიცხვი {_1}-დან {_2}-მდე ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	რიცხვი >= {_1} და < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	რიცხვი > {_1} და <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	რიცხვი > {_1} და < {_2} ({_3})
+@msg	an integer	მთელი რიცხვი
+@msg	an integer >= {_1}	მთელი რიცხვი >= {_1}
+@msg	an integer <= {_1}	მთელი რიცხვი <= {_1}
+@msg	an integer {_1} to {_2}	მთელი რიცხვი {_1}-დან {_2}-მდე
+@msg	one of {_1}	ერთ-ერთი მნიშვნელობა {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` უნდა იყოს ერთ-ერთი მნიშვნელობა {_1} და არა {got}
+@msg	an object id (a non-negative integer)	ობიექტის იდენტიფიკატორი (არაუარყოფითი მთელი რიცხვი)
+@msg	a list of object ids	ობიექტების იდენტიფიკატორების სია
+@msg	a color (a string, [r, g, b] or an object)	ფერი (სტრიქონი, [r, g, b] ან ობიექტი)
+@msg	[x, y] (two numbers)	[x, y] (ორი რიცხვი)
+@msg	an object	ობიექტი
+@msg	a list	სია
 @msg	unknown key `{k}`; the keys here are {_1}	უცნობი გასაღები `{k}`; აქ გასაღებებია: {_1}
 @msg	{_1} is listed twice	{_1} ორჯერაა მითითებული
 @msg	{_1} is not the id of an input object	{_1} შემავალი ობიექტის ID არ არის
