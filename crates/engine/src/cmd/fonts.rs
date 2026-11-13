@@ -122,7 +122,13 @@ fn pattern_name(p: &Paint) -> Option<&str> {
     }
 }
 
-/// The fill and, when it is wider than 0, the stroke of the characters of `r`.
+/// Whether `r` is laid out as an inline graphic: it has one and holds only its character.
+fn draws_inline(r: &TextRun) -> bool {
+    r.inline.is_some() && vectorcraft_text::edit::is_inline_text(&r.text)
+}
+
+/// The fill and, when it is wider than 0, the stroke of the characters of `r` (of an inline
+/// graphic too: they paint its underline, strikethrough and ruby).
 fn run_paints(r: &TextRun) -> impl Iterator<Item = &Paint> {
     [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)].into_iter().flatten()
 }
@@ -140,13 +146,15 @@ fn paint_patterns(n: &Node) -> Vec<&str> {
     out
 }
 
-/// The symbols that the inline graphics in the type of `n` draw.
-fn inline_symbols(n: &Node) -> impl Iterator<Item = &str> {
-    let runs = match &n.kind {
-        NodeKind::Text(t) => t.runs.as_slice(),
-        _ => &[],
-    };
-    runs.iter().filter_map(|r| r.inline.as_ref().map(|art| art.symbol.as_str()))
+/// The symbols that the inline graphics in the type of `n` draw (as [`drawn_runs`] finds them: not
+/// those in the overset runs of area type or type on a path).
+fn inline_symbols(n: &Node) -> Vec<&str> {
+    match &n.kind {
+        NodeKind::Text(t) if t.runs.iter().any(draws_inline) => {
+            drawn_runs(t).0.into_iter().filter(|r| draws_inline(r)).filter_map(|r| r.inline.as_ref().map(|art| art.symbol.as_str())).collect()
+        }
+        _ => vec![],
+    }
 }
 
 /// Symbols and patterns, by name: those whose art is in scope.
@@ -164,7 +172,7 @@ impl Resources {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
             self.symbols.insert(symbol.clone());
         }
-        self.symbols.extend(inline_symbols(n).map(str::to_string));
+        self.symbols.extend(inline_symbols(n).into_iter().map(str::to_string));
         self.patterns.extend(paint_patterns(n).into_iter().map(str::to_string));
         if let Some(m) = n.extras().mask.as_deref() {
             self.add(&m.art);
@@ -511,15 +519,7 @@ impl Printed<'_> {
             _ => (vec![], false),
         };
         let items: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| paints(i)).collect();
-        let patterns: Vec<&str> = items
-            .iter()
-            .map(|i| i.paint())
-            .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
-            .filter_map(|p| match p {
-                Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
-                _ => None,
-            })
-            .collect();
+        let patterns: Vec<&str> = items.iter().map(|i| i.paint()).chain(runs.iter().flat_map(|r| run_paints(r))).filter_map(pattern_name).collect();
         let brushed = vectorcraft_brush::has_brush(n);
         if (mask.is_some() || !patterns.is_empty() || brushed) && areas.is_none_or(|a| !open || self.meets(n, a)) {
             if let Some(m) = mask {
@@ -550,7 +550,7 @@ impl Printed<'_> {
                 for r in runs {
                     self.fonts.extend(run_fonts(r));
                     // Inline graphics draw their symbols' art.
-                    if let Some(art) = &r.inline {
+                    if let Some(art) = r.inline.as_ref().filter(|_| draws_inline(r)) {
                         self.symbol(&art.symbol);
                     }
                 }
@@ -941,7 +941,7 @@ fn reaches(n: &Node, uses: &impl Fn(&TextObject) -> bool, found: &Resources) -> 
         && !n.locked
         && (matches!(&n.kind, NodeKind::Text(t) if uses(t))
             || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
-            || inline_symbols(n).any(|sym| found.symbols.contains(sym))
+            || inline_symbols(n).into_iter().any(|sym| found.symbols.contains(sym))
             || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
             || n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, uses, found))
             || n.children().is_some_and(|ch| ch.iter().any(|c| reaches(c, uses, found))))
@@ -997,7 +997,7 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         let texts: HashSet<NodeId> = hits.iter().copied().collect();
         d.walk(&mut |n: &Node| {
             let shows = matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
-                || inline_symbols(n).any(|sym| found.symbols.contains(sym))
+                || inline_symbols(n).into_iter().any(|sym| found.symbols.contains(sym))
                 || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
                 || (masked.contains(&n.id) && n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, &uses, &found)));
             if shows && !n.is_layer() && !texts.contains(&n.id) && editable(n.id) {
@@ -1888,6 +1888,55 @@ mod tests {
         assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
         paint_run(&mut s, "A");
         assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+    }
+
+    /// An inline graphic that doesn't fit its area type draws nothing, and neither does an inline
+    /// graphic named on a run of other characters: Find doesn't select the text for its symbol.
+    #[test]
+    fn find_font_skips_undrawn_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mark = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Se", "font": "Inter"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let area = s
+            .execute(
+                "text.create",
+                &json!({"x": 10, "y": 60, "text": "A\nB", "font": "Source Sans 3", "size": 20, "area": {"width": 100, "height": 40}}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.insertInline", &json!({"id": area, "at": 3, "symbol": "Mark"})).unwrap();
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text(&s.doc().unwrap().doc, NodeId(area)).unwrap());
+        assert!(laid.overflow && laid.inlines.is_empty(), "the inline graphic doesn't fit the frame");
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
+        let point = s.execute("text.create", &json!({"x": 10, "y": 140, "text": "Hi", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": point, "at": 0, "symbol": "Mark"})).unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(point)]);
+        // A run that names an inline graphic but holds other characters is laid out as those
+        // characters: its fill paints them, and it draws no symbol.
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 180, "text": "Ok", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        let art = text(&s.doc().unwrap().doc, NodeId(point)).unwrap().runs.iter().find_map(|r| r.inline.clone()).unwrap();
+        s.edit("Name an inline graphic on plain characters", |d, _| {
+            if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(plain)).map(|n| &mut n.kind) {
+                for r in &mut t.runs {
+                    r.inline = Some(art.clone());
+                    r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(plain)]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(point)]);
     }
 
     /// Text whose inline graphic draws a symbol shows the symbol's type: Find selects that text
