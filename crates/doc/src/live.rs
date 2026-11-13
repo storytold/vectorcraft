@@ -55,7 +55,7 @@ use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
     EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
     envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
-    set_type_ink, smooth_handles,
+    set_type_ink, smooth_handles, warp_grid,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{

@@ -131,7 +131,7 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
             graphic.scale = frame.fitting_scale(art);
         }
         let params = effects::with_graphic(&effects::merged_params(&effect.id, &effect.params), &graphic);
-        effects::validate_three_d_at_in(Some(d), n, &effect.id, &params, item.map(|i| (i, index))).map_err(|e| bad(C, e))?;
+        effects::validate_three_d_at_in(Some(d), n, &effect.id, &params, (item, index)).map_err(|e| bad(C, e))?;
         edits.push((id, item, index, graphic));
     }
     let first = edits.first().map(|(.., g)| g.to_value());

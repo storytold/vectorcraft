@@ -357,6 +357,42 @@ fn a_file_that_lost_its_clipping_path_unclips_the_image() {
     );
 }
 
+#[test]
+fn a_file_that_gains_its_clipping_path_again_clips_the_group_that_stayed() {
+    let dir = temp_dir("update-regained-clip");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let placed = NodeId(r["ids"][0].as_u64().unwrap());
+    let id = image_of(&s, &r["ids"][0]).id;
+    let other = s.execute("file.place", &json!({ "path": path, "at": [200, 100] })).unwrap();
+    s.execute("symbol.new", &json!({ "name": "Pic", "ids": [other["ids"][0]] })).unwrap();
+    let unclipped = String::from_utf8(two_plates()).unwrap().replacen("closepath clip newpath", "closepath newpath     ", 1);
+    // The symbol's art: how deep the image is.
+    let depth = |s: &Session| {
+        fn find(n: &Node, at: usize) -> Option<usize> {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                return Some(at);
+            }
+            n.children().and_then(|ch| ch.iter().find_map(|c| find(c, at + 1)))
+        }
+        find(&s.doc().unwrap().doc.symbols.iter().find(|w| w.name == "Pic").expect("the symbol").art, 0)
+    };
+    let clipped_depth = depth(&s);
+    for _ in 0..2 {
+        std::fs::write(&path, unclipped.as_bytes()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        std::fs::write(&path, two_plates()).unwrap();
+        s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(doc.parent_of(id), Some(placed), "the placed group holds the image itself");
+        let NodeKind::Group { children, clip: true } = &doc.node(placed).unwrap().kind else { panic!("a clip group again") };
+        assert!(matches!(&children[..], [c, im] if matches!(c.kind, NodeKind::Path { clipping: true, .. }) && im.id == id));
+        assert_eq!(depth(&s), clipped_depth, "the symbol's image is not nested deeper");
+        assert!(symbol_clip_width(&s, "Pic").is_some(), "the symbol's image is clipped again");
+    }
+}
+
 /// The kind of group `g` is, as (clip, the kinds of its children are just one image).
 fn plain_group_of_image(g: &Node) -> Option<(bool, bool)> {
     match &g.kind {
