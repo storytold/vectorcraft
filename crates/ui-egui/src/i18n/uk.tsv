@@ -2737,6 +2737,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
+	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
+	Canvas display profile:	Профіль дисплея для полотна:
+	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.
+	No usable display profile was found: the canvas is drawn in sRGB.	Придатний профіль дисплея не знайдено: полотно відображається в sRGB.
 	Rearrange All Artboards	Переставити всі монтажні області
 	Rearrange	Переставити
 	Select All Artboards	Виділити всі монтажні області
@@ -3677,6 +3682,11 @@ effect	Points	Точки
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметри Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметри Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметри Warichu…
+	Warichu Settings	Параметри Warichu
+	Lines:	Рядки:
+	Line Gap:	Інтервал між рядками:
 	Composite Fonts…	Складені шрифти…
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
@@ -5068,6 +5078,7 @@ axis	Both	Обидві
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Скасовано {n} відновлений документ|Скасовано {n} відновлені документи|Скасовано {n} відновлених документів
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Відновлено {n} документ: збережіть його, щоб залишити|Відновлено {n} документи: збережіть їх, щоб залишити|Відновлено {n} документів: збережіть їх, щоб залишити
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Відкрито з {n} приміткою: {first}|Відкрито з {n} примітками: {first}|Відкрито з {n} примітками: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Відкрито з {n} приміткою: {first}|{notice}. Відкрито з {n} примітками: {first}|{notice}. Відкрито з {n} примітками: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Збережено: {path} з {n} приміткою: {first}|Збережено: {path} з {n} примітками: {first}|Збережено: {path} з {n} примітками: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
 @msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень
@@ -6466,6 +6477,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Інспектор опорних точок
 	Add Points at Crossings	Додати точки на перетинах
 	Split at Crossings	Розрізати на перетинах
+	Trim at Crossings Tool	Інструмент «Підрізання на перетинах»
+	Trim at Crossings	Підрізати на перетинах
 	Extend Path	Подовжити контур
 	Measure & Inspect	Вимірювання й аналіз
 	Set Anchor	Задати опорну точку

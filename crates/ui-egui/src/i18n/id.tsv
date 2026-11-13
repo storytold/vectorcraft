@@ -1542,6 +1542,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Pengaturan Tate-chu-yoko…
 	Tate-chu-yoko Settings	Pengaturan Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Pengaturan Warichu…
+	Warichu Settings	Pengaturan Warichu
+	Lines:	Baris:
+	Line Gap:	Celah Baris:
 	Composite Fonts…	Font komposit…
 	Composite Fonts	Font komposit
 	Export Composite Fonts	Ekspor font komposit
@@ -3608,6 +3613,11 @@ theme	Appearance	Tampilan
 	Primary	Utama
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
+	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
+	Canvas display profile:	Profil layar kanvas:
+	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Tidak ditemukan profil layar yang dapat digunakan: kanvas digambar dalam sRGB.
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
 	Export Preferences…	Ekspor preferensi…
@@ -4833,6 +4843,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Dibuka dengan {n} catatan: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} gambar tersemat
@@ -6319,6 +6330,8 @@ anchor	Points:	Titik:
 	Anchor Inspector	Pemeriksa titik jangkar
 	Add Points at Crossings	Tambahkan titik di persilangan
 	Split at Crossings	Pisahkan di persilangan
+	Trim at Crossings Tool	Alat pangkas di persilangan
+	Trim at Crossings	Pangkas di persilangan
 	Extend Path	Perpanjang jalur
 	Measure & Inspect	Ukur dan periksa
 	Set Anchor	Atur titik jangkar

@@ -849,6 +849,14 @@ fn structured_junk() {
         ("addon.pathtools.movePointsTogether", json!({"enabled": true})),
         ("addon.pathtools.slideAnchor", json!({"id": 2, "anchor": 1, "t": 0.5})),
         ("addon.pathtools.movePointsTogether", json!({"enabled": false})),
+        // Path Precision Tools: Trim at Crossings.
+        ("addon.pathtools.trim", json!({"at": [1e308, -1e308], "tolerance": 1e308})),
+        ("addon.pathtools.trim", json!({"at": ["x", null], "rect": [0, 0, f64::NAN, 1], "points": "all"})),
+        ("addon.pathtools.trim", json!({"rect": [-1e7, -1e7, 2e7, 2e7]})),
+        ("addon.pathtools.trim", json!({"rect": [0, 0, -1e308, 1e308]})),
+        ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
+        ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
+        ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),

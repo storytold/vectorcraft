@@ -1480,6 +1480,11 @@ digits	Malayalam	მალაიალამური
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko პარამეტრები…
 	Tate-chu-yoko Settings	Tate-chu-yoko პარამეტრები
+	Warichu	Warichu
+	Warichu Settings…	Warichu პარამეტრები…
+	Warichu Settings	Warichu პარამეტრები
+	Lines:	სტრიქონები:
+	Line Gap:	სტრიქონებს შორის ღრეჩო:
 	Composite Fonts…	კომპოზიტური შრიფტები…
 	Composite Fonts	კომპოზიტური შრიფტები
 	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
@@ -3452,6 +3457,11 @@ theme	Appearance	იერსახე
 	Primary	ძირითადი
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
+	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
+	Canvas display profile:	ტილოს ეკრანის პროფილი:
+	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.
+	No usable display profile was found: the canvas is drawn in sRGB.	გამოსაყენებელი ეკრანის პროფილი ვერ მოიძებნა: ტილო sRGB-ში იხატება.
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
 	Export Preferences…	პარამეტრების ექსპორტირება…
@@ -4682,6 +4692,7 @@ font-technology	Variable	ცვლადი
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
 @msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
@@ -6884,6 +6895,8 @@ anchor	Points:	წერტილები:
 	Anchor Inspector	საყრდენი წერტილების ინსპექტორი
 	Add Points at Crossings	წერტილების დამატება გადაკვეთებზე
 	Split at Crossings	დაყოფა გადაკვეთებზე
+	Trim at Crossings Tool	გადაკვეთებზე წაკვეთის ხელსაწყო
+	Trim at Crossings	წაკვეთა გადაკვეთებზე
 	Extend Path	ტრაექტორიის გაგრძელება
 	Measure & Inspect	გაზომვა და შემოწმება
 	Set Anchor	საყრდენი წერტილის დაყენება
