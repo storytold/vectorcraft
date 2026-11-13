@@ -7486,6 +7486,13 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         n.appearance = ap.into();
         n
     };
+    let frame = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), square(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
     // A group of a filled square and `second`.
     let group = |second: fn(&mut Document) -> Node| {
         move |doc: &mut Document, ap: Appearance| {
@@ -7510,7 +7517,12 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     for (what, doc, kept) in [
         ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
         ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
-        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a square twisted half a turn", twisted(180.0, filled(), path(square())), true),
+        ("a square twisted half a turn back", twisted(-180.0, filled(), path(square())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), false),
+        ("a square twisted three quarters of a turn back", twisted(-270.0, filled(), path(square())), false),
+        ("a straight compound path twisted half a turn", twisted(180.0, filled(), frame), true),
+        ("a straight compound path twisted a full turn", twisted(360.0, filled(), frame), false),
         ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
         ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
         ("a curved compound path", twisted(-60.0, filled(), ring), true),
