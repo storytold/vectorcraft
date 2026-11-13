@@ -3,6 +3,8 @@ use super::{Affine, Arc, BezPath, Node, Rect, Shape, TextObject, lru};
 /// The whole text's glyph outlines as one path, and which of them each run draws.
 pub(crate) struct TextGeom {
     pub(crate) all: BezPath,
+    /// Immutable stroke boundaries; raw glyph paths above still paint every original fill.
+    pub(crate) strokes: super::effects::text_stroke::Plan,
     /// Spans of `all`'s elements drawn by a run, in order: (run, start, end). Outlines of runs
     /// the text doesn't have are in `all` only.
     spans: Vec<(usize, usize, usize)>,
@@ -28,6 +30,10 @@ pub(crate) struct TextGeom {
 }
 
 impl TextGeom {
+    pub(crate) fn object_stroke_requested(n: &Node) -> bool {
+        n.appearance.items.iter().any(|item| matches!(item, super::AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && !st.paint.is_none()))
+    }
+
     /// The outlines run `i` draws: the glyphs of `all` it has, in their order. Kept once rather
     /// than per run as well, which held every outline twice.
     pub(crate) fn run(&self, i: usize) -> std::borrow::Cow<'_, BezPath> {
@@ -87,6 +93,7 @@ impl TextGeom {
             + self.inlines.len() * size_of::<vectorcraft_text::InlineGlyph>()
             + self.images.len() * size_of::<(usize, Arc<vectorcraft_text::GlyphImage>, Affine)>()
             + self.colours.iter().map(|(_, art)| lru::node_bytes(art)).sum::<usize>()
+            + self.strokes.heap_bytes()
     }
 }
 
@@ -144,13 +151,23 @@ pub(crate) fn text_geom(t: &TextObject) -> TextGeom {
     text_geom_snapped(t, None)
 }
 
+pub(crate) fn text_geom_for_strokes(t: &TextObject, object_stroke: bool) -> TextGeom {
+    text_geom_snapped_for_strokes(t, None, object_stroke)
+}
+
 /// Glyph geometry of `t`; `snap` (text space → device pixels) puts the glyphs on whole pixels.
 pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
+    text_geom_snapped_for_strokes(t, snap, false)
+}
+
+/// Build stroke boundaries with the original layout, before its retained heap is budgeted.
+pub(crate) fn text_geom_snapped_for_strokes(t: &TextObject, snap: Option<Affine>, object_stroke: bool) -> TextGeom {
     let db = vectorcraft_text::FontDb::global();
     let mut layout = vectorcraft_text::take_kept_layout(t).unwrap_or_else(|| vectorcraft_text::layout(db, t));
     if let Some(xf) = snap {
         layout.snap_to_pixels(xf);
     }
+    let strokes = super::effects::text_stroke::prepare(t, &layout, object_stroke);
     let mut all = BezPath::new();
     let mut spans: Vec<(usize, usize, usize)> = vec![];
     // Append `outline` to `all`, drawn by `run` when the text has that run.
@@ -229,6 +246,7 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
     }
     TextGeom {
         all,
+        strokes,
         spans,
         bounds: layout.bounds,
         substituted_fonts,
