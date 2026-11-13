@@ -267,7 +267,8 @@ the suite) keep the agent to the folders you give it:
   Links in an opened document that point outside the read roots show as missing.
 - An error names a path the client gave as given. A path the client did not give (the document's own file
   in a save without `path` and in `file.revert`, also inside `action.batch`, an export preset's folder, the
-  Scripts folder, the document's folder in `links.relink {copy}`) is named
+  Scripts folder, the document's folder in `links.relink {copy}`, a New Document profile's file in
+  `file.newProfiles.edit` and `file.newProfiles.reset`) is named
   whole only inside the read roots; outside them the error names it by its file name, or as
   `a file or folder outside the read roots` when it has none, and keeps the roots and the reason, for example
   `automation path rejected: outside the write root /work/project/out: poster.vectorcraft`.
@@ -6248,6 +6249,9 @@ with the defaults.
   them.
 - `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
   `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+- Under automation roots, `file.newProfiles.edit` needs write and read access to the profile's file and
+  `file.newProfiles.reset` needs write access. An error names the file whole only inside the read roots, and
+  otherwise by its file name.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
