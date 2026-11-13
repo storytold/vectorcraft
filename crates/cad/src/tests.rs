@@ -881,12 +881,13 @@ fn fills_without_hatches_keep_their_outlines() {
     let d = shapes_doc();
     let out = export(&d, &DxfOptions { include_hatches: false, ..opts(&d) }).unwrap();
     assert_eq!(kinds(&out), ["LWPOLYLINE", "LWPOLYLINE", "CIRCLE"], "the fill's outline, the stroke, the circle");
-    assert_eq!(out.warnings, [HATCHES_OFF]);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [HATCHES_OFF]);
     let e = entities(&out);
     assert_eq!((get(&e[0], 70), get(&e[0], 370)), (Some("1"), None), "the closed outline, without a lineweight");
     // Hatches stay by default, with no note.
     let on = export(&d, &opts(&d)).unwrap();
-    assert!(kinds(&on).iter().any(|k| k == "HATCH") && !on.warnings.iter().any(|w| w == HATCHES_OFF));
+    assert!(kinds(&on).iter().any(|k| k == "HATCH") && on.setting_notes.is_empty());
     // The outlines are the ones written beside hatches, also for overlapping subpaths, which are
     // merged first; a fill with no area (a flat rectangle, a diagonal line) writes nothing either way.
     let compound = doc_with(|d| {
@@ -916,13 +917,14 @@ fn fills_without_hatches_keep_their_outlines() {
     assert!(!kinds(&altered).iter().any(|k| k == "HATCH") && !kinds(&altered).is_empty(), "{:?}", kinds(&altered));
     // Nothing filled: no note.
     let lines = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(120.0, 20.0, 180.0, 80.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
-    assert!(export(&lines, &DxfOptions { include_hatches: false, ..opts(&lines) }).unwrap().warnings.is_empty());
+    let none = export(&lines, &DxfOptions { include_hatches: false, ..opts(&lines) }).unwrap();
+    assert!(none.warnings.is_empty() && none.setting_notes.is_empty());
     // R12 has no hatches anyway: the same outlines, and its own note alone.
     let r12 = |include_hatches| export(&d, &DxfOptions { version: DxfVersion::R12, include_hatches, ..opts(&d) }).unwrap();
     let (off, on) = (r12(false), r12(true));
     assert_eq!(off.bytes, on.bytes);
     assert_eq!(off.warnings, on.warnings);
-    assert!(!off.warnings.iter().any(|w| w == HATCHES_OFF));
+    assert!(off.setting_notes.is_empty());
 }
 
 #[test]
@@ -957,18 +959,21 @@ fn images_can_be_left_out_with_their_files() {
     let p = pairs(&out.bytes);
     assert!(!section(&p, "OBJECTS").iter().any(|o| matches!(kind(o), "IMAGEDEF" | "IMAGEDEF_REACTOR" | "RASTERVARIABLES")));
     assert!(!section(&p, "CLASSES").iter().any(|o| get(o, 1) == Some("IMAGE")));
-    assert_eq!(out.warnings, [IMAGES_OFF]);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [IMAGES_OFF]);
     // An image that can't be decoded is not read when images are left out.
     let mut broken = d.clone();
     broken.images.insert(
         "raster-1".into(),
         ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None, file_font: Default::default() },
     );
-    assert_eq!(export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap().warnings, [IMAGES_OFF]);
+    let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
+    assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
+    assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
     assert!(export(&broken, &opts(&broken)).unwrap().warnings.iter().any(|w| w.contains("couldn't be decoded")));
     // R12 has no images anyway: its own note alone.
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, include_images: false, ..opts(&d) }).unwrap();
-    assert!(r12.warnings.iter().any(|w| w.contains("no images")) && !r12.warnings.iter().any(|w| w == IMAGES_OFF));
+    assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
 }
 
 #[test]
@@ -986,7 +991,7 @@ fn images_and_hatches_are_left_out_independently_and_the_cnc_preset_leaves_out_b
     let cnc = run(DxfPreset::Cnc.options());
     assert_eq!(kinds(&cnc), ["LWPOLYLINE"]);
     assert!(cnc.images.is_empty());
-    assert!(cnc.warnings.iter().any(|w| w == IMAGES_OFF) && cnc.warnings.iter().any(|w| w == HATCHES_OFF), "{:?}", cnc.warnings);
+    assert!(cnc.setting_notes.iter().any(|w| w == IMAGES_OFF) && cnc.setting_notes.iter().any(|w| w == HATCHES_OFF), "{:?}", cnc.setting_notes);
     let custom = DxfPreset::Custom.options();
     assert!(custom.include_images && custom.include_hatches, "Custom keeps both");
 }

@@ -82,6 +82,10 @@ pub(super) struct Builder<'p> {
     pub(super) page: Rect,
     pub(super) glyphs: Option<GlyphRun>,
     pub(super) text: Option<TextLine>,
+    /// The glyphs of the open line of type (`text`) that show, each as the outline it would be
+    /// kept as: what the line becomes when its type wouldn't draw as the file does
+    /// ([`super::reshaped`]).
+    pub(super) text_glyphs: Vec<GlyphRun>,
     pub(super) text_as: TextAs,
     /// Fonts the file embeds are kept (ImportOptions::embedded_fonts).
     pub(super) embedded_fonts: bool,

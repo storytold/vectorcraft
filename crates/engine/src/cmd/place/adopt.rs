@@ -81,6 +81,12 @@ fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
             NodeKind::SymbolInstance { symbol, .. } => f(Ref::Symbol(symbol)),
             _ => {}
         }
+        // A color-masked image's masked pixels come along, and the key they were made from
+        // follows the image's.
+        if let Some(cm) = n.extras_if_any().and_then(|e| e.color_mask.as_deref_mut()) {
+            f(Ref::Image(&mut cm.key));
+            f(Ref::Image(&mut cm.from));
+        }
     });
 }
 

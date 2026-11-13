@@ -11,6 +11,7 @@ pub mod blend;
 pub mod cancel;
 pub mod clipnest;
 pub mod cmyk;
+pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
 pub mod depth;
@@ -51,7 +52,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod profiles;
@@ -61,6 +62,7 @@ pub mod rastersettings;
 mod reach;
 pub mod recolor;
 pub mod selection;
+pub mod separated;
 pub mod setup;
 pub mod shaper;
 pub mod slices;
@@ -82,8 +84,8 @@ pub(crate) mod skip;
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset,
-    SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
+    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, CustomArrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile,
+    ProfilePreset, SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use compound_shape::ShapeMode;
@@ -263,8 +265,8 @@ pub struct Document {
     /// File → Document Setup (bleed, transparency grid, paper, type options).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub setup: DocSetup,
-    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers (by name)
-    /// they were copied from instead of the current layer.
+    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers and
+    /// sublayers they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
     /// File → File Info (its title is [`Document::info_title`]).

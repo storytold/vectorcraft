@@ -279,6 +279,12 @@ impl TextLine {
         }
     }
 
+    /// Horizontal type whose characters are all read glyph by glyph from the font's mappings (none
+    /// from the file's own ActualText).
+    pub fn mapped(&self) -> bool {
+        self.upright.is_none() && !self.column && !self.authored.contains(&true)
+    }
+
     /// The paint the last glyph is filled with.
     pub fn last_fill(&self) -> Option<&Paint> {
         self.runs.last()?.0.fill.as_ref()

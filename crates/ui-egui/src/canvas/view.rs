@@ -33,7 +33,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
-        fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation))
+        fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation), app.canvas_ui_zoom)
     };
     let Some(v) = app.view_mut() else { return };
     v.center = target.center();
@@ -41,15 +41,15 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     v.zoom = zoom;
 }
 
-/// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` with a
-/// 30-point margin on each side.
-pub(super) fn fit_zoom(rect: egui::Rect, target: Rect, rotation: f64) -> f64 {
+/// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` (points of
+/// an interface zoomed by `ui_zoom`) with a 30-point margin on each side.
+pub(super) fn fit_zoom(rect: egui::Rect, target: Rect, rotation: f64, ui_zoom: f32) -> f64 {
     // The width and height of the box round the target turned with the view, at zoom 1.
     let (sn, cs) = rotation.to_radians().sin_cos();
     let (w, h) = (target.width(), target.height());
     let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
     let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
-    zx.min(zy).clamp(0.0313, 640.0)
+    (zx.min(zy) * f64::from(ui_zoom)).clamp(0.0313, 640.0)
 }
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
@@ -110,26 +110,27 @@ pub(crate) fn actual_size_zoom(display_print_size: bool) -> f64 {
 }
 
 /// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document
-/// point under screen point `p` where it is.
-pub(super) fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64) {
-    let before = Xf::new(rect, vm).to_doc(p);
+/// point under screen point `p` where it is, with the interface zoomed by `ui_zoom`.
+pub(super) fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64, ui_zoom: f32) {
+    let before = Xf::at(rect, vm, ui_zoom).to_doc(p);
     vm.zoom = zoom.clamp(0.0313, 640.0);
-    vm.center += before - Xf::new(rect, vm).to_doc(p);
+    vm.center += before - Xf::at(rect, vm, ui_zoom).to_doc(p);
 }
 
 /// Turn view `vm` of the canvas `rect` by `degrees` clockwise, keeping the document point under
-/// screen point `p` where it is.
-pub(super) fn rotate_about(vm: &mut View, rect: egui::Rect, p: Pos2, degrees: f64) {
-    let before = Xf::new(rect, vm).to_doc(p);
+/// screen point `p` where it is, with the interface zoomed by `ui_zoom`.
+pub(super) fn rotate_about(vm: &mut View, rect: egui::Rect, p: Pos2, degrees: f64, ui_zoom: f32) {
+    let before = Xf::at(rect, vm, ui_zoom).to_doc(p);
     vm.rotation = vectorcraft_geom::normalize_deg(vm.rotation + degrees);
-    vm.center += before - Xf::new(rect, vm).to_doc(p);
+    vm.center += before - Xf::at(rect, vm, ui_zoom).to_doc(p);
 }
 
 /// Move view `vm`'s content by `(dx, dy)` device pixels along the screen's axes, at `ppp` device
-/// pixels a point: the canvas's frame moves by exactly those pixels.
-pub(super) fn pan_pixels(vm: &mut View, ppp: f32, (dx, dy): (f64, f64)) {
+/// pixels a point of an interface zoomed by `ui_zoom`: the canvas's frame moves by exactly those
+/// pixels.
+pub(super) fn pan_pixels(vm: &mut View, (ppp, ui_zoom): (f32, f32), (dx, dy): (f64, f64)) {
     let (sn, cs) = vm.rotation.to_radians().sin_cos();
-    let k = vm.zoom * f64::from(ppp);
+    let k = vm.screen_zoom(ui_zoom) * f64::from(ppp);
     vm.center -= vectorcraft_geom::Vec2::new((dx * cs + dy * sn) / k, (-dx * sn + dy * cs) / k);
 }
 
@@ -155,20 +156,21 @@ pub(super) struct ScrollRest {
 /// of another kind, another document) or the device pixels a point did.
 pub(super) fn scroll_view(app: &mut VectorcraftApp, ui: &Ui, by: egui::Vec2) {
     let ppp = ui.ctx().pixels_per_point();
+    let ui_zoom = app.canvas_ui_zoom;
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
     let Some(vm) = app.view_mut() else { return };
     let id = egui::Id::unique("canvas-scroll-rest");
-    let rest = scroll_by(vm, doc, ppp, by, ui.data(|d| d.get_temp(id)).unwrap_or_default());
+    let rest = scroll_by(vm, doc, (ppp, ui_zoom), by, ui.data(|d| d.get_temp(id)).unwrap_or_default());
     ui.data_mut(|d| d.insert_temp(id, rest));
 }
 
-/// [`scroll_view`] for view `vm` of document `doc` at `ppp` device pixels a point, after the
-/// scrolls that left `rest`: what this scroll leaves.
-pub(super) fn scroll_by(vm: &mut View, doc: u64, ppp: f32, by: egui::Vec2, rest: ScrollRest) -> ScrollRest {
+/// [`scroll_view`] for view `vm` of document `doc` at `ppp` device pixels a point of an interface
+/// zoomed by `ui_zoom`, after the scrolls that left `rest`: what this scroll leaves.
+pub(super) fn scroll_by(vm: &mut View, doc: u64, (ppp, ui_zoom): (f32, f32), by: egui::Vec2, rest: ScrollRest) -> ScrollRest {
     let (x, y) = if rest.after == Some((doc, vm.center, vm.zoom, vm.rotation, ppp)) { (rest.x, rest.y) } else { (0.0, 0.0) };
     let (x, y) = (x + f64::from(by.x) * f64::from(ppp), y + f64::from(by.y) * f64::from(ppp));
     let (dx, dy) = (x.round(), y.round());
-    pan_pixels(vm, ppp, (dx, dy));
+    pan_pixels(vm, (ppp, ui_zoom), (dx, dy));
     ScrollRest { x: x - dx, y: y - dy, after: Some((doc, vm.center, vm.zoom, vm.rotation, ppp)) }
 }
 
@@ -279,7 +281,8 @@ pub(super) fn scroll_tracks(rect: egui::Rect, outer: egui::Rect) -> [egui::Rect;
 pub(super) fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, outer: egui::Rect, t: &Tokens) {
     let content = app.content_bounds();
     let Some(v) = app.view().copied() else { return };
-    let xf = Xf::new(rect, &v);
+    let ui_zoom = app.canvas_ui_zoom;
+    let xf = Xf::at(rect, &v, ui_zoom);
     let painter = ui.painter();
     painter.rect_filled(egui::Rect::from_min_max(outer.max - vec2(SCROLL_BAR, SCROLL_BAR), outer.max), 0.0, t.ruler);
     let hover = ui.input(|i| i.pointer.hover_pos());
@@ -346,7 +349,7 @@ pub(super) fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, o
         && let Some(vm) = app.view_mut()
     {
         vm.center = c;
-        pan_pixels(vm, ppp, whole_pixels(-by, ppp));
+        pan_pixels(vm, (ppp, ui_zoom), whole_pixels(-by, ppp));
     }
     if moved != egui::Vec2::ZERO {
         scroll_view(app, ui, -moved);
@@ -529,7 +532,8 @@ pub(super) fn wheel(
 
 /// Enable Touch Gestures: this frame's finger contacts on the canvas ([`crate::touch`]). A second
 /// finger drops the press the first one began (its tool interaction rolled back; the rest of the
-/// gesture presses nothing), and a tap of two fingers undoes, one of three redoes.
+/// gesture presses nothing), and a tap of two fingers undoes, one of three redoes. In the Touch
+/// workspace a tap of two fingers switches between selection and drawing modes instead.
 pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo) {
     if !app.session.prefs.touch_gestures {
         return;
@@ -561,12 +565,12 @@ pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect
                 drop_press(app, ui, view);
                 ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
             }
-            Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n),
+            Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n, app.ui.workspace == crate::workspaces::TOUCH),
             None => {}
         }
     }
     ui.data_mut(|d| d.insert_temp(key, taps));
-    // In Presentation Mode a tap of two or three fingers undoes or redoes nothing.
+    // In Presentation Mode a tap of two or three fingers runs nothing.
     if let Some(cmd) = tap
         && app.ui.screen_mode < 3
     {

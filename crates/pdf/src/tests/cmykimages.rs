@@ -322,6 +322,76 @@ fn image_doc(blob: ImageBlob, w: u32, h: u32) -> Document {
     d
 }
 
+/// An image placed from a DCS file prints each of its plates on its own ink: a spot plate on its
+/// spot ink's plate, or as its process equivalent when spots print as process. Its composite, the
+/// CMYK samples every other reader sees, never prints on a separation.
+#[test]
+fn a_dcs_image_prints_each_plate_on_its_own_ink() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(2, 1, vec![plate("Cyan", [0.0; 4], [255, 0]), plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [128, 0])]).unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    let plates = |spots_to_process: bool| {
+        let settings: PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations", "spotsToProcess": spots_to_process}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+        let coverage: Vec<Vec<u8>> = job
+            .plates
+            .iter()
+            .map(|p| {
+                let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+                p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+            })
+            .collect();
+        names.into_iter().zip(coverage).collect::<Vec<_>>()
+    };
+    let own = plates(false);
+    let get = |all: &[(String, Vec<u8>)], name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get(&own, "Cyan"), Some(vec![255, 0]));
+    assert_eq!(get(&own, "Magenta"), Some(vec![0, 0]), "the spot ink stays off the process plates");
+    assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
+    assert_eq!(get(&own, "Spot Orange"), Some(vec![128, 0]));
+    let process = plates(true);
+    assert_eq!(get(&process, "Spot Orange"), None);
+    assert_eq!(get(&process, "Magenta"), Some(vec![77, 0]), "60% of the spot plate's 50%");
+    assert_eq!(get(&process, "Yellow"), Some(vec![128, 0]));
+}
+
+/// A DCS spot plate that prints as process prints as the document's swatch of its ink does (the
+/// swatch kept in place of the plate's), not as the equivalent its file gives.
+#[test]
+fn a_dcs_spot_plate_printing_as_process_takes_the_documents_swatch() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(2, 1, vec![plate("Cyan", [0.0; 4], [255, 0]), plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [0, 128])]).unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    let plates = |d: &Document, spots_to_process: bool| {
+        let settings: PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations", "spotsToProcess": spots_to_process}})).unwrap();
+        let names: Vec<String> = print_inks(d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(d, &PrintOptions { settings, ..Default::default() }).unwrap();
+        let coverage = job.plates.iter().map(|p| {
+            let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+            p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+        });
+        names.into_iter().zip(coverage).collect::<Vec<_>>()
+    };
+    let get = |all: &[(String, Vec<u8>)], name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    // A spot swatch of the ink in another color.
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let process = plates(&d, true);
+    assert_eq!(get(&process, "Cyan"), Some(vec![255, 128]), "the swatch's cyan");
+    assert_eq!(get(&process, "Magenta"), Some(vec![0, 0]), "not the file's magenta");
+    assert_eq!(get(&process, "Yellow"), Some(vec![0, 0]));
+    // A process swatch of the ink's name: the job prints no plate for it.
+    d.swatches.retain(|w| w.name != "Spot Orange");
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), global: true, spot: false });
+    let own = plates(&d, false);
+    assert_eq!(get(&own, "Spot Orange"), None);
+    assert_eq!(get(&own, "Black"), Some(vec![0, 128]), "the swatch's black");
+    assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];
@@ -380,6 +450,11 @@ fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_
 /// A Press Quality export of a 2 × 2 CMYK image masked by PNG `mask` on its own pixel grid
 /// (`clip`, `invert`): the file, and the decoded soft mask of each CMYK image (`None`: it has none).
 fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
+    export_smasks(&masked_doc(mask, clip, invert))
+}
+
+/// A document of a 2 × 2 CMYK image masked by PNG `mask` (key `alpha`) on its own pixel grid.
+fn masked_doc(mask: Vec<u8>, clip: bool, invert: bool) -> Document {
     let ink = [0u8, 102, 255, 0];
     let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
     d.images.insert("img".into(), ImageBlob::cmyk_tiff(&Inks::new(2, 2, flat(ink, 4)).unwrap()).unwrap());
@@ -400,8 +475,14 @@ fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Optio
     let n = Node::new(d.alloc_id(), image("img")).with_mask(Some(Box::new(mask)));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// A Press Quality export of `d`: the file, and the decoded soft mask of each CMYK image (`None`:
+/// it has none).
+fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
     let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
-    let out = export_with_report(&d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
+    let out = export_with_report(d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
     let file = Pdf::new(Arc::new(out.bytes.clone())).unwrap();
     let smasks = file
         .objects()
@@ -438,6 +519,34 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     let (bytes, smasks) = export_masked(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, true);
     assert_eq!(smasks, [None]);
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
+}
+
+/// A grey mask image with a color mask masks the CMYK image with the pixels it shows: its hidden
+/// pixels are clear in the image's `/SMask`.
+#[test]
+fn a_color_masked_grid_mask_image_writes_the_pixels_it_shows_as_the_smask() {
+    let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+    // The last pixel hidden.
+    d.images.insert(
+        "shown".into(),
+        ImageBlob::new("image/png", png(image::GrayAlphaImage::from_raw(2, 2, vec![255, 255, 128, 255, 0, 255, 64, 0]).unwrap())),
+    );
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut mask = d.node(id).unwrap().extras().mask.clone().unwrap();
+    let art = std::sync::Arc::make_mut(&mut mask.art);
+    art.extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "alpha".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[64, 64, 64]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    d.node_mut(id).unwrap().extras_mut().mask = Some(mask);
+    let (_, smasks) = export_smasks(&d);
+    assert_eq!(smasks, [Some(vec![255, 128, 0, 0])]);
 }
 
 /// A pixelated CMYK image (an envelope's with Anti-Alias off) masked by a grey image of its grid

@@ -156,6 +156,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
+    p!("boundingBoxWhileMovingAndDrawing", "General", "Options", "Show Bounding Box While Moving and Drawing", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
     p!(
@@ -211,6 +212,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("fontSamplesOnWhite", "Type", "Options", "Show samples on white", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),

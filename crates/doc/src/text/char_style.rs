@@ -37,6 +37,16 @@ pub struct CharStyle {
     /// before it whose [`Self::kerning`] could space it. Elsewhere it has no effect.
     #[serde(default, rename = "kerningBefore", skip_serializing_if = "crate::skip::is_default")]
     pub kerning_before: f64,
+    /// Insert Aki Left (Character panel, East Asian options): space added before the character in
+    /// reading order, in 1/1000 em as [`Self::tracking`], 0 to 1000. Before is on the left in
+    /// left-to-right type, on the right in right-to-left type and above in vertical type. A
+    /// cluster takes the value of its first character, and full justification leaves it as it is.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "akiLeft", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_left: f64,
+    /// Insert Aki Right: space added after the character in reading order, as [`Self::aki_left`].
+    #[serde(default, rename = "akiRight", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_right: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
     #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
     pub optical_kerning: bool,
@@ -60,7 +70,9 @@ pub struct CharStyle {
     #[serde(default)]
     pub all_caps: bool,
     /// OpenType features that differ from the defaults (OpenType panel), as tags: `"dlig"` turns
-    /// a feature on, `"-liga"` off.
+    /// a feature on, `"-liga"` off, and `"salt=2"` turns a feature with alternates on at the font's
+    /// alternate number 2 (the value the shaper gets; a plain `"salt"` is value 1). Runs that
+    /// differ only in this list are shaped together, each with its own features.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
     /// Character style (Character Styles panel) these attributes come from; None = Normal.
@@ -405,6 +417,9 @@ fn hundred() -> f64 {
     100.0
 }
 
+/// The largest Insert Aki Left or Right ([`CharStyle::aki_left`]), in 1/1000 em: one em.
+pub const MAX_AKI: f64 = 1000.0;
+
 pub(super) fn yes() -> bool {
     true
 }
@@ -422,6 +437,8 @@ impl Default for CharStyle {
             tracking: 0.0,
             kerning: None,
             kerning_before: 0.0,
+            aki_left: 0.0,
+            aki_right: 0.0,
             optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
@@ -470,7 +487,8 @@ impl CharStyle {
     /// becomes Auto, and a value past [`crate::MAX_COORD`] (a baseline shift past it either way)
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
     /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
-    /// offsets are kept as the baseline shift is.
+    /// offsets are kept as the baseline shift is. Insert Aki Left and Right are kept from 0 to
+    /// [`MAX_AKI`], and one that is not a number becomes 0.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -482,6 +500,9 @@ impl CharStyle {
         self.baseline_shift = shift(self.baseline_shift);
         self.tcy_up_down = shift(self.tcy_up_down);
         self.tcy_left_right = shift(self.tcy_left_right);
+        let aki = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) };
+        self.aki_left = aki(self.aki_left);
+        self.aki_right = aki(self.aki_right);
     }
     /// Do the characters draw a stroke (a paint and a positive weight)?
     pub fn has_stroke(&self) -> bool {

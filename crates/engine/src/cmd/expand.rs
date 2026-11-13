@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones, nested squares for diamond ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones, nested squares for diamond ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255; a gradient that repeats or reflects gets the same whole number of them in each run, at least one, so a run starts on an object's edge; one that needs more than 256 runs across the box stays a gradient)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             expand
         ),
@@ -194,10 +194,12 @@ impl Expandable {
                 NodeKind::Text(t) => t.runs.iter().any(|r| r.style.has_stroke()),
                 _ => shape && !c.appearance.stroke_paint().is_none(),
             };
-            e.gradient |= match &c.kind {
-                NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
-                _ => shape && c.appearance.items.iter().any(|i| gradient_fill(i).is_some()),
-            };
+            // Once one is found, the next path is not measured.
+            e.gradient = e.gradient
+                || match &c.kind {
+                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                    _ => shape && gradient_expands(d, c),
+                };
             e.fill |= e.gradient;
             e.fill |= match &c.kind {
                 NodeKind::Text(t) => t.runs.iter().any(|r| matches!(&r.style.fill, Paint::Pattern { pattern, .. } if d.pattern(pattern).is_some())),
@@ -220,6 +222,43 @@ fn gradient_fill(i: &AppearanceItem) -> Option<(&FillLayer, &GradientPaint)> {
         },
         _ => None,
     }
+}
+
+/// Whether path `l` has a gradient fill that Fill expands ([`expand_fills`]): one that repeats or
+/// reflects stays a gradient when its box needs more runs than are written ([`padded_on`]). For a
+/// path that live-effect plug-ins paint, whether a piece of the art they paint has one
+/// ([`expand_pieces`]).
+fn gradient_expands(d: &Document, l: &Node) -> bool {
+    if !l.appearance.items.iter().any(|i| gradient_fill(i).is_some()) {
+        return false;
+    }
+    if !vectorcraft_render::effects::has_painted_effects(l) {
+        return piece_gradient_expands(d, l);
+    }
+    let Some(art) = vectorcraft_render::effects::reshape(Some(d), l, None) else { return false };
+    let mut any = false;
+    art.walk(&mut |c| {
+        any = any
+            || (matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+                && !c.is_ruler_guide()
+                && c.appearance.items.iter().any(|i| gradient_fill(i).is_some())
+                && piece_gradient_expands(d, c));
+    });
+    any
+}
+
+/// [`gradient_expands`] for a path that no live-effect plug-in paints ([`expand_piece_fills`]).
+fn piece_gradient_expands(d: &Document, l: &Node) -> bool {
+    if !l.appearance.items.iter().filter_map(gradient_fill).any(|(_, g)| g.gradient.is_spread()) {
+        return l.appearance.items.iter().any(|i| gradient_fill(i).is_some());
+    }
+    let reshaped = reshaped(d, l);
+    let l = reshaped.as_ref().unwrap_or(l);
+    let Some((path, _)) = node_path(l) else { return false };
+    let Some(bounds) = path.bounds() else { return false };
+    l.appearance.items.iter().filter(|i| gradient_fill(i).is_some()).any(|item| {
+        fill_shape(d, l, item, &path, bounds).is_some_and(|(_, _, b, moved)| gradient_fill(&moved).is_some_and(|(_, g)| padded_on(g, b).is_some()))
+    })
 }
 
 /// The definition and placement of a visible pattern fill whose pattern `d` defines.
@@ -476,11 +515,15 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
         let m = GradientMesh::for_path_with(path, FREEFORM_MESH, FREEFORM_MESH, &*gradient_sampler(g, bounds, d.color_mode.model()))?;
         vec![Node::new(d.alloc_id(), NodeKind::Mesh(m))]
     } else {
+        // A gradient that repeats or reflects expands as its stops repeated over the box (and
+        // stays a gradient when the box needs more runs than are written).
+        let (g, runs) = padded_on(g, bounds)?;
+        let g = &*g;
         let frame = Frame::new(g, bounds);
         match to {
             GradientTo::Mesh => vec![Node::new(d.alloc_id(), NodeKind::Mesh(frame.mesh(&g.gradient)))],
             GradientTo::Objects(n) => frame
-                .pieces(&g.gradient, n as usize)
+                .pieces(&g.gradient, n as usize, runs)
                 .into_iter()
                 .map(|(shape, (color, opacity))| {
                     let fill = FillLayer { opacity, overprint: f.overprint, ..FillLayer::new(Paint::solid(color)) };
@@ -543,12 +586,16 @@ fn expand_piece_leaves(
 }
 
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
-/// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
+/// path (a plain path then), and every geometry effect of its own removed, with each raster effect
+/// following the Transform effects after it
+/// ([`without_geometry`](vectorcraft_render::effects::without_geometry)) and those of its fills and
+/// strokes following its Transform effects
+/// ([`follow_items`](vectorcraft_render::effects::follow_items)). `None` when it has no
 /// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
 /// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
 /// path that one paints goes through [`expand_pieces`] instead.
 pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, without_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
@@ -559,7 +606,9 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    m.appearance.effects.retain(|e| !is_geometry(&e.id));
+    // So do the raster effects of its fills and strokes.
+    vectorcraft_render::effects::follow_items(&mut m);
+    m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
 }
 
@@ -601,9 +650,10 @@ fn with_path(l: &Node, path: PathData) -> Node {
 }
 
 /// The effects of fill `f` that stay on its expanded art: all but its geometry effects, which
-/// shape the outline it paints ([`fill_shape`]).
+/// shape the outline it paints ([`fill_shape`]), with each raster effect following the Transform
+/// effects after it ([`without_geometry`](vectorcraft_render::effects::without_geometry)).
 fn fill_effects(f: &FillLayer) -> Vec<vectorcraft_doc::Effect> {
-    f.effects.iter().filter(|e| !vectorcraft_render::effects::is_geometry(&e.id)).cloned().collect()
+    vectorcraft_render::effects::without_geometry(&f.effects)
 }
 
 /// Replace every pattern fill of the selected paths by the tiles it paints (see [`expand_patterns`]).
@@ -834,8 +884,8 @@ fn blended(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal
 }
 
-/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`), a
-/// colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
+/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`, a
+/// color-masked image's masked pixels counted as its own), a colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
 /// `n`, or anywhere when `on`, also in the tile art of the pattern fills of the paths in `n`, down
 /// to `levels` patterns. Hidden art doesn't count.
 fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: &dyn Fn(&Document, &Node) -> bool, on: bool, levels: u32) -> bool {
@@ -844,7 +894,9 @@ fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: 
     }
     let on = on || blended(n);
     match &n.kind {
-        NodeKind::Image(im) => on || keys.contains(&im.key) || (n.extras().colorize.is_some() && colorize(d, n)),
+        NodeKind::Image(im) => {
+            on || keys.contains(&im.key) || keys.contains(&d.shown_image(n, im).key) || (n.extras().colorize.is_some() && colorize(d, n))
+        }
         NodeKind::Path { .. } | NodeKind::Compound { .. } => {
             n.appearance.items.iter().any(|i| pattern_fill_holds_transparent_image(d, i, keys, colorize, on, levels))
         }
@@ -1234,8 +1286,70 @@ pub(crate) fn gradient_sampler(g: &GradientPaint, bounds: Rect, doc_model: Model
             (super::paint::stored_color(store_in, c), a)
         });
     }
+    let (geom, spread) = (g.resolve(bounds), g.gradient.spreader());
+    Box::new(move |p| g.gradient.sample_keep_model(spread(geom.param_at(g.gradient.kind, p)) as f32))
+}
+
+/// For stops repeated by [`padded_on`]: where along the vector (0 to 1) their first run starts and
+/// how many runs lie evenly from there to 1.
+type Runs = Option<(f64, usize)>;
+
+/// `g` placed on box `bounds` as a gradient that pads past its ends: a linear, radial or diamond
+/// gradient that repeats or reflects with its stops repeated as many times as the box needs
+/// ([`vectorcraft_color::Gradient::padded_over`]), a conic one with its stops repeated around the
+/// turn ([`vectorcraft_color::Gradient::unrolled`]); others as they are. With it, for the repeated
+/// stops, where along the vector (0 to 1) their first run starts and how many runs lie evenly from
+/// there to 1. `None` when the box needs more runs than are written
+/// ([`vectorcraft_color::Padded::capped`]): the gradient stays.
+fn padded_on(g: &GradientPaint, bounds: Rect) -> Option<(std::borrow::Cow<'_, GradientPaint>, Runs)> {
+    use std::borrow::Cow;
+    if !g.gradient.is_spread() {
+        return Some((Cow::Borrowed(g), None));
+    }
     let geom = g.resolve(bounds);
-    Box::new(move |p| g.gradient.sample_keep_model(geom.param_at(g.gradient.kind, p) as f32))
+    match g.gradient.padded_over(&geom, bounds) {
+        Some(p) if p.capped => None,
+        Some(p) => {
+            let runs = Some((p.first, p.runs));
+            Some((Cow::Owned(GradientPaint { gradient: p.gradient, geom: Some(p.geom), angle: p.geom.angle_deg(), ..g.clone() }), runs))
+        }
+        None => {
+            let runs = Some((0.0, g.gradient.repeat_count() as usize));
+            Some((Cow::Owned(GradientPaint { gradient: g.gradient.unrolled().into_owned(), geom: Some(geom), ..g.clone() }), runs))
+        }
+    }
+}
+
+/// The edges (gradient parameters, from `lo` to `hi`) of about `n` bands [`Frame::pieces`] cuts:
+/// evenly spaced, or for stops repeated in `runs` ([`padded_on`]: where the first run starts and
+/// how many runs lie evenly from there to 1) the same whole number of bands in each run between
+/// `lo` and `hi` (at least one, about `n` in all), so every run starts on an edge and no band
+/// holds two runs' colors.
+fn band_edges(lo: f64, hi: f64, n: usize, runs: Option<(f64, usize)>) -> Vec<f64> {
+    let n = n.max(1);
+    let even = || {
+        let step = (hi - lo) / n as f64;
+        (0..=n).map(|k| lo + k as f64 * step).collect()
+    };
+    let Some((first, count)) = runs.filter(|&(first, count)| count > 0 && (0.0..1.0).contains(&first)) else { return even() };
+    let run = (1.0 - first) / count as f64;
+    let (from, to) = (lo.max(first), hi.min(1.0));
+    let shown = (to - from) / run;
+    if !(shown > 0.0 && shown.is_finite()) {
+        return even();
+    }
+    let step = run / (n as f64 / shown).round().max(1.0);
+    // Both whole numbers of steps from `first`, at most `n` plus the runs shown, plus one.
+    let (k0, k1) = (((from - first) / step).ceil(), ((to - first) / step).floor());
+    let mut edges = vec![lo];
+    for k in (k0 as usize)..(k1 as usize).saturating_add(1) {
+        let t = first + k as f64 * step;
+        if t > edges.last().copied().unwrap_or(lo) + 1e-12 && t < hi - 1e-12 {
+            edges.push(t);
+        }
+    }
+    edges.push(hi);
+    edges
 }
 
 /// Where the colour changes along a gradient between parameters `t0` and `t1`: both ends, every
@@ -1404,10 +1518,17 @@ impl Frame {
     /// end, for a radial one, nested ellipses (largest first), for a conic one, wedges around the
     /// center from each band's start to the seam, for a diamond one, nested squares (largest
     /// first). Each paints over the ones below except its band, so no seam shows between bands.
-    /// With translucent stops each shape is just its band, so nothing doubles up.
-    fn pieces(&self, g: &Gradient, n: usize) -> Vec<(PathData, (Color, f32))> {
+    /// With translucent stops each shape is just its band, so nothing doubles up. Stops repeated
+    /// in `runs` ([`padded_on`]) get the same whole number of bands in each run ([`band_edges`]).
+    fn pieces(&self, g: &Gradient, n: usize, runs: Option<(f64, usize)>) -> Vec<(PathData, (Color, f32))> {
         let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
+        let color = |e: &[f64], k: usize| {
+            let (a, b) = (e.get(k).copied().unwrap_or(0.0), e.get(k + 1).copied().unwrap_or(1.0));
+            g.sample_keep_model(((a + b) / 2.0) as f32)
+        };
         if let Some((geom, b, _)) = &self.conic {
+            // Evenly spaced around the turn, as the wedges are.
+            let n = band_edges(0.0, 1.0, n, runs).len().saturating_sub(1);
             return geom
                 .conic_wedges(*b, n, opaque)
                 .into_iter()
@@ -1419,51 +1540,52 @@ impl Frame {
                 return vec![(shapes::rectangle(*b), g.sample_keep_model(1.0))];
             };
             // Nested squares about the center, largest first, as a radial gradient's ellipses.
-            let step = reach / n as f64;
+            let edges = band_edges(0.0, *reach, n, runs);
             let square = |t: f64| -> SubPath {
                 let pts: Vec<Point> = [0.0, 0.25, 0.5, 0.75].iter().map(|&u| *frame * (diamond_perimeter(u).to_vec2() * t).to_point()).collect();
                 SubPath::polyline(&pts, true)
             };
-            return (0..n)
+            return (0..edges.len().saturating_sub(1))
                 .rev()
                 .map(|k| {
-                    let mut shape = PathData::single(square((k + 1) as f64 * step));
+                    let mut shape = PathData::single(square(edges.get(k + 1).copied().unwrap_or(*reach)));
                     if !opaque && k > 0 {
-                        let mut hole = square(k as f64 * step);
+                        let mut hole = square(edges.get(k).copied().unwrap_or(0.0));
                         hole.reverse();
                         shape.subpaths.push(hole);
                     }
-                    (shape, g.sample_keep_model(((k as f64 + 0.5) * step) as f32))
+                    (shape, color(&edges, k))
                 })
                 .collect();
         }
-        let step = (self.t1 - self.t0) / n as f64;
-        let color = |k: usize| g.sample_keep_model((self.t0 + (k as f64 + 0.5) * step) as f32);
+        let edges = band_edges(self.t0, self.t1, n, runs);
+        let bands = edges.len().saturating_sub(1);
+        let edge = |k: usize| edges.get(k).copied().unwrap_or(self.t1);
         if self.radial {
             let ellipse = |t: f64| {
                 let c = self.focal + (self.start - self.focal) * t;
                 let m = Affine::new([self.along.x * t, self.along.y * t, self.across.x * t, self.across.y * t, c.x, c.y]);
                 shapes::ellipse(Rect::new(-1.0, -1.0, 1.0, 1.0)).transformed(m)
             };
-            return (0..n)
+            return (0..bands)
                 .rev()
                 .map(|k| {
-                    let mut shape = ellipse((k + 1) as f64 * step);
+                    let mut shape = ellipse(edge(k + 1));
                     if !opaque && k > 0 {
-                        let mut hole = ellipse(k as f64 * step).subpaths.remove(0);
+                        let mut hole = ellipse(edge(k)).subpaths.remove(0);
                         hole.reverse();
                         shape.subpaths.push(hole);
                     }
-                    (shape, color(k))
+                    (shape, color(&edges, k))
                 })
                 .collect();
         }
-        (0..n)
+        (0..bands)
             .map(|k| {
-                let a = self.t0 + k as f64 * step;
-                let b = if opaque { self.t1 } else { a + step };
+                let a = edge(k);
+                let b = if opaque { self.t1 } else { edge(k + 1) };
                 let pts = [self.at(a, self.s0), self.at(b, self.s0), self.at(b, self.s1), self.at(a, self.s1)];
-                (PathData::single(SubPath::polyline(&pts, true)), color(k))
+                (PathData::single(SubPath::polyline(&pts, true)), color(&edges, k))
             })
             .collect()
     }

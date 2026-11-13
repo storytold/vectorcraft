@@ -503,6 +503,8 @@ impl crate::Document {
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
             st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
             st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
+            st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
+            st.aki_right = num("akiRight").unwrap_or(st.aki_right);
             st.keep_dimensions_in_range();
             let kept = [
                 ("size", Some(st.size)),
@@ -511,6 +513,8 @@ impl crate::Document {
                 ("baseline_shift", Some(st.baseline_shift)),
                 ("tcyUpDown", Some(st.tcy_up_down)),
                 ("tcyLeftRight", Some(st.tcy_left_right)),
+                ("akiLeft", Some(st.aki_left)),
+                ("akiRight", Some(st.aki_right)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

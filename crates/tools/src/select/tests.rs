@@ -716,8 +716,10 @@ fn drag_moves_with_single_undo() {
     let cx = cx(&d, &s, &p);
     let mut t = SelectionTool::default();
     assert!(t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0)).is_empty());
+    assert!(!t.moving(), "a press is not a move yet");
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0));
     assert_eq!(a[0], Action::Begin("Move".into()));
+    assert!(t.moving());
     assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
     let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
     assert_eq!(a, vec![Action::Commit]);
@@ -737,9 +739,10 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0).with_mods(m));
         assert!(matches!(&a[1], Action::Preview(_, v) if v["copy"] == m.alt), "{what}: {a:?}");
-        assert!(t.transforming(), "{what}");
+        // A move or a copy, which the canvas can show the bounding box for.
+        assert!(t.transforming() && t.moving() && !t.resizing(), "{what}");
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
-        assert!(!t.busy() && !t.transforming(), "{what}");
+        assert!(!t.busy() && !t.transforming() && !t.moving(), "{what}");
         assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
         assert!(t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the drag is over");
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the release commits nothing");
@@ -748,7 +751,7 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
 }
 
 /// #1534: with Smart Guides on (the default), the point a selection is dragged by still snaps
-/// to a ruler guide within the Snap to Point distance; not with Snap to Point off.
+/// to a ruler guide within the Snapping Tolerance; not with Snap to Point off.
 #[test]
 fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     let (mut d, id) = doc_with_rect();
@@ -792,6 +795,39 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
     let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
     assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
+/// With Smart Guides on, a moved selection reaches a ruler guide within the Snapping Tolerance
+/// (4 px), as drawing and handle drags do; with Smart Guides off, Snap to Point reaches it within
+/// its own distance (2 px).
+#[test]
+fn a_move_reaches_ruler_guides_within_the_snapping_tolerance() {
+    let (mut d, id) = doc_with_rect();
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 340.0));
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let dx = |c: &ToolContext, to: f64| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0));
+        let a = t.pointer(c, &ev(PointerKind::Drag, to, 150.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        v["matrix"][4].as_f64().unwrap()
+    };
+    let c = cx(&d, &s, &p);
+    assert!(c.smart_guides && c.snap_to_point && c.guides);
+    // The right edge, 3 px short of the guide, lands on it, with or without Shift.
+    assert_eq!(dx(&c, 150.0 + 137.0), 140.0);
+    let (m, _) = shift_moved(&c, (150.0 + 137.0, 150.0));
+    assert!(moved_by(m, (140.0, 0.0)), "{m:?}");
+    // The grabbed point, 3 px from the guide, lands on it.
+    assert_eq!(dx(&c, 337.0), 190.0);
+    // 5 px away is out of reach.
+    assert_eq!(dx(&c, 150.0 + 135.0), 135.0);
+    // Smart Guides off: the grabbed point lands on the guide from 1.5 px, not from 3 px.
+    let off = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    assert_eq!(dx(&off, 338.5), 190.0);
+    assert_eq!(dx(&off, 337.0), 187.0);
 }
 
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as

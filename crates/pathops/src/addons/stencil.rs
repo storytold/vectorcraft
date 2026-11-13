@@ -146,7 +146,7 @@ fn choose(contours: &[Contour], spec: BridgeSpec, work: usize) -> Result<(Vec<Br
     }
     let mut picker = Picker::new(contours, &views, spec.width);
     picker.connect();
-    if views.iter().any(View::exhausted) {
+    if views.iter().any(View::exhausted) && picker.unjoined() > 0 {
         return Err(PathOpsError::TooComplex);
     }
     picker.spread(spec.count);

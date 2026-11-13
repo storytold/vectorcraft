@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -24,6 +24,8 @@ pub(super) struct Writer<'a> {
     /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
     spot_names: Vec<(String, String)>,
     pub(super) warnings: Vec<String>,
+    /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
+    pub(super) setting_notes: Vec<String>,
     /// The lock state the last `A` set.
     locked: bool,
     /// Symbols and live objects being written inside one another.
@@ -56,6 +58,7 @@ impl<'a> Writer<'a> {
             spots: vec![],
             spot_names: vec![],
             warnings: vec![],
+            setting_notes: vec![],
             locked: false,
             nest: 0,
             hidden: o.hidden,
@@ -68,9 +71,18 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about hidden objects left out or written visible as an option asks.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -225,7 +237,7 @@ impl<'a> Writer<'a> {
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
-                    self.warn(HIDDEN);
+                    self.note_setting(HIDDEN);
                     return;
                 }
                 HiddenObjects::Layer => {
@@ -233,7 +245,7 @@ impl<'a> Writer<'a> {
                     self.hidden_art.push((n.clone(), locked || n.locked));
                     return;
                 }
-                HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
+                HiddenObjects::Visible => self.note_setting(HIDDEN_SHOWN),
             }
         }
         if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
@@ -271,7 +283,8 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                let blob = self.doc.image_blob(im);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
@@ -487,7 +500,8 @@ impl<'a> Writer<'a> {
             self.warn(TRANSPARENCY);
         }
         let area = path.to_bezpath().bounding_box();
-        let wedges = g.resolve(area).conic_wedges(area, CONIC_WEDGES, true);
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
         self.line("q");
         self.fill_rule(rule);
         let several = path.subpaths.len() > 1;
@@ -501,7 +515,7 @@ impl<'a> Writer<'a> {
             self.line("*U");
         }
         for (pts, t) in wedges {
-            let (color, _) = g.gradient.sample_keep_model(t as f32);
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
         }
@@ -632,7 +646,8 @@ impl<'a> Writer<'a> {
             // Grey is ink coverage; the format's grey is lightness.
             Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
-            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), [r, g, b].map(unit)),
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
             Color::Lab { .. } => {
                 let rgb = color.to_rgb().map(unit);
                 Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
@@ -678,6 +693,22 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         let name = self.define(&g.gradient, g.swatch.as_deref());
         for stop in &g.gradient.stops {
             if stop.opacity < 1.0 {
