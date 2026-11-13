@@ -42,6 +42,13 @@ const PREVIEW_FIDELITY_PX: f64 = 0.5;
 /// The Smooth tool's Fidelity until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
 
+/// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
+/// at the current zoom, within the range the command takes
+/// ([`super::MIN_FIT_TOLERANCE`]..[`super::MAX_FIT_TOLERANCE`]).
+fn fit_tolerance(cx: &ToolContext, px: f64) -> f64 {
+    cx.tol(px).clamp(super::MIN_FIT_TOLERANCE, super::MAX_FIT_TOLERANCE)
+}
+
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]); 0 when it was
     /// fitted coarser than the stroke kept ([`PREVIEW_FIDELITY_PX`]).
@@ -460,7 +467,7 @@ impl GestureTool {
     pub fn freehand_params(&self, cx: &ToolContext, closed: bool) -> Value {
         let mut v = json!({
             "points": self.stroke_json(),
-            "fidelity": cx.tol(self.fidelity),
+            "fidelity": fit_tolerance(cx, self.fidelity),
             "closed": closed,
             "style": if self.id == "paintbrush" { "brush" } else { "pencil" },
             "fill": self.fill,
@@ -654,7 +661,7 @@ impl Tool for GestureTool {
                 if self.previews() && crate::previews_at(self.points.len()) {
                     let mut v = self.freehand_params(cx, false);
                     let fidelity = self.fidelity.max(PREVIEW_FIDELITY_PX);
-                    v["fidelity"] = json!(cx.tol(fidelity));
+                    v["fidelity"] = json!(fit_tolerance(cx, fidelity));
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
                     self.previewed = if fidelity > self.fidelity { 0 } else { self.points.len() };
                     if !self.live_fit {
