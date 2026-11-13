@@ -820,8 +820,16 @@ EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
 
-HP-GL: Export As… lists it (`file.exportAs {format: "hpgl"}`); it has no options dialog, so `ui.dialog.confirm` asks
-for the path and writes the `.plt` file with the default options (one per artboard with Use Artboards).
+HP-GL Options: Export As… with the HP-GL format (`file.exportAs {format: "hpgl"}`, then the save dialog), or
+`ui.hpglOptionsDialog {path?, …HP-GL options}` for agents, opens the `hpglOptions` dialog. Its fields are
+`document.export` params: `hpglVersion` (`hpgl`, `hpgl2`), `curveTolerance` (points, 0.01 to 10), `origin`
+(`bottomLeft`, `center`), `pens` (null for One Pen per Color, or the pen table's `"#rrggbb"` colors, pen 1's first),
+`sortPaths` and `insideFirst`, plus `path` and the artboard choice (`useArtboards`, `range`). A typed Curve
+Tolerance is kept within 0.01 to 10. Choosing Pen Table fills the table with the table set aside when One Pen per
+Color was chosen, else with the pens One Pen per Color gives the art this export plots (its artboards or the art's
+bounds), or one black pen when that art draws nothing. `ui.dialog.confirm` checks the options and the artboard choice
+(one the export refuses keeps the dialog open), remembers the options for the next HP-GL Options and writes the
+`.plt` file(s), asking for a path when there is none (one per artboard with Use Artboards).
 
 TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
 the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,

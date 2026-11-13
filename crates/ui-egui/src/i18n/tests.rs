@@ -442,6 +442,16 @@ fn eps_option_menu_names_are_in_complete_catalogs() {
     }
 }
 
+/// HP-GL Options' Origin menu names (drawn translated by the dropdown, not through `tl!`).
+#[test]
+fn hpgl_origin_menu_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in crate::dialogs::hpgl_options::ORIGIN_NAMES {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]

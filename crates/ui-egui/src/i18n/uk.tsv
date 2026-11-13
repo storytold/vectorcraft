@@ -961,6 +961,15 @@ font-technology	Variable	Варіативні
 	DXF Info	Відомості про DXF
 	DXF Options	Параметри DXF
 	DXF Options Dialog	Діалогове вікно «Параметри DXF»
+	HP-GL Options	Параметри HP-GL
+	HP-GL Options Dialog	Діалогове вікно «Параметри HP-GL»
+	Curve Tolerance:	Допуск кривих:
+	Origin:	Початок координат:
+	Pens:	Пера:
+	One Pen per Color	Одне перо на колір
+	Pen Table	Таблиця пер
+	Draw the Nearest Path Next	Наступним малювати найближчий контур
+	Draw Inner Paths First	Спершу малювати внутрішні контури
 	e.g. 1-3, 5	напр. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Кожна сторінка друкується як одне зображення з роздільною здатністю растрових ефектів документа.
 	Earth Tones	Земляні тони

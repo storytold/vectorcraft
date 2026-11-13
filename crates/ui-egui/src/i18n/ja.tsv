@@ -1414,6 +1414,15 @@ antiAlias	Sharp	シャープ
 	DXF Info	DXF 情報
 	DXF Options	DXF オプション
 	DXF Options Dialog	DXF オプションダイアログ
+	HP-GL Options	HP-GL オプション
+	HP-GL Options Dialog	HP-GL オプションダイアログ
+	Curve Tolerance:	カーブの許容値:
+	Origin:	原点:
+	Pens:	ペン:
+	One Pen per Color	カラーごとに 1 本のペン
+	Pen Table	ペンテーブル
+	Draw the Nearest Path Next	最も近いパスを次に描画
+	Draw Inner Paths First	内側のパスを先に描画
 	Darken	比較 (暗)
 	Darkness	濃さ
 	Dashed	破線

@@ -7597,6 +7597,13 @@ a warning.
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/stencil.plt","sortPaths":true,"insideFirst":true}}}
 ```
 
+In the app, Export As… with the HP-GL format opens HP-GL Options (`ui.hpglOptionsDialog` opens it too): Version,
+Curve Tolerance, Origin (Bottom Left or Center), Pens (One Pen per Color, or Pen Table with a row per pen to type
+its color, remove it or add one), Draw the Nearest Path Next (`sortPaths`) and Draw Inner Paths First
+(`insideFirst`). Pen Table starts from the pens One Pen per Color gives the art this export plots (the chosen
+artboards, or the bounds of the art), or one black pen when that art draws nothing. OK checks the options and the
+artboard choice, and remembers the options for the next export.
+
 ## TIFF, BMP and Targa export
 
 `document.export` (and `export`) writes them like the other raster formats: one artboard (or `useArtboards`, one

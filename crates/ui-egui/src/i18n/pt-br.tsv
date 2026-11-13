@@ -661,6 +661,15 @@ antiAlias	Sharp	Nítido
 	DXF Info	Informações DXF
 	DXF Options	Opções DXF
 	DXF Options Dialog	Diálogo de Opções DXF
+	HP-GL Options	Opções HP-GL
+	HP-GL Options Dialog	Diálogo de Opções HP-GL
+	Curve Tolerance:	Tolerância das curvas:
+	Origin:	Origem:
+	Pens:	Canetas:
+	One Pen per Color	Uma caneta por cor
+	Pen Table	Tabela de canetas
+	Draw the Nearest Path Next	Desenhar em seguida o caminho mais próximo
+	Draw Inner Paths First	Desenhar primeiro os caminhos internos
 	Dark	Escuro
 	Darken	Escurecer
 	Dashed	Tracejado

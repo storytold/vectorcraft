@@ -1385,6 +1385,15 @@ antiAlias	Sharp	Nítid
 	DXF Info	Informació del DXF
 	DXF Options	Opcions del DXF
 	DXF Options Dialog	Diàleg d’opcions del DXF
+	HP-GL Options	Opcions de l’HP-GL
+	HP-GL Options Dialog	Diàleg d’opcions de l’HP-GL
+	Curve Tolerance:	Tolerància de les corbes:
+	Origin:	Origen:
+	Pens:	Plomes:
+	One Pen per Color	Una ploma per color
+	Pen Table	Taula de plomes
+	Draw the Nearest Path Next	Dibuixa després el traçat més proper
+	Draw Inner Paths First	Dibuixa primer els traçats interiors
 	e.g. 1-3, 5	p. ex. 1-3, 5
 	Each Design Represents:	Cada disseny representa:
 	Each entry of the file is matched to a VectorCraft tool, command or panel. Check the matches and answer what is left.	Cada entrada del fitxer s’associa a una eina, una ordre o un panell del VectorCraft. Comprova les coincidències i respon a les que quedin.

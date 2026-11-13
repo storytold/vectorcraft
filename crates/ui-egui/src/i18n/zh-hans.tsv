@@ -900,6 +900,15 @@ antiAlias	Sharp	锐利
 	DXF Info	DXF 信息
 	DXF Options	DXF 选项
 	DXF Options Dialog	DXF 选项对话框
+	HP-GL Options	HP-GL 选项
+	HP-GL Options Dialog	HP-GL 选项对话框
+	Curve Tolerance:	曲线容差：
+	Origin:	原点：
+	Pens:	笔：
+	One Pen per Color	每种颜色一支笔
+	Pen Table	笔表
+	Draw the Nearest Path Next	接着绘制最近的路径
+	Draw Inner Paths First	先绘制内部路径
 	e.g. 1-3, 5	例如 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	每页会以文档的栅格效果分辨率打印为单一图像。
 	Earth Tones	大地色

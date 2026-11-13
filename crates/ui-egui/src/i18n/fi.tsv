@@ -1051,6 +1051,15 @@ lighting	Light	Valo
 	Document Raster Effects Settings Dialog	Asiakirjan rasteritehosteiden asetusten valintaikkuna
 	Drop Shadow	Pudotusvarjo
 	DXF Options Dialog	DXF-asetusten valintaikkuna
+	HP-GL Options	HP-GL-asetukset
+	HP-GL Options Dialog	HP-GL-asetusten valintaikkuna
+	Curve Tolerance:	Käyrien toleranssi:
+	Origin:	Origo:
+	Pens:	Kynät:
+	One Pen per Color	Yksi kynä kullekin värille
+	Pen Table	Kynätaulukko
+	Draw the Nearest Path Next	Piirrä seuraavaksi lähin polku
+	Draw Inner Paths First	Piirrä sisemmät polut ensin
 	Edit Toolbar	Muokkaa työkaluriviä
 	Edit Views	Muokkaa näkymiä
 	Effect…	Tehoste…

@@ -915,6 +915,15 @@ font-technology	Variable	Μεταβλητές
 	DXF Info	Πληροφορίες DXF
 	DXF Options	Επιλογές DXF
 	DXF Options Dialog	Παράθυρο επιλογών DXF
+	HP-GL Options	Επιλογές HP-GL
+	HP-GL Options Dialog	Παράθυρο επιλογών HP-GL
+	Curve Tolerance:	Ανοχή καμπυλών:
+	Origin:	Αρχή αξόνων:
+	Pens:	Πένες:
+	One Pen per Color	Μία πένα ανά χρώμα
+	Pen Table	Πίνακας πενών
+	Draw the Nearest Path Next	Σχεδίαση της πλησιέστερης διαδρομής ως επόμενης
+	Draw Inner Paths First	Σχεδίαση πρώτα των εσωτερικών διαδρομών
 	e.g. 1-3, 5	π.χ. 1-3, 5
 	Earth Tones	Γήινοι τόνοι
 	East Asian Type	Κείμενο Ανατολικής Ασίας

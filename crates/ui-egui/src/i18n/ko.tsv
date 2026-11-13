@@ -1404,6 +1404,15 @@ antiAlias	Sharp	날카롭게
 	DXF Info	DXF 정보
 	DXF Options	DXF 옵션
 	DXF Options Dialog	DXF 옵션 대화상자
+	HP-GL Options	HP-GL 옵션
+	HP-GL Options Dialog	HP-GL 옵션 대화상자
+	Curve Tolerance:	곡선 허용치:
+	Origin:	원점:
+	Pens:	펜:
+	One Pen per Color	색상마다 펜 하나
+	Pen Table	펜 테이블
+	Draw the Nearest Path Next	가장 가까운 패스를 다음에 그리기
+	Draw Inner Paths First	안쪽 패스를 먼저 그리기
 	Darken	어둡게
 	Darkness	어둡기
 	Dashed	점선

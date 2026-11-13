@@ -1022,6 +1022,11 @@ fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::dialogs::eps_options::open(app, p);
             Ok(Value::Null)
         }
+        "ui.hpglOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.hpglOptionsDialog" => {
+            crate::dialogs::hpgl_options::open(app, p);
+            Ok(Value::Null)
+        }
         // Save for Web: its dialog; with settings, write the files.
         "file.saveForWeb" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::save_for_web::open(app),
         "file.saveForWeb" => crate::dialogs::save_for_web::save(app, p.clone()),

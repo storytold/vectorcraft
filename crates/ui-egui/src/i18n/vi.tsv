@@ -1129,6 +1129,15 @@ font-technology	Variable	Biến thiên
 	DXF Info	Thông tin DXF
 	DXF Options	Tùy chọn DXF
 	DXF Options Dialog	Hộp thoại tùy chọn DXF
+	HP-GL Options	Tùy chọn HP-GL
+	HP-GL Options Dialog	Hộp thoại tùy chọn HP-GL
+	Curve Tolerance:	Dung sai đường cong:
+	Origin:	Gốc tọa độ:
+	Pens:	Bút:
+	One Pen per Color	Một bút cho mỗi màu
+	Pen Table	Bảng bút
+	Draw the Nearest Path Next	Vẽ đường dẫn gần nhất tiếp theo
+	Draw Inner Paths First	Vẽ các đường dẫn bên trong trước
 	e.g. 1-3, 5	ví dụ: 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Mỗi trang in như một ảnh, theo độ phân giải hiệu ứng raster của tài liệu.
 	Earth Tones	Tông màu đất

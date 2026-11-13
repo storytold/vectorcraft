@@ -197,6 +197,71 @@ fn export_options_are_checked() {
     let p = json!({"format": "hpgl", "origin": "CENTER", "pens": ["#ff0000", "#000000"], "curveTolerance": 10, "sortPaths": true});
     let plot = String::from_utf8(bytes(&s.execute("document.export", &p).unwrap())).unwrap();
     assert_eq!(plot, "IN;PU;SP2;PU-141,141;PD-564,141,-564,564,-141,564,-141,141;PU;SP0;");
+    // The check a dialog runs refuses the same options, and passes the given ones.
+    let doc = s.doc().unwrap().doc.clone();
+    assert!(hpgl::check(&doc, &json!({"pens": ["#ff0000", "red"]})).unwrap_err().contains("`pens`"));
+    assert!(hpgl::check(&doc, &json!({"curveTolerance": 11})).unwrap_err().contains("`curveTolerance`"));
+    assert_eq!(hpgl::check(&doc, &p), Ok(()));
+    // It checks the artboard choice as the export does: an artboard or range past the document's,
+    // a `useArtboards` that isn't true or false, and the art's bounds when no art shows.
+    let mut blank = Session::new();
+    blank.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let blank_doc = blank.doc().unwrap().doc.clone();
+    for (on_blank, p) in [
+        (false, json!({"format": "hpgl", "artboard": 2})),
+        (false, json!({"format": "hpgl", "useArtboards": true, "range": "1-3"})),
+        (false, json!({"format": "hpgl", "artboards": [0, 1]})),
+        (false, json!({"format": "hpgl", "useArtboards": "yes"})),
+        (true, json!({"format": "hpgl", "useArtboards": false})),
+    ] {
+        let (session, d) = if on_blank { (&mut blank, &blank_doc) } else { (&mut s, &doc) };
+        assert!(hpgl::check(d, &p).is_err(), "{p}");
+        assert!(session.execute("document.export", &p).is_err(), "{p}");
+    }
+    // An artboard with no width is refused before the writer refuses it.
+    let mut flat = vectorcraft_doc::Document::clone(&doc);
+    flat.artboards[1].rect = vectorcraft_geom::Rect::new(200.0, 0.0, 200.0, 100.0);
+    assert_eq!(hpgl::check(&flat, &json!({"artboard": 1})).unwrap_err(), hpgl::check(&flat, &json!({"useArtboards": true})).unwrap_err());
+    assert!(hpgl::check(&flat, &json!({"artboard": 1})).unwrap_err().contains("the export region is empty"));
+    assert_eq!(hpgl::check(&flat, &json!({})), Ok(()));
+    // A document with no artboard has nothing to plot on one, or on each.
+    flat.artboards.clear();
+    for p in [json!({}), json!({"useArtboards": true})] {
+        assert!(hpgl::check(&flat, &p).unwrap_err().contains("the document has no artboard"), "{p}");
+    }
+    // An area of the page is a raster export's option: the export refuses it, and so does the check.
+    let rect = json!({"format": "hpgl", "rect": [0, 0, 10, 10]});
+    assert!(s.execute("document.export", &rect).is_err());
+    assert!(hpgl::check(&doc, &rect).unwrap_err().contains("rect applies to raster formats"));
+    assert_eq!(hpgl::check(&doc, &json!({"useArtboards": true, "range": "2"})), Ok(()));
+    assert_eq!(hpgl::check(&doc, &json!({"useArtboards": false})), Ok(()));
+}
+
+/// The pens an export without a pen table uses: one per color the plotted art draws in, in the
+/// order it first draws in each, over the artboards or the art's bounds the export plots.
+#[test]
+fn automatic_pens_list_the_plotted_art_s_colors_in_pen_order() {
+    let s = two_boards();
+    let doc = &s.doc().unwrap().doc;
+    let pens = |p: Value| hpgl::automatic_pens(doc, &p);
+    assert_eq!(pens(json!({})), ["#000000"], "the first artboard");
+    assert_eq!(pens(json!({"artboard": 1})), ["#ff0000"]);
+    assert_eq!(pens(json!({"useArtboards": true})), ["#000000", "#ff0000"], "one numbering for every file");
+    assert_eq!(pens(json!({"useArtboards": false})), ["#000000", "#ff0000"], "the art's bounds");
+    // The pens given and the path order are not the export's own pens.
+    assert_eq!(pens(json!({"useArtboards": true, "pens": ["#00ff00"], "sortPaths": true})), ["#000000", "#ff0000"]);
+    // A refused artboard choice: no pens.
+    assert!(pens(json!({"artboard": 5})).is_empty());
+
+    // Art outside every artboard is plotted only with the art's bounds.
+    let mut off = Session::new();
+    off.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    off.execute("paint.setFill", &json!({"none": true})).unwrap();
+    off.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+    off.execute("shape.rectangle", &json!({"x": 500, "y": 500, "width": 30, "height": 30})).unwrap();
+    let doc = &off.doc().unwrap().doc;
+    assert!(hpgl::automatic_pens(doc, &json!({})).is_empty());
+    assert_eq!(hpgl::automatic_pens(doc, &json!({"useArtboards": false})), ["#0000ff"]);
 }
 
 /// `insideFirst` draws the square inside the other one first, though it was made last.

@@ -1008,6 +1008,15 @@ lighting	Light	Światło
 	Document Raster Effects Settings Dialog	Okno ustawień efektów rastrowych dokumentu
 	Drop Shadow	Cień
 	DXF Options Dialog	Okno opcji DXF
+	HP-GL Options	Opcje HP-GL
+	HP-GL Options Dialog	Okno opcji HP-GL
+	Curve Tolerance:	Tolerancja krzywych:
+	Origin:	Początek układu:
+	Pens:	Pisaki:
+	One Pen per Color	Jeden pisak na kolor
+	Pen Table	Tabela pisaków
+	Draw the Nearest Path Next	Rysuj następnie najbliższą ścieżkę
+	Draw Inner Paths First	Najpierw rysuj ścieżki wewnętrzne
 	Edit Toolbar	Edytuj pasek narzędzi
 	Edit Views	Edytuj widoki
 	Effect…	Efekt…
