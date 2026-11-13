@@ -850,7 +850,7 @@ antiAlias	Sharp	शार्प
 	Close All	सभी बंद करें
 	Close Gaps With Paths	पाथ के साथ अंतराल बंद करें
 	Close Library	लाइब्रेरी
-	Close or Join	बंद करें या शामिल हों
+	Close or Join	बंद करें या जोड़ें
 	Close Panel	पैनल बंद करें
 	Close Path	बंद पाथ
 	Close Path:	बंद पाथ:
@@ -1216,7 +1216,7 @@ antiAlias	Sharp	शार्प
 	Default Position	डिफ़ॉल्ट स्थिति
 	Default Printer	डिफ़ॉल्ट प्रिंटर
 	Default Swatches	डिफ़ॉल्ट स्वॉचेस
-	Define a variable first	पहले एक चर को परिभाषित करें
+	Define a variable first	पहले एक वेरिएबल परिभाषित करें
 	Define Grid…	ग्रिड परिभाषित…
 	Define Perspective Grid	पर्सपेक्टिव ग्रिड डिफ़ाइन करें
 	Define Perspective Grid…	पर्सपेक्टिव ग्रिड डिफ़ाइन करें…
@@ -1292,7 +1292,7 @@ antiAlias	Sharp	शार्प
 	Delete this saved preset	इस सेव किए गए प्रीसेट को हटा दें
 	Delete Toolbar	टूलबार हटाएं
 	Delete Transparency Flattener Preset	पारदर्शिता फ़्लैटनर प्रीसेट हटाएँ
-	Delete Variable	चर हटाएँ
+	Delete Variable	वेरिएबल हटाएँ
 	Delete Variables	वेरिएबल्स हटाएँ
 	Delete View	व्यू हटाएँ
 	Delete Width Point	चौड़ाई बिंदु हटाएँ
@@ -2235,7 +2235,7 @@ antiAlias	Sharp	शार्प
 	Highlight Substituted Fonts	हाईलाइट सबस्टिट्यूटेड फ़ॉन्ट
 	Highlight Substituted Glyphs	बदले हुए ग्लिफ़ हाइलाइट करें
 	Highlight Tracking	हाइलाइट ट्रैकिंग
-	Highlight Variable	उच्च प्रकाश परिवर्तनीय
+	Highlight Variable	वेरिएबल हाइलाइट करें
 	Highlight:	हाइलाइट:
 	Hindi	हिन्दी
 	History	हिस्ट्री
@@ -2424,9 +2424,9 @@ antiAlias	Sharp	शार्प
 	Join	जोड़ें
 	Join our Discord	हमारे डिसकॉर्ड में शामिल हों
 	Join Our Discord	हमारे डिसकॉर्ड में शामिल हों
-	Join Point Text	पॉइंट टेक्स्ट में शामिल हों
+	Join Point Text	पॉइंट टेक्स्ट जोड़ें
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Discord (discord.gg/artcraft) पर ArtCraft समुदाय में शामिल हों
-	Join the lines of each paragraph	प्रत्येक पैराग्राफ की लाइनों में शामिल हों
+	Join the lines of each paragraph	हर पैराग्राफ़ की लाइनें जोड़ें
 	Join Tool	जॉइन टूल
 	Joins	जुड़ना
 	Joins:	जुड़ना:
@@ -2628,7 +2628,7 @@ antiAlias	Sharp	शार्प
 	List Preferences	सूची प्राथमिकताएं
 	List Slices	सूची स्लाइस
 	List Toolbars	सूची टूलबार
-	List Variables	सूची चर
+	List Variables	वेरिएबल्स सूचीबद्ध करें
 	List View	सूची दृश्य
 	List Workspaces	सूची वर्कस्पेस
 	Live curve fitting	लाइव वक्र फिटिंग
@@ -2651,8 +2651,8 @@ antiAlias	Sharp	शार्प
 	Load SVG into Clipboard	SVG को क्लिपबोर्ड में लोड करें
 	Load Text into Clipboard	क्लिपबोर्ड में टेक्स्ट लोड करें
 	Load Texture…	लोड बनावट…
-	Load Variable Library	लोड परिवर्तनीय लाइब्रेरी
-	Load Variable Library…	लोड परिवर्तनीय लाइब्रेरी…
+	Load Variable Library	वेरिएबल लाइब्रेरी लोड करें
+	Load Variable Library…	वेरिएबल लाइब्रेरी लोड करें…
 	Loaded Texture	भारित बनावट
 	Loads native code	मूल कोड लोड करता है
 	Local Libraries	स्थानीय लाइब्रेरी
@@ -2674,7 +2674,7 @@ antiAlias	Sharp	शार्प
 	Lock Selected	लॉक सिलेक्टेड
 	Lock Slices	स्लाइस लॉक करें
 	Lock Station Point	लॉक स्टेशन पॉइंट
-	Lock Variables	लॉक चर
+	Lock Variables	वेरिएबल्स लॉक करें
 	Locked	लॉक्ड
 	Logo 1000×1000	लोगो 1000 × 1000
 	Long	लंबा
@@ -2991,8 +2991,8 @@ antiAlias	Sharp	शार्प
 	New theme from the current color	वर्तमान रंग से नया विषय
 	New Toolbar	नया टूलबार
 	New Toolbar…	नया टूलबार…
-	New Variable	नया परिवर्तनीय
-	New Variable…	नई परिवर्तनीय…
+	New Variable	नया वेरिएबल
+	New Variable…	नया वेरिएबल…
 	New View	नया दृश्य
 	New View…	नया दृश्य…
 	New Window	नई विंडो
@@ -3057,7 +3057,7 @@ antiAlias	Sharp	शार्प
 	No text selected	कोई टेक्स्ट नहीं चुना गया
 	No Thumbnails	कोई थंबनेल नहीं
 	No unused symbols	अप्रयुक्त सिंबल
-	no variable to rename	नाम बदलने के लिए कोई चर नहीं
+	no variable to rename	नाम बदलने के लिए कोई वेरिएबल नहीं
 	Noise	नॉइज़
 	Nonbreaking Hyphen	न टूटने वाला हाइफ़न
 	Nonbreaking Space	न टूटने वाला स्पेस
@@ -3715,7 +3715,7 @@ antiAlias	Sharp	शार्प
 	Rays	रे
 	Read Action Set File	एक्शन सेट फ़ाइल पढ़ें
 	Read Shortcut Set File	शॉर्टकट सेट फ़ाइल पढ़ें
-	Reads or sets environment variables	पर्यावरण चर पढ़ता है या सेट करता है
+	Reads or sets environment variables	एनवायरनमेंट वेरिएबल्स पढ़ता है या सेट करता है
 	Ready	तैयार
 	Real name	वास्तविक नाम
 	Real World:	रियल वर्ल्ड:
@@ -3890,7 +3890,7 @@ antiAlias	Sharp	शार्प
 	Rename Preset	प्रीसेट का नाम बदलें
 	Rename Style	स्टाइल का नाम बदलें
 	Rename Toolbar	टूलबार नाम दें
-	Rename Variable	चर का नाम बदलें
+	Rename Variable	वेरिएबल का नाम बदलें
 	Rename View	व्यू का नाम बदलें
 	Rename Workspace	वर्कस्पेस का नाम बदलें
 	Rename…	नाम बदलें…
@@ -4186,7 +4186,7 @@ antiAlias	Sharp	शार्प
 	Save To:	यहाँ सेव करें:
 	Save Transparency Flattener Preset	ट्रांसपेरेंसी फ़्लैटनर प्रीसेट सेव करें
 	Save Transparency Flattener Preset…	ट्रांसपेरेंसी फ़्लैटनर प्रीसेट सेव करें…
-	Save Variable Library…	वैरिएबल लाइब्रेरी सेव करें…
+	Save Variable Library…	वेरिएबल लाइब्रेरी सेव करें…
 	Save…	सेव…
 	Saved	सेव किए गए
 	SAVED	सेव किए गए
@@ -5358,11 +5358,11 @@ antiAlias	Sharp	शार्प
 	V Spacing:	वी स्पेसिंग:
 	V:	V:
 	Value Axis	मूल्य एक्सिस
-	Variable	चर
+	Variable	वेरिएबल
 	Variable Font	वेरिएबल फ़ॉन्ट
-	Variable Options	वैरिएबल ऑप्शन्स
-	Variable Options…	परिवर्तनीय ऑप्शन्स…
-	Variable Width Profile	वैरिएबल चौड़ाई प्रोफ़ाइल
+	Variable Options	वेरिएबल ऑप्शन्स
+	Variable Options…	वेरिएबल ऑप्शन्स…
+	Variable Width Profile	वेरिएबल चौड़ाई प्रोफ़ाइल
 	Variables	वेरिएबल्स
 	Variation	वैरिएशन
 	Variation:	भिन्नता:
@@ -6011,7 +6011,7 @@ antiAlias	Sharp	शार्प
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` {size} bytes (limit {MAX_DOCUMENT_DATA}) है।
 @msg	`each` is the value one design stands for, more than 0	`each` एक डिज़ाइन का मान है, जो 0 से अधिक होना चाहिए
 @msg	`end` must be "start" or "end"	`end` को "start" या "end" होना चाहिए।
-@msg	`ends` applies to joining exactly two paths	`ends` वास्तव में दो पाथ में शामिल होने के लिए लागू होता है
+@msg	`ends` applies to joining exactly two paths	`ends` ठीक दो पाथ को जोड़ने पर लागू होता है
 @msg	`event` must be one of {_1}	`event` is one of the {_1}
 @msg	`every` must be "all", "odd" or "even", not {v}	`every` होना चाहिए "all", "odd" या "even", नहीं {v}
 @msg	`expand` must be true or false	`expand` को true या false होना चाहिए
@@ -6227,7 +6227,7 @@ antiAlias	Sharp	शार्प
 @msg	a multi-layer mask needs one clipping path	बहुलेयर मास्क को एक क्लिपिंग पाथ की आवश्यकता होती है
 @msg	a multi-layer mask's operators are out of order	बहुलेयर मास्क ऑपरेटर क्रम से बाहर हैं
 @msg	a name names one asset: give multiple: false, or one object	एक नाम एक ही एसेट को दर्शाता है: multiple: false दें, या एक ऑब्जेक्ट
-@msg	a new document refuses this file because of these variables: {names}	एक नया डॉक्यूमेंट इन चरों के कारण इस फ़ाइल को मना कर देता है: {names}
+@msg	a new document refuses this file because of these variables: {names}	इन वेरिएबल्स के कारण नया डॉक्यूमेंट इस फ़ाइल को स्वीकार नहीं करता: {names}
 @msg	a new document won't read these variables back with their kind: {names}	नया डॉक्यूमेंट इन वेरिएबल्स का प्रकार वापस नहीं पढ़ पाएगा: {names}
 @msg	a page can't be read	एक पेज पढ़ा नहीं जा सकता
 @msg	a page is missing	एक पेज गायब हो रहा है
@@ -6279,8 +6279,8 @@ antiAlias	Sharp	शार्प
 @msg	a toolbar name has at most {MAX_NAME} characters	टूलबार नाम में सबसे {MAX_NAME} वर्ण हैं
 @msg	a value has the wrong type for the operator	एक मूल्य ऑपरेटर के लिए गलत प्रकार है
 @msg	a value is outside the range the operator takes	एक मूल्य सीमा के बाहर है जो ऑपरेटर लेता है
-@msg	a variable library holds text variables, and the document has none	एक परिवर्तनीय लाइब्रेरी टेक्स्ट चर रखती है, और डॉक्यूमेंट में कोई नहीं है
-@msg	a variable of unknown kind can't be bound to objects	अज्ञात प्रकार की एक चर ऑब्जेक्ट्स के लिए बाध्य नहीं किया जा सकता है
+@msg	a variable library holds text variables, and the document has none	वेरिएबल लाइब्रेरी में टेक्स्ट वेरिएबल होते हैं, लेकिन डॉक्यूमेंट में कोई नहीं है
+@msg	a variable of unknown kind can't be bound to objects	अज्ञात प्रकार का वेरिएबल ऑब्जेक्ट्स से नहीं बाँधा जा सकता
 @msg	a view named `{_1}` exists	`{_1}` नामक दृश्य मौजूद है
 @msg	a view named `{name}` exists	`{name}` नामक दृश्य मौजूद है
 @msg	a workspace keeps at most {MAX} toolbars	एक वर्कस्पेस सबसे {MAX} टूलबार में रहता है
@@ -6419,7 +6419,7 @@ antiAlias	Sharp	शार्प
 @msg	batches cannot nest	बैच घोंसला नहीं कर सकते
 @msg	before must name a panel	before: पहले एक पैनल का नाम देना चाहिए
 @msg	below and above must name a panel floating in another group	नीचे और ऊपर एक पैनल दूसरे समूह में चल रहा है नाम होना चाहिए
-@msg	bind something to a variable first	पहले एक चर के लिए कुछ बांधना
+@msg	bind something to a variable first	पहले किसी ऑब्जेक्ट को वेरिएबल से बाँधें
 @msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed होना चाहिए 0-{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}
 @msg	Blend colors: select at least three objects with filled colours	मिश्रित रंग: भरे हुए रंगों के साथ कम से कम तीन ऑब्जेक्ट चुनें
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP फ़ाइलें RGB या ग्रेस्केल होती हैं: colorModel को rgb या gray रखें
@@ -6493,20 +6493,20 @@ antiAlias	Sharp	शार्प
 @msg	colour groups can't go into colour groups	रंग समूह रंग समूहों में नहीं जा सकते हैं
 @msg	colour, mode and spot apply to solid-colour swatches only	रंग, मोड और स्पॉट केवल ठोस रंग वाले स्वॉच पर लागू होते हैं
 @msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	कॉलम {column}: `{cell}` ग्राफ़ डेटा फ़ाइल का `%` कॉलम है, जिसे पढ़ा नहीं जाता
-@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	कॉलम {column}: `{cell}` नाम `{name}`, जो एक {_1} चर है
-@msg	column {column}: `{cell}` names no variable	कॉलम {column}: `{cell}` नाम कोई चर नहीं
-@msg	column {column}: the variable name is longer than {MAX_NAME} characters	कॉलम {column}: चर नाम {MAX_NAME} अक्षरों से लंबा है
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	कॉलम {column}: `{cell}` में `{name}` नाम का {_1} वेरिएबल है
+@msg	column {column}: `{cell}` names no variable	कॉलम {column}: `{cell}` किसी वेरिएबल का नाम नहीं है
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	कॉलम {column}: वेरिएबल का नाम {MAX_NAME} कैरेक्टर से लंबा है
 @msg	column docks a set as a dock column, with no anchor or icon	कॉलम एक डॉक कॉलम के रूप में सेट करता है, जिसमें कोई एंकर या आइकन नहीं होता है
 @msg	column must be true or a number from 1	column को true या 1 या उससे बड़ी संख्या होना चाहिए
 @msg	column: true floats the whole column and takes no onto, above or below	column: true पूरे कॉलम को फ़्लोट करता है और onto, above या below नहीं लेता
-@msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों नाम चर `{name}`
+@msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों में वेरिएबल `{name}` का नाम है
 @msg	Combine Slices: the slices have no bounds	स्लाइस को मिलाएं: स्लाइस में कोई सीमा नहीं है
 @msg	command `{0}` is not available right now: {1}	आदेश `{0}` अभी उपलब्ध नहीं है: {1}
 @msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command: आदेश एक आकार होना चाहिए।* आदेश
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
 @msg	composer must be "singleLine" or "everyLine"	composer: संगीतकार "singleLine" या "everyLine" होना चाहिए।
-@msg	compound {_1} must contain exactly one open path to join	यौगिक {_1} में शामिल होने के लिए बिल्कुल एक खुला रास्ता होना चाहिए
+@msg	compound {_1} must contain exactly one open path to join	जोड़ने के लिए कंपाउंड {_1} में ठीक एक खुला पाथ होना चाहिए
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
@@ -6667,11 +6667,11 @@ antiAlias	Sharp	शार्प
 @msg	data must be an object of key: value, not {v}	data: डेटा कुंजी का एक ऑब्जेक्ट होना चाहिए: मान, नहीं {v}
 @msg	Data Recovery can't keep copies in {path}: {e}	डेटा रिकवरी {path} में प्रतियां नहीं रख सकती: {e}
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	डेटा रिकवरी की प्रतिलिपियाँ रखने के लिए कहीं नहीं है: निर्धारित प्राथमिकता → फ़ाइल हैंडलिंग → डेटा रिकवरी → फ़ोल्डर (recoveryFolder)
-@msg	data set `{name}` holds a control character, which a variable library can't hold	डेटा सेट `{name}` में एक नियंत्रण चरित्र होता है, जो एक परिवर्तनीय लाइब्रेरी पकड़ नहीं सकता है
+@msg	data set `{name}` holds a control character, which a variable library can't hold	डेटा सेट `{name}` में एक कंट्रोल कैरेक्टर है, जिसे वेरिएबल लाइब्रेरी में नहीं रखा जा सकता
 @msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	डेटा सेट `{name}` `{var}` के लिए एक मान रखता है, जिसे लाइब्रेरी घोषित नहीं करती है
 @msg	data set `{name}` holds two values for `{var}`	डेटा सेट `{name}` में `{var}` के लिए दो मान हैं।
 @msg	data set `{name}` is declared twice	डेटा सेट `{name}` को दो बार घोषित किया गया है
-@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	डेटा सेट `{name}` शुरू होता है या व्हाइट स्पेस के साथ समाप्त होता है, जो एक परिवर्तनीय लाइब्रेरी को नहीं पकड़ सकता है
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	डेटा सेट `{name}` की शुरुआत या अंत में व्हाइटस्पेस है, जिसे वेरिएबल लाइब्रेरी में नहीं रखा जा सकता
 @msg	data takes at most {MAX_DATA} keys at once	data: डेटा एक बार में सबसे {MAX_DATA} कुंजी लेता है
 @msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	प्रोग्राम पढ़ने वाले डेटा को क्षतिग्रस्त या छोटा काट दिया जाता है, या प्रोग्राम एक फ़ाइल में एक स्थिति के लिए पूछता है जिसमें कोई नहीं है।
 @msg	dataset `{name}` already exists	डेटासेट `{name}` पहले से मौजूद है
@@ -6679,7 +6679,7 @@ antiAlias	Sharp	शार्प
 @msg	date `{d}`: YYYY-MM-DD	दिनांक `{d}`: YYYYY-MM-DD
 @msg	decimals must be {_1}–{_2} (got {_3})	decimals: दशमलव होना चाहिए {_1}-{_2} ({_3})
 @msg	decoded data is too large	डीकोडेड डेटा बहुत बड़ा है
-@msg	define a variable first	पहले एक चर को परिभाषित करना
+@msg	define a variable first	पहले एक वेरिएबल परिभाषित करें
 @msg	detect must be true or false	detect को true या false होना चाहिए
 @msg	Dimension is locked or hidden	आयाम बंद या छिपा हुआ है
 @msg	Dimension mode does not match its source	आयाम मोड अपने स्रोत से मेल नहीं खाता है
@@ -6999,9 +6999,9 @@ antiAlias	Sharp	शार्प
 @msg	its Windows metafile preview was opened instead, which may simplify the art	इसके बजाय विंडोज मेटाफ़ाइल प्रीव्यू ओपन किया गया था, जो कला को सरल बना सकता है
 @msg	its zlib compression is damaged	इसके zlib संपीड़न क्षतिग्रस्त है
 @msg	its Zstandard compression is damaged	इसके Zstandard संपीड़न क्षतिग्रस्त है
-@msg	join needs open paths	join: खुले रास्ते की जरूरत
-@msg	join two different paths	दो अलग-अलग पाथ में शामिल हों
-@msg	Join: a subpath went missing	जॉइन: कोई सबपाथ नहीं मिला
+@msg	join needs open paths	जोड़ने के लिए खुले पाथ चाहिए
+@msg	join two different paths	दो अलग पाथ जोड़ें
+@msg	Join: a subpath went missing	जोड़ते समय एक सबपाथ नहीं मिला
 @msg	justify must be auto|left|center|right|justifyAll	justify को auto|left|center|right|justifyAll होना चाहिए
 @msg	kbps must be a positive number, not {kbps}	kbps एक सकारात्मक संख्या होना चाहिए, नहीं {kbps}
 @msg	kerning must be a number, "auto", or "optical"	kerning एक संख्या, "auto", या "optical" होना चाहिए
@@ -7028,7 +7028,7 @@ antiAlias	Sharp	शार्प
 @msg	line {line}: unclosed quote	लाइन {line}: unclosed उद्धरण
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	लाइन {line}: `{var}` के लिए मूल्य {MAX_GRAPH_CSV} बाइट्स से अधिक है
 @msg	line {line}: value for `{var}` must be true or false	लाइन {line}: `{var}` के लिए मान true या false होना चाहिए
-@msg	line {line}: value for `{var}` must match its variable kind	लाइन {line}: `{var}` के लिए मान इसके परिवर्तनीय प्रकार से मेल खाता होना चाहिए
+@msg	line {line}: value for `{var}` must match its variable kind	लाइन {line}: `{var}` का मान वेरिएबल के प्रकार से मेल खाना चाहिए
 @msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf या crlf
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	लिंक किए गए चित्रों से पता चलता है कि फ़ाइल में सेव किए जाने वाले निम्न-रिज़ॉल्यूशन प्रीव्यू को उनकी फ़ाइलों को मिलने तक: लिंक पैनल में उन्हें फिर से लिंक करें
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	फ़ाइल में कोई प्रीव्यू के साथ जुड़े चित्र एक प्लेसहोल्डर दिखाते हैं जब तक कि उनकी फ़ाइलें नहीं मिलती: उन्हें लिंक पैनल में फिर से लिंक करें
@@ -7143,7 +7143,7 @@ antiAlias	Sharp	शार्प
 @msg	module is {_1} bytes (limit {_2})	मॉड्यूल {_1} बाइट्स का है (सीमा {_2})
 @msg	more than {MAX_BATCH_FILES} data sets	{MAX_BATCH_FILES} डेटा सेट से अधिक
 @msg	more than {MAX_BATCH_FILES} files	{MAX_BATCH_FILES} फ़ाइलों से अधिक
-@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} से अधिक चर: आयात डेटा सेट अधिकांश {MAX_CSV_COLS} पर पढ़ा जाता है।
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} से अधिक वेरिएबल्स: डेटा सेट आयात अधिकतम {MAX_CSV_COLS} वेरिएबल्स पढ़ता है
 @msg	more than {MAX_CSV_ROWS} data rows	{MAX_CSV_ROWS} डेटा पंक्तियों से अधिक
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	{MAX_CSV_ROWS} डेटा सेट से अधिक: आयात डेटा सेट अधिकांश {MAX_CSV_ROWS} पर पढ़ा जाता है।
 @msg	more than {MAX_FILES} images	{MAX_FILES} इमेज से अधिक
@@ -7399,10 +7399,10 @@ antiAlias	Sharp	शार्प
 @msg	no user library folder here	यहां कोई उपयोगकर्ता लाइब्रेरी फ़ोल्डर नहीं
 @msg	no user library folder here (save with a path, or without one to get the data)	यहाँ कोई यूज़र लाइब्रेरी फ़ोल्डर नहीं है (पाथ के साथ सेव करें, या डेटा पाने के लिए बिना पाथ के)
 @msg	no user workspace `{from}`	कोई उपयोगकर्ता वर्कस्पेस `{from}`
-@msg	no variable named `{from}`	कोई चर नाम `{from}`
-@msg	no variable named `{name}`	कोई चर नाम `{name}`
-@msg	no variable named `{v}`	कोई चर नाम `{v}`
-@msg	no variable named `{var}`	कोई चर नाम `{var}`
+@msg	no variable named `{from}`	`{from}` नाम का कोई वेरिएबल नहीं है
+@msg	no variable named `{name}`	`{name}` नाम का कोई वेरिएबल नहीं है
+@msg	no variable named `{v}`	`{v}` नाम का कोई वेरिएबल नहीं है
+@msg	no variable named `{var}`	`{var}` नाम का कोई वेरिएबल नहीं है
 @msg	no view named `{name}`	`{name}` नाम का कोई दृश्य
 @msg	node {_1} is not a graph	node {_1} एक graph नहीं है
 @msg	node {_1} is not an image	node {_1} एक इमेज नहीं है
@@ -7461,7 +7461,7 @@ antiAlias	Sharp	शार्प
 @msg	not JSON: {e}	JSON नहीं है: {e}
 @msg	not type on a path outside perspective	दृष्टिकोण के बाहर एक पाथ पर टाइप न करें
 @msg	nothing encoded	कुछ भी नहीं
-@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	डेटा सेट {name} में कुछ भी लागू नहीं किया गया था: कोई ऑब्जेक्ट एक चर के लिए बाध्य नहीं है, इसके लिए एक मूल्य है।
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	डेटा सेट {name} से कुछ भी लागू नहीं हुआ: उसमें मान वाले किसी भी वेरिएबल से कोई ऑब्जेक्ट नहीं बाँधा गया है
 @msg	nothing prints	कुछ भी प्रिंट
 @msg	nothing selected	कुछ भी नहीं चुना
 @msg	nothing selected is in a group	कुछ भी नहीं चुना गया है एक समूह में
@@ -7512,7 +7512,7 @@ antiAlias	Sharp	शार्प
 @msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
-@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, परिवर्तनीय चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, वेरिएबल चौड़ाई वाले स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है
 @msg	offset out of range	सीमा से बाहर ऑफसेट
 @msg	Offset Path: {e}	ऑफसेट पाथ: {e}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
@@ -7669,7 +7669,7 @@ antiAlias	Sharp	शार्प
 @msg	redraw needs id	redraw: ई.डी. की आवश्यकता
 @msg	redraw within must be a finite distance of 0 or more	भीतर वापस लेना 0 या उससे अधिक की एक सीमित दूरी होना चाहिए
 @msg	registration must be 0..8	registration को 0..8 होना चाहिए
-@msg	Rejoin Path Pieces: too many paths to rejoin at once	Rejoin पाथ के टुकड़े: एक बार में फिर से जुड़ने के लिए कई पाथ
+@msg	Rejoin Path Pieces: too many paths to rejoin at once	पाथ के हिस्से फिर से जोड़ें: एक बार में फिर से जोड़ने के लिए बहुत अधिक पाथ हैं
 @msg	release a layer or a group	एक लेयर या एक समूह को छोड़ दें
 @msg	Release Guides: no guides	रिलीज़ गाइड: कोई गाइड नहीं
 @msg	Release: no layer to put the rectangle in	रिलीज: आयत को डालने के लिए कोई लेयर नहीं
@@ -7736,7 +7736,7 @@ antiAlias	Sharp	शार्प
 @msg	select a path	एक पाथ चुनें
 @msg	select a repeat	दोहराने सिलेक्ट करें
 @msg	select a Shaper group	एक शेपर समूह चुनें
-@msg	select a stroke with a variable width	एक चर चौड़ाई के साथ एक स्ट्रोक सिलेक्ट करें
+@msg	select a stroke with a variable width	वेरिएबल चौड़ाई वाला स्ट्रोक सिलेक्ट करें
 @msg	select a symbol instance	एक सिंबल उदाहरण चुनें
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
@@ -7781,7 +7781,7 @@ antiAlias	Sharp	शार्प
 @msg	select at least two objects	कम से कम दो ऑब्जेक्ट चुनें
 @msg	Select dimensions to update	अद्यतन करने के लिए आयाम सिलेक्ट करें
 @msg	select exactly two objects	वास्तव में दो ऑब्जेक्ट चुनें
-@msg	select exactly two path ends to join	वास्तव में दो पाथ में शामिल होने के लिए समाप्त होता है चुनें
+@msg	select exactly two path ends to join	जोड़ने के लिए ठीक दो पाथ एंड पॉइंट्स सिलेक्ट करें
 @msg	Select horizontal point or area type whose text fits	ऐसा क्षैतिज पॉइंट टाइप या एरिया टाइप सिलेक्ट करें जिसका टेक्स्ट फ़िट होता है
 @msg	select instances of one symbol	एक सिंबल के उदाहरण चुनें
 @msg	select members of a compound shape	एक मिश्रित आकार के सदस्यों सिलेक्ट करें
@@ -7798,7 +7798,7 @@ antiAlias	Sharp	शार्प
 @msg	select paths	पाथ चुनें
 @msg	select paths or anchor points	पाथ या एंकर अंक चुनें
 @msg	select paths or compound paths	पाथ या यौगिक पाथ सिलेक्ट करें
-@msg	select paths to join	शामिल होने के लिए पाथ सिलेक्ट करें
+@msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
@@ -7827,7 +7827,7 @@ antiAlias	Sharp	शार्प
 @msg	select the objects to attach to the path	ऑब्जेक्ट्स का सिलेक्ट करने के लिए संलग्न करने के लिए पाथ
 @msg	select the objects to bind	ऑब्जेक्ट्स को बांधने के लिए चुनें
 @msg	select the objects to transform in perspective	ऑब्जेक्ट्स को पर्सपेक्टिव में बदलने के लिए चुनें
-@msg	select two open path ends, or two open paths, to average and join	दो खुले पाथ सिलेक्ट करें, या दो खुले रास्ते, औसतन और जुड़ना
+@msg	select two open path ends, or two open paths, to average and join	औसत निकालकर जोड़ने के लिए दो खुले पाथ एंड पॉइंट्स या दो खुले पाथ सिलेक्ट करें
 @msg	select two or more graphic styles to merge	दो या अधिक ग्राफिक स्टाइल्स का सिलेक्ट करने के लिए विलय
 @msg	select two or more objects to distribute	वितरित करने के लिए दो या दो से अधिक ऑब्जेक्ट चुनें
 @msg	select two or more objects to intertwine	दो या दो से अधिक ऑब्जेक्ट्स सिलेक्ट करें
@@ -7884,7 +7884,7 @@ antiAlias	Sharp	शार्प
 @msg	strokeOptions must be an object of stroke.set options	strokeOptions को stroke.set ऑप्शन्स का ऑब्जेक्ट होना चाहिए
 @msg	strokeWidth must be a positive number of pixels	strokeWidth को पिक्सेल की धनात्मक संख्या होना चाहिए
 @msg	subpath {si} is not an open subpath	उपपाथ {si} एक खुला उपपाथ नहीं है
-@msg	subpaths required when joining the same path	एक ही पाथ में शामिल होने पर आवश्यक उप-पाथ
+@msg	subpaths required when joining the same path	एक ही पाथ को जोड़ने के लिए सबपाथ चाहिए
 @msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG UTF-8, UTF-16 या ISO 8859-1 नहीं है।
 @msg	SVG parse error: {0}	SVG पार्स त्रुटि: {0}
 @msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict को "merge" या "add" होना चाहिए, {v} नहीं
@@ -8039,9 +8039,9 @@ antiAlias	Sharp	शार्प
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	फ़ाइल की लेयरें नहीं पढ़ी गईं ({_1}): यह अपने पृष्ठ के रूप में आता है, एक लेयर में
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	फ़ाइल की लेयर्स को इसके संपादन डेटा ({_1}) से नहीं पढ़ा गया था: वे अपने PDF भाग से आते हैं
 @msg	the file's preview header points outside the file	फ़ाइल के प्रीव्यू शीर्षलेख फ़ाइल के बाहर अंक
-@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	फ़ाइल के परिवर्तनीय बंधन सभी नहीं पढ़े गए थे (बाइंडिंग्स स्किप: {_1}): वे ऑब्जेक्ट अपने चर के लिए बाध्य नहीं हैं
-@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	फ़ाइल के परिवर्तनीय लाइब्रेरी को पढ़ा नहीं जा सकता: चर पैनल इसे सूचीबद्ध नहीं करता है
-@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	फ़ाइल की परिवर्तनीय लाइब्रेरी आंशिक रूप से पढ़ी गई थी (प्रवेशियों को छोड़ दिया: {_1}): वेरिएबल्स पैनल बाकी हिस्सों को सूचीबद्ध करता है
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	फ़ाइल की कुछ वेरिएबल बाइंडिंग नहीं पढ़ी गईं (छोड़ी गई बाइंडिंग: {_1}): वे ऑब्जेक्ट अपने वेरिएबल्स से नहीं बँधे हैं
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	फ़ाइल की वेरिएबल लाइब्रेरी पढ़ी नहीं जा सकी: वेरिएबल्स पैनल उसे सूचीबद्ध नहीं करता
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	फ़ाइल की वेरिएबल लाइब्रेरी आंशिक रूप से पढ़ी गई (छोड़ी गई प्रविष्टियाँ: {_1}): वेरिएबल्स पैनल शेष प्रविष्टियाँ दिखाता है
 @msg	the files come to more than 1 GB: add fewer at a time	फ़ाइलों को 1 GB से अधिक करने के लिए आते हैं: एक समय में कम जोड़ें
 @msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	एक पंक्ति के पहले चरित्र में बर्न से पहले कोई चरित्र नहीं है: यह केवल ऊपर और नीचे चला जाता है (डी)
 @msg	the font {_1} is not available	फ़ॉन्ट {_1} उपलब्ध नहीं है
@@ -8054,7 +8054,7 @@ antiAlias	Sharp	शार्प
 @msg	The graphics were lost and couldn't be restarted.	ग्राफिक्स खो गए थे और फिर से शुरू नहीं किया जा सकता था।
 @msg	The graphics were lost and have been restarted	ग्राफिक्स खो गए थे और फिर से शुरू किया गया है
 @msg	the guide is on a hidden or locked layer	गाइड एक छिपे हुए या बंद लेयर पर है
-@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	हेडर `{cell}` के लिए `{name}` वापस चर `{other}` के रूप में पढ़ेगा: उनमें से एक का नाम बदलें
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	हेडर `{cell}` के लिए `{name}` वापस वेरिएबल `{other}` के रूप में पढ़ेगा: उनमें से एक का नाम बदलें
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` का हेडर `{header}` दोबारा पढ़ने पर वेरिएबल `{other}` बन जाएगा: किसी एक का नाम बदलें
 @msg	the image `{path}` isn't followed: {r}	इमेज `{path}` का पालन नहीं किया गया है: {r}
 @msg	the image can't be read as a texture	इमेज को बनावट के रूप में नहीं पढ़ा जा सकता है
@@ -8219,14 +8219,14 @@ antiAlias	Sharp	शार्प
 @msg	the trailer has no size	ट्रेलर में कोई आकार नहीं है
 @msg	the type object is flattened to nothing	फ़्लैटन करने पर टाइप ऑब्जेक्ट में कुछ नहीं रहता
 @msg	the value of axis `{tag}` must be a number or null	धुरी का मूल्य `{tag}` होना चाहिए एक नंबर या null होना चाहिए
-@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	परिवर्तनीय लाइब्रेरी {MAX_LIBRARY_DATASETS} डेटा सेट से अधिक घोषित करता है
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	वेरिएबल लाइब्रेरी में {MAX_LIBRARY_DATASETS} से अधिक डेटा सेट घोषित हैं
 @msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	वेरिएबल लाइब्रेरी {MAX_LIBRARY_ENTITIES} संस्थाओं से अधिक की घोषणा करती है।
-@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	परिवर्तनीय लाइब्रेरी {MAX_LIBRARY_VARIABLES} चर से अधिक घोषित करता है।
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	वेरिएबल लाइब्रेरी {MAX_LIBRARY_VARIABLES} से अधिक वेरिएबल्स घोषित करती है
 @msg	the variable library declares no variables	वेरिएबल लाइब्रेरी ने कोई वेरिएबल घोषित नहीं किया है
-@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	परिवर्तनीय लाइब्रेरी {MAX_LIBRARY_BYTES} बाइट्स से बड़ा है
-@msg	the variable library is not UTF-8	चर लाइब्रेरी UTF-8 नहीं है
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	वेरिएबल लाइब्रेरी {MAX_LIBRARY_BYTES} बाइट से बड़ी है
+@msg	the variable library is not UTF-8	वेरिएबल लाइब्रेरी UTF-8 में नहीं है
 @msg	the variable library is not well-formed XML: {e}	वेरिएबल लाइब्रेरी अच्छी तरह से निर्मित XML नहीं है: {e}
-@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	परिवर्तनीय लाइब्रेरी घोंसला तत्वों से अधिक {MAX_LIBRARY_NESTING} गहरा
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	वेरिएबल लाइब्रेरी में एलिमेंट {MAX_LIBRARY_NESTING} स्तर से अधिक गहराई तक नेस्ट किए गए हैं
 @msg	the variable library's document type declaration holds something other than entities of plain text	वेरिएबल लाइब्रेरी के डॉक्यूमेंट प्रकार की घोषणा सादे टेक्स्ट की संस्थाओं के अलावा कुछ अन्य रखती है
 @msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	वेरिएबल लाइब्रेरी की संस्थाएं {MAX_LIBRARY_BYTES} बाइट्स से अधिक विस्तार करती हैं
 @msg	the window has no dock	विंडो में कोई डॉक नहीं है
@@ -8445,14 +8445,14 @@ antiAlias	Sharp	शार्प
 @msg	unsupported: {0}	unsupported: {0}
 @msg	use paths or compound paths	पाथ या यौगिक पाथ का उपयोग करें
 @msg	useArtboards must be true or false, not {v}	useArtboards को true या false होना चाहिए, {v} नहीं
-@msg	value for `{var}` must match its variable kind	`{var}` के लिए मूल्य अपने परिवर्तनीय प्रकार से मेल खाता होना चाहिए
-@msg	variable `{_1}` is already defined	चर `{_1}` पहले से ही परिभाषित किया गया है
+@msg	value for `{var}` must match its variable kind	`{var}` का मान वेरिएबल के प्रकार से मेल खाना चाहिए
+@msg	variable `{_1}` is already defined	वेरिएबल `{_1}` पहले से परिभाषित है
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	वेरिएबल `{name}` वेरिएबल लाइब्रेरी में सेव किया नहीं जा सकता: नाम अक्षर या `_` से शुरू करें, स्पेस और `-`, `_`, `.` के अलावा अन्य चिह्न न रखें
-@msg	variable `{name}` has no `trait`	चर `{name}` में कोई `trait` नहीं है
-@msg	variable `{name}` is already defined	चर `{name}` को पहले से ही परिभाषित किया गया है
-@msg	variable `{name}` is declared twice	परिवर्तनीय `{name}` को दो बार घोषित किया गया है
-@msg	variable `{to}` already exists	चर `{to}` पहले से मौजूद
-@msg	variables are locked	चर लॉक कर रहे हैं
+@msg	variable `{name}` has no `trait`	वेरिएबल `{name}` में `trait` नहीं है
+@msg	variable `{name}` is already defined	वेरिएबल `{name}` पहले से परिभाषित है
+@msg	variable `{name}` is declared twice	वेरिएबल `{name}` दो बार घोषित है
+@msg	variable `{to}` already exists	वेरिएबल `{to}` पहले से मौजूद है
+@msg	variables are locked	वेरिएबल्स लॉक हैं
 @msg	variables that aren't text were left out: {kinds}	वेरिएबल जो टेक्स्ट नहीं छोड़े गए थे: {kinds}
 @msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ने {v} लौटाया; यह होस्ट संस्करण {ABI_VERSION} लागू करता है
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
@@ -8622,7 +8622,7 @@ file-filter	Swatch libraries	स्वॉच लाइब्रेरीज़
 file-filter	Templates	टेम्पलेट्स
 file-filter	VectorCraft Template	वेक्टर क्राफ्ट टेम्पलेट
 font-script	Japanese	जापानी
-font-technology	Variable	चर
+font-technology	Variable	वेरिएबल
 gradient-kind	Radial	रेडियल
 imageTrace	Outline	रूपरेखा
 lighting	Light	लाइट
