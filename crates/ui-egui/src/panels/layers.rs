@@ -22,6 +22,8 @@
 //!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
 //!   they are deleted, on New Layer duplicated.
+//! - Deleting rows from the panel (the trash, rows dropped on it, Delete Selection, Delete and
+//!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
@@ -60,7 +62,7 @@ mod rows;
 mod thumbs;
 
 use controls::{bottom_bar, filter_button};
-pub use controls::{expand, menu, set_filter};
+pub use controls::{delete, expand, menu, set_filter};
 pub(crate) use model::shown_name;
 pub use model::{Filter, ObjectKind, RowState};
 #[cfg(test)]
@@ -381,7 +383,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && ui.ctx().memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        out.actions.push(("layer.delete".into(), json!({})));
+        out.actions.push(("ui.layerDelete".into(), json!({})));
     }
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {

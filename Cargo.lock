@@ -6476,6 +6476,7 @@ dependencies = [
  "vectorcraft-plugins",
  "vectorcraft-text",
  "vectorcraft-three-d",
+ "vectorcraft-trace",
 ]
 
 [[package]]
@@ -6854,6 +6855,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",

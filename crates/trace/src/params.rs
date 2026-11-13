@@ -114,7 +114,8 @@ pub struct TraceParams {
     pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
-    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    /// Create: trace lines no wider than `stroke_width`, and such thin features of wider shapes, as
+    /// stroked center lines.
     pub strokes: bool,
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,

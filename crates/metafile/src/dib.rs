@@ -11,8 +11,8 @@ const MAX_SIDE: u32 = 8192;
 /// Most pixels an image the writers store holds.
 const MAX_PIXELS: u64 = 1 << 24;
 /// Most pixels along a side, and in all, of a bitmap the reader decodes.
-const MAX_READ_SIDE: u32 = 1 << 15;
-const MAX_READ_PIXELS: u64 = 1 << 26;
+pub(crate) const MAX_READ_SIDE: u32 = 1 << 15;
+pub(crate) const MAX_READ_PIXELS: u64 = 1 << 26;
 /// Most pixels the bitmaps of one file may decode to together (four of the largest one), so a small
 /// file of many image records can't cost minutes of decoding (#3600).
 pub(crate) const MAX_FILE_PIXELS: u64 = 1 << 28;
@@ -164,7 +164,7 @@ fn png_without_metadata(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
 }
 
 /// Take a bitmap of `w` × `h` from what is `left` of the file's budget, before it is decoded.
-fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
+pub(crate) fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
     let n = u64::from(w) * u64::from(h);
     *left = left.checked_sub(n).ok_or(OVER_BUDGET)?;
     Ok(())

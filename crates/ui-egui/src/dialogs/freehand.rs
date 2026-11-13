@@ -59,12 +59,13 @@ fn label_w(ui: &egui::Ui) -> f32 {
     CONTENT_W - FIELD_W - ui.spacing().item_spacing.x
 }
 
-/// The top of the Fidelity slider (points); it starts at the lowest Fidelity the tool takes, and
-/// the field takes up to 100.
+/// The top of the Fidelity slider, in the tool's unit (screen pixels for the Pencil and
+/// Paintbrush, points for Smooth and Blob Brush); it starts at the lowest Fidelity the tool takes,
+/// and the field takes up to 100.
 const FIDELITY_MAX: f64 = 20.0;
 
-/// Fidelity `v` stepped `n` steps by the slider's and the field's keys: an arrow steps hundredths up to 0.1 pt,
-/// tenths up to 1 pt and whole points above (a step down from 0.1 or 1 takes the finer step below
+/// Fidelity `v` stepped `n` steps by the slider's and the field's keys: an arrow steps hundredths up to 0.1,
+/// tenths up to 1 and whole units above, in the tool's unit (a step down from 0.1 or 1 takes the finer step below
 /// it); ten steps at once (Shift with an arrow, Page Up/Down) multiply or divide by ten, so they go
 /// 0.01 → 0.1 → 1 → 10.
 fn fidelity_step(v: f64, n: f64) -> f64 {
@@ -96,7 +97,7 @@ fn fidelity_step(v: f64, n: f64) -> f64 {
 
 /// Where Fidelity `v` sits on a slider over `(min, max)`, from 0 to 1. The rail is logarithmic, so
 /// the low values, where the stroke is followed closely, get as much of it as the high ones
-/// (0.01–1 pt takes most of a 0.01–20 rail).
+/// (0.01–1 takes most of a 0.01–20 rail, in the tool's unit).
 fn fidelity_at(v: f64, (min, max): (f64, f64)) -> f32 {
     if !(v.is_finite() && min > 0.0 && max > min) {
         return 0.0;
@@ -104,7 +105,7 @@ fn fidelity_at(v: f64, (min, max): (f64, f64)) -> f32 {
     ((v.clamp(min, max) / min).ln() / (max / min).ln()) as f32
 }
 
-/// The Fidelity at `x` (0 to 1) on a slider over `(min, max)`: hundredths below 1 pt, tenths above.
+/// The Fidelity at `x` (0 to 1) on a slider over `(min, max)`: hundredths below 1, tenths above, in the tool's unit.
 fn fidelity_from(x: f32, (min, max): (f64, f64)) -> f64 {
     let v = min * (max / min).powf(f64::from(x.clamp(0.0, 1.0)));
     let step = if v < 1.0 { 100.0 } else { 10.0 };
