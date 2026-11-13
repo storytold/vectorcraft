@@ -4,7 +4,6 @@
 //! parent is the window, named on that thread as for the portal's save dialog (`portal_save`).
 
 mod portal;
-mod request;
 
 /// The portal's color sampler over the window `parent` holds; `ui` is woken when it answers.
 pub fn sampler(ui: egui::Context, parent: super::host_services::Parent) -> vectorcraft_ui_egui::screen_color::StartSampler {

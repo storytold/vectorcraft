@@ -1053,6 +1053,246 @@ fn a_frame_that_starts_its_thread_after_outlining_has_its_first_line_indent() {
     }
 }
 
+/// Whether frame `id` of `d` is marked as continuing a paragraph.
+fn marked(d: &Document, id: NodeId) -> bool {
+    text_of(d, id).unwrap().first_para_continues
+}
+
+/// The marks of `thread`'s frames, each found from the frames before it: a frame continues a
+/// paragraph when the last of them with text does not end with a paragraph break. A frame left
+/// alone continues nothing.
+fn marks_by_scan(d: &Document, thread: &[NodeId]) -> Vec<bool> {
+    (0..thread.len())
+        .map(|k| {
+            thread.len() >= 2
+                && thread[..k]
+                    .iter()
+                    .rev()
+                    .map(|id| text_of(d, *id).unwrap().plain_text())
+                    .find(|t| !t.is_empty())
+                    .is_some_and(|t| !t.ends_with('\n'))
+        })
+        .collect()
+}
+
+/// When frames leave their threads (from the start, the middle or the end of a thread, outlined or
+/// with their type under a new id, leaving a thread with one frame), each frame that stays takes
+/// the mark found from the frames before it, and a thread that lost no frame keeps its marks.
+#[test]
+fn frames_that_stay_after_others_leave_their_threads_take_the_marks_of_their_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let mut frame = |text: &str| {
+        NodeId(new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": text, "area": {"width": 150, "height": 60}})).unwrap()))
+    };
+    let [a1, a2, a3, a4, a5] = ["One", "", "Two\n", "Three", "Four"].map(&mut frame);
+    let [b1, b2] = ["Alpha", "Beta"].map(&mut frame);
+    let [c1, c2] = ["x", "y"].map(&mut frame);
+    let [d1, d2, d3, d4] = ["M", "N\n", "O", "P"].map(&mut frame);
+    let rect = NodeId(new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 400, "width": 20, "height": 20})).unwrap()));
+    let mut d = (*s.doc().unwrap().doc).clone();
+    d.text_threads = vec![vec![a1, a2, a3, a4, a5], vec![b1, b2], vec![c1, c2], vec![d1, d2, d3, d4]];
+    // Every mark is the opposite of what it becomes, or (in the thread that loses no frame) wrong.
+    for id in [a1, a2, a3, a4, a5, b1, b2, c1, d1, d2, d3, d4] {
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            t.first_para_continues = true;
+        }
+    }
+    let shown: Vec<(NodeId, String)> = d.text_threads.iter().flatten().map(|id| (*id, text_of(&d, *id).unwrap().plain_text())).collect();
+    let was = frames(&d);
+    // a1, b2 and d3 become a rectangle; a4 becomes a group holding its type under a new id.
+    let outline = d.node(rect).unwrap().kind.clone();
+    for id in [a1, b2, d3] {
+        d.node_mut(id).unwrap().kind = outline.clone();
+    }
+    let mut kept = d.node(a4).unwrap().clone();
+    kept.id = d.alloc_id();
+    let new_a4 = kept.id;
+    let layer = d.parent_of(a4);
+    d.remove(a4).unwrap();
+    d.insert(layer, usize::MAX, Node::group(a4, vec![std::sync::Arc::new(kept)])).unwrap();
+    leave_threads(&mut d, &was);
+    assert_eq!(d.text_threads, vec![vec![a2, a3, new_a4, a5], vec![c1, c2], vec![d1, d2, d4]]);
+    for thread in [&[a2, a3, new_a4, a5][..], &[b1], &[d1, d2, d4]] {
+        let want = marks_by_scan(&d, thread);
+        assert_eq!(thread.iter().map(|id| marked(&d, *id)).collect::<Vec<_>>(), want, "{thread:?}");
+    }
+    assert_eq!([a2, a3, new_a4, a5, b1, d1, d2, d4].map(|id| marked(&d, id)), [false, false, false, true, false, false, true, false]);
+    assert_eq!([c1, c2].map(|id| marked(&d, id)), [true, false], "a thread that lost no frame keeps its marks");
+    assert!(!matches!(d.node(a4).unwrap().kind, NodeKind::Text(_)), "the group in the frame's place is not type");
+    for (id, before) in shown {
+        let now = if id == a4 { new_a4 } else { id };
+        if let Some(t) = text_of(&d, now) {
+            assert_eq!(t.plain_text(), before, "frame {id:?} keeps its text");
+        }
+    }
+}
+
+/// The frames that stay in a long thread after one leaves are marked in one pass over the thread.
+#[test]
+fn a_long_thread_is_marked_in_one_pass_when_a_frame_leaves() {
+    const FRAMES: usize = 256;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let first = NodeId(new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "w0", "area": {"width": 150, "height": 60}})).unwrap()));
+    let rect = NodeId(new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 20, "height": 20})).unwrap()));
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let layer = d.parent_of(first);
+    let model = d.node(first).unwrap().clone();
+    let mut thread = vec![first];
+    for k in 1..FRAMES {
+        let mut n = model.clone();
+        n.id = d.alloc_id();
+        if let NodeKind::Text(t) = &mut n.kind {
+            t.runs.truncate(1);
+            t.runs[0].text = format!("w{k}");
+            t.first_para_continues = true;
+        }
+        thread.push(d.insert(layer, usize::MAX, n).unwrap());
+    }
+    d.text_threads = vec![thread.clone()];
+    let was = frames(&d);
+    let out = thread[FRAMES / 2];
+    d.node_mut(out).unwrap().kind = d.node(rect).unwrap().kind.clone();
+    MARK_VISITS.with(|c| c.set(0));
+    leave_threads(&mut d, &was);
+    let visits = MARK_VISITS.with(std::cell::Cell::get);
+    let rest: Vec<NodeId> = thread.iter().copied().filter(|id| *id != out).collect();
+    assert_eq!(d.text_threads, vec![rest.clone()]);
+    assert!(visits <= FRAMES, "{visits} frames visited to mark a thread of {} frames", rest.len());
+    assert_eq!(rest.iter().map(|id| marked(&d, *id)).collect::<Vec<_>>(), marks_by_scan(&d, &rest));
+}
+
+/// `count` threads of `per` area type frames each, made in one edit, each frame holding a word.
+fn many_threads(count: usize, per: usize) -> (Session, Vec<Vec<NodeId>>) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let first = NodeId(new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": "w", "area": {"width": 150, "height": 60}})).unwrap()));
+    let threads = s
+        .edit("Make", |d, _| {
+            let layer = d.parent_of(first);
+            let model = d.node(first).unwrap().clone();
+            let mut threads = vec![];
+            for _ in 0..count {
+                let mut thread = vec![];
+                for _ in 0..per {
+                    let mut n = model.clone();
+                    n.id = d.alloc_id();
+                    thread.push(d.insert(layer, usize::MAX, n).unwrap());
+                }
+                threads.push(thread);
+            }
+            d.text_threads = threads.clone();
+            Ok(threads)
+        })
+        .unwrap();
+    assert_eq!(s.doc().unwrap().doc.text_threads, threads);
+    (s, threads)
+}
+
+/// Select the first frame of each of `threads`.
+fn select_firsts(s: &mut Session, threads: &[Vec<NodeId>]) {
+    let ids: Vec<u64> = threads.iter().map(|t| t[0].0).collect();
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+}
+
+/// Reset the count of [`Ids`] lookups, run `f`, and give its result with the lookups it made.
+fn looks<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    ID_LOOKS.with(|c| c.set(0));
+    let out = f();
+    (out, ID_LOOKS.with(std::cell::Cell::get))
+}
+
+/// Whether Release Selection and Remove Threading are available is found in one pass over the
+/// threads' frames, however many frames are selected.
+#[test]
+fn thread_commands_are_offered_after_one_pass_over_the_threads() {
+    let (mut s, made) = many_threads(300, 3);
+    let (threads, loose) = made.split_at(150);
+    s.edit("Unthread", |d, _| {
+        d.text_threads = threads.to_vec();
+        Ok(())
+    })
+    .unwrap();
+    // 450 frames out of any thread, then the last frame of the last thread.
+    let mut ids: Vec<u64> = loose.iter().flatten().map(|id| id.0).collect();
+    ids.push(threads[149][2].0);
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+    let (offered, n) = looks(|| has_thread_selection(&s));
+    assert!(offered.is_ok());
+    assert!(n <= 2 * (451 + 450), "{n} id lookups");
+    s.execute("select.set", &json!({ "ids": ids[..450] })).unwrap();
+    assert!(has_thread_selection(&s).is_err(), "frames out of any thread are no threaded text");
+    let rect = new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 20, "height": 20})).unwrap());
+    s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    assert!(has_thread_selection(&s).is_err(), "a rectangle is no threaded text");
+}
+
+/// The frames of the selected frames' threads are listed with one lookup per frame.
+#[test]
+fn the_frames_threaded_with_a_selection_are_listed_in_one_pass() {
+    let (s, threads) = many_threads(150, 3);
+    let firsts: Vec<NodeId> = threads.iter().map(|t| t[0]).collect();
+    let d = &s.doc().unwrap().doc;
+    let (all, n) = looks(|| with_threads(d, &firsts));
+    let mut want = firsts.clone();
+    want.extend(threads.iter().flat_map(|t| t[1..].iter().copied()));
+    assert_eq!(all, want);
+    assert!(n <= 4 * (150 + 450), "{n} id lookups");
+}
+
+/// The last frames of many threads copied out of them are found with a few lookups per frame and
+/// per object copied.
+#[test]
+fn the_last_frames_copied_out_of_many_threads_are_found_in_one_pass() {
+    let (s, threads) = many_threads(150, 3);
+    let d = &s.doc().unwrap().doc;
+    let lasts: Vec<std::sync::Arc<Node>> = threads.iter().map(|t| std::sync::Arc::new(d.node(t[2]).unwrap().clone())).collect();
+    let mut art = Node::group(NodeId(u64::MAX), lasts);
+    let before = art.clone();
+    let ((), n) = looks(|| keep_shown_text(d, &mut art));
+    assert!(n <= 4 * (151 + 450), "{n} id lookups");
+    assert_eq!(art, before, "each copied frame already shows all of its word");
+}
+
+/// Threading one frame of each of many threads merges them in one pass, in the order of the
+/// selection.
+#[test]
+fn creating_a_thread_from_many_threads_merges_them_in_one_pass() {
+    let (mut s, threads) = many_threads(150, 3);
+    select_firsts(&mut s, &threads);
+    let (made, n) = looks(|| s.execute("text.thread.create", &json!({})));
+    made.unwrap();
+    assert!(n <= 8 * (150 + 450), "{n} id lookups");
+    assert_eq!(s.doc().unwrap().doc.text_threads, vec![threads.concat()]);
+}
+
+/// Release Selection on one frame of each of many threads finds the selected frames with one
+/// lookup per frame.
+#[test]
+fn releasing_frames_of_many_threads_takes_one_pass() {
+    let (mut s, threads) = many_threads(150, 3);
+    select_firsts(&mut s, &threads);
+    let (released, n) = looks(|| s.execute("text.thread.releaseSelection", &json!({})));
+    released.unwrap();
+    assert!(n <= 2 * 450, "{n} id lookups");
+    let rest: Vec<Vec<NodeId>> = threads.iter().map(|t| t[1..].to_vec()).collect();
+    assert_eq!(s.doc().unwrap().doc.text_threads, rest);
+}
+
+/// Remove Threading on the last frame of each of many threads finds the selected frames with one
+/// lookup per frame.
+#[test]
+fn removing_the_threads_of_many_frames_takes_one_pass() {
+    let (mut s, threads) = many_threads(150, 3);
+    let lasts: Vec<u64> = threads.iter().map(|t| t[2].0).collect();
+    s.execute("select.set", &json!({ "ids": lasts })).unwrap();
+    let (removed, n) = looks(|| s.execute("text.thread.remove", &json!({})));
+    removed.unwrap();
+    assert!(n <= 2 * 450, "{n} id lookups");
+    assert!(s.doc().unwrap().doc.text_threads.is_empty());
+}
+
 /// The text that a thread's last frame has no room for is measured as the frame lays it out,
 /// without the first-line indent of the paragraph it continues: when the frame is outlined, the
 /// frame before it takes only that text.

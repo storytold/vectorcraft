@@ -623,6 +623,8 @@ font-technology	Variable	Варіативні
 	Convert to Artboards	Перетворити на монтажні області
 	Convert to CMYK	Перетворити на CMYK
 	Convert to Grayscale	Перетворити на відтінки сірого
+	Convert to Indexed Color	Перетворити на індексовані кольори
+	Convert to Indexed Color…	Перетворити на індексовані кольори…
 	Convert To Outlines	Перетворити на контури
 	Convert To Point Type	Перетворити на точковий текст
 	Convert to RGB	Перетворити на RGB
@@ -1617,6 +1619,8 @@ file-filter	Templates	Шаблони
 	Objects on Path Tool	Інструмент «Об’єкти на контурі»
 	Attach Objects on Path	Прикріпити об’єкти до контуру
 	Expand Objects on Path	Розібрати об’єкти на контурі
+	Detach	Відкріпити
+	Detach Object from Path	Відкріпити об’єкт від контуру
 	Release Live Paint	Звільнити швидку заливку
 	Release Repeat	Звільнити повтор
 	Release Slice	Звільнити фрагмент
@@ -2733,6 +2737,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
+	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
+	Canvas display profile:	Профіль дисплея для полотна:
+	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.
+	No usable display profile was found: the canvas is drawn in sRGB.	Придатний профіль дисплея не знайдено: полотно відображається в sRGB.
 	Rearrange All Artboards	Переставити всі монтажні області
 	Rearrange	Переставити
 	Select All Artboards	Виділити всі монтажні області
@@ -3673,6 +3682,11 @@ effect	Points	Точки
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметри Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметри Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметри Warichu…
+	Warichu Settings	Параметри Warichu
+	Lines:	Рядки:
+	Line Gap:	Інтервал між рядками:
 	Composite Fonts…	Складені шрифти…
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
@@ -4411,8 +4425,15 @@ axis	Both	Обидві
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не вдалося помістити {name}: документ, у який його перетягли, було закрито
 @msg	Couldn't place {name}: the document it was placed in was closed	Не вдалося помістити {name}: документ, у який його поміщали, було закрито
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не вдалося помістити {name}: документ, у який його перетягли, було повернуто до збереженої версії
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не вдалося помістити {name}: документ, у який його поміщали, було повернуто до збереженої версії
+@msg	Couldn't paste: the document it was pasted in was reverted	Не вдалося вставити: документ, у який виконувалося вставлення, було повернуто до збереженої версії
 @msg	Couldn't read {name}: {e}	Неможливо прочитати {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не вдалося зберегти дані відновлення: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення для {title}: {e}. Копії зберігаються в {folder}, типовій папці відновлення; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення для {title}: {e}. Копії зберігаються в {folder}, папці, заданій в установках; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення: {e}. Копії зберігаються в {folder}, типовій папці відновлення; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення: {e}. Копії зберігаються в {folder}, папці, заданій в установках; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Створення контурів: виділіть текстові об’єкти
 @msg	Create from Guides: the document has no artboard	Створення з напрямних: у документі немає монтажної області
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Створення з напрямних: напрямні утворюють більше {MAX_PIECES} фрагментів
@@ -4498,6 +4519,9 @@ axis	Both	Обидві
 @msg	`{keep}` is not a side of this axis	`{keep}` не є стороною цієї осі
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` має бути `auto` або кодом мови, наприклад `en` або `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` має бути кольором #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` має бути кольором #rrggbb або назвою кольору шару
+@msg	unknown Live Paint option `{key}`	невідомий параметр швидкої заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	невідомий параметр створення фігур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` має бути кольором #rrggbb
 @msg	`{key}` must be a number	`{key}` має бути числом
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
@@ -4657,6 +4681,7 @@ axis	Both	Обидві
 @msg	internal error: {msg} (please report this bug)	внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою: увімкніть «Записувати сторінки, довші за 200 in, у повному розмірі, у пунктах»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	у PDF 1.4 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб вкластися в межу сторінки PDF/A-2 у 14 400 одиниць: файл записується як PDF 1.6
@@ -4840,6 +4865,7 @@ axis	Both	Обидві
 @msg	paths contain invalid coordinates	контури містять неприпустимі координати
 @msg	paths: give at least one file	paths: вкажіть щонайменше один файл
 @msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
+@msg	the document it was prepared for is no longer active	документ, для якого це було підготовлено, більше не активний
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
 @msg	percent must be above 0 and at most 6400, not {p}	percent має бути більше 0 і не більше 6400, а не {p}
@@ -4875,6 +4901,7 @@ axis	Both	Обидві
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
 @msg	select an Objects on Path group	виділіть групу об’єктів на контурі
+@msg	choose the object to detach with its Select/Move widget	виберіть об’єкт для відкріплення його елементом «Вибрати/Перемістити»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	до контуру всередині складеного контуру, переходу, оболонки, повтору або групи переплетення не можна прикріпити об’єкти
 @msg	a clipping path can't take objects	до відсічного контуру не можна прикріпити об’єкти
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	об’єкти всередині переходу, оболонки, повтору або групи переплетення не можна прикріпити до контуру
@@ -5095,6 +5122,7 @@ axis	Both	Обидві
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Скасовано {n} відновлений документ|Скасовано {n} відновлені документи|Скасовано {n} відновлених документів
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Відновлено {n} документ: збережіть його, щоб залишити|Відновлено {n} документи: збережіть їх, щоб залишити|Відновлено {n} документів: збережіть їх, щоб залишити
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Відкрито з {n} приміткою: {first}|Відкрито з {n} примітками: {first}|Відкрито з {n} примітками: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Відкрито з {n} приміткою: {first}|{notice}. Відкрито з {n} примітками: {first}|{notice}. Відкрито з {n} примітками: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Збережено: {path} з {n} приміткою: {first}|Збережено: {path} з {n} примітками: {first}|Збережено: {path} з {n} примітками: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
 @msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень
@@ -5593,7 +5621,9 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графіка наноситься на плоскі грані: використайте тип об’єкта «Видавлювання» або «Площина»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
 @msg	The graphics are too complex: simplify the symbols' art	Графіка надто складна: спростіть ілюстрації символів
@@ -5947,7 +5977,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` застосовується до градієнтних заливок (paint.setFill)
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
-@msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+	Hue Clockwise	Відтінок за годинниковою стрілкою
+	Hue Counterclockwise	Відтінок проти годинникової стрілки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` має бути classic, perceptual, hue-clockwise або hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
@@ -6190,6 +6222,7 @@ axis	Y Axis	Вісь Y
 	Continue	Продовжити
 	Continue Action	Продовжити дію
 	Delete Action Step	Видалити крок дії
+	Move Action Step	Перемістити крок дії
 	Press Play Current Selection in the Actions panel to go on.	Щоб продовжити, натисніть «Відтворити поточне виділення» на панелі «Дії».
 	Stop: {message}	Зупинка: {message}
 @msg	no action is waiting at a stop	жодна дія не очікує на зупинці
@@ -6361,6 +6394,22 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+	Notched Ribbon	Стрічка з насічками
+	Double Line	Подвійна лінія
+	Wave	Хвиля
+	Teardrop	Крапля
+	Striped Ribbon	Смугаста стрічка
+	Fine Nib	Тонке перо
+	Broad Nib	Широке перо
+	Chisel	Стамеска
+	Round Pen	Кругле перо
+	Pressure Pen	Перо з натиском
+	Beads	Намистини
+	Dash Dot	Штрихпунктир
+	Scallops	Фестони
+	Stars	Зірки
+	Triangles	Трикутники
+	Sparkles	Іскри
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)
@@ -6472,6 +6521,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Інспектор опорних точок
 	Add Points at Crossings	Додати точки на перетинах
 	Split at Crossings	Розрізати на перетинах
+	Trim at Crossings Tool	Інструмент «Підрізання на перетинах»
+	Trim at Crossings	Підрізати на перетинах
 	Extend Path	Подовжити контур
 	Measure & Inspect	Вимірювання й аналіз
 	Set Anchor	Задати опорну точку
@@ -7054,3 +7105,9 @@ breakText	Glyphs	Гліфи
 	Margin	Поле
 	Box	Рамка
 	Swatch	Зразок
+	Banner Hems and Grommets…	Підгини та люверси банера…
+	Banner Hems and Grommets	Підгини та люверси банера
+	Hem	Підгин
+	Grommets	Люверси
+	Grommet Inset	Відступ люверсів від краю
+	Diameter	Діаметр

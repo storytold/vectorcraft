@@ -69,7 +69,7 @@ pub use adjust::{
     is_channel,
 };
 pub use bake::{StrokeArt, bake_appearance, bake_document, bake_type_appearance, expand_art, expand_leaf, fresh_ids, needs_bake};
-pub use clip::clip_outline;
+pub use clip::{WarpSeams, clip_outline, knockout_silhouette, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
     is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
@@ -95,7 +95,8 @@ pub use solids::{
     validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options, with_graphic,
 };
 pub use solids::{
-    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after, rename_appearance_graphic_symbol,
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after,
+    rename_appearance_graphic_symbol,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;

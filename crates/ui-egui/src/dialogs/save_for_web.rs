@@ -536,7 +536,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
             let (original, shots) = previews(app, ui.ctx(), s, &panes);
             let zoom = d.str("__zoom").parse::<f32>().ok().filter(|z| z.is_finite() && *z > 0.0).map(|z| z / 100.0);
             let kbps = d.f64("__kbps", 56.6);
-            let Some(checker) = app.session.active().map(|st| crate::canvas::checker_texture(ui.ctx(), &st.doc.setup)) else { return false };
+            let Some(checker) = app.session.active().map(|st| crate::canvas::checker_texture(ui.ctx(), &st.doc.setup, None)) else { return false };
             let cells: Vec<(egui::Rect, Pane)> = match view {
                 0 => vec![(area, Pane::Original)],
                 1 => vec![(area, Pane::Optimized(0))],

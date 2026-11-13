@@ -175,6 +175,8 @@ digits	Malayalam	말라얄람어
 	Blend Vertically	세로 혼합
 	Convert to CMYK	CMYK로 변환
 	Convert to Grayscale	회색조로 변환
+	Convert to Indexed Color	인덱스 색상으로 변환
+	Convert to Indexed Color…	인덱스 색상으로 변환…
 	Convert to RGB	RGB로 변환
 	Invert Colors	색상 반전
 	Overprint Black…	검정 겹쳐찍기…
@@ -1982,6 +1984,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -2779,6 +2783,11 @@ mark-style	Japanese	일본식
 	Rating:	평점:
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
+	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
+	Canvas display profile:	캔버스 디스플레이 프로필:
+	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
+	No usable display profile was found: the canvas is drawn in sRGB.	사용할 수 있는 디스플레이 프로필이 없습니다. 캔버스는 sRGB로 그려집니다.
 	Rearrange All Artboards	모든 아트보드 재정렬
 	Rearrange	재정렬
 	Select All Artboards	모든 아트보드 선택
@@ -3997,6 +4006,11 @@ file-filter	Templates	템플릿
 	Tate-chu-yoko	다테추요코
 	Tate-chu-yoko Settings…	다테추요코 설정…
 	Tate-chu-yoko Settings	다테추요코 설정
+	Warichu	와리추
+	Warichu Settings…	와리추 설정…
+	Warichu Settings	와리추 설정
+	Lines:	행:
+	Line Gap:	행 간격:
 	Composite Fonts…	합성 글꼴…
 	Composite Fonts	합성 글꼴
 	Export Composite Fonts	합성 글꼴 내보내기
@@ -4540,6 +4554,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
@@ -4550,6 +4565,9 @@ theme	Appearance	외관
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	웹에서는 경로로 설치할 수 없습니다. 모듈을 `dataBase64`로 전달하세요
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`은(는) `auto` 또는 `en`, `zh-hant` 같은 언어 코드여야 합니다
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`은(는) #rrggbb 색상이나 레이어 색상 이름이어야 합니다
+@msg	unknown Live Paint option `{key}`	알 수 없는 라이브 페인트 옵션 `{key}`
+@msg	unknown Shape Builder option `{key}`	알 수 없는 모양 빌더 옵션 `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
 @msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다
@@ -4757,6 +4775,7 @@ theme	Appearance	외관
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다: "200 in보다 긴 페이지를 실제 크기의 포인트로 기록"을 켜세요
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4에는 14,400 pt (200 in)보다 긴 페이지가 PDF/A-2의 페이지 한도인 14,400 단위 안에 들어가는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
@@ -5142,19 +5161,28 @@ theme	Appearance	외관
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
 @msg	Couldn't place {name}: the document it was placed in was closed	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 닫혔습니다
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name}을(를) 가져올 수 없습니다: 놓은 문서가 되돌려졌습니다
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 되돌려졌습니다
+@msg	Couldn't paste: the document it was pasted in was reverted	붙여넣을 수 없습니다: 붙여넣던 문서가 되돌려졌습니다
 @msg	no files to place	가져올 파일이 없습니다
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
 @msg	replace: the object to replace was changed or deleted	replace: 바꿀 개체가 변경되었거나 삭제되었습니다
+@msg	the document it was prepared for is no longer active	준비한 문서가 더 이상 활성 상태가 아닙니다
 @msg	Couldn't place {name}: {e}	{name}을(를) 가져올 수 없습니다: {e}
 @msg	no print service	인쇄 서비스가 없습니다
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
 @msg	there are no printer settings to open here	여기에는 열 수 있는 프린터 설정이 없습니다
 @msg	Couldn't save recovery data: {e}	복구 데이터를 저장할 수 없습니다: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title}의 복구 데이터를 저장할 수 없습니다: {e}. 복사본은 기본 복구 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title}의 복구 데이터를 저장할 수 없습니다: {e}. 복사본은 환경 설정에서 지정한 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	복구 데이터를 저장할 수 없습니다: {e}. 복사본은 기본 복구 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	복구 데이터를 저장할 수 없습니다: {e}. 복사본은 환경 설정에서 지정한 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
 @msg	Saved recovery data for {title}	{title}의 복구 데이터를 저장했습니다
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	참고 {n}건과 함께 열었습니다: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. 참고 {n}건과 함께 열었습니다: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	참고 {n}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Saving recovery data for {_1}	{_1}의 복구 데이터를 저장하는 중
 @msg	bad shortcut	잘못된 단축키
@@ -5574,7 +5602,9 @@ lighting	Light	광원
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	그래픽은 평평한 면에 매핑됩니다. 돌출 또는 평면 개체 유형을 사용하십시오
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
 @msg	The graphics are too complex: simplify the symbols' art	그래픽이 너무 복잡합니다. 심볼의 아트를 단순화하십시오
@@ -5928,7 +5958,9 @@ axis	Y Axis	Y축
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither`는 그레이디언트 칠에 적용됩니다 (paint.setFill)
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
-@msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+	Hue Clockwise	색조 시계 방향
+	Hue Counterclockwise	색조 시계 반대 방향
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method`는 classic, perceptual, hue-clockwise 또는 hue-counterclockwise여야 합니다
 @msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다
@@ -6171,6 +6203,7 @@ axis	Y Axis	Y축
 	Continue	계속
 	Continue Action	액션 계속
 	Delete Action Step	액션 단계 삭제
+	Move Action Step	액션 단계 이동
 	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
 	Stop: {message}	중지: {message}
 @msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
@@ -6342,6 +6375,22 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+	Notched Ribbon	노치 리본
+	Double Line	이중선
+	Wave	물결
+	Teardrop	눈물방울
+	Striped Ribbon	줄무늬 리본
+	Fine Nib	가는 펜촉
+	Broad Nib	넓은 펜촉
+	Chisel	끌
+	Round Pen	둥근 펜
+	Pressure Pen	필압 펜
+	Beads	구슬
+	Dash Dot	일점쇄선
+	Scallops	스캘럽
+	Stars	별
+	Triangles	삼각형
+	Sparkles	반짝임
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)
@@ -6453,6 +6502,8 @@ anchor	Points:	포인트:
 	Anchor Inspector	앵커 포인트 검사기
 	Add Points at Crossings	교차점에 포인트 추가
 	Split at Crossings	교차점에서 분할
+	Trim at Crossings Tool	교차점에서 트림 도구
+	Trim at Crossings	교차점에서 트림
 	Extend Path	패스 연장
 	Measure & Inspect	측정 및 검사
 	Set Anchor	앵커 포인트 설정
@@ -7035,3 +7086,9 @@ breakText	Glyphs	글리프
 	Margin	여백
 	Box	상자
 	Swatch	견본
+	Banner Hems and Grommets…	배너 단 접기 및 아일렛…
+	Banner Hems and Grommets	배너 단 접기 및 아일렛
+	Hem	단 접기
+	Grommets	아일렛
+	Grommet Inset	가장자리에서 아일렛까지 거리
+	Diameter	지름

@@ -629,6 +629,8 @@ font-technology	Variable	Variabili
 	Convert to Artboards	Converti in tavole da disegno
 	Convert to CMYK	Converti in CMYK
 	Convert to Grayscale	Converti in scala di grigi
+	Convert to Indexed Color	Converti in colore indicizzato
+	Convert to Indexed Color…	Converti in colore indicizzato…
 	Convert To Outlines	Converti in contorni
 	Convert To Point Type	Converti in testo per punti
 	Convert to RGB	Converti in RGB
@@ -1623,6 +1625,8 @@ file-filter	Templates	Modelli
 	Objects on Path Tool	Strumento Oggetti su tracciato
 	Attach Objects on Path	Aggancia oggetti al tracciato
 	Expand Objects on Path	Espandi oggetti su tracciato
+	Detach	Sgancia
+	Detach Object from Path	Sgancia oggetto dal tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -2741,6 +2745,11 @@ digits	Malayalam	Malayalam
 	Rating:	Valutazione:
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
+	Use Monitor Profile for Canvas	Usa il profilo del monitor per l'area di disegno
+	The canvas is drawn in sRGB.	L'area di disegno è visualizzata in sRGB.
+	Canvas display profile:	Profilo del display per l'area di disegno:
+	The system matches the window to the display's colors.	Il sistema adatta la finestra ai colori del display.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nessun profilo del display utilizzabile trovato: l'area di disegno è visualizzata in sRGB.
 	Rearrange All Artboards	Ridisponi tutte le tavole da disegno
 	Rearrange	Ridisponi
 	Select All Artboards	Seleziona tutte le tavole da disegno
@@ -3680,6 +3689,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Impostazioni Tate-chu-yoko…
 	Tate-chu-yoko Settings	Impostazioni Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Impostazioni Warichu…
+	Warichu Settings	Impostazioni Warichu
+	Lines:	Righe:
+	Line Gap:	Distanza tra le righe:
 	Composite Fonts…	Font compositi…
 	Composite Fonts	Font compositi
 	Export Composite Fonts	Esporta font compositi
@@ -4427,8 +4441,15 @@ axis	Both	Entrambi
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato chiuso
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossibile inserire {name}: il documento in cui veniva inserito è stato chiuso
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato ripristinato
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossibile inserire {name}: il documento in cui veniva inserito è stato ripristinato
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossibile incollare: il documento in cui si incollava è stato ripristinato
 @msg	Couldn't read {name}: {e}	Impossibile leggere {name}: {e}
 @msg	Couldn't save recovery data: {e}	Impossibile salvare i dati di recupero: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossibile salvare i dati di recupero di {title}: {e}. Le copie vanno in {folder}, la cartella di recupero predefinita; per usare un’altra cartella, imposta Preferenze → Gestione file → Recupero dati → Cartella (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossibile salvare i dati di recupero di {title}: {e}. Le copie vanno in {folder}, la cartella impostata nelle Preferenze; per usare un’altra cartella, imposta Preferenze → Gestione file → Recupero dati → Cartella (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossibile salvare i dati di recupero: {e}. Le copie vanno in {folder}, la cartella di recupero predefinita; per usare un’altra cartella, imposta Preferenze → Gestione file → Recupero dati → Cartella (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossibile salvare i dati di recupero: {e}. Le copie vanno in {folder}, la cartella impostata nelle Preferenze; per usare un’altra cartella, imposta Preferenze → Gestione file → Recupero dati → Cartella (recoveryFolder)
 @msg	Create Outlines: select text objects	Crea contorni: seleziona oggetti di testo
 @msg	Create from Guides: the document has no artboard	Crea da guide: il documento non ha una tavola da disegno
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crea da guide: le guide generano più di {MAX_PIECES} sezioni
@@ -4514,6 +4535,9 @@ axis	Both	Entrambi
 @msg	`{keep}` is not a side of this axis	`{keep}` non è un lato di questo asse
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` deve essere `auto` o un codice lingua come `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` deve essere un colore #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve essere un colore #rrggbb o il nome di un colore del livello
+@msg	unknown Live Paint option `{key}`	opzione di pittura dinamica sconosciuta `{key}`
+@msg	unknown Shape Builder option `{key}`	opzione del generatore forme sconosciuta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve essere un colore #rrggbb
 @msg	`{key}` must be a number	`{key}` deve essere un numero
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}
@@ -4673,6 +4697,7 @@ axis	Both	Entrambi
 @msg	internal error: {msg} (please report this bug)	errore interno: {msg} (segnala questo bug)
 @msg	invalid PDF setting: {0}	impostazione PDF non valida: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): viene scritta con una UserUnit di {unit}, quindi le app che ignorano UserUnit la mostrano altrettante volte più piccola
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): viene scritta con una UserUnit di {unit}, quindi le app che ignorano UserUnit la mostrano altrettante volte più piccola: attiva «Scrivi le pagine più lunghe di 200 in a grandezza reale, in punti»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): le pagine {label} vengono scritte senza UserUnit, in punti, e le app che rispettano il limite tagliano la pagina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per mantenere le sue dimensioni: il file viene scritto come PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per restare entro il limite di pagina di PDF/A-2, di 14.400 unità: il file viene scritto come PDF 1.6
@@ -4856,6 +4881,7 @@ axis	Both	Entrambi
 @msg	paths contain invalid coordinates	i tracciati contengono coordinate non valide
 @msg	paths: give at least one file	paths: specifica almeno un file
 @msg	replace: the object to replace was changed or deleted	replace: l’oggetto da sostituire è stato modificato o eliminato
+@msg	the document it was prepared for is no longer active	il documento per cui è stato preparato non è più attivo
 @msg	pattern missing	motivo mancante
 @msg	patterns nested too deeply are filled with mid-grey	i motivi annidati troppo in profondità vengono riempiti di grigio medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve essere maggiore di 0 e al massimo 6400, non {p}
@@ -4891,6 +4917,7 @@ axis	Both	Entrambi
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
+@msg	choose the object to detach with its Select/Move widget	scegli l’oggetto da sganciare con il suo controllo Seleziona/Sposta
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracciato all'interno di un tracciato composto, una fusione, un involucro, una ripetizione o un gruppo intrecciato non può ricevere oggetti
 @msg	a clipping path can't take objects	un tracciato di ritaglio non può ricevere oggetti
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	gli oggetti all'interno di una fusione, un involucro, una ripetizione o un gruppo intrecciato non possono essere agganciati a un tracciato
@@ -5111,6 +5138,7 @@ axis	Both	Entrambi
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Scartato {n} documento recuperato|Scartati {n} documenti recuperati
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Ripristinato {n} documento recuperato. Salvalo per conservarlo|Ripristinati {n} documenti recuperati. Salvali per conservarli
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aperto con {n} nota: {first}|Aperto con {n} note: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Aperto con {n} nota: {first}|{notice}. Aperto con {n} note: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Salvato {path} con {n} nota: {first}|Salvato {path} con {n} note: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Incorporata {n} immagine; mancanti: {missing} (ricollegale prima)|Incorporate {n} immagini; mancanti: {missing} (ricollegale prima)
 @msgplural	Embedded {n} image|Embedded {n} images	Incorporata {n} immagine|Incorporate {n} immagini
@@ -5613,7 +5641,9 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` face must be front or back	face di `{GRAPHICS}` deve essere front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Le grafiche si applicano a facce piane: usate il tipo di oggetto Estrusione o Piano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione
+@msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore
 @msg	The graphics are too complex: simplify the symbols' art	Le grafiche sono troppo complesse: semplificate il disegno dei simboli
@@ -5967,7 +5997,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` si applica ai riempimenti sfumati (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
-@msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+	Hue Clockwise	Tonalità in senso orario
+	Hue Counterclockwise	Tonalità in senso antiorario
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` deve essere classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
@@ -6210,6 +6242,7 @@ axis	Y Axis	Asse Y
 	Continue	Continua
 	Continue Action	Continua azione
 	Delete Action Step	Elimina passaggio dell’azione
+	Move Action Step	Sposta passaggio dell’azione
 	Press Play Current Selection in the Actions panel to go on.	Per continuare, premi Esegui selezione corrente nel pannello Azioni.
 	Stop: {message}	Interruzione: {message}
 @msg	no action is waiting at a stop	nessuna azione è in attesa a un'interruzione
@@ -6381,6 +6414,22 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+	Notched Ribbon	Nastro dentellato
+	Double Line	Doppia linea
+	Wave	Onda
+	Teardrop	Goccia
+	Striped Ribbon	Nastro a righe
+	Fine Nib	Pennino fine
+	Broad Nib	Pennino largo
+	Chisel	Scalpello
+	Round Pen	Penna tonda
+	Pressure Pen	Penna a pressione
+	Beads	Perline
+	Dash Dot	Tratto-punto
+	Scallops	Smerlo
+	Stars	Stelle
+	Triangles	Triangoli
+	Sparkles	Scintille
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
@@ -6492,6 +6541,8 @@ anchor	Points:	Punti:
 	Anchor Inspector	Ispettore punti di ancoraggio
 	Add Points at Crossings	Aggiungi punti agli incroci
 	Split at Crossings	Dividi agli incroci
+	Trim at Crossings Tool	Strumento Rifila agli incroci
+	Trim at Crossings	Rifila agli incroci
 	Extend Path	Estendi tracciato
 	Measure & Inspect	Misura e ispeziona
 	Set Anchor	Imposta punto di ancoraggio
@@ -7074,3 +7125,9 @@ breakText	Glyphs	Glifi
 	Margin	Margine
 	Box	Riquadro
 	Swatch	Campione
+	Banner Hems and Grommets…	Orli e occhielli per striscioni…
+	Banner Hems and Grommets	Orli e occhielli per striscioni
+	Hem	Orlo
+	Grommets	Occhielli
+	Grommet Inset	Distanza degli occhielli dal bordo
+	Diameter	Diametro

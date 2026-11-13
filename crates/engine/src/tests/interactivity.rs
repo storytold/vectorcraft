@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use crate::tests_links::{Folder, save, write};
 use crate::*;
 
 fn session() -> Session {
@@ -108,6 +109,124 @@ fn javascript_files_are_linked_once_and_unlinked() {
     assert_eq!(run(&mut s, "svgInteractivity.removeFile", json!({"file": "menu.js"}))["files"], json!(["https://example.com/a.js"]));
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(files(&mut s), json!(["menu.js", "https://example.com/a.js"]));
+}
+
+/// `cmd` with `p` for a caller whose read roots are `read` and whose write roots are `write`.
+fn confined(s: &mut Session, read: &[&Folder], write: &[&Folder], cmd: &str, p: Value) -> std::result::Result<Value, String> {
+    let read: Vec<&std::path::Path> = read.iter().map(|f| f.0.as_path()).collect();
+    let write: Vec<&std::path::Path> = write.iter().map(|f| f.0.as_path()).collect();
+    let roots = crate::file_access::AutomationRoots::new(&read, &write).unwrap();
+    crate::file_access::confine(roots.as_ref(), || s.execute(cmd, &p)).map_err(|e| e.to_string())
+}
+
+/// `info`, `addFile` and `removeFile` for a caller with read roots name a linked file outside them
+/// by its file name, a relative one taken from the document's folder; a file inside them and a URL
+/// are named as they are, and the document keeps every path.
+#[test]
+fn javascript_file_replies_hide_paths_outside_read_roots() {
+    let (away, home) = (Folder::new("js-replies-away"), Folder::new("js-replies-home"));
+    let (outside, inside) = (away.file("menu.js"), home.file("in.js"));
+    for f in [&outside, &inside, &away.file("lib/rel.js")] {
+        write(f, b"void 0;");
+    }
+    let url = "https://example.com/a.js";
+    let mut s = session();
+    for f in [outside.as_str(), inside.as_str(), url, "lib/rel.js"] {
+        run(&mut s, "svgInteractivity.addFile", json!({ "file": f }));
+    }
+    save(&mut s, &away.file("poster.vectorcraft"));
+    let stored = s.doc().unwrap().doc.svg_scripts.clone();
+    let shown = json!(["menu.js", inside, url, "rel.js"]);
+    let info = confined(&mut s, &[&home], &[], "svgInteractivity.info", json!({})).unwrap();
+    assert_eq!(info["files"], shown, "{info}");
+    let added = confined(&mut s, &[&home], &[], "svgInteractivity.addFile", json!({"file": "https://example.com/b.js"})).unwrap();
+    assert_eq!(added["files"], json!(["menu.js", inside, url, "rel.js", "https://example.com/b.js"]), "{added}");
+    let removed = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "https://example.com/b.js"})).unwrap();
+    assert_eq!(removed["files"], shown, "{removed}");
+    assert!(!format!("{info}{added}{removed}").contains("js-replies-away"));
+    // A caller with only write roots reads none of the paths.
+    let info = confined(&mut s, &[], &[&home], "svgInteractivity.info", json!({})).unwrap();
+    assert_eq!(info["files"], json!(["menu.js", "in.js", url, "rel.js"]), "{info}");
+    // A caller whose read roots hold the files, and one without roots, sees every path.
+    assert_eq!(confined(&mut s, &[&away, &home], &[], "svgInteractivity.info", json!({})).unwrap()["files"], json!(stored));
+    assert_eq!(run(&mut s, "svgInteractivity.info", json!({}))["files"], json!(stored));
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, stored, "the document keeps its paths");
+}
+
+/// A caller with read roots unlinks a file a reply names by its file name alone by that name, as
+/// one undo step; the name is not taken for a file it may read, nor without read roots.
+#[test]
+fn hidden_javascript_file_can_be_removed_by_unique_shown_name() {
+    let (away, home) = (Folder::new("js-remove-away"), Folder::new("js-remove-home"));
+    let (outside, inside) = (away.file("menu.js"), home.file("other.js"));
+    let mut s = session();
+    for f in [&outside, &inside] {
+        run(&mut s, "svgInteractivity.addFile", json!({ "file": f }));
+    }
+    assert!(s.execute("svgInteractivity.removeFile", &json!({"file": "menu.js"})).is_err(), "no name without read roots");
+    let e = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "other.js"})).unwrap_err();
+    assert!(e.contains("\"other.js\" isn't linked"), "a file inside the roots is unlinked by its path: {e}");
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "menu.js"})).unwrap();
+    assert_eq!(r["files"], json!([inside]), "{r}");
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [inside.as_str()]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [outside.as_str(), inside.as_str()]);
+    // A caller that knows the whole path unlinks the file by it.
+    let r = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({ "file": outside })).unwrap();
+    assert_eq!(r["files"], json!([inside]), "{r}");
+}
+
+/// Two linked files outside the read roots with the same file name: that name unlinks neither,
+/// and the error names no path.
+#[test]
+fn ambiguous_hidden_javascript_file_name_is_refused_without_edit() {
+    let (away, home) = (Folder::new("js-ambiguous-away"), Folder::new("js-ambiguous-home"));
+    let (a, b) = (away.file("a/menu.js"), away.file("b/menu.js"));
+    let mut s = session();
+    for f in [&a, &b] {
+        run(&mut s, "svgInteractivity.addFile", json!({ "file": f }));
+    }
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "menu.js"})).unwrap_err();
+    assert!(e.contains("\"menu.js\" names more than one linked JavaScript file") && !e.contains("js-ambiguous-away"), "{e}");
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [a.as_str(), b.as_str()]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    let e = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "nav.js"})).unwrap_err();
+    assert!(e.contains("\"nav.js\" isn't linked") && !e.contains("js-ambiguous-away"), "{e}");
+    // A file linked as the name itself, beside one outside the roots shown by that name: neither.
+    run(&mut s, "svgInteractivity.removeFile", json!({ "file": b }));
+    run(&mut s, "svgInteractivity.addFile", json!({"file": "menu.js"}));
+    let e = confined(&mut s, &[&home], &[], "svgInteractivity.removeFile", json!({"file": "menu.js"})).unwrap_err();
+    assert!(e.contains("names more than one"), "{e}");
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [a.as_str(), "menu.js"]);
+    // Without read roots the name is the file linked as it.
+    run(&mut s, "svgInteractivity.removeFile", json!({"file": "menu.js"}));
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [a.as_str()]);
+}
+
+/// `addFile` takes a file the same text links as already linked: a file name that a reply shows for
+/// a different file is linked as one more file, within the 64-file limit.
+#[test]
+fn adding_a_shown_name_does_not_deduplicate_a_different_hidden_path() {
+    let (away, home) = (Folder::new("js-add-away"), Folder::new("js-add-home"));
+    let mut s = session();
+    let outside = away.file("0.js");
+    run(&mut s, "svgInteractivity.addFile", json!({ "file": outside }));
+    let r = confined(&mut s, &[&home], &[], "svgInteractivity.addFile", json!({"file": "0.js"})).unwrap();
+    assert_eq!(r["files"], json!(["0.js", "0.js"]), "{r}");
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [outside.as_str(), "0.js"]);
+    run(&mut s, "edit.undo", json!({}));
+    for i in 1..64 {
+        run(&mut s, "svgInteractivity.addFile", json!({ "file": away.file(&format!("{i}.js")) }));
+    }
+    let e = confined(&mut s, &[&home], &[], "svgInteractivity.addFile", json!({"file": "0.js"})).unwrap_err();
+    assert!(e.contains("at most 64"), "a 65th file is refused: {e}");
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = confined(&mut s, &[&home], &[], "svgInteractivity.addFile", json!({ "file": outside })).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(64), "the same path is already linked");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }
 
 #[test]

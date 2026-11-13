@@ -140,14 +140,24 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 /// what didn't come in as it was, and missing links are asked about. The status bar names the
 /// first of the notes that say reading the file left something out (the ones that make Save ask
 /// before writing over it), else the first note, and keeps the notes in that order for its hover.
+/// A line about the document's linked files comes before the notes ([`show_opened`]).
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     let notes = open_notes(app, r);
-    if let Some(first) = notes.first() {
-        let status = opened_with_notes(notes.len(), first);
-        show_with_notes(app, status, notes);
-    }
-    crate::dialogs::missing_links::after_open(app, r);
+    crate::dialogs::missing_links::after_open(app, r, notes);
+}
+
+/// Show what an open says in the status bar: `notice`, a line about the document's linked files,
+/// then the open's `notes` ([`opened_with_notes`]), kept for the message's hover. Without either
+/// the status bar keeps its message.
+pub(crate) fn show_opened(app: &mut VectorcraftApp, notice: Option<String>, notes: Vec<String>) {
+    let status = match (notice, notes.first()) {
+        (Some(notice), Some(first)) => opened_after_notice(&notice, notes.len(), first),
+        (None, Some(first)) => opened_with_notes(notes.len(), first),
+        (Some(notice), None) => notice,
+        (None, None) => return,
+    };
+    show_with_notes(app, status, notes);
 }
 
 /// The notes of the open `r`, those of what reading the file left out (its document's
@@ -164,6 +174,16 @@ fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
 /// The status bar's line for a document opened with `n` notes, the first of them `first`.
 pub(crate) fn opened_with_notes(n: usize, first: &str) -> String {
     crate::i18n::msg_n(n as u64, "Opened with {n} note: {first}", "Opened with {n} notes: {first}", &[("first", first)])
+}
+
+/// [`opened_with_notes`] after `notice`, a line about the document's linked files.
+pub(crate) fn opened_after_notice(notice: &str, n: usize, first: &str) -> String {
+    crate::i18n::msg_n(
+        n as u64,
+        "{notice}. Opened with {n} note: {first}",
+        "{notice}. Opened with {n} notes: {first}",
+        &[("notice", notice), ("first", first)],
+    )
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -564,8 +584,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
     };
     let bytes = read(app, &path)?;
     let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
-    app.sync_views();
-    crate::dialogs::missing_links::after_open(app, &r);
+    opened(app, &r);
     Ok(r)
 }
 
