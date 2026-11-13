@@ -42,7 +42,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
                 app.run("tool.setOption", json!({ "key": "shape", "value": s_id })).ok();
             }
         }
-        ui.separator();
+        crate::chrome::group_separator(ui);
     }
 
     match active_shape.as_str() {
@@ -106,7 +106,7 @@ fn draw_ellipse_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, se
     if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
         apply_shape(app, &[("arcMode", json!("whole")), ("arcStart", json!(0.0)), ("arcEnd", json!(0.0))], json!({ "reset": true }));
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
@@ -164,7 +164,7 @@ fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, 
             json!({ "reset": true }),
         );
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, active_shape: &str, selected_custom: Option<CustomShape>) {
@@ -225,7 +225,7 @@ fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, ac
             json!({ "reset": true }),
         );
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
@@ -255,7 +255,7 @@ fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sel
     if widgets::flat_button(ui, tl!("Reset"), 52.0).clicked() {
         apply_shape(app, &[("turns", json!(3.0)), ("divergence", json!(1.0)), ("innerRadius", json!(0.0))], json!({ "reset": true }));
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, selected_custom: Option<CustomShape>) {
@@ -298,7 +298,7 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sele
             json!({ "reset": true }),
         );
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 fn mode_str(m: EllipseMode) -> &'static str {

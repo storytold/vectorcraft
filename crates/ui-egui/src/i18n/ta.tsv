@@ -1398,6 +1398,10 @@ antiAlias	Sharp	கூர்மையான
 	Dock Panel	பலகத்தை நிலைநிறுத்து
 	Dock to Top	மேலே நிலைநிறுத்து
 	Dock to Bottom	கீழே நிலைநிறுத்து
+	Dock to Left	இடப்புறம் நிலைநிறுத்து
+	Dock to Right	வலப்புறம் நிலைநிறுத்து
+	Dock Toolbar	கருவிப் பட்டையை நிலைநிறுத்து
+	Float Toolbar	கருவிப் பட்டையை மிதக்கவிடு
 	Control Bar Options	கட்டுப்பாட்டுப் பட்டி விருப்பங்கள்
 	Tool Options	கருவி விருப்பங்கள்
 	Object Options	பொருள் விருப்பங்கள்
@@ -4552,6 +4556,12 @@ antiAlias	Sharp	கூர்மையான
 	Show Slice Numbers	துண்டு எண்களைக் காட்டு
 	Show Slices	துண்டுகளைக் காட்டு
 	Show smooth color wheel	மென்மையான நிற வட்டத்தைக் காட்டு
+	Pixel Snapping Options	பிக்சல் பொருத்துதல் விருப்பங்கள்
+	Pixel Snapping Options…	பிக்சல் பொருத்துதல் விருப்பங்கள்…
+	Snap to Pixel While Drawing	வரையும்போது பிக்சலுடன் பொருத்து
+	Snap to Pixel While Moving	நகர்த்தும்போது பிக்சலுடன் பொருத்து
+	Snap to Pixel While Scaling	அளவு மாற்றும்போது பிக்சலுடன் பொருத்து
+	These options take effect when View › Snap to Pixel is on.	பார்வை › பிக்சலுடன் பொருத்து இயக்கத்தில் இருக்கும்போது இந்த விருப்பங்கள் செயல்படும்.
 	Show Snap to Glyph Options	குறியெழுத்துடன் பொருத்தும் விருப்பங்களைக் காட்டு
 	Show Swatch Bounds	வண்ண மாதிரி எல்லைகளைக் காட்டு
 	Show Swatch Kinds	வண்ண மாதிரி வகைகளைக் காட்டு
@@ -7224,6 +7234,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	no library `{key}` (see {list})	`{key}` என்ற நூலகம் இல்லை ({list} ஐப் பார்க்கவும்)
 @msg	No line breaks to remove	அகற்ற வரி முறிவுகள் எதுவும் இல்லை
 @msg	No linked files to look for	தேடுவதற்கு இணைக்கப்பட்ட கோப்புகள் இல்லை
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	இணைப்பு ஒரு சின்னம், வரைபட வடிவமைப்பு, வடிவமாதிரி அல்லது ஒளிபுகா மறைப்புக்குள் உள்ளது; கேன்வாஸில் அதற்கு இடம் இல்லை
 @msg	no Live Paint edge near that point	அந்தப் புள்ளிக்கு அருகில் நேரடி வண்ண விளிம்பு இல்லை
 @msg	no Live Paint face at that point	அந்தப் புள்ளியில் நேரடி வண்ண முகம் இல்லை
 @msg	no metafile format	மெட்டாஃபைல் வடிவம் இல்லை
@@ -8826,3 +8837,16 @@ theme	Appearance	தோற்றப்பாணி
 @msg	width and height must be more than 0 and at most {limit}	width, height 0 ஐ விட அதிகமாகவும் அதிகபட்சம் {limit} ஆகவும் இருக்க வேண்டும்
 	Pattern Objects	வடிவமாதிரிப் பொருட்கள்
 	Gradient Objects	சாய்வுப் பொருட்கள்
+	Font Details	எழுத்துரு விவரங்கள்
+	Linked Images	இணைக்கப்பட்ட படங்கள்
+	Embedded Images	உட்பொதிக்கப்பட்ட படங்கள்
+	Compound Paths	கூட்டுப் பாதைகள்
+	Text Objects	உரைப் பொருட்கள்
+	Placed Documents	இடப்பட்ட ஆவணங்கள்
+	Symbol Instances	சின்ன நிகழ்வுகள்
+	Gradient Meshes	சாய்வு வலைகள்
+	Blends	கலப்புகள்
+	Envelopes	உறைகள்
+	Intertwine Groups	பின்னிப்பிணைப்புக் குழுக்கள்
+	Opacity Masks	ஒளிபுகா மறைப்புகள்
+	Objects with Effects	விளைவுகளுடன் கூடிய பொருட்கள்

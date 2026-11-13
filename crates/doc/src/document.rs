@@ -286,7 +286,9 @@ impl Document {
         self.next_id = self.next_id.max(id);
     }
 
-    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
+    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data), then give
+    /// the objects outside the layer tree (opacity-mask art, symbols, graph designs and patterns)
+    /// whose id is missing or already taken a new one, so each stored object has an id of its own.
     pub fn fix_next_id(&mut self) {
         // Ids from [`MAX_NEXT_ID`] up (a damaged or hand-made file: #1718) are left out, as is a
         // counter up there: new ids start under them and never reach them, where counting on from
@@ -297,13 +299,12 @@ impl Document {
                 max = max.max(id);
             }
         };
-        for l in &self.layers {
-            l.walk(&mut |n| see(n.id.0));
-        }
+        self.visit_stored(|n, _| see(n.id.0));
         self.slices.iter().for_each(|s| see(s.id.0));
         self.assets.iter().for_each(|a| see(a.id));
         let counter = Some(self.next_id).filter(|n| *n <= MAX_NEXT_ID).unwrap_or(0);
         self.next_id = counter.max(max.saturating_add(1));
+        self.renumber_stored_duplicates();
     }
 
     /// Find a node anywhere in the tree.

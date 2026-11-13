@@ -868,6 +868,10 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Dock to Left	Zadokuj po lewej
+	Dock to Right	Zadokuj po prawej
+	Dock Toolbar	Zadokuj pasek narzędzi
+	Float Toolbar	Odepnij pasek narzędzi
 	Control Bar Options	Opcje paska sterowania
 	Tool Options	Opcje narzędzia
 	Object Options	Opcje obiektu
@@ -3874,6 +3878,20 @@ theme	Appearance	Wygląd
 	Spot Color Objects	Obiekty z kolorami dodatkowymi
 	Pattern Objects	Obiekty ze wzorkami
 	Gradient Objects	Obiekty z gradientami
+	Font Details	Szczegóły czcionek
+	Linked Images	Połączone obrazy
+	Embedded Images	Osadzone obrazy
+	Compound Paths	Ścieżki złożone
+	Text Objects	Obiekty tekstowe
+	Placed Documents	Umieszczone dokumenty
+	Symbol Instances	Wystąpienia symboli
+	Gradient Meshes	Siatki gradientowe
+	Blends	Przejścia
+	Envelopes	Koperty
+	Intertwine Groups	Grupy przeplatania
+	Opacity Masks	Maski krycia
+	Objects with Effects	Obiekty z efektami
+	Pattern Swatches	Próbki wzorków
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -5244,6 +5262,7 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for it is taken in the Fonts folder	wszystkie numerowane nazwy dla niego są zajęte w folderze czcionek
 @msg	every numbered name for {name} is taken in the document's folder	wszystkie numerowane nazwy dla {name} są zajęte w folderze dokumentu
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Łącze znajduje się w symbolu, wzorze wykresu, wzorku lub masce krycia i nie ma miejsca na obszarze roboczym
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
@@ -6574,6 +6593,13 @@ axis	Y Axis	Oś Y
 	Area Text	Tekst akapitowy
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcje przyciągania do pikseli
+	Pixel Snapping Options…	Opcje przyciągania do pikseli…
+	Snap to Pixel While Drawing	Przyciągaj do pikseli podczas rysowania
+	Snap to Pixel While Moving	Przyciągaj do pikseli podczas przesuwania
+	Snap to Pixel While Scaling	Przyciągaj do pikseli podczas skalowania
+	These options take effect when View › Snap to Pixel is on.	Te opcje działają, gdy włączona jest opcja Widok › Przyciągaj do pikseli.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów

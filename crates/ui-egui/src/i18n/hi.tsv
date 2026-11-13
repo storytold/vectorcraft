@@ -1386,6 +1386,10 @@ antiAlias	Sharp	शार्प
 	Dock Panel	पैनल डॉक करें
 	Dock to Top	ऊपर डॉक करें
 	Dock to Bottom	नीचे डॉक करें
+	Dock to Left	बाईं ओर डॉक करें
+	Dock to Right	दाईं ओर डॉक करें
+	Dock Toolbar	टूलबार डॉक करें
+	Float Toolbar	टूलबार फ़्लोट करें
 	Control Bar Options	नियंत्रण बार ऑप्शन्स
 	Tool Options	टूल ऑप्शन्स
 	Object Options	ऑब्जेक्ट ऑप्शन्स
@@ -4562,6 +4566,12 @@ antiAlias	Sharp	शार्प
 	Show Slice Numbers	स्लाइस नंबर दिखाएँ
 	Show Slices	स्लाइस दिखाएँ
 	Show smooth color wheel	चिकनी रंग पहिया दिखाएँ
+	Pixel Snapping Options	पिक्सेल पर स्नैप ऑप्शन्स
+	Pixel Snapping Options…	पिक्सेल पर स्नैप ऑप्शन्स…
+	Snap to Pixel While Drawing	ड्रॉ करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Moving	मूव करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Scaling	स्केल करते समय पिक्सेल के लिए स्नैप
+	These options take effect when View › Snap to Pixel is on.	ये ऑप्शन्स तब लागू होते हैं जब व्यू › पिक्सेल के लिए स्नैप चालू हो।
 	Show Snap to Glyph Options	ग्लिफ़ पर स्नैप ऑप्शन्स दिखाएँ
 	Show Swatch Bounds	स्वॉच की सीमाएँ दिखाएँ
 	Show Swatch Kinds	स्वॉच प्रकार दिखाएँ
@@ -4747,6 +4757,19 @@ antiAlias	Sharp	शार्प
 	Spot Color Objects	स्पॉट कलर्स के साथ ऑब्जेक्ट्स
 	Pattern Objects	पैटर्न्स के साथ ऑब्जेक्ट्स
 	Gradient Objects	ग्रेडिएंट्स के साथ ऑब्जेक्ट्स
+	Font Details	फ़ॉन्ट विवरण
+	Linked Images	लिंक्ड चित्र
+	Embedded Images	एम्बेडेड चित्र
+	Compound Paths	कंपाउंड पाथ्स
+	Text Objects	टेक्स्ट ऑब्जेक्ट्स
+	Placed Documents	प्लेस्ड डॉक्यूमेंट्स
+	Symbol Instances	सिंबल इंस्टेंस
+	Gradient Meshes	ग्रेडिएंट मेश
+	Blends	ब्लेंड्स
+	Envelopes	एन्वेलप्स
+	Intertwine Groups	इंटरट्वाइन समूह
+	Opacity Masks	ओपेसिटी मास्क
+	Objects with Effects	इफ़ेक्ट्स के साथ ऑब्जेक्ट्स
 	Spot Colors	स्पॉट रंग
 	Spot Colors (0)	स्पॉट कलर्स (0)
 	Spot Colors…	स्पॉट कलर्स…
@@ -7245,6 +7268,7 @@ antiAlias	Sharp	शार्प
 @msg	no library `{key}` (see {list})	कोई लाइब्रेरी `{key}` ({list} देखें)
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
 @msg	No linked files to look for	देखने के लिए कोई लिंक्ड फ़ाइल नहीं
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	लिंक किसी सिंबल, ग्राफ़ डिज़ाइन, पैटर्न या ओपेसिटी मास्क के अंदर है और कैनवास पर इसकी कोई जगह नहीं है
 @msg	no Live Paint edge near that point	उस बिंदु के पास कोई लाइव पेंट एज नहीं
 @msg	no Live Paint face at that point	उस बिंदु पर कोई लाइव पेंट फेस नहीं
 @msg	no metafile format	कोई मेटाफ़ाइल फ़ॉर्मैट

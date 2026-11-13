@@ -816,6 +816,10 @@
 	Dock Panel	პანელის მიმაგრება
 	Dock to Top	ზემოთ მიმაგრება
 	Dock to Bottom	ქვემოთ მიმაგრება
+	Dock to Left	მარცხნივ მიმაგრება
+	Dock to Right	მარჯვნივ მიმაგრება
+	Dock Toolbar	ხელსაწყოთა ზოლის მიმაგრება
+	Float Toolbar	მცურავი ხელსაწყოთა ზოლი
 	Control Bar Options	მართვის ზოლის პარამეტრები
 	Tool Options	ხელსაწყოს პარამეტრები
 	Object Options	ობიექტის პარამეტრები
@@ -3573,6 +3577,19 @@ theme	Appearance	იერსახე
 	Spot Color Objects	ობიექტები სპოტ-ფერებით
 	Pattern Objects	ობიექტები პატერნებით
 	Gradient Objects	ობიექტები გრადიენტებით
+	Font Details	შრიფტების დეტალები
+	Linked Images	დაკავშირებული გამოსახულებები
+	Embedded Images	ჩაშენებული გამოსახულებები
+	Compound Paths	შედგენილი ტრაექტორიები
+	Text Objects	ტექსტური ობიექტები
+	Placed Documents	განთავსებული დოკუმენტები
+	Symbol Instances	სიმბოლოს ეგზემპლარები
+	Gradient Meshes	გრადიენტული ბადეები
+	Blends	გადასვლები
+	Envelopes	გარსები
+	Intertwine Groups	გადახლართვის ჯგუფები
+	Opacity Masks	გაუმჭვირვალობის ნიღბები
+	Objects with Effects	ობიექტები ეფექტებით
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
@@ -5128,6 +5145,7 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -6744,6 +6762,13 @@ swatch	Bright Violet	კაშკაშა იისფერი
 	Area Text	არის ტექსტი
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	ტექსტის გაზომვა გლიფის საზღვრებით
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	პიქსელზე მიბმის პარამეტრები
+	Pixel Snapping Options…	პიქსელზე მიბმის პარამეტრები…
+	Snap to Pixel While Drawing	პიქსელზე მიბმა ხატვისას
+	Snap to Pixel While Moving	პიქსელზე მიბმა გადაადგილებისას
+	Snap to Pixel While Scaling	პიქსელზე მიბმა მასშტაბირებისას
+	These options take effect when View › Snap to Pixel is on.	ეს პარამეტრები მოქმედებს, როცა ხედი › პიქსელზე მიბმა ჩართულია.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
 	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა

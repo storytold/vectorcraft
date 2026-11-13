@@ -3435,6 +3435,20 @@ effect	Points	Punkte
 	Spot Color Objects	Objekte mit Volltonfarben
 	Pattern Objects	Objekte mit Mustern
 	Gradient Objects	Objekte mit Verläufen
+	Font Details	Schriftdetails
+	Linked Images	Verknüpfte Bilder
+	Embedded Images	Eingebettete Bilder
+	Compound Paths	Zusammengesetzte Pfade
+	Text Objects	Textobjekte
+	Placed Documents	Platzierte Dokumente
+	Symbol Instances	Symbolinstanzen
+	Gradient Meshes	Verlaufsgitter
+	Blends	Angleichungen
+	Envelopes	Hüllen
+	Intertwine Groups	Verflechtungsgruppen
+	Opacity Masks	Deckkraftmasken
+	Objects with Effects	Objekte mit Effekten
+	Pattern Swatches	Musterfarbfelder
 	Spot Colors	Volltonfarben
 	Spot Colors…	Volltonfarben…
 	Spread:	Ausbreitung:
@@ -4077,6 +4091,10 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Dock to Left	Links andocken
+	Dock to Right	Rechts andocken
+	Dock Toolbar	Werkzeugleiste andocken
+	Float Toolbar	Werkzeugleiste ablösen
 	Control Bar Options	Optionen der Steuerungsleiste
 	Tool Options	Werkzeugoptionen
 	Object Options	Objektoptionen
@@ -5033,6 +5051,7 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Die Verknüpfung befindet sich in einem Symbol, einem Diagrammdesign, einem Muster oder einer Deckkraftmaske und hat keinen Platz auf der Zeichenfläche
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -6311,6 +6330,13 @@ axis	Y Axis	Y-Achse
 	Area Text	Flächentext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Text an Glyphenbegrenzung messen
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Optionen für „An Pixel ausrichten“
+	Pixel Snapping Options…	Optionen für „An Pixel ausrichten“…
+	Snap to Pixel While Drawing	Beim Zeichnen an Pixel ausrichten
+	Snap to Pixel While Moving	Beim Verschieben an Pixel ausrichten
+	Snap to Pixel While Scaling	Beim Skalieren an Pixel ausrichten
+	These options take effect when View › Snap to Pixel is on.	Diese Optionen wirken, wenn Ansicht › An Pixel ausrichten aktiviert ist.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
 	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden

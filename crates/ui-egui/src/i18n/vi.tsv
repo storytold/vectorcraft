@@ -1012,6 +1012,10 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Dock to Left	Neo sang trái
+	Dock to Right	Neo sang phải
+	Dock Toolbar	Neo thanh công cụ
+	Float Toolbar	Thả nổi thanh công cụ
 	Control Bar Options	Tùy chọn thanh điều khiển
 	Tool Options	Tùy chọn công cụ
 	Object Options	Tùy chọn đối tượng
@@ -3851,6 +3855,20 @@ mark-style	Japanese	Kiểu Nhật
 	Spot Color Objects	Đối tượng có màu đặc biệt
 	Pattern Objects	Đối tượng có họa tiết
 	Gradient Objects	Đối tượng có chuyển sắc
+	Font Details	Chi tiết phông chữ
+	Linked Images	Hình ảnh đã liên kết
+	Embedded Images	Hình ảnh đã nhúng
+	Compound Paths	Đường dẫn phức
+	Text Objects	Đối tượng văn bản
+	Placed Documents	Tài liệu đã đặt
+	Symbol Instances	Thực thể ký hiệu
+	Gradient Meshes	Lưới chuyển sắc
+	Blends	Hòa trộn
+	Envelopes	Envelope
+	Intertwine Groups	Nhóm đan xen
+	Opacity Masks	Mặt nạ độ mờ
+	Objects with Effects	Đối tượng có hiệu ứng
+	Pattern Swatches	Mẫu màu họa tiết
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun
@@ -4982,6 +5000,7 @@ theme	Appearance	Giao diện
 @msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Liên kết nằm trong ký hiệu, thiết kế biểu đồ, họa tiết hoặc mặt nạ độ mờ và không có vị trí trên canvas
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó
 @msg	no Live Paint face at that point	không có mặt tô trực tiếp tại điểm đó
 @msg	no native format	không có định dạng gốc
@@ -6326,6 +6345,13 @@ axis	Y Axis	Trục Y
 	Area Text	Chữ vùng
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Tùy chọn hút vào pixel
+	Pixel Snapping Options…	Tùy chọn hút vào pixel…
+	Snap to Pixel While Drawing	Hút vào pixel khi vẽ
+	Snap to Pixel While Moving	Hút vào pixel khi di chuyển
+	Snap to Pixel While Scaling	Hút vào pixel khi thay đổi tỉ lệ
+	These options take effect when View › Snap to Pixel is on.	Các tùy chọn này có hiệu lực khi Hiển thị › Hút vào pixel đang bật.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph

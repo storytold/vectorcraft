@@ -2257,6 +2257,10 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Dock to Left	Αγκύρωση αριστερά
+	Dock to Right	Αγκύρωση δεξιά
+	Dock Toolbar	Αγκύρωση γραμμής εργαλείων
+	Float Toolbar	Αιωρούμενη γραμμή εργαλείων
 	Control Bar Options	Επιλογές γραμμής ελέγχου
 	Tool Options	Επιλογές εργαλείου
 	Object Options	Επιλογές αντικειμένου
@@ -3969,6 +3973,20 @@ digits	Malayalam	Μαλαγιάλαμ
 	Spot Color Objects	Αντικείμενα με χρώματα spot
 	Pattern Objects	Αντικείμενα με μοτίβα
 	Gradient Objects	Αντικείμενα με ντεγκραντέ
+	Font Details	Λεπτομέρειες γραμματοσειρών
+	Linked Images	Συνδεδεμένες εικόνες
+	Embedded Images	Ενσωματωμένες εικόνες
+	Compound Paths	Σύνθετες διαδρομές
+	Text Objects	Αντικείμενα κειμένου
+	Placed Documents	Τοποθετημένα έγγραφα
+	Symbol Instances	Στιγμιότυπα συμβόλων
+	Gradient Meshes	Πλέγματα ντεγκραντέ
+	Blends	Αναμείξεις
+	Envelopes	Περιβλήματα
+	Intertwine Groups	Ομάδες διαπλοκής
+	Opacity Masks	Μάσκες αδιαφάνειας
+	Objects with Effects	Αντικείμενα με εφέ
+	Path Length	Μήκος διαδρομής
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)
@@ -5057,6 +5075,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for it is taken in the Fonts folder	όλα τα αριθμημένα ονόματά του χρησιμοποιούνται ήδη στον φάκελο γραμματοσειρών
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -6671,6 +6690,13 @@ axis	Y Axis	Άξονας Y
 	Area Text	Κείμενο περιοχής
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Επιλογές προσκόλλησης σε εικονοστοιχείο
+	Pixel Snapping Options…	Επιλογές προσκόλλησης σε εικονοστοιχείο…
+	Snap to Pixel While Drawing	Προσκόλληση σε εικονοστοιχείο κατά τη σχεδίαση
+	Snap to Pixel While Moving	Προσκόλληση σε εικονοστοιχείο κατά τη μετακίνηση
+	Snap to Pixel While Scaling	Προσκόλληση σε εικονοστοιχείο κατά την αλλαγή κλίμακας
+	These options take effect when View › Snap to Pixel is on.	Αυτές οι επιλογές ισχύουν όταν είναι ενεργή η επιλογή Προβολή › Προσκόλληση σε εικονοστοιχείο.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή
