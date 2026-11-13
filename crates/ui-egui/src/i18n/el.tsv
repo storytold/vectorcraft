@@ -771,6 +771,8 @@ font-technology	Variable	Μεταβλητές
 	Delete Width Point	Διαγραφή σημείου πλάτους
 	Delete Workspace	Διαγραφή χώρου εργασίας
 	Delete {kind} Style	Διαγραφή στυλ {kind}
+	Delete the selected items and their artwork?	Να διαγραφούν τα επιλεγμένα στοιχεία και τα γραφικά τους;
+	Delete this layer and its artwork?	Να διαγραφεί αυτό το επίπεδο και τα γραφικά του;
 	Delete “{name}”?	Να διαγραφεί το «{name}»;
 	Depth:	Βάθος:
 	Description	Περιγραφή
@@ -979,12 +981,14 @@ font-technology	Variable	Μεταβλητές
 	Enable Contextual Task Bar	Ενεργοποίηση γραμμής εργασιών βάσει περιβάλλοντος
 	Enable copying of text, images and other content	Να επιτρέπεται η αντιγραφή κειμένου, εικόνων και άλλου περιεχομένου
 	Enable in-menu font previews	Ενεργοποίηση προεπισκόπησης γραμματοσειρών στα μενού
+	Show samples on white	Εμφάνιση δειγμάτων σε λευκό
 	Enable Missing Glyph Protection	Ενεργοποίηση προστασίας από ελλείποντες γλύφους
 	Enable Opacity Mask	Ενεργοποίηση μάσκας αδιαφάνειας
 	Enable plaintext metadata	Ενεργοποίηση μεταδεδομένων απλού κειμένου
 	Enable Rubber Band for	Ενεργοποίηση δυναμικής προεπισκόπησης γραμμής για
 	Enable text access for screen readers	Ενεργοποίηση πρόσβασης κειμένου για αναγνώστες οθόνης
 	Enable Touch Gestures	Ενεργοποίηση χειρονομιών αφής
+	Switch Selection and Drawing Modes	Εναλλαγή λειτουργιών επιλογής και σχεδίασης
 	Enable Touch Workspace	Ενεργοποίηση χώρου εργασίας αφής
 	Encoding	Κωδικοποίηση
 	Encoding:	Κωδικοποίηση:
@@ -2969,6 +2973,10 @@ theme	Appearance	Εμφάνιση
 	Long	Μακρύ
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Σύνολο Kinsoku
 	Kinsoku Shori Type	Τύπος Kinsoku Shori
 	Push In First	Πρώτα προς τα μέσα
@@ -4659,6 +4667,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	not a valid plug-in module: {0}	δεν είναι έγκυρη μονάδα προσθέτου: {0}
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
 @msg	not an HP-GL file	δεν είναι αρχείο HP-GL
+@msg	not a PICT file	δεν είναι αρχείο PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	το `pens` πρέπει να είναι πίνακας 1 έως 255 χρωμάτων #rrggbb
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
@@ -5035,6 +5044,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	choose the font files to add	επιλέξτε τα αρχεία γραμματοσειρών που θέλετε να προσθέσετε
 @msg	not a file	δεν είναι αρχείο
 @msg	not a font file	δεν είναι αρχείο γραμματοσειράς
+@msg	the active document changed while the question was open; nothing was deleted	το ενεργό έγγραφο άλλαξε ενώ η ερώτηση ήταν ανοιχτή· δεν διαγράφηκε τίποτα
 @msg	that document is no longer open	αυτό το έγγραφο δεν είναι πλέον ανοιχτό
 @msg	larger than 256 MB	μεγαλύτερο από 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	τα αρχεία ξεπερνούν το 1 GB: προσθέστε λιγότερα κάθε φορά
@@ -6335,6 +6345,35 @@ axis	Y Axis	Άξονας Y
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
+@msg	a number >= {_1}	αριθμός >= {_1}
+@msg	a number > {_1}	αριθμός > {_1}
+@msg	a number <= {_1}	αριθμός <= {_1}
+@msg	a number < {_1}	αριθμός < {_1}
+@msg	a number {_1} to {_2}	αριθμός από {_1} έως {_2}
+@msg	a number >= {_1} and < {_2}	αριθμός >= {_1} και < {_2}
+@msg	a number > {_1} and <= {_2}	αριθμός > {_1} και <= {_2}
+@msg	a number > {_1} and < {_2}	αριθμός > {_1} και < {_2}
+@msg	a number ({_1})	αριθμός ({_1})
+@msg	a number >= {_1} ({_2})	αριθμός >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	αριθμός > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	αριθμός <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	αριθμός < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	αριθμός από {_1} έως {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	αριθμός >= {_1} και < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	αριθμός > {_1} και <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	αριθμός > {_1} και < {_2} ({_3})
+@msg	an integer	ακέραιος
+@msg	an integer >= {_1}	ακέραιος >= {_1}
+@msg	an integer <= {_1}	ακέραιος <= {_1}
+@msg	an integer {_1} to {_2}	ακέραιος από {_1} έως {_2}
+@msg	one of {_1}	μία από τις τιμές {_1}
+@msg	`{path}` must be one of {_1}, not {got}	Το `{path}` πρέπει να είναι μία από τις τιμές {_1}, όχι {got}
+@msg	an object id (a non-negative integer)	αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
+@msg	a list of object ids	λίστα αναγνωριστικών αντικειμένων
+@msg	a color (a string, [r, g, b] or an object)	χρώμα (συμβολοσειρά, [r, g, b] ή αντικείμενο)
+@msg	[x, y] (two numbers)	[x, y] (δύο αριθμοί)
+@msg	an object	αντικείμενο
+@msg	a list	λίστα
 @msg	unknown key `{k}`; the keys here are {_1}	άγνωστο κλειδί `{k}`· τα κλειδιά εδώ είναι {_1}
 @msg	{_1} is listed twice	το {_1} αναφέρεται δύο φορές
 @msg	{_1} is not the id of an input object	το {_1} δεν είναι αναγνωριστικό αντικειμένου εισόδου
@@ -7172,7 +7211,9 @@ breakText	Glyphs	Γλύφοι
 @msg	“{shown}” opens {_1} files, not `{_2}`	το «{shown}» ανοίγει αρχεία {_1}, όχι `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εισαγωγής
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εξαγωγής
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	το `{_1}` είναι πρόσθετο εισαγωγής: ανοίξτε ένα αρχείο με document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	το `{_1}` είναι πρόσθετο εισαγωγής: ανοίξτε ένα αρχείο με document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	το `{_1}` είναι πρόσθετο εξαγωγής: κάντε εξαγωγή με document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	το `{_1}` είναι δυναμικό εφέ: εφαρμόστε το με effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	το πρόσθετο εισαγωγής δεν επέστρεψε κανένα αντικείμενο
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ένα πρόσθετο εισαγωγής επιστρέφει `objects` και `warnings`, όχι `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	το αρχείο είναι μεγαλύτερο από τα {MAX_INPUT_BYTES} byte που διαβάζει ένα πρόσθετο εισαγωγής

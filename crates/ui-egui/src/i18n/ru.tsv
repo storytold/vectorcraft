@@ -810,6 +810,8 @@ font-technology	Variable	Вариативные
 	Delete Width Point	Удалить точку ширины
 	Delete Workspace	Удалить рабочую среду
 	Delete {kind} Style	Удалить стиль {kind}
+	Delete the selected items and their artwork?	Удалить выбранные элементы вместе с графикой?
+	Delete this layer and its artwork?	Удалить этот слой вместе с графикой?
 	Delete “{name}”?	Удалить «{name}»?
 	Depth:	Глубина:
 	Description	Описание
@@ -1030,12 +1032,14 @@ font-technology	Variable	Вариативные
 	Enable Contextual Task Bar	Включить контекстную панель задач
 	Enable copying of text, images and other content	Разрешить копирование текста, изображений и другого содержимого
 	Enable in-menu font previews	Включить предварительный просмотр шрифтов в меню
+	Show samples on white	Показывать образцы на белом
 	Enable Missing Glyph Protection	Включить защиту отсутствующих глифов
 	Enable Opacity Mask	Включить непрозрачную маску
 	Enable plaintext metadata	Включить метаданные в виде простого текста
 	Enable Rubber Band for	Включить «резиновую полосу» для
 	Enable text access for screen readers	Разрешить доступ к тексту для программ чтения с экрана
 	Enable Touch Gestures	Включить сенсорные жесты
+	Switch Selection and Drawing Modes	Переключить режимы выделения и рисования
 	Enable Touch Workspace	Включить сенсорную рабочую среду
 	Encoding	Кодировка
 	Encoding:	Кодировка:
@@ -2068,6 +2072,10 @@ file-filter	Templates	Шаблоны
 	Long	Длинные
 	Stylistic	Стилистические
 	Mojikumi Set	Набор mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
 	Push In First	Сначала втягивать
@@ -4743,6 +4751,7 @@ axis	Both	Оба
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
 @msg	not an HP-GL file	не является файлом HP-GL
+@msg	not a PICT file	не является файлом PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` должен быть массивом из 1–255 цветов #rrggbb
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора
@@ -5125,6 +5134,7 @@ axis	Both	Оба
 @msg	choose the font files to add	выберите файлы шрифтов для добавления
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифта
+@msg	the active document changed while the question was open; nothing was deleted	активный документ сменился, пока был открыт вопрос; ничего не удалено
 @msg	that document is no longer open	этот документ больше не открыт
 @msg	larger than 256 MB	больше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файлы занимают больше 1 ГБ: добавляйте меньше за раз
@@ -5995,6 +6005,35 @@ axis	Y Axis	Ось Y
 @msg	the path has no anchor points	у контура нет опорных точек
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})
 @msg	true or false	true или false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число от {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} и < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} и <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} и < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число от {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} и < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} и <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} и < {_2} ({_3})
+@msg	an integer	целое число
+@msg	an integer >= {_1}	целое число >= {_1}
+@msg	an integer <= {_1}	целое число <= {_1}
+@msg	an integer {_1} to {_2}	целое число от {_1} до {_2}
+@msg	one of {_1}	одно из значений {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` должно быть одним из значений {_1}, а не {got}
+@msg	an object id (a non-negative integer)	идентификатор объекта (неотрицательное целое число)
+@msg	a list of object ids	список идентификаторов объектов
+@msg	a color (a string, [r, g, b] or an object)	цвет (строка, [r, g, b] или объект)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	объект
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	неизвестный ключ `{k}`; здесь допустимы ключи {_1}
 @msg	{_1} is listed twice	{_1} указан дважды
 @msg	{_1} is not the id of an input object	{_1} не является идентификатором входного объекта
@@ -7309,7 +7348,9 @@ shape	Open	Открытый
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» открывает файлы {_1}, а не `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` является модулем вида `{_2}`, а не модулем импорта
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` является модулем вида `{_2}`, а не модулем экспорта
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` — модуль экспорта: экспортируйте с помощью document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` — динамический эффект: примените его с помощью effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	модуль импорта не вернул ни одного объекта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль импорта возвращает `objects` и `warnings`, а не `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл больше {MAX_INPUT_BYTES} байт, которые читает модуль импорта

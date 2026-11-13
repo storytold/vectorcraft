@@ -495,19 +495,21 @@ impl Tool for PenTool {
             return t.overlays(cx);
         }
         let mut o = vec![];
-        if cx.pen_rubber_band
-            && self.drag.is_none()
+        // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
+        if self.drag.is_none()
             && self.handle.is_none()
             && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
-            let mut bp = BezPath::new();
-            bp.move_to(last);
-            if out.distance(last) > 1e-9 {
-                bp.quad_to(out, h);
-            } else {
-                bp.line_to(h);
+            if cx.pen_rubber_band {
+                let mut bp = BezPath::new();
+                bp.move_to(last);
+                if out.distance(last) > 1e-9 {
+                    bp.quad_to(out, h);
+                } else {
+                    bp.line_to(h);
+                }
+                o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
             }
-            o.push(Overlay::Path { path: bp, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
             if cx.measurement_labels && last.distance(h) > 1e-9 {
                 o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(last, h) });
             }

@@ -790,6 +790,108 @@ fn a_modified_turn_that_starts_a_stream_keeps_it_off_the_field() {
     assert_eq!((left, notches), (1, 0), "the stream began as a modified turn");
 }
 
+/// The font menus of two panels (other ids, other scopes) share their filters: a filter chosen in
+/// one menu is on when the other opens, and it lists its rows by it.
+#[test]
+fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
+    use vectorcraft_text::FontClass;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let fields = [("character", "character-font", 10.0), ("control-bar", "control-font", 60.0)];
+    let field = |top: f32| egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(200.0, 30.0));
+    // Draws both fields (and the open menu), and returns the texts drawn with their centers and
+    // each menu's state.
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0))), ..Default::default() };
+        let mut ids = [egui::Id::NULL; 2];
+        let mut out = ctx.run_ui(input, |ui| {
+            for (i, (scope, id, top)) in fields.into_iter().enumerate() {
+                ui.push_id(scope, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(field(top)), |ui| {
+                        ids[i] = ui.scope_id().with(id).with("font-menu");
+                        super::font_menu(ui, id, "Inter", 200.0, None, super::MenuLook { samples: false, ..Default::default() });
+                    });
+                });
+            }
+        });
+        out.textures_delta.clear();
+        let texts: Vec<(String, egui::Pos2)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => None,
+            })
+            .collect();
+        let states = ids.map(|id| ctx.data(|d| d.get_temp::<super::MenuState>(id)).unwrap_or_default());
+        (texts, states)
+    };
+    let press = |at: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(vec![button(false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    let open = |i: usize| press(field(fields[i].2).min + egui::vec2(10.0, 10.0));
+    let close = || {
+        let escape = [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+        frame(escape.to_vec());
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    // The topmost text `label`: a filter chip, above the rows.
+    let chip = |label: &str| {
+        let (texts, _) = frame(vec![]);
+        texts
+            .into_iter()
+            .filter(|(t, _)| t == label)
+            .map(|(_, at)| at)
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap_or_else(|| panic!("{label} is drawn"))
+    };
+    let families = |st: &super::MenuState| st.rows.iter().filter(|r| matches!(r, Row::Family(_))).count();
+    let filters = |st: &super::MenuState| (st.script, st.class, st.variable_only, st.favorites_only);
+    frame(vec![]);
+    // Favorites only, chosen in the first panel's menu, with no favorites: the second lists nothing.
+    open(0);
+    press(chip("★"));
+    close();
+    let (_, [first, second]) = frame(vec![]);
+    assert!(first.favorites_only && second.favorites_only, "the second menu has the filter before it opens");
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert!(second.favorites_only);
+    assert_eq!(families(&second), 0, "no favorites, so the second menu lists no family");
+    // A script, a kind and Variable chosen in the second panel's menu are on in the first.
+    press(chip(super::script_label(3)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(0);
+    let (_, [first, _]) = frame(vec![]);
+    assert_eq!(filters(&first), (3, Some(FontClass::Monospaced), true, true));
+    // Every filter, turned off in the first menu, is off in the second, which lists families again.
+    press(chip("★"));
+    press(chip(super::script_label(0)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert_eq!(filters(&second), (0, None, false, false));
+    assert!(families(&second) > 0, "every family is listed again");
+}
+
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
 #[test]
 fn the_variable_filter_is_named_as_fonts_are() {
@@ -881,4 +983,51 @@ fn the_variable_filter_lists_only_variable_families() {
     assert!(!st.variable_only);
     assert!(lasting.iter().all(|f| has(&again, f)), "{again:?}");
     assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
+}
+
+/// A Type › Font menu item's sample follows Show samples on white: dark type on a white slot,
+/// or the interface's dimmed text color with nothing behind it. The slot is white while the
+/// sample is still rendering too.
+#[test]
+fn a_menu_items_sample_follows_show_samples_on_white() {
+    use crate::theme::{Brightness, Tokens};
+    let dark = Tokens::for_brightness(Brightness::Light).text;
+    for b in Brightness::ALL {
+        let t = Tokens::for_brightness(b);
+        for on_white in [false, true] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+            let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+            let frame = || {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "Inter", on_white));
+                out.textures_delta.clear();
+                out.shapes
+            };
+            frame();
+            super::wait_for_samples(&ctx);
+            let shapes = frame();
+            let tints: Vec<_> = shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => m.vertices.first().map(|v| v.color),
+                    _ => None,
+                })
+                .collect();
+            let papers =
+                shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)).count();
+            assert_eq!(tints, [if on_white { dark } else { t.text_dim }], "{}, on white {on_white}", b.id());
+            assert_eq!(papers, usize::from(on_white), "{}, on white {on_white}", b.id());
+        }
+    }
+    // While a family's sample is still rendering, its slot is already white.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "JetBrains Mono", true));
+    out.textures_delta.clear();
+    let shapes = out.shapes;
+    super::wait_for_samples(&ctx);
+    assert!(!shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default())), "no sample");
+    assert!(shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)), "the slot is white");
 }

@@ -200,7 +200,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Remembers Layers",
             ["Window", "Layers"],
             None,
-            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers they were copied from (by name; a missing one is made on top), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
+            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers or sublayers they were copied from (in that document while they are still there, else by the names of the layer and the layers around it, the topmost match first; a missing sublayer is made inside its layer, a missing top-level layer on top; a hidden or locked one is an error and nothing is pasted), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
             has_doc,
             paste_remembers_layers
         ),

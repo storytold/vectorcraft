@@ -806,6 +806,8 @@ font-technology	Variable	Варіативні
 	Delete Width Point	Видалити точку ширини
 	Delete Workspace	Видалити робоче середовище
 	Delete {kind} Style	Видалити стиль {kind}
+	Delete the selected items and their artwork?	Видалити вибрані елементи разом із графікою?
+	Delete this layer and its artwork?	Видалити цей шар разом із графікою?
 	Delete “{name}”?	Видалити "{name}"?
 	Depth:	Глибина:
 	Description	Опис
@@ -1035,12 +1037,14 @@ font-technology	Variable	Варіативні
 	Enable Contextual Task Bar	Увімкнути контекстну панель завдань
 	Enable copying of text, images and other content	Дозволити копіювання тексту, зображень та іншого вмісту
 	Enable in-menu font previews	Увімкнути попередній перегляд шрифтів у меню
+	Show samples on white	Показувати зразки на білому
 	Enable Missing Glyph Protection	Увімкнути захист відсутніх гліфів
 	Enable Opacity Mask	Увімкнути маску непрозорості
 	Enable plaintext metadata	Увімкнути метадані у вигляді простого тексту
 	Enable Rubber Band for	Включити «гумову смугу» для
 	Enable text access for screen readers	Дозволити доступ до тексту для програм читання з екрану
 	Enable Touch Gestures	Увімкнути сенсорні жести
+	Switch Selection and Drawing Modes	Перемкнути режими виділення та малювання
 	Enable Touch Workspace	Включити сенсорне робоче середовище
 	Encoding	Кодування
 	Encoding:	Кодування:
@@ -2073,6 +2077,10 @@ file-filter	Templates	Шаблони
 	Long	Довгі
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набір kinsoku
 	Kinsoku Shori Type	Тип kinsoku shori
 	Push In First	Спершу втягувати
@@ -4741,6 +4749,7 @@ axis	Both	Обидві
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
 @msg	not an HP-GL file	не є файлом HP-GL
+@msg	not a PICT file	не є файлом PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` має бути масивом із 1–255 кольорів #rrggbb
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
@@ -5123,6 +5132,7 @@ axis	Both	Обидві
 @msg	choose the font files to add	виберіть файли шрифтів для додавання
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифту
+@msg	the active document changed while the question was open; nothing was deleted	активний документ змінився, поки питання було відкрите; нічого не видалено
 @msg	that document is no longer open	цей документ більше не відкрито
 @msg	larger than 256 MB	більше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файли займають понад 1 ГБ: додавайте менше за раз
@@ -5989,6 +5999,35 @@ axis	Y Axis	Вісь Y
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число від {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} і < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} і <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} і < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число від {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} і < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} і <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} і < {_2} ({_3})
+@msg	an integer	ціле число
+@msg	an integer >= {_1}	ціле число >= {_1}
+@msg	an integer <= {_1}	ціле число <= {_1}
+@msg	an integer {_1} to {_2}	ціле число від {_1} до {_2}
+@msg	one of {_1}	одне зі значень {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` має бути одним зі значень {_1}, а не {got}
+@msg	an object id (a non-negative integer)	ідентифікатор об’єкта (невід’ємне ціле число)
+@msg	a list of object ids	список ідентифікаторів об’єктів
+@msg	a color (a string, [r, g, b] or an object)	колір (рядок, [r, g, b] або об’єкт)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	об’єкт
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	невідомий ключ `{k}`; тут допустимі ключі {_1}
 @msg	{_1} is listed twice	{_1} вказано двічі
 @msg	{_1} is not the id of an input object	{_1} не є ідентифікатором вхідного об’єкта
@@ -6829,7 +6868,9 @@ breakText	Glyphs	Гліфи
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» відкриває файли {_1}, а не `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` є модулем виду `{_2}`, а не модулем імпорту
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` є модулем виду `{_2}`, а не модулем експорту
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` - модуль експорту: експортуйте за допомогою document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` - динамічний ефект: застосуйте його за допомогою effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл більший за {MAX_INPUT_BYTES} байтів, які читає модуль імпорту

@@ -397,7 +397,9 @@ pub(crate) fn commit_new_art_colors(s: &mut Session) -> Result<()> {
     Ok(())
 }
 
-fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
+/// Record new-art paints `before` and the session's current ones with the step just made (or the
+/// interaction or undo group in progress), so Undo puts `before` back and Redo the current ones.
+pub(super) fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
     let after = s.paint.clone();
     if before != after || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
         let st = s.doc_mut()?;
@@ -422,7 +424,9 @@ fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaul
     Ok(())
 }
 
-fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
+/// The new-art paints an undo step that starts now puts back: those at the start of the undo group
+/// or interaction in progress, else the session's current ones.
+pub(super) fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
     let st = s.doc()?;
     Ok(st.undo_group.as_ref().map(|g| &g.paint).or_else(|| st.interaction.as_ref().map(|it| &it.paint)).cloned().unwrap_or_else(|| s.paint.clone()))
 }

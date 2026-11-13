@@ -732,6 +732,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
     ),
     (
+        "tool.toggleTouchMode",
+        "Switch Selection and Drawing Modes",
+        "",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
+    ),
+    (
         "effect.dialog",
         "Effect…",
         "",
@@ -944,6 +950,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Options for Selection…",
         "",
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
+    ),
+    (
+        "ui.layerDelete",
+        "Delete Selection",
+        "",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",

@@ -452,6 +452,127 @@ fn dragging_rows_onto_the_trash_deletes_them() {
     assert!(doc.node(top).is_none());
 }
 
+/// The message of the confirmation open now, if one is.
+fn asked(app: &VectorcraftApp) -> Option<String> {
+    app.ui.dialog.as_ref().filter(|d| d.kind == crate::dialogs::confirm::KIND).map(|d| d.str("message"))
+}
+
+/// The trash, the Delete key and rows dropped on the trash ask before deleting a layer that holds
+/// art, hidden and locked art included: Cancel keeps it, and OK deletes the rows it asked about in
+/// one undo step, even after another row was highlighted.
+#[test]
+fn deleting_a_layer_that_holds_art_asks_first() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    run(&mut app, "layer.setProps", json!({"ids": [rect.0], "visible": false, "locked": true}));
+    let art = app.session.active().unwrap().doc.layers[0].id;
+    run(&mut app, "layer.new", json!({}));
+    let there = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(art).is_some();
+    let ctx = egui::Context::default();
+    // Rows top first: Layer 2, Layer 1, its rectangle.
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    let name = |i: usize| egui::pos2(150.0, c[i].y);
+    let question = Some("Delete this layer and its artwork?".to_string());
+    click_with(&mut app, &ctx, name(1), egui::Modifiers::NONE);
+    let trash = trash_pos(&mut app, &ctx);
+    click_with(&mut app, &ctx, trash, egui::Modifiers::NONE);
+    assert_eq!(asked(&app), question, "the trash asks");
+    assert!(there(&app), "nothing is deleted before OK");
+    crate::dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none() && there(&app), "Cancel keeps the layer");
+    click_with(&mut app, &ctx, name(1), egui::Modifiers::NONE);
+    let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame(&mut app, &ctx, vec![del], false);
+    assert_eq!(asked(&app), question, "Delete asks");
+    assert!(there(&app));
+    crate::dialogs::cancel(&mut app);
+    let undo = app.session.active().unwrap().history.undo.len();
+    drag(&mut app, &ctx, c[1] - vec2(100.0, 0.0), trash, false);
+    assert_eq!(asked(&app), question, "a drop on the trash asks");
+    assert!(there(&app));
+    // Highlighting Layer 2 now leaves OK deleting the row that was dropped.
+    click_with(&mut app, &ctx, name(0), egui::Modifiers::NONE);
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    assert!(app.ui.dialog.is_none() && st.doc.node(art).is_none() && st.doc.node(rect).is_none());
+    assert_eq!((st.doc.layers.len(), st.history.undo.len()), (1, undo + 1), "one undo step");
+    run(&mut app, "edit.undo", json!({}));
+    assert!(there(&app));
+}
+
+/// The panel menu's Delete Selection (`ui.layerDelete`) asks once for several rows when one of
+/// them is a layer with art, art in a sublayer included; an empty layer, a layer with only a
+/// guide, and objects alone go at once, and `layer.delete` itself never asks.
+#[test]
+fn delete_selection_asks_only_for_layers_with_art() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let bottom = app.session.active().unwrap().doc.layers[0].id.0;
+    let loose = id(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})));
+    let outer = id(run(&mut app, "layer.new", json!({})));
+    let sub = id(run(&mut app, "layer.newSublayer", json!({})));
+    let nested = id(run(&mut app, "shape.ellipse", json!({"x": 50, "y": 50, "width": 20, "height": 20})));
+    run(&mut app, "select.none", json!({}));
+    let empty = id(run(&mut app, "layer.new", json!({"top": true})));
+    let guided = id(run(&mut app, "layer.new", json!({"top": true})));
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50, "layer": guided}));
+    run(&mut app, "select.none", json!({}));
+    let exists = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(NodeId(id)).is_some();
+    for (rows, what) in [(json!([empty]), "an empty layer"), (json!([guided]), "a layer with only a guide"), (json!([loose]), "an object")] {
+        app.run("ui.layerDelete", json!({ "ids": rows })).unwrap();
+        assert!(app.ui.dialog.is_none(), "{what} goes at once");
+        assert!(!exists(&app, rows[0].as_u64().unwrap()), "{what} is deleted");
+    }
+    run(&mut app, "edit.undo", json!({}));
+    // Art in a sublayer counts; the highlighted rows are the default, and a mixed selection asks once.
+    run(&mut app, "layer.highlight", json!({"ids": [outer, loose]}));
+    app.run("ui.layerDelete", json!({})).unwrap();
+    assert_eq!(asked(&app).as_deref(), Some("Delete the selected items and their artwork?"));
+    assert!(exists(&app, nested) && exists(&app, loose));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(!exists(&app, outer) && !exists(&app, sub) && !exists(&app, nested) && !exists(&app, loose));
+    assert!(app.ui.dialog.is_none(), "asked once");
+    // A sublayer with art asks as a layer does.
+    run(&mut app, "edit.undo", json!({}));
+    app.run("ui.layerDelete", json!({ "id": sub })).unwrap();
+    assert_eq!(asked(&app).as_deref(), Some("Delete this layer and its artwork?"));
+    crate::dialogs::cancel(&mut app);
+    // Scripts deleting with layer.delete are not asked.
+    app.run("layer.delete", json!({ "ids": [outer] })).unwrap();
+    assert!(app.ui.dialog.is_none() && !exists(&app, outer));
+    assert!(exists(&app, bottom));
+}
+
+/// Rows `layer.delete` refuses are refused without a question, and OK deletes nothing once another
+/// document is active.
+#[test]
+fn delete_selection_refusals_and_a_document_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    let only = app.session.active().unwrap().doc.layers[0].id.0;
+    let e = app.run("ui.layerDelete", json!({ "ids": [only] })).unwrap_err();
+    assert!(e.contains("at least one layer") && app.ui.dialog.is_none(), "{e}");
+    for bad in [json!({"ids": [999_999]}), json!({"id": "x"}), json!({"ids": 3}), json!({"confirmed": "yes"}), json!({"doc": -1})] {
+        assert!(app.run("ui.layerDelete", bad.clone()).is_err() && app.ui.dialog.is_none(), "{bad}");
+    }
+    let art = run(&mut app, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    app.run("ui.layerDelete", json!({ "ids": [art] })).unwrap();
+    assert!(asked(&app).is_some());
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    let e = crate::dialogs::confirm(&mut app).unwrap_err();
+    assert!(e.contains("nothing was deleted"), "{e}");
+    let first = &app.session.documents()[0].doc;
+    assert!(first.node(NodeId(art)).is_some(), "the first document keeps the layer");
+}
+
 #[test]
 fn renaming_a_layer_commits_on_enter_and_escape_cancels() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -665,9 +786,11 @@ fn rows_at_every_depth_are_clickable() {
     assert_eq!(rows_of(&app), vec![sub, b, a]);
     click_with(&mut app, &ctx, name(5), egui::Modifiers::COMMAND);
     assert_eq!(rows_of(&app), vec![sub, b, a, c]);
-    // Delete with the panel's keyboard: the highlighted rows go.
+    // Delete with the panel's keyboard: the highlighted rows go once OK answers the question the
+    // sublayer's art asks.
     let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
     frame(&mut app, &ctx, vec![del], false);
+    crate::dialogs::confirm(&mut app).unwrap();
     let d = &app.session.active().unwrap().doc;
     assert!(d.node(sub).is_none() && d.node(c).is_none());
     assert_eq!(d.layers.len(), 1);
