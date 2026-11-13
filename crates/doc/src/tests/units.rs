@@ -228,3 +228,15 @@ fn q_and_ha_suffixes_do_not_take_other_units_suffixes() {
     // A suffix after math covers the whole expression, as for the other units.
     assert!((Unit::Points.parse("26/2 q").unwrap() - Unit::Q.to_pt(13.0)).abs() < 1e-9);
 }
+
+#[test]
+fn format_area_formats_and_trims_cleanly() {
+    assert_eq!(Unit::Points.format_area(100.0), "100 pt²");
+    assert_eq!(Unit::Inches.format_area(4.5 * 72.0 * 72.0), "4.5 in²");
+    let mm_side = Unit::Millimeters.to_pt(1.0);
+    assert_eq!(Unit::Millimeters.format_area(12.5 * mm_side * mm_side), "12.5 mm²");
+    assert_eq!(Unit::Points.format_area(0.0), "0 pt²");
+    assert_eq!(Unit::Points.format_area(-10.0), "0 pt²");
+    assert_eq!(Unit::Points.format_area(f64::NAN), "0 pt²");
+    assert_eq!(Unit::Points.format_area(f64::INFINITY), "0 pt²");
+}

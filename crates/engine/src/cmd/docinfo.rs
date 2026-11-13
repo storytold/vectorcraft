@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), pathArea: pt² (the paths' total area, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -182,6 +182,12 @@ fn sections(
                     // The paths' total length, in the document's units, right after their count.
                     if let Some(at) = rows.iter().position(|(label, _)| label == "Paths") {
                         rows.insert(at + 1, ("Path Length".into(), u.format(info["pathLength"].as_f64().unwrap_or(0.0))));
+                    }
+                    let area = info["pathArea"].as_f64().unwrap_or(0.0);
+                    if area > 0.0
+                        && let Some(at) = rows.iter().position(|(label, _)| label == "Path Length")
+                    {
+                        rows.insert(at + 1, ("Path Area".into(), u.format_area(area)));
                     }
                     rows
                 }
@@ -446,6 +452,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
     let mut path_length = 0.0;
+    let mut path_area = 0.0;
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
@@ -509,6 +516,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     let l = path.length();
                     if l.is_finite() {
                         path_length += l;
+                    }
+                    let a: f64 = path.subpaths.iter().filter(|s| s.closed).map(|s| s.area().abs()).filter(|a| a.is_finite()).sum();
+                    if a.is_finite() {
+                        path_area += a;
                     }
                     Some("paths")
                 }
@@ -649,6 +660,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "document": document_summary(d),
         "objects": counts,
         "pathLength": path_length,
+        "pathArea": path_area,
         "fonts": font_names,
         "images": images,
         "symbols": symbols,
@@ -817,6 +829,45 @@ mod tests {
         // Nothing with no paths, and no length row.
         s.execute("select.none", &json!({})).unwrap();
         assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
+    }
+
+    /// Document Info › Objects gives the closed paths' total area in the document's units: an open
+    /// line has no area, a rectangle and a compound path's pieces count, a guide doesn't.
+    #[test]
+    fn info_gives_the_paths_total_area() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400, "units": "Points"})).unwrap();
+        let line = s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 72, "y2": 0})).unwrap()["id"].clone();
+        let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 20})).unwrap()["id"].clone();
+        let area = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["pathArea"].as_f64().unwrap();
+        // The rectangle encloses 200 pt²; the open line encloses 0.
+        assert!((area(&mut s, json!({})) - 200.0).abs() < 1e-6);
+        // An open line selected: pathArea is 0, so no "Path Area" row is inserted.
+        s.execute("select.set", &json!({"ids": [line]})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "72 pt"]]));
+        // The rectangle selected: "Path Area" row follows "Path Length".
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        assert!((area(&mut s, json!({"selectionOnly": true})) - 200.0).abs() < 1e-6);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "60 pt"], ["Path Area", "200 pt²"]]));
+        // A compound path's pieces are paths: their areas count.
+        let other = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [rect, other]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s, json!({"selectionOnly": true})) - 225.0).abs() < 1e-6);
+        // A guide path is left out.
+        let guide = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
+            *g = true;
+        }
+        s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        // Nothing with no paths, and no area row.
+        s.execute("select.none", &json!({})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
     }
 
     /// Document Info › Brushes lists the brushes the art's strokes use, each once with its type, and
