@@ -41,7 +41,8 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
 
 /// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
 /// by id: paths and compound paths with points and groups, with live effects, linked to a graphic
-/// style or (paths and compound paths) with a brush on a stroke, without Opacity & Mask Define
+/// style or (paths and compound paths) with a brush on a stroke, and embedded images with one Warp
+/// ([`warped_image`]), without Opacity & Mask Define
 /// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
 /// groups, none with effects or anything baking changes.
@@ -86,8 +87,20 @@ fn candidate(n: &Node) -> bool {
         NodeKind::Path { path, guide: false, clipping: false, .. } => has_points(path),
         NodeKind::Compound { .. } => has_points(&compound_path(n)),
         NodeKind::Group { children, clip: false } => !n.is_compound_shape() && children.iter().all(|c| plain_member(c)),
+        NodeKind::Image(_) => warped_image(n),
         _ => false,
     }
+}
+
+/// Is `n` an embedded image without an opacity mask whose appearance is one Warp, with no fills or
+/// strokes that paint and no effects on them: an image the reader reads with its Warp live
+/// ([`crate::import::read_art_style`]'s `image_warp`)?
+fn warped_image(n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    im.link.is_none()
+        && n.extras().mask.is_none()
+        && matches!(n.appearance.effects.as_slice(), [e] if e.id.starts_with("warp."))
+        && n.appearance.items.iter().all(|i| i.paint().is_none() && i.effects().is_empty())
 }
 
 /// Does `n` have a stroke with a brush that paints, one that its art style holds ([`Writer::style_text`]
@@ -666,7 +679,7 @@ impl Writer<'_> {
             return Some(name);
         }
         let brushed = brushed(orig);
-        if (orig.appearance.effects.is_empty() && !brushed) || !own_style_holds(&orig.appearance) {
+        if (orig.appearance.effects.is_empty() && !brushed) || !(own_style_holds(&orig.appearance) || warped_image(orig)) {
             return None;
         }
         let graded = orig.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_)));
@@ -704,7 +717,8 @@ impl Writer<'_> {
     /// glows or feathers, the object's transparency
     /// after the group's end, `0 0 Xd`, `6 () XW`); the object itself on `%_` lines (a path's or
     /// compound path's points painted with nothing, or with its gradient fill when its style has
-    /// one; a group with its members), its name and opacity mask; then `1 (name) XW`.
+    /// one; a group with its members; an image with its pixels), its name and opacity mask; then
+    /// `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
     /// room for them, nothing is written, and the object counts neither as written with its graphic
     /// style nor as written with a brush on its stroke.
@@ -712,7 +726,7 @@ impl Writer<'_> {
         let own = match &orig.kind {
             NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
             NodeKind::Compound { .. } => super::object_count(compound_path(orig).subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
-            NodeKind::Group { .. } => 1,
+            NodeKind::Group { .. } | NodeKind::Image(_) => 1,
             _ => 0,
         };
         if !self.take_objects(1 + own) {
@@ -752,13 +766,14 @@ impl Writer<'_> {
         let saved = std::mem::take(&mut self.body);
         self.hidden += 1;
         let fit = drawn_outline(n, orig).map(|p| p.bounding_box());
-        // A path's objects were kept for it above; it counts them itself.
+        // A path's or an image's objects were kept for it above; it counts them itself.
         if !matches!(orig.kind, NodeKind::Group { .. }) {
             self.objects -= own;
         }
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(orig, im), xy),
             NodeKind::Group { children, .. } => {
                 self.line("u");
                 for c in children {
@@ -847,7 +862,8 @@ fn object_rule(n: &Node) -> FillRule {
 
 /// Can appearance `ap` be written as a style of an object's own: fills and strokes that paint without
 /// transparency or effects of their own, and no Warp, Distort & Transform or Blur effect? Those
-/// are written only in the Graphic Styles panel's styles.
+/// are written only in the Graphic Styles panel's styles, apart from a Warp on an image
+/// ([`warped_image`]).
 fn own_style_holds(ap: &Appearance) -> bool {
     let plain = |i: &AppearanceItem| i.opacity() >= 1.0 && i.blend() == BlendMode::Normal && i.effects().is_empty();
     let panel_only = |e: &Effect| ["warp.", "distort.", "blur."].iter().any(|p| e.id.starts_with(p));
@@ -870,13 +886,16 @@ fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
 /// Does the reader read object `n` written with style text `text` as it is: a path or compound
 /// path with a style it reads on any object, filled by the non-zero rule when the style fills it,
 /// or a group with no fills or strokes of its own, with effects that move the outline only where the
-/// reader reads them ([`crate::import::style_moves_with`])?
+/// reader reads them ([`crate::import::style_moves_with`]), or an image ([`warped_image`]) with a
+/// style of one Warp? The reader takes such an image's Warp where it draws as its drawn look.
 fn object_reads(n: &Node, text: &str) -> bool {
     let section = known_style("x", text);
     let own = n.appearance.fill().map(|f| &f.paint).filter(|p| matches!(p, Paint::Gradient(_)));
     let Some(mut read) = crate::import::read_art_style(section.as_bytes(), "x", own) else { return false };
     let group = matches!(n.kind, NodeKind::Group { .. });
-    if !read.simple
+    let image = matches!(n.kind, NodeKind::Image(_));
+    if (image && !(read.image_warp && warped_image(n)))
+        || (!image && !read.simple)
         || (group && !read.appearance.items.is_empty())
         || (!group && read.pathfinder)
         || !crate::import::style_moves_with(section.as_bytes(), "x", n)

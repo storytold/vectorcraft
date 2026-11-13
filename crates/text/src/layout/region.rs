@@ -73,6 +73,52 @@ fn poly_intervals(polys: &[Vec<Point>], y: f64) -> Vec<(f64, f64)> {
     xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect()
 }
 
+/// The part of the horizontal line at `y` closer than `r` to the segment `a`–`b`: the line's
+/// intersection with the segment's two end disks and the band between them, which together make
+/// a convex shape, so the result is one interval.
+fn near_segment(a: Point, b: Point, y: f64, r: f64) -> Option<(f64, f64)> {
+    if y <= a.y.min(b.y) - r || y >= a.y.max(b.y) + r {
+        return None;
+    }
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for p in [a, b] {
+        let h = r * r - (y - p.y) * (y - p.y);
+        if h > 0.0 {
+            lo = lo.min(p.x - h.sqrt());
+            hi = hi.max(p.x + h.sqrt());
+        }
+    }
+    let d = b - a;
+    let len = d.hypot();
+    if len > 0.0 {
+        let n = kurbo::Vec2::new(-d.y, d.x) * (r / len);
+        let band = [a + n, b + n, b - n, a - n];
+        for i in 0..4 {
+            let (p, q) = (band[i], band[(i + 1) % 4]);
+            if (p.y <= y) != (q.y <= y) {
+                let x = p.x + (y - p.y) / (q.y - p.y) * (q.x - p.x);
+                lo = lo.min(x);
+                hi = hi.max(x);
+            }
+        }
+    }
+    (hi > lo).then_some((lo, hi))
+}
+
+/// Inside intervals (even-odd) of the horizontal line at `y` through `polys`, less the points
+/// closer than `inset` to any edge of them (holes included), measured from the edge itself.
+fn inset_intervals(polys: &[Vec<Point>], y: f64, inset: f64) -> Vec<(f64, f64)> {
+    let iv = poly_intervals(polys, y);
+    if inset <= 0.0 || iv.is_empty() {
+        return iv;
+    }
+    if !inset.is_finite() {
+        return vec![];
+    }
+    let near = polys.iter().flat_map(|p| (0..p.len()).filter_map(move |i| near_segment(p[i], p[(i + 1) % p.len()], y, inset)));
+    subtract_intervals(&iv, &union_intervals(near.collect()))
+}
+
 /// Union of sorted-or-not intervals.
 fn union_intervals(mut v: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     v.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -168,12 +214,22 @@ impl Region {
 
     /// Inside intervals (even-odd) of the horizontal line at `y`, minus the wrap objects (or
     /// inside them, for Invert Wrap). Offsets grow each wrap shape vertically and horizontally.
+    /// On a shaped frame the intervals keep the inset from the frame's edges, measured from the
+    /// edge itself. Along the line, the text also keeps the inset beside each wrap object (outside
+    /// it, or inside it for Invert Wrap); above and below a wrap object only its offset applies.
     fn intervals(&self, y: f64) -> Vec<(f64, f64)> {
-        let mut iv = if self.polys.is_empty() || self.rect { vec![(self.cell.x0, self.cell.x1)] } else { poly_intervals(&self.polys, y) };
+        let mut iv =
+            if self.polys.is_empty() || self.rect { vec![(self.cell.x0, self.cell.x1)] } else { inset_intervals(&self.polys, y, self.inset) };
         for (polys, off, invert) in self.wraps.iter() {
             let ys = if *off > 0.0 { vec![y - off, y - off * 0.5, y, y + off * 0.5, y + off] } else { vec![y] };
             let w = union_intervals(ys.into_iter().flat_map(|y| poly_intervals(polys, y)).map(|(a, b)| (a - off, b + off)).collect());
-            iv = if *invert { intersect_intervals(&iv, &w) } else { subtract_intervals(&iv, &w) };
+            iv = if *invert {
+                let w: Vec<_> = w.into_iter().map(|(a, b)| (a + self.inset, b - self.inset)).filter(|(a, b)| b > a).collect();
+                intersect_intervals(&iv, &w)
+            } else {
+                let w = union_intervals(w.into_iter().map(|(a, b)| (a - self.inset, b + self.inset)).collect());
+                subtract_intervals(&iv, &w)
+            };
         }
         iv
     }
@@ -186,8 +242,10 @@ impl Region {
     /// Every horizontal span inside the frame (and the cell) over the band `top..bottom`, left to
     /// right (text wraps on both sides of an object).
     pub(super) fn spans(&self, top: f64, bottom: f64) -> Vec<(f64, f64)> {
+        // The inset from the cell's edges; `intervals` already keeps it from the frame's edges and
+        // beside the wrap objects.
         let clip = |(a, b): (f64, f64)| {
-            let (a, b) = (a.max(self.cell.x0) + self.inset, b.min(self.cell.x1) - self.inset);
+            let (a, b) = (a.max(self.cell.x0 + self.inset), b.min(self.cell.x1 - self.inset));
             (b > a).then_some((a, b))
         };
         let plain = self.polys.is_empty() || self.rect;
@@ -237,4 +295,101 @@ fn the_cells_of_a_frame_share_its_polygons_and_the_wrap_shapes() {
     let first = &cells[0];
     assert!(!first.polys.is_empty() && !first.wraps.is_empty());
     assert!(cells.iter().all(|c| c.polys.as_ptr() == first.polys.as_ptr() && c.wraps.as_ptr() == first.wraps.as_ptr()));
+}
+
+/// A path with one closed subpath through each list of points.
+#[cfg(test)]
+fn closed(subpaths: &[&[(f64, f64)]]) -> BezPath {
+    let mut path = BezPath::new();
+    for pts in subpaths {
+        path.move_to(pts[0]);
+        for &p in &pts[1..] {
+            path.line_to(p);
+        }
+        path.close_path();
+    }
+    path
+}
+
+/// The spans of every cell of `path` over the band `top..bottom`.
+#[cfg(test)]
+fn cell_spans(path: &BezPath, opts: &LayoutOptions, wrap: &[vectorcraft_doc::WrapShape], top: f64, bottom: f64) -> Vec<Vec<(f64, f64)>> {
+    Region::cells(path, opts, wrap).iter().map(|c| c.spans(top, bottom)).collect()
+}
+
+#[cfg(test)]
+fn assert_spans(got: &[(f64, f64)], want: &[(f64, f64)]) {
+    assert_eq!(got.len(), want.len(), "{got:?} != {want:?}");
+    for (g, w) in got.iter().zip(want) {
+        assert!((g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6, "{got:?} != {want:?}");
+    }
+}
+
+/// On a triangle, the inset keeps the line 10 pt from the sloped edge, measured from the edge
+/// itself (x + y <= 100 - 10√2 at the band's bottom), not 10 pt along the line.
+#[cfg(test)]
+#[test]
+fn inset_on_a_shaped_frame_is_measured_from_its_sloped_edge() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    let inset = |inset| cell_spans(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[], 40.0, 60.0);
+    assert_spans(&inset(10.0)[0], &[(10.0, 40.0 - 10.0 * std::f64::consts::SQRT_2)]);
+    assert_spans(&inset(0.0)[0], &[(0.0, 40.0)]);
+}
+
+/// A rectangular frame keeps its inset from each side, and its first line starts the inset below
+/// its top.
+#[cfg(test)]
+#[test]
+fn a_rectangular_frame_keeps_its_inset_from_each_side() {
+    let cells = Region::cells(&Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1), &LayoutOptions { inset: 10.0, ..LayoutOptions::default() }, &[]);
+    assert!(cells[0].rect);
+    assert_eq!((cells[0].top(), cells[0].bottom()), (10.0, 90.0));
+    assert_spans(&cells[0].spans(40.0, 60.0), &[(10.0, 90.0)]);
+}
+
+/// The inset keeps text clear of a hole's sloped edges too.
+#[cfg(test)]
+#[test]
+fn inset_keeps_text_clear_of_a_hole_s_sloped_edges() {
+    let square = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    let diamond = [(50.0, 30.0), (70.0, 50.0), (50.0, 70.0), (30.0, 50.0)];
+    let spans = cell_spans(&closed(&[&square, &diamond]), &LayoutOptions { inset: 5.0, ..LayoutOptions::default() }, &[], 40.0, 44.0);
+    let clear = 5.0 * std::f64::consts::SQRT_2;
+    assert_spans(&spans[0], &[(5.0, 36.0 - clear), (64.0 + clear, 95.0)]);
+}
+
+/// In a frame of columns, the inset is kept once from a column's inner edge and once from the
+/// frame's sloped edge.
+#[cfg(test)]
+#[test]
+fn inset_applies_once_at_a_column_s_edge_and_at_the_frame_s_edge() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    let spans = cell_spans(&triangle, &LayoutOptions { inset: 10.0, columns: 2, gutter: 0.0, ..LayoutOptions::default() }, &[], 10.0, 20.0);
+    assert_spans(&spans[0], &[(10.0, 40.0)]);
+    assert_spans(&spans[1], &[(60.0, 80.0 - 10.0 * std::f64::consts::SQRT_2)]);
+}
+
+/// An inset wider than a shaped frame leaves no room for text, whatever its size.
+#[cfg(test)]
+#[test]
+fn an_inset_wider_than_a_shaped_frame_leaves_no_room() {
+    let triangle = closed(&[&[(0.0, 0.0), (100.0, 0.0), (0.0, 100.0)]]);
+    for inset in [40.0, 1e300, f64::INFINITY] {
+        let cells = Region::cells(&triangle, &LayoutOptions { inset, ..LayoutOptions::default() }, &[]);
+        assert!(cells[0].spans(40.0, 60.0).is_empty() && cells[0].span(40.0, 60.0).is_none(), "inset {inset}");
+    }
+}
+
+/// Along the line, text keeps the inset beside a wrap object, around it and, with Invert Wrap,
+/// inside it.
+#[cfg(test)]
+#[test]
+fn text_keeps_the_inset_beside_a_wrap_object_along_the_line() {
+    let frame = Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1);
+    let shape = PathData::from_bezpath(&Rect::new(40.0, 40.0, 60.0, 60.0).to_path(0.1));
+    let opts = LayoutOptions { inset: 5.0, ..LayoutOptions::default() };
+    for (invert, want) in [(false, vec![(5.0, 35.0), (65.0, 95.0)]), (true, vec![(45.0, 55.0)])] {
+        let wrap = vectorcraft_doc::WrapShape { path: shape.clone(), wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert } };
+        assert_spans(&cell_spans(&frame, &opts, &[wrap], 45.0, 55.0)[0], &want);
+    }
 }
