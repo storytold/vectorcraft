@@ -1,3 +1,5 @@
+use egui::IntoAtoms as _;
+
 use super::drag::PanelDrag;
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::text::take_armed_focus;
@@ -26,6 +28,37 @@ pub fn dropdown_names_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
             if ui.add(egui::Button::selectable(*o == current, *o)).clicked() {
+                chosen = Some(i);
+            }
+        }
+        chosen
+    })
+}
+
+/// [`dropdown_names`] whose options each show an icon before their name, in the open list and in
+/// the closed field, so that a name that says little on its own is shown with a picture of what it
+/// means (#6304). `icon(ui, rect, index, ink)` paints option `index`'s icon into `rect`, an
+/// `icon_size` square, with `ink`, the colour the row's name is drawn in. `current` is the option
+/// shown; `None` shows a blank field (characters that differ).
+pub fn dropdown_icon_names(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: Option<usize>,
+    options: &[&str],
+    width: f32,
+    icon_size: f32,
+    icon: impl Fn(&Ui, Rect, usize, egui::Color32),
+) -> Option<usize> {
+    let icon = &icon;
+    let atom = move |i: usize| egui::Atom::paint(Vec2::splat(icon_size), move |ui, a| icon(ui, a.rect, i, a.fallback_text_color));
+    let shown = match current.and_then(|i| options.get(i).map(|name| (i, *name))) {
+        Some((i, name)) => (atom(i), egui::RichText::new(name).size(12.0)).into_atoms(),
+        None => egui::RichText::new("").size(12.0).into_atoms(),
+    };
+    combo_atoms_named(ui, id, None, shown, width, |ui| {
+        let mut chosen = None;
+        for (i, o) in options.iter().enumerate() {
+            if ui.add(egui::Button::selectable(current == Some(i), (atom(i), *o))).clicked() {
                 chosen = Some(i);
             }
         }
@@ -89,6 +122,18 @@ pub(crate) fn combo_named<R>(
     width: f32,
     list: impl FnOnce(&mut Ui) -> Option<R>,
 ) -> Option<R> {
+    combo_atoms_named(ui, id, name, egui::RichText::new(current).size(12.0), width, list)
+}
+
+/// [`combo_named`] whose closed field shows the atoms `current` (an icon and a name, say).
+fn combo_atoms_named<'a, R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: Option<&str>,
+    current: impl egui::IntoAtoms<'a>,
+    width: f32,
+    list: impl FnOnce(&mut Ui) -> Option<R>,
+) -> Option<R> {
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     egui::Frame::NONE
@@ -99,7 +144,7 @@ pub(crate) fn combo_named<R>(
             let button_id = combo_button_id(ui, &id);
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
             let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
-                .selected_text(egui::RichText::new(current).size(12.0))
+                .selected_text(current)
                 .width(width - 4.0)
                 .height(ui.spacing().combo_height)
                 .show_ui(ui, list);
