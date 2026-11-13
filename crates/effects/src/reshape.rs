@@ -524,9 +524,10 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), its
-/// fills and strokes carrying the geometry effects of the instance's active fill and stroke
-/// ([`add_instance_row_effects`]).
+/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), as
+/// the art its members draw when the instance has geometry effects of its own
+/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry effects of the
+/// instance's active fill and stroke ([`add_instance_row_effects`]).
 /// `None` for other kinds (images, paths, containers), and for an instance whose art placed
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
@@ -562,20 +563,16 @@ fn outline_art_with(
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
-        _ if has_transform_art(n) || (apart && has_transform_copies(n)) => {
-            let mut one = n.clone();
-            one.opacity = 1.0;
-            one.blend = Default::default();
-            one.isolate = false;
-            one.extras_mut().mask = None;
-            one.appearance.effects.clear();
-            Node::group(n.id, vec![Arc::new(one)])
-        }
+        _ if has_transform_art(n) || (apart && has_transform_copies(n)) => one_piece(n),
         _ if vectorcraft_doc::live::is_live(n) => evaluated_with(symbols, n, outline, nodes),
         _ => return None,
     };
     outline_nested_text(paint_doc, &mut art, false);
     if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        // The instance's own geometry effects reshape what the symbol's members draw.
+        if !geometry_effects(n).is_empty() {
+            crate::group::members_as_drawn(paint_doc, &mut art);
+        }
         add_instance_row_effects(symbols, n, &mut art);
     }
     art.opacity = 1.0;
@@ -843,18 +840,64 @@ fn as_art_opts(
     }
     // The art is a group with `n`'s id (for an image without fills or strokes that paint, a clip
     // group).
-    let mut out = art;
-    out.name = n.name.clone();
-    out.visible = n.visible;
-    out.opacity = n.opacity;
-    out.blend = n.blend;
-    out.isolate = n.isolate;
+    Some(dressed(art, n))
+}
+
+/// `art`, the art made of `n`, with `n`'s name, visibility, transparency, opacity mask and
+/// remaining (raster) effects.
+fn dressed(mut art: Node, n: &Node) -> Node {
+    art.name = n.name.clone();
+    art.visible = n.visible;
+    art.opacity = n.opacity;
+    art.blend = n.blend;
+    art.isolate = n.isolate;
     // One element: its pieces never knock each other out.
-    out.knockout = vectorcraft_doc::Knockout::Off;
-    out.knockout_shape = n.knockout_shape;
-    out.extras_mut().mask = n.extras().mask.clone();
-    out.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
-    Some(out)
+    art.knockout = vectorcraft_doc::Knockout::Off;
+    art.knockout_shape = n.knockout_shape;
+    art.extras_mut().mask = n.extras().mask.clone();
+    art.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
+    art
+}
+
+/// A group with `n`'s id holding `n` without its transparency, opacity mask and effects: the one
+/// piece that `n`'s own geometry effects reshape.
+fn one_piece(n: &Node) -> Node {
+    let mut one = n.clone();
+    one.opacity = 1.0;
+    one.blend = Default::default();
+    one.isolate = false;
+    one.extras_mut().mask = None;
+    one.appearance.effects.clear();
+    Node::group(n.id, vec![Arc::new(one)])
+}
+
+/// Path or compound path `n` with its own geometry effects applied, as the art it draws: with
+/// geometry effects in a visible fill or stroke of its own, a group of one path for each fill and
+/// stroke, its effects and that fill's or stroke's applied ([`crate::bake_type_appearance`]);
+/// otherwise a group with `n`'s id holding the path reshaped by its effects ([`reshape_leaves`]).
+/// The art keeps `n`'s id, name, visibility, transparency, opacity mask and raster effects. `None`
+/// for a guide, for other kinds of objects, for a path with a linked opacity mask or a 3D effect,
+/// and when `n` has no visible geometry effect of its own or in a visible fill or stroke.
+pub(crate) fn own_effects_art(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        || n.extras().mask.as_ref().is_some_and(|m| m.linked)
+        || crate::has_solid(n)
+        || crate::has_revolve(n)
+    {
+        return None;
+    }
+    if n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects())) {
+        // One element: its pieces never knock each other out.
+        return crate::bake_type_appearance(doc, n).map(|art| Node { knockout: vectorcraft_doc::Knockout::Off, ..art });
+    }
+    let fx = geometry_effects(n);
+    if fx.is_empty() {
+        return None;
+    }
+    let mut art = one_piece(n);
+    reshape_leaves(&mut art, &fx, &n.appearance.effects, doc);
+    transform_items(&mut art, doc);
+    Some(dressed(art, n))
 }
 
 /// Map every path under `art` (and its gradients), and every path in the art of the linked opacity

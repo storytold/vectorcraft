@@ -2960,6 +2960,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Reimposta le righe sui colori della grafica
 	Color Theme Picker	Selettore tema colore
 	Click or drag across the art to pick its colors; Shift adds more	Fai clic o trascina sulla grafica per prelevarne i colori; Maiusc ne aggiunge altri
+	Prominent Colors	Colori prominenti
+	Save All Colors	Salva tutti i colori
+	Save Prominent Colors	Salva colori prominenti
 	Reset to Default	Reimposta valori predefiniti
 	Reset to White, Black	Reimposta su bianco, nero
 	Reset with Mesh	Reimposta con trama
@@ -3512,6 +3515,20 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Oggetti con colori spot
 	Pattern Objects	Oggetti con motivi
 	Gradient Objects	Oggetti con sfumature
+	Font Details	Dettagli font
+	Linked Images	Immagini collegate
+	Embedded Images	Immagini incorporate
+	Compound Paths	Tracciati composti
+	Text Objects	Oggetti di testo
+	Placed Documents	Documenti inseriti
+	Symbol Instances	Istanze di simbolo
+	Gradient Meshes	Trame sfumatura
+	Blends	Fusioni
+	Envelopes	Involucri
+	Intertwine Groups	Gruppi intrecciati
+	Opacity Masks	Maschere di opacità
+	Objects with Effects	Oggetti con effetti
+	Pattern Swatches	Campioni motivo
 	Spot Colors	Colori spot
 	Spot Colors…	Colori spot…
 	Spread:	Estensione:
@@ -4208,6 +4225,10 @@ axis	Both	Entrambi
 	Dock Panel	Ancora pannello
 	Dock to Top	Ancora in alto
 	Dock to Bottom	Ancora in basso
+	Dock to Left	Ancora a sinistra
+	Dock to Right	Ancora a destra
+	Dock Toolbar	Ancora barra degli strumenti
+	Float Toolbar	Rendi mobile barra degli strumenti
 	Control Bar Options	Opzioni barra di controllo
 	Tool Options	Opzioni strumento
 	Object Options	Opzioni oggetto
@@ -6163,6 +6184,7 @@ axis	Y Axis	Asse Y
 @msg	message must be text	message deve essere testo
 @msg	allowContinue must be true or false	allowContinue deve essere true o false
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
+@msg	Batch cannot play an action with a View menu step	L'elaborazione batch non può eseguire un'azione con un passaggio del menu Visualizza
 	Insert Menu Item…	Inserisci voce di menu…
 	Insert Menu Item	Inserisci voce di menu
 	Insert Select Path	Inserisci selezione tracciato
@@ -6977,6 +6999,19 @@ breakText	Glyphs	Glifi
 	Show where this tool is	Mostra dove si trova questo strumento
 @msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+	View more	Mostra altro
+	Finish tutorial	Termina il tutorial
+	Next Up	Prossimo
+	You finished the last tutorial in this skill.	Hai terminato l’ultimo tutorial di questa competenza.
+	Back to skills	Torna alle competenze
+	Open Tutorial Sample	Apri l’esempio del tutorial
+	Finish Tutorial	Termina il tutorial
+	Next Tutorial	Tutorial successivo
+	Back to Skills	Torna alle competenze
+@msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
+@msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina prima `{id}` (vedi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` è l’ultimo tutorial della sua competenza
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati

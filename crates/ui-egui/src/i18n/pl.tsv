@@ -868,6 +868,10 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Dock to Left	Zadokuj po lewej
+	Dock to Right	Zadokuj po prawej
+	Dock Toolbar	Zadokuj pasek narzędzi
+	Float Toolbar	Odepnij pasek narzędzi
 	Control Bar Options	Opcje paska sterowania
 	Tool Options	Opcje narzędzia
 	Object Options	Opcje obiektu
@@ -2800,6 +2804,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Przywróć w wierszach kolory kompozycji
 	Color Theme Picker	Próbnik motywu kolorów
 	Click or drag across the art to pick its colors; Shift adds more	Kliknij lub przeciągnij po kompozycji, aby pobrać jej kolory; Shift dodaje kolejne
+	Prominent Colors	Dominujące kolory
+	Save All Colors	Zapisz wszystkie kolory
+	Save Prominent Colors	Zapisz dominujące kolory
 	Separate colors into rows	Rozdziel kolory na wiersze
 	Unlink harmony colors	Odłącz kolory harmonii
 	1 Color Job	Praca 1-kolorowa
@@ -3876,6 +3883,20 @@ theme	Appearance	Wygląd
 	Spot Color Objects	Obiekty z kolorami dodatkowymi
 	Pattern Objects	Obiekty ze wzorkami
 	Gradient Objects	Obiekty z gradientami
+	Font Details	Szczegóły czcionek
+	Linked Images	Połączone obrazy
+	Embedded Images	Osadzone obrazy
+	Compound Paths	Ścieżki złożone
+	Text Objects	Obiekty tekstowe
+	Placed Documents	Umieszczone dokumenty
+	Symbol Instances	Wystąpienia symboli
+	Gradient Meshes	Siatki gradientowe
+	Blends	Przejścia
+	Envelopes	Koperty
+	Intertwine Groups	Grupy przeplatania
+	Opacity Masks	Maski krycia
+	Objects with Effects	Obiekty z efektami
+	Pattern Swatches	Próbki wzorków
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -6392,6 +6413,7 @@ axis	Y Axis	Oś Y
 @msg	message must be text	message musi być tekstem
 @msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
+@msg	Batch cannot play an action with a View menu step	Przetwarzanie wsadowe nie może odtworzyć operacji z krokiem z menu Widok
 	Insert Menu Item…	Wstaw polecenie menu…
 	Insert Menu Item	Wstaw polecenie menu
 	Insert Select Path	Wstaw zaznaczenie ścieżki
@@ -7204,6 +7226,19 @@ breakText	Glyphs	Glify
 	Show where this tool is	Pokaż, gdzie jest to narzędzie
 @msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
+	View more	Pokaż więcej
+	Finish tutorial	Zakończ samouczek
+	Next Up	Następny
+	You finished the last tutorial in this skill.	Ukończono ostatni samouczek tej umiejętności.
+	Back to skills	Powrót do umiejętności
+	Open Tutorial Sample	Otwórz przykład samouczka
+	Finish Tutorial	Zakończ samouczek
+	Next Tutorial	Następny samouczek
+	Back to Skills	Powrót do umiejętności
+@msg	tutorial `{id}` has no practice sample	samouczek `{id}` nie ma przykładu do ćwiczeń
+@msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	najpierw zakończ `{id}` (patrz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` to ostatni samouczek swojej umiejętności
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty

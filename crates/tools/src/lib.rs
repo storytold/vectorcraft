@@ -641,10 +641,11 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
+            // Live Paint Bucket's bucket is drawn.
             let stand_in = match id {
                 "mesh" => Some(Cursor::PenAdd),
-                "blobBrush" | "eraser" => None,
+                "blobBrush" | "eraser" | "livePaintBucket" => None,
                 _ => Some(Cursor::Crosshair),
             };
             assert_eq!(c.stand_in(), stand_in, "{id}");

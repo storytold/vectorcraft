@@ -923,6 +923,10 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Dock to Left	Ukotvit vlevo
+	Dock to Right	Ukotvit vpravo
+	Dock Toolbar	Ukotvit panel nástrojů
+	Float Toolbar	Plovoucí panel nástrojů
 	Control Bar Options	Možnosti ovládacího panelu
 	Tool Options	Možnosti nástroje
 	Object Options	Možnosti objektu
@@ -2891,6 +2895,9 @@ digits	Malayalam	Malajálamské
 	Reset the rows to the artwork's colors	Obnovit řádky na barvy kresby
 	Color Theme Picker	Výběr barevného motivu
 	Click or drag across the art to pick its colors; Shift adds more	Klepnutím nebo tažením přes kresbu převezmete její barvy; Shift přidá další
+	Prominent Colors	Převládající barvy
+	Save All Colors	Uložit všechny barvy
+	Save Prominent Colors	Uložit převládající barvy
 	Separate colors into rows	Rozdělit barvy do řádků
 	Unlink harmony colors	Zrušit propojení barev harmonie
 	1 Color Job	Zakázka s 1 barvou
@@ -4017,6 +4024,19 @@ theme	Appearance	Motiv
 	Spot Color Objects	Objekty s přímými barvami
 	Pattern Objects	Objekty se vzorky
 	Gradient Objects	Objekty s přechody
+	Font Details	Podrobnosti písem
+	Linked Images	Propojené obrazy
+	Embedded Images	Vložené obrazy
+	Compound Paths	Složené cesty
+	Text Objects	Textové objekty
+	Placed Documents	Umístěné dokumenty
+	Symbol Instances	Instance symbolů
+	Gradient Meshes	Přechodové sítě
+	Blends	Prolnutí
+	Envelopes	Obálky
+	Intertwine Groups	Skupiny proplétání
+	Opacity Masks	Masky krytí
+	Objects with Effects	Objekty s efekty
 	Spot Colors	Přímé barvy
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
@@ -6538,6 +6558,7 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+@msg	Batch cannot play an action with a View menu step	Dávka nemůže přehrát akci s krokem z nabídky Zobrazení
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
 	Insert Select Path	Vložit výběr cesty
@@ -7348,6 +7369,19 @@ breakText	Glyphs	Glyfy
 	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+	View more	Zobrazit více
+	Finish tutorial	Dokončit výukový kurz
+	Next Up	Další
+	You finished the last tutorial in this skill.	Dokončili jste poslední výukový kurz této dovednosti.
+	Back to skills	Zpět na dovednosti
+	Open Tutorial Sample	Otevřít ukázku výukového kurzu
+	Finish Tutorial	Dokončit výukový kurz
+	Next Tutorial	Další výukový kurz
+	Back to Skills	Zpět na dovednosti
+@msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
+@msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty

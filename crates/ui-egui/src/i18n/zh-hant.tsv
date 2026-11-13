@@ -4015,6 +4015,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
+	Prominent Colors	主要顏色
+	Save All Colors	儲存所有顏色
+	Save Prominent Colors	儲存主要顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設
@@ -4565,6 +4568,20 @@ digits	Malayalam	馬來亞拉姆數字
 	Spot Color Objects	使用特別色的物件
 	Pattern Objects	使用圖樣的物件
 	Gradient Objects	使用漸層的物件
+	Font Details	字體詳細資訊
+	Linked Images	已連結的影像
+	Embedded Images	嵌入的影像
+	Compound Paths	複合路徑
+	Text Objects	文字物件
+	Placed Documents	已置入的文件
+	Symbol Instances	符號範例
+	Gradient Meshes	漸層網格
+	Blends	漸變
+	Envelopes	封套
+	Intertwine Groups	交織群組
+	Opacity Masks	不透明度遮色片
+	Objects with Effects	使用效果的物件
+	Pattern Swatches	圖樣色票
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：
@@ -5274,6 +5291,10 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Dock to Left	停駐到左側
+	Dock to Right	停駐到右側
+	Dock Toolbar	停駐工具列
+	Float Toolbar	浮動工具列
 	Control Bar Options	控制列選項
 	Tool Options	工具選項
 	Object Options	物件選項
@@ -6181,6 +6202,7 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message 必須是文字
 @msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
+@msg	Batch cannot play an action with a View menu step	批次無法播放含有檢視選單步驟的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
 	Insert Select Path	插入選取路徑
@@ -6992,6 +7014,19 @@ breakText	Glyphs	字符
 	Show where this tool is	顯示此工具的位置
 @msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+	View more	檢視更多
+	Finish tutorial	完成教學課程
+	Next Up	接下來
+	You finished the last tutorial in this skill.	你已完成此技能的最後一個教學課程。
+	Back to skills	返回技能
+	Open Tutorial Sample	開啟教學課程範例
+	Finish Tutorial	完成教學課程
+	Next Tutorial	下一個教學課程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	請先完成 `{id}` (請參閱 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最後一個教學課程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果

@@ -1073,7 +1073,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
     size_field(app, ui, "cb-font-size", 96.0);
     ui.add_space(4.0);
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
