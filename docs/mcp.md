@@ -1623,8 +1623,18 @@ hides the dock, no panel is checked, and the panel shows again with the dock in 
 Control bar stay as they are.
 
 The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
-and `file.export` refuse a key that no format takes, and ignore a key that only another format takes
-(`{"format": "pdf", "quality": 80}` writes the PDF). `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
+and `file.export` refuse a key that no format takes. They accept a key that only another format takes and do not use
+it: `{"format": "pdf", "quality": 80}` writes the PDF, and the reply's `warnings` name the key
+("`quality` was not used: PDF files don't read it"), in the wording of a save's note. The warning names the kind of
+file written. A legacy `.ai` file (`aiVersion: "7"`) reads `outlineText`, `hiddenObjects`, `transparentImages`, the
+artboard choice and `useArtboards`, and beside `aiVersion` no other option
+("`compress` was not used: legacy .ai (version 7) files don't read it"). The other `.ai` files don't read those three
+options or `preserveEditing`, which is always on for a `.ai` file. An export doesn't read `separateArtboards`, or
+`range` for a `vectorcraft` or `template` file: a save reads them to write each artboard to a file of its own. In the
+desktop app, `app.export` and `file.exportAs` give these warnings in the reply and the status bar
+when automation asked for the export. An `app.export` that returns before the file is written (`background: true`)
+gives them in that reply. An export that first asks a question (the one before replacing a file) and that a person
+then answers gives none. `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
 refuse a key that PDF doesn't take, `document.exportEps` one that EPS doesn't take and `document.exportDxf` one that DXF
 doesn't take. Each of them refuses an unknown key inside an option object it takes (`marks`, `bleed`, `compression`,
 `output`, `advanced`, `security`, `flattener`, `svg`), naming its path:
