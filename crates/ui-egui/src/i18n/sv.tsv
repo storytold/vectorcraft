@@ -8097,7 +8097,7 @@ digits	Hindi	Hindi
 @msg	need at least two points	minst två punkter krävs
 @msg	needs points	punkter krävs
 @msg	nineSlice must be true or false	nineSlice måste vara true eller false
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett 0..1, med left + right < 1 och top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides måste vara [left, top, right, bottom], vart och ett -16..16, med left + right < 1 och top + bottom < 1
 @msg	no action set is current	ingen åtgärdsuppsättning är aktuell
 @msg	no active data set	ingen aktiv datauppsättning
 @msg	no appearance item {index}	inget utseendeobjekt {index}
