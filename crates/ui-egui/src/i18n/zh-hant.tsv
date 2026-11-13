@@ -5956,7 +5956,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 適用於漸層填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
-@msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+	Hue Clockwise	色相順時針
+	Hue Counterclockwise	色相逆時針
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必須是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層

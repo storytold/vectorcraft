@@ -5898,7 +5898,9 @@ axis	Y Axis	Y축
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither`는 그레이디언트 칠에 적용됩니다 (paint.setFill)
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
-@msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+	Hue Clockwise	색조 시계 방향
+	Hue Counterclockwise	색조 시계 반대 방향
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method`는 classic, perceptual, hue-clockwise 또는 hue-counterclockwise여야 합니다
 @msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다

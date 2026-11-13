@@ -5777,6 +5777,8 @@ lighting	Light	Lumière
 	Pen	Plume
 	Pentagram	Pentagramme
 	Perceptual	Perceptif
+	Hue Clockwise	Teinte en sens horaire
+	Hue Counterclockwise	Teinte en sens antihoraire
 	Phone 360×800	Téléphone 360×800
 	Phone 375×667	Téléphone 375×667
 	Phone 375×812	Téléphone 375×812
@@ -6306,7 +6308,7 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` s’applique aux fonds en dégradé (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
-@msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` doit être classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange

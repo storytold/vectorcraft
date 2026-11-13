@@ -1279,7 +1279,7 @@ canvas draws it as pixels, out to the miters, caps and arrowheads of a stroke. P
 have no diamond gradient: one of opaque stops is written as four linear gradients, one for each quarter of the
 square, clipped to the shape (PDF as axial shadings). In PDF and SVG, one with translucent stops, a dithered fill or
 a square with no area is an image, and so is a Perceptual one, except in PDF when its stops are spot colors that the
-Method paragraph below describes. SVG writes one on type characters as a radial gradient through the square's
+Method paragraph below describes. One mixed around the hue wheel is always an image in PDF and SVG. SVG writes one on type characters as a radial gradient through the square's
 corners. PDF import reads a function-based shading (type 1) whose color is the same along each square about the
 origin of its space, with corners on its axes, as a diamond gradient. CSS writes a radial gradient through the
 square's corners. A swatch library saved as CSS gets four `linear-gradient` layers, one for each quarter of the box,
@@ -1323,7 +1323,7 @@ change its colors least. Each run keeps its ends; sharp steps and swatch-linked 
 but a run with more of them than its share of the limit loses some. The same applies to a gradient along or across a
 stroke, and to CSS's conic gradient, past 16,384 stops, and to Outline Stroke's mesh past 1,024. For CSS the 16,384
 counts the gradient's stops before they are written: CSS then adds a stop for each midpoint, and for a Perceptual
-gradient stops along each span's curve, so the written gradient can hold more. PDF
+gradient or one mixed around the hue wheel stops along each span's curve, so the written gradient can hold more. PDF
 import finds a sharp step between two colors in an axial or radial shading by halving the spans between its samples,
 so the step reads back where it is in the file (to 1/64 × 2^-14 of the axis) instead of blurred across the samples
 around it. A shading takes at most 16,384 samples, so the steps past the point where that budget runs out stay
@@ -1352,10 +1352,26 @@ stops whose other stops are all paper white or written in CMYK or gray, that is 
 does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
 or gray inks as a DeviceN shading.
+`hue-clockwise` and `hue-counterclockwise` (VectorCraft's own methods) mix a linear, radial, conic or diamond
+gradient's colors around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next.
+With `hue-clockwise` the hue angle falls (red, magenta, blue, cyan, green, yellow, red), which is clockwise on the
+app's color wheels, and with `hue-counterclockwise` it rises. The angle keeps one direction between two stops, as the
+fixed-direction rules of [CSS Color 4](https://www.w3.org/TR/css-color-4/#hue-interpolation) do, so red to blue passes
+through green one way and through magenta the other. Two stops whose hues are less than half a color level apart
+count as one hue and keep it, so a color and a tint or shade of it do not turn the wheel; their saturation and
+brightness still change evenly, which is not the mix `classic` gives. A stop whose RGB numbers are less than half a
+color level apart is gray: it takes the hue of the stop it mixes with, and a black stop takes that stop's saturation
+too. SVG and PDF exports write such a gradient as an RGB image at the Document Raster Effects resolution, in a CMYK
+document and with CMYK stops too, and with spot color stops (with a warning). EPS writes it as a shading in process
+colors, and a legacy `.ai` file and the `.ai` editing data get the colors between its stops as stops of their own, in
+process colors (at most 256, with a warning). `reverse` turns a hue method the other way with the stops, so the ramp
+keeps its colors, and a Reflect spread mirrors the colors of each run. The names also read in any case, and with a
+space or an underscore for the hyphen, or without it.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"method":"perceptual"}}}
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"method":"hue-clockwise"}}}
 ```
 
 Freeform gradients: `paint.editGradient {kind: "freeform"}` places four or more colour points inside each selected
@@ -4617,7 +4633,7 @@ paper white, 0 %) exports to PDF as a Separation shading, and one that mixes spo
 inks exports as a DeviceN shading. A gradient that mixes a spot ink with colors written in RGB or Lab is written in
 process colors, with a warning; an export that converts colors to a CMYK destination profile writes RGB and Lab stops
 in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile. Freeform gradients and dithered fills export to PDF as images in process colors, and Method
-above covers Perceptual gradients.
+above covers Perceptual gradients and gradients mixed around the hue wheel.
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}

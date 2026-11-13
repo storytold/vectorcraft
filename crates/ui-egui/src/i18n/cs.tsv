@@ -5714,6 +5714,8 @@ imageTrace	Outline	Obrys
 	Spectrum	Spektrum
 # Rendering intents, recolor methods, gradient kinds
 	Perceptual	Percepční
+	Hue Clockwise	Odstín ve směru hodinových ručiček
+	Hue Counterclockwise	Odstín proti směru hodinových ručiček
 	Relative Colorimetric	Relativní kolorimetrický
 	Absolute Colorimetric	Absolutní kolorimetrický
 	Exact	Přesná
@@ -6311,7 +6313,7 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` platí pro výplně přechodem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
-@msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musí být classic, perceptual, hue-clockwise nebo hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody

@@ -3032,6 +3032,8 @@ file-filter	Templates	Sablonok
 	per slice	szeletenként
 	Percent:	Százalék:
 	Perceptual	Észlelési
+	Hue Clockwise	Színárnyalat az óramutató járásával megegyezően
+	Hue Counterclockwise	Színárnyalat az óramutató járásával ellentétesen
 	Perceptual Scales	Észlelési skálák
 	Performance	Teljesítmény
 diagnostics	render	renderelés
@@ -6294,7 +6296,7 @@ axis	Y Axis	Y tengely
 @msg	`dither` applies to gradient fills (stroke: false)	A `dither` színátmenetes kitöltésekre vonatkozik (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	A `dither` színátmenetes kitöltésekre vonatkozik (paint.setFill)
 @msg	`dither` must be true or false	`dither`: true vagy false kell
-@msg	`method` must be classic or perceptual	a `method` értéke classic vagy perceptual lehet
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	a `method` értéke classic, perceptual, hue-clockwise vagy hue-counterclockwise lehet
 @msg	`spread` must be pad, repeat or reflect	a `spread` értéke pad, repeat vagy reflect lehet
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	a `repeats` értéke 1 és {MAX_REPEATS} közötti egész szám lehet
 @msg	`spread` applies to linear, radial, conic and diamond gradients	a `spread` a lineáris, sugaras, kúpos és rombusz színátmenetekre vonatkozik

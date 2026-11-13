@@ -5177,6 +5177,8 @@ imageTrace	Outline	Kontur
 	Vivid	Cerah
 	Spectrum	Spektrum
 	Perceptual	Perseptual
+	Hue Clockwise	Rona searah jarum jam
+	Hue Counterclockwise	Rona berlawanan arah jarum jam
 	Relative Colorimetric	Kolorimetrik relatif
 	Absolute Colorimetric	Kolorimetrik absolut
 	Exact	Eksak
@@ -5991,7 +5993,7 @@ axis	Y Axis	Sumbu Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` berlaku untuk isian gradien (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` berlaku untuk isian gradien (paint.setFill)
 @msg	`dither` must be true or false	`dither` harus true atau false
-@msg	`method` must be classic or perceptual	`method` harus classic atau perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` harus classic, perceptual, hue-clockwise atau hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instal “{name}”, yang meminta anggaran komputasi besar?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Setiap kali dijalankan, plug-in ini bisa memakan waktu hingga {minutes} menit dan melakukan {times} kali pekerjaan yang diizinkan untuk plug-in lain. Plug-in ini berjalan di latar belakang, dan Anda dapat membatalkannya.

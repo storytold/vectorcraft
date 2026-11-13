@@ -5693,6 +5693,8 @@ imageTrace	Outline	Contour
 	Vivid	Levendig
 	Spectrum	Spectrum
 	Perceptual	Perceptueel
+	Hue Clockwise	Tint met de klok mee
+	Hue Counterclockwise	Tint tegen de klok in
 	Relative Colorimetric	Relatief colorimetrisch
 	Absolute Colorimetric	Absoluut colorimetrisch
 	Exact	Exact
@@ -6608,7 +6610,7 @@ axis	Y Axis	Y-as
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` geldt voor verloopvullingen (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` geldt voor verloopvullingen (paint.setFill)
 @msg	`dither` must be true or false	`dither` moet true of false zijn
-@msg	`method` must be classic or perceptual	`method` moet classic of perceptual zijn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` moet classic, perceptual, hue-clockwise of hue-counterclockwise zijn
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}” installeren, dat om een groot rekenbudget vraagt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Elke run kan tot {minutes} minuten duren en {times} keer zoveel werk doen als andere plug-ins mogen. Hij draait op de achtergrond en je kunt hem annuleren.
