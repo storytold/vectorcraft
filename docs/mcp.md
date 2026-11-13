@@ -547,7 +547,11 @@ change nothing; an omitted or null `id` keeps the default. Commands that need an
 `text.createInPath`) refuse a value that is not a non-negative integer with "`id` must be a whole number", naming the
 key, and report a key left out or null as missing. The optional `group` of `livePaint.fill` and `parent` of
 `node.move` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
-`group` is left out or null, and reports a missing group only when both are left out. A command that leaves out an object selected inside a
+`group` is left out or null, and reports a missing group only when both are left out. A command that needs a number
+(`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
+`object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
+`` `x` must be a number, not "40" ``, naming the key and showing the value as given, and reports a key left out or null
+as `` missing number `x` ``; it changes nothing either way. A command that leaves out an object selected inside a
 selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
 `ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
 that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
@@ -589,7 +593,10 @@ space. RGB edits preserve the other native channels; HSB uses those same working
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
 opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
 the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
-applied colors still join the list while it is hidden.
+applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPercent": true}` shows the Color panel's
+RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
+`ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
+and answers true when the fields show in percent.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -955,7 +962,11 @@ Export As goes through `options` too: for PNG, JPEG and WebP `useArtboards: true
 or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF keeps them as pages of one file; an
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
-way.
+way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
+`range`. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
+is in VectorCraft Default), the export comes back with a warning that says so.
+Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
+Artboards section and the page is the bounds of the visible art.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -3588,7 +3599,8 @@ For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `reco
 with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
-end). Without one, or with a value that is not a number, it answers `` missing number `intensity` `` and changes nothing.
+end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
+`"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
 The `edit.colors.*` commands, `edit.colors.overprintBlack` and `addon.color.filter` answer a `fill`, `stroke`,
 `includeImages`, `includePatterns`, `convert`, `remove`, `includeCmyBlacks` or `includeSpotBlacks` that is not true or
 false with `` `fill` must be true or false ``, naming the key, a `percentage` that is not a number with
@@ -3654,6 +3666,27 @@ the library's colors. Colors that no row holds, such as preserved White and Blac
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#ff0000","#0000ff":"#0000ff"},"globalAdjust":{"saturation":-40,"temperature":25}}}}
+```
+
+`recolor.pickTheme {picks, colors?}` is the dialog's Color Theme Picker: it returns the color palette of the art picked
+as `colors` (keys, the most used first) and `objects` (how many objects it read), and changes nothing. Each pick is
+`{at: [x, y]}`, a click that reads the object a Selection tool click there takes with everything inside it, or
+`{rect: [x0, y0, x1, y1]}`, a marquee that reads every painted object it touches and the part of each image inside it
+(document points; 1 to 256 picks, which add up). It reads visible fills and strokes, gradient stops, text, mesh points,
+pattern tiles (with the patterns they use), the art of symbol instances (placed through their 9-slice guides), the
+colorize color of an image it applies to and the pixels of other images: at most 65,536 pixels of each pick of an
+image, spread evenly, and 1,048,576 pixels of at most 64 images in all, leaving out pixels less than half opaque and
+images it can't decode; each image is decoded once for all its picks. In a clip group, or under an opacity mask that
+clips, it reads only what shows inside the clipping path or the mask art, and a blend, envelope or repeat that a
+marquee touches is read whole. Hidden or fully transparent objects and fill or stroke items are left out, and locked
+objects are read. As VectorCraft's own rule, each object read weighs the same, shared among its colors (an image's
+among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
+its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
+most used color in its own model. Picks that touch no art return no colors. In the Recolor Artwork dialog the picks are the `themePicks` field: the rows that aren't
+excluded take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
 ```
 
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
@@ -5060,8 +5093,9 @@ the Align To choice, and while there is a key object or a key guide they send th
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
 Align To then offers Align to Selection and Align to Artboard. Align to Artboard sends `to: "artboard"`, which keeps the
-tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`. Align
-to Selection sends `to: "selection"`. The Distribute buttons need two or more selected artboards.
+tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`, which
+can then be negative. Align to Selection sends `to: "selection"`. The Distribute buttons need two or more selected
+artboards with Align to Artboard, and three or more with Align to Selection.
 
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
@@ -6028,7 +6062,8 @@ artboard it names is locked. When no artboard changes, the command records no un
 Align and distribute artboards ([Align and distribute artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/align-and-distribute-artboards.html)):
 three commands move whole artboards, by default those the Artboard tool has selected, else its active one. Each takes
 `index? | indices?`, `to?: "selection"|"artboard"`, `artboard?: n`, `moveArt?`, `patterns?` and `lockedAndHidden?`, and
-returns `{moved: [index…]}`.
+returns `{moved: [index…]}`. With `moveArt`, art inside two of the artboards goes with the one first in artboard order, and stays when that one
+stays.
 
 - `artboard.align {horizontal?: "left"|"center"|"right", vertical?: "top"|"center"|"bottom"}` moves each artboard until
   the named edge or center is on that edge or center of the bounds of all the artboards named. One of the two
@@ -6617,7 +6652,9 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
-embeddedImages, repeats), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
+its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
+fonts of the selected type), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
@@ -6636,7 +6673,8 @@ swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Fr
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
-stops of a gradient with a stop above opacity 0, at a tint above 0, and every grayscale image colorized with one, by
+stops of a gradient with a stop above opacity 0, at a tint above 0, leaving out fills and strokes at an opacity of 0,
+and every grayscale image colorized with one, by
 the same rules as `patternObjects`, with the spot colors it uses; a process
 color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
@@ -7909,6 +7947,29 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Insert Aki
+
+`text.setFormat` and `text.setRangeStyle {akiLeft?, akiRight?}` set Insert Aki Left and Insert Aki Right of the
+characters: space added before and after each character, in thousandths of an em from 0 to 1000, measured as tracking
+is ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). 250 adds a quarter of
+a full-width space and 500 half of one. Left is the space before the character in reading order and Right the space
+after it: above and below the character in vertical type, and on the right and left of it in right-to-left type. The
+space stays the same width when a line is justified and when Optical kerning measures the characters. A ligature, a
+letter with its marks and a tate-chu-yoko block take the values of their first character. Setting one value leaves the other as it is. Both are 0
+by default and saved only when not 0, and character styles carry them (`charStyle.new`, `charStyle.setAttrs` and
+`charStyle.edit` refuse a value outside the range). A value that is not a number is refused with `` `akiLeft` must be a number ``, and one outside
+the range with `` `akiLeft` must be from 0 to 1000 ``, naming the key. One undo step. With Show East Asian Options on,
+the Character panel shows both fields, blank where the selected characters differ, with 0, 250, 500 and 1000 in their
+menus, and a value typed past 1000 sets 1000; Reset Panel sets both to 0. Character Style Options shows both fields
+in Advanced Character Formats. With Fractional Widths off or System Layout on, each side is set in whole points, and
+justification keeps that width. Live SVG text places each character the space moves, and type on a path with
+Insert Aki is written as outlines. An SVG saved without Preserve Editing (`preserveEditing`) reopens without the
+Insert Aki values; save it with Preserve Editing to keep them editable.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
+```
+
 ## Composite Fonts
 
 A composite font sets each class of character in a font of its own
@@ -8611,13 +8672,15 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
-`tcyLeftRight`, `rotation`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
--1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+-1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
+an em, with the Character panel's 0, 250, 500 and 1000 in their menus; a value typed below 0 or past 1000 sets 0 or
+1000) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -8970,9 +9033,10 @@ itself when its window comes to the front and a font folder changed meanwhile.
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
 ```
 
-`text.missingFonts` lists the fonts that the active document's type uses, in its layers and its symbols, and that aren't
-available as named: `{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or
-`substitute`, as in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
+`text.missingFonts` lists the fonts that the active document's type uses, in its layers, its symbols and its pattern
+swatches, the type in opacity masks included, and that aren't available as named:
+`{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or `substitute`, as
+in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
 longer than 256 bytes are left out. `fontsNextToDocument` is the `Fonts` folder next to the saved document
 (File › Package writes it), when there is one and a search may start there. `text.findFontFiles {folder}` looks for
 the fonts' files in an absolute folder and its subfolders on separate threads and returns at once with
@@ -9783,7 +9847,8 @@ glyph of its first character lands where it was drawn.
   size and the centre of its text. With `scale: true` the horizontal scale goes too, the object's and each character's.
 - `addon.cleanup.replaceFonts {font?}` sets every character of the document's type whose font family isn't available
   in `font` (by default the default type font, Source Sans 3), in that family's style closest to the one it had. The
-  type in the art of the document's symbols is replaced too.
+  type in the art of the document's symbols and pattern swatches and in opacity masks is replaced too, including
+  hidden or locked type and the type in disabled masks.
 
 In the panel, the Text row (which the panel can hide) runs them: Shift-click Lines to break into paragraphs, and
 Alt-click Reset Transform to reset the horizontal scale too. Recovering live text from outlines, combining vertical
@@ -10142,9 +10207,10 @@ selected art and weeding lines across the box, so the waste vinyl around the art
 VectorCraft's own. The weed box is a rectangle `margin` points (0 to 100000, default 9) outside the art's bounds;
 `box: false` leaves it out. The weeding lines run `"horizontal"`, `"vertical"` or `"both"` ways (default `"both"`) from
 one side of the box to the other and divide it evenly: `count` lines each way (a whole number from 0 to 1000, default 1),
-or with `spacing` instead, as few lines as keep them at most that far apart. A line is left out over the art's area and
-within `gap` points of its outlines (0 to 100000, default 0: the lines stop at the outlines), so it ends in several
-pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
+or with `spacing` points instead (more than 0 and at most 100000), as few lines as keep them at most that far apart. A
+`spacing` that needs more than 1000 lines each way is refused, and so is a request that gives both `count` and
+`spacing`. A line is left out over the art's area and within `gap` points of its outlines (0 to 100000, default 0: the
+lines stop at the outlines), so it ends in several pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
 color swatch `swatch` (default `"[Registration]"`), with no fill.
 
 The art is measured by the outlines a cutter cuts. Closed paths enclose their area by their fill rule, so the hole of a

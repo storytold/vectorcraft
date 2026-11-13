@@ -7,18 +7,23 @@ use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject
 /// tate-chu-yoko continuation, a zero-width mark) stays zero. Right to left, a cluster with manual
 /// kerning moves by the difference the kerning makes to its rounded advance, so the rounding
 /// changes the space before the next character in reading order and not the space after the one
-/// before it.
+/// before it. Each side of the Insert Aki is rounded to whole points on its own and added to the
+/// rounded advance, so justification keeps it at that width.
 pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
     let whole = |adv: f64| if adv.is_finite() && adv > 0.0 { adv.round().max(1.0) } else { adv };
+    let points = |aki: f64| if aki.is_finite() { aki.round() } else { 0.0 };
     for cluster in glyphs.chunk_by_mut(|a, b| continues_cluster(Some(a), Some(b))) {
-        // The cluster's last glyph carries the manual kerning in its advance.
-        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv, g.kern_shift));
+        // The cluster's last glyph carries the manual kerning and the Insert Aki in its advance.
+        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv - g.aki, g.kern_shift - g.aki_shift));
         let rounded_shift = Some(whole(adv) - whole(adv - shift)).filter(|s| s.is_finite()).unwrap_or(shift);
         for g in cluster {
-            g.adv = whole(g.adv);
-            if shift != 0.0 {
-                g.kern_shift = rounded_shift;
-            }
+            // The space before the character and the space after it are each rounded.
+            let aki_shift = points(g.aki_shift);
+            let aki = if g.aki == 0.0 { 0.0 } else { aki_shift + points(g.aki - g.aki_shift) };
+            g.adv = whole(g.adv - g.aki) + aki;
+            g.kern_shift = if shift != 0.0 { rounded_shift } else { g.kern_shift - g.aki_shift } + aki_shift;
+            g.aki = aki;
+            g.aki_shift = aki_shift;
         }
     }
 }
@@ -33,7 +38,10 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 /// before the automatic digit rule. A marked block moves by the Tate-chu-yoko Settings Up/Down
 /// and Left/Right of its first character; an automatic block does not move.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
-pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyle) {
+///
+/// With `whole` (System Layout on or Fractional Widths off), each side of a block's Insert Aki is
+/// set in whole points ([`whole_character_widths`]).
+pub(super) fn tate_chu_yoko(g: &mut [SGlyph], whole: bool, style: impl Fn(&SGlyph) -> TcyStyle) {
     let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
     let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
     let mut i = 0;
@@ -44,7 +52,7 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyl
                 end += 1;
             }
             let first = style(&g[i]);
-            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right));
+            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right), whole);
             i = end;
             continue;
         }
@@ -58,7 +66,7 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyl
         }
         if (2..=3).contains(&(end - i)) {
             let em = style(&g[i]).size;
-            place_tcy_block(&mut g[i..end], em, (0.0, 0.0));
+            place_tcy_block(&mut g[i..end], em, (0.0, 0.0), whole);
         }
         i = end;
     }
@@ -74,15 +82,35 @@ pub(super) struct TcyStyle {
 }
 
 /// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
-/// em; the rest share its cell.
-fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64)) {
-    let width: f64 = g.iter().map(|gl| gl.adv).sum();
+/// em; the rest share its cell. The Insert Aki of the block's first character is space above and
+/// below the block, and the Insert Aki of its other characters is left out: the block is set
+/// down the column that much further, and its last glyph carries the space in its advance. With
+/// `whole`, the space above and the space below are each rounded to whole points.
+fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64), whole: bool) {
+    let Some(first) = g.first() else { return };
+    let (byte, before) = (first.byte, first.aki_shift);
+    let aki: f64 = g.iter().filter(|gl| gl.byte == byte).map(|gl| gl.aki).sum();
+    let points = |v: f64| {
+        if !whole {
+            v
+        } else if v.is_finite() {
+            v.round()
+        } else {
+            0.0
+        }
+    };
+    let (before, aki) = (points(before), points(before) + points(aki - before));
+    let width: f64 = g.iter().map(|gl| gl.adv - gl.aki).sum();
     let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
+    let last = g.len() - 1;
     let mut ink = 0.0;
     for (k, gl) in g.iter_mut().enumerate() {
-        let adv = gl.adv;
-        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up, right });
-        gl.adv = if k == 0 { em } else { 0.0 };
+        let adv = gl.adv - gl.aki;
+        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up: up - before, right });
+        gl.kern_shift -= gl.aki_shift;
+        gl.aki_shift = 0.0;
+        gl.aki = if k == last { aki } else { 0.0 };
+        gl.adv = if k == 0 { em } else { 0.0 } + gl.aki;
         ink += adv;
     }
 }

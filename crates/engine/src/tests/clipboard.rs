@@ -492,6 +492,222 @@ fn pasting_again_reuses_what_an_earlier_paste_added() {
     assert!(doc(&s).swatch("Brand 3").is_none() && doc(&s).char_styles.len() == 1);
 }
 
+/// The active document, to edit its definitions directly.
+fn doc_mut(s: &mut Session) -> &mut Document {
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+}
+
+/// The pattern a paint paints with.
+fn pattern_of(p: &Paint) -> Option<&str> {
+    match p {
+        Paint::Pattern { pattern, .. } => Some(pattern),
+        _ => None,
+    }
+}
+
+/// The pattern the fill of the active document's character style `name` paints with.
+fn style_pattern(s: &Session, name: &str) -> Option<String> {
+    let attrs = &doc(s).char_styles.iter().find(|x| x.name == name)?.attrs;
+    pattern_of(&serde_json::from_value::<Paint>(attrs.get("fill")?.clone()).ok()?).map(str::to_string)
+}
+
+/// A pattern "Dots" made from a `size` square of `color` in the active document.
+fn dots(s: &mut Session, size: f64, color: &str) {
+    let square = rect(s, 300.0, 200.0, size, size);
+    s.execute("paint.setFill", &json!({"ids": [square.0], "color": color})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square.0]})).unwrap();
+}
+
+/// Type "Hi" filled with the pattern "Dots" (a small red square), set in a character style
+/// "Patterned" whose fill is that pattern.
+fn patterned_type(s: &mut Session) -> NodeId {
+    dots(s, 10.0, "#ff0000");
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [t.0], "swatch": "Dots"})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Patterned", "id": t.0})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Patterned", "id": t.0})).unwrap();
+    t
+}
+
+/// The character style name of a type object's first run, and the pattern that run paints with.
+fn type_links(s: &Session, id: NodeId) -> (Option<String>, Option<String>) {
+    let NodeKind::Text(tx) = node(s, id).kind else { panic!("not type") };
+    (tx.runs[0].style.style_name.clone(), pattern_of(&tx.runs[0].style.fill).map(str::to_string))
+}
+
+/// Type set in a style that paints with a pattern, pasted into a document with another pattern of
+/// that name: the pattern comes in as "Dots 2", and the style paints with "Dots 2" too, so applying
+/// it later paints with the pasted pattern. Pasting again adds nothing.
+#[test]
+fn pasted_styles_paint_with_the_renamed_pattern_they_use() {
+    let mut s = session();
+    let t = patterned_type(&mut s);
+    copy(&mut s, &[t]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(doc(&s).pattern("Dots 2").is_some(), "{v}");
+    assert_eq!(style_pattern(&s, "Patterned").as_deref(), Some("Dots 2"), "{v}");
+    let named = |n: &str| Some(n.to_string());
+    assert_eq!(type_links(&s, ids_of(&v)[0]), (named("Patterned"), named("Dots 2")));
+    let other = id_of(&s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Yo"})).unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Patterned", "id": other.0})).unwrap();
+    assert_eq!(type_links(&s, other).1.as_deref(), Some("Dots 2"), "the applied style paints with the pasted pattern");
+    let counts = |s: &Session| (doc(s).patterns.len(), doc(s).char_styles.len());
+    let before = counts(&s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert_eq!(counts(&s), before);
+    assert_eq!(type_links(&s, ids_of(&v)[0]), (named("Patterned"), named("Dots 2")));
+}
+
+/// A document whose "Patterned" style has the pasted style's attributes but whose "Dots" is
+/// another pattern: that style paints with the document's "Dots", so the pasted one comes in as
+/// "Patterned 2", painting with "Dots 2", and the document's own is left as it was. Pasting again
+/// uses the numbered copies.
+#[test]
+fn pasted_styles_are_not_matched_to_styles_that_paint_with_another_pattern() {
+    let mut s = session();
+    let t = patterned_type(&mut s);
+    let style = doc(&s).char_styles.iter().find(|x| x.name == "Patterned").unwrap().clone();
+    copy(&mut s, &[t]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    doc_mut(&mut s).char_styles.push(style);
+    let own = (doc(&s).char_styles.clone(), doc(&s).pattern("Dots").cloned());
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(style_pattern(&s, "Patterned 2").as_deref(), Some("Dots 2"), "{v}");
+    let d = doc(&s);
+    assert_eq!((&d.char_styles[..own.0.len()], d.pattern("Dots")), (&own.0[..], own.1.as_ref()), "the document's own are unchanged");
+    let named = |n: &str| Some(n.to_string());
+    let links = (named("Patterned 2"), named("Dots 2"));
+    assert_eq!(type_links(&s, ids_of(&v)[0]), links);
+    let counts = |s: &Session| (doc(s).patterns.len(), doc(s).char_styles.len());
+    let before = counts(&s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert_eq!(counts(&s), before);
+    assert_eq!(type_links(&s, ids_of(&v)[0]), links);
+}
+
+/// A style that paints with a pattern whose tile sets type in that same style is pasted with the
+/// pattern: when the pattern comes in as "Dots 2", the style paints with "Dots 2", and the tile's
+/// type is set in the style. Pasting again adds nothing. The commands do not make that loop, so the
+/// source is a document edited directly.
+#[test]
+fn a_pasted_style_and_the_pattern_whose_tile_uses_it_come_in_together() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Tile"})).unwrap());
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": t.0})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [t.0]})).unwrap();
+    let other = id_of(&s.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": other.0})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [other.0]})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Painted", "id": other.0})).unwrap();
+    let d = doc_mut(&mut s);
+    let painted = d.char_styles.iter().find(|x| x.name == "Painted").unwrap().attrs.clone();
+    d.char_styles.retain(|x| x.name != "Painted");
+    d.char_styles.iter_mut().find(|x| x.name == "Accent").unwrap().attrs = painted;
+    assert_eq!(style_pattern(&s, "Accent").as_deref(), Some("Dots"));
+    copy(&mut s, &[other]);
+    new_doc(&mut s);
+    dots(&mut s, 30.0, "#0000ff");
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(doc(&s).pattern("Dots 2").is_some(), "{v}");
+    assert_eq!(style_pattern(&s, "Accent").as_deref(), Some("Dots 2"), "{v}");
+    let NodeKind::Text(tile) = &doc(&s).pattern("Dots 2").unwrap().art[0].kind else { panic!("the tile is type") };
+    assert_eq!(tile.runs[0].style.style_name.as_deref(), Some("Accent"));
+    let after = doc(&s).clone();
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+    assert!(doc(&s).patterns == after.patterns && doc(&s).char_styles == after.char_styles, "nothing is added");
+    // Back in the source document, the loop is the document's own.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!((v["added"].as_u64(), v["renamed"].as_array().map(Vec::len)), (Some(0), Some(0)), "{v}");
+}
+
+/// A symbol whose art paints with a pattern is not matched to the document's symbol of that name
+/// and art when the document's pattern of that name is another one: it comes in as "Mark 2",
+/// painting with "Dots 2".
+#[test]
+fn pasted_symbols_are_not_matched_to_symbols_that_paint_with_another_pattern() {
+    let mut s = session();
+    dots(&mut s, 10.0, "#ff0000");
+    let r = rect(&mut s, 20.0, 20.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Dots"})).unwrap();
+    sel(&mut s, &[r]);
+    let mark = id_of(&s.execute("symbol.new", &json!({"name": "Mark"})).unwrap());
+    copy(&mut s, &[mark]);
+    // The document gets "Mark" and "Dots" from a first paste; then its "Dots" gets another tile.
+    new_doc(&mut s);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["renamed"], json!([]), "{v}");
+    let tile = &mut doc_mut(&mut s).patterns.iter_mut().find(|p| p.name == "Dots").unwrap().tile;
+    *tile = Rect::new(tile.x0, tile.y0, tile.x1 + 30.0, tile.y1 + 30.0);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".to_string(), "Mark".to_string(), "Mark 2".to_string())), "{v}");
+    let art = |s: &Session, name: &str| fill_of(&doc(s).symbols.iter().find(|x| x.name == name).unwrap().art);
+    assert_eq!((art(&s, "Mark").as_deref(), art(&s, "Mark 2").as_deref()), (Some("Dots"), Some("Dots 2")));
+    assert!(matches!(node(&s, ids_of(&v)[0]).kind, NodeKind::SymbolInstance { ref symbol, .. } if symbol == "Mark 2"));
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
+/// The pattern the first filled object in `n` paints with.
+fn fill_of(n: &Node) -> Option<String> {
+    let mut found = None;
+    n.walk(&mut |m| {
+        if found.is_none() {
+            found = pattern_of(&m.appearance.fill_paint()).map(str::to_string);
+        }
+    });
+    found
+}
+
+/// A brush whose art sets type in a character style is not matched to the document's brush of
+/// that name and art when the document's style of that name is another one: the style comes in as
+/// "Accent 2", and the brush as a copy whose type is set in "Accent 2".
+#[test]
+fn pasted_brushes_are_not_matched_to_brushes_that_use_another_style() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ink"})).unwrap());
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Accent", "id": t.0})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "art", "name": "Lettering", "ids": [t.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let path = rect(&mut s, 200.0, 200.0, 40.0, 10.0);
+    s.execute("brush.apply", &json!({"name": name, "ids": [path.0]})).unwrap();
+    let brush = vectorcraft_brush::find(doc(&s), &name).unwrap();
+    copy(&mut s, &[path]);
+    new_doc(&mut s);
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 10}})).unwrap();
+    let d = doc_mut(&mut s);
+    let mut lib = vectorcraft_brush::library(d);
+    lib.push(brush);
+    vectorcraft_brush::store(d, &lib);
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    let names = renamed(&v);
+    let copied = names.iter().find(|(k, from, _)| k == "brush" && *from == name).map(|(_, _, to)| to.clone());
+    assert!(names.contains(&("charStyle".to_string(), "Accent".to_string(), "Accent 2".to_string())), "{v}");
+    let copied = copied.unwrap_or_else(|| panic!("the brush is added under a free name: {v}"));
+    let style_of = |s: &Session, b: &str| {
+        let b = vectorcraft_brush::find(doc(s), b).unwrap();
+        let mut found = None;
+        for a in b.art() {
+            a.walk(&mut |m| {
+                if let NodeKind::Text(tx) = &m.kind {
+                    found = found.take().or_else(|| tx.runs[0].style.style_name.clone());
+                }
+            });
+        }
+        found
+    };
+    assert_eq!((style_of(&s, &name).as_deref(), style_of(&s, &copied).as_deref()), (Some("Accent"), Some("Accent 2")));
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
 #[test]
 fn brushes_travel_with_their_strokes() {
     let mut s = session();
