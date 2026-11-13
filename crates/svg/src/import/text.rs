@@ -1236,12 +1236,6 @@ impl Ctx {
             .collect();
         let under = stroke_under(&mut cells, label, warnings);
 
-        let anchor_of = |i: usize| match cs.chars.get(i).and_then(|c| self.prop(c.1, "text-anchor")).as_deref() {
-            Some("middle") => 0.5,
-            Some("end") => 1.0,
-            _ => 0.0,
-        };
-        let anchor = anchor_of(0);
         let path = cs.path.and_then(|tp| match self.text_path(xml, tp) {
             Some(p) => Some((tp, p)),
             None => {
@@ -1250,6 +1244,22 @@ impl Ctx {
             }
         });
         let vertical = self.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
+        // Where the chunk starting at character `i` sits on its anchor: 0 its left (or top) edge,
+        // 0.5 its middle, 1 its right (or bottom) edge; on a path, its edge toward the path's
+        // start, its middle or its edge toward the path's end. In horizontal type `start` and
+        // `end` follow the `direction` of the element holding that character: right-to-left text
+        // starts at its right edge, and on a path at the edge toward the path's end (type on a
+        // path lays its glyphs out in visual order from its start).
+        let anchor_of = |i: usize| {
+            let Some(&(_, el)) = cs.chars.get(i) else { return 0.0 };
+            let a = match self.prop(el, "text-anchor").as_deref() {
+                Some("middle") => 0.5,
+                Some("end") => 1.0,
+                _ => 0.0,
+            };
+            if !vertical && self.prop(el, "direction").is_some_and(|d| d.trim() == "rtl") { 1.0 - a } else { a }
+        };
+        let anchor = anchor_of(0);
         self.fit_lengths(&cs.spans, &mut cells, vertical, label, warnings);
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
@@ -1268,6 +1278,8 @@ impl Ctx {
             let em = self.font_size(tp);
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
+            // Text that would start before the path's beginning starts at it, with all its glyphs
+            // on the path (SVG does not draw the glyphs that fall off it).
             let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| s.clamp(0.0, 1.0));
             obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start, end: None };
             obj.xf = Affine::IDENTITY;
@@ -1293,14 +1305,14 @@ impl Ctx {
             obj.xf = Affine::IDENTITY;
         } else {
             let origin = Point::new(x[0].unwrap_or(0.0) + dx[0], y[0].unwrap_or(0.0) + dy[0]);
-            let (justify, left, starts) = lines(&mut cells, &x, &y, &dx, &dy, anchor, origin.x, &mut breaks);
+            let (justify, left, starts) = lines(&mut cells, &x, &y, &dx, &dy, &anchor_of, origin.x, &mut breaks);
             obj.para.justify = justify;
             obj.xf = Affine::translate((finite(left), finite(origin.y)));
-            // Lines anchored differently (paragraphs aligned differently): each line's paragraph
-            // takes its alignment, and indents that put it where it was.
-            if let Some(starts) = starts.filter(|st| st.iter().any(|(i, _)| anchor_of(*i) != anchor)) {
-                for (k, &(i, ax)) in starts.iter().enumerate() {
-                    let a = anchor_of(i);
+            // Lines anchored differently or at different x (paragraphs aligned or indented
+            // differently): each line's paragraph takes its alignment, and indents that put it
+            // where it was.
+            if starts.iter().any(|&(_, a, ax)| a != starts[0].1 || ax != starts[0].2) {
+                for (k, &(_, a, ax)) in starts.iter().enumerate() {
                     let d = finite(ax - left);
                     let mut pa = ParaStyle { justify: justify_of(a), ..ParaStyle::default() };
                     match pa.justify {
@@ -1412,7 +1424,7 @@ fn finite(v: f64) -> f64 {
     if v.is_finite() { v } else { 0.0 }
 }
 
-/// The alignment of an SVG text chunk anchored at `anchor` (0 start, 0.5 middle, 1 end).
+/// The alignment of an SVG text chunk anchored at `anchor` (0 left edge, 0.5 middle, 1 right edge).
 fn justify_of(anchor: f64) -> Justify {
     match anchor {
         a if a >= 1.0 => Justify::Right,
@@ -1428,8 +1440,10 @@ fn leading_tolerance(spacing: f64) -> f64 {
 }
 
 /// Point type: line breaks, baseline shifts and kerning from the positioning lists. Returns the
-/// justification, the x of the first line's left (or anchor) edge and, when no character is
-/// placed on its own, each line's first character and anchor x.
+/// justification, the x of the first line's left (or anchor) edge and each line's first
+/// character, alignment (as for [`justify_of`]) and anchor x. `anchor_of` gives where the chunk
+/// starting at a character sits on its anchor. When characters are placed on their own, every
+/// line is left-aligned and its anchor x is its left edge.
 #[allow(clippy::too_many_arguments)]
 fn lines(
     cells: &mut [Cell],
@@ -1437,10 +1451,10 @@ fn lines(
     y: &[Option<f64>],
     dx: &[f64],
     dy: &[f64],
-    anchor: f64,
+    anchor_of: &dyn Fn(usize) -> f64,
     x0: f64,
     breaks: &mut Vec<Break>,
-) -> (Justify, f64, Option<Vec<(usize, f64)>>) {
+) -> (Justify, f64, Vec<(usize, f64, f64)>) {
     let n = cells.len();
     let y0 = y[0].unwrap_or(0.0) + dy[0];
     let (mut base, mut cur) = (y0, y0);
@@ -1482,15 +1496,16 @@ fn lines(
         }
     }
     if targets.is_empty() {
-        return (justify_of(anchor), x0, Some(lines));
+        let starts = lines.iter().map(|&(s, lx)| (s, anchor_of(s), lx)).collect();
+        return (justify_of(anchor_of(0)), x0, starts);
     }
     // Absolutely placed characters: lay the text out left-aligned and kern each one onto its x.
-    // SVG anchors every absolutely placed chunk on its own, so with a middle/end anchor each
-    // chunk's target moves back by its share of the chunk's width.
+    // SVG anchors every absolutely placed chunk on its own, so a chunk not anchored at its left
+    // edge moves back by its share of its own width.
     let line_of = |i: usize| lines.partition_point(|(s, _)| *s <= i) - 1;
-    let mut left = x0;
+    let mut line_left: Vec<f64> = lines.iter().map(|l| l.1).collect();
     let mut wants: Vec<(usize, f64)> = targets.clone();
-    if anchor > 0.0 {
+    if lines.iter().chain(&targets).any(|c| anchor_of(c.0) > 0.0) {
         let (runs, bytes) = assemble(cells, breaks);
         let lay = measure(&with_runs(runs.0));
         let (pens, ends) = pens(&lay, &bytes);
@@ -1506,15 +1521,13 @@ fn lines(
                 _ => 0.0,
             }
         };
-        let line_left: Vec<f64> = lines.iter().map(|&(s, lx)| lx - anchor * width(s)).collect();
-        left = line_left[0];
+        line_left = lines.iter().map(|&(s, lx)| lx - anchor_of(s) * width(s)).collect();
         for w in &mut wants {
-            w.1 -= anchor * width(w.0) + line_left[line_of(w.0)];
+            w.1 -= anchor_of(w.0) * width(w.0);
         }
-    } else {
-        for w in &mut wants {
-            w.1 -= lines[line_of(w.0)].1;
-        }
+    }
+    for w in &mut wants {
+        w.1 -= line_left[line_of(w.0)];
     }
     // Kerning changes shaping (pair kerning is off for manually kerned characters): repeat until
     // every character sits on its x.
@@ -1538,7 +1551,8 @@ fn lines(
             break;
         }
     }
-    (Justify::Left, left, None)
+    let starts = lines.iter().zip(&line_left).map(|(&(s, _), &lx)| (s, 0.0, lx)).collect();
+    (Justify::Left, line_left[0], starts)
 }
 
 /// Centred and right-aligned lines of point type `obj` where a reader draws them. `text-anchor`
@@ -1546,7 +1560,9 @@ fn lines(
 /// export anchors lines so); VectorCraft aligns a line without that tracking
 /// ([`vectorcraft_text::LineInfo::trailing`]). Each such line moves back by its share of it: the
 /// type moves when every line moves alike, otherwise each paragraph's right indent takes the
-/// tracking (a line of imported point type is a paragraph). Browsers add that letter spacing
+/// tracking (a line of imported point type is a paragraph). A right-to-left paragraph's lines
+/// keep all their tracking in the layout (`trailing` is 0), so they stay where they are and their
+/// whole advance sits on the anchor. Browsers add that letter spacing
 /// today; CSS WG issue 1518 and Firefox bugs 1907305 and 1913554 may drop it at a line's end.
 fn keep_reader_anchors(obj: &mut TextObject) {
     let share = |j: Justify| match j {
