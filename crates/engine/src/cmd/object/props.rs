@@ -1,4 +1,5 @@
 use super::{BlendMode, EngineError, Knockout, Node, Result, Session, Value, bad, check_numbers, check_switches, ok, percent, str_param, targets};
+use vectorcraft_doc::NodeKind;
 
 /// The most data entries `object.setProps` takes at once.
 const MAX_DATA: usize = 256;
@@ -27,7 +28,7 @@ fn data_param(m: &serde_json::Map<String, Value>) -> Result<Vec<(String, Option<
 }
 
 pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["visible", "locked", "isolate", "knockoutShape"], "object.setProps")?;
+    check_switches(p, &["visible", "locked", "isolate", "knockoutShape", "pixelated"], "object.setProps")?;
     check_numbers(p, &["opacity"], "object.setProps")?;
     let ids = targets(s, p)?;
     let opacity = p.get("opacity").and_then(Value::as_f64).map(percent);
@@ -51,6 +52,7 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     // When every object already has every value given, the document and its undo history stay as
     // they are.
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
+    let pixelated = flag("pixelated");
     let has_values = |n: &Node| {
         str_param(p, "name").is_none_or(|v| n.name.as_deref() == Some(v).filter(|v| !v.is_empty()))
             && flag("visible").is_none_or(|v| n.visible == v)
@@ -63,8 +65,18 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             && data.iter().flatten().all(|(k, v)| {
                 n.extras().attrs.as_ref().and_then(|a| a.data.iter().find(|(key, _)| key == k)).map(|(_, now)| now.as_str()) == v.as_deref()
             })
+            && pixelated.is_none_or(|v| n.extras().pixelated == v)
     };
     let d = &s.doc()?.doc;
+    if pixelated.is_some() {
+        for id in &ids {
+            let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
+
+            if !matches!(&n.kind, NodeKind::Image(_)) {
+                return Err(bad("object.setProps", "pixelated can only be set on image objects"));
+            }
+        }
+    }
     // A graph keeps the object opacity and blend mode set on a mark of a series for the whole series, so a value a mark
     // already has still replaces the one another mark left on the graph.
     let transparency = opacity.is_some() || blend.is_some();
@@ -102,6 +114,9 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = p.get("knockoutShape").and_then(Value::as_bool) {
                 n.knockout_shape = v;
+            }
+            if let Some(v) = pixelated {
+                n.extras_mut().pixelated = v;
             }
             if let Some(changes) = &data {
                 n.edit_attrs(|a| {

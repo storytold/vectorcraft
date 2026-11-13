@@ -132,6 +132,7 @@ pub(super) mod persp_select;
 mod persp_text;
 mod perspgrid;
 mod pixelalign;
+mod pixelated;
 mod place;
 mod placed_document;
 mod plugins;
