@@ -2793,6 +2793,11 @@ mark-style	Japanese	日本式
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
+	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
+	Canvas display profile:	キャンバスのディスプレイプロファイル:
+	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
+	No usable display profile was found: the canvas is drawn in sRGB.	使用できるディスプレイプロファイルが見つかりません。キャンバスは sRGB で描画されます。
 	Rearrange All Artboards	すべてのアートボードを再配置
 	Rearrange	再配置
 	Select All Artboards	すべてのアートボードを選択
@@ -4013,6 +4018,11 @@ file-filter	Templates	テンプレート
 	Tate-chu-yoko	縦中横
 	Tate-chu-yoko Settings…	縦中横の設定…
 	Tate-chu-yoko Settings	縦中横の設定
+	Warichu	割注
+	Warichu Settings…	割注の設定…
+	Warichu Settings	割注の設定
+	Lines:	行数:
+	Line Gap:	行間:
 	Composite Fonts…	合成フォント…
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
@@ -5201,6 +5211,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	ドキュメントを開きました (注意 {n} 件): {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。ドキュメントを開きました (注意 {n} 件): {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} を保存しましたが、注意事項が {n} 件あります: {first}
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
 @msg	This shortcut file is in a form VectorCraft can't read.	このショートカットファイルは VectorCraft で読み込めない形式です。
@@ -6552,6 +6563,8 @@ anchor	Points:	ポイント:
 	Anchor Inspector	アンカーポイントインスペクター
 	Add Points at Crossings	交差点にポイントを追加
 	Split at Crossings	交差点で分割
+	Trim at Crossings Tool	交差点でトリムツール
+	Trim at Crossings	交差点でトリム
 	Extend Path	パスを延長
 	Measure & Inspect	計測・検査
 	Set Anchor	アンカーポイントを設定

@@ -2732,6 +2732,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -3670,6 +3675,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметры Warichu…
+	Warichu Settings	Параметры Warichu
+	Lines:	Строки:
+	Line Gap:	Интервал между строками:
 	Composite Fonts…	Составные шрифты…
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
@@ -5069,6 +5079,7 @@ axis	Both	Оба
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Открыто с {n} примечанием: {first}|{notice}. Открыто с {n} примечаниями: {first}|{notice}. Открыто с {n} примечаниями: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
@@ -6837,6 +6848,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор опорных точек
 	Add Points at Crossings	Добавить точки на пересечениях
 	Split at Crossings	Разрезать на пересечениях
+	Trim at Crossings Tool	Инструмент «Подрезка на пересечениях»
+	Trim at Crossings	Подрезать на пересечениях
 	Extend Path	Продлить контур
 	Measure & Inspect	Измерение и анализ
 	Set Anchor	Задать опорную точку

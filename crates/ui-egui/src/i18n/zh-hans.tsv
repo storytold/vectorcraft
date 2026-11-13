@@ -2601,6 +2601,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Rating:	等级：
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
+	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
+	Canvas display profile:	画布显示配置文件：
+	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
+	No usable display profile was found: the canvas is drawn in sRGB.	未找到可用的显示器配置文件：画布以 sRGB 绘制。
 	Rearrange All Artboards	重新排列所有画板
 	Rearrange	重新排列
 	Select All Artboards	选择所有画板
@@ -3499,6 +3504,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Tate-chu-yoko	纵中横
 	Tate-chu-yoko Settings…	纵中横设置…
 	Tate-chu-yoko Settings	纵中横设置
+	Warichu	割注
+	Warichu Settings…	割注设置…
+	Warichu Settings	割注设置
+	Lines:	行数：
+	Line Gap:	行间距：
 	Composite Fonts…	复合字体…
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
@@ -4884,6 +4894,7 @@ imageTrace	Outline	轮廓
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已打开，有 {n} 条注释：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。
@@ -6699,6 +6710,8 @@ anchor	Points:	点：
 	Anchor Inspector	锚点检查器
 	Add Points at Crossings	在交叉处添加锚点
 	Split at Crossings	在交叉处分割
+	Trim at Crossings Tool	在交叉处修剪工具
+	Trim at Crossings	在交叉处修剪
 	Extend Path	延长路径
 	Measure & Inspect	测量与检查
 	Set Anchor	设置锚点

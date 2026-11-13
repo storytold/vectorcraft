@@ -508,8 +508,9 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
-/// Nothing targeted is not an edit, and when `f` leaves every target as it was, the document and
-/// its undo history stay as they are.
+/// What the edit changes on the topmost visible fill and stroke of graph series marks is stored on
+/// their graphs in the same step ([`capture_series_changes`]). Nothing targeted is not an edit, and
+/// when `f` leaves every target as it was, the document and its undo history stay as they are.
 pub(crate) fn edit_items(
     s: &mut Session,
     ids: &[NodeId],
@@ -519,12 +520,13 @@ pub(crate) fn edit_items(
     fill: bool,
     f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
 ) -> Result<()> {
-    edit_items_then(s, ids, item, cmd, label, fill, f, |_, _| Ok(false))
+    edit_items_then(s, ids, item, cmd, label, fill, f, |before, d, edited| Ok(capture_series_changes(before, d, edited)))
 }
 
-/// [`edit_items`], then `after` on the ids `f` ran on, inside the same undo step. `after` returns
-/// whether it changed the document; when it did not and `f` left every target as it was, the
-/// document and its undo history stay as they are.
+/// [`edit_items`], then `after` on the document as it was before the edit, the edited document and
+/// the ids `f` ran on, inside the same undo step. `after` returns whether it changed the document;
+/// when it did not and `f` left every target as it was, the document and its undo history stay as
+/// they are.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn edit_items_then(
     s: &mut Session,
@@ -534,7 +536,7 @@ pub(crate) fn edit_items_then(
     label: &str,
     fill: bool,
     mut f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
-    mut after: impl FnMut(&mut vectorcraft_doc::Document, &[NodeId]) -> Result<bool>,
+    mut after: impl FnMut(&vectorcraft_doc::Document, &mut vectorcraft_doc::Document, &[NodeId]) -> Result<bool>,
 ) -> Result<()> {
     if ids.is_empty() {
         return Ok(());
@@ -550,7 +552,7 @@ pub(crate) fn edit_items_then(
             f(n, index)?;
             edited.push(*id);
         }
-        let more = after(d, &edited)?;
+        let more = after(&before, d, &edited)?;
         Ok(count_changed(d, &before, &edited) + usize::from(more))
     })?;
     Ok(())
@@ -789,6 +791,19 @@ pub(super) fn capture_series_writes(
     let objects = if object { ids.to_vec() } else { object_opacity_changed(before, d, ids) };
     let stored = super::graph::capture_series_object_opacity(d, &objects);
     kept || painted || stored
+}
+
+/// Store on the graph what an edit of `ids` (from `before` to `d`) changed on the series marks among them: the paint,
+/// weight, opacity or blend mode of the topmost visible fill and stroke, and the object opacity and blend mode. Rows
+/// and objects the edit left as they were keep what the graph stores. When the edit changes several marks of one series,
+/// the frontmost one sets what the graph stores, whatever order `ids` are in. Returns whether the stored paint changed.
+pub(crate) fn capture_series_changes(before: &vectorcraft_doc::Document, d: &mut vectorcraft_doc::Document, ids: &[NodeId]) -> bool {
+    // Only objects directly in a series group can be marks: other edits skip the search of the document for graphs.
+    let in_series = |id: &NodeId| d.parent_of(*id).and_then(|p| d.node(p)).is_some_and(|g| g.extras().series_index.is_some());
+    let mut marks: Vec<NodeId> = ids.iter().copied().filter(in_series).collect();
+    // A later mark's capture replaces an earlier one's: take them in paint order.
+    marks.sort_by_cached_key(|id| d.index_path(*id));
+    !marks.is_empty() && capture_series_writes(before, d, &marks, (false, false), (false, false), false, false)
 }
 
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
@@ -1550,6 +1565,7 @@ fn copied_character_styles<'a>(source: &Node, targets: impl Iterator<Item = &'a 
         local.baseline_shift /= scale.points;
         local.tcy_up_down /= scale.points;
         local.tcy_left_right /= scale.points;
+        local.warichu_gap /= scale.points;
         local.h_scale /= scale.horizontal;
         // As with dimensional type commands, reject overflow and underflow before layout.
         if !copied_dimensions_fit(&effective, &local) {
@@ -1568,6 +1584,7 @@ fn copied_dimensions_fit(from: &CharStyle, to: &CharStyle) -> bool {
         (from.baseline_shift, to.baseline_shift),
         (from.tcy_up_down, to.tcy_up_down),
         (from.tcy_left_right, to.tcy_left_right),
+        (from.warichu_gap, to.warichu_gap),
         (from.h_scale, to.h_scale),
     ]
     .iter()

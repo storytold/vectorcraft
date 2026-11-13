@@ -3442,6 +3442,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rating:	Αξιολόγηση:
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
+	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
+	Canvas display profile:	Προφίλ οθόνης καμβά:
+	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
+	No usable display profile was found: the canvas is drawn in sRGB.	Δεν βρέθηκε κατάλληλο προφίλ οθόνης: ο καμβάς σχεδιάζεται σε sRGB.
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
 	Rearrange	Αναδιάταξη
 	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
@@ -4114,6 +4119,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ρυθμίσεις Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ρυθμίσεις Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ρυθμίσεις Warichu…
+	Warichu Settings	Ρυθμίσεις Warichu
+	Lines:	Γραμμές:
+	Line Gap:	Απόσταση γραμμών:
 	Composite Fonts…	Σύνθετες γραμματοσειρές…
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
@@ -4981,6 +4991,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Άνοιξε με {n} σημείωση: {first}|Άνοιξε με {n} σημειώσεις: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Άνοιξε με {n} σημείωση: {first}|{notice}. Άνοιξε με {n} σημειώσεις: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Αποθηκεύτηκε το {path} με {n} σημείωση: {first}|Αποθηκεύτηκε το {path} με {n} σημειώσεις: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ενσωματώθηκε {n} εικόνα· λείπουν {missing}: επανασυνδέστε τις πρώτα|Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
 @msgplural	Embedded {n} image|Embedded {n} images	Ενσωματώθηκε {n} εικόνα|Ενσωματώθηκαν {n} εικόνες
@@ -6812,6 +6823,8 @@ anchor	Points:	Σημεία:
 	Anchor Inspector	Επιθεωρητής σημείων αγκύρωσης
 	Add Points at Crossings	Προσθήκη σημείων στις διασταυρώσεις
 	Split at Crossings	Διαχωρισμός στις διασταυρώσεις
+	Trim at Crossings Tool	Εργαλείο περικοπής στις διασταυρώσεις
+	Trim at Crossings	Περικοπή στις διασταυρώσεις
 	Extend Path	Επέκταση διαδρομής
 	Measure & Inspect	Μέτρηση και επιθεώρηση
 	Set Anchor	Ορισμός σημείου αγκύρωσης

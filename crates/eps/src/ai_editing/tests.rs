@@ -7486,6 +7486,13 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         n.appearance = ap.into();
         n
     };
+    let frame = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), square(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
     // A group of a filled square and `second`.
     let group = |second: fn(&mut Document) -> Node| {
         move |doc: &mut Document, ap: Appearance| {
@@ -7510,7 +7517,12 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     for (what, doc, kept) in [
         ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
         ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
-        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a square twisted half a turn", twisted(180.0, filled(), path(square())), true),
+        ("a square twisted half a turn back", twisted(-180.0, filled(), path(square())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), false),
+        ("a square twisted three quarters of a turn back", twisted(-270.0, filled(), path(square())), false),
+        ("a straight compound path twisted half a turn", twisted(180.0, filled(), frame), true),
+        ("a straight compound path twisted a full turn", twisted(360.0, filled(), frame), false),
         ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
         ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
         ("a curved compound path", twisted(-60.0, filled(), ring), true),
@@ -8406,8 +8418,9 @@ fn brushes_the_reader_cant_read_are_left_out() {
     }
     left_out(vec![Brush { name: "A/B".into(), ..keep.clone() }], "slash");
     left_out(vec![Brush { kind: BrushKind::Bristle(Bristle::default()), ..keep.clone() }], "a second brush of the name");
-    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back. A
-    // path with "X" is drawn with the Pattern brush, so it comes back as its drawn look.
+    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back,
+    // as "X 2", the name the library gives it when it is read. A path with "X" is drawn with the
+    // Pattern brush, so it comes back as its drawn look.
     let mut doc = Document::new(300.0, 200.0);
     let x = Brush { name: "X".into(), ..keep.clone() };
     vectorcraft_brush::store(&mut doc, &[Brush { name: "X".into(), kind: BrushKind::Pattern(PatternBrush::default()) }, x.clone()]);
@@ -8415,7 +8428,7 @@ fn brushes_the_reader_cant_read_are_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert_eq!(vectorcraft_brush::library(&back), [x]);
+    assert_eq!(vectorcraft_brush::library(&back), [Brush { name: "X 2".into(), ..x }]);
     let n = &back.layers[0].children().unwrap()[0];
     assert!(n.appearance.stroke().is_none_or(|s| s.brush.is_none()), "not with the other brush of the name: {n:#?}");
 }

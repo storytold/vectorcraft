@@ -2633,6 +2633,7 @@ file-filter	Templates	範本
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已捨棄 {n} 份復原的文件
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已還原 {n} 份復原的文件：請儲存以保留
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已開啟，附有 {n} 則註解：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已開啟，附有 {n} 則註解：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已儲存 {path}，附有 {n} 則註解：{first}
 @msg	Saving recovery data for {_1}	正在儲存 {_1} 的復原資料
 @msg	This shortcut file is in a form VectorCraft can't read.	VectorCraft 無法讀取此快速鍵檔案的格式。
@@ -3806,6 +3807,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Rating:	評等：
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
+	Use Monitor Profile for Canvas	畫布使用顯示器描述檔
+	The canvas is drawn in sRGB.	畫布以 sRGB 繪製。
+	Canvas display profile:	畫布顯示描述檔：
+	The system matches the window to the display's colors.	系統會讓視窗符合顯示器的色彩。
+	No usable display profile was found: the canvas is drawn in sRGB.	找不到可用的顯示器描述檔：畫布以 sRGB 繪製。
 	Rearrange All Artboards	重新排列所有工作區域
 	Rearrange	重新排列
 	Select All Artboards	選取所有工作區域
@@ -4743,6 +4749,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Tate-chu-yoko	縱中橫
 	Tate-chu-yoko Settings…	縱中橫設定…
 	Tate-chu-yoko Settings	縱中橫設定
+	Warichu	割註
+	Warichu Settings…	割註設定…
+	Warichu Settings	割註設定
+	Lines:	行數：
+	Line Gap:	行間距：
 	Composite Fonts…	複合字體…
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
@@ -6505,6 +6516,8 @@ anchor	Points:	點：
 	Anchor Inspector	錨點檢查器
 	Add Points at Crossings	在交叉處增加錨點
 	Split at Crossings	在交叉處分割
+	Trim at Crossings Tool	在交叉處修剪工具
+	Trim at Crossings	在交叉處修剪
 	Extend Path	延長路徑
 	Measure & Inspect	測量與檢查
 	Set Anchor	設定錨點

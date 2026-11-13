@@ -2745,6 +2745,11 @@ digits	Malayalam	Malayalam
 	Rating:	Valutazione:
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
+	Use Monitor Profile for Canvas	Usa il profilo del monitor per l'area di disegno
+	The canvas is drawn in sRGB.	L'area di disegno è visualizzata in sRGB.
+	Canvas display profile:	Profilo del display per l'area di disegno:
+	The system matches the window to the display's colors.	Il sistema adatta la finestra ai colori del display.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nessun profilo del display utilizzabile trovato: l'area di disegno è visualizzata in sRGB.
 	Rearrange All Artboards	Ridisponi tutte le tavole da disegno
 	Rearrange	Ridisponi
 	Select All Artboards	Seleziona tutte le tavole da disegno
@@ -3684,6 +3689,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Impostazioni Tate-chu-yoko…
 	Tate-chu-yoko Settings	Impostazioni Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Impostazioni Warichu…
+	Warichu Settings	Impostazioni Warichu
+	Lines:	Righe:
+	Line Gap:	Distanza tra le righe:
 	Composite Fonts…	Font compositi…
 	Composite Fonts	Font compositi
 	Export Composite Fonts	Esporta font compositi
@@ -5084,6 +5094,7 @@ axis	Both	Entrambi
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Scartato {n} documento recuperato|Scartati {n} documenti recuperati
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Ripristinato {n} documento recuperato. Salvalo per conservarlo|Ripristinati {n} documenti recuperati. Salvali per conservarli
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aperto con {n} nota: {first}|Aperto con {n} note: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Aperto con {n} nota: {first}|{notice}. Aperto con {n} note: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Salvato {path} con {n} nota: {first}|Salvato {path} con {n} note: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Incorporata {n} immagine; mancanti: {missing} (ricollegale prima)|Incorporate {n} immagini; mancanti: {missing} (ricollegale prima)
 @msgplural	Embedded {n} image|Embedded {n} images	Incorporata {n} immagine|Incorporate {n} immagini
@@ -6486,6 +6497,8 @@ anchor	Points:	Punti:
 	Anchor Inspector	Ispettore punti di ancoraggio
 	Add Points at Crossings	Aggiungi punti agli incroci
 	Split at Crossings	Dividi agli incroci
+	Trim at Crossings Tool	Strumento Rifila agli incroci
+	Trim at Crossings	Rifila agli incroci
 	Extend Path	Estendi tracciato
 	Measure & Inspect	Misura e ispeziona
 	Set Anchor	Imposta punto di ancoraggio

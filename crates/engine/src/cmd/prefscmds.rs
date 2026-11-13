@@ -368,6 +368,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
     p!("linuxDisplayServer", "Performance", "", "Linux Display Server", choice(LINUX_DISPLAY_SERVERS)),
+    p!("monitorProfileDisplay", "Performance", "", "Use Monitor Profile for Canvas", bool),
     // File Handling
     p!("backgroundSave", "File Handling", "", "Enable Background Save", bool),
     p!("backgroundExport", "File Handling", "", "Enable Background Export", bool),
