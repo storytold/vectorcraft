@@ -5479,6 +5479,65 @@ lighting	Light	Свет
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: из изображения нельзя построить тело. Сначала трассируйте его командой Объект › Трассировка изображения › Создать.
 @msg	{label} requires a shape with at least two anchors	{label}: требуется фигура не менее чем с двумя опорными точками
 @msg	The shape is too complex for a 3D effect	Фигура слишком сложна для 3D-эффекта
+@msg	Extrude & Bevel	Выдавливание и фаска
+@msg	Revolve	Вращение
+@msg	Inflate	Надувание
+@msg	Rotate	Повернуть
+@msg	Extrude & Bevel (Classic)	Выдавливание и фаска (классическое)
+@msg	Revolve (Classic)	Вращение (классическое)
+@msg	Rotate (Classic)	Поворот (классический)
+@msg	This effect	Этот эффект
+@msg	clipping paths	обтравочные контуры
+@msg	other objects	другие объекты
+@msg	{label} requires a group holding a shape with at least two anchors	{label}: требуется группа с фигурой не менее чем с двумя опорными точками
+@msg	Revolve requires a group holding a shape with at least two anchors	Вращение: требуется группа с фигурой не менее чем с двумя опорными точками
+@msg	Revolve requires a shape with at least two anchors	Вращение: требуется фигура не менее чем с двумя опорными точками
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} для группы: нужны контуры, составные контуры, текст, группы, обтравочные группы, переходы и экземпляры символов; сначала отмените или разберите эти элементы: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} для группы: допускается не более {MAX_MEMBERS} объектов
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	3D-эффект для группы или слоя применяется к самой группе, а не к её заливке или обводке
+@msg	a 3D effect on a group's fill or stroke draws nothing	3D-эффект на заливке или обводке группы ничего не рисует
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-эффект на заливке или обводке группы не рисует ничего для экспорта
+@msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
+@msg	its 3D effect builds no solid	его 3D-эффект не строит тела
+@msg	bevel must be none or one of {_1}	bevel должен быть none или одним из: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: нельзя построить тела из этой иллюстрации: её экземпляры символов, переходы и обтравочные группы содержат слишком много объектов
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: нельзя построить тело из экземпляра символа «{symbol}»: иллюстрация символа недоступна
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: обтравочный контур слишком сложен, чтобы обрезать им иллюстрацию
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}: допускается не более {MAX_MEMBERS} объектов
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}: нельзя построить тела из иллюстрации с вложенностью более {MAX_DEPTH} уровней
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Окраска «Вращения» слишком сложна для этой поверхности; уменьшите «Сегменты» или упростите градиент
+@msg	Revolve edge must be left or right	Вращение: edge должен быть left или right
+@msg	Revolve cap must be a boolean	Вращение: cap должен быть логическим значением
+@msg	the revolved object has no fill or stroke	у объекта вращения нет заливки или обводки
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor должен быть непрозрачным цветом RGB в формате #rrggbb
+@msg	lights must contain one to ten lights	lights должен содержать от одного до десяти источников света
+@msg	each light must be an object	каждый источник света должен быть объектом
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	неизвестный параметр источника света: используйте color, intensity, rotation, height, softness или behind
+@msg	light {key} must be a number from {min} to {max}	источник света: {key} должен быть числом от {min} до {max}
+@msg	light color must use opaque #rrggbb	color источника света должен быть непрозрачным #rrggbb
+@msg	light behind must be true or false	behind источника света должен быть true или false
+@msg	shadow must be true or false	shadow должен быть true или false
+@msg	shadowPosition must be behind or below	shadowPosition должен быть behind или below
+@msg	{key} must be a number from {min} to {max}	{key} должно быть числом от {min} до {max}
+@msg	each of `{GRAPHICS}` must be an object	каждый элемент `{GRAPHICS}` должен быть объектом
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	элементы `{GRAPHICS}` принимают symbol, face, x, y, scale и rotation, а не `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	каждому элементу `{GRAPHICS}` нужен `symbol`, имя символа
+@msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` должен быть front или back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графика наносится на плоские грани: используйте тип объекта «Выдавливание» или «Плоскость»
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
+@msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
+@msg	The graphics are too complex: simplify the symbols' art	Графика слишком сложна: упростите иллюстрации символов
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Иллюстрация графики может быть вложена не более чем на {MAX_LEVELS} уровней: упростите иллюстрацию символа
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Иллюстрация графики может вкладывать символы не более чем на {MAX_NESTING} уровней: упростите иллюстрацию символа
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Иллюстрация графики содержит слишком много объектов: упростите иллюстрацию символа
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Графика рисует не более {MAX_PIECES} заливок и обводок: упростите иллюстрацию символа
+@msg	`surface` must be one of {_1}	`surface` должно быть одним из: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}: для этого объекта рисуется исходная иллюстрация вместо его 3D-поверхности
+@msg	{label} draws no faces for this object	{label}: для этого объекта не рисуется ни одной грани
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	каркас содержит более {MAX_WIRE_EDGES} рёбер
 @msg	The 3D surface is too complex; simplify the shape	3D-поверхность слишком сложна; упростите фигуру
 	Transform Objects	Трансформировать объекты
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестный параметр `{key}`; возможно, имелся в виду `{near}`?
