@@ -326,6 +326,30 @@ fn a_warp_edit_that_moves_nothing_leaves_the_warp() {
     assert!(s.execute("object.mesh.movePoints", &json!({"id": 99999, "points": [], "dx": 1, "dy": 0})).is_err());
 }
 
+/// A handle placed at its own end, sent as point plus handle, leaves a warp a warp, even where
+/// `(p + v) - p` rounds to a value other than `v`.
+#[test]
+fn a_warp_handle_placed_at_its_end_leaves_the_warp() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 50}));
+    let (warp, n) = (node(&s, e), undo_len(&s));
+    let grid = live::warp_grid(&warp).unwrap();
+    let mut rounds = 0;
+    for (index, pt) in grid.points.iter().enumerate() {
+        for (h, v) in pt.handles.iter().enumerate() {
+            let end = pt.p + *v;
+            if end - pt.p != *v {
+                rounds += 1;
+            }
+            for cmd in ["object.mesh.movePoint", "object.envelope.setMeshPoint"] {
+                s.execute(cmd, &json!({"id": e.0, "index": index, "x": end.x, "y": end.y, "handle": h})).unwrap();
+                assert_eq!((node(&s, e), undo_len(&s)), (warp.clone(), n), "{cmd}: point {index}, handle {h}");
+            }
+        }
+    }
+    assert!(rounds > 0, "the grid has a handle whose end does not give the handle back");
+}
+
 /// With Direct Selection, a selected warp's point drags as `object.mesh.movePoint`: the preview
 /// makes it a mesh envelope, Escape gives back the warp with no undo step, and a finished drag is
 /// one undo step. While its contents are edited, its points don't take the press.

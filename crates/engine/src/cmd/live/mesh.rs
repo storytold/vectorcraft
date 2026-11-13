@@ -153,7 +153,8 @@ pub(super) fn warp_point_stays(d: &Document, id: NodeId, index: usize, handle: O
     };
     let grid = envelope_grid_to_edit(n, cmd, true)?;
     Ok(grid.points.get(index).is_some_and(|pt| match handle {
-        Some(h) => pt.handles.get(h).is_some_and(|v| *v == q - pt.p),
+        // The caller sends a handle's end as point plus handle; `q - p` can round away from it.
+        Some(h) => pt.handles.get(h).is_some_and(|v| pt.p + *v == q),
         None => pt.p == q,
     }))
 }
