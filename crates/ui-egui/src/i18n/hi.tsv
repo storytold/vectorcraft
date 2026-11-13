@@ -7949,7 +7949,9 @@ antiAlias	Sharp	शार्प
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	ग्राफ़िक्स समतल फ़ेस पर लगते हैं: एक्सट्रूड या समतल ऑब्जेक्ट प्रकार का उपयोग करें
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं
+@msg	Revolve maps graphics onto its side: map them onto the front	रिवॉल्व ग्राफ़िक्स को अपनी बगल वाली सतह पर लगाता है: उन्हें सामने वाले फ़ेस पर लगाएँ
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	ग्राफ़िक्स इस सतह के लिए बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ या सेगमेंट कम करें
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
 @msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
 @msg	The graphics are too complex: simplify the symbols' art	ग्राफ़िक्स बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ

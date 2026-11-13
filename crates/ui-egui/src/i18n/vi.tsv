@@ -5344,7 +5344,9 @@ theme	Appearance	Giao diện
 @msg	`{GRAPHICS}` face must be front or back	face của `{GRAPHICS}` phải là front hoặc back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Đồ họa được đặt lên các mặt phẳng: hãy dùng loại đối tượng Kéo dài hoặc Mặt phẳng
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
 @msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
 @msg	The graphics are too complex: simplify the symbols' art	Đồ họa quá phức tạp: hãy đơn giản hóa hình vẽ của các ký hiệu

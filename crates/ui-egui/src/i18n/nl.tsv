@@ -5904,6 +5904,9 @@ mark-style	Japanese	Japans
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Illustraties worden op de objecttypen Vlak, Extruderen en Draaien geplaatst
+@msg	Revolve maps graphics onto its side: map them onto the front	Draaien plaatst illustraties op de zijkant: plaats ze op de voorkant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	De illustraties zijn te complex voor dit oppervlak: vereenvoudig de illustraties van de symbolen of verlaag Segmenten
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` neemt maximaal {MAX_GRAPHICS} illustraties op
 @msg	A plane has one face: map its graphics onto the front	Een vlak heeft één zijde: plaats de illustraties ervan op de voorkant
 @msg	The graphics are too complex: simplify the symbols' art	De illustraties zijn te complex: vereenvoudig de illustraties van de symbolen

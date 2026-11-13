@@ -5619,7 +5619,10 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
+	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
 @msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください

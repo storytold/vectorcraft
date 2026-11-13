@@ -5247,7 +5247,9 @@ font-technology	Variable	ცვლადი
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	გრაფიკა ბრტყელ წახნაგებზე თავსდება: გამოიყენეთ ობიექტის ტიპი „ამოწევა“ ან „სიბრტყე“
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
 @msg	The graphics are too complex: simplify the symbols' art	გრაფიკა ზედმეტად რთულია: გაამარტივეთ სიმბოლოების ნახატი

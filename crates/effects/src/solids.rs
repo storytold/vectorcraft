@@ -21,13 +21,14 @@ pub use classic::{CLASSIC_EXTRUDE, CLASSIC_ROTATE, ROTATE_SURFACES, SHADING_COLO
 mod source;
 pub(crate) use source::{resolve, resolve_for};
 
-mod graphics;
+pub(crate) mod graphics;
 pub use graphics::{
     GRAPHICS, GraphicFrame, MAX_GRAPHICS, MappedGraphic, graphic_symbols, mapped_graphics, missing_symbol, names_graphic_symbol,
     rename_graphic_symbol, rename_graphic_symbol_in, takes_graphics, with_graphic,
 };
 pub use graphics::{
-    MAX_OFFSET as GRAPHIC_MAX_OFFSET, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, rename_appearance_graphic_symbol,
+    MAX_OFFSET as GRAPHIC_MAX_OFFSET, NOT_TAKEN as GRAPHICS_NOT_TAKEN, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols,
+    rename_appearance_graphic_symbol,
 };
 
 pub(crate) mod shadow;
@@ -80,8 +81,9 @@ pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
             }
         }
     }
-    // A plane has only a front, so graphics on the back cap are dropped.
-    if to == ROTATE
+    // A plane has only a front, and Revolve's graphics go on its side, named the front, so graphics
+    // on the back cap are dropped.
+    if (to == ROTATE || to == crate::REVOLVE)
         && let Some(Value::Array(list)) = out.get_mut(GRAPHICS)
     {
         list.retain(|g| g.get("face").and_then(Value::as_str) != Some(PlanarFace::Back.id()));
@@ -505,7 +507,7 @@ pub fn validate_three_d_at_in(doc: Option<&Document>, n: &Node, id: &str, p: &Va
         (Some(_), _) if is_container(n) || source::resolves(n) => {
             Err("A 3D effect on a group or layer goes on the group itself, not on its fill or stroke".into())
         }
-        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(n, id, p, item, index),
+        (Some(item), index) if crate::revolve::is_revolve(id) => crate::revolve::validate_item_of(doc, n, id, p, item, index),
         (None, _) if crate::revolve::is_revolve(id) => crate::revolve::validate_in(doc, n, id, p),
         (item, index) => validate_solid_for(doc, n, id, p, (item, Some(index))),
     }
@@ -1840,9 +1842,10 @@ pub fn graphic_frame(doc: Option<&Document>, n: &Node, item: Option<usize>) -> O
 }
 
 /// [`graphic_frame`] of the 3D effect at `index` in that list, which must be a visible Extrude &
-/// Bevel or Rotate.
+/// Bevel, Rotate or Revolve. Revolve's frame is its unrolled side seen from the front, centered on
+/// the origin, with no face maps: it sizes a new graphic and places no handles.
 pub fn graphic_frame_at(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<graphics::GraphicFrame> {
-    frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && SOLIDS.contains(&e.id.as_str())).map(|e| (index, e)))
+    frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && is_three_d(&e.id)).map(|e| (index, e)))
 }
 
 /// Does a visible geometry effect come after the 3D effect at `index` in the effects of `n` (on the
@@ -1886,6 +1889,21 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
     }
     let p = crate::merged_params(&fx.id, &fx.params);
     let b = union_bounds(&shapes)?;
+    if fx.id == crate::REVOLVE {
+        // Revolve's graphics lie on its unrolled side (in a group, the side of the member with the
+        // longest profile): the frame is the part of it seen from the front, with no planar face
+        // to place a handle on.
+        let options = crate::revolve::revolve_options(&p);
+        let (w, h) = shapes
+            .iter()
+            .filter(|s| crate::revolve::surface_item(&s.items).is_some())
+            .filter_map(|s| vectorcraft_three_d::revolve_surface_size(&s.path, b, options))
+            .fold((0.0f64, 0.0f64), |best, size| if size.1 > best.1 { size } else { best });
+        if w <= 0.0 || h <= 0.0 {
+            return None;
+        }
+        return Some(graphics::GraphicFrame::new(Rect::new(-w / 2.0, -h / 2.0, w / 2.0, h / 2.0), None, None));
+    }
     let view = view_options(&p);
     if fx.id == ROTATE {
         let plane = vectorcraft_three_d::plane_face_map(b, view);

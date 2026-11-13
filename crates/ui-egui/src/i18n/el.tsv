@@ -5319,7 +5319,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{GRAPHICS}` face must be front or back	το face του `{GRAPHICS}` πρέπει να είναι front ή back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Τα γραφικά αντιστοιχίζονται σε επίπεδες όψεις: χρησιμοποιήστε τον τύπο αντικειμένου Εξώθηση ή Επίπεδο
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
+@msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη
 @msg	The graphics are too complex: simplify the symbols' art	Τα γραφικά είναι πολύ σύνθετα: απλοποιήστε το σχέδιο των συμβόλων
