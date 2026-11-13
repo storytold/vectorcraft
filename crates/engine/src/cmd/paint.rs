@@ -88,7 +88,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke (docs/mcp.md) → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -583,7 +583,7 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
             }
             Ok(())
         },
-        |d, changed| {
+        |_, d, changed| {
             let series = super::graph::capture_series_paints(d, changed, fill);
             let labels = super::graph::capture_label_styles(d, changed, &|st| {
                 if fill {

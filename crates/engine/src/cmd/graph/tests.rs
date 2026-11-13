@@ -1733,6 +1733,208 @@ fn swapping_onto_a_hidden_top_fill_leaves_the_stored_fill() {
     assert_eq!(spec(&s, id).series_paints[0].fill, red);
 }
 
+/// Run `case` on each of `cases`, and fail naming every case that failed, not only the first one.
+fn every_case<T: std::fmt::Debug>(cases: impl IntoIterator<Item = T>, case: impl Fn(&T)) {
+    let failed: Vec<T> = cases.into_iter().filter(|c| std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| case(c))).is_err()).collect();
+    assert!(failed.is_empty(), "failed cases: {failed:?}");
+}
+
+/// The top fill paint of `mark`.
+fn fill_of(s: &Session, mark: NodeId) -> Paint {
+    s.doc().unwrap().doc.node(mark).unwrap().appearance.fill_paint()
+}
+
+/// A stroke weight set with `stroke.set`, or stepped with `stroke.weightUp` or `stroke.weightDown`, on a series mark is
+/// stored on the graph with the mark's stroke paint, and undo takes it back with its edit.
+#[test]
+fn a_stroke_weight_set_on_a_series_mark_is_kept() {
+    let cases = [("stroke.set", json!({"weight": 7}), 7.0), ("stroke.weightUp", json!({}), 3.0), ("stroke.weightDown", json!({}), 1.0)];
+    every_case(cases, |(cmd, params, weight)| {
+        let (mut s, id, marks) = stored_red_stroke();
+        let was = spec(&s, id).series_paints;
+        let mut p = params.clone();
+        p["ids"] = json!([marks[1].0]);
+        s.execute(cmd, &p).unwrap();
+        let mark = s.doc().unwrap().doc.node(marks[1]).unwrap().clone();
+        let (fill, stroke) = (mark.appearance.fill_paint(), mark.appearance.stroke_paint());
+        let kept = spec(&s, id).series_paints[0].clone();
+        assert_eq!((kept.stroke.clone(), kept.stroke_width), (Some(stroke.clone()), Some(*weight)), "{cmd}");
+        series_0_is(&mut s, id, (&fill, 0.4, &stroke, *weight), &was);
+    });
+}
+
+/// A gradient made on a series mark's fill with `paint.editGradient` is stored on the graph, every mark of the series has
+/// that fill after the graph is drawn again, and undo takes it back with its edit.
+#[test]
+fn a_gradient_edit_on_a_series_mark_is_kept() {
+    let (mut s, id, marks) = stored_red_stroke();
+    let was = spec(&s, id).series_paints;
+    s.execute("paint.editGradient", &json!({"ids": [marks[0].0], "kind": "linear"})).unwrap();
+    let fill = fill_of(&s, marks[0]);
+    assert!(matches!(fill, Paint::Gradient(_)), "{fill:?}");
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()));
+    let red = was[0].stroke.clone().unwrap();
+    series_0_is(&mut s, id, (&fill, 0.4, &red, 2.0), &was);
+}
+
+/// A gradient placed on a series mark's fill with `paint.setGradientGeom` is stored on the graph as it is placed, and
+/// every mark of the series has that fill, placement included, after the graph is drawn again.
+#[test]
+fn a_gradient_placed_on_a_series_mark_is_kept_with_its_placement() {
+    let (mut s, id, _, marks) = column_marks();
+    // `paint.setFill` stores the gradient before it is placed.
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "linear"}})).unwrap();
+    let fill = fill_of(&s, marks[0]);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()));
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[0].0], "start": [0, 0], "end": [10, 40]})).unwrap();
+    let placed = fill_of(&s, marks[0]);
+    assert_ne!(placed, fill, "the command places the gradient");
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(placed.clone()));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == placed), "{:?}", marks_of(&s, id, 0));
+}
+
+/// A point recolored with `paint.freeform.setPoint` in a freeform gradient on a series mark's fill is stored on the graph.
+#[test]
+fn a_freeform_gradient_edit_on_a_series_mark_is_kept() {
+    let (mut s, id, _, marks) = column_marks();
+    let points = json!([{"at": [20, 20], "color": "#53aadf"}, {"at": [50, 50], "color": "#ff8000"}]);
+    // `paint.setFill` stores the gradient before its point is recolored.
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "freeform", "freeform": {"points": points}}})).unwrap();
+    let fill = fill_of(&s, marks[0]);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()));
+    s.execute("paint.freeform.setPoint", &json!({"ids": [marks[0].0], "index": 1, "color": "#00ff00"})).unwrap();
+    let edited = fill_of(&s, marks[0]);
+    assert_ne!(edited, fill, "the command recolors the point");
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(edited.clone()));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == edited), "{:?}", marks_of(&s, id, 0));
+}
+
+/// A series mark's fill recolored with Invert or Complement (the proxy, or one appearance row), an Edit Colors command,
+/// a color filter or Recolor Artwork is stored on the graph, and undo takes it back with its edit.
+#[test]
+fn a_recolored_series_mark_is_kept() {
+    let cases = [
+        ("paint.invert", json!({}), false),
+        ("paint.complement", json!({}), false),
+        ("paint.invert", json!({}), true),
+        ("paint.complement", json!({}), true),
+        ("edit.colors.invert", json!({}), false),
+        ("edit.colors.toGrayscale", json!({}), false),
+        ("addon.color.filter", json!({"effect": "addon.color.invert"}), false),
+        ("recolor.apply", json!({"map": {"#3366cc": "#00ff00"}}), false),
+    ];
+    every_case(cases, |(cmd, params, item)| {
+        let (mut s, id, marks) = stored_red_stroke();
+        // Not the gray the series starts in: Complement leaves a gray as it is.
+        s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": top_row(&s, marks[0], true), "color": "#3366cc"})).unwrap();
+        let was = spec(&s, id).series_paints;
+        let mut p = params.clone();
+        if *cmd == "recolor.apply" {
+            // Recolor Artwork works on the selection.
+            s.execute("select.set", &json!({"ids": [marks[0].0]})).unwrap();
+        } else {
+            p["ids"] = json!([marks[0].0]);
+        }
+        if *item {
+            p["item"] = json!(top_row(&s, marks[0], true));
+        }
+        let was_fill = fill_of(&s, marks[0]);
+        s.execute(cmd, &p).unwrap();
+        let fill = fill_of(&s, marks[0]);
+        assert_ne!(fill, was_fill, "{cmd} recolors the fill");
+        assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()), "{cmd} item {item}");
+        let red = was[0].stroke.clone().unwrap();
+        series_0_is(&mut s, id, (&fill, 0.4, &red, 2.0), &was);
+    });
+}
+
+/// The ink limit of Print Ink Fixes on a series mark's fill is stored on the graph.
+#[test]
+fn an_ink_limit_on_a_series_mark_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"colorMode": "cmyk"})).unwrap();
+    let id = graph(&mut s, "column");
+    let mark = series(&s.doc().unwrap().doc.node(id).unwrap().clone(), 0).children().unwrap()[0].id;
+    // `paint.setFill` stores the heavy color before the limit lowers it.
+    s.execute("paint.setFill", &json!({"ids": [mark.0], "color": {"c": 100, "m": 100, "y": 100, "k": 100}})).unwrap();
+    let heavy = fill_of(&s, mark);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(heavy.clone()));
+    s.execute("addon.color.printFixes", &json!({"ids": [mark.0], "inkLimit": 300})).unwrap();
+    let fill = fill_of(&s, mark);
+    assert_ne!(fill, heavy, "the limit lowers the ink");
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == fill), "{:?}", marks_of(&s, id, 0));
+}
+
+/// A recolor of a whole graph, or of one series group, stores the new fill of each series it reaches, and the marks have
+/// it after the graph is drawn again.
+#[test]
+fn recoloring_a_graph_or_a_series_group_stores_its_marks_fills() {
+    let cases = [("edit.colors.invert", true), ("edit.colors.invert", false), ("paint.invert", true), ("paint.invert", false)];
+    every_case(cases, |(cmd, whole)| {
+        let (mut s, id, gray, _) = column_marks();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let (group, other) = (series(&n, 0).id, series(&n, 1).children().unwrap()[0].clone());
+        let target = if *whole { id } else { group };
+        s.execute(cmd, &json!({"ids": [target.0]})).unwrap();
+        let fill = marks_of(&s, id, 0).last().unwrap().0.clone();
+        assert_ne!(fill, gray, "{cmd} recolors the series");
+        let kept = spec(&s, id).series_paints;
+        assert_eq!(kept[0].fill, Some(fill.clone()), "{cmd} whole {whole}");
+        let other_now = fill_of(&s, other.id);
+        if *whole {
+            assert_ne!(other_now, other.appearance.fill_paint());
+            assert_eq!(kept[1].fill, Some(other_now.clone()));
+        } else {
+            assert_eq!(other_now, other.appearance.fill_paint(), "the other series is left as it was");
+            assert!(kept.get(1).is_none_or(|p| p.fill.is_none()), "{kept:?}");
+        }
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+        assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == fill), "{:?}", marks_of(&s, id, 0));
+        assert!(marks_of(&s, id, 1).iter().all(|m| m.0 == other_now), "{:?}", marks_of(&s, id, 1));
+    });
+}
+
+/// A recolor that changes several marks of one series to different fills stores the frontmost mark's fill, whatever
+/// order the ids are given in.
+#[test]
+fn recoloring_several_marks_of_a_series_stores_the_frontmost_ones_fill() {
+    let cases =
+        [("edit.colors.invert", false), ("paint.invert", true)].into_iter().flat_map(|c| [[0, 1, 2], [2, 1, 0], [1, 2, 0]].map(|o| (c.0, c.1, o)));
+    every_case(cases, |(cmd, item, order)| {
+        let (mut s, id, _, marks) = column_marks();
+        for (mark, hex) in [(marks[0], "#ff0000"), (marks[1], "#00ff00"), (marks[2], "#0000ff")] {
+            s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, true), "color": hex})).unwrap();
+        }
+        let mut p = json!({"ids": order.map(|i| marks[i].0)});
+        if *item {
+            p["item"] = json!(top_row(&s, marks[0], true));
+        }
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill_of(&s, marks[2])), "{cmd} {order:?}");
+    });
+}
+
+/// Blend Horizontally across a series' three marks stores the fill it gives the middle one on the graph.
+#[test]
+fn blending_a_series_marks_fills_is_kept() {
+    let (mut s, id, marks) = stored_red_stroke();
+    for (mark, hex) in [(marks[0], "#ff0000"), (marks[2], "#0000ff")] {
+        s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, true), "color": hex})).unwrap();
+    }
+    let was = spec(&s, id).series_paints;
+    s.execute("select.set", &json!({"ids": [marks[0].0, marks[1].0, marks[2].0]})).unwrap();
+    s.execute("edit.colors.blendHorizontally", &json!({})).unwrap();
+    let mid = s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.fill_paint();
+    assert_ne!(Some(&mid), was[0].fill.as_ref());
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(mid.clone()));
+    let red = was[0].stroke.clone().unwrap();
+    series_0_is(&mut s, id, (&mid, 0.4, &red, 2.0), &was);
+}
+
 /// A kept opacity read from a file outside 0..1 is held to that range, and one that is not a number is left out.
 #[test]
 fn a_kept_series_opacity_from_a_file_is_held_to_its_range() {
