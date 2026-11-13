@@ -8562,6 +8562,44 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Warichu
+
+`text.setFormat` and `text.setRangeStyle {warichu?, warichuLines?, warichuGap?, warichuScale?, warichuAlign?}` set the
+Character panel menu's Warichu and Warichu Settings of the characters (the menu items show with Show East Asian
+Options). Warichu characters are set at `warichuScale` percent of their size (10 to 100, default 50) and stacked on
+`warichuLines` lines (a whole number from 1 to 6, default 2) inside their line: one above the other in horizontal type
+and side by side across the column in vertical type, the first line above or to the right. `warichuGap` is the space
+between the lines in points (0 to 100, default 0, document points as `baselineShift`). The stack is centered across the
+line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size.
+A stretch of warichu characters is one block that takes the settings of its first character; a character with other
+settings, another size or the other kind of leading (Auto or a number) starts a new one, and a tab, a forced line break or a tate-chu-yoko character ends it. In
+vertical type a character marked `tateChuYoko` as well is set as tate-chu-yoko at its own size, and two or three digits
+marked `warichu` are stacked with their block instead of being set across the column. In horizontal type each line's
+characters are set in their bidi order, so right-to-left text reads from the right. The Insert Aki before the block's
+first character and after its last is space before and after the block. The text is split between the lines where
+their lengths come nearest an even share, after a space or a CJK character when there are enough such places, and
+between any two characters otherwise; a block has no more lines than characters. The block is as long as its longest
+line and is not broken across lines: a block longer than its line stays whole and runs past the line's end, as No Break
+text does. `warichuAlign` sets each line along the block: `"left"`, `"center"` or `"right"` (top, center or bottom in
+vertical type), `"justifyLeft"`, `"justifyCenter"` or `"justifyRight"` (every line but the last spread to the block's
+length, the last set left, centered or right) or `"justifyAll"`. `"auto"`, the default, sets the lines as
+`"justifyLeft"` does. These rules, the ranges and the defaults are VectorCraft's own; the public page
+<https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html> describes the Lines, Line Gap, Scale and
+Alignment settings. Type on a path sets warichu characters at their own size along the path. The canvas and every
+export draw the stacked lines; SVG, PDF and the `.ai` writers write type with warichu as outlines, as they do ruby.
+None of the settings turns `warichu` on. All are saved only when they differ from the defaults, and character styles
+carry them (`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` refuse a value outside the range). A value
+outside its range is refused with `` `warichuLines` must be a whole number from 1 to 6 `` or
+`` `warichuScale` must be from 10 to 100 ``, naming the key, and an unknown alignment with the list of the values. One
+undo step; a `text.setFormat` call that changes nothing records none. `ui.warichuSettings` opens the Warichu Settings dialog on the
+values the selected characters share, a blank field where they differ; OK sends the values that changed and leaves a
+blank field's value alone. OK with a field that is not a number returns `Lines must be a number`,
+`Line Gap must be a number` or `Scale must be a number` and keeps the dialog open.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":2,"end":8,"warichu":true,"warichuLines":2,"warichuScale":50,"warichuAlign":"auto"}}}
+```
+
 ## Insert Aki
 
 `text.setFormat` and `text.setRangeStyle {akiLeft?, akiRight?}` set Insert Aki Left and Insert Aki Right of the
