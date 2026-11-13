@@ -9,6 +9,7 @@
 
 pub mod addons;
 pub mod bbox;
+pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
 pub mod corners;
@@ -57,7 +58,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
@@ -148,13 +149,26 @@ pub trait Tool: Send {
         false
     }
     /// Is a drag moving, scaling or rotating the selection (the canvas then hides the bounding box,
-    /// so only the art is seen going with the pointer, except during a handle resize)?
+    /// so only the art is seen going with the pointer, except during a handle resize, and during a
+    /// move with General › Show Bounding Box While Moving and Drawing on)?
     fn transforming(&self) -> bool {
         false
     }
     /// Is the transforming drag a resize by a bounding-box handle? The canvas then keeps drawing
     /// the bounding box at the changing bounds.
     fn resizing(&self) -> bool {
+        false
+    }
+    /// Is the transforming drag a move of the selection (an Alt-drag copy included)? With General ›
+    /// Show Bounding Box While Moving and Drawing on, the canvas then draws the bounding box where
+    /// the drag has moved the selection.
+    fn moving(&self) -> bool {
+        false
+    }
+    /// Is a drag drawing a new shape that the tool shows the bounding box of once drawn? With
+    /// General › Show Bounding Box While Moving and Drawing on, the canvas then draws the box around
+    /// the shape as it is drawn.
+    fn drawing_boxed(&self) -> bool {
         false
     }
     /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
@@ -528,6 +542,7 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            pixel_snap: crate::PixelSnap::default(),
             snap_to_point: true,
             snap_tangent: true,
             snap_perpendicular: true,
@@ -627,10 +642,11 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
+            // Live Paint Bucket's bucket is drawn.
             let stand_in = match id {
                 "mesh" => Some(Cursor::PenAdd),
-                "blobBrush" | "eraser" => None,
+                "blobBrush" | "eraser" | "livePaintBucket" => None,
                 _ => Some(Cursor::Crosshair),
             };
             assert_eq!(c.stand_in(), stand_in, "{id}");

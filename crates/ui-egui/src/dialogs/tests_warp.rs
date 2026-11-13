@@ -616,3 +616,33 @@ fn warp_options_style_keyboard_enter_does_not_accept_dialog() {
         assert_eq!(app.session.doc().unwrap().doc, moved);
     }
 }
+
+/// Warp Options editing the Warps of two objects, one new and one saved without a map version,
+/// changes the Bend of both and keeps each one's own `version`.
+#[test]
+fn warp_options_edit_keeps_each_targets_map_version() {
+    let (mut app, first) = app();
+    app.run("effect.apply", json!({"effect": "warp.arc"})).unwrap();
+    let second = NodeId(app.run("shape.rectangle", json!({"x": 230, "y": 60, "width": 120, "height": 80})).unwrap()["id"].as_u64().unwrap());
+    app.run("effect.apply", json!({"effect": "warp.arc"})).unwrap();
+    // As a file saved before the version existed gives it.
+    let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+    if let Some(Value::Object(p)) = doc.node_mut(second).and_then(|n| n.appearance.effects.first_mut()).map(|e| &mut e.params) {
+        p.remove("version");
+    }
+    app.run("select.set", json!({"ids": [first.0, second.0]})).unwrap();
+    app.run("effect.dialog", json!({"effect": "warp.arc"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, effect::EXISTS);
+    let ctx = context();
+    settle(&mut app, &ctx);
+    click_text(&mut app, &ctx, "Edit");
+    settle(&mut app, &ctx);
+    make_warp_edit(&mut app, &ctx, "bend");
+    click_text(&mut app, &ctx, "OK");
+    assert!(app.ui.dialog.is_none());
+    let doc = app.session.doc().unwrap().doc.clone();
+    let params = |id: NodeId| doc.node(id).unwrap().appearance.effects[0].params.clone();
+    assert_eq!((&params(first)["bend"], &params(first)["version"]), (&json!(25.0), &json!(vectorcraft_doc::live::WARP_NET)));
+    assert_eq!(params(second)["bend"], json!(25.0));
+    assert!(params(second).get("version").is_none(), "{:?}", params(second));
+}

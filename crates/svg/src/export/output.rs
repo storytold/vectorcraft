@@ -30,7 +30,7 @@ pub(super) fn valid_xml_value(s: &str) -> bool {
 }
 
 /// An XML name without a colon (an NCName): a letter or `_`, then [`xml_name_char`]s.
-fn xml_ncname(s: &str) -> bool {
+pub(super) fn xml_ncname(s: &str) -> bool {
     let mut chars = s.chars();
     chars.next().is_some_and(|c| c.is_alphabetic() || c == '_') && chars.all(xml_name_char)
 }
@@ -88,7 +88,7 @@ fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
     let info = &doc.metadata;
     let mut terms = vec![("format", "image/svg+xml".to_string())];
     let created = info.created.map(vectorcraft_doc::metadata::iso8601).unwrap_or_default();
-    let fields = [("title", doc.title.as_str()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
+    let fields = [("title", doc.info_title()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
     let rights = [("rights", info.copyright_notice.as_str()), ("rights", info.copyright_url.as_str()), ("date", created.as_str())];
     let keywords = info.keywords.iter().map(|k| ("subject", k.as_str()));
     terms.extend(fields.into_iter().chain(keywords).chain(rights).filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k, v.to_string())));
@@ -193,6 +193,9 @@ impl Writer<'_> {
             return String::new();
         }
         let mut out = self.names.get(&n.id).map_or_else(String::new, |id| format!(" id=\"{}\"", xml_escape(id)));
+        if let Some(id) = self.names.get(&n.id).filter(|_| !self.bound.is_empty()).cloned() {
+            self.note_bound(n.id, &id);
+        }
         if let (Some(id), Some(name)) = (self.names.get(&n.id), n.name.as_deref())
             && name != id
         {
@@ -525,9 +528,19 @@ impl Writer<'_> {
         })
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed ([`crate::Output::warnings`]). A note about an option goes to [`Self::note_setting`].
     pub(super) fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about an option that wasn't applied or was applied another way while the
+    /// art reaches the file as it looks ([`crate::Output::setting_notes`]).
+    pub(super) fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 }

@@ -2,7 +2,9 @@
 //! applies it to the selected paths (and makes it the Paintbrush's current brush); double-clicking
 //! one opens its Brush Options. Shift-click selects a range of brushes, Cmd/Ctrl-click adds or
 //! removes one, and the panel menu's Select All Unused selects the brushes no stroke paints with,
-//! for Delete Brush and Duplicate Brush. Brush libraries open in library panels
+//! for Delete Brush and Duplicate Brush. A scatter, art or pattern brush dragged onto an empty part
+//! of the canvas places a copy of its art there, and art from the canvas Alt-dragged (Option-dragged
+//! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
 use std::cell::RefCell;
@@ -269,6 +271,22 @@ fn reorder_drop(
     }
 }
 
+/// Art dragged off the canvas and held over the tile or row `resp` of a scatter, art or pattern
+/// brush `name` (of type `ty`) with Alt (Option on macOS) held: the tile is outlined, and released
+/// there it sets `replaced` to the brush and the art's ids, whose art then replaces the brush's.
+/// Without Alt, or on another type of brush, the drop is left to the list, which opens New Brush.
+fn replace_drop(ui: &Ui, resp: &egui::Response, name: &str, ty: &str, replaced: &mut Option<(String, Vec<u64>)>) {
+    if !matches!(ty, "scatter" | "art" | "pattern") || !ui.input(|i| i.modifiers.alt) {
+        return;
+    }
+    let Some(drag) = resp.dnd_hover_payload::<PanelDrag>() else { return };
+    let PanelDrag::Art(ids) = &*drag else { return };
+    ui.painter().rect_stroke(resp.rect, 0.0, egui::Stroke::new(1.5, Tokens::get(ui.ctx()).accent), egui::StrokeKind::Inside);
+    if resp.dnd_release_payload::<PanelDrag>().is_some() {
+        *replaced = Some((name.to_string(), ids.iter().map(|id| id.0).collect()));
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let (list, current) = brushes(app);
@@ -284,6 +302,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut clicked: Option<(String, egui::Modifiers)> = None;
     let mut options: Option<String> = None;
     let mut moved: Option<Value> = None;
+    let mut replaced: Option<(String, Vec<u64>)> = None;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
@@ -346,6 +365,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 for (i, (name, _)) in group.into_iter().enumerate() {
                     let resp = row(ui, name, vec2(ui.available_width(), 26.0), true);
                     reorder_drop(ui, &resp, &list, (name, ty, i), true, &mut moved);
+                    replace_drop(ui, &resp, name, ty, &mut replaced);
                     pick(resp, name);
                 }
             } else {
@@ -353,6 +373,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     for (i, (name, _)) in group.into_iter().enumerate() {
                         let resp = row(ui, name, vec2(64.0, 28.0), false);
                         reorder_drop(ui, &resp, &list, (name, ty, i), false, &mut moved);
+                        replace_drop(ui, &resp, name, ty, &mut replaced);
                         pick(resp, name);
                     }
                 });
@@ -361,6 +382,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.min_rect()
     });
+    // Art Alt-dragged onto a scatter, art or pattern brush replaces its art, asking first when
+    // strokes use the brush.
+    if let Some((name, ids)) = replaced {
+        crate::dialogs::brush_replace_art::replace(app, &name, &ids);
+    }
     // Art dragged off the canvas and dropped on the list opens New Brush for that art, as the New
     // Brush button opens it for the selection; a brush library's brush dropped there is added.
     let zone = ui.interact(list_rect, ui.scope_id().with("brushes-drop"), Sense::hover());
@@ -611,9 +637,15 @@ impl LibraryKind for BrushLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.brush_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibBrush>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a brush's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibBrush>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|b| found(b.name())).map(|b| Row { name: b.name(), item: Some(b) }).collect()
+    }
+    /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> &'a str {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

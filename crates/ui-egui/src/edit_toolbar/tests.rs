@@ -381,7 +381,7 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     frame(&mut app, &ctx, 0.1, vec![]);
     let area = || ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
     let bar = area();
-    let edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).expect("its ••• button");
+    let edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().rfind(|r| bar.contains(r.center())).expect("its ••• button");
     // Open beside the Tools panel's toolbar, the drawer moves to this one on its ••• click.
     app.run("window.editToolbar", json!({})).unwrap();
     frame(&mut app, &ctx, 0.5, vec![]);
@@ -439,6 +439,112 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     assert!(!ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Middle, crate::custom_toolbars::area_id("Mine")))));
 }
 
+/// A toolbar made with New Toolbar has an Add Tool… button (+, above the ••• button) that the
+/// keyboard reaches and opens with Enter. Its menu lists the tools under the drawer's headings: a
+/// tool picked there with a click or with Enter is
+/// added at the end of this toolbar alone, without the drawer, and is dimmed in the menu from then
+/// on; picked under Remove Tool, it is taken out again.
+#[test]
+fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
+    let mut app = app();
+    let ctx = ctx();
+    let shipped = slots(&app);
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
+    let plus = || {
+        let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
+        let buttons: Vec<Rect> =
+            crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().filter(|r| bar.contains(r.center())).collect();
+        assert_eq!(buttons.len(), 2, "the + and ••• buttons: {buttons:?}");
+        buttons[0]
+    };
+    let button = plus();
+    let sense = ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == button).map(|w| w.sense));
+    assert!(sense.is_some_and(|s| s.is_focusable()), "Tab stops on the + button: {sense:?}");
+    // The menu at `time`, opened with a click on the + button unless it is open.
+    let open = |app: &mut VectorcraftApp, time: f64| {
+        let shown = frame(app, &ctx, time, vec![]);
+        if shown.iter().any(|(s, ..)| s == "Select:") {
+            return shown;
+        }
+        click(app, &ctx, time + 0.2, plus().center());
+        // The menu is sized in its first frame and drawn from the second.
+        frame(app, &ctx, time + 0.5, vec![]);
+        frame(app, &ctx, time + 0.6, vec![])
+    };
+    // The items named `name` that the menu shows (it scrolls), top first.
+    let items = |shown: &[(String, Pos2, Color32)], name: &str| {
+        let menu = ctx.memory(|m| m.area_rect(crate::custom_toolbars::add_menu_id("Mine"))).expect("the menu is open");
+        let mut at: Vec<(Pos2, Color32)> = shown.iter().filter(|(s, p, _)| s.trim() == name && menu.contains(*p)).map(|(_, p, c)| (*p, *c)).collect();
+        at.sort_by(|a, b| a.0.y.total_cmp(&b.0.y));
+        at
+    };
+    let mine = |app: &VectorcraftApp| crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots.clone();
+    // The keyboard: Enter on the focused + button opens the menu, and Enter on a tool adds it.
+    let focusable_at = |p: Pos2| {
+        let id = ctx.viewport(|vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.contains(p) && w.sense.is_focusable()).last().map(|w| w.id)
+        });
+        id.unwrap_or_else(|| panic!("nothing focusable at {p:?}"))
+    };
+    let enter = |app: &mut VectorcraftApp, time: f64, at: Pos2| {
+        let id = focusable_at(at);
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(app, &ctx, time, vec![]);
+        for (k, pressed) in [true, false].into_iter().enumerate() {
+            let key = Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+            frame(app, &ctx, time + 0.1 * (k + 1) as f64, vec![key]);
+        }
+        frame(app, &ctx, time + 0.5, vec![]);
+        frame(app, &ctx, time + 0.6, vec![])
+    };
+    let shown = enter(&mut app, 9.0, plus().center());
+    assert!(items(&shown, "Remove Tool:").is_empty(), "nothing to take out of a blank toolbar");
+    let lasso = items(&shown, "Lasso Tool");
+    assert_eq!(lasso.len(), 1, "listed once, under Select");
+    enter(&mut app, 10.0, lasso[0].0);
+    assert_eq!(mine(&app), [["lasso"]]);
+    assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
+    assert!(!app.ui.tools_drawer, "no drawer opened");
+    let list = app.run("window.toolbar.list", json!({})).unwrap();
+    assert_eq!(
+        list,
+        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "floating": true, "side": "left", "order": null}])
+    );
+    // A second tool goes after the first.
+    let shown = open(&mut app, 19.0);
+    click(&mut app, &ctx, 20.0, items(&shown, "Magic Wand Tool")[0].0);
+    assert_eq!(mine(&app), [["lasso"], ["magicWand"]]);
+    // A tool in the toolbar is listed under Remove Tool, and dimmed under its heading, where a click
+    // adds nothing.
+    let shown = open(&mut app, 29.0);
+    assert_eq!(items(&shown, "Remove Tool:").len(), 1);
+    let lasso = items(&shown, "Lasso Tool");
+    assert_eq!(lasso.len(), 2, "under Remove Tool, then under Select");
+    let enabled = |at: Pos2| {
+        let layer = egui::LayerId::new(egui::Order::Foreground, crate::custom_toolbars::add_menu_id("Mine"));
+        ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .filter(|(l, _)| **l == layer)
+                .flat_map(|(_, w)| w.iter())
+                .filter(|w| w.sense.senses_click() && w.rect.contains(at))
+                .last()
+                .map(|w| w.enabled)
+        })
+    };
+    assert_eq!([enabled(lasso[0].0), enabled(lasso[1].0)], [Some(true), Some(false)], "dimmed under Select");
+    click(&mut app, &ctx, 30.0, lasso[1].0);
+    assert_eq!(mine(&app), [["lasso"], ["magicWand"]]);
+    // Under Remove Tool, a click takes it out.
+    let shown = open(&mut app, 39.0);
+    click(&mut app, &ctx, 40.0, items(&shown, "Lasso Tool")[0].0);
+    assert_eq!(mine(&app), [["magicWand"]]);
+    assert_eq!(slots(&app), shipped);
+}
+
 /// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.
 #[test]
 fn new_toolbar_in_the_drawer_menu_asks_for_a_name() {
@@ -477,7 +583,7 @@ fn the_drawer_moves_between_new_toolbars() {
     frame(&mut app, &ctx, 0.1, vec![]);
     let edit_of = |name: &str| {
         let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id(name))).unwrap();
-        crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).unwrap()
+        crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().rfind(|r| bar.contains(r.center())).unwrap()
     };
     let (a, b) = (edit_of("A"), edit_of("B"));
     for (k, (button, name)) in [(b, "B"), (a, "A"), (b, "B")].into_iter().enumerate() {

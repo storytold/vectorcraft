@@ -197,10 +197,83 @@ fn strokes_without_pressure_round_trip_unchanged() {
 fn profile_interp() {
     let p = WidthProfile::lens();
     assert_eq!(p.at(0.5), (1.0, 1.0));
-    // Half way up the lens the width curves above the straight ramp (0.5), flattening into its
-    // widest point (#5714).
-    assert_eq!(p.at(0.25), (0.625, 0.625));
+    // The lens is a parabola between its ends, so a quarter of the way along is 0.75: above the
+    // 0.5 a straight taper would give.
+    assert_eq!(p.at(0.25), (0.75, 0.75));
     assert_eq!(p.at(2.0), (0.0, 0.0));
+}
+
+/// The width runs smoothly between points: it passes through them, has one slope either side
+/// of one, and never overshoots the widths its points set.
+#[test]
+fn profile_is_smooth_between_points() {
+    let p = [(0.0, 1.0, 2.0), (0.5, 0.2, 2.0), (1.0, 1.0, 2.0)];
+    assert!((WidthProfile::at_points(&p, 0.5).0 - 0.2).abs() < 1e-12);
+    let slope = |t: f64| (WidthProfile::at_points(&p, t + 1e-6).0 - WidthProfile::at_points(&p, t - 1e-6).0) / 2e-6;
+    // A local minimum at the middle point is flat there, so the two sides agree.
+    assert!(slope(0.5).abs() < 1e-3, "{}", slope(0.5));
+    for k in 0..=100 {
+        let w = WidthProfile::at_points(&p, k as f64 / 100.0).0;
+        assert!((0.2..=1.0).contains(&w), "{w} at {k}");
+    }
+    // The side with no points of its own stays flat.
+    for k in 0..=100 {
+        assert!((WidthProfile::at_points(&p, k as f64 / 100.0).1 - 2.0).abs() < 1e-12);
+    }
+}
+
+/// A run with only two points takes its secant as both end slopes, so it stays a straight
+/// taper on each side instead of becoming a smoothstep.
+#[test]
+fn profile_two_point_runs_are_linear() {
+    let p = [(0.0, 0.0, 1.0), (1.0, 1.0, 0.0)];
+    for k in 0..=100 {
+        let t = k as f64 / 100.0;
+        let (l, r) = WidthProfile::at_points(&p, t);
+        assert!((l - t).abs() < 1e-12, "left {l} at {t}");
+        assert!((r - (1.0 - t)).abs() < 1e-12, "right {r} at {t}");
+    }
+}
+
+/// The lens's one-sided end slopes make it a parabola: at a quarter of the way it is 0.75,
+/// above the 0.5 a straight line between its points would give.
+#[test]
+fn profile_lens_is_convex() {
+    let p = WidthProfile::lens();
+    assert!((p.at(0.25).0 - 0.75).abs() < 1e-12);
+    assert!((p.at(0.75).0 - 0.75).abs() < 1e-12);
+    for k in 1..25 {
+        let t = k as f64 / 100.0;
+        assert!(p.at(t).0 > 2.0 * t, "{} at {t}", p.at(t).0);
+        assert!(p.at(1.0 - t).0 > 2.0 * t, "{} at {}", p.at(1.0 - t).0, 1.0 - t);
+    }
+}
+
+/// A step still steps, and the smooth runs either side meet it flat.
+#[test]
+fn profile_steps_stay_steps() {
+    let p = [(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (1.0, 2.0, 2.0)];
+    assert_eq!(WidthProfile::at_points(&p, 0.5), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.5 + 1e-6), (2.0, 2.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.5 - 1e-6), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.25), (1.0, 1.0));
+    assert_eq!(WidthProfile::at_points(&p, 0.75), (2.0, 2.0));
+}
+
+/// Moving a point only reshapes the segments beside it (local influence), not the whole path.
+#[test]
+fn profile_points_only_affect_the_curve_around_them() {
+    // A monotone run, so no neighbouring slope is held flat by a local extremum.
+    let a = [(0.0, 0.0, 0.0), (0.25, 0.3, 0.3), (0.5, 0.5, 0.5), (0.75, 0.7, 0.7), (1.0, 1.0, 1.0)];
+    let mut b = a;
+    b[3] = (0.75, 0.9, 0.9);
+    // Moving p[3] changes the slopes at p[2] and p[3], so p[1] and p[4] also shape the
+    // curve: nothing before p[1] may move.
+    for k in 0..=24 {
+        let t = k as f64 / 100.0;
+        assert_eq!(WidthProfile::at_points(&a, t), WidthProfile::at_points(&b, t), "at {t}");
+    }
+    assert_ne!(WidthProfile::at_points(&a, 0.3), WidthProfile::at_points(&b, 0.3));
 }
 
 #[test]
@@ -264,11 +337,63 @@ fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
     ];
     for name in SAVED {
         let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
-        assert_eq!(serde_json::to_value(a).unwrap(), name);
+        assert_eq!(serde_json::to_value(&a).unwrap(), name);
         assert_eq!(Arrowhead::ALL.iter().filter(|x| **x == a).count(), 1, "{name} in the menu once");
     }
     let labels: std::collections::HashSet<&str> = Arrowhead::ALL.iter().map(|a| a.label()).collect();
     assert_eq!(labels.len(), Arrowhead::ALL.len(), "labels are distinct");
+}
+
+/// A custom head: a triangle from its tip back 3 units, 2 units right and 1 left of its line.
+fn custom_head() -> Arrowhead {
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let path = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(3.0, 2.0), Point::new(3.0, -1.0)], true));
+    Arrowhead::Custom(std::sync::Arc::new(CustomArrowhead::new("Wedge".into(), path)))
+}
+
+#[test]
+fn custom_arrowheads_carry_their_art_and_measure_it() {
+    let head = custom_head();
+    assert_eq!((head.name(), head.label()), ("Wedge", "Custom"));
+    assert_eq!(head.reach(), 3.0f64.hypot(2.0));
+    assert_eq!(head.half_width(), 2.0);
+    let Arrowhead::Custom(c) = &head else { panic!("custom") };
+    assert_eq!(c.stop(), 1.5, "the line stops halfway along the head");
+    // Saved with the stroke, art and all, beside the built-in heads' names.
+    let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+    (st.start_arrow, st.end_arrow) = (Some(Arrowhead::Triangle), Some(head.clone()));
+    let json = serde_json::to_value(&st).unwrap();
+    assert_eq!(json["start_arrow"], "Triangle");
+    assert_eq!(json["end_arrow"]["Custom"]["name"], "Wedge");
+    let back: StrokeLayer = serde_json::from_value(json).unwrap();
+    assert_eq!(back, st);
+    // Extended, the tip sits the stop past the end point; on it, only the reach counts.
+    assert_eq!(head.length(), 1.5 + head.reach());
+    assert_eq!(st.head_reach(true), head.length() * 2.0 + 1.0);
+    st.arrow_align = ArrowAlign::Tip;
+    assert_eq!(st.head_reach(true), head.reach() * 2.0 + 1.0);
+}
+
+#[test]
+fn custom_arrowheads_out_of_bounds_draw_nothing() {
+    let Arrowhead::Custom(c) = custom_head() else { panic!("custom") };
+    let mut path = c.path.clone();
+    path.subpaths[0].anchors[1] = vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1e9, 0.0));
+    // A file can hold what `new` drops: reading it drops it too.
+    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path }).unwrap();
+    let far: CustomArrowhead = serde_json::from_value(json).unwrap();
+    assert_eq!((far.name.as_str(), far.path.subpaths.len()), ("Wedge", 0));
+    assert_eq!((far.reach(), far.half_width(), far.stop()), (0.0, 0.0, 0.0));
+    let anchors = vec![vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1.0, 0.0)); CustomArrowhead::MAX_ANCHORS + 1];
+    let many = CustomArrowhead::new("Many".into(), vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::new(anchors, true)));
+    assert!(many.path.subpaths.is_empty(), "too many anchors");
+    // Empty subpaths add no anchors, and still count.
+    let mut hollow = c.path.clone();
+    hollow.subpaths.extend(std::iter::repeat_n(vectorcraft_geom::SubPath::new(vec![], false), CustomArrowhead::MAX_ANCHORS));
+    assert!(!CustomArrowhead::fits(&hollow), "too many subpaths");
+    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow }).unwrap();
+    let hollow: CustomArrowhead = serde_json::from_value(json).unwrap();
+    assert!(hollow.path.subpaths.is_empty(), "too many subpaths, read back");
 }
 
 #[test]

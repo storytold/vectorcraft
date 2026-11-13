@@ -42,6 +42,8 @@ impl Writer<'_> {
         art.walk(&mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            let shown = self.doc.shown_image(n, im);
+            let im = &*shown;
             if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
                 return;
             }
@@ -176,12 +178,14 @@ impl Writer<'_> {
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                let shown = self.doc.shown_image(c, im);
+                let im = &*shown;
                 if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
                     && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
                 {
                     return;
                 }
-                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
+                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, im.clone())).0 += 1;
             }
         });
         let mut repeated: Vec<_> = seen.into_iter().filter(|(k, (n, _))| *n > 1 && !self.shared_images.contains_key(k)).collect();
@@ -269,13 +273,31 @@ impl Writer<'_> {
             // `raster_paint`).
             self.warn("conic gradients on characters are written as linear gradients");
         }
+        if g.gradient.kind == GradientKind::Diamond {
+            // Object fills and strokes are four linear gradients or images (see `raster_paint`).
+            self.warn("diamond gradients on characters are written as radial gradients");
+        }
+        // A gradient that repeats or reflects: one run of its stops over its period, and
+        // `spreadMethod` to carry it on past both ends.
+        let spread = g.gradient.is_spread();
         let mut geom = g.resolve(bounds);
+        if spread {
+            // A conic is written as a linear gradient along its vector: its runs lie along it.
+            let written = if g.gradient.kind == GradientKind::Conic { GradientKind::Linear } else { g.gradient.kind };
+            geom = geom.period(written, g.gradient.repeat_count());
+        }
         geom.transform(self.xf, g.gradient.kind);
+        if g.gradient.kind != GradientKind::Radial {
+            // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
+            // carry one that draws nothing).
+            geom.focal = None;
+        }
         let (s, e) = (geom.start, geom.end);
         // An off-centre focal point: `fx`/`fy`, in the gradient's own (unsquashed) space.
         let focal = |w: &Self, f: Point| format!(" fx=\"{}\" fy=\"{}\"", w.num(f.x), w.num(f.y));
         let (tag, prefix, attrs) = match g.gradient.kind {
-            GradientKind::Radial => {
+            // A diamond's circle runs through its square's corners.
+            GradientKind::Radial | GradientKind::Diamond => {
                 let r = self.num((e - s).hypot());
                 let attrs = if (geom.aspect - 1.0).abs() < 1e-9 {
                     let f = geom.focal.map(|f| focal(self, f)).unwrap_or_default();
@@ -293,6 +315,11 @@ impl Writer<'_> {
                 "linear-gradient",
                 format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
             ),
+        };
+        let attrs = match g.gradient.spread {
+            _ if !spread => attrs,
+            vectorcraft_color::GradientSpread::Reflect => format!("{attrs} spreadMethod=\"reflect\""),
+            _ => format!("{attrs} spreadMethod=\"repeat\""),
         };
         let stops: Vec<String> = g
             .gradient
@@ -432,10 +459,12 @@ impl Writer<'_> {
 
     /// A gradient `g` painted over `bounds` (the space [`Self::xf`] maps into user space) that is
     /// drawn as pixels ([`GradientPaint::draws_as_pixels`]) when it paints a fill (`fill`) or a
-    /// stroke: an `<image>` over its painted box, clipped to `clip` (outlines in user space filled
-    /// by `rule`), in a group with `props` and the `side` attribute. A freeform gradient's colour
+    /// stroke: an `<image>` over its painted box and over `area` (a stroke's outline, whose miters,
+    /// caps and arrowheads can reach past the box), clipped to `clip` (outlines in user space
+    /// filled by `rule`), in a group with `props` and the `side` attribute. A freeform gradient's
+    /// image covers the painted box only. A freeform gradient's colour
     /// field, which SVG can't express, is sampled as the canvas samples it (at twice the box's size
-    /// in points); a linear, radial or conic gradient at the document's raster effects resolution
+    /// in points); a linear, radial, conic or diamond gradient at the document's raster effects resolution
     /// (at most [`MAX_GRADIENT_PX`] a side), with dither's noise on a fill. Nothing is written for
     /// an empty box.
     ///
@@ -444,15 +473,41 @@ impl Writer<'_> {
     /// running on to the seam under the next ([`vectorcraft_color::GradientGeom::conic_wedges`]):
     /// vector art with a sharp seam. With translucent stops, where wedges drawn over each other
     /// would add up their opacity, it is an image.
+    ///
+    /// A diamond gradient (SVG has none) with opaque stops that isn't drawn as pixels is written
+    /// as four linear gradients in the same clip group, one for each quadrant of its frame and
+    /// equal to the diamond there, overlapping so no hairline shows between them
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). With translucent stops, where
+    /// the overlaps would add up their opacity, or without an extent, it is an image.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn raster_paint(&mut self, g: &GradientPaint, bounds: Rect, clip: &[String], rule: FillRule, props: &Props, side: &str, fill: bool) {
+    pub(super) fn raster_paint(
+        &mut self,
+        g: &GradientPaint,
+        bounds: Rect,
+        area: Rect,
+        clip: &[String],
+        rule: FillRule,
+        props: &Props,
+        side: &str,
+        fill: bool,
+    ) {
         use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let freeform = g.gradient.kind == GradientKind::Freeform;
+        // The box the paint covers: the painted box, and a stroke's outline, whose miters, caps
+        // and arrowheads can reach past it (a freeform gradient's field covers the painted box).
+        let cover = if freeform { b } else { Some(b.union(area.abs())).filter(|r| r.is_finite()).unwrap_or(b) };
         let conic = g.gradient.kind == GradientKind::Conic;
-        let wedges = conic && !g.draws_as_pixels(fill) && g.gradient.stops.iter().all(|s| s.opacity >= 1.0);
+        let opaque = g.gradient.stops.iter().all(|s| s.opacity >= 1.0);
+        let wedges = conic && !g.draws_as_pixels(fill) && opaque;
+        let quadrants = (g.gradient.kind == GradientKind::Diamond && !g.draws_as_pixels(fill) && opaque)
+            .then(|| g.resolve(bounds).diamond_quadrants(cover))
+            .flatten();
         let href = if wedges {
             self.warn("conic gradients are written as solid wedges clipped to their shapes");
+            None
+        } else if quadrants.is_some() {
+            self.warn("diamond gradients are written as four linear gradients clipped to their shapes");
             None
         } else {
             let (rgba, cols, rows): (Vec<u8>, u16, u16) = if freeform {
@@ -463,8 +518,8 @@ impl Writer<'_> {
             } else {
                 let k = self.doc.raster_effects_ppi / 72.0;
                 let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_GRADIENT_PX) as u16;
-                let (cols, rows) = (along(b.width()), along(b.height()));
-                (g.pixels(b, b, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
+                let (cols, rows) = (along(cover.width()), along(cover.height()));
+                (g.pixels(b, cover, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
             };
             let mut png = Vec::new();
             let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
@@ -474,7 +529,9 @@ impl Writer<'_> {
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
-                "conic gradients with translucent stops, dither or the Perceptual method are written as images clipped to their shapes"
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
+            } else if g.gradient.kind == GradientKind::Diamond {
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
             } else {
                 "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
             });
@@ -499,20 +556,32 @@ impl Writer<'_> {
         self.depth += 1;
         match href {
             Some(href) => {
-                let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+                let (x, y, w, h) = (self.num(cover.x0), self.num(cover.y0), self.num(cover.width()), self.num(cover.height()));
                 let tr = if self.xf == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(self.xf)) };
                 self.line(&format!(
                     "<image x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{tr} preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
                     xml_escape(&href)
                 ));
             }
-            None => {
-                let sample = g.gradient.sampler();
-                for (pts, t) in g.resolve(bounds).conic_wedges(b, CONIC_WEDGES, true) {
-                    let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
-                    self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(t as f32).0.to_hex()));
+            None => match quadrants {
+                Some(quadrants) => {
+                    let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+                    for (pts, geom) in quadrants {
+                        // Not named after the swatch: four defs, none of them the swatch's gradient.
+                        let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+                        let id = self.gradient_def(&linear, b);
+                        let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
+                        self.line(&format!("<path d=\"{d}\" fill=\"url(#{id})\"/>"));
+                    }
                 }
-            }
+                None => {
+                    let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
+                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, g.gradient.conic_wedge_count(CONIC_WEDGES), true) {
+                        let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
+                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(spread(t) as f32).0.to_hex()));
+                    }
+                }
+            },
         }
         self.depth -= 1;
         self.line("</g>");
@@ -700,18 +769,19 @@ impl Writer<'_> {
     }
 }
 
-/// Most pixels along a side of a linear, radial or conic gradient's image.
+/// Most pixels along a side of a linear, radial, conic or diamond gradient's image.
 const MAX_GRADIENT_PX: f64 = 4096.0;
 
 /// Wedges a conic gradient with opaque stops is written as: one a degree.
 const CONIC_WEDGES: usize = 360;
 
 /// The gradient a fill (`fill`) or stroke paint is, if it is drawn as pixels
-/// ([`GradientPaint::draws_as_pixels`]; SVG has no freeform gradients, for one) or is a conic
-/// gradient (SVG has none either: [`Writer::raster_paint`] draws it as wedges or an image).
+/// ([`GradientPaint::draws_as_pixels`]; SVG has no freeform gradients, for one) or is a conic or
+/// diamond gradient (SVG has neither: [`Writer::raster_paint`] draws a conic as wedges or an
+/// image, a diamond as four linear gradients or an image).
 pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     match p {
-        Paint::Gradient(g) if g.draws_as_pixels(fill) || g.gradient.kind == GradientKind::Conic => Some(g),
+        Paint::Gradient(g) if g.draws_as_pixels(fill) || matches!(g.gradient.kind, GradientKind::Conic | GradientKind::Diamond) => Some(g),
         _ => None,
     }
 }

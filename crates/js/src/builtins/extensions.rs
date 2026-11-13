@@ -9,14 +9,18 @@
 //! a script's own method: a getter, a function, a date, a regular expression, an error, a boxed
 //! primitive, an array with properties besides its elements, an object whose prototype is not
 //! `Object.prototype`, a property that is not enumerable or any other object that is not plain
-//! data throws a `TypeError`, and so does an object that contains itself. A value nested deeper, with more entries or longer text than the
+//! data throws a `TypeError`, and so does an object that contains itself. A literal makes an
+//! extensible object whose properties are writable and configurable and an array whose `length`
+//! is writable, so a property that is not writable or not configurable, an object or array that is
+//! not extensible (after `Object.preventExtensions`, `Object.seal` or `Object.freeze`) and an
+//! array with a read-only `length` throw a `TypeError` too. A value nested deeper, with more entries or longer text than the
 //! realm's [`crate::DataLimits`] allow throws a `RangeError`. Every value written takes fuel.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::{Builder, arg, method};
-use crate::heap::{Class, NativeFn, ObjId, Prop, key};
+use crate::heap::{CONFIGURABLE, Class, NativeFn, ObjId, Object, Prop, WRITABLE, key};
 use crate::interp::{ErrorType, Interp, JsResult};
 use crate::value::{Value, array_index, index_key, number_to_str};
 use crate::{ScriptItem, bytecode::Code};
@@ -289,10 +293,14 @@ impl Source {
             Class::Ordinary => return Err(interp.type_error(NOT_PLAIN_OBJECT)),
             _ => None,
         };
+        let fixed = shape.as_ref().and(fixed_state(o));
         let Some(shape) = shape else {
             let what = format!("toSource: a {} cannot be written as source", interp.object(id)?.class.name());
             return Err(interp.type_error(&what));
         };
+        if let Some(what) = fixed {
+            return Err(interp.type_error(what));
+        }
         self.ancestors.push(id);
         let r = match shape {
             Err(length) => self.array(interp, id, length),
@@ -347,6 +355,23 @@ const NOT_PLAIN_ARRAY: &str =
     "toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source";
 const NOT_PLAIN_OBJECT: &str =
     "toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source";
+const NOT_EXTENSIBLE: &str = "toSource: a non-extensible object cannot be written as source";
+const READ_ONLY_LENGTH: &str = "toSource: an array with a read-only length cannot be written as source";
+const FIXED_PROPERTY: &str = "toSource: a property that is not writable or configurable cannot be written as source";
+
+/// Why the literal for the array or plain object `o` would not make it again: `o` is not
+/// extensible, its `length` is read-only, or one of its data properties is not writable or not
+/// configurable. A literal makes each of these open.
+fn fixed_state(o: &Object) -> Option<&'static str> {
+    if !o.extensible {
+        return Some(NOT_EXTENSIBLE);
+    }
+    if matches!(o.class, Class::Array { length_writable: false, .. }) {
+        return Some(READ_ONLY_LENGTH);
+    }
+    let open = WRITABLE | CONFIGURABLE;
+    o.props.iter().any(|(_, p)| matches!(p, Prop::Data { flags, .. } if flags & open != open)).then_some(FIXED_PROPERTY)
+}
 
 /// The getter behind `item`; [`ScriptItem::Global`] is a value and has none.
 pub(crate) fn getter(item: ScriptItem) -> Option<(&'static str, NativeFn)> {
@@ -363,18 +388,33 @@ fn last_error(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<V
 }
 
 fn line(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let line = interp.script_frames().last().map_or(0, |(code, pc, _)| code.line_column(pc.saturating_sub(1)).0);
+    let line = interp.script_frames().last().map_or(0, |(code, pc, _)| place(interp.locator.as_ref(), code, pc).1);
     Ok(Value::Number(f64::from(line)))
+}
+
+/// Where the instruction before `pc` in `code` came from: the file the realm's locator names
+/// (`None` without one) and the line there, or the line in the compiled source without a locator.
+fn place(locator: Option<&crate::realm::SourceLocator>, code: &Code, pc: usize) -> (Option<String>, u32) {
+    let line = code.line_column(pc.saturating_sub(1)).0;
+    match locator {
+        Some(locate) => {
+            let (file, line) = locate(code.source.tag, line);
+            (Some(file), line)
+        }
+        None => (None, line),
+    }
 }
 
 /// The most frames `$.stack` lists, and the most characters of a function's name it shows.
 const STACK_FRAMES: usize = 64;
 const STACK_NAME_UNITS: usize = 64;
 
-/// The script's frames, outermost first, one a line: the function's name and the line it is at.
+/// The script's frames, outermost first, one a line: the function's name and the line it is at,
+/// as `name:line`, or as `name@file:line` with the file the realm's locator names.
 fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let frames: Vec<(Rc<Code>, usize, bool)> = interp.script_frames().map(|(c, pc, f)| (c.clone(), pc, f)).collect();
     let skip = frames.len().saturating_sub(STACK_FRAMES);
+    let locator = interp.locator.clone();
     let mut text = String::new();
     if skip > 0 {
         text.push_str("…\n");
@@ -382,8 +422,10 @@ fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value>
     for (code, pc, function) in frames.iter().skip(skip) {
         interp.use_fuel()?;
         let name = if *function { function_name(code) } else { "[global]".to_string() };
-        let line = code.line_column(pc.saturating_sub(1)).0;
-        text.push_str(&format!("{name}:{line}\n"));
+        match place(locator.as_ref(), code, *pc) {
+            (Some(file), line) => text.push_str(&format!("{name}@{file}:{line}\n")),
+            (None, line) => text.push_str(&format!("{name}:{line}\n")),
+        }
     }
     let mut out = Builder::new();
     out.push_str(interp, &text)?;

@@ -47,6 +47,10 @@
 //!   rasterised in SVG
 //!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html>).
 //!   On characters they are written as linear gradients through stops on the perceptual curve.
+//! * **Gradients mixed around the hue wheel** (Hue Clockwise and Hue Counterclockwise,
+//!   VectorCraft's own methods) fill or stroke objects as an `<image>` of the gradient too, at the
+//!   document's raster effects resolution. On characters they are written as gradients through
+//!   stops on their way around the wheel.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
@@ -74,8 +78,8 @@
 //! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
 //!   as a hidden layer; other undisplayed objects as hidden objects, unless a `<use>` refers to
 //!   them.
-//! * `spreadMethod` reflect and repeat are expanded into stops over the painted area (at most
-//!   64 periods).
+//! * `spreadMethod` reflect and repeat become the gradient's spread, Reflect or Repeat, its stops
+//!   running once along the vector.
 //! * `<image>` files are read through [`ImportOptions`]: rasters stay linked, SVG files (and SVG
 //!   `data:` URLs) become art (without their text), missing ones a placeholder keeping the link.
 //! * Text lines after the first start at the first line's x; absolute positions inside type on a
@@ -246,6 +250,10 @@ pub struct ExportOptions {
     /// its licence allows (whole where it forbids subsetting, left out where it forbids
     /// embedding). Not with outlined text or the Tiny profile.
     pub embed_fonts: bool,
+    /// Include Variable Data: write the document's text variables, its data sets and the object
+    /// each text variable is bound to as a `variableSets` element, in the layout Load Variable
+    /// Library reads. Opening the SVG reads them back.
+    pub variable_data: bool,
 }
 
 impl Default for ExportOptions {
@@ -267,6 +275,7 @@ impl Default for ExportOptions {
             encoding: Encoding::Utf8,
             profile: Profile::Svg11,
             embed_fonts: false,
+            variable_data: false,
         }
     }
 }
@@ -294,6 +303,9 @@ pub struct Output {
     pub linked: Vec<LinkedImage>,
     /// Features the export approximates.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way (an encoding, a
+    /// font embedded whole).
+    pub setting_notes: Vec<String>,
     /// The encoding [`Self::bytes`] writes.
     pub encoding: Encoding,
 }
@@ -361,10 +373,11 @@ pub fn export(doc: &Document, opts: &ExportOptions) -> String {
     export_full(doc, opts, None).svg
 }
 
-/// Export a document as an SVG string, also returning warnings about approximated features.
+/// Export a document as an SVG string, also returning warnings about approximated features,
+/// then the notes on the options ([`Output::setting_notes`]).
 pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
     let o = export_full(doc, opts, None);
-    (o.svg, o.warnings)
+    (o.svg, o.warnings.into_iter().chain(o.setting_notes).collect())
 }
 
 /// Export a document as SVG plus the image files it links to. `native`: the document in the
@@ -576,6 +589,15 @@ pub fn import_within(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     // capped (`import::depth`), and it gets room for that cap whatever thread asks.
     vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts, max_nodes))
 }
+
+/// [`import_with`], also returning the object made of each element whose id `ids` lists (the
+/// first object named after it), by element id. Ids with no object are left out.
+pub fn import_finding(svg: &str, opts: &ImportOptions, ids: &std::collections::HashSet<String>) -> Result<(Document, Vec<String>, Found), SvgError> {
+    vectorcraft_doc::depth::with_deep_stack(|| import::import_finding(svg, opts, MAX_NODES, ids))
+}
+
+/// The object made of each element [`import_finding`] looked for, by element id.
+pub type Found = std::collections::HashMap<String, vectorcraft_doc::NodeId>;
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
 /// `None` when there is no readable file at the (absolute) path.

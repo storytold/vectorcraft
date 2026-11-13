@@ -40,6 +40,7 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
         fields.insert("section".into(), json!("general"));
         let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
         fields.extend(super::para_style_options::form_fields(&attrs, app.session.general_unit()));
+        fields.insert("__vertical".into(), json!(super::para_style_options::vertical_text(app)));
     } else {
         fields.insert("section".into(), json!("general"));
         fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));

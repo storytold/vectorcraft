@@ -107,6 +107,45 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
 }
 
+/// The Mojikumi Set menu lists None, the four other predefined sets and Line-end Punctuation Half
+/// Width, each under its own label in every interface language. Each entry sets the selected
+/// paragraphs' set in one undo step and is shown as the current set; paragraphs with different
+/// sets show a blank menu, and Reset Panel gives them Line-end Punctuation Half Width.
+#[test]
+fn mojikumi_menu_offers_and_sets_every_predefined_set() {
+    let keys: Vec<&str> = mojikumi_sets().iter().map(|s| s.2).collect();
+    assert_eq!(keys, ["none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku", "lineEndHalf"]);
+    for lang in crate::i18n::Lang::all() {
+        crate::i18n::set_current(lang);
+        let labels: std::collections::BTreeSet<&str> = mojikumi_sets().iter().map(|s| s.0).collect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(labels.len(), 6, "{}: {labels:?}", lang.code());
+    }
+    let (mut app, id) = editing_text("「あ」。\nい、");
+    app.session.prefs.show_east_asian_options = true;
+    app.session.set_tool_option("selectAll", &json!(true));
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for (_, set, key) in mojikumi_sets() {
+        app.session.set_tool_option("selectAll", &json!(true));
+        let before = (shared_para(&app, |p| p.mojikumi), steps(&app));
+        format(&mut app, json!({"mojikumi": key}));
+        assert_eq!(shared_para(&app, |p| p.mojikumi), Some(set), "{key}");
+        if before.0 == Some(set) {
+            continue;
+        }
+        assert_eq!(steps(&app), before.1 + 1, "{key}: one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shared_para(&app, |p| p.mojikumi), before.0, "{key}: undone");
+        app.run("edit.redo", json!({})).unwrap();
+    }
+    app.run("text.setFormat", json!({"id": id, "start": 0, "end": 0, "mojikumi": "yakumonoHankaku"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 13, "end": 13, "mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.mojikumi), None, "mixed sets");
+    reset_panel(&mut app);
+    assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf), "Reset Panel");
+}
+
 /// Kinsoku Shori Type: the menu's item sets the type of the paragraphs the Type tool's selection
 /// touches in one undo step, and none is checked while the selected paragraphs differ.
 #[test]
@@ -131,6 +170,81 @@ fn kinsoku_shori_type_sets_the_selected_paragraphs_in_one_undo_step() {
     app.run("edit.undo", json!({})).unwrap();
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(types(&app), (KinsokuShoriType::PushOutOnly, KinsokuShoriType::PushOutOnly));
+}
+
+/// Korean Line Break Anywhere: new type has it off; the menu item turns it on for the paragraphs
+/// the Type tool's selection touches in one undo step, is unchecked while the selected paragraphs
+/// differ, turns it on for all of them then and off again once they all have it. Reset Panel turns
+/// it off.
+#[test]
+fn korean_line_break_anywhere_toggles_the_selected_paragraphs_in_one_undo_step() {
+    let (mut app, id) = editing_text("가나\n다라\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).korean_line_break_anywhere, text.para_at(1).korean_line_break_anywhere)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.korean_line_break_anywhere), None, "mixed: unchecked");
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (true, true));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_korean_line_break_anywhere(&mut app);
+    assert_eq!(flags(&app), (false, false));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_korean_line_break_anywhere(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
+/// Bunri-Kinshi: new type has it off; the menu item turns it on for the paragraphs the Type tool's
+/// selection touches in one undo step, is unchecked while the selected paragraphs differ, and is
+/// unavailable while any of them has kinsoku None, which keeps the setting. Reset Panel turns it off.
+#[test]
+fn bunri_kinshi_toggle_follows_kinsoku_and_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("あ——い\nう……え\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).bunri_kinshi, text.para_at(1).bunri_kinshi)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    assert_eq!(bunri_kinshi_item(&app), (true, false));
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, false), "mixed: unchecked");
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (true, true));
+    // Kinsoku None on one paragraph: the item is unavailable and the setting stays.
+    let second = "あ——い\n".len();
+    app.run("text.setFormat", json!({"id": id, "start": second, "end": second, "kinsoku": "none"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (false, true));
+    assert_eq!(flags(&app), (true, true));
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "soft"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(bunri_kinshi_item(&app), (true, true));
+    toggle_bunri_kinshi(&mut app);
+    assert_eq!(flags(&app), (false, false));
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_bunri_kinshi(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
 }
 
 #[test]
@@ -730,10 +844,11 @@ fn the_character_and_paragraph_groups_hold_the_type_controls() {
 }
 
 /// #5372: at any width the Control bar trims itself from its right end, ending inside its margin.
-/// With type selected the inline X/Y/W/H fields go first, then the Distribute and Align buttons,
-/// area type's vertical alignment, the Paragraph buttons and last the Paragraph: link, while the
-/// Transform link keeps its room; a wider bar never leaves out what a narrower one showed. For one point
-/// type object, area type (its vertical alignment) and two objects (the Distribute buttons).
+/// With type selected the inline X/Y/W/H fields go first, then the Distribute buttons, the Align To
+/// menu and the Align buttons, area type's vertical alignment, the Paragraph buttons and last the
+/// Paragraph: link, while the Transform link keeps its room; a wider bar never leaves out what a
+/// narrower one showed. For one point type object, area type (its vertical alignment) and two
+/// objects (the Distribute buttons).
 #[test]
 fn the_control_bar_trims_its_paragraph_section_after_the_controls_to_its_right() {
     let ctx = control_bar_ctx();
@@ -748,12 +863,13 @@ fn the_control_bar_trims_its_paragraph_section_after_the_controls_to_its_right()
             groups.push(("vertical alignment", VERTICAL.to_vec()));
         }
         groups.push(("Align", vec!["Horizontal Align Left", "Vertical Align Bottom"]));
+        groups.push(("Align To", vec!["Align To:"]));
         if case == "two objects" {
             groups.push(("Distribute", vec!["Vertical Distribute Top", "Horizontal Distribute Right"]));
         }
         groups.push(("X/Y/W/H", vec!["X:", "H:"]));
         let mut seen = vec![false; groups.len()];
-        for width in (600..=2400).step_by(10) {
+        for width in (600..=2600).step_by(10) {
             let nodes = control_bar_nodes(&ctx, &mut app, width as f32, vec![]);
             let inside = |x: f64| x <= f64::from(width) - 10.0;
             let shown: Vec<bool> = groups

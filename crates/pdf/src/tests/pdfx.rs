@@ -224,3 +224,23 @@ fn verify_finds_what_each_standard_forbids() {
     assert!(matches!(verify(&file(font), Standard::PdfX4), Err(PdfError::Unsupported(m)) if m.contains("fonts")));
     assert!(verify(&file("<</Type/FontDescriptor/FontFile2 4 0 R>>"), Standard::PdfX4).is_ok());
 }
+
+/// Names inside a string or a comment are text, not syntax: a file identifier, whose base64 hash
+/// can hold `/BM` or `/Lab`, does not make a file break its standard.
+#[test]
+fn verify_skips_names_in_strings_and_comments() {
+    use crate::pdfx::verify;
+    let file = |body: &str| format!("%PDF-1.3\n%/BM/Multiply\n1 0 obj\n{body}\nendobj\n").into_bytes();
+    for ok in [
+        "<</Size 2/ID[(q/BM+Zt1kR0x/Lab=) (q/BM+Zt1kR0x/Lab=)]>>",
+        "<</Title(a\\)/SMask 5 0 R)/Subject(a(b)/ca 0.5)>>",
+        "<</Title(stream\n/BM/Multiply\nendstream)>>",
+    ] {
+        for standard in [Standard::PdfX1a, Standard::PdfX3] {
+            assert!(verify(&file(ok), standard).is_ok(), "{standard:?}: {ok}");
+        }
+    }
+    // A name after a string is still read.
+    let after = "<</Title(a(b)c)/BM/Multiply>>";
+    assert!(matches!(verify(&file(after), Standard::PdfX3), Err(PdfError::Unsupported(m)) if m.contains("blend modes")));
+}

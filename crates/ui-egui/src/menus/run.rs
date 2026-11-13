@@ -25,6 +25,34 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
     }
 }
 
+/// An optional `{key?: number}` param: none when it is omitted or null.
+pub(crate) fn opt_number(p: &Value, key: &str) -> Result<Option<f64>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_f64().map(Some).ok_or_else(|| format!("`{key}` must be a number")),
+    }
+}
+
+/// An optional `{key?: index}` param, a whole number of 0 or more: none when it is omitted or null.
+pub(crate) fn opt_index(p: &Value, key: &str) -> Result<Option<usize>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).map(Some).ok_or_else(|| format!("`{key}` must be a whole number of 0 or more")),
+    }
+}
+
+/// An optional `{key?: [x, y]}` param: none when it is omitted or null.
+fn opt_point(p: &Value, key: &str) -> Result<Option<vectorcraft_geom::Point>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v.as_array().map(Vec::as_slice) {
+            Some([x, y]) => x.as_f64().zip(y.as_f64()).map(|(x, y)| Some(vectorcraft_geom::Point::new(x, y))),
+            _ => None,
+        }
+        .ok_or_else(|| format!("`{key}` must be [x, y] numbers")),
+    }
+}
+
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 /// `params` has only keys the params description of engine command `id` names, or the parameter
 /// error naming the one it doesn't (#1442). The UI's own commands aren't checked yet: their
@@ -48,13 +76,18 @@ pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Va
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     // Window menu items and the named panel function keys toggle against the checked state;
     // other commands that open panels show them.
-    if id == "window.panel" && p.get("toggle").and_then(Value::as_bool) == Some(true) && checked(app, id, p) == Some(true) {
+    let toggles = if id == "window.panel" { opt_bool(p, "toggle").and_then(|t| Ok((t, opt_bool(p, "toggleGroup")?))) } else { Ok((None, None)) };
+    let (toggle, toggle_group) = match toggles {
+        Ok(flags) => flags,
+        Err(e) => return Some(Err(e)),
+    };
+    if toggle == Some(true) && checked(app, id, p) == Some(true) {
         let panel = p.get("panel").and_then(Value::as_str).and_then(normalize_panel).unwrap_or_default();
         if app.ui.open_panel.as_deref() == Some(panel) {
             app.ui.open_panel = None;
             return Some(Ok(json!({"open": null})));
         }
-        if p.get("toggleGroup").and_then(Value::as_bool) == Some(true) {
+        if toggle_group == Some(true) {
             return Some(crate::panel_docking::hide_group(app, panel));
         }
         return Some(app.run("window.panel.close", json!({"panel": panel})));
@@ -81,6 +114,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
+        .or_else(|| crate::panels::learn::command(app, id, p))
     {
         return Some(r);
     }
@@ -122,16 +156,27 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the
         // format's options dialog ask first.
-        "file.save" => io::save(app, SaveMode::Save, p, true),
-        "file.saveAs" => io::save(app, SaveMode::SaveAs, p, true),
-        "file.saveCopy" => io::save(app, SaveMode::Copy, p, true),
-        "file.saveAsTemplate" => io::save(app, SaveMode::Template, p, true),
+        // A confined request sees the document's own file, and the folder a save suggests, only
+        // inside its read roots.
+        "file.save" | "file.saveAs" | "file.saveCopy" | "file.saveAsTemplate" => {
+            let mode = match id {
+                "file.save" => SaveMode::Save,
+                "file.saveAs" => SaveMode::SaveAs,
+                "file.saveCopy" => SaveMode::Copy,
+                _ => SaveMode::Template,
+            };
+            let saved = if mode == SaveMode::Save { io::save_current(app, p) } else { io::save(app, mode, p, true) };
+            saved.map(|mut r| {
+                vectorcraft_engine::cmd::fileio::leave_out_unreadable_save_paths(&mut r, p.get("path").and_then(Value::as_str));
+                r
+            })
+        }
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }
         // Bytes sent by an agent go straight to the engine; a path or nothing opens it here.
         "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
-        "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
+        "file.revert" if opt_bool(p, "confirmed") != Ok(Some(true)) => opt_bool(p, "confirmed").and_then(|_| io::ask_revert(app)),
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
@@ -386,9 +431,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "view.setZoom" => {
             let print = app.session.prefs.display_print_size;
-            let z = crate::state::zoom_from_display_percent(p.get("zoom").and_then(Value::as_f64).unwrap_or(100.0), print);
-            let center =
-                p.get("center").and_then(Value::as_array).and_then(|a| Some(vectorcraft_geom::Point::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
+            let (zoom, center) = match opt_number(p, "zoom").and_then(|z| Ok((z, opt_point(p, "center")?))) {
+                Ok(given) => given,
+                Err(e) => return Some(Err(e)),
+            };
+            let z = crate::state::zoom_from_display_percent(zoom.unwrap_or(100.0), print);
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = z.clamp(0.0313, 640.0);
@@ -417,7 +464,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(json!(app.ui.screen_mode))
         }
         "view.screenMode" => {
-            app.ui.screen_mode = match p.get("mode").and_then(Value::as_u64) {
+            let mode = match opt_index(p, "mode") {
+                Ok(mode) => mode,
+                Err(e) => return Some(Err(e)),
+            };
+            app.ui.screen_mode = match mode {
                 Some(m) => m.min(3) as u8,
                 // F cycles the three screen modes. Without a mode, the command also goes from
                 // Presentation Mode (not in the cycle) back to Normal.
@@ -465,13 +516,17 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.helpBar" => flag(&mut app.ui.help_bar),
-        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to, or
+        // floating over the window at the position it last floated at.
         "window.control.dock" => {
             let key = "edge";
             let edges = crate::chrome::CONTROL_BAR_EDGES;
             match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
                 Some(i) => {
-                    app.ui.control_bar_bottom = i == 1;
+                    app.ui.control_bar_floating = i == 2;
+                    if i < 2 {
+                        app.ui.control_bar_bottom = i == 1;
+                    }
                     Ok(json!({ key: edges[i] }))
                 }
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
@@ -629,6 +684,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        crate::touch::TOGGLE_MODE => Ok(crate::touch::toggle_mode(app)),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
@@ -674,6 +730,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "help.checkForUpdates" => crate::updates_ui::check(app),
         "help.safeMode" => crate::dialogs::safe_mode::open(app),
+        "help.copyTroubleshootingInfo" => crate::troubleshooting::copy(app),
         "help.commandPalette" => {
             app.ui.palette_open = !app.ui.palette_open;
             app.ui.palette_query.clear();
@@ -682,9 +739,10 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
         // Without an `index`, the current window closes: one of several views of a document closes
         // without closing the document (Window › New Window).
-        "file.close" => match p.get("index").and_then(Value::as_u64).map(|i| i as usize) {
-            Some(i) => crate::unsaved::close(app, i),
-            None => {
+        "file.close" => match opt_index(p, "index") {
+            Err(e) => Err(e),
+            Ok(Some(i)) => crate::unsaved::close(app, i),
+            Ok(None) => {
                 app.session.active_index()?;
                 crate::doc_windows::close_current(app)
             }
@@ -696,8 +754,10 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("missing `name`".into()),
         },
         "ui.newSwatch" => {
-            let on = |k: &str| p.get(k).and_then(Value::as_bool).unwrap_or(false);
-            crate::dialogs::new_swatch::open(app, on("spot"), on("global"), s("group").as_deref())
+            let on = |k: &str| opt_bool(p, k).map(|on| on.unwrap_or(false));
+            on("spot")
+                .and_then(|spot| Ok((spot, on("global")?)))
+                .and_then(|(spot, global)| crate::dialogs::new_swatch::open(app, spot, global, s("group").as_deref()))
         }
         "ui.newColorGroup" => {
             let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
@@ -720,7 +780,10 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.newParaStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Para),
         "ui.symbolOptions" => {
             let name = s("name");
-            let edit = p.get("edit").and_then(Value::as_bool).unwrap_or(false);
+            let edit = match opt_bool(p, "edit") {
+                Ok(edit) => edit.unwrap_or(false),
+                Err(e) => return Some(Err(e)),
+            };
             if edit || name.is_some() {
                 crate::dialogs::symbol_options::open_edit(app, name.as_deref())
             } else {
@@ -767,6 +830,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.layerDelete" => crate::panels::layers::delete(app, p),
         "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
@@ -871,6 +935,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
+        "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
@@ -919,12 +984,15 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::START_RECORDING => crate::panels::actions::record(app, p),
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
+        crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
+        crate::panels::actions::INSERT_SELECT_PATH => crate::panels::actions::insert_select_path(app, p),
+        crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
+        crate::panels::actions::MOVE_STEP => crate::panels::actions::move_step(app, p),
         "ui.batchDialog" => {
-            let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
-            let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
-            crate::dialogs::action_batch::open(app, set, action)
+            let index = |k: &str| opt_index(p, k).map(|i| i.unwrap_or(0));
+            index("set").and_then(|set| Ok((set, index("action")?))).and_then(|(set, action)| crate::dialogs::action_batch::open(app, set, action))
         }
         crate::panels::actions::SAVE_SET => crate::panels::actions::save_set(app, p),
         crate::panels::actions::LOAD_SET => crate::panels::actions::load_set(app, p),
@@ -957,7 +1025,11 @@ fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         // File → Export Selection…: the selection becomes one asset (`multiple: true`: one per
         // object), shown checked on Export for Screens' Assets tab.
         "file.exportSelection" => {
-            app.run("assets.add", json!({ "multiple": p.get("multiple").and_then(Value::as_bool).unwrap_or(false) })).map(|r| {
+            let multiple = match opt_bool(p, "multiple") {
+                Ok(multiple) => multiple.unwrap_or(false),
+                Err(e) => return Some(Err(e)),
+            };
+            app.run("assets.add", json!({ "multiple": multiple })).map(|r| {
                 let ids: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
                 crate::dialogs::open_export_for_screens_assets(app, Some(&ids));
                 json!({ "assets": ids })

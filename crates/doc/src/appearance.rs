@@ -10,7 +10,7 @@ mod stroke_style;
 
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
-pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
+pub use stroke_style::{ArrowAlign, Arrowhead, CustomArrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
 // A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
@@ -444,7 +444,8 @@ impl Appearance {
         }
     }
     /// Map placed gradients through a warp, given its local affine approximation at a point (taken
-    /// at each gradient's center: the start of a radial or conic, the middle of a linear vector).
+    /// at each gradient's center: the start of a radial, conic or diamond, the middle of a linear
+    /// vector).
     /// Freeform points each follow the warp at their own position.
     pub fn warp_gradients(&mut self, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
         for g in self.gradients_mut() {

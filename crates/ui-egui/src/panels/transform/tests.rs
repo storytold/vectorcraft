@@ -567,3 +567,34 @@ fn align_to_pixel_grid_shows_and_sets_the_property() {
     app.run("select.set", json!({"ids": [member]})).unwrap();
     assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
 }
+
+/// The panel menu's Align New Objects to Pixel Grid shows and toggles the active document's
+/// setting, follows a switch to another document, and is unavailable with no document open.
+#[test]
+fn align_new_objects_menu_item_toggles_the_active_document() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let item = "Align New Objects to Pixel Grid";
+    let shown =
+        |ctx: &egui::Context, app: &mut VectorcraftApp| menu_texts(ctx, app).into_iter().find(|t| t.trim_start_matches('✓').trim_start() == item);
+    assert!(shown(&ctx, &mut app).is_some_and(|t| !t.starts_with('✓')), "no document");
+    menu_click(&ctx, &mut app, item);
+    assert!(app.session.active().is_none());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"preset": "Web 1920×1080"})).unwrap();
+    let on = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.setup.align_new_objects_to_pixel_grid;
+    assert_eq!((on(&app, 0), on(&app, 1)), (false, true));
+    assert!(shown(&ctx, &mut app).is_some_and(|t| t.starts_with('✓')), "the Web document");
+    app.session.set_active(0);
+    assert!(shown(&ctx, &mut app).is_some_and(|t| !t.starts_with('✓')), "the Letter-sized document");
+    menu_click(&ctx, &mut app, item);
+    assert_eq!((on(&app, 0), on(&app, 1)), (true, true));
+    assert!(shown(&ctx, &mut app).is_some_and(|t| t.starts_with('✓')));
+    let r = app.run("shape.rectangle", json!({"x": 10.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    assert!(app.session.active().unwrap().doc.node(id).unwrap().extras().pixel_aligned);
+    app.session.set_active(1);
+    menu_click(&ctx, &mut app, item);
+    assert_eq!((on(&app, 0), on(&app, 1)), (true, false));
+}

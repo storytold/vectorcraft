@@ -102,7 +102,53 @@ const FILE_WORDS: &[&str] = &[
 ];
 
 /// Param keys that name a file or a folder.
-const FILE_KEYS: &[&str] = &["path", "paths", "file", "files", "folder", "folders", "dir", "directory", "destinationFolder", "sourceFolder", "url"];
+const FILE_KEYS: &[&str] =
+    &["path", "paths", "file", "files", "folder", "folders", "dir", "directory", "destinationFolder", "sourceFolder", "url", "diffPath"];
+
+/// The keys in [`FILE_KEYS`] that name a folder.
+const FOLDER_KEYS: &[&str] = &["folder", "folders", "dir", "directory", "destinationFolder", "sourceFolder"];
+
+/// What a param key that names a place on disk names there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Location {
+    /// A file (or a list of files).
+    File,
+    /// A folder (or a list of folders).
+    Folder,
+}
+
+/// What `key` names on disk when a command takes it ([`FILE_KEYS`]), or `None` when it never
+/// names a file or a folder.
+pub fn key_location(key: &str) -> Option<Location> {
+    if FOLDER_KEYS.contains(&key) {
+        Some(Location::Folder)
+    } else if FILE_KEYS.contains(&key) {
+        Some(Location::File)
+    } else {
+        None
+    }
+}
+
+/// What `key` names on disk in command `spec`: [`key_location`], or `None` when [`NOT_FILES`]
+/// names it for `spec` (it names part of the document there).
+pub fn location_in(spec: &CommandSpec, key: &str) -> Option<Location> {
+    if NOT_FILES.contains(&(spec.id, key)) { None } else { key_location(key) }
+}
+
+/// The param keys of `spec` that name a file or a folder, with what they name: the keys in
+/// [`FILE_KEYS`] that its params description names ([`super::params::doc_keys`]), with those of the
+/// commands its `…` entries name ([`super::params::takes_key`]), and its schema's params, less those
+/// [`NOT_FILES`] names for it. Sorted, each key once.
+pub fn location_keys(spec: &CommandSpec) -> Vec<(&'static str, Location)> {
+    let described = super::params::doc_keys(spec.params).map(|p| p.keys).unwrap_or_default();
+    let in_schema = spec.schema.map(|s| s.params.iter().map(|p| p.name)).into_iter().flatten();
+    let taken = FILE_KEYS.iter().copied().filter(|k| super::params::takes_key(spec.params, k));
+    let mut keys: Vec<(&'static str, Location)> =
+        described.into_iter().chain(in_schema).chain(taken).filter_map(|k| Some((k, location_in(spec, k)?))).collect();
+    keys.sort_unstable_by_key(|(k, _)| *k);
+    keys.dedup();
+    keys
+}
 
 /// Commands and the param key in [`FILE_KEYS`] that, in them, names part of the document (a path of
 /// its art, a setting, an attribute it stores or a result field), not a file.
@@ -119,7 +165,13 @@ pub(crate) const NOT_FILES: &[(&str, &str)] = &[
     ("attributes.set", "url"),
     ("svgInteractivity.info", "files"),
     ("addon.cleanup.rejoin", "paths"),
+    ("object.slice.options", "url"),
+    ("document.exportForScreens", "folders"),
 ];
+
+/// Commands and the keys from the top of their params down to a key in [`FILE_KEYS`] that, there,
+/// names part of the document, not a file: a custom arrowhead's outline in `stroke.set`.
+const NESTED_NOT_FILES: &[(&str, &[&str])] = &[("stroke.set", &["startArrow", "Custom", "path"]), ("stroke.set", &["endArrow", "Custom", "path"])];
 
 /// Is command id `id` one a plug-in may never call, from its id alone ([`DENIED_PREFIXES`],
 /// [`FILE_WORDS`])?
@@ -184,20 +236,32 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
 
 /// Does `args`, the arguments of a call of command `id`, carry a key in [`FILE_KEYS`] at any depth
 /// (in objects and in arrays), such as an effect's `textureImage.path`? Only a key [`NOT_FILES`]
-/// names for `id`, at the top level, isn't counted. The walk keeps its own stack, so deep
-/// arguments can't overflow the thread's.
+/// names for `id`, at the top level, and one at the end of a [`NESTED_NOT_FILES`] key list for
+/// `id`, aren't counted. The walk keeps its own stack, so deep arguments can't overflow the
+/// thread's.
 fn names_file(id: &str, args: &Value) -> bool {
-    let mut stack = vec![(args, true)];
-    while let Some((v, top)) = stack.pop() {
+    // Each value, whether it is the params themselves, and the keys of a NESTED_NOT_FILES list
+    // still to follow below it.
+    let mut stack: Vec<(&Value, bool, Option<&[&str]>)> = vec![(args, true, None)];
+    while let Some((v, top, trail)) = stack.pop() {
         match v {
-            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false))),
+            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false, None))),
             Value::Object(o) => {
                 for (k, x) in o {
                     let k = k.as_str();
-                    if FILE_KEYS.contains(&k) && !(top && NOT_FILES.contains(&(id, k))) {
+                    let rest = if top {
+                        NESTED_NOT_FILES
+                            .iter()
+                            .find(|(c, keys)| *c == id && keys.first() == Some(&k))
+                            .map(|(_, keys)| keys.get(1..).unwrap_or_default())
+                    } else {
+                        trail.filter(|keys| keys.first() == Some(&k)).map(|keys| keys.get(1..).unwrap_or_default())
+                    };
+                    let document = (top && NOT_FILES.contains(&(id, k))) || rest.is_some_and(<[&str]>::is_empty);
+                    if FILE_KEYS.contains(&k) && !document {
                         return true;
                     }
-                    stack.push((x, false));
+                    stack.push((x, false, rest.filter(|keys| !keys.is_empty())));
                 }
             }
             _ => {}
@@ -349,6 +413,7 @@ pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Sess
                 st.interaction = None;
             }
             saved.restore(s);
+            s.sync_front_profiles();
             Err(e)
         }
     }
@@ -466,7 +531,8 @@ mod tests {
         }
         for (id, key) in NOT_FILES {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
-            assert!(names_key(spec.params, key), "{id} has no `{key}` param");
+            let described = crate::cmd::params::doc_keys(spec.params).is_ok_and(|p| p.keys.contains(key));
+            assert!(names_key(spec.params, key) || described, "{id} has no `{key}` param");
         }
         let leaks: Vec<&str> = specs
             .iter()
@@ -536,6 +602,16 @@ mod tests {
         assert!(!names_file("object.setLiveShape", &json!({"path": [[0, 0], [1, 1]]})));
         assert!(names_file("object.setLiveShape", &json!({"options": {"path": "/tmp/x"}})));
         assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
+        // A custom arrowhead's outline in stroke.set, only where stroke.set takes one.
+        let outline = json!({"subpaths": []});
+        assert!(!names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline}}})));
+        assert!(!names_file("stroke.set", &json!({"startArrow": {"Custom": {"name": "A", "path": outline}}, "endArrow": "Triangle"})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline, "file": "/tmp/x"}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"Custom": {"path": {"path": "/tmp/x"}}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"path": "/tmp/x"}})));
+        assert!(names_file("stroke.set", &json!({"options": {"endArrow": {"Custom": {"path": "/tmp/x"}}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": [{"Custom": {"path": "/tmp/x"}}]})));
+        assert!(names_file("object.move", &json!({"endArrow": {"Custom": {"path": "/tmp/x"}}})));
         // Deep nesting is walked without recursion.
         let mut deep = json!({"file": "/tmp/x"});
         for _ in 0..10_000 {
@@ -563,6 +639,40 @@ mod tests {
         let _ = std::fs::remove_file(&file);
         assert!(e.contains("read authority is absent"), "{e}");
         read.unwrap();
+    }
+
+    /// [`location_keys`] names every key in [`FILE_KEYS`] that a command's params description or
+    /// schema names, in every way a description writes one (`path | name`, `folder? (…)`), less
+    /// those [`NOT_FILES`] names for it; folder keys name folders. No command a plug-in may call
+    /// has one.
+    #[test]
+    fn location_keys_come_from_the_command_catalog() {
+        let find = |id: &str| crate::cmd::find_command(id).unwrap_or_else(|| panic!("no command {id}"));
+        let keys = |id: &str| location_keys(find(id));
+        assert!(keys("document.open").contains(&("path", Location::File)), "{:?}", keys("document.open"));
+        assert!(keys("document.compare").contains(&("diffPath", Location::File)), "{:?}", keys("document.compare"));
+        assert!(keys("addon.document.saveTimestampedCopy").contains(&("folder", Location::Folder)));
+        let relink = keys("links.relink");
+        for k in [("path", Location::File), ("paths", Location::File), ("folder", Location::Folder)] {
+            assert!(relink.contains(&k), "{relink:?}");
+        }
+        assert!(keys("action.batch").contains(&("destinationFolder", Location::Folder)));
+        for (id, key) in NOT_FILES {
+            assert!(!keys(id).iter().any(|(k, _)| k == key), "{id} `{key}` names a file");
+        }
+        for spec in crate::cmd::command_specs() {
+            let found = location_keys(spec);
+            let described = crate::cmd::params::doc_keys(spec.params).map(|p| p.keys).unwrap_or_default();
+            let in_schema = spec.schema.map(|s| s.params.iter().map(|p| p.name).collect::<Vec<_>>()).unwrap_or_default();
+            for k in described.into_iter().chain(in_schema).filter(|k| FILE_KEYS.contains(k) && !NOT_FILES.contains(&(spec.id, *k))) {
+                assert!(found.iter().any(|(f, _)| *f == k), "{}: `{k}` is missing from {found:?}", spec.id);
+            }
+            assert!(found.iter().all(|(k, l)| (*l == Location::Folder) == FOLDER_KEYS.contains(k)), "{}: {found:?}", spec.id);
+            assert!(denied(spec).is_some() || found.is_empty(), "{} names {found:?} but a plug-in may call it", spec.id);
+        }
+        assert_eq!(key_location("url"), Some(Location::File));
+        assert_eq!(key_location("sourceFolder"), Some(Location::Folder));
+        assert_eq!(key_location("pathData"), None);
     }
 
     #[test]

@@ -461,6 +461,65 @@ fn a_clipped_status_message_shows_in_full_on_hover() {
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "a message that fits has no tooltip: {hovered:?}");
 }
 
+/// The status message of an open with several notes lists them all on hover, and screen readers
+/// receive them after the message, while the status bar shows that message. A later message
+/// leaves the list out, and so does an open with one note.
+#[test]
+fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    app.ui.status = crate::io::opened_with_notes(2, &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let listed = "• the file's layers weren't read\n• a brush wasn't read";
+    let full = format!("{}\n{listed}", app.ui.status);
+    let (texts, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!status_text(&texts, "Opened").elided);
+    assert!(nodes.iter().any(|n| n.value() == Some(full.as_str())), "screen readers receive the notes: {nodes:?}");
+    assert!(hovered.iter().any(|t| t.text == full), "the tooltip lists the notes: {hovered:?}");
+
+    app.ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Saved", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "no tooltip: {hovered:?}");
+
+    // One note is the message itself: no list.
+    app.ui.status = crate::io::opened_with_notes(1, "a brush wasn't read");
+    app.ui.status_notes = Some((app.ui.status.clone(), vec!["a brush wasn't read".to_string()]));
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
+}
+
+/// The list has at most 30 notes, then how many more there are.
+#[test]
+fn the_hover_lists_thirty_notes_and_counts_the_rest() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}")).collect();
+    let listed = super::status_bar::listed_notes(&notes, usize::MAX);
+    let lines: Vec<&str> = listed.lines().collect();
+    assert_eq!((lines.len(), lines[0], lines[29], lines[30]), (31, "• note 1", "• note 30", "… (+2)"));
+    assert_eq!(super::status_bar::listed_notes(&notes[..2], usize::MAX), "• note 1\n• note 2");
+    assert_eq!(super::status_bar::listed_notes(&notes[..3], 1), "• note 1\n… (+2)");
+}
+
+/// A hover with more long notes than the window can show lists the ones that fit and how many
+/// more there are, inside the window. A window 300 points tall is shorter than the main window's
+/// smallest size (500 points) at UI Scaling 1.5.
+#[test]
+fn the_hover_of_many_notes_stays_inside_a_small_window() {
+    let (mut app, ctx) = status_readout_app();
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}: {}", "this file's PostScript couldn't be read ".repeat(3))).collect();
+    app.ui.status = crate::io::opened_with_notes(notes.len(), &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let (_, _, hovered) = bar_hover(&mut app, &ctx, 700.0, "Opened", super::status_bar);
+    let tip: Vec<_> = hovered.iter().filter(|t| t.text.contains("\n• note 1:")).collect();
+    let [tip] = &tip[..] else { panic!("one tooltip lists the notes: {hovered:?}") };
+    assert!(tip.bounds.top() >= 0.0 && tip.bounds.bottom() <= 300.0 && tip.bounds.right() <= 700.0, "{tip:?}");
+    let last = tip.text.lines().last().unwrap_or_default();
+    assert!(last.starts_with("… (+") && !tip.text.contains("• note 30:"), "{last:?}");
+}
+
 /// The Help Bar's hint ends in an ellipsis when it is wider than the window and shows in full on
 /// hover, in a tooltip that wraps within the window (#6622). The Dimension tool's hint is wider
 /// than the smallest main window (800 points); 400 points is that window at UI Scaling 2.0.
@@ -2188,6 +2247,82 @@ fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
     check(&nodes, "Alignment Guides", true);
 }
 
+/// The Control bar's Snapping menu opens Pixel Snapping Options with the current options; OK sets
+/// the three choices the dialog shows, and a dialog closed without OK changes nothing.
+#[test]
+fn the_control_bar_snapping_menu_opens_pixel_snapping_options() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("view.snapToPixel.options", json!({"moving": false})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 400.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let center = |nodes: &[(egui::accesskit::NodeId, egui::accesskit::Node)], name: &str| {
+        let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n.clone()).unwrap_or_else(|| panic!("missing {name}"));
+        let b = n.bounds().expect("a visible menu control");
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let menu = center(&nodes, "Snapping");
+    let nodes = click(&mut app, menu);
+    let entry = center(&nodes, "Pixel Snapping Options…");
+    click(&mut app, entry);
+    let d = app.ui.dialog.as_ref().expect("Pixel Snapping Options");
+    assert_eq!(d.kind, crate::dialogs::pixel_snap_options::KIND);
+    assert_eq!(serde_json::Value::Object(d.fields.clone()), json!({"drawing": true, "moving": false, "scaling": true}));
+    // While View › Snap to Pixel is off, the dialog says the options wait for it.
+    // A new window is laid out unseen in its first frame, so the second frame is read.
+    let note = |app: &mut crate::VectorcraftApp| {
+        let mut nodes = vec![];
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = |text: &str| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|l| l.contains(text)));
+        (shown("Snap to Pixel While Drawing"), shown("take effect when View › Snap to Pixel is on"))
+    };
+    assert!(!app.ui.view.snap_to_pixel);
+    assert_eq!(note(&mut app), (true, true), "the note shows with Snap to Pixel off");
+    app.ui.view.snap_to_pixel = true;
+    assert_eq!(note(&mut app), (true, false), "the note is hidden with Snap to Pixel on");
+    let before = app.session.prefs.pixel_snap;
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("drawing".into(), json!(false));
+    app.ui.dialog = None;
+    assert_eq!(app.session.prefs.pixel_snap, before, "a dialog closed without OK changes nothing");
+    crate::menus::invoke(&mut app, "view.snapToPixel.options", json!({}));
+    let d = app.ui.dialog.as_mut().expect("Pixel Snapping Options");
+    d.fields.insert("drawing".into(), json!(false));
+    d.fields.insert("moving".into(), json!(true));
+    d.fields.insert("scaling".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.prefs.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: false });
+}
+
 /// The window the Control bar docking tests draw the bar in.
 const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
 
@@ -2295,49 +2430,279 @@ fn the_control_bar_panel_menu_scrolls_in_a_short_window() {
     assert!(app.ui.control_bar_bottom, "Dock to Bottom docks the bar at the bottom");
 }
 
-/// Dragging the Control bar's gripper docks the bar at the edge of the window the pointer is
-/// released nearer; a drag released nearer the edge it is at leaves it there.
+/// The gripper of a Control bar docked at the top or the bottom of [`DOCK_SCREEN`]: the bar's first
+/// item, inside its 10-point margin, centered in the 34-point bar.
+fn docked_grip(bottom: bool) -> egui::Pos2 {
+    egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 })
+}
+
+/// The gripper of the Control bar floating with its top-left corner at `pos`: inside its 1-point
+/// border and 10-point margin.
+fn floating_grip(pos: [f32; 2]) -> egui::Pos2 {
+    egui::pos2(pos[0] + 14.0, pos[1] + 17.0)
+}
+
+/// A drag of the Control bar's gripper from `from` to `to` in window `screen`, with `during` sent
+/// at the last move before the release, released at `to`.
+fn drag_gripper_in(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    screen: egui::Rect,
+    from: egui::Pos2,
+    to: egui::Pos2,
+    during: Vec<egui::Event>,
+) {
+    // A bar that has just started floating takes a frame to show.
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    control_bar_frame_in(app, ctx, screen, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame_in(app, ctx, screen, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    control_bar_frame_in(app, ctx, screen, during);
+    control_bar_frame_in(app, ctx, screen, vec![press_at(to, false)]);
+    control_bar_frame_in(app, ctx, screen, vec![]);
+}
+
+/// [`drag_gripper_in`] in [`DOCK_SCREEN`] with nothing sent during the drag.
+fn drag_gripper(app: &mut crate::VectorcraftApp, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
+    drag_gripper_in(app, ctx, DOCK_SCREEN, from, to, vec![]);
+}
+
+/// Dragging the Control bar's gripper and releasing it within 24 points of the top or the bottom of
+/// the window docks the bar at that edge, the edge it is at included.
 #[test]
 fn dragging_the_control_bar_gripper_docks_it_at_the_nearer_edge() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    // The gripper is the bar's first item, inside its 10-point margin, centered in the 34-point bar.
-    let grip = |bottom: bool| egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 });
-    let drag = |app: &mut crate::VectorcraftApp, from: egui::Pos2, to: egui::Pos2| {
-        control_bar_frame(app, &ctx, vec![]);
-        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
-        for k in 1..=4 {
-            control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
-        }
-        control_bar_frame(app, &ctx, vec![press_at(to, false)]);
-    };
-    drag(&mut app, grip(false), egui::pos2(400.0, 200.0));
-    assert!(app.ui.control_bar_bottom, "released nearer the bottom: docked at the bottom");
-    drag(&mut app, grip(true), egui::pos2(400.0, 160.0));
-    assert!(app.ui.control_bar_bottom, "released nearer the bottom again: still at the bottom");
-    drag(&mut app, grip(true), egui::pos2(400.0, 120.0));
-    assert!(!app.ui.control_bar_bottom, "released nearer the top: docked at the top");
-    drag(&mut app, grip(false), egui::pos2(400.0, 140.0));
-    assert!(!app.ui.control_bar_bottom, "released nearer the top again: still at the top");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, 290.0));
+    assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the bottom: docked at the bottom");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(400.0, 280.0));
+    assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the bottom again: still at the bottom");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(400.0, 10.0));
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the top: docked at the top");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, 20.0));
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the top again: still at the top");
 }
 
-/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, and
-/// the panel menu checks the edge in use; another edge, or none, is an error and changes nothing.
+/// Dragging the docked Control bar's gripper away from both edges and releasing it there floats
+/// the bar under the pointer, held where the gripper was grabbed: 800 points wide, over the window,
+/// with its gripper and panel menu. The bar stays docked until the release.
 #[test]
-fn the_control_bar_dock_command_takes_top_or_bottom() {
+fn dragging_the_control_bar_gripper_away_from_both_edges_floats_it() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let from = docked_grip(false);
+    control_bar_frame(&mut app, &ctx, vec![]);
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    let to = egui::pos2(400.0, 150.0);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    assert!(!app.ui.control_bar_floating && super::control_bar_moving(&ctx), "still docked while the drag goes on");
+    control_bar_frame(&mut app, &ctx, vec![press_at(to, false)]);
+    assert!(app.ui.control_bar_floating && !super::control_bar_moving(&ctx), "released away from both edges: floating");
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "float"})), Some(true));
+    assert_eq!(app.ui.control_bar_float_pos, Some([to.x - from.x, to.y - from.y]), "held where the gripper was grabbed");
+    control_bar_frame(&mut app, &ctx, vec![]);
+    let menu = node_center(&control_bar_frame(&mut app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+    let left = to.x - from.x;
+    assert!((menu.y - to.y).abs() < 1.0 && (menu.x - (left + 800.0 - 19.0)).abs() < 1.0, "the panel menu ends the 800-point bar: {menu:?}");
+}
+
+/// A floating Control bar's gripper moves it, and docks it again at the top or the bottom of the
+/// window; from either edge it floats again.
+#[test]
+fn floating_control_bar_moves_and_redocks_from_each_edge() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    let at = super::CONTROL_BAR_FLOAT_AT;
+    drag_gripper(&mut app, &ctx, floating_grip(at), egui::pos2(300.0, 100.0));
+    assert!(app.ui.control_bar_floating, "moved, it still floats");
+    let moved = [300.0 - 14.0, 100.0 - 17.0];
+    assert_eq!(app.ui.control_bar_float_pos, Some(moved));
+    drag_gripper(&mut app, &ctx, floating_grip(moved), egui::pos2(500.0, 290.0));
+    assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom, "released at the bottom: docked there");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(500.0, 160.0));
+    assert!(app.ui.control_bar_floating, "from the bottom it floats again");
+    let [x, y] = app.ui.control_bar_float_pos.unwrap_or_default();
+    drag_gripper(&mut app, &ctx, floating_grip([x, y]), egui::pos2(500.0, 8.0));
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "released at the top: docked there");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(700.0, 120.0));
+    assert!(app.ui.control_bar_floating, "from the top it floats again");
+}
+
+/// A floating Control bar's panel menu keeps Dock to Top and Dock to Bottom, neither checked, and
+/// each docks the bar at its edge.
+#[test]
+fn floating_control_bar_menu_docks_to_either_edge() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, MENU_SCREEN, events);
+    for (item, bottom) in [("Dock to Bottom", true), ("Dock to Top", false)] {
+        app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+        frame(&mut app, vec![]);
+        let menu = node_center(&frame(&mut app, vec![]), "Panel menu").unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+        frame(&mut app, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+        frame(&mut app, vec![press_at(menu, false)]);
+        let nodes = frame(&mut app, vec![]);
+        let checked = nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓') && l.contains("Dock")).count();
+        assert_eq!(checked, 0, "neither edge is checked while the bar floats");
+        let at = node_center(&nodes, item).unwrap_or_else(|| panic!("the menu lists {item}"));
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom == bottom, "{item} docks the bar");
+    }
+}
+
+/// Escape during a gripper drag cancels it: a docked bar stays at its edge and a floating one where
+/// it floats.
+#[test]
+fn control_bar_drag_escape_restores_placement() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let escape =
+        || vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }];
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, docked_grip(false), egui::pos2(400.0, 150.0), escape());
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the docked bar stays at the top");
+    assert!(!super::control_bar_moving(&ctx), "the drag is over");
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, docked_grip(false), egui::pos2(400.0, 290.0), escape());
+    assert!(!app.ui.control_bar_bottom, "a canceled drag over the bottom does not dock it there");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    let at = super::CONTROL_BAR_FLOAT_AT;
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, floating_grip(at), egui::pos2(500.0, 200.0), escape());
+    assert!(app.ui.control_bar_floating, "the floating bar still floats");
+    assert_eq!(app.ui.control_bar_float_pos, None, "where it floated");
+    // A bar hidden in the middle of a drag leaves no drag to take a later Escape once the button
+    // is released.
+    let (from, to) = (floating_grip(at), egui::pos2(500.0, 200.0));
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    assert!(super::control_bar_moving(&ctx), "the drag goes on");
+    for events in [vec![press_at(to, false)], vec![]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |_| {});
+        out.textures_delta.clear();
+    }
+    assert!(!super::control_bar_moving(&ctx), "released with the bar hidden, the drag is over");
+}
+
+/// An Escape in the same frame as the gripper's release is the drag's: the frame's shortcuts, which
+/// run before the bar is drawn, still see the drag, and the bar stays where it was.
+#[test]
+fn control_bar_drag_escape_on_release_frame_is_the_drags() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (from, to) = (docked_grip(false), egui::pos2(400.0, 150.0));
+    control_bar_frame(&mut app, &ctx, vec![]);
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let mut moving = None;
+    let input = egui::RawInput { events: vec![escape, press_at(to, false)], screen_rect: Some(DOCK_SCREEN), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        moving = Some(super::control_bar_moving(ui.ctx()));
+        super::control_bar(&mut app, ui);
+    });
+    out.textures_delta.clear();
+    assert_eq!(moving, Some(true), "the release frame's shortcuts see the drag");
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the canceled drag leaves the bar at the top");
+    control_bar_frame(&mut app, &ctx, vec![]);
+    assert!(!super::control_bar_moving(&ctx), "the drag is over");
+}
+
+/// A gripper drag released outside the window leaves the bar where it was.
+#[test]
+fn control_bar_drag_release_outside_window_keeps_previous_placement() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, DOCK_SCREEN.bottom() + 120.0));
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the bar stays at the top");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    drag_gripper(&mut app, &ctx, floating_grip(super::CONTROL_BAR_FLOAT_AT), egui::pos2(-50.0, 150.0));
+    assert!(app.ui.control_bar_floating && app.ui.control_bar_float_pos.is_none(), "the floating bar stays where it was");
+}
+
+/// In a window too short for a floating bar between the two docking zones, a release docks the bar
+/// at the nearer edge; a floating bar saved on a bigger window is drawn inside a smaller one, its
+/// panel menu in reach, without docking it.
+#[test]
+fn floating_control_bar_stays_reachable_in_tiny_and_resized_windows() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let tiny = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 70.0));
+    drag_gripper_in(&mut app, &ctx, tiny, egui::pos2(13.0, 17.0), egui::pos2(300.0, 40.0), vec![]);
+    assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom, "released below the middle: docked at the bottom");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    app.ui.control_bar_float_pos = Some([1000.0, 250.0]);
+    let small = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(500.0, 120.0));
+    control_bar_frame_in(&mut app, &ctx, small, vec![]);
+    let menu = node_center(&control_bar_frame_in(&mut app, &ctx, small, vec![]), "Panel menu")
+        .unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+    assert!(small.shrink(1.0).contains(menu), "the panel menu is inside the smaller window: {menu:?}");
+    assert!(app.ui.control_bar_floating, "a smaller window does not dock the bar");
+    // The gripper too: a drag from where the bar is drawn moves it.
+    let grip = egui::pos2(small.right() - 500.0 + 14.0, small.bottom() - 34.0 + 17.0);
+    drag_gripper_in(&mut app, &ctx, small, grip, egui::pos2(200.0, 60.0), vec![]);
+    assert!(app.ui.control_bar_floating, "moved inside the smaller window");
+    assert_eq!(app.ui.control_bar_float_pos, Some([0.0, 43.0]), "kept inside the window, its gripper under the pointer");
+}
+
+/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, or
+/// floats it, and the panel menu checks the edge in use; another edge, or none, is an error and
+/// changes nothing. A floating bar floats at the position it last floated at, docked in between
+/// or hidden by Tab and shown again.
+#[test]
+fn the_control_bar_dock_command_takes_top_bottom_or_float() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     assert_eq!(app.run("window.control.dock", json!({"edge": "bottom"})).unwrap(), json!({"edge": "bottom"}));
     assert!(app.ui.control_bar_bottom);
     assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "bottom"})), Some(true));
     assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "top"})), Some(false));
-    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": 1}), json!({})] {
+    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": "Float"}), json!({"edge": 1}), json!({})] {
         let err = app.run("window.control.dock", p.clone()).unwrap_err();
-        assert_eq!(err, "`edge` must be one of top, bottom", "{p}");
-        assert!(app.ui.control_bar_bottom, "{p} leaves the bar at the bottom");
+        assert_eq!(err, "`edge` must be one of top, bottom, float", "{p}");
+        assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "{p} leaves the bar at the bottom");
     }
+    assert_eq!(app.run("window.control.dock", json!({"edge": "float"})).unwrap(), json!({"edge": "float"}));
+    assert!(app.ui.control_bar_floating && app.ui.control_bar_bottom, "floating, it keeps the edge it docked to last");
+    for edge in ["top", "bottom"] {
+        assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({ "edge": edge })), Some(false), "{edge}");
+    }
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "float"})), Some(true));
+    let err = app.run("window.control.dock", json!({"edge": "side"})).unwrap_err();
+    assert_eq!(err, "`edge` must be one of top, bottom, float");
+    assert!(app.ui.control_bar_floating, "an error leaves the bar floating");
+    app.ui.control_bar_float_pos = Some([240.0, 160.0]);
     assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
-    assert!(!app.ui.control_bar_bottom);
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating);
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    assert_eq!(app.ui.control_bar_float_pos, Some([240.0, 160.0]), "it floats where it last floated");
+    // Tab hides the floating bar, and Tab again shows it floating where it was.
+    app.ui.control_bar = true;
+    app.run("window.dock", json!({})).unwrap();
+    assert!(!app.ui.control_bar && app.ui.control_bar_floating, "Tab hides the bar");
+    app.run("window.dock", json!({})).unwrap();
+    assert!(app.ui.control_bar && app.ui.control_bar_floating, "Tab shows it floating again");
+    assert_eq!(app.ui.control_bar_float_pos, Some([240.0, 160.0]));
 }
 
 /// The labels of the Control bar panel menu's groups of options, in the menu's order.
@@ -2556,6 +2921,96 @@ fn the_artboard_tool_s_control_bar_follows_its_two_groups() {
     assert!(has(&bar, "Name:") && has(&bar, "Move Artwork with Artboard"), "{bar:?}");
 }
 
+/// The separators the docked Control bar draws in window `screen` (vertical lines most of the bar's
+/// height, left of the panel menu button), in order, with whether any other shape is drawn between
+/// each one and the next, or after the last one for the last.
+fn control_bar_separators(app: &mut crate::VectorcraftApp, ctx: &egui::Context, screen: egui::Rect) -> Vec<(f32, bool)> {
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+    let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    let menu_left =
+        nodes.iter().find(|n| n.label().is_some_and(|l| l == "Panel menu")).and_then(|n| n.bounds()).map_or(screen.right(), |b| b.x0 as f32);
+    let separator = |s: &egui::Shape| match s {
+        egui::Shape::LineSegment { points: [a, b], .. } if (a.x - b.x).abs() < 0.5 && (a.y - b.y).abs() >= 16.0 => Some(a.x),
+        _ => None,
+    };
+    let (mut lines, mut others) = (vec![], vec![]);
+    for cs in &out.shapes {
+        let r = cs.shape.visual_bounding_rect();
+        if !r.is_finite() || !cs.clip_rect.intersects(r) || r.min.x >= menu_left || r.width() > screen.width() / 2.0 {
+            continue;
+        }
+        match separator(&cs.shape) {
+            Some(x) => lines.push(x),
+            None => others.push(r.center().x),
+        }
+    }
+    lines.sort_by(f32::total_cmp);
+    (0..lines.len())
+        .map(|i| {
+            let next = lines.get(i + 1).copied().unwrap_or(f32::INFINITY);
+            (lines[i], others.iter().any(|&x| x > lines[i] && x < next))
+        })
+        .collect()
+}
+
+/// A Control bar separator stands only between two groups that draw controls: none is left at the
+/// end of the bar when the groups after it are off, do not apply or have no room, and none follows
+/// another with nothing between them, in every window width. With every group on, the separators
+/// between the groups stay.
+#[test]
+fn no_separator_is_left_at_the_end_of_the_control_bar() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let set = |app: &mut crate::VectorcraftApp, groups: &[&str], visible: bool| {
+        for group in groups {
+            app.run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
+        }
+    };
+    // The first width in each case where a separator has nothing after it.
+    let mut stray = vec![];
+    let mut check = |app: &mut crate::VectorcraftApp, case: &str| {
+        for w in (300..=1500).step_by(50) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+            let lines = control_bar_separators(app, &ctx, screen);
+            if lines.iter().any(|(_, followed)| !followed) {
+                stray.push(format!("{case}, {w} wide: {lines:?}"));
+                return;
+            }
+        }
+    };
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let wide = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1500.0, 300.0));
+    assert!(control_bar_separators(&mut app, &ctx, wide).len() >= 2, "the groups keep their separators");
+    check(&mut app, "every group on");
+    set(&mut app, &["transform", "alignDistribute"], false);
+    assert!(!control_bar_separators(&mut app, &ctx, wide).is_empty(), "Fill and Stroke and Opacity keep theirs");
+    check(&mut app, "Transform and Align off");
+    set(&mut app, &["opacity", "graphicStyle"], false);
+    check(&mut app, "Fill and Stroke last");
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    set(&mut app, &["opacity", "graphicStyle"], true);
+    set(&mut app, &["documentOptions"], false);
+    check(&mut app, "nothing selected, Document Options off");
+    app.select_tool("puppetWarp");
+    set(&mut app, &["fillStroke", "opacity"], false);
+    check(&mut app, "Puppet Warp options last");
+    app.select_tool("ellipse");
+    check(&mut app, "Ellipse options last");
+    set(&mut app, &["fillStroke", "opacity", "documentOptions", "transform", "alignDistribute"], true);
+    app.select_tool("artboard");
+    set(&mut app, &["artboardOptions"], false);
+    check(&mut app, "the artboard's Transform link and Align");
+    set(&mut app, &["alignDistribute"], false);
+    check(&mut app, "the artboard's Transform link last");
+    assert!(stray.is_empty(), "a separator with nothing after it: {stray:#?}");
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]
@@ -2608,6 +3063,57 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     assert_eq!(f, screen.bottom(), "docked at the top: menus stop at the window's bottom");
     let f = floor(&mut app, true, true, 0);
     assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
+    // Floating after docking at the bottom, the bar is no bottom bar.
+    app.ui.control_bar_floating = true;
+    let f = floor(&mut app, false, true, 0);
+    assert_eq!(f, screen.bottom(), "floating: menus stop at the window's bottom");
+}
+
+/// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
+/// controls while it has room, and the Distribute buttons for two or more selected artboards with
+/// Align to Artboard and three or more with Align to Selection. A
+/// click aligns the selected artboards as the Align panel's button does. The group is left out
+/// while the panel menu has it off.
+#[test]
+fn the_control_bar_aligns_the_selected_artboards_with_the_artboard_tool() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let button = |app: &mut crate::VectorcraftApp, name: &str| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
+        n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+    };
+    app.session.set_tool_option("selected", &json!([1]));
+    assert!(button(&mut app, "Vertical Align Top").is_some(), "one artboard: the Align buttons");
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "one artboard: no Distribute buttons");
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "two artboards, Align to Selection: no Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Artboard;
+    assert!(button(&mut app, "Horizontal Distribute Left").is_some(), "two artboards, Align to Artboard: the Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Selection;
+    let r = button(&mut app, "Vertical Align Top").expect("Vertical Align Top");
+    let press =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
+        frame(&mut app, events);
+    }
+    let tops: Vec<f64> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.y0).collect();
+    assert_eq!(tops, [0.0, 0.0], "{}", app.ui.status);
+    app.run("window.control.options", json!({"group": "alignDistribute", "visible": false})).unwrap();
+    assert!(button(&mut app, "Vertical Align Top").is_none(), "the group is off");
 }
 
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
@@ -2661,6 +3167,109 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar's Align To menu follows its Align buttons. It shows the Align panel's Align To
+/// choice (Artboard for one object, which the buttons align to the artboard) and screen readers
+/// get it as the value of a combo box named "Align To:". Its menu checks that choice, has Align to
+/// Key Object off while no key object can be made, and a pick chooses as the Align panel does:
+/// Artboard and Selection are stored with the UI state and let go of the key object, and Key
+/// Object makes the topmost selected object the key, keeping the stored choice. The Align
+/// buttons then align to the choice.
+#[test]
+fn the_control_bar_align_to_menu_chooses_what_align_aligns_to() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 40, "width": 30, "height": 20})).unwrap()["id"].clone()
+    };
+    let (a, b) = (rect(&mut app, 50.0), rect(&mut app, 150.0));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    // A control by its name; a menu row's name follows its check column.
+    let find = |nodes: &Nodes, name: &str| {
+        nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim_start_matches(['✓', ' ']) == name)).map(|(_, n)| n.clone())
+    };
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    let menu = |app: &mut crate::VectorcraftApp| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        find(&nodes, "Align To:").unwrap_or_else(|| panic!("the Control bar has the Align To menu"))
+    };
+    // Opens the menu, checks its rows and picks `pick`, or closes it with Escape.
+    let choose = |app: &mut crate::VectorcraftApp, checked: &str, key_on: bool, pick: Option<&str>| {
+        let at = center(&menu(app));
+        let nodes = click(app, at);
+        for name in ["Align to Selection", "Align to Key Object", "Align to Artboard"] {
+            let row = find(&nodes, name).unwrap_or_else(|| panic!("the menu lists {name}"));
+            assert_eq!(row.label().is_some_and(|l| l.starts_with('✓')), name == checked, "{name} checked");
+            assert_eq!(row.is_disabled(), name == "Align to Key Object" && !key_on, "{name} off");
+        }
+        let nodes = match pick {
+            Some(pick) => click(app, center(&find(&nodes, pick).unwrap_or_else(|| panic!("{pick}")))),
+            None => {
+                let escape =
+                    |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+                frame(app, vec![escape(true)]);
+                frame(app, vec![escape(false)]);
+                frame(app, vec![])
+            }
+        };
+        assert!(find(&nodes, "Align to Artboard").is_none(), "the menu closes");
+    };
+    let key = |app: &crate::VectorcraftApp| app.session.active().unwrap().selection.key;
+    let x0 = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
+    };
+
+    // One object: the buttons align it to the artboard, and Align to Key Object is off.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let m = menu(&mut app);
+    assert_eq!(m.role(), egui::accesskit::Role::ComboBox);
+    assert_eq!(m.value(), Some("Align to Artboard"), "one object shows Artboard");
+    choose(&mut app, "Align to Artboard", false, None);
+    assert_eq!(key(&app), None);
+
+    // Two objects: the stored choice, Selection.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(menu(&mut app).value(), Some("Align to Selection"));
+    choose(&mut app, "Align to Selection", true, Some("Align to Artboard"));
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Artboard, "the choice the Align panel shows");
+    assert_eq!(menu(&mut app).value(), Some("Align to Artboard"));
+    let left = find(&frame(&mut app, vec![]), "Horizontal Align Left").unwrap_or_else(|| panic!("Horizontal Align Left"));
+    click(&mut app, center(&left));
+    assert_eq!((x0(&app, &a), x0(&app, &b)), (0.0, 0.0), "aligned to the artboard: {}", app.ui.status);
+
+    // Key Object makes the topmost the key and keeps the stored choice.
+    choose(&mut app, "Align to Artboard", true, Some("Align to Key Object"));
+    assert_eq!(key(&app), Some(vectorcraft_doc::NodeId(b.as_u64().unwrap())), "the topmost object is the key");
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Artboard, "the stored choice stays");
+    assert_eq!(menu(&mut app).value(), Some("Align to Key Object"));
+
+    // Selection lets go of the key and is stored.
+    choose(&mut app, "Align to Key Object", true, Some("Align to Selection"));
+    assert_eq!(key(&app), None, "the key object is let go");
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Selection);
+    assert_eq!(menu(&mut app).value(), Some("Align to Selection"));
 }
 
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
@@ -2765,7 +3374,8 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         crate::theme::install_fonts(&ctx);
         let mut seen = false;
         let mut menu_seen = false;
-        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
+        // The Align group and the Align To menu, then for two objects the Distribute group (#5372):
+        // each by its controls.
         let mut groups: Vec<(&str, Vec<&str>)> = vec![(
             "Align",
             vec![
@@ -2778,6 +3388,7 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
                 "Vertical Align Bottom",
             ],
         )];
+        groups.push(("Align To", vec!["Align To:"]));
         if count == 2 {
             groups.push((
                 "Distribute",

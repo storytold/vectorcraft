@@ -13,7 +13,7 @@ use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKin
 use vectorcraft_geom::{Rect, shapes};
 
 use super::{
-    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
+    CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, f64_req, has_doc, has_selection, ids_param, index, number_or, object_param,
     switch_or, targets,
 };
 
@@ -380,7 +380,8 @@ fn from_selection(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = selected(s)?;
-    let (dx, dy) = (f64_or(p, "dx", 10.0), f64_or(p, "dy", 10.0));
+    let dx = number_or(p, "dx", 10.0, "object.slice.duplicate")?;
+    let dy = number_or(p, "dy", 10.0, "object.slice.duplicate")?;
     let ids = s.edit("Duplicate Slice", |d, sel| {
         let mut out = vec![];
         for id in &targets {
@@ -679,7 +680,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_rect(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.slice.setRect";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let r = rect_param(p, C)?;
     let d = &s.doc()?.doc;
     if d.slice(id).is_none() {
@@ -737,7 +738,7 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 fn select(s: &mut Session, p: &Value) -> Result<Value> {
     let slices = p.get("slices").filter(|v| !v.is_null()).cloned().unwrap_or(json!([]));
     let ids = slice_targets(s, &json!({ "slices": slices }), "object.slice.select")?;
-    let toggle = bool_or(p, "toggle", false);
+    let toggle = switch_or(p, "toggle", false, "object.slice.select")?;
     s.select(|_, sel| {
         let mut now = if toggle { sel.slices.clone() } else { vec![] };
         for id in ids {

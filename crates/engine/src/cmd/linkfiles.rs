@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
 use super::findfiles::{self, Limits, Visitor};
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, checked_ids_param, cmd};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, cmd, ids_param};
 
 /// The most linked files one search looks for.
 const MAX_LINKS: usize = 1_000;
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Find Linked Files",
         [],
         None,
-        "{folder?: an absolute path, ids?: [image or placed document ids] (default: the active document's missing links), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders, on separate threads, for files with the names of the linked files (in any letter case), and answer at once with the search's state (searching while it runs); without folder: the last search's state, with the files found so far. Each linked file's files come best first: same (the size and hash saved with the link), size (the saved size, where there is no saved hash or the file is larger than 1 GiB), then name. Within each kind, a file whose name has the link's letter case comes first. Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that differs, and a file with more matching names comes first; files that still tie are listed by path. Before the comparison, the saved path's parent-folder steps (.., or the empty components of a classic Mac :: run) are resolved, and . components in a slash path are skipped. A search looks for at most 1000 linked files and keeps the first 10 files of each one's name, and up to 10 that are the same file; it ends once every linked file has its same file, and searches only the folders text.findFontFiles may search, with the same maxSeconds, depth and count limits; none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, links: [{name, path, ids, files: [{path, size, match: same|size|name, caseDiffers?: true}]}], searched?: {folders, files, read}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
+        "{folder?: an absolute path, ids?: [image or placed document ids] (default: the active document's missing links), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders, on separate threads, for files with the names of the linked files (in any letter case), and answer at once with the search's state (searching while it runs); without folder: the last search's state, with the files found so far. Each linked file's files come best first: same (the size and hash saved with the link), size (the saved size, where there is no saved hash or the file is larger than 1 GiB), then name. Within each kind, a file whose name has the link's letter case comes first. Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that differs, and a file with more matching names comes first; files that still tie are listed by path. Before the comparison, the saved path's parent-folder steps (.., or the empty components of a classic Mac :: run) are resolved, and . components in a slash path are skipped. A search looks for at most 1000 linked files and keeps the first 10 files of each one's name, and up to 10 that are the same file; it ends once every linked file has its same file, and searches only the folders text.findFontFiles may search, with the same maxSeconds, depth and count limits. With automation read roots, a reply leaves out the files found outside the caller's roots, a link's path outside them, and the folder when it is outside them (error then gives the reason without the path); none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, links: [{name, path?, ids, files: [{path, size, match: same|size|name, caseDiffers?: true}]}], searched?: {folders, files, read}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
         always,
         find
     )]
@@ -52,6 +52,8 @@ pub(crate) struct LinkSearch {
     pub(crate) id: u64,
     /// The folder as given.
     pub(crate) folder: String,
+    /// The path of the document the links were taken from, which a relative link path starts from.
+    pub(crate) doc: Option<String>,
     pub(crate) links: Vec<Sought>,
     /// The size of each file read, by the path the search reports ([`LinkFiles::sizes`]).
     pub(crate) sizes: Arc<Mutex<HashMap<PathBuf, u64>>>,
@@ -141,8 +143,14 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = match p.get("ids") {
         None | Some(Value::Null) => None,
         Some(_) => {
-            let ids = checked_ids_param(s, p, "ids", C)?;
-            let linkable = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)));
+            // Images and placed documents in opacity-mask art and in the art of symbols, graph
+            // designs and patterns are named by their ids too (`links.list`).
+            let ids = ids_param(p, "ids", C)?.unwrap_or_default();
+            let kind = |id: &NodeId| st.doc.stored_node(*id).map(|(n, _)| &n.kind);
+            if let Some(value) = ids.iter().find(|id| kind(id).is_none()).map(|id| id.0) {
+                return Err(bad(C, format!("no such object id {value}")));
+            }
+            let linkable = |id: &NodeId| matches!(kind(id), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)));
             if let Some(id) = ids.iter().find(|id| !linkable(id)) {
                 return Err(bad(C, format!("object {} is not an image or a linked file", id.0)));
             }
@@ -163,6 +171,7 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     if links.is_empty() {
         return Err(bad(C, if ids.is_some() { "these objects show no linked files" } else { "no linked files are missing" }));
     }
+    let doc = super::links::LinkBase::of(st).doc.map(str::to_string);
     // A new search stops the last one.
     s.link_search = None;
     let threads = s.search_threads.unwrap_or_else(findfiles::threads);
@@ -171,7 +180,7 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     let visitor = Arc::new(LinkFiles::new(&links, sizes.clone()));
     let search =
         findfiles::start(PathBuf::from(&folder), s.search_rules.clone(), limits, threads, 2 * links.len(), visitor).map_err(EngineError::Other)?;
-    s.link_search = Some(LinkSearch { id: NEXT.fetch_add(1, Ordering::Relaxed), folder, links, sizes, search });
+    s.link_search = Some(LinkSearch { id: NEXT.fetch_add(1, Ordering::Relaxed), folder, doc, links, sizes, search });
     Ok(state(s))
 }
 
@@ -209,7 +218,9 @@ fn shared_folders(saved: &str, found: &Path) -> usize {
 /// Where the session's last search stands (`links.findFiles` without `folder`).
 fn state(s: &Session) -> Value {
     let Some(l) = &s.link_search else { return json!({ "state": "idle", "links": [] }) };
-    let p = l.search.progress();
+    let mut p = l.search.progress();
+    // Only what the caller asking now may read: a search another caller started can hold more.
+    let (folder, error) = p.keep_readable(&l.folder);
     let n = l.links.len();
     let sizes = lock(&l.sizes).clone();
     // Per linked file: the files found, each with whether it is the same file.
@@ -267,19 +278,23 @@ fn state(s: &Session) -> Value {
                     f
                 })
                 .collect();
-            json!({ "name": link.name, "path": link.path, "ids": link.ids, "files": files })
+            let mut row = json!({ "name": link.name, "ids": link.ids, "files": files });
+            super::links::note_path(&mut row, "path", &link.path, l.doc.as_deref());
+            row
         })
         .collect();
-    let folder = if p.folder.as_os_str().is_empty() { l.folder.clone() } else { p.folder.to_string_lossy().into_owned() };
     let mut out = json!({
-        "id": l.id, "state": p.state(), "folder": folder, "links": links,
+        "id": l.id, "state": p.state(), "links": links,
         "searched": { "folders": p.folders, "files": p.files, "read": p.read },
         "skipped": p.skipped, "unreadable": p.unreadable, "seconds": (p.seconds * 10.0).round() / 10.0,
     });
+    if let Some(folder) = folder {
+        out["folder"] = json!(folder);
+    }
     if let Some(why) = p.stopped() {
         out["stopped"] = json!(why);
     }
-    if let Some(e) = p.error() {
+    if let Some(e) = error {
         out["error"] = json!(e);
     }
     out

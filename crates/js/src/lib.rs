@@ -41,9 +41,11 @@
 //! With [`Options::e4x`], the parser also reads E4X (ECMA-357, second edition, December 2005):
 //! XML and XMLList literals, the `.@`, `..`, `::` and `.( )` operators, `for each … in` and
 //! `default xml namespace`; the realm then provides `XML`, `XMLList`, `Namespace`, `QName`,
-//! `isXMLName` and `setDefaultXMLNamespace`. Without the option, the language and the built-ins are
+//! `isXMLName` and `setDefaultXMLNamespace`, and XML and XMLList values have an `xpath` method that
+//! evaluates an XPath 1.0 expression. Without the option, the language and the built-ins are
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
-//! serializing them use no native recursion and take fuel for each node.
+//! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
+//! node.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -70,6 +72,7 @@ mod token;
 mod value;
 mod xml;
 mod xml_builtins;
+mod xpath;
 
 pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
@@ -77,10 +80,10 @@ pub use ast::{
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
-pub use host::{Arg, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem};
+pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, UNKNOWN_SOURCE};
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.

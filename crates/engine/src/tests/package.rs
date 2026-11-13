@@ -280,6 +280,103 @@ fn a_missing_link_is_reported_not_copied() {
     assert!(report.contains("blue.png: not found"), "{report}");
 }
 
+/// Packaged for a client whose read root holds neither the document's file nor its links: the report,
+/// its Document Info part included, names them by their file names, and `document.info` gives no
+/// link. The person's report names them whole.
+#[test]
+fn a_confined_package_names_files_outside_the_read_root_by_name() {
+    let dir = Folder::new("package-roots");
+    let mut s = poster(&dir);
+    std::fs::create_dir_all(dir.file("in")).unwrap();
+    std::fs::remove_file(dir.file("art/blue.png")).unwrap();
+    open(&mut s, &dir.file("poster.vectorcraft"));
+    let report = |r: &Value| {
+        let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+        String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap()
+    };
+    let person = report(&run(&mut s, "file.package", json!({})));
+    assert!(person.contains(&format!("From: {}\n", dir.file("poster.vectorcraft"))), "{person}");
+    assert!(person.contains(&format!("{} → Links/red.png", dir.file("art/red.png"))), "{person}");
+    assert!(person.contains(&format!("blue.png: not found ({})", dir.file("art/blue.png"))), "{person}");
+
+    let in_root = dir.0.join("in");
+    let roots = crate::file_access::AutomationRoots::new(&[in_root.as_path()], &[]).unwrap();
+    let client = crate::file_access::confine(roots.as_ref(), || run(&mut s, "file.package", json!({})));
+    let text = report(&client);
+    assert!(text.contains("From: poster.vectorcraft\n"), "{text}");
+    assert!(text.contains("\nred.png → Links/red.png\n") && text.contains("\nblue.png: not found (blue.png), not copied\n"), "{text}");
+    let base = dir.0.to_string_lossy().into_owned();
+    assert!(!text.contains(&base), "{text}");
+    for key in ["missingLinks", "warnings", "files"] {
+        assert!(!client[key].to_string().contains(&base), "{key}: {client}");
+    }
+    // Document Info, whose report the package holds, gives no link either.
+    for p in [json!({}), json!({"format": "text"})] {
+        let info = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", p.clone()));
+        assert!(!info.to_string().contains(&base), "{p}: {info}");
+    }
+    let info = run(&mut s, "document.info", json!({"format": "text"}));
+    assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
+}
+
+/// A missing link stored as a path relative to the document names a file inside a confined
+/// request's read root: the package report and Document Info give its stored path.
+#[test]
+fn a_relative_link_inside_the_read_root_keeps_its_path() {
+    let dir = Folder::new("package-roots-relative");
+    write(&dir.file("art/near.png"), &png(8, 8, RED));
+    let mut s = session();
+    let id = place(&mut s, &dir.file("art/near.png"));
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    let Some(vectorcraft_doc::NodeKind::Image(im)) = doc.node_mut(id).map(|n| &mut n.kind) else { panic!("not an image") };
+    im.link = Some(vectorcraft_doc::LinkInfo::new("art/near.png"));
+    write(&dir.file("near.vectorcraft"), &vectorcraft_format::save(&doc, false));
+    // Missing, the link keeps its stored path when the document opens (the package copies the
+    // image the document holds).
+    std::fs::remove_file(dir.file("art/near.png")).unwrap();
+    open(&mut s, &dir.file("near.vectorcraft"));
+    let roots = crate::file_access::AutomationRoots::new(&[dir.0.as_path()], &[]).unwrap();
+    let r = crate::file_access::confine(roots.as_ref(), || run(&mut s, "file.package", json!({})));
+    let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let text = String::from_utf8(zip["near Folder/near Report.txt"].clone()).unwrap();
+    assert!(text.contains("\nart/near.png → Links/near.png\n"), "{text}");
+    let info = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", json!({})));
+    let links: Vec<&Value> = info["images"].as_object().unwrap().values().map(|i| &i["link"]).collect();
+    assert_eq!(links, [&json!("art/near.png")], "{info}");
+    let text = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", json!({"format": "text"})));
+    assert!(text.to_string().contains("art/near.png"), "{text}");
+}
+
+/// A link whose stored path names a place outside a confined request's read root, with its file
+/// found by name beside the document inside the root: the package report and reply give the file
+/// name, not the stored path.
+#[test]
+fn a_stored_path_outside_the_read_root_is_left_out_when_its_file_is_found_inside() {
+    let dir = Folder::new("package-roots-stale");
+    write(&dir.file("in/near.png"), &png(8, 8, RED));
+    let mut s = session();
+    let id = place(&mut s, &dir.file("in/near.png"));
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    let Some(vectorcraft_doc::NodeKind::Image(im)) = doc.node_mut(id).map(|n| &mut n.kind) else { panic!("not an image") };
+    let stale = dir.file("out/near.png");
+    im.link = Some(vectorcraft_doc::LinkInfo::new(&stale));
+    write(&dir.file("in/near.vectorcraft"), &vectorcraft_format::save(&doc, false));
+    // Missing when the document opens, the link keeps its stored path; the file then appears beside it.
+    std::fs::remove_file(dir.file("in/near.png")).unwrap();
+    open(&mut s, &dir.file("in/near.vectorcraft"));
+    write(&dir.file("in/near.png"), &png(8, 8, RED));
+    let in_root = dir.0.join("in");
+    let roots = crate::file_access::AutomationRoots::new(&[in_root.as_path()], &[]).unwrap();
+    let r = crate::file_access::confine(roots.as_ref(), || run(&mut s, "file.package", json!({})));
+    let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let text = String::from_utf8(zip["near Folder/near Report.txt"].clone()).unwrap();
+    assert!(text.contains("\nnear.png → Links/near.png\n"), "{text}");
+    assert!(!text.contains(&stale), "{text}");
+    for key in ["missingLinks", "warnings", "files"] {
+        assert!(!r[key].to_string().contains(&stale), "{key}: {r}");
+    }
+}
+
 /// A file missing from a document that moved keeps the place its relative path names from the
 /// document's folder: the packaged document writes its relative path from there.
 #[test]
@@ -418,7 +515,7 @@ fn the_document_info_report_has_every_category() {
         "OBJECTS",
         "GRAPHIC STYLES",
         "BRUSHES",
-        "SPOT COLORS",
+        "SPOT COLOR OBJECTS",
         "PATTERN OBJECTS",
         "GRADIENT OBJECTS",
         "SYMBOLS",

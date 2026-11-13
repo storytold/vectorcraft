@@ -264,6 +264,25 @@ pub(crate) fn downsample(src: &[u8], w: usize, h: usize, k: usize) -> Vec<u8> {
     out
 }
 
+/// For each of `to` pixels spread over `from` (both above 0), the `from` pixels under it and the
+/// share of it each covers (summing to 1).
+fn area_spans(from: usize, to: usize) -> Vec<Vec<(usize, f64)>> {
+    let step = from as f64 / to as f64;
+    (0..to)
+        .map(|i| {
+            let (start, end) = ((i * from) as f64 / to as f64, ((i + 1) * from) as f64 / to as f64);
+            let first = start.floor() as usize;
+            let last = (end.ceil() as usize).max(first + 1).min(from);
+            (first..last)
+                .filter_map(|j| {
+                    let cover = end.min((j + 1) as f64) - start.max(j as f64);
+                    (cover > 0.0).then_some((j, cover / step))
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// A rendered image (premultiplied RGBA8, row-major).
 pub struct Rendered {
     pub width: u32,
@@ -285,6 +304,49 @@ impl Rendered {
         }
         out
     }
+    /// This image at `width`×`height` pixels: each new pixel is the average of the area of this one
+    /// under it, the pixels at its edges weighted by how much of them it covers. Colors are averaged
+    /// premultiplied, so transparent pixels add no color. At the same size it is a copy. An error
+    /// when a side is 0 or the pixel buffer doesn't match the image size.
+    pub fn area_resized(&self, width: u32, height: u32) -> Result<Rendered, String> {
+        let (sw, sh) = (self.width as usize, self.height as usize);
+        if sw.checked_mul(sh).and_then(|n| n.checked_mul(4)) != Some(self.pixels.len()) {
+            return Err("the pixel buffer doesn't match the image size".into());
+        }
+        if sw == 0 || sh == 0 || width == 0 || height == 0 {
+            return Err(format!("a {sw} × {sh} image can't be resized to {width} × {height} pixels"));
+        }
+        if (width, height) == (self.width, self.height) {
+            return Ok(Rendered { width, height, pixels: self.pixels.clone() });
+        }
+        let (dw, dh) = (width as usize, height as usize);
+        let len = dw.checked_mul(dh).and_then(|n| n.checked_mul(4)).ok_or_else(|| format!("a {width} × {height} image is too large"))?;
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(len).map_err(|e| format!("a {width} × {height} image: {e}"))?;
+        let (cols, rows) = (area_spans(sw, dw), area_spans(sh, dh));
+        let src: Vec<&[[u8; 4]]> = self.pixels.as_chunks::<4>().0.chunks_exact(sw).collect();
+        let mut acc = vec![[0f64; 4]; dw];
+        for row in &rows {
+            acc.fill([0.0; 4]);
+            for &(y, wy) in row {
+                let Some(line) = src.get(y) else { continue };
+                for (a, col) in acc.iter_mut().zip(&cols) {
+                    for &(x, wx) in col {
+                        if let Some(px) = line.get(x) {
+                            let w = wy * wx;
+                            for (s, v) in a.iter_mut().zip(px) {
+                                *s += w * f64::from(*v);
+                            }
+                        }
+                    }
+                }
+            }
+            for a in &acc {
+                pixels.extend(a.map(|v| v.round().clamp(0.0, 255.0) as u8));
+            }
+        }
+        Ok(Rendered { width, height, pixels })
+    }
     /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
     /// [`encode`]).
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
@@ -293,6 +355,58 @@ impl Rendered {
             .ok_or("PNG encoding failed: pixel buffer doesn't match the image size")?;
         img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
         Ok(buf)
+    }
+    /// Each pixel's grey level and alpha: the Rec. 709 luma of its straight colour, with `bilevel`
+    /// black below 128 and white from there up. A clear pixel is white: no ink where a fill
+    /// colour colorizes the image.
+    fn gray_alpha(&self, bilevel: bool) -> Vec<u8> {
+        let straight = self.to_straight();
+        let px = straight.as_chunks::<4>().0;
+        px.iter()
+            .flat_map(|&[r, g, b, a]| {
+                let y = (0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b)).round().clamp(0.0, 255.0) as u8;
+                let y = if a == 0 || (bilevel && y >= 128) {
+                    255
+                } else if bilevel {
+                    0
+                } else {
+                    y
+                };
+                [y, a]
+            })
+            .collect()
+    }
+    /// Encode as a greyscale PNG without metadata (Object › Rasterize's Grayscale colour model):
+    /// grey levels ([`Self::gray_alpha`]), with alpha only when some pixel isn't opaque.
+    pub fn to_gray_png(&self) -> Result<Vec<u8>, String> {
+        encode::png::encode_gray(&self.gray_alpha(false), self.width, self.height, &encode::png::PngOptions::default())
+    }
+    /// Encode in black and white (Object › Rasterize's Bitmap colour model): a 1-bit TIFF at `ppi`
+    /// when every pixel is opaque, else a grey PNG with alpha of only black and white (one-bit grey
+    /// with alpha is no format readers take). Returns the media type and the file.
+    pub fn to_bilevel(&self, ppi: f64) -> Result<(&'static str, Vec<u8>), String> {
+        let gray_alpha = self.gray_alpha(true);
+        let px = gray_alpha.as_chunks::<2>().0;
+        if !px.iter().all(|p| p[1] == 255) {
+            return Ok(("image/png", encode::png::encode_gray(&gray_alpha, self.width, self.height, &encode::png::PngOptions::default())?));
+        }
+        // WhiteIsZero: a set bit is black. Each row starts on a byte.
+        let mut bits = Vec::with_capacity(px.len() / 8 + self.height as usize);
+        for row in px.chunks(self.width.max(1) as usize) {
+            bits.extend(row.chunks(8).map(|byte| byte.iter().enumerate().fold(0u8, |b, (i, p)| b | u8::from(p[0] == 0) << (7 - i))));
+        }
+        let image = encode::tiff::Image {
+            width: self.width,
+            height: self.height,
+            data: &bits,
+            photometric: encode::tiff::Photometric::WhiteIsZero,
+            samples: 1,
+            bits: 1,
+            alpha: false,
+        };
+        let layout =
+            encode::tiff::Layout { byte_order: encode::tiff::ByteOrder::Little, compression: encode::tiff::Compression::PackBits, ppi, icc: None };
+        Ok(("image/tiff", encode::tiff::write(&image, &layout)?))
     }
     /// Encode as JPEG (flattened on white) at `quality` 1..=100.
     pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {

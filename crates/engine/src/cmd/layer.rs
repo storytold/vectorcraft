@@ -14,8 +14,8 @@ use vectorcraft_doc::{Artboard, ArtboardSide, Document, LAYER_COLORS, LayerColor
 use vectorcraft_geom::{Affine, Rect};
 
 use super::{
-    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, cmd, color_value, f64_or, has_doc,
-    has_selection, id_param, ids_param, index, ok, str_param, switch_or,
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, checked_node, checked_nodes_param, cmd,
+    color_value, f64_or, has_doc, has_selection, ids_param, index, object_param, ok, str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
             has_doc,
             set_props
         ),
@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Artboard",
             ["Window", "Artboards"],
             None,
-            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
+            "{x?, y?, width?, height? (each more than 0 and at most 3,999,856 pt, as file.new takes them), name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
             has_doc,
             artboard_new
         ),
@@ -200,7 +200,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Remembers Layers",
             ["Window", "Layers"],
             None,
-            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers they were copied from (by name; a missing one is made on top), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
+            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers or sublayers they were copied from (in that document while they are still there, else by the names of the layer and the layers around it, the topmost match first; a missing sublayer is made inside its layer, a missing top-level layer on top; a hidden or locked one is an error and nothing is pasted), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
             has_doc,
             paste_remembers_layers
         ),
@@ -210,11 +210,16 @@ pub fn specs() -> Vec<CommandSpec> {
 /// The rows a panel command acts on: `ids` or `id`, else the highlighted rows, else the current
 /// layer (capped at [`MAX_ROWS`]).
 pub(crate) fn rows_param(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
+    rows_or_guides_param(s, p, command, false)
+}
+
+/// The rows [`rows_param`] reads; given ruler guide ids are taken too when `guides`, else refused.
+fn rows_or_guides_param(s: &Session, p: &Value, command: &str, guides: bool) -> Result<Vec<NodeId>> {
     // Presence is explicit intent: validate every target before fallback, truncation or edits.
     let mut ids = if p.get("ids").is_some() {
-        checked_ids_param(s, p, "ids", command)?
+        checked_nodes_param(s, p, "ids", command, guides)?
     } else if let Some(id) = p.get("id") {
-        vec![checked_id(s, id, command)?]
+        vec![checked_node(s, id, command, guides)?]
     } else {
         let st = s.doc()?;
         let rows = st.highlighted_rows();
@@ -426,7 +431,7 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     if !st.doc.is_editable(id) {
@@ -594,7 +599,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setCurrent";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc_mut()?;
     let layer = st.doc.layer_containing(id).ok_or(EngineError::NoNode(id))?;
     st.active_layer = Some(layer);
@@ -637,7 +642,8 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setProps";
     let xml_id = s.prefs.identify_objects_by == "xmlId";
     check_options(C, p, xml_id)?;
-    let ids = rows_param(s, p, C)?;
+    // A ruler guide's row takes visible and locked: its own eye and lock.
+    let ids = rows_or_guides_param(s, p, C, true)?;
     if ids.is_empty() {
         return Err(bad(C, "no rows"));
     }
@@ -700,7 +706,7 @@ fn in_isolation(doc: &Document, isolation: Option<NodeId>, id: NodeId) -> bool {
 /// The selection column: select a row's art.
 fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.selectAll";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let add = switch_or(p, "add", false, C)?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -747,9 +753,12 @@ enum Place {
 /// Drag rows in the Layers panel.
 fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.move";
-    let mut ids = ids_param(p, "ids", C)?.or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = match ids_param(p, "ids", C)? {
+        Some(ids) => ids,
+        None => vec![object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing ids"))?],
+    };
     ids.truncate(MAX_ROWS);
-    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing target"))?;
+    let target = object_param(p, "target", C)?.ok_or_else(|| bad(C, "missing target"))?;
     let place = match str_param(p, "place").unwrap_or("inside") {
         "above" => Place::Above,
         "below" => Place::Below,
@@ -831,8 +840,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "node.move";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let parent = id_param(p, "parent");
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let parent = object_param(p, "parent", C)?;
     let index = p.get("index").and_then(Value::as_u64).map_or(usize::MAX, index);
     let d = &s.doc()?.doc;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
@@ -847,12 +856,21 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn rect_from(p: &Value, default: Rect) -> Rect {
+/// The rectangle from `x`, `y`, `width` and `height`, each defaulting to `default`'s. Sides are kept as given.
+fn rect_unclamped(p: &Value, default: Rect) -> Rect {
     let x = f64_or(p, "x", default.x0);
     let y = f64_or(p, "y", default.y0);
-    let w = f64_or(p, "width", default.width()).max(1.0);
-    let h = f64_or(p, "height", default.height()).max(1.0);
+    let w = f64_or(p, "width", default.width());
+    let h = f64_or(p, "height", default.height());
     Rect::new(x, y, x + w, y + h)
+}
+
+/// [`rect_unclamped`] with each supplied side raised to at least 1 pt, as `artboard.setProps` uses it.
+/// A side left out keeps `default`'s, even below 1 pt.
+fn rect_from(p: &Value, default: Rect) -> Rect {
+    let r = rect_unclamped(p, default);
+    let floor = |key: &str, side: f64| if p.get(key).and_then(Value::as_f64).is_some() { side.max(1.0) } else { side };
+    Rect::new(r.x0, r.y0, r.x0 + floor("width", r.width()), r.y0 + floor("height", r.height()))
 }
 
 /// An artboard command's `color` param, its background color: None when absent, `Some(None)` for
@@ -923,6 +941,9 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let guide_label = artboard_guide_label(p, "artboard.new")?.flatten();
     check_switches(p, &["showCenterMark", "showCrossHairs", "showVideoSafeAreas"], "artboard.new")?;
     check_numbers(p, &["x", "y", "width", "height"], "artboard.new")?;
+    if ["width", "height"].iter().filter_map(|k| p.get(*k).and_then(Value::as_f64)).any(|side| !super::newdoc::side_in_range(side)) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let r = match artboard_side(p, "artboard.new")? {
         Some(side) => {
             if ["x", "y", "width", "height"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
@@ -936,8 +957,12 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
             src + side.offset(src)
         }
         None if p.get("beside").is_some_and(|v| !v.is_null()) => return Err(bad("artboard.new", "`beside` needs `side`")),
-        None => rect_from(p, def),
+        None => rect_unclamped(p, def),
     };
+    // A size taken from another artboard (`side`, or width or height left out) keeps to the limit too.
+    if !super::newdoc::side_in_range(r.width()) || !super::newdoc::side_in_range(r.height()) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let given = artboard_str(p, "name", "artboard.new")?.map(str::trim).filter(|n| !n.is_empty());
     let (show_center_mark, show_cross_hairs) = (bool_or(p, "showCenterMark", false), bool_or(p, "showCrossHairs", false));
     let show_video_safe_areas = bool_or(p, "showVideoSafeAreas", false);

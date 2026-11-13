@@ -342,6 +342,33 @@ fn fix_all_is_one_undo_step() {
 }
 
 #[test]
+fn a_long_straight_run_loses_its_inner_anchors_in_one_step() {
+    let mut s = session();
+    let n: u32 = 5_000;
+    let mut pts: Vec<(f64, f64)> = (0..n).map(|i| (10.0 + f64::from(i) * 0.05, 150.0)).collect();
+    pts.push((260.0, 190.0));
+    let id = line(&mut s, &pts);
+    let other = rect(&mut s, 300.0, 20.0, 40.0, 40.0);
+    select(&mut s, &[other]);
+    let check = s.execute("addon.cleanup.check", &json!({"kinds": ["collinearAnchors"], "scope": "document"})).unwrap();
+    assert_eq!(check["total"], n - 2, "{check}");
+    assert_eq!(check["findings"][0]["ids"], json!([id.0]));
+    let shown = s.execute("addon.cleanup.show", &json!({"kind": "collinearAnchors", "scope": "document"})).unwrap();
+    assert_eq!(shown["count"], n - 2);
+    assert_eq!(s.doc().unwrap().selection.objects, [id], "Show selects the path");
+    select(&mut s, &[other]);
+    let (steps, before) = (undo_steps(&s), node(&s, id).unwrap());
+    let r = s.execute("addon.cleanup.fix", &json!({"kinds": ["collinearAnchors"], "scope": "document"})).unwrap();
+    assert_eq!((r["total"].as_u64(), r["fixed"]["collinearAnchors"].as_u64()), (Some(u64::from(n) - 2), Some(u64::from(n) - 2)));
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, [other], "Fix keeps the selection");
+    let ends: Vec<(f64, f64)> = node(&s, id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!(ends, [(10.0, 150.0), (10.0 + f64::from(n - 1) * 0.05, 150.0), (260.0, 190.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, id).unwrap(), before);
+}
+
+#[test]
 fn the_scope_is_the_selection_or_the_document() {
     let mut s = session();
     let a = path(&mut s, json!([{"x": 30, "y": 30}]), false);
