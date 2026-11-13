@@ -1537,6 +1537,8 @@ font-technology	Variable	Променливи
 	Objects on Path Tool	Инструмент „Обекти по пътя“
 	Attach Objects on Path	Прикрепяне на обекти към пътя
 	Expand Objects on Path	Разширяване на обекти по пътя
+	Detach	Откачване
+	Detach Object from Path	Откачване на обект от пътя
 	Release Live Paint	Освобождаване на динамично оцветяване
 	Release Repeat	Освобождаване на повторение
 	Release Slice	Освобождаване на отрязък

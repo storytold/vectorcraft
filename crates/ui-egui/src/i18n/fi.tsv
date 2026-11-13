@@ -1813,6 +1813,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Objektit polulla -työkalu
 	Attach Objects on Path	Kiinnitä objektit polulle
 	Expand Objects on Path	Laajenna objektit polulla
+	Detach	Irrota
+	Detach Object from Path	Irrota objekti polulta
 	Release Live Paint	Vapauta elävä maalaus
 	Release Repeat	Vapauta toisto
 	Release Slice	Vapauta siivu
@@ -6028,6 +6030,7 @@ mark-style	Japanese	Japanilainen
 @msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
+@msg	choose the object to detach with its Select/Move widget	valitse irrotettava objekti sen Valitse/Siirrä-säätimellä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja
 @msg	a clipping path can't take objects	leikkauspolkuun ei voi kiinnittää objekteja
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevia objekteja ei voi kiinnittää polulle

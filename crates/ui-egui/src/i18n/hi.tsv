@@ -1706,6 +1706,8 @@ antiAlias	Sharp	शार्प
 	Expand Live Paint	लाइव पेंट एक्सपैंड करें
 	Expand Object	ऑब्जेक्ट का विस्तार
 	Expand Objects on Path	पाथ पर ऑब्जेक्ट्स एक्सपैंड करें
+	Detach	अलग करें
+	Detach Object from Path	पाथ से ऑब्जेक्ट अलग करें
 	Expand Options	ऑप्शन्स एक्सपैंड करें
 	Expand Panels	पैनलों का विस्तार
 	Expand Repeat	रिपीट एक्सपैंड करें
@@ -7731,6 +7733,7 @@ antiAlias	Sharp	शार्प
 @msg	select an object with a freeform gradient	एक फ्रीफॉर्म ग्रेडिएंट के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an object with an opacity mask	एक opacity मास्क के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an Objects on Path group	पाथ समूह पर एक ऑब्जेक्ट चुनें
+@msg	choose the object to detach with its Select/Move widget	अलग करने वाले ऑब्जेक्ट को उसके चुनें/ले जाएँ विजेट से चुनें
 @msg	select area type	क्षेत्र प्रकार सिलेक्ट करें
 @msg	select area type (text in a frame)	क्षेत्र प्रकार (एक फ्रेम में टेक्स्ट) सिलेक्ट करें
 @msg	select area type and closed paths (at least one area type object)	क्षेत्र प्रकार और बंद पाथ (कम से कम एक क्षेत्र प्रकार ऑब्जेक्ट) सिलेक्ट करें

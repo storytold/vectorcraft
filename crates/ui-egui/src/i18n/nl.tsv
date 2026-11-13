@@ -185,6 +185,7 @@
 @msg	node {_1} is on a locked artboard	knooppunt {_1} staat op een vergrendeld tekengebied
 @msg	thumbnail: no page {n} (the file has 1)	miniatuur: geen pagina {n} (het bestand heeft er 1)
 @msg	select an Objects on Path group	selecteer een groep Objecten op pad
+@msg	choose the object to detach with its Select/Move widget	kies het object dat je wilt loskoppelen met zijn widget Selecteren/verplaatsen
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	een pad binnen een samengesteld pad, mengsel, omvorming, herhaling of verstrengelingsgroep kan geen objecten opnemen
 @msg	a clipping path can't take objects	een knippad kan geen objecten opnemen
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objecten binnen een mengsel, omvorming, herhaling of verstrengelingsgroep kunnen niet aan een pad worden gekoppeld
@@ -6391,6 +6392,8 @@ swatch	Bright Violet	Felviolet
 	Objects on Path Tool	Objecten-op-pad-gereedschap
 	Attach Objects on Path	Objecten aan pad koppelen
 	Expand Objects on Path	Objecten op pad uitbreiden
+	Detach	Loskoppelen
+	Detach Object from Path	Object van pad loskoppelen
 	Release Live Paint	Live Paint vrijgeven
 	Release Repeat	Herhaling vrijgeven
 	Release Slice	Slice vrijgeven

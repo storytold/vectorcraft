@@ -1550,6 +1550,8 @@ font-technology	Variable	Variabla
 	Objects on Path Tool	Verktyg för objekt på bana
 	Attach Objects on Path	Fäst objekt på bana
 	Expand Objects on Path	Expandera objekt på bana
+	Detach	Lossa
+	Detach Object from Path	Lossa objekt från bana
 	Release Live Paint	Släpp direktmålning
 	Release Repeat	Släpp upprepning
 	Release Slice	Släpp skiva
@@ -6019,6 +6021,7 @@ theme	Appearance	Utseende
 @msg	no bound object reports a value (locked objects and embedded images report none)	inget bundet objekt rapporterar ett värde (låsta objekt och inbäddade bilder rapporterar inget)
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
+@msg	choose the object to detach with its Select/Move widget	välj objektet som ska lossas med dess Markera/Flytta-reglage
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
 @msg	a clipping path can't take objects	en klippbana kan inte ta emot objekt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekt inuti en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte fästas på en bana

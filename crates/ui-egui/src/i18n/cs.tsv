@@ -1840,6 +1840,8 @@ digits	Malayalam	Malajálamské
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
+	Detach	Odpojit
+	Detach Object from Path	Odpojit objekt od cesty
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -5091,6 +5093,7 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	choose the object to detach with its Select/Move widget	vyberte objekt k odpojení jeho ovládacím prvkem Vybrat/Přesunout
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
 @msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu

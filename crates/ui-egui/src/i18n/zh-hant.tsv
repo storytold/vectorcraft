@@ -1588,6 +1588,8 @@ file-filter	Templates	範本
 	Objects on Path Tool	路徑上的物件工具
 	Attach Objects on Path	附加路徑上的物件
 	Expand Objects on Path	展開路徑上的物件
+	Detach	分離
+	Detach Object from Path	將物件從路徑分離
 	Release Live Paint	釋放即時上色
 	Release Repeat	釋放重複
 	Release Slice	釋放切片
@@ -2021,6 +2023,7 @@ file-filter	Templates	範本
 @msg	select a repeat	請選取重複物件
 @msg	select an Intertwine group	請選取交織群組
 @msg	select an Objects on Path group	請選取路徑上的物件群組
+@msg	choose the object to detach with its Select/Move widget	請用物件的「選取/移動」控制項選取要分離的物件
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合路徑、漸變物件、封套、重複物件或交織群組中的路徑無法附加物件
 @msg	a clipping path can't take objects	剪裁路徑無法附加物件
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	漸變物件、封套、重複物件或交織群組中的物件無法附加到路徑

@@ -1542,6 +1542,8 @@ antiAlias	Sharp	Nítid
 	Expand Live Paint	Expandeix la pintura interactiva
 	Expand Object	Expandeix l’objecte
 	Expand Objects on Path	Expandeix els objectes del traçat
+	Detach	Separa
+	Detach Object from Path	Separa l’objecte del traçat
 	Expand Options	Opcions d’expansió
 	Expand Panels	Expandeix els panells
 	Expand Repeat	Expandeix la repetició
@@ -6000,6 +6002,7 @@ digits	Malayalam	Malaiàlam
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
+@msg	choose the object to detach with its Select/Move widget	tria l’objecte que vols separar amb el seu control Selecciona/Mou
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
 @msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}

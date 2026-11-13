@@ -1757,6 +1757,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Narzędzie Obiekty na ścieżce
 	Attach Objects on Path	Dołącz obiekty do ścieżki
 	Expand Objects on Path	Rozszerz obiekty na ścieżce
+	Detach	Odłącz
+	Detach Object from Path	Odłącz obiekt od ścieżki
 	Release Live Paint	Uwolnij aktywne malowanie
 	Release Repeat	Uwolnij powtórzenie
 	Release Slice	Uwolnij plasterek
@@ -4916,6 +4918,7 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	zaznacz powtórzenie
 @msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select an Objects on Path group	zaznacz grupę obiektów na ścieżce
+@msg	choose the object to detach with its Select/Move widget	wybierz obiekt do odłączenia jego uchwytem Zaznacz/Przesuń
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	do ścieżki wewnątrz ścieżki złożonej, przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć obiektów
 @msg	a clipping path can't take objects	do ścieżki przycinającej nie można dołączyć obiektów
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	obiektów wewnątrz przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć do ścieżki

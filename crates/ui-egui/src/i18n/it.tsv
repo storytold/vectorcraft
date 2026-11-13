@@ -1623,6 +1623,8 @@ file-filter	Templates	Modelli
 	Objects on Path Tool	Strumento Oggetti su tracciato
 	Attach Objects on Path	Aggancia oggetti al tracciato
 	Expand Objects on Path	Espandi oggetti su tracciato
+	Detach	Sgancia
+	Detach Object from Path	Sgancia oggetto dal tracciato
 	Release Live Paint	Rilascia pittura dinamica
 	Release Repeat	Rilascia ripetizione
 	Release Slice	Rilascia sezione
@@ -4834,6 +4836,7 @@ axis	Both	Entrambi
 @msg	select a repeat	seleziona una ripetizione
 @msg	select an Intertwine group	seleziona un gruppo intrecciato
 @msg	select an Objects on Path group	seleziona un gruppo di oggetti su tracciato
+@msg	choose the object to detach with its Select/Move widget	scegli l’oggetto da sganciare con il suo controllo Seleziona/Sposta
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracciato all'interno di un tracciato composto, una fusione, un involucro, una ripetizione o un gruppo intrecciato non può ricevere oggetti
 @msg	a clipping path can't take objects	un tracciato di ritaglio non può ricevere oggetti
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	gli oggetti all'interno di una fusione, un involucro, una ripetizione o un gruppo intrecciato non possono essere agganciati a un tracciato
