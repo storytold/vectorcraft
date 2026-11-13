@@ -623,6 +623,61 @@ fn rename_pattern_reaches_paints_outside_the_layers() {
     assert!(is_pattern(&s.paint.fill, "Dots"), "Undo gives the fill its old name back");
 }
 
+/// A new graph whose stored series fill and stroke and value label fill and stroke are pattern
+/// `name`, as a later redraw would give them to its marks and labels.
+fn graph_painted_with(s: &mut Session, name: &str) -> NodeId {
+    let v = s.execute("graph.create", &json!({"type": "column", "x": 200, "y": 200, "width": 60, "height": 40, "csv": ",2024\nQ1,3\nQ2,5"}));
+    let id = id_of(&v.unwrap());
+    let p = pattern_paint(name);
+    let mut extras = doc_mut(s).node_mut(id).unwrap().extras_mut();
+    let spec = extras.graph.as_mut().unwrap();
+    spec.series_paints = vec![vectorcraft_doc::SeriesPaint { fill: Some(p.clone()), stroke: Some(p.clone()), ..Default::default() }];
+    spec.label_styles.values = Some(vectorcraft_doc::CharStyle { fill: p.clone(), stroke: p, ..Default::default() });
+    id
+}
+
+/// The series and label paints a graph stores, in order: series fill and stroke, then the value
+/// labels' fill and stroke.
+fn stored_graph_paints(s: &Session, id: NodeId) -> Vec<Paint> {
+    let n = node(s, id);
+    let g = n.extras().graph.as_deref().unwrap();
+    let series = g.series_paints.iter().flat_map(|p| [p.fill.clone(), p.stroke.clone()]).flatten();
+    series.chain(g.label_styles.values.iter().flat_map(|st| [st.fill.clone(), st.stroke.clone()])).collect()
+}
+
+/// Delete Pattern clears the series and label paints a graph stores, and a rename renames them, so
+/// a later `graph.setData` draws no paint of a missing pattern.
+#[test]
+fn delete_and_rename_reach_a_graphs_stored_paints() {
+    let mut s = session();
+    make_dots(&mut s);
+    let g = graph_painted_with(&mut s, "Dots");
+    s.execute("pattern.options", &json!({"name": "Dots", "newName": "Spots"})).unwrap();
+    assert!(stored_graph_paints(&s, g).iter().all(|p| is_pattern(p, "Spots")), "the rename reaches the graph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(stored_graph_paints(&s, g).iter().all(|p| is_pattern(p, "Dots")));
+    let v = s.execute("pattern.delete", &json!({"name": "Dots"})).unwrap();
+    assert_eq!(v["unpainted"], 4, "the series fill and stroke and the value labels' fill and stroke");
+    assert!(stored_graph_paints(&s, g).iter().all(Paint::is_none));
+    s.execute("graph.setData", &json!({"id": g.0, "rows": [[2], [4]]})).unwrap();
+    assert_eq!(pattern_uses(doc(&s), "Dots"), 0, "the redrawn graph holds no paint of the deleted pattern");
+}
+
+/// Canceling a new pattern clears the series and label paints a graph stores.
+#[test]
+fn cancel_new_pattern_reaches_a_graphs_stored_paints() {
+    let mut s = session();
+    // The graph is made outside the editing layer, and its paints take the new pattern's name.
+    let g = graph_painted_with(&mut s, "Tiles");
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("object.pattern.make", &json!({"name": "Tiles"})).unwrap();
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+    assert_eq!(stored_graph_paints(&s, g).len(), 4);
+    assert!(stored_graph_paints(&s, g).iter().all(Paint::is_none));
+    assert_eq!(pattern_uses(doc(&s), "Tiles"), 0);
+}
+
 /// With New Art Has Basic Appearance off, Redo of Delete Pattern gives new art the paints the
 /// command left, the selected object's appearance taken after the pattern's fill was cleared.
 #[test]

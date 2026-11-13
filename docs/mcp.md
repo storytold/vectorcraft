@@ -4095,8 +4095,8 @@ old name keeps it. A blank name gives "New Pattern N" in `object.pattern.make` a
 `object.pattern.cancel {}` leaves pattern editing mode and discards the changes. For a pattern that `object.pattern.make`
 made for the edit, it removes the pattern and every swatch of it, a color group's included. Every other paint of the
 pattern becomes no paint: on art outside the editing layer, in opacity mask art, type runs, symbol definitions, graph
-designs, other patterns' tiles, graphic and character styles and brush art, and in the fill, stroke and appearance new
-art takes. A pattern that `object.pattern.saveCopy` saved during the edit stays, with those paints cleared in its tile.
+designs, the series and label paints a graph keeps for its next redraw, other patterns' tiles, graphic and character
+styles and brush art, and in the fill, stroke and appearance new art takes. A pattern that `object.pattern.saveCopy` saved during the edit stays, with those paints cleared in its tile.
 For an existing pattern, Cancel puts the definition back as it was when editing started; when `pattern.options` renamed
 it during the edit, the old name comes back with its swatches and paints, unless another pattern, swatch or color group
 has taken that name. `pattern.delete {name}` clears the paints of the pattern in the same places and returns

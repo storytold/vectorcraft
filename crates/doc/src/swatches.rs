@@ -143,8 +143,8 @@ impl Document {
     }
 
     /// Visit every paint in the places [`Document::map_solid_paints`] visits (fills, strokes, text
-    /// runs, image colorize paints and dynamic symbol instances' own paints in the art, opacity masks
-    /// included, symbol definitions, graph designs, pattern tiles and the tile that pattern
+    /// runs, image colorize paints, dynamic symbol instances' own paints and graphs' stored series and
+    /// label paints in the art, opacity masks included, symbol definitions, graph designs, pattern tiles and the tile that pattern
     /// editing's Cancel puts back; graphic styles; the swatches; character styles' fill and
     /// stroke), whatever its kind. `f(paint)` gives the paint to put in its place, or `None` to keep
     /// it. Only nodes holding a changed paint (and the paths to them) are copied. Returns the number
@@ -210,7 +210,7 @@ impl Document {
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).chain(graph_paints(m)).for_each(&mut *f);
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -382,6 +382,23 @@ pub fn override_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     n.extras().symbol_overrides.iter().flat_map(|o| [o.fill.as_ref(), o.stroke.as_ref()]).flatten()
 }
 
+/// The paints a graph keeps for its series and its labels ([`crate::graph::GraphSpec`]), which its
+/// marks and labels take each time it is drawn again and which [`node_paints`] leaves out.
+pub fn graph_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+    let g = n.extras().graph.as_deref();
+    let series = g.into_iter().flat_map(|g| &g.series_paints).flat_map(|s| [s.fill.as_ref(), s.stroke.as_ref()]).flatten();
+    let labels = g.into_iter().flat_map(|g| [&g.label_styles.values, &g.label_styles.categories, &g.label_styles.legend]).flatten();
+    series.chain(labels.flat_map(|st| [&st.fill, &st.stroke]))
+}
+
+/// Mutable [`graph_paints`] of graph `g`, in the same order.
+fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mut Paint> {
+    let series = g.series_paints.iter_mut().flat_map(|s| [s.fill.as_mut(), s.stroke.as_mut()]).flatten();
+    let l = &mut g.label_styles;
+    let labels = [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten();
+    series.chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
+}
+
 /// Mutable [`node_paints`], in the same order.
 pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     let runs = match &mut n.kind {
@@ -421,6 +438,22 @@ fn map_node(n: &Node, f: &mut PaintFn) -> Option<(Node, usize)> {
         if k > 0 {
             out.get_or_insert_with(|| n.clone()).extras_mut().symbol_overrides = overrides;
             count += k;
+        }
+    }
+    // A graph's series and label paints, which its marks and labels take when it is drawn again.
+    let graph: Vec<(usize, Paint)> = graph_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
+    if !graph.is_empty() {
+        count += graph.len();
+        let m = out.get_or_insert_with(|| n.clone());
+        if let Some(spec) = m.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            let mut graph = graph.into_iter().peekable();
+            for (i, p) in graph_paints_mut(spec).enumerate() {
+                if graph.peek().is_some_and(|c| c.0 == i)
+                    && let Some((_, q)) = graph.next()
+                {
+                    *p = q;
+                }
+            }
         }
     }
     if let Some(ch) = n.children() {
@@ -646,6 +679,35 @@ mod tests {
         assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 1);
         assert_eq!(loose.appearance.fill_paint(), linked(blue, "Brand"));
         assert_eq!(map_node_solid_paints(&mut loose, &mut to_blue), 0, "nothing left to change");
+    }
+
+    #[test]
+    fn mapping_reaches_the_series_and_label_paints_a_graph_keeps() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            series_paints: vec![crate::SeriesPaint { fill: Some(red.clone()), stroke: Some(red.clone()), ..Default::default() }],
+            label_styles: crate::graph::LabelStyles {
+                legend: Some(crate::CharStyle { fill: red.clone(), stroke: Paint::None, ..Default::default() }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut seen = 0;
+        d.visit_paints(&mut |p| seen += usize::from(*p == red));
+        assert_eq!(seen, 4, "the fill and the graph's series fill, series stroke and legend fill");
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
+        assert_eq!(d.map_solid_paints(&mut to_blue), 4);
+        let g = d.node(a).unwrap().extras().graph.clone().unwrap();
+        assert_eq!(g.series_paints[0].fill, Some(linked(blue, "Brand")));
+        assert_eq!(g.series_paints[0].stroke, Some(linked(blue, "Brand")));
+        let legend = g.label_styles.legend.unwrap();
+        assert_eq!((legend.fill, legend.stroke), (linked(blue, "Brand"), Paint::None));
+        let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
+        assert_eq!(d.map_paints(&mut cleared), 4, "the fill and the graph's three");
+        assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
     }
 
     #[test]

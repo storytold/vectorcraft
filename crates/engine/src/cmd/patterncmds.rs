@@ -461,8 +461,8 @@ fn pattern_paints<'a>(name: &'a str, to: Option<&'a str>) -> impl FnMut(&Paint) 
 
 /// Remove pattern `name` from `d`: its definition and every swatch, grouped or not, whose paint is
 /// the pattern. Every paint of the pattern left anywhere in the document (the art, opacity masks,
-/// type, symbol definitions, graph designs, other patterns' tiles, graphic and character styles and
-/// the art of brushes) becomes no paint. Returns the number of such paints.
+/// type, symbol definitions, graph designs, graphs' stored series and label paints, other patterns'
+/// tiles, graphic and character styles and the art of brushes) becomes no paint. Returns the number of such paints.
 fn forget_pattern(d: &mut Document, name: &str) -> usize {
     d.patterns.retain(|p| p.name != name);
     let is_it = |sw: &vectorcraft_color::Swatch| matches!(&sw.paint, Paint::Pattern { pattern, .. } if pattern == name);
