@@ -351,6 +351,10 @@ fn the_xml_methods_behave_as_specified() {
         "var x = <a xmlns:p='u'><b/></a>; x.b[0].inScopeNamespaces().length === 1 && x.namespaceDeclarations()[0].prefix === 'p' && x.b[0].namespaceDeclarations().length === 0",
     );
     truth("var x = <a xmlns:p='u'/>; x.namespace('p').uri === 'u' && x.namespace('q') === undefined && x.namespace().uri === ''");
+    truth(
+        "var x = <a xmlns:p='u' xmlns:q='v'><b xmlns:p='w' xmlns:q='v'><c/></b></a>; var c = x.b.c[0]; var s = c.inScopeNamespaces(); var d = x.b[0].namespaceDeclarations(); \
+         s.length === 2 && c.namespace('p').uri === 'w' && c.namespace('q').uri === 'v' && c.namespace('z') === undefined && d.length === 1 && d[0].prefix === 'p' && d[0].uri === 'w'",
+    );
     truth("var x = <a/>; x.addNamespace(new Namespace('p', 'u')); x.namespace('p').uri === 'u'");
     truth("var x = <a xmlns:p='u'/>; x.removeNamespace(new Namespace('p', 'u')); x.namespace('p') === undefined");
     truth("var x = <a xmlns:p='u' p:q='1'/>; x.removeNamespace(new Namespace('p', 'u')); x.namespace('p').uri === 'u'");
@@ -1243,7 +1247,12 @@ fn comparing_xml_values_is_charged_to_the_heap() {
 
 /// Runs `setup` with no limit, then `action` in the same realm, and returns how `action` ended.
 fn after_setup(setup: &str, action: &str) -> Result<JsValue, RunErrorKind> {
-    let mut r = realm();
+    after_setup_with(e4x(), setup, action)
+}
+
+/// [`after_setup`] in a realm with `options`.
+fn after_setup_with(options: Options, setup: &str, action: &str) -> Result<JsValue, RunErrorKind> {
+    let mut r = Realm::with_options(options, Limits::default());
     let interp = r.interp();
     let global = interp.global;
     assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
@@ -1265,6 +1274,135 @@ fn namespace_declarations_and_qname_strings_are_charged_to_the_heap() {
     let long = "var s = 'x'; for (var i = 0; i < 12; i++) s += s; var q = new QName('u', s);";
     let action = "squeeze(12000); var t1 = q.toString(); var t2 = q.toString(); 1";
     assert_eq!(after_setup(long, action), heap);
+}
+
+#[test]
+fn namespace_scopes_are_charged_to_the_heap() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let setup = "var x = <r><b><c/></b></r>; for (var i = 0; i < 2000; i++) x.addNamespace(new Namespace('p' + i, 'u' + i)); \
+                 var b = x.b[0]; b.c[0].setNamespace(new Namespace('u7'));";
+    for (action, ample) in [
+        ("b.namespace('p1999').uri", JsValue::String("u1999".into())),
+        ("b.namespaceDeclarations().length", JsValue::Number(0.0)),
+        ("b.inScopeNamespaces().length", JsValue::Number(2000.0)),
+        ("x.xpath('b[namespace::p1999]').length()", JsValue::Number(1.0)),
+        ("b.xpath('p5:c').length()", JsValue::Number(0.0)),
+        ("b.xpath(\"*[name() = 'p7:c']\").length()", JsValue::Number(1.0)),
+    ] {
+        assert_eq!(after_setup(setup, &format!("squeeze(16384); {action}")), heap, "{action}");
+        assert_eq!(after_setup(setup, action), Ok(ample.clone()), "{action}");
+        // The scope reads the same bindings after the script has left garbage to collect.
+        let churn = format!("squeeze(2000000); for (var i = 0; i < 3000; i++) [i]; {action}");
+        assert_eq!(after_setup(setup, &churn), Ok(ample), "{action}");
+    }
+}
+
+#[test]
+fn namespace_edits_read_attributes_in_place_and_charge_their_walk() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let wide = "var s = '<r xmlns:q=\"v\"'; for (var i = 0; i < 4000; i++) s += ' a' + i + '=\"v\"'; var x = new XML(s + '/>'); \
+                var n = new Namespace('q', 'v'); var m = new Namespace('s', 'w');";
+    let deep = "var s = '<r xmlns:q=\"v\">'; for (var i = 0; i < 2000; i++) s += '<d>'; for (var i = 0; i < 2000; i++) s += '</d>'; \
+                var x = new XML(s + '</r>'); var n = new Namespace('q', 'v');";
+    let removed = "x.removeNamespace(n); x.namespace('q') === undefined";
+    // An element's attributes are read where they are, so 4,000 of them need no room; the walk of a
+    // deep tree is held against the limit.
+    for (tree, setup, action, ample, squeezed) in [
+        ("wide", wide, "x.addNamespace(m); x.namespace('s').uri", JsValue::String("w".into()), false),
+        ("wide", wide, removed, JsValue::Bool(true), false),
+        ("deep", deep, removed, JsValue::Bool(true), true),
+    ] {
+        let options = Options { max_depth: 1_000_000, ..e4x() };
+        let want = if squeezed { heap.clone() } else { Ok(ample.clone()) };
+        assert_eq!(after_setup_with(options.clone(), setup, &format!("squeeze(4096); {action}")), want, "{tree}: {action}");
+        assert_eq!(after_setup_with(options, setup, action), Ok(ample), "{tree}: {action}");
+    }
+}
+
+#[test]
+fn xml_list_methods_charge_their_copies_to_the_heap() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let setup = "var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<a/>); var l = x.a;";
+    for (action, ample) in [
+        ("l.child(0).length()", JsValue::Number(0.0)),
+        ("l.comments().length()", JsValue::Number(0.0)),
+        ("l.normalize().length()", JsValue::Number(4000.0)),
+    ] {
+        assert_eq!(after_setup(setup, &format!("squeeze(4096); {action}")), heap, "{action}");
+        assert_eq!(after_setup(setup, action), Ok(ample), "{action}");
+    }
+}
+
+/// The least spare heap, found by bisection, at which `action` ends without the heap limit after
+/// `setup`.
+fn least_spare(setup: &str, action: &str) -> usize {
+    let (mut lo, mut hi) = (0usize, 1usize << 22);
+    assert!(after_setup(setup, &format!("squeeze({hi}); {action}")).is_ok(), "{action}");
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        match after_setup(setup, &format!("squeeze({mid}); {action}")) {
+            Ok(_) => hi = mid,
+            Err(RunErrorKind::Limit(LimitKind::Heap)) => lo = mid + 1,
+            Err(e) => panic!("{action}: {e:?}"),
+        }
+    }
+    lo
+}
+
+#[test]
+fn replace_charges_its_copy_of_the_matches_to_the_heap() {
+    let setup = "var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<a/>);";
+    let action = "x.replace('a', 'z'); x.children().length()";
+    let select = least_spare(setup, "x.a.length()");
+    let replace = least_spare(setup, action);
+    assert!(replace >= select + 4000 * 4, "select {select}, replace {replace}");
+    assert_eq!(after_setup(setup, action), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn xpath_qualified_names_are_charged_to_the_heap() {
+    let setup = "var s = 'a'; for (var i = 0; i < 14; i++) s += s; var x = <r xmlns:p='u'><c/></r>; var c = x.c[0]; \
+                 c.setLocalName(s); c.setNamespace(new Namespace('u'));";
+    let action = "x.xpath('*[string-length(name()) = 16386]').length()";
+    assert_eq!(after_setup(setup, &format!("squeeze(16384); {action}")), Err(RunErrorKind::Limit(LimitKind::Heap)));
+    assert_eq!(after_setup(setup, action), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn xml_methods_charge_the_strings_they_flatten() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    // `s` and `t` are ropes of 32,768 and 49,152 units; `f` is a flat string that starts with `@`.
+    let setup = "var s = 'a'; for (var i = 0; i < 15; i++) s += s; var t = 'a b'; for (var i = 0; i < 14; i++) t += t; \
+                 var f = '@' + s; isXMLName(f); var x = <r><c/></r>; var c = x.c[0];";
+    let mut wrong = Vec::new();
+    for (action, ample) in [
+        ("x.addNamespace(s); 1", JsValue::Number(1.0)),
+        ("new Namespace(t, 'u').prefix", JsValue::Undefined),
+        ("c.setName(s); 1", JsValue::Number(1.0)),
+        ("isXMLName(s)", JsValue::Bool(true)),
+        ("x.attribute(s).length()", JsValue::Number(0.0)),
+        ("x.attribute(f).length()", JsValue::Number(0.0)),
+        ("x.namespace(s) === undefined", JsValue::Bool(true)),
+        ("x.propertyIsEnumerable(s)", JsValue::Bool(false)),
+        ("c.setLocalName(s); 1", JsValue::Number(1.0)),
+    ] {
+        let squeezed = after_setup(setup, &format!("squeeze(16384); {action}"));
+        if squeezed != heap {
+            wrong.push(format!("{action} with 16384 spare: {squeezed:?}"));
+        }
+        assert_eq!(after_setup(setup, action), Ok(ample), "{action}");
+    }
+    // Parsing a rope needs room for its flat copy on top of what parsing the same flat text needs.
+    let text = "var k = 'x'; for (var i = 0; i < 15; i++) k += k; var s = '<a><!--' + k + '--></a>'; \
+                var g = '<a><!--' + k + '--></a>'; isXMLName(g);";
+    for ctor in ["XML", "XMLList"] {
+        let rope = least_spare(text, &format!("new {ctor}(s); 1"));
+        let flat = least_spare(text, &format!("new {ctor}(g); 1"));
+        if rope < flat + 32768 {
+            wrong.push(format!("new {ctor} needs {rope} spare for a rope and {flat} for flat text"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 #[test]
