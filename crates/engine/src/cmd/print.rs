@@ -112,6 +112,9 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     super::printadvanced::flattener(C, &set, &s.prefs.flattener_presets)?;
     let mut pv = vectorcraft_pdf::preview(doc, &set).map_err(|e| pdf_error(C, e))?;
     pv.warnings.extend(type_warnings(doc, set.print_layers, &areas(&pv)));
+    // What the job loses comes first, then the notes on the options.
+    let settings = std::mem::take(&mut pv.setting_notes);
+    pv.warnings.extend(settings);
     let mut v = serde_json::to_value(pv).map_err(|e| EngineError::Other(e.to_string()))?;
     v["settings"] = to_json(&set)?;
     Ok(v)
@@ -199,7 +202,9 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         let mut r =
             vectorcraft_pdf::print(printed, &PrintOptions { settings: set, for_printer: bool_or(p, "forPrinter", false), ..Default::default() })
                 .map_err(|e| pdf_error(PRINT, e))?;
+        // What the job loses comes first, then the notes on the options.
         r.warnings.extend(typed);
+        r.warnings.extend(r.setting_notes);
         return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
     }
     let level = match p.get("level").filter(|v| !v.is_null()) {
@@ -209,12 +214,13 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Level::default(),
     };
-    let mut warnings = vec![];
+    // What the job loses, then the notes on the options: a reply lists them in that order.
+    let (mut warnings, mut setting_notes) = (vec![], vec![]);
     if !bitmap && (tile_images || doc.layers.iter().any(|l| l.shows_transparency())) {
         warnings.push("transparency is flattened into opaque art and images (PostScript has none): see flattenerPreset".to_string());
     }
     if !set.color.profile.trim().is_empty() && set.output.mode == vectorcraft_pdf::OutputMode::Composite {
-        warnings.push("the printer profile converts the colours of PDF output: PostScript prints the document's colours".to_string());
+        setting_notes.push("the printer profile converts the colours of PDF output: PostScript prints the document's colours".to_string());
     }
     let flatness = (!set.graphics.auto_flatness).then_some(set.graphics.flatness);
     let plan = vectorcraft_pdf::plan(prepared.as_ref().unwrap_or(doc), &PrintOptions { settings: set, postscript: true, ..Default::default() })
@@ -244,5 +250,11 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let areas: Vec<Rect> = plan.sheets.iter().filter_map(|sh| on_page(sh.area, sh.view * sh.place, sh.size)).collect();
     warnings.extend(type_warnings(&full, which, &areas));
+    for w in plan.setting_notes.iter().chain(&out.setting_notes) {
+        if !warnings.contains(w) && !setting_notes.contains(w) {
+            setting_notes.push(w.clone());
+        }
+    }
+    warnings.extend(setting_notes);
     write_or_return(path, &out.bytes, json!({ "pages": plan.order.len(), "format": "postscript", "warnings": warnings }))
 }

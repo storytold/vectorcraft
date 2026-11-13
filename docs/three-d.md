@@ -326,7 +326,8 @@ These rules are VectorCraft's own:
 
 - A graphic is drawn on the visible face of each of the object's solids (a fill's, and a stroke's outline),
   turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
-  with the face's light: each color is multiplied by the light that falls on the face, and drawn with the
+  with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
+  which keep their own colors. It is drawn with the
   opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
   the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
