@@ -1129,6 +1129,10 @@ antiAlias	Sharp	शार्प
 	Corner Color	कोनों का रंग
 	Contiguous	सन्निहित
 	Each Channel	प्रत्येक चैनल
+	Color Mask…	रंग मास्क…
+	Color Mask	रंग मास्क
+	Remove Color Mask	रंग मास्क हटाएँ
+	Apply Color Mask	रंग मास्क लागू करें
 	Crop Marks	क्रॉप मार्क
 	Crop To	करने के लिए फसल
 	Cross	क्रॉस
@@ -7665,6 +7669,10 @@ antiAlias	Sharp	शार्प
 @msg	a CMYK image has no transparency to set	CMYK इमेज में सेट करने के लिए कोई पारदर्शिता नहीं है
 @msg	every pixel matches the background: no image would be left	हर पिक्सेल पृष्ठभूमि से मेल खाता है: कोई इमेज नहीं बचेगी
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} पिक्सेल की इमेज बदलने के लिए बहुत बड़ी है
+@msg	select an image with a color mask	रंग मास्क वाली एक इमेज चुनें
+@msg	the color mask's settings are out of range	रंग मास्क की सेटिंग सीमा से बाहर हैं
+@msg	a CMYK image can't take a color mask	CMYK इमेज पर रंग मास्क नहीं लगाया जा सकता
+@msg	the mask would hide every pixel	मास्क हर पिक्सेल को छिपा देगा
 @msg	select an image (or an Image Trace group)	एक इमेज सिलेक्ट करें (या एक इमेज ट्रेस समूह)
 @msg	select an Image Trace object	एक इमेज ट्रेस ऑब्जेक्ट चुनें
 @msg	select an image, or pass id	एक इमेज सिलेक्ट करें, या आईडी पास करें

@@ -76,12 +76,13 @@ pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }
 
-/// `n` shows an image of `keys` (itself or inside).
+/// `n` shows an image of `keys` (itself or inside), a color-masked image's masked pixels counted as
+/// what it shows.
 pub(super) fn draws_image(n: &Node, keys: &BTreeSet<String>) -> bool {
     !keys.is_empty()
         && n.visible
         && match &n.kind {
-            NodeKind::Image(im) => keys.contains(&im.key),
+            NodeKind::Image(im) => keys.contains(&im.key) || Document::color_mask_of(n).is_some_and(|m| m.made_for(im) && keys.contains(&m.key)),
             _ => n.children().is_some_and(|ch| ch.iter().any(|c| draws_image(c, keys))),
         }
 }

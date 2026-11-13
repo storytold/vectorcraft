@@ -662,14 +662,20 @@ impl Renderer {
         // shortcut: art kept by `fx_arts` isn't made again when only a swatch's kind (spot or
         // process) changes, which Duotone reads; editing the object makes it again.
         let swatches = |name: &str| effects::addons::duotone::swatch_kind(doc, name);
-        let adjusted = effects::adjust(&art, outer, &swatches, &mut |key, map| {
-            let mut h = std::hash::DefaultHasher::new();
-            std::hash::Hash::hash(&format!("{map:?}"), &mut h);
-            let hash = std::hash::Hasher::finish(&h);
-            let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
-            wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
-            Some(derived)
-        });
+        let adjusted = effects::adjust(
+            &art,
+            outer,
+            &swatches,
+            &mut |key, map| {
+                let mut h = std::hash::DefaultHasher::new();
+                std::hash::Hash::hash(&format!("{map:?}"), &mut h);
+                let hash = std::hash::Hasher::finish(&h);
+                let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
+                wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
+                Some(derived)
+            },
+            &|key| doc.images.contains_key(key),
+        );
         for (key, derived, hash, map) in wanted {
             self.adjusted_image(&key, derived, hash, &map);
         }
