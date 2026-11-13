@@ -33,6 +33,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             xh: 4.0,
             ch,
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
             keeps_word: false,

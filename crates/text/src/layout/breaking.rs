@@ -20,7 +20,8 @@ pub(super) struct Metrics {
 
 impl Metrics {
     pub(super) fn of(g: &SGlyph) -> Self {
-        let em = g.face.units_per_em() * g.sy;
+        // A warichu glyph's em is the em of the line its block sits in.
+        let em = super::vertical::glyph_em(g);
         Self { asc: g.ascent, desc: g.descent, lead: g.leading, cap: g.cap, xh: g.xh, top: (g.face.ideographic_centre() + 0.5) * em }
     }
     pub(super) fn max(g: &[SGlyph]) -> Option<Self> {
@@ -448,9 +449,10 @@ pub(super) fn break_line(
 
 /// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
 /// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
-/// its line breaks and composer). Never an inline graphic (U+FFFC).
+/// its line breaks and composer). Never an inline graphic (U+FFFC), nor a character of a
+/// tate-chu-yoko or warichu block.
 pub(super) fn hangs(g: &SGlyph) -> bool {
-    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
+    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none() && g.wari.is_none()
 }
 
 /// Optical Margin Alignment: the share of glyph `g`'s advance that hangs outside the margin when
@@ -458,9 +460,10 @@ pub(super) fn hangs(g: &SGlyph) -> bool {
 /// asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half (the amounts
 /// published for Roman Hanging Punctuation). A, V, W, Y, v, w and y hang by a tenth of their
 /// advance, VectorCraft's own amount for their slanted sides. Other characters, East Asian
-/// punctuation (which burasagari hangs) and inline graphics don't hang.
+/// punctuation (which burasagari hangs), inline graphics and the characters of a warichu block
+/// don't hang.
 pub(super) fn optical_share(g: &SGlyph) -> f64 {
-    if g.inline.is_some() || g.tcy.is_some() {
+    if g.inline.is_some() || g.tcy.is_some() || g.wari.is_some() {
         return 0.0;
     }
     match g.ch {
@@ -688,7 +691,7 @@ fn push_in(
 }
 
 /// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
-/// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
+/// CJK, outside a tate-chu-yoko or warichu block, a list marker and a shaped cluster, and not next to a space,
 /// a tab or an inline graphic before it, nor inside an inseparable pair that Bunri-Kinshi keeps
 /// together. Zero-width format controls take no gap: the gap is the one between the visible
 /// characters on either side, before `end`, as the layout justifies it.
@@ -702,7 +705,7 @@ fn closes(g: &[SGlyph], a: usize, end: usize) -> bool {
         && !p.is_space()
         && !n.is_space()
         && p.ch != '\t'
-        && !n.continues_tcy()
+        && !n.continues_block()
         && (is_cjk(p.ch) || is_cjk(n.ch))
 }
 

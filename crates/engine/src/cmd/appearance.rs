@@ -1430,6 +1430,7 @@ fn copied_character_styles<'a>(source: &Node, targets: impl Iterator<Item = &'a 
         local.baseline_shift /= scale.points;
         local.tcy_up_down /= scale.points;
         local.tcy_left_right /= scale.points;
+        local.warichu_gap /= scale.points;
         local.h_scale /= scale.horizontal;
         // As with dimensional type commands, reject overflow and underflow before layout.
         if !copied_dimensions_fit(&effective, &local) {
@@ -1448,6 +1449,7 @@ fn copied_dimensions_fit(from: &CharStyle, to: &CharStyle) -> bool {
         (from.baseline_shift, to.baseline_shift),
         (from.tcy_up_down, to.tcy_up_down),
         (from.tcy_left_right, to.tcy_left_right),
+        (from.warichu_gap, to.warichu_gap),
         (from.h_scale, to.h_scale),
     ]
     .iter()
