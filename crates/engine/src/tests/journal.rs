@@ -273,6 +273,32 @@ fn a_batch_fit_selection_replays_but_an_action_uses_the_current_selection() {
     assert_eq!(boards(&a), [was[0], fitted[1], fitted[2]], "the action fits the artboards selected when it plays");
 }
 
+/// The journal records the `index` a batch's Fit to Artwork Bounds step took from the batch's
+/// `artboard`, so a replay fits that artboard even when the Artboard tool then has several selected.
+#[test]
+fn a_batch_fit_step_records_the_batchs_artboard() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    let start = s.journal.len();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]]);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({"index": 1})));
+    let mut r = Session::new();
+    for (n, (id, p)) in s.journal.iter().enumerate() {
+        if n == start {
+            r.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+            r.set_tool_option("selected", &json!([0, 2]));
+        }
+        r.execute(id, p).unwrap();
+    }
+    assert_eq!(boards(&r), boards(&s), "the replay fits artboard 2, not the selected ones");
+    assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
     let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();
