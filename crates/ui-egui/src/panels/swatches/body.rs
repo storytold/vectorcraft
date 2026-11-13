@@ -49,9 +49,17 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     let lit = app.session.active().map(|st| highlighted(&st.doc, sel)).unwrap_or_default();
     let is_sel = |name: &str| lit.contains(&name);
     let mut ev = TileEvents::default();
+    // In a sized panel the list fills the space above the footer (#1638), as the Artboards list
+    // does; elsewhere it keeps its 150 pt (200 pt for large thumbnails).
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 200.0 } else { 150.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let max_height = if view == View::LargeThumb { 200.0 } else { 150.0 };
-        let out = egui::ScrollArea::vertical().id_salt("swatch-scroll").max_height(max_height).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt("swatch-scroll")
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        let out = scroll.show(ui, |ui| {
             ui.set_width(ui.available_width());
             if view.is_list() {
                 for e in &items {
