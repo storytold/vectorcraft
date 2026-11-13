@@ -2301,6 +2301,8 @@ file-filter	Templates	Шаблоны
 	Normal Screen Mode	Обычный режим экрана
 	Note:	Примечание:
 	Nothing matches the Show filter.	Ничего не соответствует фильтру «Показать».
+	Show DCS Transparency Interactions	Показывать взаимодействия DCS с прозрачностью
+	Transparent, or overlaps transparent objects: check its separations	Прозрачно или перекрывает прозрачные объекты: проверьте цветоделение
 	Nothing to print	Нечего печатать
 	Nudge	Сдвинуть
 	Nudge in Perspective	Сдвинуть в перспективе
