@@ -3,7 +3,7 @@
 
 use vectorcraft_doc::{Document, Node, NodeKind, Unit};
 use vectorcraft_geom::Rect;
-use vectorcraft_svg::import;
+use vectorcraft_svg::{ExportOptions, export, import};
 
 fn art(d: &Document) -> Vec<&Node> {
     let mut v = Vec::new();
@@ -129,4 +129,64 @@ fn absolute_lengths_in_a_pixel_document_keep_their_size() {
     let n = art(&d)[0];
     assert!(close_rect(n.geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 720.0 / 25.4)), "{:?}", n.geometric_bounds());
     assert!(close(n.appearance.stroke_width(), 2.0));
+}
+
+#[test]
+fn export_physical_units_writes_unit_suffixes() {
+    // Millimeters (#864 / G11: avoid 75% scale in external tools like LightBurn, LaserGRBL, Inkscape)
+    let mut d = Document::new(50.0 * 72.0 / 25.4, 30.0 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"50mm\" height=\"30mm\""), "{s}");
+    assert!(s.contains("viewBox=\"0 0 141.732 85.039\""), "{s}");
+
+    // Inches
+    let mut d = Document::new(8.5 * 72.0, 11.0 * 72.0);
+    d.units = Unit::Inches;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"8.5in\" height=\"11in\""), "{s}");
+    assert!(s.contains("viewBox=\"0 0 612 792\""), "{s}");
+
+    // Centimeters
+    let mut d = Document::new(5.0 * 72.0 / 2.54, 3.0 * 72.0 / 2.54);
+    d.units = Unit::Centimeters;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"5cm\" height=\"3cm\""), "{s}");
+
+    // Picas
+    let mut d = Document::new(10.0 * 12.0, 20.0 * 12.0);
+    d.units = Unit::Picas;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"10pc\" height=\"20pc\""), "{s}");
+
+    // Points and pixels remain unitless
+    let mut d = Document::new(100.0, 200.0);
+    d.units = Unit::Points;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"100\" height=\"200\""), "{s}");
+
+    d.units = Unit::Pixels;
+    let s = export(&d, &ExportOptions::default());
+    assert!(s.contains("width=\"100\" height=\"200\""), "{s}");
+
+    // Responsive export omits width and height even with physical units
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions { responsive: true, ..Default::default() });
+    assert!(!s.contains("width="), "{s}");
+    assert!(!s.contains("height="), "{s}");
+
+    // Roundtrip preserves physical units without reverting to points or pixels (#864)
+    let mut d = Document::new(50.0 * 72.0 / 25.4, 30.0 * 72.0 / 25.4);
+    d.units = Unit::Millimeters;
+    let s = export(&d, &ExportOptions::default());
+    let reloaded = import(&s).unwrap();
+    assert_eq!(reloaded.units, Unit::Millimeters);
+    assert!(close_rect(reloaded.artboards[0].rect, d.artboards[0].rect));
+
+    // Nonzero physical dimensions do not round to zero even with small decimals option
+    let mut d = Document::new(2.0, 72.0);
+    d.units = Unit::Inches;
+    let s = export(&d, &ExportOptions { decimals: 1, ..Default::default() });
+    assert!(!s.contains("width=\"0in\""), "width must not round to zero: {s}");
+    assert!(s.contains("width=\"0.02778in\""), "{s}");
 }
