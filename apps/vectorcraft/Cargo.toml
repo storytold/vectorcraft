@@ -97,7 +97,7 @@ winit = { version = "0.30", default-features = false, features = ["wayland-csd-a
 # second X connection, x11rb's pure-Rust `RustConnection`. MIT OR Apache-2.0, already in the build
 # through winit with the `xinput` feature. XKB reads Caps Lock's locked modifier state (src/caps_lock.rs).
 # RandR reads a display's `_ICC_PROFILE` for the canvas (src/display_profile.rs).
-x11rb = { version = "0.13", default-features = false, features = ["randr", "xinput", "xkb"] }
+x11rb = { version = "0.14", default-features = false, features = ["randr", "xinput", "xkb"] }
 
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
 # so Automatic draws on that one, and copies and pastes text, SVG and PNG through the compositor's
@@ -115,7 +115,7 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 # systems where rfd shows the portal's dialog. MIT, already in the build through accesskit. Pinned
 # exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-zbus = "=5.19.0"
+zbus = "=6.2.1"
 # Waits for a portal answer (the save dialog's and the screen color sampler's) and for the portal
 # leaving the bus at the same time (src/portal_request.rs). Apache-2.0 OR MIT, already in the build
 # through zbus.
@@ -134,4 +134,4 @@ tempfile = "3"
 # Bound socket buffers in real loopback transport deadline regressions.
 socket2 = { workspace = true }
 # src/portal_save.rs's tests build and read the portal's D-Bus values on every system.
-zbus = "=5.19.0"
+zbus = "=6.2.1"

@@ -78,7 +78,7 @@ dependencies = [
  "futures-lite",
  "futures-util",
  "serde",
- "zbus",
+ "zbus 5.19.0",
 ]
 
 [[package]]
@@ -217,9 +217,9 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "wl-clipboard-rs",
- "x11rb",
+ "x11rb 0.13.2",
 ]
 
 [[package]]
@@ -408,7 +408,7 @@ dependencies = [
  "enumflags2",
  "serde",
  "static_assertions",
- "zbus",
+ "zbus 5.19.0",
  "zbus-lockstep",
  "zbus-lockstep-macros",
  "zbus_names",
@@ -423,7 +423,7 @@ checksum = "2230e48787ed3eb4088996eab66a32ca20c0b67bbd4fd6cdfe79f04f1f04c9fc"
 dependencies = [
  "atspi-common",
  "serde",
- "zbus",
+ "zbus 5.19.0",
 ]
 
 [[package]]
@@ -1620,7 +1620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3869,7 +3869,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4391,7 +4391,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4769,7 +4769,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4828,7 +4828,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5687,7 +5687,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5892,7 +5892,9 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -6356,8 +6358,8 @@ dependencies = [
  "winresource",
  "winsafe",
  "wl-clipboard-rs",
- "x11rb",
- "zbus",
+ "x11rb 0.14.0",
+ "zbus 6.2.1",
 ]
 
 [[package]]
@@ -7520,7 +7522,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7782,7 +7784,7 @@ dependencies = [
  "web-time",
  "windows-sys 0.52.0",
  "x11-dl",
- "x11rb",
+ "x11rb 0.13.2",
  "xkbcommon-dl",
 ]
 
@@ -7917,7 +7919,18 @@ dependencies = [
  "libloading",
  "once_cell",
  "rustix 1.1.6",
- "x11rb-protocol",
+ "x11rb-protocol 0.13.2",
+]
+
+[[package]]
+name = "x11rb"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8885a854a8bfdf87a301e53e41b17c5f8f33639903131338b997b1eb614f44"
+dependencies = [
+ "gethostname",
+ "rustix 1.1.6",
+ "x11rb-protocol 0.14.0",
 ]
 
 [[package]]
@@ -7925,6 +7938,12 @@ name = "x11rb-protocol"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
+
+[[package]]
+name = "x11rb-protocol"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acf4d1bc32aa46eec18caa634ec3cf4c05bfa151f12b93b510b15190f69a1ca8"
 
 [[package]]
 name = "x509-cert"
@@ -8070,9 +8089,38 @@ dependencies = [
  "uuid",
  "windows-sys 0.61.2",
  "winnow",
- "zbus_macros",
+ "zbus_macros 5.19.0",
  "zbus_names",
  "zvariant",
+]
+
+[[package]]
+name = "zbus"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ddb2961d9587ef9f24ad14cde1c3bc4c5edc9f1525932a8cffdd5bd98886eb9"
+dependencies = [
+ "async-trait",
+ "bitflags 2.13.2",
+ "endi",
+ "futures-core",
+ "hex",
+ "libc",
+ "ordered-stream",
+ "rustix 1.1.6",
+ "serde",
+ "serde_repr",
+ "socket2",
+ "tokio",
+ "tracing",
+ "uds_windows",
+ "uuid",
+ "windows-sys 0.61.2",
+ "winnow",
+ "zbus_macros 6.3.0",
+ "zbus_utils",
+ "zcheapstr",
+ "zruntime",
 ]
 
 [[package]]
@@ -8115,6 +8163,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zbus_macros"
+version = "6.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37c9dd4beaf145c16fcb2902862f50da86e54aed13dd368ddf64a1d17e6b8529"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+ "zbus_utils",
+]
+
+[[package]]
 name = "zbus_names"
 version = "4.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8123,6 +8183,19 @@ dependencies = [
  "serde",
  "winnow",
  "zvariant",
+]
+
+[[package]]
+name = "zbus_utils"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af55e52da295311b368c45bcae221f020e28e97a2420360170ce389218e76ec7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 3.0.9",
+ "winnow",
 ]
 
 [[package]]
@@ -8271,6 +8344,20 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zruntime"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce6a55d4f521760475a30f7b96779508fe8c40dc834478709454dd1d5f0ebc72"
+dependencies = [
+ "futures-core",
+ "futures-io",
+ "rustix 1.1.6",
+ "socket2",
+ "tracing",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "zune-core"
