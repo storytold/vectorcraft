@@ -609,7 +609,7 @@ fn remove_keep_shape(s: &mut Session, _: &Value) -> Result<Value> {
 fn picked_segments(segments: Option<&BTreeSet<(usize, usize)>>, si: usize, sp: &SubPath, anchors: &BTreeSet<usize>) -> BTreeSet<usize> {
     let n = sp.anchors.len().max(1);
     match segments.filter(|set| !set.is_empty()) {
-        Some(set) => set.iter().filter(|(s, _)| *s == si).map(|(_, k)| *k).collect(),
+        Some(set) => super::super::path::subpath_refs(set, si).collect(),
         None => (0..sp.segment_count()).filter(|k| anchors.contains(k) && anchors.contains(&((k + 1) % n))).collect(),
     }
 }
@@ -681,6 +681,18 @@ pub(super) fn close(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Split / Add Points at Crossings ----------
 
+/// The crossing places `on` of one path, as `(segment, t)` for each of its `subpaths` subpaths in
+/// the order they come in `on`. A place on a subpath past the last is left out.
+fn places_by_subpath(on: &[(usize, usize, f64)], subpaths: usize) -> Vec<Vec<(usize, f64)>> {
+    let mut by_sub = vec![vec![]; subpaths];
+    for &(si, seg, t) in on {
+        if let Some(here) = by_sub.get_mut(si) {
+            here.push((seg, t));
+        }
+    }
+    by_sub
+}
+
 fn crossings(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.pathtools.crossings";
     let (cut, self_crossings) = (switch_or(p, "cut", false, C)?, switch_or(p, "selfCrossings", false, C)?);
@@ -702,8 +714,7 @@ fn crossings(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let mut subs = vec![];
         let mut marks = vec![];
-        for (si, sp) in path.subpaths.iter().enumerate() {
-            let here: Vec<(usize, f64)> = on.iter().filter(|(s, ..)| *s == si).map(|&(_, seg, t)| (seg, t)).collect();
+        for (sp, here) in path.subpaths.iter().zip(places_by_subpath(&on, path.subpaths.len())) {
             let (out, m) = pt::insert_at(sp, &here);
             count += m.len();
             subs.push(out);
