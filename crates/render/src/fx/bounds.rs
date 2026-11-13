@@ -487,6 +487,12 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
             let a = art_effects_reach(symbols, n);
             Some(b.inflate(a, a))
         }
+        // A spine can rotate a blend's keys and steps past their unrotated visual bounds.
+        NodeKind::Blend { .. } => {
+            let b = n.reach_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            Some(b.inflate(a, a))
+        }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
             let b = match &n.kind {
@@ -545,10 +551,14 @@ pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) ->
     b.inflate(o, o)
 }
 
-/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
-/// object effects leave it as it is (Revolve builds no art from type).
+/// `n`'s own box, type's grown to hold its glyphs ([`glyphs_box`]) and a blend's to hold its
+/// spine-placed keys and steps: what it draws when its object effects leave it as it is
+/// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = n.visual_bounds_with(symbols)?;
+    let b = match &n.kind {
+        NodeKind::Blend { .. } => n.reach_bounds_with(symbols),
+        _ => n.visual_bounds_with(symbols),
+    }?;
     Some(match &n.kind {
         NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
         _ => b,
