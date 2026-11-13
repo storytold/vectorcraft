@@ -392,7 +392,7 @@ fn the_color_profile_is_kept() {
     encoder.set_icc_profile(icc.clone()).unwrap();
     DynamicImage::ImageRgba8(framed()).write_with_encoder(encoder).unwrap();
     let blob = ImageBlob::png(bytes);
-    let out = super::clear(&blob, &settings(Background::Edges), None).unwrap().unwrap();
+    let out = super::clear(&blob, &settings(Background::Edges), None, super::C).unwrap().unwrap();
     let mut decoder = image::codecs::png::PngDecoder::new(Cursor::new(out.blob.bytes.as_slice())).unwrap();
     assert_eq!(decoder.icc_profile().unwrap(), Some(icc));
 }

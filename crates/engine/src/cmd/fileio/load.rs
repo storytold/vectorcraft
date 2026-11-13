@@ -73,6 +73,8 @@ pub struct RasterImage {
     pub height: u32,
     /// The resolution the file declares (see [`super::ppi::resolution`]).
     pub ppi: Option<(f64, f64)>,
+    /// A DCS file's clipping path, in the image's pixel space ([`crate::cmd::place::dcs`]).
+    pub clip: Option<vectorcraft_geom::PathData>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -131,6 +133,12 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
+    }
+    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
+    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
+    // signature starts the file is checked first.
+    if vectorcraft_metafile::is_pict(bytes) {
+        return format("pict");
     }
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
@@ -380,6 +388,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let (mut doc, mut warnings, restored) = match format.id {
         // EPS, .ps and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
+            // A DCS file's plates print from its file: it is only placed linked.
+            if crate::cmd::place::dcs::is_dcs(bytes) {
+                return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
+            }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
                 let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
@@ -497,6 +509,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "emf" | "wmf" => {
             let (doc, warnings) = super::metafile::import(bytes)?;
+            (doc, warnings, false)
+        }
+        "pict" => {
+            let (doc, warnings) = super::metafile::import_pict(bytes)?;
             (doc, warnings, false)
         }
         "hpgl" => {
@@ -1014,13 +1030,13 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob::new(mime, bytes);
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
 }
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, ppi, .. } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;

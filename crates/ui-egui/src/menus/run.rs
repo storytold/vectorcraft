@@ -516,13 +516,17 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.helpBar" => flag(&mut app.ui.help_bar),
-        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to, or
+        // floating over the window at the position it last floated at.
         "window.control.dock" => {
             let key = "edge";
             let edges = crate::chrome::CONTROL_BAR_EDGES;
             match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
                 Some(i) => {
-                    app.ui.control_bar_bottom = i == 1;
+                    app.ui.control_bar_floating = i == 2;
+                    if i < 2 {
+                        app.ui.control_bar_bottom = i == 1;
+                    }
                     Ok(json!({ key: edges[i] }))
                 }
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
@@ -825,6 +829,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.layerDelete" => crate::panels::layers::delete(app, p),
         "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
@@ -979,6 +984,8 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
         crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
+        crate::panels::actions::INSERT_SELECT_PATH => crate::panels::actions::insert_select_path(app, p),
+        crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
         "ui.batchDialog" => {

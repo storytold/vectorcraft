@@ -577,10 +577,10 @@ impl VectorcraftApp {
             chrome::hint_bar(self, ui);
         }
         if (self.ui.screen_mode >= 3 || (!self.ui.status_bar && !self.ui.help_bar))
-            && !(self.ui.control_bar && self.ui.control_bar_bottom && self.ui.screen_mode < 2)
+            && !(self.ui.control_bar && self.ui.control_bar_bottom && !self.ui.control_bar_floating && self.ui.screen_mode < 2)
         {
             // Keeps the previous frame's value valid for menus drawn above, before the bars. A
-            // Control bar docked at the bottom has set it to the bar's top.
+            // Control bar docked at the bottom has set it to the bar's top; a floating one sets none.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {

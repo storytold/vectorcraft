@@ -219,6 +219,10 @@
 	Corner Color	Kulmien väri
 	Contiguous	Yhtenäinen
 	Each Channel	Jokainen kanava
+	Color Mask…	Värimaski…
+	Color Mask	Värimaski
+	Remove Color Mask	Poista värimaski
+	Apply Color Mask	Käytä värimaskia
 	Edit Path	Muokkaa polkua
 	Mask	Maski
 	Rasterize…	Rasteroi…
@@ -1917,6 +1921,8 @@ digits	Malayalam	Malajalam
 	Modified since it was read: {path}	Muokattu lukemisen jälkeen: {path}
 	No Thumbnails	Ei pikkukuvia
 	Nothing matches the Show filter.	Mikään ei vastaa Näytä-suodinta.
+	Show DCS Transparency Interactions	Näytä DCS-läpinäkyvyyden vuorovaikutukset
+	Transparent, or overlaps transparent objects: check its separations	Läpinäkyvä tai läpinäkyvien objektien päällä: tarkista sen erottelut
 	PPI	PPI
 	Relink…	Linkitä uudelleen…
 	Find Linked Files	Etsi linkitetyt tiedostot
@@ -1992,6 +1998,10 @@ digits	Malayalam	Malajalam
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-joukko
 	Kinsoku Shori Type	Kinsoku Shori -tyyppi
 	Push In First	Ensin sisään
@@ -2127,6 +2137,8 @@ digits	Malayalam	Malajalam
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
+	Delete the selected items and their artwork?	Poistetaanko valitut kohteet ja niiden kuvitus?
+	Delete this layer and its artwork?	Poistetaanko tämä taso ja sen kuvitus?
 	Delete “{name}”?	Poistetaanko ”{name}”?
 	Document Swatches	Asiakirjan värimallit
 	Edit or Apply Color Group	Muokkaa tai käytä väriryhmää
@@ -3715,6 +3727,7 @@ theme	Appearance	Ulkoasu
 	Enable Background Export	Ota taustavienti käyttöön
 	Enable Background Save	Ota taustatallennus käyttöön
 	Enable in-menu font previews	Ota fonttien esikatselu valikoissa käyttöön
+	Show samples on white	Näytä mallit valkoisella pohjalla
 	Enable Missing Glyph Protection	Ota puuttuvien merkkien suojaus käyttöön
 	Enable Rubber Band for	Ota kumilankavalinta käyttöön kohteelle
 	Enable Touch Gestures	Ota kosketuseleet käyttöön
@@ -4918,6 +4931,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	not a PICT file	ei PICT-tiedosto
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
@@ -5000,6 +5014,10 @@ imageTrace	Outline	Ääriviiva
 @msg	a CMYK image has no transparency to set	CMYK-kuvalla ei ole asetettavaa läpinäkyvyyttä
 @msg	every pixel matches the background: no image would be left	jokainen pikseli vastaa taustaa: kuvaa ei jäisi jäljelle
 @msg	an image of {w} × {h} pixels is too large to change	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri muutettavaksi
+@msg	select an image with a color mask	valitse kuva, jossa on värimaski
+@msg	the color mask's settings are out of range	värimaskin asetukset ovat sallitun alueen ulkopuolella
+@msg	a CMYK image can't take a color mask	CMYK-kuvalla ei voi olla värimaskia
+@msg	the mask would hide every pixel	maski piilottaisi jokaisen pikselin
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}
@@ -5290,6 +5308,7 @@ imageTrace	Outline	Ääriviiva
 @msg	choose the font files to add	valitse lisättävät fonttitiedostot
 @msg	not a file	ei tiedosto
 @msg	not a font file	ei fonttitiedosto
+@msg	the active document changed while the question was open; nothing was deleted	aktiivinen asiakirja vaihtui kysymyksen ollessa auki; mitään ei poistettu
 @msg	that document is no longer open	kyseinen asiakirja ei ole enää auki
 @msg	larger than 256 MB	suurempi kuin 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	tiedostojen koko on yli 1 GB: lisää vähemmän kerrallaan
@@ -5754,6 +5773,65 @@ mark-style	Japanese	Japanilainen
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} ei voi luoda kappaletta kuvasta: jäljitä se ensin komennolla Objekti › Kuvan jäljitys › Luo.
 @msg	{label} requires a shape with at least two anchors	{label} vaatii muodon, jossa on vähintään kaksi ankkuria
 @msg	The shape is too complex for a 3D effect	Muoto on liian monimutkainen 3D-tehosteelle
+@msg	Extrude & Bevel	Pursota ja viistä
+@msg	Revolve	Pyöräytä
+@msg	Inflate	Täytä ilmalla
+@msg	Rotate	Kierrä
+@msg	Extrude & Bevel (Classic)	Pursota ja viistä (perinteinen)
+@msg	Revolve (Classic)	Pyöräytä (perinteinen)
+@msg	Rotate (Classic)	Kierrä (perinteinen)
+@msg	This effect	Tämä tehoste
+@msg	clipping paths	leikkauspolut
+@msg	other objects	muut objektit
+@msg	{label} requires a group holding a shape with at least two anchors	{label} vaatii ryhmän, jonka muodossa on vähintään kaksi ankkuria
+@msg	Revolve requires a group holding a shape with at least two anchors	Pyöräytä vaatii ryhmän, jonka muodossa on vähintään kaksi ankkuria
+@msg	Revolve requires a shape with at least two anchors	Pyöräytä vaatii muodon, jossa on vähintään kaksi ankkuria
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} ryhmässä vaatii polkuja, yhdistelmäpolkuja, tekstiä, ryhmiä, leikkausryhmiä, sulautuksia ja symbolien esiintymiä: vapauta tai laajenna ensin nämä: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} ryhmässä hyväksyy enintään {MAX_MEMBERS} objektia
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Ryhmän tai tason 3D-tehoste kuuluu itse ryhmälle, ei sen täytölle tai viivalle
+@msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
+@msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
+@msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
+@msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ei voi muodostaa kappaletta symbolin ”{symbol}” esiintymästä: symbolin kuvitus ei ole käytettävissä
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: leikkauspolku on liian monimutkainen kuvituksen leikkaamiseen
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} hyväksyy enintään {MAX_MEMBERS} objektia
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} ei voi muodostaa kappaleita kuvituksesta, joka on sisäkkäin yli {MAX_DEPTH} tason syvyydellä
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Pyöräytä-tehosteen maalaus on liian monimutkainen tälle pinnalle; pienennä Segmentit-arvoa tai yksinkertaista liukuväriä
+@msg	Revolve edge must be left or right	Pyöräytä: edge-arvon on oltava left tai right
+@msg	Revolve cap must be a boolean	Pyöräytä: cap-arvon on oltava totuusarvo
+@msg	the revolved object has no fill or stroke	pyöräytetyllä objektilla ei ole täyttöä eikä viivaa
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor-arvon on oltava peittävä RGB-väri muodossa #rrggbb
+@msg	lights must contain one to ten lights	lights-arvossa on oltava yhdestä kymmeneen valoa
+@msg	each light must be an object	jokaisen valon on oltava objekti
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	tuntematon valoasetus: käytä arvoja color, intensity, rotation, height, softness tai behind
+@msg	light {key} must be a number from {min} to {max}	valo: {key}-arvon on oltava luku, joka on vähintään {min} ja enintään {max}
+@msg	light color must use opaque #rrggbb	valon color-arvon on oltava peittävä #rrggbb
+@msg	light behind must be true or false	valon behind-arvon on oltava true tai false
+@msg	shadow must be true or false	shadow-arvon on oltava true tai false
+@msg	shadowPosition must be behind or below	shadowPosition-arvon on oltava behind tai below
+@msg	{key} must be a number from {min} to {max}	{key}-arvon on oltava luku, joka on vähintään {min} ja enintään {max}
+@msg	each of `{GRAPHICS}` must be an object	jokaisen `{GRAPHICS}`-kohteen on oltava objekti
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-kohteet hyväksyvät arvot symbol, face, x, y, scale ja rotation, eivät arvoa `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jokainen `{GRAPHICS}`-kohde tarvitsee arvon `symbol`, symbolin nimen
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiikat sijoitetaan tasaisille pinnoille: käytä objektityyppiä Pursota tai Taso
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
+@msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
+@msg	The graphics are too complex: simplify the symbols' art	Grafiikat ovat liian monimutkaisia: yksinkertaista symbolien kuvitusta
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Grafiikan kuvitus voi olla sisäkkäin enintään {MAX_LEVELS} tason syvyydellä: yksinkertaista symbolin kuvitusta
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Grafiikan kuvituksessa symbolit voivat olla sisäkkäin enintään {MAX_NESTING} tason syvyydellä: yksinkertaista symbolin kuvitusta
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Grafiikan kuvitus sisältää liikaa objekteja: yksinkertaista symbolin kuvitusta
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafiikka piirtää enintään {MAX_PIECES} täyttöä ja viivaa: yksinkertaista symbolin kuvitusta
+@msg	`surface` must be one of {_1}	`surface` on oltava jokin seuraavista: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} piirtää tälle objektille lähdekuvituksen sen 3D-pinnan sijaan
+@msg	{label} draws no faces for this object	{label} ei piirrä tälle objektille yhtään pintaa
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	rautalankamallissa on yli {MAX_WIRE_EDGES} reunaa
 @msg	The 3D surface is too complex; simplify the shape	3D-pinta on liian monimutkainen; yksinkertaista muotoa
 	Transform Objects	Muunna objekteja
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
@@ -5764,6 +5842,7 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
 @msg	missing `{path}`	`{path}` puuttuu
 @msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
+@msg	`{path}` is nested too deeply	`{path}` on liian syvällä sisäkkäin
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
@@ -6457,6 +6536,23 @@ axis	Y Axis	Y-akseli
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
+	Insert Select Path	Lisää polun valinta
+	Select Path	Valitse polku
+@msg	select one whole path or compound path	valitse yksi kokonainen polku tai yhdistelmäpolku
+@msg	select only one path	valitse vain yksi polku
+@msg	the path is hidden or locked, or cannot be selected here	polku on piilotettu tai lukittu, tai sitä ei voi valita tässä
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekti {value} ei ole tallennettu polku: se on muuttunut, tai asiakirja on toinen
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` on oltava "v1:" ja 16 pientä heksadesimaalinumeroa
+	Select Object…	Valitse objekti…
+	Select Object	Valitse objekti
+	Set Selection	Määritä valinta
+	Case Sensitive	Kirjainkoko merkitsevä
+	Whole Word	Koko sana
+	Select Object: {note}	Valitse objekti: {note}
+	Select by Note	Valitse huomautuksen mukaan
+@msg	the note is empty	huomautus on tyhjä
+@msg	the note is longer than 1,024 bytes	huomautus on pidempi kuin 1 024 tavua
+@msg	no object that can be selected has a note matching “{query}”	millään valittavissa olevalla objektilla ei ole huomautusta, joka vastaa hakua ”{query}”
 	Menu Item:	Valikkokohta:
 	No menu item matches.	Mikään valikkokohta ei vastaa hakua.
 	Several menu items match. Choose one from the list.	Useampi valikkokohta vastaa hakua. Valitse yksi luettelosta.
@@ -7172,7 +7268,9 @@ breakText	Glyphs	Merkit
 @msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` on vientilaajennus: vie komennolla document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` on live-tehoste: käytä sitä komennolla effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
 @msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tiedosto on suurempi kuin tuontilaajennuksen lukemat {MAX_INPUT_BYTES} tavua

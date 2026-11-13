@@ -199,6 +199,10 @@
 	Corner Color	Hjørnefarve
 	Contiguous	Sammenhængende
 	Each Channel	Hver kanal
+	Color Mask…	Farvemaske…
+	Color Mask	Farvemaske
+	Remove Color Mask	Fjern farvemaske
+	Apply Color Mask	Anvend farvemaske
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
@@ -1771,6 +1775,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Ændret siden den blev læst: {path}
 	No Thumbnails	Ingen miniaturer
 	Nothing matches the Show filter.	Intet matcher Vis-filteret.
+	Show DCS Transparency Interactions	Vis DCS-gennemsigtighedsinteraktioner
+	Transparent, or overlaps transparent objects: check its separations	Gennemsigtig eller overlapper gennemsigtige objekter: kontrollér dens separationer
 	PPI	PPI
 	Relink…	Sammenkæd igen…
 	Find Linked Files	Find sammenkædede filer
@@ -1833,6 +1839,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-sæt
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Skub ind først
@@ -1968,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
+	Delete the selected items and their artwork?	Slet de valgte elementer og deres grafik?
+	Delete this layer and its artwork?	Slet dette lag og dets grafik?
 	Delete “{name}”?	Slet »{name}«?
 	Document Swatches	Dokumentfarveprøver
 	Edit or Apply Color Group	Redigér eller anvend farvegruppe
@@ -3510,6 +3522,7 @@ theme	Appearance	Udseende
 	Enable Background Export	Aktivér eksport i baggrunden
 	Enable Background Save	Aktivér lagring i baggrunden
 	Enable in-menu font previews	Aktivér skrifttypeforhåndsvisning i menuer
+	Show samples on white	Vis eksempler på hvidt
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
@@ -6003,6 +6016,23 @@ axis	Y Axis	Y-akse
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
+	Insert Select Path	Indsæt kurvemarkering
+	Select Path	Markér kurve
+@msg	select one whole path or compound path	markér én hel kurve eller sammensat kurve
+@msg	select only one path	markér kun én kurve
+@msg	the path is hidden or locked, or cannot be selected here	kurven er skjult eller låst, eller kan ikke markeres her
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} er ikke den gemte kurve: den er ændret, eller dokumentet er et andet
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` skal være "v1:" og 16 hexadecimale cifre med små bogstaver
+	Select Object…	Markér objekt…
+	Select Object	Markér objekt
+	Set Selection	Angiv markering
+	Case Sensitive	Forskel på store og små bogstaver
+	Whole Word	Helt ord
+	Select Object: {note}	Markér objekt: {note}
+	Select by Note	Markér efter note
+@msg	the note is empty	noten er tom
+@msg	the note is longer than 1,024 bytes	noten er længere end 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	intet objekt, der kan markeres, har en note, der matcher »{query}«
 	Menu Item:	Menupunkt:
 	No menu item matches.	Intet menupunkt passer.
 	Several menu items match. Choose one from the list.	Flere menupunkter passer. Vælg et fra listen.

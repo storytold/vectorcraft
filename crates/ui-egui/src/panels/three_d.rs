@@ -341,6 +341,10 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
     let st = app.session.active()?;
     let n = st.selection.objects.first().and_then(|id| st.doc.node(*id))?;
     let t = find(n)?;
+    // A hidden fill or stroke draws no solid and no graphics, so its graphics get no handles.
+    if t.item.is_some_and(|k| n.appearance.items.get(k).is_none_or(|it| !it.visible())) {
+        return None;
+    }
     // The frame of the effect whose graphics are listed: none while that effect is hidden.
     let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index)?;
     // A geometry effect after the 3D effect of any selected object moves or bends its drawn

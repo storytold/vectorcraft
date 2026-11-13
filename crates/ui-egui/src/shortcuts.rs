@@ -487,20 +487,22 @@ fn hold_back_key(app: &VectorcraftApp, ctx: &egui::Context, key: Key) {
     ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key)));
 }
 
-/// The key of the mark that the Escape held down ended a ruler-origin drag or a floating Tools move.
+/// The key of the mark that the Escape held down ended a ruler-origin drag, a floating Tools move
+/// or a Control bar gripper drag.
 fn escape_ended_gesture_id() -> egui::Id {
     egui::Id::unique("escape-ended-gesture")
 }
 
-/// Does this frame's Escape end a ruler-origin drag or a floating Tools move? The repeats of an
-/// Escape that ended one do too, up to the frame that releases Escape or presses it again.
+/// Does this frame's Escape end a ruler-origin drag, a floating Tools move or a Control bar gripper
+/// drag? The repeats of an Escape that ended one do too, up to the frame that releases Escape or
+/// presses it again.
 fn escape_ended_gesture(ctx: &egui::Context) -> bool {
     let (down, pressed, repeated) = ctx.input(|i| {
         let escape =
             |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
         (i.key_down(Key::Escape), escape(false), escape(true))
     });
-    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) {
+    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) || crate::chrome::control_bar_moving(ctx) {
         if down {
             ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
         }
