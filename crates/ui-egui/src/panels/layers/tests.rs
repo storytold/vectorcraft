@@ -1235,10 +1235,21 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
 /// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when
 /// `alt`): for every row name painted inside the list's view, its center, and the view.
 fn short_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (HashMap<String, egui::Pos2>, egui::Rect) {
+    timed_short_frame(app, ctx, events, alt, 1.0 / 60.0)
+}
+
+/// [`short_frame`] for a frame that comes `dt` seconds after the one before it.
+fn timed_short_frame(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    alt: bool,
+    dt: f32,
+) -> (HashMap<String, egui::Pos2>, egui::Rect) {
     let mut events = events;
     events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 260.0));
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), predicted_dt: dt, ..Default::default() }, |ui| show(app, ui));
     out.textures_delta.clear();
     // The rows' eye column dividers are drawn clipped to the list's view.
     let border = Tokens::get(ctx).input_border;
@@ -1340,6 +1351,41 @@ fn rows_held_near_the_bottom_or_top_edge_scroll_the_list_to_a_row_out_of_view() 
     assert_eq!((names[28].as_str(), names[30].as_str()), ("Layer 28", "Layer 29"), "{names:?}");
     assert!(names[29].starts_with("Layer 2"), "the copy, below Layer 29: {names:?}");
     assert_eq!(names[2], "Layer 2", "the original stays");
+}
+
+#[test]
+fn a_held_row_scrolls_the_list_as_far_in_the_same_time_at_any_frame_rate() {
+    // Layer 30 held just above the list's bottom edge for half a second, drawn in `frames` frames,
+    // then moved beside the list, where the scrolling stops: → where the rows in view came to rest.
+    let held = |frames: u16| {
+        let mut app = thirty_layers();
+        let ctx = egui::Context::default();
+        let (names, view) = short_frame(&mut app, &ctx, vec![], false);
+        let grab = names["Layer 30"];
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+        short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+        let dt = 0.5 / f32::from(frames);
+        timed_short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(grab.x, view.bottom() - 3.0))], false, dt);
+        for _ in 1..frames {
+            timed_short_frame(&mut app, &ctx, vec![], false, dt);
+        }
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(view.right() + 2.0, view.bottom() - 3.0))], false);
+        let mut rows = HashMap::new();
+        for _ in 0..120 {
+            rows = short_frame(&mut app, &ctx, vec![], false).0;
+        }
+        // (Layer 30's dimmed copy follows the pointer.)
+        rows.remove("Layer 30");
+        rows
+    };
+    let (at_30, at_120) = (held(15), held(60));
+    assert!(!at_30.contains_key("Layer 29") && !at_30.is_empty(), "the list scrolled: {at_30:?}");
+    assert_eq!(at_30.len(), at_120.len(), "{at_30:?} {at_120:?}");
+    for (name, a) in &at_30 {
+        let b = at_120.get(name).unwrap_or_else(|| panic!("{name} is in view at 30 frames a second only: {at_120:?}"));
+        assert!((a.y - b.y).abs() < 2.0, "{name}: {a:?} at 30 frames a second, {b:?} at 120");
+    }
 }
 
 #[test]

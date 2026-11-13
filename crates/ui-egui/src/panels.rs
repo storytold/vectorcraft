@@ -524,19 +524,27 @@ pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
 /// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
 const DRAG_SCROLL_EDGE: f32 = 28.0;
 
+/// The speed of that scrolling in points per second: at the band's inner side, and added to it at
+/// the list's edge.
+const DRAG_SCROLL_SPEED: (f32, f32) = (60.0, 280.0);
+
 /// While something is dragged near the top or bottom edge of a scrolled list (`ui`: its contents),
 /// scroll that way, faster nearer the edge, and draw the next frame so a pointer held still keeps
-/// it scrolling. The pointer must be over the list's width.
+/// it scrolling. The pointer must be over the list's width. Each frame scrolls by the time it
+/// took (a stalled frame counts a tenth of a second at most), so the speed is the same at every
+/// frame rate.
 pub(crate) fn scroll_at_edges(ui: &mut Ui) {
     let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
     let view = ui.clip_rect();
     if !view.x_range().contains(pos.x) {
         return;
     }
-    let speed = |depth: f32| if (0.0..DRAG_SCROLL_EDGE).contains(&depth) { 2.0 + 10.0 * (1.0 - depth / DRAG_SCROLL_EDGE) } else { 0.0 };
-    let delta = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
-    if delta != 0.0 {
-        ui.scroll_with_delta(vec2(0.0, delta));
+    let (slow, more) = DRAG_SCROLL_SPEED;
+    let speed = |depth: f32| if (0.0..DRAG_SCROLL_EDGE).contains(&depth) { slow + more * (1.0 - depth / DRAG_SCROLL_EDGE) } else { 0.0 };
+    let per_second = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
+    if per_second != 0.0 {
+        let dt = ui.input(|i| i.stable_dt).min(0.1);
+        ui.scroll_with_delta_animation(vec2(0.0, per_second * dt), egui::style::ScrollAnimation::none());
         ui.ctx().request_repaint();
     }
 }
