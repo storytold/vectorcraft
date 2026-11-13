@@ -31,6 +31,7 @@ mod flow;
 mod on_path;
 mod region;
 mod ruby;
+mod shaped;
 mod vertical;
 
 pub(crate) use bidi::{is_rtl, para_bidi};

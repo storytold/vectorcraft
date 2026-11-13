@@ -257,6 +257,25 @@ fn shadows_under_a_groups_or_an_objects_transform_expand_appearance_as_the_canva
     }
 }
 
+/// A group's Transform effect runs after its member's own Offset Path in Expand Appearance as on
+/// the canvas: the 100 pt square offset to 120 pt and scaled by half expands 60 pt wide.
+#[test]
+fn a_groups_effects_after_its_members_own_expand_as_the_canvas_draws_them() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 50, "scaleV": 50}}));
+    let before = render(&s);
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+    let doc = &s.doc().unwrap().doc;
+    let w = doc.node(doc.layers[0].id).and_then(|l| l.geometric_bounds()).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).
