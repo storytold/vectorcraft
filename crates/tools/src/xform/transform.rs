@@ -125,6 +125,12 @@ impl TransformTool {
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.
     pub fn matrix_for(&self, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
+        self.matrix_moved(o, start, p, p - start, shift, bounds)
+    }
+
+    /// [`Self::matrix_for`] with `moved`, the pointer's own movement since the press: a snapped
+    /// press or point can turn a level drag diagonal, so it picks a Shift-drag's axis for Scale.
+    fn matrix_moved(&self, o: Point, start: Point, p: Point, moved: Vec2, shift: bool, bounds: Rect) -> (Affine, String) {
         match self.kind {
             TransformKind::Rotate => {
                 let (a, deg) = rotate_for_drag(o, start, p, shift);
@@ -146,7 +152,6 @@ impl TransformTool {
                 // Shift: a drag within 22.5° of an axis scales along that axis alone, a diagonal
                 // one uniformly (#6324). A drag that starts level with the reference point on that
                 // axis has nothing to scale it by, so it stays uniform.
-                let moved = p - start;
                 let angle = moved.y.abs().atan2(moved.x.abs()).to_degrees();
                 let along = moved.hypot() > 1e-9;
                 if shift && along && angle <= 22.5 && d0.x.abs() > 1e-6 {
@@ -252,9 +257,10 @@ impl Tool for TransformTool {
                     self.snap = Some(PointSnap::new(cx, || Targets::collect(cx.doc, &cx.selection.objects, None)));
                     out.push(Action::Begin(self.kind.label().into()));
                 }
+                let moved = p - d.start;
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, text) = self.matrix_for(d.origin, d.pick, p, ev.mods.shift, d.bounds);
+                let (m, text) = self.matrix_moved(d.origin, d.pick, p, moved, ev.mods.shift, d.bounds);
                 d.last = m;
                 self.drag = Some(d);
                 self.measure = Some((p, text));
@@ -489,6 +495,23 @@ mod tests {
         assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
         let (sx, sy) = from(Point::new(150.0, 100.0), Point::new(160.0, 150.0));
         assert!((sx - sy).abs() < 1e-9 && (sx - 1.2).abs() < 1e-9, "{sx} {sy}");
+    }
+
+    /// The axis of a Shift-drag comes from the pointer's own movement: a press near a corner
+    /// snaps to it, and a level drag from there still scales the width alone.
+    #[test]
+    fn scale_shift_axis_follows_the_pointer_not_the_snapped_press() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let shift = Mods { shift: true, ..Default::default() };
+        let mut t = TransformTool::new(TransformKind::Scale);
+        t.pointer(&cx, &ev(PointerKind::Down, 198.0, 203.0).with_mods(shift));
+        let drag = t.pointer(&cx, &ev(PointerKind::Drag, 205.0, 203.0).with_mods(shift));
+        let c = matrix(drag.last().expect("a preview")).as_coeffs();
+        assert!((c[0] - 1.1).abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9, "the width alone: {c:?}");
     }
 
     #[test]
