@@ -3351,6 +3351,8 @@ theme	Appearance	Vormgeving
 	Rename Library Group	Bibliotheekgroep hernoemen
 	Delete Library Group	Bibliotheekgroep verwijderen
 	Move Library Item to Group	Bibliotheekitem naar groep verplaatsen
+	Rename Library Item	Bibliotheekitem hernoemen
+	Add to Character Styles	Aan tekenstijlen toevoegen
 	Rename Library	Bibliotheek hernoemen
 	Show Library	Bibliotheek weergeven
 	Use Library Item	Bibliotheekitem gebruiken
@@ -4197,6 +4199,7 @@ imageTrace	Outline	Contour
 @plural	{n} step|{n} steps	{n} stap|{n} stappen
 @plural	{n} stroke|{n} strokes	{n} lijn|{n} lijnen
 @msg	no library `{id}`	geen bibliotheek `{id}`
+@msg	the library has another item of that kind named `{name}`	de bibliotheek heeft al een ander item van die soort met de naam `{name}`
 @msg	select some type first	selecteer eerst wat tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning moet een getal, ‘auto’ of ‘optical’ zijn
 @msg	{_1} has no {_2} style	{_1} heeft geen {_2}stijl
