@@ -272,6 +272,12 @@ impl Writer<'_> {
                 self.warn("type on a path with space before a character after a line break is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // A `<textPath>` places its characters one after the other: Insert Aki keeps its look as
+            // outlines.
+            if t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0) {
+                self.warn("type on a path with Insert Aki is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {
@@ -522,7 +528,7 @@ impl Writer<'_> {
                 continue;
             };
             if !font.subset {
-                self.warn(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
+                self.note_setting(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
             }
             let shared = uses.iter().filter(|o| described(o) == described(u)).count() > 1;
             let range = if shared { format!(";unicode-range:{}", unicode_range(&u.chars)) } else { String::new() };
@@ -703,11 +709,14 @@ const PLACE_TOLERANCE: f64 = 1e-6;
 /// caps are upper case. Unless `fewer`, a line that is justified or composed with Mojikumi also
 /// starts a new segment at each character the layout draws elsewhere than a reader continuing
 /// the segment would ([`reader_advances`]): a Justify All line's letter gaps, the gaps between
-/// the characters of a justified Japanese line, and the spacing Mojikumi changes.
+/// the characters of a justified Japanese line, and the spacing Mojikumi changes. Text with Insert
+/// Aki does so on every line, with `fewer` too.
 fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Line> {
     let plain = t.plain_text();
     let mut lines = Vec::with_capacity(lay.lines.len());
     let (mut kerned, mut unkerned) = (None, None);
+    // Insert Aki moves characters from where a reader draws them, with `fewer` too.
+    let aki = t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0);
     for line in &lay.lines {
         let para = plain.as_bytes().get(..line.start).map_or(0, |b| b.iter().filter(|&&c| c == b'\n').count());
         let style = t.para_at(para);
@@ -716,7 +725,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
         // Justification…'s Desired word and letter spacing and glyph scaling move characters from
         // where a reader draws them, on every line (Block's word gap among them).
         let spaced = !fewer && !t.layout_justification(style).desired_is_default();
-        let reader = if split_words || spaced || (!fewer && !style.mojikumi.is_none()) {
+        let reader = if aki || split_words || spaced || (!fewer && !style.mojikumi.is_none()) {
             Some(&*kerned.get_or_insert_with(|| reader_advances(t, lay, true)))
         } else {
             None
@@ -871,9 +880,11 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
         if !kerning {
             r.style.kerning.get_or_insert(0.0);
         }
-        // A reader puts no space before a line's first character (`kerningBefore`): the segment
-        // starts that much further along instead.
+        // A reader puts no space before a line's first character (`kerningBefore`) and no Insert
+        // Aki: the segment starts that much further along instead.
         r.style.kerning_before = 0.0;
+        r.style.aki_left = 0.0;
+        r.style.aki_right = 0.0;
     }
     let relaid;
     let glyphs = if set == *t {

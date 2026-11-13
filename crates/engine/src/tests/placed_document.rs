@@ -1102,6 +1102,13 @@ fn document_replies_leave_out_paths_outside_the_read_roots() {
     s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
     s.execute("dataset.new", &json!({"name": "Row", "values": {"Photo": pic}})).unwrap();
     let image = r["ids"][0].as_u64().unwrap();
+    // A linked JavaScript file outside the read roots, and one given as a URL.
+    let script = away.file("menu.js");
+    write(&script, b"void 0;");
+    let url = "https://example.com/scripts/menu.js";
+    for file in [script.as_str(), url] {
+        s.execute("svgInteractivity.addFile", &json!({"file": file})).unwrap();
+    }
     let poster = away.file("poster.vectorcraft");
     save(&mut s, &poster);
     // The folder Export for Screens wrote to, and a pattern of the linked image being edited: its
@@ -1124,11 +1131,13 @@ fn document_replies_leave_out_paths_outside_the_read_roots() {
         assert!(model.contains(&format!("\"path\":\"{name}\"")), "{name}: {model}");
     }
     assert!(model.contains("{\"image\":\"photo.png\"}"), "{model}");
+    assert!(model.contains(&format!("\"svg_scripts\":[\"menu.js\",\"{url}\"]")), "{model}");
     // The document keeps its links, and a caller whose read roots hold the files sees every path.
     assert_eq!(placed(&s, id).link.path, src);
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [script.as_str(), url]);
     for model in [ask(&mut s, &away.0, "document.json"), s.execute("document.json", &json!({})).unwrap()] {
         let model = model.to_string();
-        for path in [&src, &pic, &out] {
+        for path in [&src, &pic, &out, &script] {
             assert!(model.contains(&json!(path).to_string()), "{path}: {model}");
         }
     }

@@ -63,9 +63,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
-        "window.control.dock" => {
-            p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
-        }
+        "window.control.dock" => p.get("edge").and_then(Value::as_str) == Some(crate::chrome::control_bar_placement(&app.ui)),
         "window.control.options" => p
             .get("group")
             .and_then(Value::as_str)
@@ -225,7 +223,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
-        id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
+        id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "file.cancelOpen" => !app.opening.pending.is_empty(),

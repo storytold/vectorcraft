@@ -84,11 +84,10 @@ fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &m
 /// one frame ends and the next begins, the last paragraph of the one and the first of the next are
 /// pieces of one story paragraph: a paragraph that runs on into the next frame, or an empty piece
 /// after a frame's last paragraph break. Such a paragraph is targeted once, by its last piece with
-/// text in a frame that `selected` takes, the piece whose style the story keeps when it flows again.
-/// A paragraph whose text lies only in frames that `selected` leaves out is not targeted. An empty
-/// paragraph takes its style from its last piece when the story flows again, so it is targeted by
-/// that piece when `selected` takes its frame, and otherwise not.
-fn append_story_targets(doc: &Document, story: &[NodeId], selected: impl Fn(NodeId) -> bool, targets: &mut Vec<IndentTarget>) {
+/// text, the piece whose style the story keeps when it flows again. An empty paragraph takes its
+/// style from its last piece when the story flows again, so it is targeted by that piece. Locked and
+/// hidden frames are targeted like the others.
+fn append_story_targets(doc: &Document, story: &[NodeId], targets: &mut Vec<IndentTarget>) {
     /// The part of a story paragraph in one frame: paragraph `index` there, starting at byte `start`.
     struct Piece<'a> {
         id: NodeId,
@@ -113,11 +112,7 @@ fn append_story_targets(doc: &Document, story: &[NodeId], selected: impl Fn(Node
         }
     }
     for pieces in &paragraphs {
-        let pick = if pieces.iter().any(|p| p.has_text) {
-            pieces.iter().rev().find(|p| p.has_text && selected(p.id))
-        } else {
-            pieces.last().filter(|p| selected(p.id))
-        };
+        let pick = pieces.iter().rev().find(|p| p.has_text).or_else(|| pieces.last());
         if let Some(p) = pick {
             targets.push(indent_target(p.id, p.text, p.index, p.start));
         }
@@ -125,13 +120,14 @@ fn append_story_targets(doc: &Document, story: &[NodeId], selected: impl Fn(Node
 }
 
 /// Paragraphs touched by the Type selection (every paragraph of the story after Select All in
-/// threaded text), or all paragraphs of selected text objects. Each paragraph of a threaded story
-/// is listed once, in story order ([`append_story_targets`]).
+/// threaded text), or all paragraphs of selected text objects. A selected frame of a threaded story
+/// selects the whole story, its locked and hidden frames included. Each paragraph of a threaded
+/// story is listed once, in story order ([`append_story_targets`]).
 fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
     let mut targets = Vec::new();
     if let Some((_, a, b)) = super::character::text_editing(app) {
         if let (Some(story), Some(st)) = (super::character::text_story(app), app.session.active()) {
-            append_story_targets(&st.doc, &story, |_| true, &mut targets);
+            append_story_targets(&st.doc, &story, &mut targets);
         } else if let NodeKind::Text(text) = &node.kind {
             append_indent_targets(node, text.paragraphs_in(a, b), &mut targets);
         }
@@ -153,7 +149,7 @@ fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
             }
             let story = st.doc.story_of(id);
             done.extend(story.iter().copied());
-            append_story_targets(&st.doc, &story, |f| taken.contains(&f), &mut targets);
+            append_story_targets(&st.doc, &story, &mut targets);
         }
     }
     targets
@@ -243,9 +239,9 @@ fn paint_markers(ui: &mut Ui, painter: &egui::Painter, tokens: &Tokens, view: Ma
     }
 }
 
-/// Apply an absolute ruler position through paragraph-format commands. Paragraphs that need values
-/// of their own get one command each, the story's last paragraph first: threaded text re-flows
-/// after each command, and a re-flow moves only text after the paragraph that changed.
+/// Apply an absolute ruler position through paragraph-format commands. When the paragraphs need
+/// values of their own, one command sets each paragraph's ([`set_each_indent`]), and threaded text
+/// flows again once.
 fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para: &ParaStyle, span: f64, targets: &[IndentTarget], both: bool) {
     if targets.is_empty() || !target.is_finite() {
         return;
@@ -253,23 +249,10 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
     let Some(target) = bounded_marker_position(marker, target, span, targets, both) else { return };
     if marker == IndentMarker::Upper {
         if targets.iter().all(|p| p.left == para.left_indent) {
-            if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", json!({"firstLineIndent": target - para.left_indent})) {
-                app.status(e);
-            }
+            run_on_targets(app, targets, json!({"firstLineIndent": target - para.left_indent}));
         } else {
-            super::character::end_typing(app);
-            let commands: Vec<Value> = targets
-                .iter()
-                .rev()
-                .map(|p| {
-                    json!({"command": "text.setFormat", "params": {
-                        "ids": [p.id], "start": p.start, "end": p.start, "firstLineIndent": target - p.left
-                    }})
-                })
-                .collect();
-            if let Err(e) = app.run("command.batch", json!({"label": tl!("First-line Left Indent"), "commands": commands})) {
-                app.status(e);
-            }
+            let changes = targets.iter().map(|p| (p, None, Some(target - p.left))).collect();
+            set_each_indent(app, tl!("First-line Left Indent"), changes);
         }
     } else {
         // The ruler shows each paragraph's left indent with its list level's added; the paragraph
@@ -284,26 +267,58 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
             _ => None,
         };
         if let Some(params) = params {
-            if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", params) {
-                app.status(e);
-            }
+            run_on_targets(app, targets, params);
             return;
         }
-        super::character::end_typing(app);
-        let commands: Vec<Value> = targets
-            .iter()
-            .rev()
-            .map(|p| {
-                let mut params = json!({"ids": [p.id], "start": p.start, "end": p.start, "leftIndent": target - p.level});
-                if !both {
-                    params["firstLineIndent"] = json!(p.left + p.first_line - target);
-                }
-                json!({"command": "text.setFormat", "params": params})
-            })
-            .collect();
-        if let Err(e) = app.run("command.batch", json!({"label": tl!("Left Indent"), "commands": commands})) {
-            app.status(e);
-        }
+        let changes = targets.iter().map(|p| (p, Some(target - p.level), (!both).then_some(p.left + p.first_line - target))).collect();
+        set_each_indent(app, tl!("Left Indent"), changes);
+    }
+}
+
+/// Run one `text.setFormat` with `params` on the paragraphs the Paragraph panel acts on while typing,
+/// and with the Selection tool on every type object of `targets`, so a selected frame of a threaded
+/// story sets the whole story ([`indent_targets`]).
+fn run_on_targets(app: &mut VectorcraftApp, targets: &[IndentTarget], mut params: Value) {
+    if super::character::text_editing(app).is_none() {
+        let mut seen = HashSet::new();
+        params["ids"] = json!(targets.iter().map(|p| p.id).filter(|id| seen.insert(*id)).collect::<Vec<_>>());
+    }
+    if let Err(e) = super::paragraph::run_on_paragraphs(app, "text.setFormat", params) {
+        app.status(e);
+    }
+}
+
+/// Give each paragraph its own left and first-line indents (None: as it is) in one `text.setFormat`
+/// with `paragraphIndents`, one undo step named `label`. Paragraphs that keep their indents are
+/// left out, and when every paragraph keeps them nothing is run.
+fn set_each_indent(app: &mut VectorcraftApp, label: &str, changes: Vec<(&IndentTarget, Option<f64>, Option<f64>)>) {
+    // As `text.setFormat` keeps a paragraph's indents, within 1296 pt either way.
+    let bound = |v: Option<f64>| v.map(|v| v.clamp(-1296.0, 1296.0));
+    let entries: Vec<Value> = changes
+        .into_iter()
+        .filter_map(|(p, left, first_line)| {
+            let (left, first_line) = (bound(left), bound(first_line));
+            let own_left = p.left - p.level;
+            if left.is_none_or(|v| v == own_left) && first_line.is_none_or(|v| v == p.first_line) {
+                return None;
+            }
+            let mut entry = json!({"id": p.id, "start": p.start});
+            if let Some(v) = left {
+                entry["leftIndent"] = json!(v);
+            }
+            if let Some(v) = first_line {
+                entry["firstLineIndent"] = json!(v);
+            }
+            Some(entry)
+        })
+        .collect();
+    if entries.is_empty() {
+        return;
+    }
+    super::character::end_typing(app);
+    let command = json!({"command": "text.setFormat", "params": {"paragraphIndents": entries}});
+    if let Err(e) = app.run("command.batch", json!({"label": label, "commands": [command]})) {
+        app.status(e);
     }
 }
 

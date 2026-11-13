@@ -420,10 +420,23 @@ pub struct UiState {
     /// The Learn panel's tab, skill and tutorial, kept while the app runs.
     #[serde(skip)]
     pub learn: crate::panels::learn::View,
+    /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
+    /// is on screen. Not saved.
+    #[serde(skip)]
+    pub learn_locate: Option<crate::panels::learn::locate::Locate>,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
     pub control_bar_bottom: bool,
+    /// The Control bar floats over the window at `control_bar_float_pos` instead of docking to an
+    /// edge (`window.control.dock {edge: "float"}`); `control_bar_bottom` keeps the edge it last
+    /// docked to.
+    #[serde(default)]
+    pub control_bar_floating: bool,
+    /// The top-left corner of the floating Control bar in window points, kept while the bar is
+    /// docked; none: `chrome::CONTROL_BAR_FLOAT_AT`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control_bar_float_pos: Option<[f32; 2]>,
     /// The groups of the Control bar's options (`chrome::CONTROL_BAR_GROUPS`) that its panel menu
     /// has off (`window.control.options`); none: every group shows.
     #[serde(deserialize_with = "crate::chrome::read_hidden_groups")]
@@ -695,6 +708,14 @@ pub struct UiState {
     /// recent colors keeps filling while the row is hidden.
     #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
     pub color_show_recent_colors: bool,
+    /// Color panel: RGB mode shows R, G and B in percent instead of 0 to 255 (a double-click right
+    /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
+    pub color_rgb_percent: bool,
+    /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
+    /// row (#6617; read as [`Self::color_show_recent_colors`] is). Separate from the Color panel's.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub swatches_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -991,7 +1012,8 @@ pub struct FloatingPanels {
     pub docked: Option<u32>,
 }
 
-/// Drop a Tools panel position that isn't a number (a hand-edited preferences file or workspace).
+/// Drop a floating position of the Tools panel or the Control bar that isn't a number (a
+/// hand-edited preferences file or workspace).
 pub fn sanitize_toolbar_pos(toolbar_pos: &mut Option<[f32; 2]>) {
     if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
         *toolbar_pos = None;
@@ -1015,6 +1037,7 @@ impl UiState {
         }
         FloatingFlyout::sanitize(&mut self.floating_flyouts);
         sanitize_toolbar_pos(&mut self.toolbar_pos);
+        sanitize_toolbar_pos(&mut self.control_bar_float_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
         // `read_preferences` converted the file's older layouts already; this covers a state read
         // any other way. What it reports lost was dropped there.
@@ -1061,8 +1084,11 @@ impl Default for UiState {
             color_settings_scroll: false,
             find_font_in: String::new(),
             learn: Default::default(),
+            learn_locate: None,
             control_bar: false,
             control_bar_bottom: false,
+            control_bar_floating: false,
+            control_bar_float_pos: None,
             control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
@@ -1143,6 +1169,8 @@ impl Default for UiState {
             color_mode: None,
             color_hide_options: false,
             color_show_recent_colors: true,
+            color_rgb_percent: false,
+            swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,

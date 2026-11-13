@@ -345,6 +345,35 @@ fn a_narrow_peak_where_a_reflecting_gradient_turns_back_stays_in_the_mesh() {
     }
 }
 
+/// Outline Stroke's mesh across a stroke of many ribs, with a gradient of many stops repeated 100
+/// times: each mesh holds at most so many points, and every run still starts on its first color.
+#[test]
+fn a_mesh_across_many_ribs_and_stops_stays_bounded() {
+    use vectorcraft_color::GradientSpread;
+    let pts: Vec<(f64, f64)> = (0..1200).map(|i| (i as f64 * 10.0, if i % 2 == 0 { 0.0 } else { 10.0 })).collect();
+    let bp = poly(&pts, false);
+    let stops: Vec<GradientStop> = (0..200).map(|i| GradientStop::new(i as f32 / 199.0, Color::gray(1.0 - i as f32 / 199.0))).collect();
+    let g = Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(vectorcraft_color::GradientKind::Linear, stops) };
+    let mut st = stroke(4.0, StrokeGradientMode::Across);
+    st.paint = Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+    let meshes = gradient_meshes(&bp, FillRule::NonZero, &st, &g);
+    assert!(!meshes.is_empty());
+    for m in &meshes {
+        assert!(m.points.len() <= super::gradient::MAX_MESH_POINTS, "{} points", m.points.len());
+        // A row at the start of each of the 100 runs, on every rib, is white.
+        let light = m.points.iter().filter(|p| p.color.to_rgb()[0] > 0.97).count();
+        assert!(light >= 100 * (m.cols as usize + 1), "{light} light points of {}", m.points.len());
+    }
+    // A strip of more ribs than one mesh has room for is split into meshes that share their end
+    // ribs, every rib in one of them.
+    use super::gradient::rib_pieces;
+    assert_eq!(rib_pieces(5, 3), [0..3, 2..5]);
+    assert_eq!(rib_pieces(4, 3), [0..3, 2..4]);
+    let one = rib_pieces(2, 1000);
+    assert_eq!((one.len(), one.first()), (1, Some(&(0..2))));
+    assert_eq!(rib_pieces(3, 0), [0..2, 1..3]);
+}
+
 /// #5960: with dashes, the ribs reach as far as the stroke gets wide within a cap's length along
 /// the path, however many points lie that far: not as far as it is wide anywhere when more than
 /// 256 do.

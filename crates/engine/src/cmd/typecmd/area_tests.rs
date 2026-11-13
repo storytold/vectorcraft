@@ -1663,6 +1663,63 @@ fn tate_chu_yoko_settings_are_character_attributes_saved_only_when_set() {
     assert_eq!(offsets(&s), before);
 }
 
+/// Insert Aki Left and Right (Character panel, East Asian options): character attributes in
+/// thousandths of an em, 0 by default and saved only when not 0. Both commands set either side
+/// alone, keeping the other side of every run, in one undo step; a value that is not a number or
+/// lies outside 0 to 1000 is refused, naming the key, before anything changes; a character style
+/// captured from the characters carries them.
+#[test]
+fn insert_aki_is_a_character_attribute_set_one_side_at_a_time() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let aki = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("akiLeft").is_none() && saved.get("akiRight").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"akiLeft": 250})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 0.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(aki(&s), [("（日本）".to_string(), 250.0, 0.0)]);
+
+    // One side on part of the text: the runs keep their other side.
+    let paren = "（".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": paren, "akiRight": 500})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 250.0, 500.0), ("日本）".to_string(), 250.0, 0.0)]);
+    s.execute("text.setFormat", &json!({"akiLeft": 0})).unwrap();
+    assert_eq!(aki(&s), [("（".to_string(), 0.0, 500.0), ("日本）".to_string(), 0.0, 0.0)]);
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!((saved.get("akiLeft"), saved["akiRight"].clone()), (None, json!(500.0)));
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.aki_left, r.style.aki_right)).collect();
+    assert_eq!(reopened, aki(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!((attrs["akiLeft"].clone(), attrs["akiRight"].clone()), (json!(0.0), json!(500.0)));
+
+    let before = aki(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"akiLeft": "250"}), "`akiLeft` must be a number"),
+        ("text.setFormat", json!({"akiRight": -1}), "`akiRight` must be from 0 to 1000"),
+        ("text.setFormat", json!({"akiLeft": 250, "akiRight": 1000.5}), "`akiRight` must be from 0 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "akiRight": true}), "`akiRight` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": paren, "akiLeft": 2000}), "`akiLeft` must be from 0 to 1000"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(aki(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
 /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
 /// attribute, off by default and saved only when on. Documents written before it read as off; a
 /// character style captured from the characters carries it.
@@ -2208,4 +2265,128 @@ fn set_path_handle_reshapes_type_on_a_path() {
     assert_eq!(first(&s), a, "one undo step each");
     assert!(s.execute("text.setPathHandle", &json!({"id": id.0, "anchor": 9, "which": "out", "x": 0, "y": 0})).is_err(), "no such anchor");
     assert!(s.execute("text.setPathHandle", &json!({"id": path["id"], "anchor": 0, "which": "out", "x": 0, "y": 0})).is_err(), "not type");
+}
+
+/// `text.setFormat` refuses a number or switch given as another type, naming the key, and
+/// changes nothing; null leaves the attribute as it is.
+#[test]
+fn set_format_refuses_a_param_of_the_wrong_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let before = state(&s);
+    for key in [
+        "baselineShift",
+        "hScale",
+        "vScale",
+        "rotation",
+        "leftIndent",
+        "rightIndent",
+        "firstLineIndent",
+        "spaceBefore",
+        "spaceAfter",
+        "wordsLongerThan",
+        "afterFirst",
+        "beforeLast",
+        "hyphenLimit",
+        "hyphenationZone",
+    ] {
+        for wrong in [json!("30"), json!(true), json!([30])] {
+            let err = s.execute("text.setFormat", &json!({ key: wrong })).unwrap_err().to_string();
+            assert!(err.contains(&format!("`{key}` must be a number, not {wrong}")), "{key}: {err}");
+        }
+    }
+    for key in ["underline", "allCaps", "hyphenate", "noBreak"] {
+        let err = s.execute("text.setFormat", &json!({ key: "true" })).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{key}` must be true or false")), "{key}: {err}");
+    }
+    let err = s.execute("text.setFormat", &json!({"leftIndent": 30, "firstLineIndent": "12"})).unwrap_err().to_string();
+    assert!(err.contains("`firstLineIndent` must be a number"), "{err}");
+    assert!(state(&s) == before, "a refused call changes nothing and records no undo step");
+    s.execute("text.setFormat", &json!({"leftIndent": 30, "firstLineIndent": null})).unwrap();
+    let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!((t.para_at(0).left_indent, t.para_at(0).first_line_indent), (30.0, 0.0));
+}
+
+/// `text.setFormat` reads a null value as one left out: a call whose attributes are all null has
+/// nothing to change, and records no edit, no undo step and no new revision.
+#[test]
+fn set_format_with_only_null_values_changes_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.history.undo.len(), st.revision)
+    };
+    let before = state(&s);
+    for params in [
+        json!({"leftIndent": null}),
+        json!({"leftIndent": null, "firstLineIndent": null, "underline": null}),
+        json!({"kerning": null, "antiAlias": null, "list": null, "wordSpacing": null}),
+        json!({"mojikumi": null}),
+        json!({"kinsoku": null, "kinsokuType": null, "direction": null, "leadingModel": null}),
+        json!({"burasagari": null, "kashida": null, "singleWordJustification": null, "autoLeading": null}),
+        json!({"ids": [id], "start": 0, "end": 3, "spaceBefore": null}),
+    ] {
+        let err = s.execute("text.setFormat", &params).unwrap_err().to_string();
+        assert!(err.contains("nothing to change"), "{params}: {err}");
+        assert!(state(&s) == before, "{params}: no edit, no undo step and no new revision");
+    }
+    // A null beside a value leaves only its own attribute.
+    let para = |d: &vectorcraft_doc::Document| {
+        let NodeKind::Text(t) = &d.node(NodeId(id)).unwrap().kind else { panic!("text") };
+        (t.para_at(0).mojikumi, t.para_at(0).kinsoku)
+    };
+    let mojikumi = para(&before.0).0;
+    s.execute("text.setFormat", &json!({"mojikumi": null, "kinsoku": "soft"})).unwrap();
+    assert_eq!(para(&s.doc().unwrap().doc), (mojikumi, vectorcraft_doc::Kinsoku::Soft));
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1 + 1, "one undo step");
+}
+
+/// `text.setFormat` with the values the text already has succeeds and names its objects, but
+/// records no edit, no undo step and no new revision.
+#[test]
+fn set_format_with_the_current_values_records_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.history.undo.len(), st.revision)
+    };
+    let before = state(&s);
+    let NodeKind::Text(t) = &before.0.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let hyphenate = t.para_at(0).hyphenate;
+    for params in [
+        json!({"leftIndent": 0, "firstLineIndent": 0}),
+        json!({"underline": false, "strikethrough": false, "hyphenate": hyphenate}),
+        json!({"ids": [id], "start": 0, "end": 3, "spaceBefore": 0, "spaceAfter": 0}),
+        json!({"ids": [id], "start": 4, "end": 7, "leftIndent": null, "rightIndent": 0}),
+    ] {
+        let out = s.execute("text.setFormat", &params).unwrap();
+        assert_eq!(out["ids"], json!([id]), "{params}");
+        assert!(state(&s) == before, "{params}: no edit, no undo step and no new revision");
+    }
+    // A call that changes a value is one undo step; the same call again records nothing.
+    s.execute("text.setFormat", &json!({"leftIndent": 24})).unwrap();
+    let changed = state(&s);
+    assert_eq!((changed.1, changed.2), (before.1 + 1, before.2 + 1), "one undo step and one revision");
+    s.execute("text.setFormat", &json!({"leftIndent": 24})).unwrap();
+    assert!(state(&s) == changed, "the same value again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc == before.0, "one undo restores the text");
+    // The anti-aliasing method is compared the same way.
+    s.execute("text.setFormat", &json!({"antiAlias": "none"})).unwrap();
+    s.execute("text.setFormat", &json!({"antiAlias": "strong"})).unwrap();
+    let strong = state(&s);
+    assert!(strong.1 > before.1, "a new method is an undo step");
+    let NodeKind::Text(t) = &strong.0.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.anti_alias, vectorcraft_doc::text::TypeAntiAlias::Strong);
+    s.execute("text.setFormat", &json!({"antiAlias": "strong"})).unwrap();
+    assert!(state(&s) == strong, "the same method again records nothing");
 }

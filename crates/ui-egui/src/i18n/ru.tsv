@@ -708,6 +708,10 @@ font-technology	Variable	Вариативные
 	Corner Color	Цвет углов
 	Contiguous	Смежные
 	Each Channel	Каждый канал
+	Color Mask…	Цветовая маска…
+	Color Mask	Цветовая маска
+	Remove Color Mask	Удалить цветовую маску
+	Apply Color Mask	Применить цветовую маску
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -2200,6 +2204,7 @@ file-filter	Templates	Шаблоны
 	Art Brush	Художественная кисть
 	Bristle Brush	Щетинная кисть
 	Pattern Brush	Узорная кисть
+	missing from the Brushes panel	отсутствует в панели «Кисти»
 	Select art to make a scatter, art or pattern brush.	Выделите рисунок, чтобы создать кисть-распыление, художественную или узорную кисть.
 	Brush Art	Рисунок кисти
 	New Calligraphic Brush	Новая каллиграфическая кисть
@@ -2649,6 +2654,8 @@ mark-style	Japanese	Японский
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
 	Proportional Metrics	Пропорциональные метрики
+	Insert Aki Left	Вставить аки слева
+	Insert Aki Right	Вставить аки справа
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -2915,10 +2922,16 @@ digits	Malayalam	Малаялам
 	Search Preferences	Поиск в настройках
 	No settings found	Настройки не найдены
 	Reset Profiles	Сбросить профили
+	Arrowheads	Стрелки
+	Edit Arrowheads	Редактировать стрелки
+	Edit Arrowheads…	Редактировать стрелки…
+	Reload Arrowheads	Перезагрузить стрелки
 	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
 	Rotate View to Selection	Повернуть вид по выделению
 	Reset the rows to the artwork's colors	Сбросить строки к цветам рисунка
+	Color Theme Picker	Выбор цветовой темы
+	Click or drag across the art to pick its colors; Shift adds more	Щёлкните или проведите по рисунку, чтобы взять его цвета; Shift добавляет ещё
 	Reset to Default	Сбросить к значениям по умолчанию
 	Reset to White, Black	Сбросить к белому, чёрному
 	Reset with Mesh	Сбросить с сеткой
@@ -3328,6 +3341,7 @@ digits	Malayalam	Малаялам
 	Show Note	Показать примечание
 	Show Options	Показать параметры
 	Show Recent Colors	Показать последние цвета
+	Toggle RGB Percent	Переключить RGB в процентах
 	Show Original Path	Показать исходный контур
 	Open this dialog with these settings next time	Открывать это диалоговое окно с этими параметрами в следующий раз
 	Auto-Simplify	Автоматическое упрощение
@@ -4243,6 +4257,85 @@ axis	Both	Оба
 @msg	the script's run is no longer available	выполнение скрипта больше недоступно
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	неудавшаяся команда изменила шаги отмены, которые не удалось восстановить, поэтому скрипт остановлен
 @msg	a recovery copy could not be written, so the script was not run	не удалось записать копию для восстановления, поэтому скрипт не выполнен
+@msg	Script file access denied	Доступ к файлу скрипта запрещен
+@msg	Script file exceeds 8 MiB	Файл скрипта больше 8 МиБ
+@msg	Script file is not open	Файл скрипта не открыт
+@msg	Script file cannot be decoded	Не удается декодировать файл скрипта
+@msg	Script file is not a regular file	Файл скрипта не является обычным файлом
+@msg	Script file does not exist	Файл скрипта не существует
+@msg	Script file could not be read	Не удалось прочитать файл скрипта
+@msg	Script folder has more than 2,048 entries	В папке скрипта больше 2048 элементов
+@msg	Script file open mode must be r, w, e or a	Режим открытия файла скрипта должен быть r, w, e или a
+@msg	Script file writing is not available	Запись файлов скрипта недоступна
+@msg	Script file dialogs are not available	Диалоговые окна файлов скрипта недоступны
+@msg	Script files cannot be opened in another application	Файлы скрипта нельзя открыть в другом приложении
+@msg	Script file access is unavailable on the web	Доступ к файлам скрипта в веб-версии недоступен
+@msg	Script has 256 files open	У скрипта открыто 256 файлов
+@msg	Script file path exceeds 32,767 characters	Путь к файлу скрипта длиннее 32 767 символов
+@msg	Script folder mask takes too many steps to match	Сопоставление маски папки скрипта требует слишком много шагов
+@msg	the script opened more file data than one run may open (32 MiB)	скрипт открыл больше данных файлов, чем может открыть один запуск (32 МиБ)
+@msg	File.seek: takes a position and a mode	File.seek: принимает позицию и режим
+@msg	vc.run: give a command id, as a string	vc.run: укажите идентификатор команды в виде строки
+@msg	vc.run: takes a command id and an object of parameters	vc.run: принимает идентификатор команды и объект параметров
+@msg	vc.run: the parameters must be an object	vc.run: параметры должны быть объектом
+@msg	vc.run: the result{place} is too large for a script	vc.run: результат{place} слишком велик для скрипта
+@msg	$.evalFile requires a file path	$.evalFile требует путь к файлу
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут должен быть конечным числом миллисекунд, 0 или больше
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: принимает путь к файлу и тайм-аут
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: строка {line}, столбец {column} в {file}: {e} (исключение)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: строка {line}, столбец {column}: {e} (исключение)
+@msg	{name}: {e} (thrown)	{name}: {e} (исключение)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: строка {line}, столбец {column} в {file}: {e} (ограничение)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: строка {line}, столбец {column}: {e} (ограничение)
+@msg	{name}: {e} (limit)	{name}: {e} (ограничение)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: строка {line}, столбец {column} в {file}: {e} (синтаксическая ошибка)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: строка {line}, столбец {column}: {e} (синтаксическая ошибка)
+@msg	{name}: {e} (syntax)	{name}: {e} (синтаксическая ошибка)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: строка {line}, столбец {column} в {file}: {e} (остановлен)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: строка {line}, столбец {column}: {e} (остановлен)
+@msg	{name}: {e} (stopped)	{name}: {e} (остановлен)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: строка {line}, столбец {column} в {file}: {e} (внутренняя ошибка)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: строка {line}, столбец {column}: {e} (внутренняя ошибка)
+@msg	{name}: {e} (internal)	{name}: {e} (внутренняя ошибка)
+@msg	{e} (these files stay written: {paths})	{e} (эти файлы остаются записанными: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: укажите имя в виде строки
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: укажите локаль, например "en" или "de_DE", или null для локали интерфейса
+@msg	$.localize: give true or false	$.localize: укажите true или false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: можно установить только 512, которое включает локализацию, или 0
+@msg	$.flags: give a number	$.flags: укажите число
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: здесь скрипты читают и записывают только UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: укажите имя кодировки в виде строки
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: размер кэша памяти нельзя установить
+@msg	$.setenv: give a value, as a string	$.setenv: укажите значение в виде строки
+@msg	$.setenv: only {_1} can be set	$.setenv: можно установить только {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: значение содержит не более {MAX_ENV_BYTES} букв, цифр и знаков _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: укажите число миллисекунд от 0 до {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: укажите число миллисекунд
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: запуск не может ждать внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите её из собственного кода скрипта
+@msg	$.bp: scripts here have no debugger	$.bp: здесь у скриптов нет отладчика
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: скрипты пока не могут показывать диалоговое окно
+@msg	{name}: give a message	{name}: укажите сообщение
+@msg	{name}: give the text the field starts with	{name}: укажите текст, с которого начинается поле
+@msg	{name}: the message is longer than 16 KiB	{name}: сообщение длиннее 16 КиБ
+@msg	{name}: the title is longer than 256 bytes	{name}: заголовок длиннее 256 байт
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: текст, с которого начинается поле, длиннее 16 КиБ
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалоговое окно не может открыться внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите его из собственного кода скрипта
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следующий ответ в `answers` предназначен для {_1}, а не для {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
+@msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
+@msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
+@msg	this function's script run has ended	запуск скрипта этой функции завершён
+@msg	the script made more host calls than one run may make	скрипт сделал больше вызовов хоста, чем разрешено одному запуску
+@msg	the script passed more data to and from commands than one run may pass	скрипт передал командам и получил от них больше данных, чем разрешено одному запуску
+@msg	the script added more objects and data to the documents than one run may add	скрипт добавил в документы больше объектов и данных, чем разрешено одному запуску
+@msg	{what}: the object is not a File or a Folder	{what}: объект не является ни File, ни Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: количество должно быть конечным числом, 0 или больше
+@msg	File.seek: the position must be a finite number	File.seek: позиция должна быть конечным числом
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: режим должен быть 0, 1 или 2
+@msg	script file is compiled: {value}	файл скрипта скомпилирован: {value}
+@msg	`name` must be the name of a script engine	`name` должно быть именем движка скриптов
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	основной движок скриптов создаётся заново для каждого запуска и никогда не сохраняется, поэтому его нельзя удалить
+@msg	there is no script engine named {name}	движка скриптов с именем {name} нет
 @msg	Running a script	Выполняется скрипт
 @msg	Copied the script report	Отчёт о сценарии скопирован
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура
@@ -4736,6 +4829,10 @@ axis	Both	Оба
 @msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
 @msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
 @msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
+@msg	select an image with a color mask	выделите изображение с цветовой маской
+@msg	the color mask's settings are out of range	настройки цветовой маски вне допустимого диапазона
+@msg	a CMYK image can't take a color mask	к изображению CMYK нельзя применить цветовую маску
+@msg	the mask would hide every pixel	маска скрыла бы все пиксели
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}
@@ -5392,6 +5489,7 @@ lighting	Light	Свет
 @msg	unknown parameter `{path}`; it takes: {keys}	неизвестный параметр `{path}`; принимает: {keys}
 @msg	missing `{path}`	отсутствует `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` должно быть {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` вложено слишком глубоко
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP
@@ -5945,6 +6043,16 @@ axis	Y Axis	Ось Y
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
+	Select Object…	Выделить объект…
+	Select Object	Выделить объект
+	Set Selection	Задать выделение
+	Case Sensitive	С учетом регистра
+	Whole Word	Слово целиком
+	Select Object: {note}	Выделить объект: {note}
+	Select by Note	Выделить по примечанию
+@msg	the note is empty	примечание пустое
+@msg	the note is longer than 1,024 bytes	примечание длиннее 1024 байт
+@msg	no object that can be selected has a note matching “{query}”	ни у одного объекта, который можно выделить, нет примечания, совпадающего с «{query}»
 	Menu Item:	Пункт меню:
 	No menu item matches.	Нет подходящих пунктов меню.
 	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.
@@ -7208,6 +7316,8 @@ shape	Open	Открытый
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткие практические уроки по основным инструментам, сгруппированные по навыкам. Выберите навык, чтобы увидеть его уроки.
 	List Tutorials	Перечислить уроки
 	Show Tutorial	Показать урок
+	Show Tool Location	Показать расположение инструмента
+	Show where this tool is	Показать, где находится этот инструмент
 @msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
 

@@ -811,6 +811,10 @@ font-technology	Variable	Biến thiên
 	Corner Color	Màu góc
 	Contiguous	Liền kề
 	Each Channel	Từng kênh
+	Color Mask…	Mặt nạ màu…
+	Color Mask	Mặt nạ màu
+	Remove Color Mask	Xóa mặt nạ màu
+	Apply Color Mask	Áp dụng mặt nạ màu
 	Edit Path	Sửa đường dẫn
 	Crop Marks	Dấu cắt xén
 	Crop To	Cắt xén đến
@@ -2801,6 +2805,7 @@ digits	Hindi	Hindi
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
+	missing from the Brushes panel	không có trong bảng Cọ
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết
@@ -2961,6 +2966,8 @@ mark-style	Japanese	Kiểu Nhật
 	Proof Setup	Thiết lập thử nghiệm
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
+	Insert Aki Left	Chèn aki bên trái
+	Insert Aki Right	Chèn aki bên phải
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định
@@ -3207,11 +3214,17 @@ mark-style	Japanese	Kiểu Nhật
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
+	Arrowheads	Đầu mũi tên
+	Edit Arrowheads	Chỉnh sửa đầu mũi tên
+	Edit Arrowheads…	Chỉnh sửa đầu mũi tên…
+	Reload Arrowheads	Tải lại đầu mũi tên
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
 	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
 	Reset Ruler Origin	Đặt lại gốc thước
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
+	Color Theme Picker	Bộ chọn bộ màu
+	Click or drag across the art to pick its colors; Shift adds more	Nhấp hoặc kéo qua tác phẩm để lấy màu của nó; Shift để thêm
 	Reset to Default	Đặt lại về mặc định
 	Reset to default	Đặt lại về mặc định
 	Reset to White, Black	Đặt lại về Trắng, Đen
@@ -3680,6 +3693,7 @@ mark-style	Japanese	Kiểu Nhật
 	Show Note	Hiện ghi chú
 	Show Options	Hiện tùy chọn
 	Show Recent Colors	Hiện màu gần đây
+	Toggle RGB Percent	Chuyển đổi RGB theo phần trăm
 	Show Original Path	Hiện đường dẫn gốc
 	Open this dialog with these settings next time	Lần sau mở hộp thoại này với các cài đặt này
 	Auto-Simplify	Tự động đơn giản hóa
@@ -4667,6 +4681,85 @@ theme	Appearance	Giao diện
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
+@msg	Script file access denied	Truy cập tệp tập lệnh bị từ chối
+@msg	Script file exceeds 8 MiB	Tệp tập lệnh vượt quá 8 MiB
+@msg	Script file is not open	Tệp tập lệnh chưa được mở
+@msg	Script file cannot be decoded	Không thể giải mã tệp tập lệnh
+@msg	Script file is not a regular file	Tệp tập lệnh không phải là tệp thông thường
+@msg	Script file does not exist	Tệp tập lệnh không tồn tại
+@msg	Script file could not be read	Không thể đọc tệp tập lệnh
+@msg	Script folder has more than 2,048 entries	Thư mục tập lệnh có hơn 2.048 mục
+@msg	Script file open mode must be r, w, e or a	Chế độ mở tệp tập lệnh phải là r, w, e hoặc a
+@msg	Script file writing is not available	Không thể ghi tệp tập lệnh
+@msg	Script file dialogs are not available	Không có hộp thoại tệp cho tập lệnh
+@msg	Script files cannot be opened in another application	Không thể mở tệp tập lệnh trong ứng dụng khác
+@msg	Script file access is unavailable on the web	Không thể truy cập tệp tập lệnh trên web
+@msg	Script has 256 files open	Tập lệnh đang mở 256 tệp
+@msg	Script file path exceeds 32,767 characters	Đường dẫn tệp tập lệnh vượt quá 32.767 ký tự
+@msg	Script folder mask takes too many steps to match	Mặt nạ thư mục tập lệnh cần quá nhiều bước để so khớp
+@msg	the script opened more file data than one run may open (32 MiB)	tập lệnh đã mở nhiều dữ liệu tệp hơn mức một lần chạy được phép mở (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: nhận một vị trí và một chế độ
+@msg	vc.run: give a command id, as a string	vc.run: hãy cung cấp id lệnh dưới dạng chuỗi
+@msg	vc.run: takes a command id and an object of parameters	vc.run: nhận một id lệnh và một đối tượng tham số
+@msg	vc.run: the parameters must be an object	vc.run: tham số phải là một đối tượng
+@msg	vc.run: the result{place} is too large for a script	vc.run: kết quả{place} quá lớn đối với tập lệnh
+@msg	$.evalFile requires a file path	$.evalFile cần đường dẫn tệp
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: thời gian chờ phải là một số mili giây hữu hạn, từ 0 trở lên
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: nhận một đường dẫn tệp và một thời gian chờ
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: dòng {line}, cột {column} của {file}: {e} (đã ném)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: dòng {line}, cột {column}: {e} (đã ném)
+@msg	{name}: {e} (thrown)	{name}: {e} (đã ném)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: dòng {line}, cột {column} của {file}: {e} (giới hạn)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: dòng {line}, cột {column}: {e} (giới hạn)
+@msg	{name}: {e} (limit)	{name}: {e} (giới hạn)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: dòng {line}, cột {column} của {file}: {e} (lỗi cú pháp)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: dòng {line}, cột {column}: {e} (lỗi cú pháp)
+@msg	{name}: {e} (syntax)	{name}: {e} (lỗi cú pháp)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: dòng {line}, cột {column} của {file}: {e} (đã dừng)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: dòng {line}, cột {column}: {e} (đã dừng)
+@msg	{name}: {e} (stopped)	{name}: {e} (đã dừng)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: dòng {line}, cột {column} của {file}: {e} (lỗi nội bộ)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: dòng {line}, cột {column}: {e} (lỗi nội bộ)
+@msg	{name}: {e} (internal)	{name}: {e} (lỗi nội bộ)
+@msg	{e} (these files stay written: {paths})	{e} (các tệp này vẫn được ghi: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: hãy cung cấp tên dưới dạng chuỗi
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: hãy cung cấp một ngôn ngữ vùng như "en" hoặc "de_DE", hoặc null cho ngôn ngữ của giao diện
+@msg	$.localize: give true or false	$.localize: hãy cung cấp true hoặc false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: chỉ có thể đặt 512, giá trị bật bản địa hóa, hoặc 0
+@msg	$.flags: give a number	$.flags: hãy cung cấp một số
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: ở đây tập lệnh chỉ đọc và ghi UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: hãy cung cấp tên bảng mã dưới dạng chuỗi
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: không thể đặt kích thước bộ nhớ đệm
+@msg	$.setenv: give a value, as a string	$.setenv: hãy cung cấp giá trị dưới dạng chuỗi
+@msg	$.setenv: only {_1} can be set	$.setenv: chỉ có thể đặt {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: một giá trị có tối đa {MAX_ENV_BYTES} chữ cái, chữ số và _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: hãy cung cấp số mili giây từ 0 đến {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: hãy cung cấp số mili giây
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: một lần chạy không thể chờ bên trong lệnh gọi lại của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã của chính tập lệnh
+@msg	$.bp: scripts here have no debugger	$.bp: ở đây tập lệnh không có trình gỡ lỗi
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: tập lệnh chưa thể hiển thị hộp thoại
+@msg	{name}: give a message	{name}: hãy cung cấp thông báo
+@msg	{name}: give the text the field starts with	{name}: hãy cung cấp văn bản mà trường bắt đầu
+@msg	{name}: the message is longer than 16 KiB	{name}: thông báo dài hơn 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: tiêu đề dài hơn 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: văn bản mà trường bắt đầu dài hơn 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: hộp thoại không thể mở bên trong lệnh gọi lại của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã của chính tập lệnh
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: câu trả lời tiếp theo trong `answers` dành cho {_1}, không phải {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` không còn câu trả lời nào cho hộp thoại này
+@msg	vc.document{place} is too large for a script	vc.document{place} quá lớn đối với tập lệnh
+@msg	vc.log: the log of this run is full	vc.log: nhật ký của lần chạy này đã đầy
+@msg	this function's script run has ended	lần chạy tập lệnh của hàm này đã kết thúc
+@msg	the script made more host calls than one run may make	tập lệnh đã thực hiện nhiều lệnh gọi máy chủ hơn mức một lần chạy được phép
+@msg	the script passed more data to and from commands than one run may pass	tập lệnh đã truyền đến và từ các lệnh nhiều dữ liệu hơn mức một lần chạy được phép
+@msg	the script added more objects and data to the documents than one run may add	tập lệnh đã thêm vào tài liệu nhiều đối tượng và dữ liệu hơn mức một lần chạy được phép
+@msg	{what}: the object is not a File or a Folder	{what}: đối tượng không phải File cũng không phải Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: số lượng phải là một số hữu hạn, 0 trở lên
+@msg	File.seek: the position must be a finite number	File.seek: vị trí phải là một số hữu hạn
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: chế độ phải là 0, 1 hoặc 2
+@msg	script file is compiled: {value}	tệp tập lệnh đã được biên dịch: {value}
+@msg	`name` must be the name of a script engine	`name` phải là tên của một bộ máy tập lệnh
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	bộ máy tập lệnh chính được tạo mới cho mỗi lần chạy và không bao giờ được giữ lại, nên không thể loại bỏ nó
+@msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
@@ -5113,6 +5206,10 @@ theme	Appearance	Giao diện
 @msg	a CMYK image has no transparency to set	ảnh CMYK không có độ trong suốt để đặt
 @msg	every pixel matches the background: no image would be left	mọi điểm ảnh đều khớp với nền: sẽ không còn lại ảnh nào
 @msg	an image of {w} × {h} pixels is too large to change	ảnh {w} × {h} điểm ảnh quá lớn nên không thể thay đổi
+@msg	select an image with a color mask	hãy chọn ảnh có mặt nạ màu
+@msg	the color mask's settings are out of range	cài đặt của mặt nạ màu nằm ngoài phạm vi cho phép
+@msg	a CMYK image can't take a color mask	ảnh CMYK không thể có mặt nạ màu
+@msg	the mask would hide every pixel	mặt nạ sẽ ẩn mọi điểm ảnh
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại
@@ -5300,6 +5397,7 @@ theme	Appearance	Giao diện
 @msg	unknown parameter `{path}`; it takes: {keys}	tham số không xác định `{path}`; nhận: {keys}
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
+@msg	`{path}` is nested too deeply	`{path}` lồng nhau quá sâu
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
 @msg	Preferences imported.	Đã nhập tùy chọn.
 @msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
@@ -5940,6 +6038,16 @@ axis	Y Axis	Trục Y
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
+	Select Object…	Chọn đối tượng…
+	Select Object	Chọn đối tượng
+	Set Selection	Đặt vùng chọn
+	Case Sensitive	Phân biệt chữ hoa chữ thường
+	Whole Word	Toàn bộ từ
+	Select Object: {note}	Chọn đối tượng: {note}
+	Select by Note	Chọn theo ghi chú
+@msg	the note is empty	ghi chú trống
+@msg	the note is longer than 1,024 bytes	ghi chú dài hơn 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	không có đối tượng nào có thể chọn có ghi chú khớp với “{query}”
 	Menu Item:	Mục menu:
 	No menu item matches.	Không có mục menu nào khớp.
 	Several menu items match. Choose one from the list.	Có nhiều mục menu khớp. Hãy chọn một mục trong danh sách.
@@ -6729,6 +6837,8 @@ breakText	Glyphs	Glyph
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
 	List Tutorials	Liệt kê hướng dẫn
 	Show Tutorial	Hiện hướng dẫn
+	Show Tool Location	Hiện vị trí công cụ
+	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 

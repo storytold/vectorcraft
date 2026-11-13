@@ -77,13 +77,15 @@ impl Template {
 }
 
 /// Match `s` against `pieces`, a placeholder taking the shortest non-empty text that lets the
-/// rest match (the last one takes what remains). With `counted`, `{n}` takes only a count.
+/// rest match (the last one takes what remains). With `counted`, `{n}` takes only a count. A
+/// placeholder that occurs twice takes the same text both times.
 fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>) -> bool {
     let Some((first, rest)) = pieces.split_first() else { return s.is_empty() };
     match first {
         Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out)),
         Piece::Hole(name) => {
-            let fits = |value: &str| !(counted && name == "n") || value.parse::<u64>().is_ok();
+            let earlier = out.iter().find(|(n, _)| *n == name.as_str()).map(|&(_, v)| v);
+            let fits = |value: &str| (!(counted && name == "n") || value.parse::<u64>().is_ok()) && earlier.is_none_or(|e| e == value);
             let Some((next, after)) = rest.split_first() else {
                 if s.is_empty() || !fits(s) {
                     return false;

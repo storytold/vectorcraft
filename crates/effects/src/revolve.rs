@@ -509,6 +509,60 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
     Ok(out)
 }
 
+/// The outline of every face [`revolve_art`] draws for `n`'s Revolve or Revolve (Classic) (its symbol
+/// instances, blends and clipping groups already resolved), in document coordinates: with the
+/// effect on the object, the surface in its top visible fill (else its stroke); with it on fills and strokes, one surface for each of
+/// them, reshaped by the geometry effects after each one's Revolve; on a group or layer, one for
+/// each member, about one shared axis. The swatches and patterns named by a live-effect plug-in
+/// after a fill's or stroke's Revolve are looked up in `doc`.
+pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, String> {
+    let faces = |path: &PathData, b: Rect, options: Revolve| -> Result<Vec<PathData>, String> {
+        Ok(vectorcraft_three_d::revolve(path, b, options)?.iter().map(vectorcraft_three_d::Face::path).collect())
+    };
+    if is_container(n) {
+        let index = n
+            .appearance
+            .effects
+            .iter()
+            .position(|e| e.visible && is_revolve(&e.id))
+            .ok_or("a 3D effect on a group's fill or stroke draws nothing")?;
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let mut shapes = members(n, "Revolve")?;
+        reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
+        let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
+        let options = shared_options(&shapes, fx_options(fx))?;
+        let mut out = vec![];
+        for s in shapes.iter().filter(|s| surface_item(&s.items).is_some()) {
+            out.extend(faces(&s.path, b, options)?);
+        }
+        return Ok(out);
+    }
+    let (path, _) = object_profile(n, "Revolve")?;
+    let ctx = GeomContext::of(n);
+    if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
+        if surface_item(&solid_paints(n)).is_none() {
+            return Err("the revolved object has no fill or stroke".into());
+        }
+        let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+        return faces(&path, b, fx_options(fx));
+    }
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut out = vec![];
+    for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        if let Some(index) = item.effects().iter().position(|e| e.visible && is_revolve(&e.id))
+            && let Some(fx) = item.effects().get(index)
+        {
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            let b = p.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+            let surface = faces(&p, b, fx_options(fx))?;
+            out.extend(crate::solids::wireframe::reshaped(surface, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
+        }
+    }
+    Ok(out)
+}
+
 /// [`revolve_meshes`] of group or layer `n`: one mesh for each member, about one shared axis.
 fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
     let index = n
@@ -540,7 +594,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     if is_container(n) {
         return group_art(n, expand);
     }
-    let (path, _) = profile(n)?;
+    let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
     let mut children = vec![];
     let mut copies = 0;
@@ -565,12 +619,18 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
         remaining = crate::without_geometry(&remaining);
+        // The object's Transform effects, applied to the path above, transform the items' raster
+        // effects too. Each copy keeps its item beside it, which plug-in effects are told they sit
+        // on.
+        let originals: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+        let mut items: Vec<AppearanceItem> = originals.iter().map(|i| (*i).clone()).collect();
+        crate::raster::follow_paints(&mut items, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
-        for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        for (original, item) in originals.into_iter().zip(&items) {
             if let Some(index) = item.effects().iter().position(|e| e.visible && is_revolve(&e.id)) {
                 let fx = item.effects().get(index)?;
-                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
+                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(original));
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
                 let mut art = object_surface(n, &p, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| !is_revolve(&e.id)).cloned().collect();
@@ -582,7 +642,8 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 }
                 children.push(Arc::new(art));
             } else {
-                children.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: vec![item.clone()], ..Default::default() })));
+                let flat = Appearance { items: vec![item.clone()], ..Default::default() };
+                children.push(Arc::new(crate::group::shape_node(n.id, path.clone(), rule, flat)));
             }
         }
         children.splice(0..0, shadows);
@@ -962,6 +1023,52 @@ mod tests {
         let surface = &a.children().unwrap()[0];
         assert_eq!(surface.opacity, 0.4);
         assert!(surface.children().unwrap().iter().all(|c| c.opacity == 1.0 && !has_revolve(c)));
+    }
+    #[test]
+    fn a_fill_without_the_revolve_keeps_the_even_odd_hole() {
+        use vectorcraft_geom::FillRule;
+        use vectorcraft_geom::hit::fill_contains;
+        // Two nested squares drawn in the same direction: only the even-odd rule leaves a hole.
+        let [outer, inner] = [(100.0, 200.0), (130.0, 170.0)].map(|(lo, hi)| {
+            let mut b = BezPath::new();
+            b.move_to((lo, lo));
+            b.line_to((hi, lo));
+            b.line_to((hi, hi));
+            b.line_to((lo, hi));
+            b.close_path();
+            PathData::from_bezpath(&b)
+        });
+        let flat = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.1, 0.3, 0.9))));
+        for id in [REVOLVE, CLASSIC_REVOLVE] {
+            let mut top = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.8, 0.2, 0.1))));
+            top.effects_mut().push(crate::new_effect(id, &json!({})).unwrap());
+            let appearance = Appearance { items: vec![flat.clone(), top], ..Default::default() };
+            let members = vec![
+                Arc::new(Node::path(NodeId(2), outer.clone(), Appearance::default())),
+                Arc::new(Node::path(NodeId(3), inner.clone(), Appearance::default())),
+            ];
+            let mut compound = Node::new(NodeId(1), NodeKind::Compound { children: members, rule: FillRule::EvenOdd });
+            compound.appearance = appearance.clone().into();
+            let both = PathData::new(outer.subpaths.iter().chain(&inner.subpaths).cloned().collect());
+            let path = crate::group::shape_node(NodeId(1), both, FillRule::EvenOdd, appearance);
+            for (n, shape) in [(compound, "compound path"), (path, "path")] {
+                for (art, how) in [(revolve_art(&n), "live"), (expand_revolve_art(&n), "expanded")] {
+                    let what = format!("{id} on the top fill of a {shape}, {how}");
+                    let art = art.unwrap_or_else(|| panic!("{what}"));
+                    let children = art.children().unwrap();
+                    let plain: Vec<usize> = (0..children.len())
+                        .filter(|&i| children[i].appearance.items == [flat.clone()] && children[i].path_data().is_some())
+                        .collect();
+                    let [index] = plain[..] else { panic!("{what}: one flat child, got {plain:?}") };
+                    let NodeKind::Path { path, rule, .. } = &children[index].kind else { panic!("{what}: a path") };
+                    assert_eq!(*rule, FillRule::EvenOdd, "{what}");
+                    let bez = path.to_bezpath();
+                    assert!(fill_contains(&bez, *rule, Point::new(110.0, 150.0)), "{what}: the ring is filled");
+                    assert!(!fill_contains(&bez, *rule, Point::new(150.0, 150.0)), "{what}: the hole stays open");
+                    assert!(index + 1 < children.len(), "{what}: the revolved art is drawn above");
+                }
+            }
+        }
     }
     #[test]
     fn export_bakes_faces_with_unique_ids_and_no_revolve_effects() {

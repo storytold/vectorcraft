@@ -752,12 +752,14 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
         carries_editing.set(true);
         Ok(Some((data, resolved_warnings)))
     };
-    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
-    warnings.extend(placed_warnings);
+    let (bytes, notes) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
+    let mut enc = Encoded::one_with_notes(bytes, notes);
+    enc.warnings.extend(placed_warnings);
+    // A note on the options: `pdfCompatible: false` writes blank pages.
     if !pdf_compatible {
-        warnings.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
+        enc.setting_notes.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
     }
-    Ok(Encoded { warnings, ..Encoded::one(bytes) })
+    Ok(enc)
 }
 
 /// Snapshot the active document for `plan` (stamping File Info's dates on the snapshot when the
@@ -845,8 +847,8 @@ impl SaveJob {
     }
 
     /// Encode the file → it (and, with `separateArtboards`, a file per artboard after it), with
-    /// the warnings (what the format loses first, then the encoder's own notes: PDF options not
-    /// applied yet…, then the plan's notes on its params).
+    /// the notes (what the format loses first, then the encoder's own notes: PDF options not
+    /// applied yet…, then the plan's notes on its params, which are notes on the options).
     pub fn encode(&self) -> Result<Encoded> {
         let mut enc = self.encode_one(&self.doc)?;
         for &b in &self.boards {
@@ -854,7 +856,7 @@ impl SaveJob {
             enc.files.extend(one.files.into_iter().map(|(_, bytes)| (Some(b), bytes)));
         }
         enc.warnings.splice(0..0, self.format_losses());
-        enc.warnings.extend(self.plan.notes.iter().cloned());
+        enc.setting_notes.extend(self.plan.notes.iter().cloned());
         Ok(enc)
     }
 
@@ -905,9 +907,8 @@ impl SaveJob {
     /// order: when `stop` returns a value, nothing is written and that value is returned.
     pub fn write_unless(&self, stop: impl FnOnce(&[&str]) -> Option<Value>, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let (plan, doc) = (&self.plan, &*self.doc);
-        let mut enc = self.encode()?;
-        let warnings = std::mem::take(&mut enc.warnings);
-        let extra = json!({ "format": plan.format.id, "warnings": warnings });
+        let enc = self.encode()?;
+        let extra = json!({ "format": plan.format.id, "warnings": enc.notes() });
         let Some(path) = &plan.path else {
             let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
             out["name"] = json!(plan.name);
@@ -1031,6 +1032,8 @@ impl SaveJob {
         }
         // The other open documents that place this one show the new version.
         let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
+        // A save of the arrowheads file lists its heads in the arrowhead menus.
+        let native = self.plan.format.id == "vectorcraft";
         if let Some(st) = s.document_mut(uid) {
             self.finish(st);
         }
@@ -1038,6 +1041,9 @@ impl SaveJob {
             crate::cmd::recovery::forget(s, uid);
         }
         if let Some(path) = written {
+            if native {
+                s.arrowheads_saved(&path);
+            }
             crate::cmd::links::refresh_placed(s, uid, &path);
         }
     }
