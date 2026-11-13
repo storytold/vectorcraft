@@ -287,8 +287,8 @@
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	een exportplug-in declareert 1 tot {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	maximaal {MAX_UNGROUPED} parameters buiten groepen: geef de andere een `group`
 @msg	can't encode the input	de invoer kan niet worden gecodeerd
-@msg	expected {"dataBase64"}	verwacht: {"dataBase64"}
-@msg	expected {"objects"}	verwacht: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	verwacht: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	verwacht: {{"objects": [...]}}
 @msg	export `{name}`: {e}	export `{name}`: {e}
 @msg	extension {e} is listed twice	extensie {e} staat twee keer in de lijst
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensie {e}: gebruik 1-16 kleine letters en cijfers, zonder de punt
@@ -352,11 +352,11 @@
 @msg	a painted live effect returns only `objects`	een geschilderd live-effect geeft alleen `objects` terug
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills` en `strokes`
 @msg	a read-only object was left out	een alleen-lezen object is weggelaten
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {"id"} of zoals het is gegeven
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {{"id": …}} of zoals het is gegeven
 @msg	a string	een string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	een contour heeft alleen `paint`, `width`, `join`, `cap` en `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	een contour moet {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} zijn
-@msg	an effect must be {"id", "params"?, "visible"?}	een effect moet {"id", "params"?, "visible"?} zijn
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	een contour moet {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} zijn
+@msg	an effect must be {{"id", "params"?, "visible"?}}	een effect moet {{"id", "params"?, "visible"?}} zijn
 @msg	an effect on a fill returns only `fills`	een effect op een vulling geeft alleen `fills` terug
 @msg	an effect on a stroke returns only `strokes`	een effect op een contour geeft alleen `strokes` terug
 @msg	an object must be a JSON object	een object moet een JSON-object zijn
