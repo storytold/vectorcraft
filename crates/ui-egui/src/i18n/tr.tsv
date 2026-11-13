@@ -5449,6 +5449,8 @@ lighting	Light	Işık
 	Pen	Kalem
 	Pentagram	Pentagram
 	Perceptual	algısal
+	Hue Clockwise	Renk tonu saat yönünde
+	Hue Counterclockwise	Renk tonu saat yönünün tersine
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6243,7 +6245,7 @@ axis	Y Axis	Y ekseni
 	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
-@msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise veya hue-counterclockwise olmalıdır
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir

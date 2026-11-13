@@ -5007,6 +5007,8 @@ font-technology	Variable	ცვლადი
 	High Contrast 3	მაღალი კონტრასტი 3
 	Pentagram	პენტაგრამა
 	Perceptual	აღქმითი
+	Hue Clockwise	ფერის ტონი საათის ისრის მიმართულებით
+	Hue Counterclockwise	ფერის ტონი საათის ისრის საწინააღმდეგოდ
 	Relative Colorimetric	ფარდობითი კოლორიმეტრიული
 	Absolute Colorimetric	აბსოლუტური კოლორიმეტრიული
 	Exact	ზუსტი
@@ -6238,7 +6240,7 @@ axis	Y Axis	Y ღერძი
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` ვრცელდება გრადიენტულ შევსებებზე (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` ვრცელდება გრადიენტულ შევსებებზე (paint.setFill)
 @msg	`dither` must be true or false	`dither` უნდა იყოს true ან false
-@msg	`method` must be classic or perceptual	`method` უნდა იყოს classic ან perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` უნდა იყოს classic, perceptual, hue-clockwise ან hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` უნდა იყოს pad, repeat ან reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` უნდა იყოს მთელი რიცხვი 1-დან {MAX_REPEATS}-მდე
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` ეხება წრფივ, რადიალურ, კონუსურ და რომბულ გრადიენტებს

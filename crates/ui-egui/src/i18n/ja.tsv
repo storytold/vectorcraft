@@ -5977,7 +5977,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
-@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+	Hue Clockwise	時計回りの色相
+	Hue Counterclockwise	反時計回りの色相
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` には classic、perceptual、hue-clockwise または hue-counterclockwise を指定してください
 @msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます

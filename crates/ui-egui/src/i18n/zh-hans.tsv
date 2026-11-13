@@ -5248,6 +5248,8 @@ imageTrace	Outline	轮廓
 	Outlined Text	轮廓化的文字
 	All Rasterized Regions	所有栅格化区域
 	Perceptual	可感知
+	Hue Clockwise	色相顺时针
+	Hue Counterclockwise	色相逆时针
 	Relative Colorimetric	相对比色
 	Absolute Colorimetric	绝对比色
 	Simulate	模拟
@@ -6125,7 +6127,7 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` 适用于渐变填色 (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
-@msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必须是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变

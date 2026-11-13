@@ -5878,7 +5878,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe

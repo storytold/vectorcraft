@@ -5543,6 +5543,8 @@ imageTrace	Outline	Kontur
 	High Contrast 3	Wysoki kontrast 3
 	Pentagram	Pentagram
 	Perceptual	Percepcyjna
+	Hue Clockwise	Barwa zgodnie z ruchem wskazówek zegara
+	Hue Counterclockwise	Barwa przeciwnie do ruchu wskazówek zegara
 	Relative Colorimetric	Kolorymetryczna względna
 	Absolute Colorimetric	Kolorymetryczna bezwzględna
 	Exact	Dokładne
@@ -6141,7 +6143,7 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` dotyczy wypełnień gradientem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
-@msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musi mieć wartość classic, perceptual, hue-clockwise lub hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych

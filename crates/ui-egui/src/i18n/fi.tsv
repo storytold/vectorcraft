@@ -5585,6 +5585,8 @@ imageTrace	Outline	Ääriviiva
 	Vivid	Eloisa
 	Spectrum	Spektri
 	Perceptual	Havainnollinen
+	Hue Clockwise	Sävy myötäpäivään
+	Hue Counterclockwise	Sävy vastapäivään
 	Relative Colorimetric	Suhteellinen kolorimetrinen
 	Absolute Colorimetric	Absoluuttinen kolorimetrinen
 	Exact	Tarkka
@@ -6317,7 +6319,7 @@ axis	Y Axis	Y-akseli
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` koskee liukuväritäyttöjä (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` koskee liukuväritäyttöjä (paint.setFill)
 @msg	`dither` must be true or false	`dither` on oltava true tai false
-@msg	`method` must be classic or perceptual	`method` on oltava classic tai perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` on oltava classic, perceptual, hue-clockwise tai hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` on oltava pad, repeat tai reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` on oltava kokonaisluku väliltä 1–{MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` koskee lineaarisia, säteittäisiä ja kartiomaisia liukuvärejä sekä vinoneliöliukuvärejä

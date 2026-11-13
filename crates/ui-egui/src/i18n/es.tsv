@@ -5608,6 +5608,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tono en sentido horario
+	Hue Counterclockwise	Tono en sentido antihorario
 	Relative Colorimetric	Colorimétrico relativo
 	Absolute Colorimetric	Colorimétrico absoluto
 	Exact	Exacto
@@ -6229,7 +6231,7 @@ axis	Y Axis	Eje Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a rellenos de degradado (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a rellenos de degradado (paint.setFill)
 @msg	`dither` must be true or false	`dither` debe ser true o false
-@msg	`method` must be classic or perceptual	`method` debe ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` debe ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` debe ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` debe ser un número entero de 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a los degradados lineales, radiales, cónicos y de rombo

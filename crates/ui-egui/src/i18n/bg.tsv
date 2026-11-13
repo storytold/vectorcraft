@@ -5385,6 +5385,8 @@ lighting	Light	Светлина
 	Pen	Перо
 	Pentagram	Петограм
 	Perceptual	Перцептивен
+	Hue Clockwise	Оттенък по часовниковата стрелка
+	Hue Counterclockwise	Оттенък обратно на часовниковата стрелка
 	Phone 360×800	Телефон 360×800
 	Phone 375×667	Телефон 375×667
 	Phone 375×812	Телефон 375×812
@@ -5954,7 +5956,7 @@ axis	Y Axis	Y ос
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` се прилага към градиентни запълки (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` се прилага към градиентни запълки (paint.setFill)
 @msg	`dither` must be true or false	`dither` трябва да бъде true или false
-@msg	`method` must be classic or perceptual	`method` трябва да е classic или perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` трябва да е classic, perceptual, hue-clockwise или hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Да се инсталира ли „{name}“, който иска голям изчислителен бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Всяко изпълнение може да продължи до {minutes} минути и да свърши {times} пъти повече работа, отколкото е позволено на другите приставки. То се изпълнява във фонов режим и можете да го откажете.

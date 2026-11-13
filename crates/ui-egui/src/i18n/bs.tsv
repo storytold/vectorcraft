@@ -5482,6 +5482,8 @@ imageTrace	Outline	Obris
 	Vivid	Živo
 	Spectrum	Spektar
 	Perceptual	Perceptivno
+	Hue Clockwise	Nijansa u smjeru kazaljke na satu
+	Hue Counterclockwise	Nijansa suprotno od kazaljke na satu
 	Relative Colorimetric	Relativna kolorimetrija
 	Absolute Colorimetric	Apsolutna kolorimetrija
 	Exact	Tačno
@@ -5973,7 +5975,7 @@ axis	Y Axis	Y osa
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se primjenjuje na gradijentne ispune (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se primjenjuje na gradijentne ispune (paint.setFill)
 @msg	`dither` must be true or false	`dither` mora biti true ili false
-@msg	`method` must be classic or perceptual	`method` mora biti classic ili perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` mora biti classic, perceptual, hue-clockwise ili hue-counterclockwise
 	Install “{name}”, which asks for a heavy budget?	Instalirati „{name}”, koji traži veliki budžet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Svako pokretanje može trajati do {minutes} minuta i obaviti {times} puta više posla nego drugi dodaci. Radi u pozadini i možete ga otkazati.
 	It may take minutes, so it runs in the background, where you can cancel it.	Može trajati minutama, pa radi u pozadini, gdje ga možete otkazati.

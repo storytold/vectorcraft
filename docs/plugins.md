@@ -617,7 +617,7 @@ An **importer** gets the bytes of the file being opened, as they are (not JSON),
   `paint`, `width` in points, `join` (`"miter"`, `"round"` or `"bevel"`), `cap` (`"butt"`, `"round"` or `"square"`)
   and `miterLimit`. Paints use the native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`,
   `{"type": "gradient", "gradient": {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity,
-  midpoint}], "dither"?, "method"?: "Perceptual"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
+  midpoint}], "dither"?, "method"?: "Perceptual"|"HueClockwise"|"HueCounterclockwise"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
   "xf"?}`. Colours are `{"model": "rgb", r, g, b}`, `{"model": "cmyk", c, m, y, k}`, `{"model": "gray", k}` (ink: 0
   white, 1 black) or `{"model": "lab", l, a, b}`; components 0–1 except Lab's.
 - `effects` (filters): the object's own effects in order, as its effect records: `id` (as `effect.list` lists it, or

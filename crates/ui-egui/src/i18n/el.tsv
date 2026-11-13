@@ -2742,6 +2742,8 @@ lighting	Light	Φως
 	Oval	Οβάλ
 	Pen	Πένα (Pen Tool)
 	Perceptual	Αντιληπτικό
+	Hue Clockwise	Απόχρωση δεξιόστροφα
+	Hue Counterclockwise	Απόχρωση αριστερόστροφα
 	Pixel	Εικονοστοιχείο
 	Points:	Σημεία:
 	Preserve	Διατήρηση
@@ -6238,7 +6240,7 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
-@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	Το `method` πρέπει να είναι classic, perceptual, hue-clockwise ή hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ

@@ -3406,6 +3406,8 @@ antiAlias	Sharp	शार्प
 	per slice	प्रति स्लाइस
 	Percent:	प्रतिशत:
 	Perceptual	परसेप्चुअल
+	Hue Clockwise	ह्यू घड़ी की दिशा में
+	Hue Counterclockwise	ह्यू घड़ी की विपरीत दिशा में
 	Perceptual Scales	अवधारणात्मक स्केल
 	Performance	प्रदर्शन
 	Permissions	अनुमतियां
@@ -6052,7 +6054,7 @@ antiAlias	Sharp	शार्प
 @msg	`length` must be a number of at most 1000000 pt either way	`length` को 1000000 pt में से एक होना चाहिए।
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
 @msg	`line` must be true or false	`line` को true या false होना चाहिए
-@msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise या hue-counterclockwise होना चाहिए
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat या reflect होना चाहिए
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 से {MAX_REPEATS} तक की पूर्ण संख्या होनी चाहिए
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` रैखिक, रेडियल, शंक्वाकार और डायमंड ग्रेडिएंट्स पर लागू होता है

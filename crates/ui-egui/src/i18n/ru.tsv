@@ -5898,7 +5898,9 @@ axis	Y Axis	Ось Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` применяется к градиентным заливкам (paint.setFill)
 @msg	`dither` must be true or false	`dither` должно быть true или false
 	Perceptual	Перцепционный
-@msg	`method` must be classic or perceptual	`method` должен быть classic или perceptual
+	Hue Clockwise	Оттенок по часовой стрелке
+	Hue Counterclockwise	Оттенок против часовой стрелки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` должен быть classic, perceptual, hue-clockwise или hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` должен быть pad, repeat или reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` должен быть целым числом от 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` применяется к линейным, радиальным, коническим и ромбовидным градиентам
