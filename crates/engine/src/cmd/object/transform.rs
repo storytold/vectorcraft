@@ -365,12 +365,14 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
 /// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
 /// `"box"` (the default) is the bounding box of `ids`, turned with rotated objects until Reset
 /// Bounding Box ([`Document::bbox_angle`]); `"page"` is the page's axes. Anchors selected with
-/// Direct Selection (and no copy) transform along the page's axes, as their own box does. The
-/// basis joins the journal entry, so a replay acts in the same frame.
+/// Direct Selection (with no copy and Transform Objects on) transform along the page's axes, as
+/// their own box does. The basis joins the journal entry, so a replay acts in the same frame.
 fn basis_frame(s: &mut Session, p: &Value, cmd: &str, ids: &[NodeId]) -> Result<OrientedBox> {
     let page = choice(p, cmd, "basis", &["box", "page"])? == Some("page");
     let st = s.doc()?;
-    let anchors = !bool_or(p, "copy", false) && effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure()).is_some();
+    let anchors = !bool_or(p, "copy", false)
+        && transforms_objects(p)
+        && effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure()).is_some();
     let angle = if page || anchors { 0.0 } else { st.doc.bbox_angle(ids) };
     s.note_journal("basis", json!(if page { "page" } else { "box" }));
     Ok(OrientedBox { angle, rect: Rect::ZERO })

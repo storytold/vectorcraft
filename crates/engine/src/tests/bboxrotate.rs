@@ -469,6 +469,35 @@ fn scale_follows_the_page_after_a_reset_and_for_mixed_angles() {
     assert!(near(r.width(), w.width()) && near(r.height(), 2.0 * w.height()), "{w:?} {r:?}");
 }
 
+/// With anchors selected, Scale and a named Reflect move the anchors along the page's axes, but
+/// with Transform Objects off they move the whole objects' pattern tiles, along the turned box.
+#[test]
+fn pattern_only_transforms_of_selected_anchors_follow_the_turned_box() {
+    let c = Point::new(200.0, 200.0);
+    let frame = OrientedBox { angle: 45.0, rect: Rect::ZERO };
+    let about = |m: Affine| Affine::translate(c.to_vec2()) * m * Affine::translate(-c.to_vec2());
+    let last = |s: &Session| match s.doc().unwrap().last_transform.clone() {
+        Some(LastTransform::Matrix(m, _)) => m,
+        other => panic!("no matrix to repeat: {other:?}"),
+    };
+    let scale = Affine::scale_non_uniform(2.0, 1.0);
+    let flip = Affine::scale_non_uniform(-1.0, 1.0);
+    for (cmd, p, m) in [("object.scale", json!({"sx": 200, "sy": 100}), scale), ("object.reflect", json!({"axis": "vertical"}), flip)] {
+        for objects in [false, true] {
+            let mut s = session();
+            let a = turned_rect(&mut s);
+            s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+            let mut p = p.clone();
+            p["origin"] = json!([c.x, c.y]);
+            p["objects"] = json!(objects);
+            p["patterns"] = json!(true);
+            s.execute(cmd, &p).unwrap();
+            let want = if objects { about(m) } else { about(frame.conjugate(m)) };
+            assert!(same_matrix(last(&s), want), "{cmd} objects {objects}: {:?}", last(&s));
+        }
+    }
+}
+
 #[test]
 fn groups_type_and_multiple_selections_keep_their_angle() {
     let mut s = session();

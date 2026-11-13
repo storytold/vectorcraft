@@ -5144,7 +5144,8 @@ stretches along the box's own width and `sy` along its height, and `"vertical"` 
 axes, until Object › Transform › Reset Bounding Box squares the box to the page. Both take `basis?: "box"|"page"`:
 `"box"` is the default, and `"page"` acts along the page's axes. Any other `basis` is an error, and nothing changes.
 `origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
-objects stand at different angles, and anchors selected with Direct Selection, use the page's axes. The journal entry
+objects stand at different angles, and anchors selected with Direct Selection, use the page's axes; with `copy` or
+with `objects: false`, the whole objects or their pattern tiles transform, along the box. The journal entry
 records the `basis` used, so a recorded action replays in the same frame; an older recording without `basis` acts
 along the box. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
 and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis

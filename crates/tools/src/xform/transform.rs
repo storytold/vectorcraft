@@ -74,7 +74,8 @@ struct Drag {
     /// ([`TransformTool::matrix_in`]).
     angle: f64,
     /// Anchors are selected with Direct Selection: they transform alone along the page's axes,
-    /// and a copy transforms the whole objects along the box ([`Drag::angle_for`]).
+    /// and a copy or a pattern-only drag transforms the whole objects along the box
+    /// ([`Drag::angle_for`]).
     anchors: bool,
     /// The snapped pointer and Shift at the last drag event, to work out the transform again
     /// when the Alt state at the release changes what it transforms.
@@ -84,9 +85,10 @@ struct Drag {
 }
 
 impl Drag {
-    /// The angle Scale and Reflect act along, for a drag that copies (`copy`) or not.
-    fn angle_for(&self, copy: bool) -> f64 {
-        if self.anchors && !copy { 0.0 } else { self.angle }
+    /// The angle Scale and Reflect act along, for a drag that copies (`copy`) or not, and that
+    /// transforms only pattern tiles (`patterns_only`, the backquote key) or not.
+    fn angle_for(&self, copy: bool, patterns_only: bool) -> f64 {
+        if self.anchors && !copy && !patterns_only { 0.0 } else { self.angle }
     }
 }
 
@@ -292,7 +294,7 @@ impl Tool for TransformTool {
                 }
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, text) = self.matrix_in(d.angle_for(ev.mods.alt), d.origin, d.pick, p, ev.mods.shift, d.bounds);
+                let (m, text) = self.matrix_in(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, ev.mods.shift, d.bounds);
                 (d.last, d.pointer, d.shift) = (m, p, ev.mods.shift);
                 self.drag = Some(d);
                 self.measure = Some((p, text));
@@ -302,10 +304,14 @@ impl Tool for TransformTool {
             PointerKind::Up => {
                 let Some(d) = self.end_drag() else { return vec![] };
                 if d.began {
-                    // The Alt state at release decides whether the result is a copy, and with
-                    // anchors selected, whether it acts along the box or the page.
-                    let m =
-                        if d.anchors { self.matrix_in(d.angle_for(ev.mods.alt), d.origin, d.pick, d.pointer, d.shift, d.bounds).0 } else { d.last };
+                    // The Alt and backquote states at release decide whether the result is a copy
+                    // or moves only pattern tiles, and with anchors selected, whether it acts
+                    // along the box or the page.
+                    let m = if d.anchors {
+                        self.matrix_in(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, d.pointer, d.shift, d.bounds).0
+                    } else {
+                        d.last
+                    };
                     vec![preview(m, ev.mods.alt, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too.
@@ -680,6 +686,14 @@ mod tests {
             let up = t.pointer(&cx, &ev(PointerKind::Up, to.x, to.y).with_mods(if copy { alt() } else { Mods::default() }));
             assert_eq!(page_axes(matrix(&up[0])), !copy, "copy {copy}: {up:?}");
         }
+        // With the backquote key the drag moves only the whole objects' pattern tiles, which
+        // scale along the box, both while dragging and at the release.
+        let mut t = TransformTool::new(TransformKind::Scale);
+        t.pointer(&cx, &ev(PointerKind::Down, from.x, from.y));
+        let a = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.x, to.y) });
+        assert!(!page_axes(matrix(&a[1])), "{a:?}");
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, to.x, to.y) });
+        assert!(!page_axes(matrix(&up[0])), "{up:?}");
     }
 
     #[test]
