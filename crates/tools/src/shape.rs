@@ -236,7 +236,7 @@ impl ShapeTool {
         self.selection = if let Some((handle, bx)) = self.over_handle(cx, ev.pos) {
             let is_area = |id: &vectorcraft_doc::NodeId| cx.doc.node(*id).is_some_and(is_area_type);
             let areas = cx.selection.objects.iter().any(is_area);
-            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::new(cx, || Targets::for_scale(cx))), last: None })
+            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::scaling(cx, || Targets::for_scale(cx))), last: None })
         } else {
             match hit_center(cx, ev.pos, cx.point_tol()) {
                 Some((_, hold)) => Some(SelectionDrag::Move { start: ev.pos, hold, began: false, snap: Box::new(MoveSnap::new(cx)) }),

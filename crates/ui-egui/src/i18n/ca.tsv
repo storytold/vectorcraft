@@ -6676,6 +6676,13 @@ theme	Appearance	Aparença
 	Area Text	Text d’àrea
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcions d’ajust al píxel
+	Pixel Snapping Options…	Opcions d’ajust al píxel…
+	Snap to Pixel While Drawing	Ajusta al píxel en dibuixar
+	Snap to Pixel While Moving	Ajusta al píxel en moure
+	Snap to Pixel While Scaling	Ajusta al píxel en escalar
+	These options take effect when View › Snap to Pixel is on.	Aquestes opcions tenen efecte quan Visualitza › Ajusta al píxel està activat.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif

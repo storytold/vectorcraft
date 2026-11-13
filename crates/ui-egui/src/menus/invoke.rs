@@ -206,7 +206,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
 }
 
-/// The dialogs the Envelope, Variables, Pathfinder, Repeat, type, graph and View commands open when called without
+/// The dialogs the Envelope, Variables, Pathfinder, Pixel Snapping, Repeat, type, graph and View commands open when called without
 /// params; whether `id` was one of them.
 fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
@@ -224,6 +224,11 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Pathfinder Options: a dialog with the current options.
     if id == "object.pathfinder.options" && p.as_object().is_none_or(|o| o.is_empty()) {
         crate::dialogs::pathfinder_options::open(app);
+        return true;
+    }
+    // Pixel Snapping Options: a dialog with the current options.
+    if id == "view.snapToPixel.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pixel_snap_options::open(app);
         return true;
     }
     // Repeat Options: a dialog with the selected repeat's current values.

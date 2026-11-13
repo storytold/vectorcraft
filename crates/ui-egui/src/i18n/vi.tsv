@@ -6319,6 +6319,13 @@ axis	Y Axis	Trục Y
 	Area Text	Chữ vùng
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Tùy chọn hút vào pixel
+	Pixel Snapping Options…	Tùy chọn hút vào pixel…
+	Snap to Pixel While Drawing	Hút vào pixel khi vẽ
+	Snap to Pixel While Moving	Hút vào pixel khi di chuyển
+	Snap to Pixel While Scaling	Hút vào pixel khi thay đổi tỉ lệ
+	These options take effect when View › Snap to Pixel is on.	Các tùy chọn này có hiệu lực khi Hiển thị › Hút vào pixel đang bật.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph

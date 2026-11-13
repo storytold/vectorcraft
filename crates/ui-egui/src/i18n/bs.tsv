@@ -6218,6 +6218,12 @@ axis	Y Axis	Y osa
 	Area Text	Tekst u oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
+	Pixel Snapping Options	Opcije prianjanja uz piksel
+	Pixel Snapping Options…	Opcije prianjanja uz piksel…
+	Snap to Pixel While Drawing	Prilijepi uz piksel pri crtanju
+	Snap to Pixel While Moving	Prilijepi uz piksel pri pomjeranju
+	Snap to Pixel While Scaling	Prilijepi uz piksel pri skaliranju
+	These options take effect when View › Snap to Pixel is on.	Ove opcije djeluju kada je uključeno Prikaz › Prilijepi uz piksel.
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif

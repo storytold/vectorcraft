@@ -1777,7 +1777,7 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 ### Parameter schemas
 
 Some commands have a machine-readable parameter schema: at present a small set including `view.capsLock`, `view.saved.new`,
-`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options`, `view.snapToPixel.options` and `engine.apiReference`
 (most of the catalogue still documents params in prose only; schemas grow command by command). The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
@@ -1830,9 +1830,10 @@ as the English gives them.
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
-more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 4
 (`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
-`engine.apiReference`; level 3 says that `rotation` in `view.saved.new` and `view.saved.list` turns clockwise. Commands that plug-ins add have no schema here.
+`engine.apiReference`; level 3 says that `rotation` in `view.saved.new` and `view.saved.list` turns clockwise; level 4
+adds `view.snapToPixel.options`. Commands that plug-ins add have no schema here.
 
 `engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
 runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
@@ -5636,6 +5637,23 @@ know or a value that isn't a boolean is refused and changes nothing.
 {"name":"run_command","arguments":{"command":"view.snapToGlyph.options","params":{"angular":false,"anchors":false}}}
 ```
 
+The Pixel Snapping Options (the desktop app's Control bar › Snapping menu › Pixel Snapping Options…, described on the
+help page,
+<https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/draw-pixel-perfect-art.html>):
+`view.snapToPixel.options {drawing?, moving?,
+scaling?}` (or `prefs.get`/`prefs.set` with key `pixelSnap`, a partial object) reads and sets which edits View › Snap to
+Pixel lands on whole pixels. All three are on by default, which is VectorCraft's own default. `drawing` covers the
+points the drawing tools place, the rulers' origin and measured points; `moving` covers the selection, its anchors and
+segments, artboards and ruler guides moved by dragging, and the Rotate, Reflect and Shear tools' drags; `scaling`
+covers the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag. An edit
+whose option is off snaps as it does with Snap to Pixel off. With Snap to Pixel off, the options do nothing. `{}` reads
+them; a key it doesn't know or a value that isn't a boolean is refused and changes nothing. Align New Objects to Pixel
+Grid and the objects' pixel-aligned property (see Align to Pixel Grid) do not depend on these options.
+
+```json
+{"name":"run_command","arguments":{"command":"view.snapToPixel.options","params":{"scaling":false}}}
+```
+
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
 "center"), else its corners and side line up with the edges and centres of the other objects and the artboards (a
@@ -5863,8 +5881,8 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
-holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder` and `glyphSnap`
-groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
+holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder`, `glyphSnap` and
+`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
 saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
 `prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
 set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer

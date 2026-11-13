@@ -6696,6 +6696,13 @@ axis	Y Axis	Y tengely
 	Area Text	Területszöveg
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pixelhez illesztés beállításai
+	Pixel Snapping Options…	Pixelhez illesztés beállításai…
+	Snap to Pixel While Drawing	Illesztés pixelhez rajzoláskor
+	Snap to Pixel While Moving	Illesztés pixelhez mozgatáskor
+	Snap to Pixel While Scaling	Illesztés pixelhez méretezéskor
+	These options take effect when View › Snap to Pixel is on.	Ezek a beállítások akkor érvényesek, ha a Nézet › Illesztés pixelhez be van kapcsolva.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése

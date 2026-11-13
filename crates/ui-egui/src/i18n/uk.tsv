@@ -6318,6 +6318,13 @@ axis	Y Axis	Вісь Y
 	Area Text	Текст в області
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметри прив’язки до пікселя
+	Pixel Snapping Options…	Параметри прив’язки до пікселя…
+	Snap to Pixel While Drawing	Прив’язати до пікселя під час малювання
+	Snap to Pixel While Moving	Прив’язати до пікселя під час переміщення
+	Snap to Pixel While Scaling	Прив’язати до пікселя під час масштабування
+	These options take effect when View › Snap to Pixel is on.	Ці параметри діють, коли ввімкнено Перегляд › Прив’язати до пікселя.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа

@@ -6713,6 +6713,13 @@ axis	Y Axis	osa Y
 	Area Text	Text v oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Měřit text podle hranic glyfů
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Možnosti přichytávání k obrazovým bodům
+	Pixel Snapping Options…	Možnosti přichytávání k obrazovým bodům…
+	Snap to Pixel While Drawing	Přichytávat k obrazovým bodům při kreslení
+	Snap to Pixel While Moving	Přichytávat k obrazovým bodům při přesouvání
+	Snap to Pixel While Scaling	Přichytávat k obrazovým bodům při změně velikosti
+	These options take effect when View › Snap to Pixel is on.	Tyto volby se uplatní, když je zapnuto Zobrazení › Přichytávat k obrazovým bodům.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Zobrazit možnosti přichytávání ke glyfům
 	Hide Snap to Glyph Options	Skrýt možnosti přichytávání ke glyfům

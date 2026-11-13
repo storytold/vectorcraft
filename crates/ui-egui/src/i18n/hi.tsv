@@ -4556,6 +4556,12 @@ antiAlias	Sharp	शार्प
 	Show Slice Numbers	स्लाइस नंबर दिखाएँ
 	Show Slices	स्लाइस दिखाएँ
 	Show smooth color wheel	चिकनी रंग पहिया दिखाएँ
+	Pixel Snapping Options	पिक्सेल पर स्नैप ऑप्शन्स
+	Pixel Snapping Options…	पिक्सेल पर स्नैप ऑप्शन्स…
+	Snap to Pixel While Drawing	ड्रॉ करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Moving	मूव करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Scaling	स्केल करते समय पिक्सेल के लिए स्नैप
+	These options take effect when View › Snap to Pixel is on.	ये ऑप्शन्स तब लागू होते हैं जब व्यू › पिक्सेल के लिए स्नैप चालू हो।
 	Show Snap to Glyph Options	ग्लिफ़ पर स्नैप ऑप्शन्स दिखाएँ
 	Show Swatch Bounds	स्वॉच की सीमाएँ दिखाएँ
 	Show Swatch Kinds	स्वॉच प्रकार दिखाएँ

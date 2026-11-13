@@ -6628,6 +6628,13 @@ axis	Y Axis	Eixo Y
 	Area Text	Texto de Área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir Texto pelos Limites do Glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opções de Ajuste ao Pixel
+	Pixel Snapping Options…	Opções de Ajuste ao Pixel…
+	Snap to Pixel While Drawing	Ajustar ao Pixel ao Desenhar
+	Snap to Pixel While Moving	Ajustar ao Pixel ao Mover
+	Snap to Pixel While Scaling	Ajustar ao Pixel ao Dimensionar
+	These options take effect when View › Snap to Pixel is on.	Essas opções têm efeito quando Exibir › Ajustar ao Pixel está ativado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar Opções de Ajuste ao Glifo
 	Hide Snap to Glyph Options	Ocultar Opções de Ajuste ao Glifo

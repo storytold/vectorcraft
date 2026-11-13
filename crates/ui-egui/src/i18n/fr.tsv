@@ -6708,6 +6708,13 @@ axis	Y Axis	Axe Y
 	Area Text	Texte captif
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesurer le texte d’après les limites du glyphe
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Options de magnétisme du pixel
+	Pixel Snapping Options…	Options de magnétisme du pixel…
+	Snap to Pixel While Drawing	Magnétisme du pixel lors du dessin
+	Snap to Pixel While Moving	Magnétisme du pixel lors du déplacement
+	Snap to Pixel While Scaling	Magnétisme du pixel lors de la mise à l’échelle
+	These options take effect when View › Snap to Pixel is on.	Ces options s’appliquent lorsque Affichage › Magnétisme du pixel est activé.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Afficher les options de magnétisme du glyphe
 	Hide Snap to Glyph Options	Masquer les options de magnétisme du glyphe

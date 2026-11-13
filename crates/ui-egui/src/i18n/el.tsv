@@ -6664,6 +6664,13 @@ axis	Y Axis	Άξονας Y
 	Area Text	Κείμενο περιοχής
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Επιλογές προσκόλλησης σε εικονοστοιχείο
+	Pixel Snapping Options…	Επιλογές προσκόλλησης σε εικονοστοιχείο…
+	Snap to Pixel While Drawing	Προσκόλληση σε εικονοστοιχείο κατά τη σχεδίαση
+	Snap to Pixel While Moving	Προσκόλληση σε εικονοστοιχείο κατά τη μετακίνηση
+	Snap to Pixel While Scaling	Προσκόλληση σε εικονοστοιχείο κατά την αλλαγή κλίμακας
+	These options take effect when View › Snap to Pixel is on.	Αυτές οι επιλογές ισχύουν όταν είναι ενεργή η επιλογή Προβολή › Προσκόλληση σε εικονοστοιχείο.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή

@@ -2736,3 +2736,33 @@ fn snap_to_glyph_options_read_set_and_reset() {
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
 }
+
+/// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving
+/// and While Scaling, all on by default, kept as the `pixelSnap` preference group; bad keys and
+/// values change nothing, preferences saved without the group read it as all on, and resetting the
+/// preferences turns them all back on.
+#[test]
+fn pixel_snapping_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"drawing": true, "moving": true, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
+    let set = json!({"drawing": true, "moving": false, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({"moving": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pixelSnap"})).unwrap(), set);
+    assert!(!s.prefs.pixel_snap.moving && s.prefs.pixel_snap.drawing && s.prefs.pixel_snap.scaling);
+    for bad in [json!({"moving": 1}), json!({"rotating": false})] {
+        assert!(s.execute("view.snapToPixel.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "pixelSnap", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), set, "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "pixelSnap", "value": {"scaling": false}})).unwrap();
+    let both = json!({"drawing": true, "moving": false, "scaling": false});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), both);
+    // Preferences written before the group existed, and a group that names only some options.
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert_eq!(older.pixel_snap, vectorcraft_tools::PixelSnap::default());
+    let partial: Prefs = serde_json::from_value(json!({"pixelSnap": {"drawing": false}})).unwrap();
+    assert_eq!(partial.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: true });
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
+}

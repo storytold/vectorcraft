@@ -58,7 +58,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
@@ -542,6 +542,7 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            pixel_snap: crate::PixelSnap::default(),
             snap_to_point: true,
             snap_tangent: true,
             snap_perpendicular: true,

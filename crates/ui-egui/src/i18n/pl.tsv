@@ -6567,6 +6567,13 @@ axis	Y Axis	Oś Y
 	Area Text	Tekst akapitowy
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcje przyciągania do pikseli
+	Pixel Snapping Options…	Opcje przyciągania do pikseli…
+	Snap to Pixel While Drawing	Przyciągaj do pikseli podczas rysowania
+	Snap to Pixel While Moving	Przyciągaj do pikseli podczas przesuwania
+	Snap to Pixel While Scaling	Przyciągaj do pikseli podczas skalowania
+	These options take effect when View › Snap to Pixel is on.	Te opcje działają, gdy włączona jest opcja Widok › Przyciągaj do pikseli.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów

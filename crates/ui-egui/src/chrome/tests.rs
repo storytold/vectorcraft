@@ -2247,6 +2247,82 @@ fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
     check(&nodes, "Alignment Guides", true);
 }
 
+/// The Control bar's Snapping menu opens Pixel Snapping Options with the current options; OK sets
+/// the three choices the dialog shows, and a dialog closed without OK changes nothing.
+#[test]
+fn the_control_bar_snapping_menu_opens_pixel_snapping_options() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("view.snapToPixel.options", json!({"moving": false})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 400.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let center = |nodes: &[(egui::accesskit::NodeId, egui::accesskit::Node)], name: &str| {
+        let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n.clone()).unwrap_or_else(|| panic!("missing {name}"));
+        let b = n.bounds().expect("a visible menu control");
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let menu = center(&nodes, "Snapping");
+    let nodes = click(&mut app, menu);
+    let entry = center(&nodes, "Pixel Snapping Options…");
+    click(&mut app, entry);
+    let d = app.ui.dialog.as_ref().expect("Pixel Snapping Options");
+    assert_eq!(d.kind, crate::dialogs::pixel_snap_options::KIND);
+    assert_eq!(serde_json::Value::Object(d.fields.clone()), json!({"drawing": true, "moving": false, "scaling": true}));
+    // While View › Snap to Pixel is off, the dialog says the options wait for it.
+    // A new window is laid out unseen in its first frame, so the second frame is read.
+    let note = |app: &mut crate::VectorcraftApp| {
+        let mut nodes = vec![];
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = |text: &str| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|l| l.contains(text)));
+        (shown("Snap to Pixel While Drawing"), shown("take effect when View › Snap to Pixel is on"))
+    };
+    assert!(!app.ui.view.snap_to_pixel);
+    assert_eq!(note(&mut app), (true, true), "the note shows with Snap to Pixel off");
+    app.ui.view.snap_to_pixel = true;
+    assert_eq!(note(&mut app), (true, false), "the note is hidden with Snap to Pixel on");
+    let before = app.session.prefs.pixel_snap;
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("drawing".into(), json!(false));
+    app.ui.dialog = None;
+    assert_eq!(app.session.prefs.pixel_snap, before, "a dialog closed without OK changes nothing");
+    crate::menus::invoke(&mut app, "view.snapToPixel.options", json!({}));
+    let d = app.ui.dialog.as_mut().expect("Pixel Snapping Options");
+    d.fields.insert("drawing".into(), json!(false));
+    d.fields.insert("moving".into(), json!(true));
+    d.fields.insert("scaling".into(), json!(false));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.prefs.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: false });
+}
+
 /// The window the Control bar docking tests draw the bar in.
 const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
 
