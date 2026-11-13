@@ -496,7 +496,8 @@ impl Layers<'_> {
             runs_inside([hole], |y, a, b| {
                 #[cfg(test)]
                 round.live_reads.fetch_add(1, Ordering::Relaxed);
-                !dead.get(y).is_some_and(|runs| meets(runs, a, b))
+                let row = y.saturating_mul(self.w);
+                !meets(dead, row.saturating_add(a), row.saturating_add(b))
             })
         };
         let mut marked = vec![];
@@ -739,17 +740,13 @@ impl Layers<'_> {
         // Two bytes a pixel for the marks.
         let marks: Vec<AtomicU16> = (0..n).map(|_| AtomicU16::new(0)).collect();
         let untraced = |l: u16| l == TRANSPARENT || self.ignored(l);
-        // Eight bytes a run of untraced pixels, at most four a pixel (where every other pixel is one), and a list a row.
-        let mut dead = self.traced.iter().any(|&l| untraced(l)).then(|| dead_runs(self.w, self.traced, untraced));
-        let dead_bytes = dead.as_ref().map_or(0, |rows| {
-            rows.iter().fold(0usize, |s, r| {
-                s.saturating_add(size_of::<Vec<(u32, u32)>>()).saturating_add(r.capacity().saturating_mul(size_of::<(u32, u32)>()))
-            })
-        });
+        // Eight bytes a run of untraced pixels, at most four a pixel (where every other pixel is one).
+        let mut dead = self.traced.iter().any(|&l| untraced(l)).then(|| dead_runs(self.traced, untraced));
+        let dead_bytes = dead.as_ref().map_or(0, |runs| runs.capacity().saturating_mul(size_of::<(u32, u32)>()));
         #[cfg(test)]
         let probe = PROBE.with(|p| {
             let mut p = p.borrow_mut();
-            (p.live_reads, p.areas) = (0, vec![]);
+            (p.live_reads, p.areas, p.dead_bytes) = (0, vec![], dead_bytes);
             p.clone()
         });
         #[cfg(test)]
@@ -1074,9 +1071,9 @@ struct Round<'a> {
     /// it; 0 where none does.
     marks: &'a [AtomicU16],
     /// In the first round, where a hole may hold a pixel that the layers do not trace (transparent, or a color left
-    /// out), the runs of such pixels in each row, left to right as `(x0, x1)`: an area is filled only where it holds
-    /// none. `None` in later rounds and in images without such pixels.
-    dead: Option<&'a [Vec<(u32, u32)>]>,
+    /// out), the runs of such pixels (see [`dead_runs`]): an area is filled only where it holds none. `None` in later
+    /// rounds and in images without such pixels.
+    dead: Option<&'a [(u32, u32)]>,
     /// Tests: the reads made to check a hole against `dead`.
     #[cfg(test)]
     live_reads: &'a AtomicUsize,
@@ -1129,6 +1126,8 @@ pub(crate) struct Probe {
     pub(crate) budget: Option<u64>,
     /// Counted: the reads the first round made to check that a hole holds only pixels the layers trace.
     pub(crate) live_reads: usize,
+    /// Counted: the bytes the runs of untraced pixels take.
+    pub(crate) dead_bytes: usize,
     /// Counted: each area of a later round, as `(round, cost, filled)`, in the order the budget was charged.
     pub(crate) areas: Vec<(usize, u64, bool)>,
 }
@@ -1138,25 +1137,21 @@ thread_local! {
     pub(crate) static PROBE: std::cell::RefCell<Probe> = std::cell::RefCell::new(Probe::default());
 }
 
-/// The runs of the pixels in each row of a `w` pixels wide image for which `dead` holds, left to right as `(x0, x1)`.
-fn dead_runs(w: usize, labels: &[u16], dead: impl Fn(u16) -> bool) -> Vec<Vec<(u32, u32)>> {
-    labels
-        .chunks(w.max(1))
-        .map(|row| {
-            let mut runs: Vec<(u32, u32)> = vec![];
-            for (x, &l) in row.iter().enumerate() {
-                let x = u32::try_from(x).unwrap_or(u32::MAX);
-                if !dead(l) {
-                    continue;
-                }
-                match runs.last_mut() {
-                    Some(r) if r.1 == x => r.1 = x.saturating_add(1),
-                    _ => runs.push((x, x.saturating_add(1))),
-                }
-            }
-            runs
-        })
-        .collect()
+/// The runs of the pixels of `labels` for which `dead` holds, in order as `(i0, i1)` (indices into `labels`, so that a
+/// run goes on into the next row; one list for the image, whatever its height).
+fn dead_runs(labels: &[u16], dead: impl Fn(u16) -> bool) -> Vec<(u32, u32)> {
+    let mut runs: Vec<(u32, u32)> = vec![];
+    for (i, &l) in labels.iter().enumerate() {
+        let i = u32::try_from(i).unwrap_or(u32::MAX);
+        if !dead(l) {
+            continue;
+        }
+        match runs.last_mut() {
+            Some(r) if r.1 == i => r.1 = i.saturating_add(1),
+            _ => runs.push((i, i.saturating_add(1))),
+        }
+    }
+    runs
 }
 
 /// Whether any of the runs `runs` (left to right, apart) meets the pixels `a..b`.

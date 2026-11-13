@@ -485,6 +485,22 @@ fn overlapping_checks_nested_holes_around_a_transparent_center_by_their_rows() {
     assert!(probe.live_reads > 0 && probe.live_reads < 37 * 300, "{} reads", probe.live_reads);
 }
 
+/// Overlapping: in a tall, narrow image that is transparent but for a black block with a white center, the runs of
+/// untraced pixels take a few bytes for the whole image, not a list for each row.
+#[test]
+fn overlapping_holds_the_untraced_pixels_of_a_tall_narrow_image_in_a_few_runs() {
+    let img = Raster::from_fn(3, 20_000, |x, y| match y {
+        100..110 if x == 1 && (104..106).contains(&y) => WHITE,
+        100..110 => BLACK,
+        _ => [0, 0, 0, 0],
+    });
+    let params =
+        TraceParams { mode: Mode::Color, palette: Palette::Limited, colors: 2, noise: 0, method: Method::Overlapping, ..TraceParams::default() };
+    let (res, probe) = probed(layers::Probe::default(), || trace(&img, &params));
+    assert_draws(&img, &res, &[]);
+    assert!(probe.dead_bytes > 0 && probe.dead_bytes <= 64, "{} bytes", probe.dead_bytes);
+}
+
 /// Overlapping: an enclosed area past what is left of the work budget keeps its holes and is charged nothing, so a
 /// smaller area after it in the same round is still filled.
 #[test]
