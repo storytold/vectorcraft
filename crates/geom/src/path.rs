@@ -165,6 +165,26 @@ impl Anchor {
     pub fn reversed(&self) -> Self {
         Self { p: self.p, h_in: self.h_out, h_out: self.h_in, kind: self.kind }
     }
+    /// Make the anchor smooth between the points `prev` and `next` (its own point for a missing
+    /// one): handles in line with them, each a third of the way to that side's point. A smooth
+    /// anchor with both handles keeps them. False, with no change, when the two points give no
+    /// direction. [`SubPath::smooth_anchor`] calls it with the anchor's neighbors.
+    pub fn smooth_between(&mut self, prev: Option<Point>, next: Option<Point>) -> bool {
+        if self.kind == AnchorKind::Smooth && self.has_in() && self.has_out() {
+            return true;
+        }
+        let (pp, nn) = (prev.unwrap_or(self.p), next.unwrap_or(self.p));
+        let dir = nn - pp;
+        let l = dir.hypot();
+        if l <= 1e-9 {
+            return false;
+        }
+        let u = dir / l;
+        self.h_in = self.p - u * (self.p.distance(pp) / 3.0);
+        self.h_out = self.p + u * (self.p.distance(nn) / 3.0);
+        self.kind = AnchorKind::Smooth;
+        true
+    }
     /// Remove both handles (convert to a sharp corner).
     pub fn retract(&mut self) {
         self.h_in = self.p;
@@ -398,21 +418,7 @@ impl SubPath {
         };
         let at = |j: Option<usize>| j.and_then(|j| self.anchors.get(j)).map(|a| a.p);
         let (prev, next) = (at(prev), at(next));
-        let Some(a) = self.anchors.get_mut(i) else { return false };
-        if a.kind == AnchorKind::Smooth && a.has_in() && a.has_out() {
-            return true;
-        }
-        let (pp, nn) = (prev.unwrap_or(a.p), next.unwrap_or(a.p));
-        let dir = nn - pp;
-        let l = dir.hypot();
-        if l <= 1e-9 {
-            return false;
-        }
-        let u = dir / l;
-        a.h_in = a.p - u * (a.p.distance(pp) / 3.0);
-        a.h_out = a.p + u * (a.p.distance(nn) / 3.0);
-        a.kind = AnchorKind::Smooth;
-        true
+        self.anchors.get_mut(i).is_some_and(|a| a.smooth_between(prev, next))
     }
     /// Cut at the anchors `at`: each becomes the end of one open piece and the start of the next,
     /// its handle off each piece retracted (the shape doesn't change). A closed subpath opens at
