@@ -2354,49 +2354,279 @@ fn the_control_bar_panel_menu_scrolls_in_a_short_window() {
     assert!(app.ui.control_bar_bottom, "Dock to Bottom docks the bar at the bottom");
 }
 
-/// Dragging the Control bar's gripper docks the bar at the edge of the window the pointer is
-/// released nearer; a drag released nearer the edge it is at leaves it there.
+/// The gripper of a Control bar docked at the top or the bottom of [`DOCK_SCREEN`]: the bar's first
+/// item, inside its 10-point margin, centered in the 34-point bar.
+fn docked_grip(bottom: bool) -> egui::Pos2 {
+    egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 })
+}
+
+/// The gripper of the Control bar floating with its top-left corner at `pos`: inside its 1-point
+/// border and 10-point margin.
+fn floating_grip(pos: [f32; 2]) -> egui::Pos2 {
+    egui::pos2(pos[0] + 14.0, pos[1] + 17.0)
+}
+
+/// A drag of the Control bar's gripper from `from` to `to` in window `screen`, with `during` sent
+/// at the last move before the release, released at `to`.
+fn drag_gripper_in(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    screen: egui::Rect,
+    from: egui::Pos2,
+    to: egui::Pos2,
+    during: Vec<egui::Event>,
+) {
+    // A bar that has just started floating takes a frame to show.
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    control_bar_frame_in(app, ctx, screen, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame_in(app, ctx, screen, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    control_bar_frame_in(app, ctx, screen, during);
+    control_bar_frame_in(app, ctx, screen, vec![press_at(to, false)]);
+    control_bar_frame_in(app, ctx, screen, vec![]);
+}
+
+/// [`drag_gripper_in`] in [`DOCK_SCREEN`] with nothing sent during the drag.
+fn drag_gripper(app: &mut crate::VectorcraftApp, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
+    drag_gripper_in(app, ctx, DOCK_SCREEN, from, to, vec![]);
+}
+
+/// Dragging the Control bar's gripper and releasing it within 24 points of the top or the bottom of
+/// the window docks the bar at that edge, the edge it is at included.
 #[test]
 fn dragging_the_control_bar_gripper_docks_it_at_the_nearer_edge() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    // The gripper is the bar's first item, inside its 10-point margin, centered in the 34-point bar.
-    let grip = |bottom: bool| egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 });
-    let drag = |app: &mut crate::VectorcraftApp, from: egui::Pos2, to: egui::Pos2| {
-        control_bar_frame(app, &ctx, vec![]);
-        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
-        for k in 1..=4 {
-            control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
-        }
-        control_bar_frame(app, &ctx, vec![press_at(to, false)]);
-    };
-    drag(&mut app, grip(false), egui::pos2(400.0, 200.0));
-    assert!(app.ui.control_bar_bottom, "released nearer the bottom: docked at the bottom");
-    drag(&mut app, grip(true), egui::pos2(400.0, 160.0));
-    assert!(app.ui.control_bar_bottom, "released nearer the bottom again: still at the bottom");
-    drag(&mut app, grip(true), egui::pos2(400.0, 120.0));
-    assert!(!app.ui.control_bar_bottom, "released nearer the top: docked at the top");
-    drag(&mut app, grip(false), egui::pos2(400.0, 140.0));
-    assert!(!app.ui.control_bar_bottom, "released nearer the top again: still at the top");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, 290.0));
+    assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the bottom: docked at the bottom");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(400.0, 280.0));
+    assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the bottom again: still at the bottom");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(400.0, 10.0));
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the top: docked at the top");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, 20.0));
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating, "released at the top again: still at the top");
 }
 
-/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, and
-/// the panel menu checks the edge in use; another edge, or none, is an error and changes nothing.
+/// Dragging the docked Control bar's gripper away from both edges and releasing it there floats
+/// the bar under the pointer, held where the gripper was grabbed: 800 points wide, over the window,
+/// with its gripper and panel menu. The bar stays docked until the release.
 #[test]
-fn the_control_bar_dock_command_takes_top_or_bottom() {
+fn dragging_the_control_bar_gripper_away_from_both_edges_floats_it() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let from = docked_grip(false);
+    control_bar_frame(&mut app, &ctx, vec![]);
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    let to = egui::pos2(400.0, 150.0);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    assert!(!app.ui.control_bar_floating && super::control_bar_moving(&ctx), "still docked while the drag goes on");
+    control_bar_frame(&mut app, &ctx, vec![press_at(to, false)]);
+    assert!(app.ui.control_bar_floating && !super::control_bar_moving(&ctx), "released away from both edges: floating");
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "float"})), Some(true));
+    assert_eq!(app.ui.control_bar_float_pos, Some([to.x - from.x, to.y - from.y]), "held where the gripper was grabbed");
+    control_bar_frame(&mut app, &ctx, vec![]);
+    let menu = node_center(&control_bar_frame(&mut app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+    let left = to.x - from.x;
+    assert!((menu.y - to.y).abs() < 1.0 && (menu.x - (left + 800.0 - 19.0)).abs() < 1.0, "the panel menu ends the 800-point bar: {menu:?}");
+}
+
+/// A floating Control bar's gripper moves it, and docks it again at the top or the bottom of the
+/// window; from either edge it floats again.
+#[test]
+fn floating_control_bar_moves_and_redocks_from_each_edge() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    let at = super::CONTROL_BAR_FLOAT_AT;
+    drag_gripper(&mut app, &ctx, floating_grip(at), egui::pos2(300.0, 100.0));
+    assert!(app.ui.control_bar_floating, "moved, it still floats");
+    let moved = [300.0 - 14.0, 100.0 - 17.0];
+    assert_eq!(app.ui.control_bar_float_pos, Some(moved));
+    drag_gripper(&mut app, &ctx, floating_grip(moved), egui::pos2(500.0, 290.0));
+    assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom, "released at the bottom: docked there");
+    drag_gripper(&mut app, &ctx, docked_grip(true), egui::pos2(500.0, 160.0));
+    assert!(app.ui.control_bar_floating, "from the bottom it floats again");
+    let [x, y] = app.ui.control_bar_float_pos.unwrap_or_default();
+    drag_gripper(&mut app, &ctx, floating_grip([x, y]), egui::pos2(500.0, 8.0));
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "released at the top: docked there");
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(700.0, 120.0));
+    assert!(app.ui.control_bar_floating, "from the top it floats again");
+}
+
+/// A floating Control bar's panel menu keeps Dock to Top and Dock to Bottom, neither checked, and
+/// each docks the bar at its edge.
+#[test]
+fn floating_control_bar_menu_docks_to_either_edge() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, MENU_SCREEN, events);
+    for (item, bottom) in [("Dock to Bottom", true), ("Dock to Top", false)] {
+        app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+        frame(&mut app, vec![]);
+        let menu = node_center(&frame(&mut app, vec![]), "Panel menu").unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+        frame(&mut app, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+        frame(&mut app, vec![press_at(menu, false)]);
+        let nodes = frame(&mut app, vec![]);
+        let checked = nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓') && l.contains("Dock")).count();
+        assert_eq!(checked, 0, "neither edge is checked while the bar floats");
+        let at = node_center(&nodes, item).unwrap_or_else(|| panic!("the menu lists {item}"));
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom == bottom, "{item} docks the bar");
+    }
+}
+
+/// Escape during a gripper drag cancels it: a docked bar stays at its edge and a floating one where
+/// it floats.
+#[test]
+fn control_bar_drag_escape_restores_placement() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let escape =
+        || vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }];
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, docked_grip(false), egui::pos2(400.0, 150.0), escape());
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the docked bar stays at the top");
+    assert!(!super::control_bar_moving(&ctx), "the drag is over");
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, docked_grip(false), egui::pos2(400.0, 290.0), escape());
+    assert!(!app.ui.control_bar_bottom, "a canceled drag over the bottom does not dock it there");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    let at = super::CONTROL_BAR_FLOAT_AT;
+    drag_gripper_in(&mut app, &ctx, DOCK_SCREEN, floating_grip(at), egui::pos2(500.0, 200.0), escape());
+    assert!(app.ui.control_bar_floating, "the floating bar still floats");
+    assert_eq!(app.ui.control_bar_float_pos, None, "where it floated");
+    // A bar hidden in the middle of a drag leaves no drag to take a later Escape once the button
+    // is released.
+    let (from, to) = (floating_grip(at), egui::pos2(500.0, 200.0));
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    assert!(super::control_bar_moving(&ctx), "the drag goes on");
+    for events in [vec![press_at(to, false)], vec![]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |_| {});
+        out.textures_delta.clear();
+    }
+    assert!(!super::control_bar_moving(&ctx), "released with the bar hidden, the drag is over");
+}
+
+/// An Escape in the same frame as the gripper's release is the drag's: the frame's shortcuts, which
+/// run before the bar is drawn, still see the drag, and the bar stays where it was.
+#[test]
+fn control_bar_drag_escape_on_release_frame_is_the_drags() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (from, to) = (docked_grip(false), egui::pos2(400.0, 150.0));
+    control_bar_frame(&mut app, &ctx, vec![]);
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let mut moving = None;
+    let input = egui::RawInput { events: vec![escape, press_at(to, false)], screen_rect: Some(DOCK_SCREEN), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        moving = Some(super::control_bar_moving(ui.ctx()));
+        super::control_bar(&mut app, ui);
+    });
+    out.textures_delta.clear();
+    assert_eq!(moving, Some(true), "the release frame's shortcuts see the drag");
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the canceled drag leaves the bar at the top");
+    control_bar_frame(&mut app, &ctx, vec![]);
+    assert!(!super::control_bar_moving(&ctx), "the drag is over");
+}
+
+/// A gripper drag released outside the window leaves the bar where it was.
+#[test]
+fn control_bar_drag_release_outside_window_keeps_previous_placement() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    drag_gripper(&mut app, &ctx, docked_grip(false), egui::pos2(400.0, DOCK_SCREEN.bottom() + 120.0));
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the bar stays at the top");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    drag_gripper(&mut app, &ctx, floating_grip(super::CONTROL_BAR_FLOAT_AT), egui::pos2(-50.0, 150.0));
+    assert!(app.ui.control_bar_floating && app.ui.control_bar_float_pos.is_none(), "the floating bar stays where it was");
+}
+
+/// In a window too short for a floating bar between the two docking zones, a release docks the bar
+/// at the nearer edge; a floating bar saved on a bigger window is drawn inside a smaller one, its
+/// panel menu in reach, without docking it.
+#[test]
+fn floating_control_bar_stays_reachable_in_tiny_and_resized_windows() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let tiny = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 70.0));
+    drag_gripper_in(&mut app, &ctx, tiny, egui::pos2(13.0, 17.0), egui::pos2(300.0, 40.0), vec![]);
+    assert!(!app.ui.control_bar_floating && app.ui.control_bar_bottom, "released below the middle: docked at the bottom");
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    app.ui.control_bar_float_pos = Some([1000.0, 250.0]);
+    let small = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(500.0, 120.0));
+    control_bar_frame_in(&mut app, &ctx, small, vec![]);
+    let menu = node_center(&control_bar_frame_in(&mut app, &ctx, small, vec![]), "Panel menu")
+        .unwrap_or_else(|| panic!("the floating bar has a panel menu"));
+    assert!(small.shrink(1.0).contains(menu), "the panel menu is inside the smaller window: {menu:?}");
+    assert!(app.ui.control_bar_floating, "a smaller window does not dock the bar");
+    // The gripper too: a drag from where the bar is drawn moves it.
+    let grip = egui::pos2(small.right() - 500.0 + 14.0, small.bottom() - 34.0 + 17.0);
+    drag_gripper_in(&mut app, &ctx, small, grip, egui::pos2(200.0, 60.0), vec![]);
+    assert!(app.ui.control_bar_floating, "moved inside the smaller window");
+    assert_eq!(app.ui.control_bar_float_pos, Some([0.0, 43.0]), "kept inside the window, its gripper under the pointer");
+}
+
+/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, or
+/// floats it, and the panel menu checks the edge in use; another edge, or none, is an error and
+/// changes nothing. A floating bar floats at the position it last floated at, docked in between
+/// or hidden by Tab and shown again.
+#[test]
+fn the_control_bar_dock_command_takes_top_bottom_or_float() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     assert_eq!(app.run("window.control.dock", json!({"edge": "bottom"})).unwrap(), json!({"edge": "bottom"}));
     assert!(app.ui.control_bar_bottom);
     assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "bottom"})), Some(true));
     assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "top"})), Some(false));
-    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": 1}), json!({})] {
+    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": "Float"}), json!({"edge": 1}), json!({})] {
         let err = app.run("window.control.dock", p.clone()).unwrap_err();
-        assert_eq!(err, "`edge` must be one of top, bottom", "{p}");
-        assert!(app.ui.control_bar_bottom, "{p} leaves the bar at the bottom");
+        assert_eq!(err, "`edge` must be one of top, bottom, float", "{p}");
+        assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "{p} leaves the bar at the bottom");
     }
+    assert_eq!(app.run("window.control.dock", json!({"edge": "float"})).unwrap(), json!({"edge": "float"}));
+    assert!(app.ui.control_bar_floating && app.ui.control_bar_bottom, "floating, it keeps the edge it docked to last");
+    for edge in ["top", "bottom"] {
+        assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({ "edge": edge })), Some(false), "{edge}");
+    }
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "float"})), Some(true));
+    let err = app.run("window.control.dock", json!({"edge": "side"})).unwrap_err();
+    assert_eq!(err, "`edge` must be one of top, bottom, float");
+    assert!(app.ui.control_bar_floating, "an error leaves the bar floating");
+    app.ui.control_bar_float_pos = Some([240.0, 160.0]);
     assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
-    assert!(!app.ui.control_bar_bottom);
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating);
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    assert_eq!(app.ui.control_bar_float_pos, Some([240.0, 160.0]), "it floats where it last floated");
+    // Tab hides the floating bar, and Tab again shows it floating where it was.
+    app.ui.control_bar = true;
+    app.run("window.dock", json!({})).unwrap();
+    assert!(!app.ui.control_bar && app.ui.control_bar_floating, "Tab hides the bar");
+    app.run("window.dock", json!({})).unwrap();
+    assert!(app.ui.control_bar && app.ui.control_bar_floating, "Tab shows it floating again");
+    assert_eq!(app.ui.control_bar_float_pos, Some([240.0, 160.0]));
 }
 
 /// The labels of the Control bar panel menu's groups of options, in the menu's order.
@@ -2667,6 +2897,10 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     assert_eq!(f, screen.bottom(), "docked at the top: menus stop at the window's bottom");
     let f = floor(&mut app, true, true, 0);
     assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
+    // Floating after docking at the bottom, the bar is no bottom bar.
+    app.ui.control_bar_floating = true;
+    let f = floor(&mut app, false, true, 0);
+    assert_eq!(f, screen.bottom(), "floating: menus stop at the window's bottom");
 }
 
 /// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard

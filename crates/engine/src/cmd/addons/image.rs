@@ -2,11 +2,15 @@
 //! selected images transparent in their own pixels, as one undo step. The background is the most
 //! common color along an image's edges, the average of its four corners, or colors the caller
 //! picks. It is cleared where it reaches in from an edge, or wherever it is. The work is done here,
-//! on the pixels; nothing is sent anywhere. It is a VectorCraft addition. Its submenu (Object ›
-//! Plug-ins › Image Tools) and dialog are the UI's.
+//! on the pixels; nothing is sent anywhere. Color Mask ([`mask`]) hides colors matched the same
+//! way while the image keeps its pixels. They are VectorCraft additions. Its submenu (Object ›
+//! Plug-ins › Image Tools) and dialogs are the UI's.
 
+mod mask;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use mask::refresh as refresh_color_masks;
 
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
@@ -15,12 +19,12 @@ use std::sync::{Arc, Weak};
 use image::{DynamicImage, ImageBuffer, LumaA, Rgba};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_doc::{ImageBlob, NodeId, NodeKind};
+use vectorcraft_doc::{ImageBlob, ImageObject, NodeId, NodeKind};
 use vectorcraft_geom::Affine;
 
 use super::super::fileio::{MAX_RASTER_ALLOC, ppi};
 use super::super::menucmds::has_image;
-use super::super::paint::{PROCESS_ON_TRANSPARENCY, gray_colorized_with_process};
+use super::super::paint::{PROCESS_ON_TRANSPARENCY, colorized_with_process};
 use super::super::{CommandSpec, Result, Session, bad, checked_ids_param, cmd, hex_with_alpha, number_or, switch_or, text_param};
 
 /// Remove Background's command.
@@ -35,7 +39,7 @@ const MAX_COLORS: usize = 16;
 const WORK_BYTES: u64 = 10;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
+    let mut v = vec![cmd!(
         "addon.image.removeBackground",
         "Remove Background…",
         ["Object", "Plug-ins", "Image Tools"],
@@ -43,7 +47,9 @@ pub fn specs() -> Vec<CommandSpec> {
         "{background?: \"edges\" (default: the most common color along the image's edges; nothing is cleared when the edges hold at least as many clear pixels as pixels of that color) | \"corners\" (the average of the image's four corner pixels that are not clear; nothing is cleared when all four are clear) | \"colors\" (the colors in `colors`), colors?: [color…] or one string of them split by commas or spaces (1 to 16 colors, each a hex color \"#rrggbb\" or \"#rgb\" with or without the # or one of black, white, red, green and blue; needed with background: colors, and checked but not used with edges or corners), contiguous?: bool (true: only background pixels that reach in from an edge are cleared; false: they are cleared wherever they are; true), match?: \"distance\" (default: a color's RGB distance from a background color) | \"channels\" (its largest difference on one of red, green and blue), tolerance?: 0..100 (with distance, % of the largest RGB distance; with channels, % of 255 steps on one channel; a pixel this near a background color is cleared; 10), softness?: 0..100 (% past the tolerance over which pixels fade from cleared to kept; 10), ids?: [id…] (default: the selected images)} make the background of each image transparent in its own pixels, as one undo step: the image stays an image, embedded as a PNG with an alpha channel at the depth of its pixels (16-bit images keep 16 bits and grayscale images stay gray) with the source's color profile and resolution, and a linked image is embedded; a CMYK image, a linked image that shows its preview (embed or relink it first), an image too large to change, a result with no pixel left, and a grayscale image colorized with a process color (which can't colorize gray pixels with transparency) are refused, and an image whose pixels do not change is left as it is (no undo step when none changes) → {changed: the images changed, ids, cleared: the pixels made fully clear in them}",
         has_image,
         remove_background
-    )]
+    )];
+    v.extend(mask::specs());
+    v
 }
 
 /// Where the background's colors come from.
@@ -79,50 +85,50 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    /// The settings `p` gives, each checked.
-    fn read(p: &Value) -> Result<Self> {
+    /// The settings `p` gives to command `cmd`, each checked.
+    fn read(p: &Value, cmd: &str) -> Result<Self> {
         let percent = |key: &str| -> Result<f64> {
-            let v = number_or(p, key, 10.0, C)?;
-            if v.is_finite() && (0.0..=100.0).contains(&v) { Ok(v) } else { Err(bad(C, format!("`{key}` must be from 0 to 100"))) }
+            let v = number_or(p, key, 10.0, cmd)?;
+            if v.is_finite() && (0.0..=100.0).contains(&v) { Ok(v) } else { Err(bad(cmd, format!("`{key}` must be from 0 to 100"))) }
         };
         let (tolerance, softness) = (percent("tolerance")?, percent("softness")?);
         let colors = match p.get("colors") {
             None | Some(Value::Null) => None,
-            Some(v) => Some(colors(v)?),
+            Some(v) => Some(colors(v, cmd)?),
         };
-        let background = match text_param(p, "background", C)? {
+        let background = match text_param(p, "background", cmd)? {
             None | Some("edges") => Background::Edges,
             Some("corners") => Background::Corners,
-            Some("colors") => Background::Colors(colors.ok_or_else(colors_error)?),
-            Some(_) => return Err(bad(C, "`background` must be edges, corners or colors")),
+            Some("colors") => Background::Colors(colors.ok_or_else(|| colors_error(cmd))?),
+            Some(_) => return Err(bad(cmd, "`background` must be edges, corners or colors")),
         };
-        let measure = match text_param(p, "match", C)? {
+        let measure = match text_param(p, "match", cmd)? {
             None | Some("distance") => Match::Distance,
             Some("channels") => Match::Channels,
-            Some(_) => return Err(bad(C, "`match` must be distance or channels")),
+            Some(_) => return Err(bad(cmd, "`match` must be distance or channels")),
         };
-        let contiguous = switch_or(p, "contiguous", true, C)?;
+        let contiguous = switch_or(p, "contiguous", true, cmd)?;
         Ok(Self { background, contiguous, measure, tolerance, softness })
     }
 }
 
-fn colors_error() -> crate::EngineError {
-    bad(C, "`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue")
+fn colors_error(cmd: &str) -> crate::EngineError {
+    bad(cmd, "`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue")
 }
 
-/// The colors `v` lists: an array of strings, or one string of them split by commas or spaces.
-/// Each is read as [`Color::from_hex`] reads it; one with an alpha part is refused.
-fn colors(v: &Value) -> Result<Vec<[u8; 3]>> {
+/// The colors `v` lists to command `cmd`: an array of strings, or one string of them split by
+/// commas or spaces. Each is read as [`Color::from_hex`] reads it; one with an alpha part is refused.
+fn colors(v: &Value, cmd: &str) -> Result<Vec<[u8; 3]>> {
     // One past the most is enough to tell a list that is too long.
     let texts: Vec<&str> = match v {
         Value::String(s) => s.split([',', ' ', '\t', '\n']).filter(|t| !t.is_empty()).take(MAX_COLORS + 1).collect(),
-        Value::Array(a) => a.iter().take(MAX_COLORS + 1).map(Value::as_str).collect::<Option<_>>().ok_or_else(colors_error)?,
-        _ => return Err(colors_error()),
+        Value::Array(a) => a.iter().take(MAX_COLORS + 1).map(Value::as_str).collect::<Option<_>>().ok_or_else(|| colors_error(cmd))?,
+        _ => return Err(colors_error(cmd)),
     };
     if texts.is_empty() || texts.len() > MAX_COLORS {
-        return Err(colors_error());
+        return Err(colors_error(cmd));
     }
-    texts.into_iter().map(|t| rgb8(t).ok_or_else(colors_error)).collect()
+    texts.into_iter().map(|t| rgb8(t).ok_or_else(|| colors_error(cmd))).collect()
 }
 
 /// The 8-bit RGB of the color `t` writes.
@@ -135,7 +141,7 @@ fn rgb8(t: &str) -> Option<[u8; 3]> {
 }
 
 fn remove_background(s: &mut Session, p: &Value) -> Result<Value> {
-    let settings = Settings::read(p)?;
+    let settings = Settings::read(p, C)?;
     // A preview step keeps the pixels it decodes for the next step; other runs keep none.
     let mut kept = std::mem::take(&mut s.decoded_images);
     let previewing = s.previewing;
@@ -165,40 +171,15 @@ fn remove_background(s: &mut Session, p: &Value) -> Result<Value> {
 /// cleared as `settings` say and the transform that keeps its place and size. Decoded pixels are
 /// taken from and kept in `kept` when it is given.
 fn changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&mut DecodedImages>) -> Result<Vec<(NodeId, Cleared, Affine)>> {
+    let images = images(s, p, C)?;
+    // The result has an alpha channel, which a grayscale image colorized with a process color
+    // can't take. The pixels that are cleared are checked, the image's own, not the ones a color
+    // mask shows.
     let st = s.doc()?;
-    let ids: Vec<NodeId> = if p.get("ids").is_some_and(|v| !v.is_null()) {
-        // Each image once, however often `ids` names it.
-        let mut given = HashSet::new();
-        let ids: Vec<NodeId> = checked_ids_param(s, p, "ids", C)?.into_iter().filter(|id| given.insert(*id)).collect();
-        if let Some(id) = ids.iter().find(|id| !matches!(st.doc.node(**id).map(|n| &n.kind), Some(NodeKind::Image(_)))) {
-            return Err(bad(C, format!("object {} is not an image", id.0)));
-        }
-        ids
-    } else {
-        st.selection.objects.iter().copied().filter(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_)))).collect()
-    };
-    if ids.is_empty() {
-        return Err(bad(C, "select an image"));
-    }
-    // Every image is checked before any is decoded.
-    let mut images = vec![];
-    for id in ids {
-        let Some(n) = st.doc.node(id) else { continue };
-        let NodeKind::Image(im) = &n.kind else { continue };
-        let blob = st.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image's pixels are missing"))?;
-        // The result has an alpha channel, which a grayscale image colorized with a process color
-        // can't take.
-        if gray_colorized_with_process(&st.doc, n).is_some() {
+    for (id, _, blob) in &images {
+        if blob.gray_source().is_some() && st.doc.node(*id).is_some_and(|n| colorized_with_process(&st.doc, n)) {
             return Err(bad(C, PROCESS_ON_TRANSPARENCY));
         }
-        // The preview stands in for a file that hasn't been read, or that is kept at its preview.
-        if im.link.is_some() && blob.is_proxy() {
-            return Err(bad(C, "the linked image shows its preview: embed or relink it first"));
-        }
-        if blob.is_cmyk() {
-            return Err(bad(C, "a CMYK image has no transparency to set"));
-        }
-        images.push((id, im, blob));
     }
     // Each image's pixels once, however many objects show them.
     let mut cleared: HashMap<&str, Option<Cleared>> = HashMap::new();
@@ -207,7 +188,7 @@ fn changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&mut De
         let out = match cleared.get(im.key.as_str()) {
             Some(out) => out.clone(),
             None => {
-                let out = clear(blob, settings, kept.as_deref_mut())?;
+                let out = clear(blob, settings, kept.as_deref_mut(), C)?;
                 cleared.insert(&im.key, out.clone());
                 out
             }
@@ -223,6 +204,58 @@ fn changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&mut De
         }
     }
     Ok(changes)
+}
+
+/// The image objects command `cmd` acts on (`ids`, each once, or the selected images), each with
+/// its pixels, all checked before any is decoded: an object that is not an image, missing pixels,
+/// a linked image that shows its preview and a CMYK image are errors, as is no image at all.
+fn images<'a>(s: &'a Session, p: &Value, cmd: &str) -> Result<Vec<(NodeId, &'a ImageObject, &'a ImageBlob)>> {
+    let st = s.doc()?;
+    let mut images = vec![];
+    for id in targets(s, p, cmd)? {
+        let Some(NodeKind::Image(im)) = st.doc.node(id).map(|n| &n.kind) else { continue };
+        let blob = st.doc.images.get(&im.key).ok_or_else(|| bad(cmd, "the image's pixels are missing"))?;
+        // The preview stands in for a file that hasn't been read, or that is kept at its preview.
+        if im.link.is_some() && blob.is_proxy() {
+            return Err(bad(cmd, "the linked image shows its preview: embed or relink it first"));
+        }
+        if blob.is_cmyk() {
+            return Err(cmyk_refusal(cmd));
+        }
+        images.push((id, &**im, blob));
+    }
+    Ok(images)
+}
+
+/// The image objects command `cmd` acts on: `ids`, each once, or the selected images. An object in
+/// `ids` that is not an image is an error, as is no image at all.
+fn targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    let ids: Vec<NodeId> = if p.get("ids").is_some_and(|v| !v.is_null()) {
+        // Each image once, however often `ids` names it.
+        let mut given = HashSet::new();
+        let ids: Vec<NodeId> = checked_ids_param(s, p, "ids", cmd)?.into_iter().filter(|id| given.insert(*id)).collect();
+        if let Some(id) = ids.iter().find(|id| !matches!(st.doc.node(**id).map(|n| &n.kind), Some(NodeKind::Image(_)))) {
+            return Err(bad(cmd, format!("object {} is not an image", id.0)));
+        }
+        ids
+    } else {
+        st.selection.objects.iter().copied().filter(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_)))).collect()
+    };
+    if ids.is_empty() {
+        return Err(bad(cmd, "select an image"));
+    }
+    Ok(ids)
+}
+
+/// Whether `cmd` is one of Color Mask's commands, which hide pixels instead of clearing them.
+fn masks(cmd: &str) -> bool {
+    matches!(cmd, mask::COLOR_MASK | mask::REMOVE_COLOR_MASK | mask::APPLY_COLOR_MASK)
+}
+
+/// Command `cmd`'s refusal of a CMYK image.
+fn cmyk_refusal(cmd: &str) -> crate::EngineError {
+    if masks(cmd) { bad(cmd, "a CMYK image can't take a color mask") } else { bad(cmd, "a CMYK image has no transparency to set") }
 }
 
 /// An image with its background cleared: its PNG, its size in pixels, and how many of its pixels
@@ -352,16 +385,16 @@ impl Pixels {
 
 /// `blob` with its background cleared as `settings` say, or `None` when no pixel changes. A CMYK
 /// image, one that can't be decoded or is too large to change, and a result with no pixel left are
-/// errors. The PNG keeps the source's ICC profile and resolution. The decoded pixels are taken
-/// from and kept in `kept` when it is given.
-pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut DecodedImages>) -> Result<Option<Cleared>> {
+/// errors of command `cmd`. The PNG keeps the source's ICC profile and resolution. The decoded
+/// pixels are taken from and kept in `kept` when it is given.
+pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut DecodedImages>, cmd: &str) -> Result<Option<Cleared>> {
     if blob.is_cmyk() {
-        return Err(bad(C, "a CMYK image has no transparency to set"));
+        return Err(cmyk_refusal(cmd));
     }
     let found = kept.as_deref_mut().and_then(|k| k.get(&blob.bytes));
     let (source, gray, icc) = match found {
         Some(found) => found,
-        None => decode(blob, kept)?,
+        None => decode(blob, kept, cmd)?,
     };
     // The pixels kept for the next run stay as they are; ones not kept are worked on in place.
     let mut px = Arc::try_unwrap(source).unwrap_or_else(|kept| Pixels::clone(&kept));
@@ -373,7 +406,11 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
         Pixels::Sixteen(img) => img.pixels().any(|p| p.0[3] > 0),
     };
     if !left {
-        return Err(bad(C, "every pixel matches the background: no image would be left"));
+        return Err(if masks(cmd) {
+            bad(cmd, "the mask would hide every pixel")
+        } else {
+            bad(cmd, "every pixel matches the background: no image would be left")
+        });
     }
     let out = match (px, gray) {
         (Pixels::Eight(img), false) => DynamicImage::ImageRgba8(img),
@@ -389,9 +426,9 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
     let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
     if let Some(icc) = icc {
         use image::ImageEncoder as _;
-        encoder.set_icc_profile(icc).map_err(|e| bad(C, e.to_string()))?;
+        encoder.set_icc_profile(icc).map_err(|e| bad(cmd, e.to_string()))?;
     }
-    out.write_with_encoder(encoder).map_err(|e| bad(C, e.to_string()))?;
+    out.write_with_encoder(encoder).map_err(|e| bad(cmd, e.to_string()))?;
     // The resolution the file declares, which sizes the image at 100% when it is replaced or relinked.
     if let Some(r) = ppi::resolution(&blob.bytes) {
         png = ppi::with_png_resolution(&png, r);
@@ -401,11 +438,12 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
 
 /// `blob`'s pixels as straight RGBA, whether they were gray, and its ICC profile. An image that
 /// can't be decoded or is too large to change is an error. The pixels are kept in `kept`, when it
-/// is given, if a copy of them fits the decode allowance beside the work.
-fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>) -> Result<(Arc<Pixels>, bool, Option<Vec<u8>>)> {
-    let reader =
-        || image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(|_| bad(C, "the image's pixels can't be read"));
-    let mut decoder = reader()?.into_decoder().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?;
+/// is given, if a copy of them fits the decode allowance beside the work. Errors are command `cmd`'s.
+fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>, cmd: &str) -> Result<(Arc<Pixels>, bool, Option<Vec<u8>>)> {
+    let reader = || {
+        image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(|_| bad(cmd, "the image's pixels can't be read"))
+    };
+    let mut decoder = reader()?.into_decoder().map_err(|e| bad(cmd, format!("the image's pixels can't be read: {e}")))?;
     // The ICC profile the colors are in goes with them into the PNG.
     let (w, h, kind, icc) = {
         use image::ImageDecoder as _;
@@ -418,13 +456,13 @@ fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>) -> Result<(Arc<Pix
     let deep = kind.bytes_per_pixel() > kind.channel_count();
     let per_pixel = u64::from(kind.bytes_per_pixel()) + 2 * if deep { 8 } else { 4 } + WORK_BYTES;
     if u64::from(w).checked_mul(u64::from(h)).and_then(|n| n.checked_mul(per_pixel)).is_none_or(|n| n > MAX_RASTER_ALLOC) {
-        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to change")));
+        return Err(bad(cmd, format!("an image of {w} × {h} pixels is too large to change")));
     }
     let mut reader = reader()?;
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(MAX_RASTER_ALLOC);
     reader.limits(limits);
-    let img = reader.decode().map_err(|e| bad(C, format!("the image's pixels can't be read: {e}")))?;
+    let img = reader.decode().map_err(|e| bad(cmd, format!("the image's pixels can't be read: {e}")))?;
     #[cfg(test)]
     DECODES.with(|c| c.set(c.get() + 1));
     let gray = matches!(img.color(), image::ColorType::L8 | image::ColorType::La8 | image::ColorType::L16 | image::ColorType::La16);

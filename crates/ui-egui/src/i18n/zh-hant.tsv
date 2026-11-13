@@ -672,6 +672,10 @@ font-technology	Variable	可變
 	Corner Color	轉角顏色
 	Contiguous	連續
 	Each Channel	每個通道
+	Color Mask…	顏色遮色片…
+	Color Mask	顏色遮色片
+	Remove Color Mask	移除顏色遮色片
+	Apply Color Mask	套用顏色遮色片
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -2424,6 +2428,10 @@ file-filter	Templates	範本
 @msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
 @msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
+@msg	select an image with a color mask	請選取帶有顏色遮色片的影像
+@msg	the color mask's settings are out of range	顏色遮色片的設定超出範圍
+@msg	a CMYK image can't take a color mask	CMYK 影像無法使用顏色遮色片
+@msg	the mask would hide every pixel	遮色片會隱藏所有像素
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`

@@ -1025,6 +1025,37 @@ mod tests {
         assert_eq!(m.locate_within(Point::new(30.0, 60.0), 3.0), m.locate(Point::new(30.0, 60.0)));
     }
 
+    /// A point on a mesh's outline locates on the edge it lies on, on all four sides alike, with no
+    /// tolerance; a point just outside does not, and a tolerance reaches only as far as it says.
+    /// A point that isn't finite locates nowhere.
+    #[test]
+    fn mesh_locate_takes_a_point_on_any_side_of_the_outline() {
+        for (rows, cols) in [(1, 1), (2, 3)] {
+            let m =
+                GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0)
+                    .unwrap();
+            let sides = [
+                ("top", Point::new(30.0, 0.0), Vec2::new(0.0, -0.01)),
+                ("bottom", Point::new(30.0, 100.0), Vec2::new(0.0, 0.01)),
+                ("left", Point::new(0.0, 70.0), Vec2::new(-0.01, 0.0)),
+                ("right", Point::new(100.0, 70.0), Vec2::new(0.01, 0.0)),
+            ];
+            for (side, p, out) in sides {
+                let (r, c, u, v) = m.locate(p).unwrap_or_else(|| panic!("{rows}×{cols} {side}: {p:?} is not located"));
+                assert!(r < m.rows as usize && c < m.cols as usize && (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v), "{side}");
+                assert!(m.eval(r, c, u, v).distance(p) < 1e-3, "{rows}×{cols} {side}: {:?}", m.eval(r, c, u, v));
+                let mut e = m.clone();
+                assert!(e.add_lines_at(p, 0.0).is_some(), "{rows}×{cols} {side}: no line at {p:?}");
+                assert_eq!(m.locate(p + out), None, "{rows}×{cols} {side}: just outside");
+                assert_eq!(m.locate_within(p + out * 100.0, 0.5), None, "{rows}×{cols} {side}: past the tolerance");
+                assert!(m.locate_within(p + out * 100.0, 1.5).is_some(), "{rows}×{cols} {side}: within the tolerance");
+            }
+            for p in [Point::new(f64::NAN, 0.0), Point::new(30.0, f64::INFINITY)] {
+                assert_eq!(m.locate_within(p, f64::INFINITY), None, "{p:?}");
+            }
+        }
+    }
+
     /// Corners all in CMYK mix in CMYK (the inks halfway), not in RGB.
     #[test]
     fn a_cmyk_mesh_mixes_its_inks() {

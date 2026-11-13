@@ -670,6 +670,10 @@ font-technology	Variable	Μεταβλητές
 	Corner Color	Χρώμα γωνιών
 	Contiguous	Συνεχόμενα
 	Each Channel	Κάθε κανάλι
+	Color Mask…	Μάσκα χρώματος…
+	Color Mask	Μάσκα χρώματος
+	Remove Color Mask	Αφαίρεση μάσκας χρώματος
+	Apply Color Mask	Εφαρμογή μάσκας χρώματος
 	Edit Path	Επεξεργασία διαδρομής
 	Mask	Μάσκα
 	Crop Marks	Σημάδια ξακρίσματος
@@ -4735,6 +4739,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a CMYK image has no transparency to set	μια εικόνα CMYK δεν έχει διαφάνεια για να οριστεί
 @msg	every pixel matches the background: no image would be left	κάθε εικονοστοιχείο ταιριάζει με το φόντο: δεν θα έμενε καμία εικόνα
 @msg	an image of {w} × {h} pixels is too large to change	η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για να αλλάξει
+@msg	select an image with a color mask	επιλέξτε εικόνα με μάσκα χρώματος
+@msg	the color mask's settings are out of range	οι ρυθμίσεις της μάσκας χρώματος είναι εκτός εύρους
+@msg	a CMYK image can't take a color mask	μια εικόνα CMYK δεν μπορεί να έχει μάσκα χρώματος
+@msg	the mask would hide every pixel	η μάσκα θα έκρυβε κάθε εικονοστοιχείο
 @msg	select an object in perspective	επιλέξτε αντικείμενο σε προοπτική
 @msg	select artwork (or a colour group) to recolor	επιλέξτε σχέδιο (ή ομάδα χρωμάτων) για επαναχρωματισμό
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {locked} και {hidden}

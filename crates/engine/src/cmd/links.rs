@@ -1060,6 +1060,8 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
         };
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
+    // Color masks of images whose files were read again are made for the new pixels.
+    super::refresh_color_masks(None, d);
     out
 }
 
