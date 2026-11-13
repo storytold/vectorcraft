@@ -491,6 +491,32 @@ fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
 }
 
+/// The message of an open that starts with a line about its linked files lists the open's notes on
+/// hover and for screen readers, in a wide and in a narrow window. A later message leaves the list
+/// out.
+#[test]
+fn combined_open_and_link_status_lists_notes_on_hover_and_for_accessibility() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    let notice = crate::dialogs::missing_links::changed_on_disk_status(2);
+    let opened = crate::io::opened_with_notes(2, &notes[0]);
+    crate::io::show_opened(&mut app, Some(notice.clone()), notes);
+    assert!(app.ui.status.starts_with(&notice) && app.ui.status.ends_with(&opened), "{}", app.ui.status);
+    let full = format!("{}\n• the file's layers weren't read\n• a brush wasn't read", app.ui.status);
+    for width in [1400.0, 700.0] {
+        let (texts, nodes, hovered) = bar_hover(&mut app, &ctx, width, "2 linked", super::status_bar);
+        assert!(width > 700.0 || status_text(&texts, "2 linked").elided, "the narrow window cuts the message short");
+        assert!(nodes.iter().any(|n| n.value() == Some(full.as_str())), "screen readers receive the notes at {width}: {nodes:?}");
+        assert!(hovered.iter().any(|t| t.text == full), "the tooltip lists the notes at {width}: {hovered:?}");
+    }
+
+    app.ui.status = crate::dialogs::missing_links::changed_on_disk_status(1);
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "1 linked", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("1 linked")).count(), 1, "no tooltip: {hovered:?}");
+}
+
 /// The list has at most 30 notes, then how many more there are.
 #[test]
 fn the_hover_lists_thirty_notes_and_counts_the_rest() {

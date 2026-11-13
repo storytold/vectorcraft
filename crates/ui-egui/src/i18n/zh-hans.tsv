@@ -4856,6 +4856,7 @@ imageTrace	Outline	轮廓
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已打开，有 {n} 条注释：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。

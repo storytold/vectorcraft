@@ -11,8 +11,9 @@
 //! in Folder… (`ui.findLinksInFolder`), they stay as they are.
 //!
 //! Fields: `document` (the document's uid), `missing` (`[{name, path, ids}]`), `modified` (the ids
-//! of the images whose file was modified, offered for update afterwards), `back` (the files left
-//! without a choice and those that fail to relink go back to dialog `missingLinks`), `state`
+//! of the images whose file was modified, offered for update afterwards), `notes` (from
+//! `missingLinks`: the open's notes, shown with the line about the modified files), `back` (the
+//! files left without a choice and those that fail to relink go back to dialog `missingLinks`), `state`
 //! (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`,
 //! `found` (`links.findFiles`'s `links`, with the files found), `searched`, `skipped`,
 //! `unreadable`, `stopped`, `error`, `picks` (the file chosen for each row of `missing`, or null),
@@ -66,6 +67,7 @@ fn dialog(app: &VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, back:
 /// Linked Files, searching `folder` for every file `d` still asks about.
 pub(super) fn from_missing_links(app: &mut VectorcraftApp, d: &mut Dialog, folder: &str) -> Result<(), String> {
     let mut find = dialog(app, rows(d, "missing"), rows(d, "modified"), true)?;
+    find.fields.insert("notes".into(), json!(super::missing_links::notes(d)));
     start_search(app, &mut find, folder)?;
     *d = find;
     Ok(())
@@ -385,7 +387,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         None => {}
     }
     if d.bool("back") {
-        super::missing_links::ask_next(app, rest, rows(d, "modified"));
+        super::missing_links::ask_next(app, rest, rows(d, "modified"), super::missing_links::notes(d));
     }
     Ok(json!({ "relinked": relinked, "failed": failed }))
 }

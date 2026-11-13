@@ -4733,6 +4733,7 @@ axis	Both	Her İkisi
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} notla açıldı: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} notla açıldı: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path}, {n} notla kaydedildi: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın
 @msgplural	Embedded {n} image|Embedded {n} images	{n} görsel gömüldü

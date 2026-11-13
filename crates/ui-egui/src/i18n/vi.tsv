@@ -5104,6 +5104,7 @@ theme	Appearance	Giao diện
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})

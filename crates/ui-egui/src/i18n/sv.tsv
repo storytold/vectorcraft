@@ -4895,6 +4895,7 @@ axis	Both	Båda
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Öppnad med {n} anteckning: {first}|Öppnad med {n} anteckningar: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Öppnad med {n} anteckning: {first}|{notice}. Öppnad med {n} anteckningar: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sparade {path} med {n} anteckning: {first}|Sparade {path} med {n} anteckningar: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
 @msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
