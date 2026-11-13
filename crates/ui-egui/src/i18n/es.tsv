@@ -4748,6 +4748,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	los trazados contienen coordenadas no válidas
 @msg	paths: give at least one file	paths: indica al menos un archivo
 @msg	replace: the object to replace was changed or deleted	replace: se modificó o eliminó el objeto que se iba a reemplazar
+@msg	the document it was prepared for is no longer active	el documento para el que se preparó ya no está activo
 @msg	pattern missing	falta el motivo
 @msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent debe ser mayor que 0 y como máximo 6400, no {p}

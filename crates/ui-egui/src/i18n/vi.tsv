@@ -5120,6 +5120,7 @@ theme	Appearance	Giao diện
 @msg	paths contain invalid coordinates	đường dẫn chứa tọa độ không hợp lệ
 @msg	paths: give at least one file	đường dẫn: hãy cung cấp ít nhất một tệp
 @msg	replace: the object to replace was changed or deleted	thay thế: đối tượng cần thay thế đã bị thay đổi hoặc xóa
+@msg	the document it was prepared for is no longer active	tài liệu được chuẩn bị không còn hoạt động
 @msg	pattern missing	thiếu họa tiết
 @msg	patterns nested too deeply are filled with mid-grey	họa tiết lồng nhau quá sâu được tô bằng màu xám trung tính
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng

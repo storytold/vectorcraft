@@ -7648,6 +7648,7 @@ antiAlias	Sharp	शार्प
 @msg	Replace Spine: select a blend and a path	Spine: एक मिश्रण और एक पाथ चुनें
 @msg	replace: select the one object to replace	प्रतिस्थापित करने के लिए एक ऑब्जेक्ट सिलेक्ट करें
 @msg	replace: the object to replace was changed or deleted	प्रतिस्थापित करने के लिए ऑब्जेक्ट को बदल दिया गया था या हटा दिया गया
+@msg	the document it was prepared for is no longer active	जिस डॉक्यूमेंट के लिए इसे तैयार किया गया था, वह अब सक्रिय नहीं है
 @msg	Reset {_1}	रीसेट करें {_1}
 @msg	resolution must be a number or screen|medium|high	resolution: रिज़ॉल्यूशन एक नंबर या स्क्रीन होना चाहिए
 @msg	resolution must be between 1 and 2400 ppi	resolution: संकल्प 1 और 2400 ppi के बीच होना चाहिए

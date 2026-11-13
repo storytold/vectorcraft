@@ -5108,6 +5108,7 @@ imageTrace	Outline	Contour
 @msg	paths contain invalid coordinates	paden bevatten ongeldige coördinaten
 @msg	paths: give at least one file	paden: geef minstens één bestand
 @msg	replace: the object to replace was changed or deleted	vervangen: het te vervangen object is gewijzigd of verwijderd
+@msg	the document it was prepared for is no longer active	het document waarvoor het is voorbereid, is niet langer actief
 @msg	pattern missing	patroon ontbreekt
 @msg	patterns nested too deeply are filled with mid-grey	patronen die te diep genest zijn, worden gevuld met middelgrijs
 @msg	percent must be above 0 and at most 6400, not {p}	percent moet boven 0 en maximaal 6400 zijn, niet {p}

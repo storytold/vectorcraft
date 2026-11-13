@@ -4881,6 +4881,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	ścieżki zawierają nieprawidłowe współrzędne
 @msg	paths: give at least one file	paths: podaj co najmniej jeden plik
 @msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
+@msg	the document it was prepared for is no longer active	dokument, dla którego to przygotowano, nie jest już aktywny
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
 @msg	percent must be above 0 and at most 6400, not {p}	percent musi być większy od 0 i nie większy niż 6400, nie {p}

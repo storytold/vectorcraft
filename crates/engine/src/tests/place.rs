@@ -365,6 +365,95 @@ fn a_file_read_apart_from_the_session_replaces_what_was_selected_when_place_star
     }
 }
 
+/// Every open document with its art, selection and undo steps, and the journal, tool and tool
+/// options: what a refused hand-off leaves as it was.
+type Snapshot = (Vec<(u64, Arc<vectorcraft_doc::Document>, Vec<NodeId>, usize)>, usize, &'static str, Value);
+
+fn snapshot(s: &Session) -> Snapshot {
+    let docs = s.documents().iter().map(|d| (d.uid, d.doc.clone(), d.selection.objects.clone(), d.history.undo.len())).collect();
+    (docs, s.journal.len(), s.tool_id(), s.tool_options())
+}
+
+/// A file read apart from the session is placed only in the document Place started in: with
+/// another document active, Replace included when that document holds the same object under the
+/// same id, or after the document closed, nothing changes in any document; with the document
+/// active again, the file is placed in it.
+#[test]
+fn a_file_read_apart_from_the_session_is_placed_only_in_the_document_it_was_read_for() {
+    let blue = file("blue.png", &png(8, 8, [0, 0, 255, 255], None));
+    let not_active = "the document it was prepared for is no longer active";
+    for replace in [false, true] {
+        let p = with(blue.clone(), json!({"replace": replace}));
+        let mut s = session();
+        let square = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+        let a = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        let read = s.prepare_place(&p).unwrap().read().unwrap();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let b = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        assert_eq!(a, b, "the other document holds an object with the same id");
+        assert!(node(&s, &b) == s.documents()[0].doc.node(NodeId(a.as_u64().unwrap())).unwrap().clone(), "and the same content");
+        let before = snapshot(&s);
+        let err = s.place_read(read).unwrap_err();
+        assert!(err.to_string().contains(not_active), "replace {replace}: {err}");
+        assert!(snapshot(&s) == before, "replace {replace}: nothing placed, selected or journaled in either document");
+        // Active again, the document Place started in takes the file.
+        let read = {
+            s.execute("document.activate", &json!({"index": 0})).unwrap();
+            s.prepare_place(&p).unwrap().read().unwrap()
+        };
+        s.execute("document.activate", &json!({"index": 1})).unwrap();
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        let r = s.place_read(read).unwrap();
+        assert_eq!(s.active_index(), Some(0));
+        assert!(s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).is_some(), "replace {replace}: placed in the first document");
+        let others = s.documents()[1].doc.layers.last().unwrap().children().unwrap().len();
+        assert_eq!(others, 1, "replace {replace}: the other document keeps its one object");
+    }
+    // The document Place started in closed: refused in the document left open, and with none left.
+    let mut s = session();
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "nothing placed in the document left open");
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.close", &json!({})).unwrap();
+    let journal = s.journal.len();
+    assert!(s.place_read(read).is_err() && s.journal.len() == journal, "no document left: refused");
+}
+
+/// Files read for the place cursor apart from the session load it only in the document they were
+/// read for: with another document active, or after that document closed, its tool and queue stay
+/// as they were; with the document active again, the cursor is loaded.
+#[test]
+fn files_read_for_the_place_cursor_apart_from_the_session_load_it_only_in_their_document() {
+    let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "link": false});
+    let not_active = "the document it was prepared for is no longer active";
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before && s.tool_id() == "selection", "the other document's tool and queue stay");
+    let read = {
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        s.prepare_place_queue(&p).unwrap().read().unwrap()
+    };
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(s.place_queue_read(read).unwrap()["count"], 1);
+    assert_eq!(s.tool_id(), "place");
+    // The document they were read for closed.
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "the document left open keeps its tool");
+}
+
 /// A linked image keeps the preview its file was read with ([`cmd::place::PlaceJob::read`] makes
 /// it), so placing the read file does not decode the image again; an embedded image has none.
 #[test]

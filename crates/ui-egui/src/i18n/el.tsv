@@ -4701,6 +4701,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	paths contain invalid coordinates	οι διαδρομές περιέχουν μη έγκυρες συντεταγμένες
 @msg	paths: give at least one file	διαδρομές: δώστε τουλάχιστον ένα αρχείο
 @msg	replace: the object to replace was changed or deleted	αντικατάσταση: το αντικείμενο προς αντικατάσταση άλλαξε ή διαγράφηκε
+@msg	the document it was prepared for is no longer active	το έγγραφο για το οποίο προετοιμάστηκε δεν είναι πλέον ενεργό
 @msg	pattern missing	λείπει το μοτίβο
 @msg	patterns nested too deeply are filled with mid-grey	τα πολύ βαθιά ένθετα μοτίβα γεμίζονται με μέτριο γκρι
 @msg	percent must be above 0 and at most 6400, not {p}	το percent πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
