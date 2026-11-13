@@ -360,8 +360,8 @@ fn same_but_anchors(a: &Node, b: &Node) -> bool {
 }
 
 /// Does `n` paint each pixel from the segments near it alone: no effects, every visible fill and
-/// stroke a solid color, and no stroke with dashes, a width profile, pressure, tilt, bearing or
-/// rotation, arrowheads, a brush or effects?
+/// stroke a solid color, and no stroke with dashes, a width profile, pressure, tilt, bearing,
+/// rotation or wheel, arrowheads, a brush or effects?
 fn local_paint(n: &Node) -> bool {
     use vectorcraft_doc::AppearanceItem;
     let solid = |p: &vectorcraft_color::Paint| matches!(p, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None);
@@ -379,6 +379,7 @@ fn local_paint(n: &Node) -> bool {
                     && s.tilt.is_none()
                     && s.bearing.is_none()
                     && s.rotation.is_none()
+                    && s.wheel.is_none()
                     && s.start_arrow.is_none()
                     && s.end_arrow.is_none()
                     && s.brush.is_none()

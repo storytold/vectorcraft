@@ -6,7 +6,7 @@
 //!   tool clicked.
 //! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
 //!   opacity, stroke weight, dashes, miter limit, width profiles and the pen pressure, tilt,
-//!   bearing and rotation that brushes read interpolate; what can't
+//!   bearing, rotation and wheel that brushes read interpolate; what can't
 //!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
 //! - **Groups** pair their children in stacking order; the children one group has more of grow
 //!   out of the other group's centre. Compound paths stay compound paths.
@@ -373,8 +373,8 @@ fn lerp_angle(x: Option<&AngleProfile>, y: Option<&AngleProfile>, t: f64) -> Opt
 }
 
 /// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale, width
-/// profile and the pen pressure, tilt, bearing and rotation its brush reads into `o` (a copy of
-/// the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
+/// profile and the pen pressure, tilt, bearing, rotation and wheel its brush reads into `o` (a
+/// copy of the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
 fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     let tf = t as f32;
     o.paint = lerp_paint(&x.paint, &y.paint, tf);
@@ -388,6 +388,7 @@ fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     o.tilt = lerp_pressure(x.tilt.as_ref(), y.tilt.as_ref(), t);
     o.bearing = lerp_angle(x.bearing.as_ref(), y.bearing.as_ref(), t);
     o.rotation = lerp_angle(x.rotation.as_ref(), y.rotation.as_ref(), t);
+    o.wheel = lerp_pressure(x.wheel.as_ref(), y.wheel.as_ref(), t);
 }
 
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
@@ -607,8 +608,8 @@ fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wr
 }
 
 /// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
-/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
-/// arrowheads.
+/// when reversed), pen pressure, tilt, bearing, rotation and wheel, and on a reversed open path
+/// its arrowheads.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
     if o.is_identity() {
         return;
@@ -634,7 +635,7 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
         let out = reoriented(&pts, o, |f| p.at(f), |v| v, |(l, r)| (r, l));
         p.points = out.into_iter().map(|(t, (l, r))| (t, l, r)).collect();
     }
-    for p in [&mut s.pressure, &mut s.tilt].into_iter().flatten() {
+    for p in [&mut s.pressure, &mut s.tilt, &mut s.wheel].into_iter().flatten() {
         let out = reoriented(&p.points, o, |f| p.at(f), same, same);
         p.points = out;
     }

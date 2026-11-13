@@ -159,7 +159,7 @@ impl Calligraphic {
     pub fn uses_pressure(&self) -> bool {
         self.modes().contains(&Variation::Pressure)
     }
-    /// Does the pen (its pressure, tilt, bearing or rotation) change the nib?
+    /// Does the pen (its pressure, tilt, bearing, rotation or wheel) change the nib?
     pub fn uses_pen(&self) -> bool {
         self.modes().iter().any(|m| m.follows_pen())
     }
@@ -201,11 +201,25 @@ pub enum Variation {
     /// The value plus the variation times the pen barrel's rotation over 180°, counter-clockwise
     /// from where the pen reports 0° round to ±180°.
     Rotation,
+    /// From the value less the variation with an airbrush pen's finger wheel at one end of its
+    /// travel to the value plus the variation at the other (the value itself half way).
+    StylusWheel,
 }
 
 impl Variation {
-    pub const ALL: [Variation; 6] =
+    pub const ALL: [Variation; 7] =
+        [Variation::Fixed, Variation::Random, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
+    /// The modes Brush Options offers for a value other than a size (a Calligraphic brush's Angle
+    /// and Roundness, a Scatter brush's Spacing, Scatter and Rotation): all but
+    /// [`Variation::StylusWheel`], which drives a Calligraphic or Scatter brush's Size and an Art
+    /// brush's Width.
+    pub const OTHER: [Variation; 6] =
         [Variation::Fixed, Variation::Random, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
+    /// The modes Brush Options offers for a size (`true`: [`Self::ALL`]) or another value
+    /// ([`Self::OTHER`]).
+    pub fn offered(size: bool) -> &'static [Variation] {
+        if size { &Self::ALL } else { &Self::OTHER }
+    }
     /// The name brush definitions use.
     pub fn id(self) -> &'static str {
         match self {
@@ -215,6 +229,7 @@ impl Variation {
             Variation::Tilt => "tilt",
             Variation::Bearing => "bearing",
             Variation::Rotation => "rotation",
+            Variation::StylusWheel => "stylusWheel",
         }
     }
     pub fn label(self) -> &'static str {
@@ -225,15 +240,16 @@ impl Variation {
             Variation::Tilt => "Tilt",
             Variation::Bearing => "Bearing",
             Variation::Rotation => "Rotation",
+            Variation::StylusWheel => "Stylus Wheel",
         }
     }
     pub fn parse(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|v| v.id() == id)
     }
     /// Does the value follow something the pen records along a stroke (Pressure, Tilt, Bearing,
-    /// Rotation)?
+    /// Rotation, Stylus Wheel)?
     pub fn follows_pen(self) -> bool {
-        matches!(self, Variation::Pressure | Variation::Tilt | Variation::Bearing | Variation::Rotation)
+        matches!(self, Variation::Pressure | Variation::Tilt | Variation::Bearing | Variation::Rotation | Variation::StylusWheel)
     }
 }
 
@@ -250,12 +266,14 @@ pub(crate) struct PenAt {
     bearing: f64,
     /// ½ plus the counter-clockwise barrel rotation over 360°.
     rotation: f64,
+    /// Where the airbrush finger wheel was set, 0 at one end of its travel to 1 at the other.
+    wheel: f64,
 }
 
 impl PenAt {
     /// Every input at `c`.
     pub(crate) fn uniform(c: f64) -> Self {
-        Self { pressure: c, tilt: c, bearing: c, rotation: c }
+        Self { pressure: c, tilt: c, bearing: c, rotation: c, wheel: c }
     }
     /// What `stroke` recorded at `f` (the fraction of its path's length).
     pub(crate) fn of(stroke: &StrokeLayer, f: f64) -> Self {
@@ -266,6 +284,7 @@ impl PenAt {
             tilt: 1.0 - stroke.tilt.as_ref().map_or(mid, |p| p.at(f)),
             bearing: turn(stroke.bearing.as_ref()),
             rotation: turn(stroke.rotation.as_ref()),
+            wheel: stroke.wheel.as_ref().map_or(mid, |p| p.at(f)),
         }
     }
     /// The 0..1 a value on `mode` takes, or `None` for a mode that doesn't follow the pen.
@@ -276,6 +295,7 @@ impl PenAt {
             Variation::Tilt => self.tilt,
             Variation::Bearing => self.bearing,
             Variation::Rotation => self.rotation,
+            Variation::StylusWheel => self.wheel,
         };
         Some(if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
     }
@@ -300,9 +320,10 @@ pub struct Scatter {
     /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
     /// first, Random any value between them, Pressure the first at the lightest pen pressure and
     /// the second at the heaviest, Tilt the first with the pen lying flat and the second upright,
-    /// Bearing and Rotation the first at −180° and the second at 180° (half way at 0°). `None`
-    /// (brushes saved before there were modes): Random where the two differ, else Fixed (see
-    /// [`Scatter::modes`]).
+    /// Bearing and Rotation the first at −180° and the second at 180° (half way at 0°), and Stylus
+    /// Wheel (the size's only) the first at one end of an airbrush pen's finger wheel and the
+    /// second at the other. `None` (brushes saved before there were modes): Random where the two
+    /// differ, else Fixed (see [`Scatter::modes`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<[Variation; 4]>,
 }
@@ -373,11 +394,12 @@ pub struct ArtBrush {
     /// How the width varies along a stroke: `None` (Fixed) always `width`; a mode that follows the
     /// pen goes from `width` to [`Self::width_max`] over the ranges [`Variation`] gives: Pressure
     /// from the lightest pressure to the heaviest, Tilt from the pen lying flat to upright, Bearing
-    /// and Rotation from −180° to 180° (half way at 0°).
+    /// and Rotation from −180° to 180° (half way at 0°), Stylus Wheel from one end of an airbrush
+    /// pen's finger wheel to the other.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_mode: Option<Variation>,
-    /// The second width (%) of a mode that follows the pen: at the heaviest pressure, upright, or
-    /// at 180° (`width` without one).
+    /// The second width (%) of a mode that follows the pen: at the heaviest pressure, upright, at
+    /// 180° or at the wheel's far end (`width` without one).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_max: Option<f64>,
     pub flip_along: bool,
@@ -716,7 +738,7 @@ impl Brush {
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
-                // The width follows the pen (its pressure, tilt, bearing or rotation) or stays fixed.
+                // The width follows the pen (its pressure, tilt, bearing, rotation or wheel) or stays fixed.
                 if !a.width_mode.is_some_and(Variation::follows_pen) {
                     a.width_mode = None;
                 }

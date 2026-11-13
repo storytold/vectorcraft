@@ -214,6 +214,7 @@ pub fn tool_definitions() -> Vec<Value> {
                             "tiltX": num("Pen tilt in degrees −90..90, positive leaning right (document axes); with tiltY, the tilt the Paintbrush records for Tilt and Bearing brushes. One without the other is 0"),
                             "tiltY": num("Pen tilt in degrees −90..90, positive leaning down the page"),
                             "rotation": num("Pen barrel rotation in degrees clockwise: the rotation the Paintbrush records for Rotation brushes"),
+                            "wheel": num("Airbrush pen finger wheel 0..1 (clamped): the wheel the Paintbrush records for Stylus Wheel brushes"),
                             "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },

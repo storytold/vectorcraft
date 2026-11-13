@@ -200,12 +200,13 @@ fn numbers(s: &str) -> Option<Vec<f64>> {
     s.split_whitespace().map(|w| w.parse::<f64>().ok().filter(|v| v.is_finite())).collect()
 }
 
-/// How a value varies, by its code: `None` for the stylus wheel and codes that aren't known.
+/// How a value varies, by its code: `None` for codes that aren't known.
 fn variation(code: f64) -> Option<Variation> {
     match code {
         0.0 => Some(Variation::Fixed),
         1.0 => Some(Variation::Random),
         2.0 => Some(Variation::Pressure),
+        3.0 => Some(Variation::StylusWheel),
         4.0 => Some(Variation::Tilt),
         5.0 => Some(Variation::Bearing),
         6.0 => Some(Variation::Rotation),

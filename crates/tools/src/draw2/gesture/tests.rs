@@ -82,7 +82,7 @@ fn paintbrush_sends_pen_tilt_and_rotation() {
         let Some(Action::Preview(_, v)) = last.first() else { panic!("{last:?}") };
         v["points"].clone()
     };
-    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r });
+    let leaning = |x: f32, r: Option<f32>| Some(PenPose { tilt: Some([x, -10.0]), rotation: r, wheel: None });
     assert_eq!(
         stroke("paintbrush", 0.5, [leaning(30.0, Some(45.0)), leaning(40.0, Some(-90.0)), None]),
         json!([[0.0, 0.0, 0.5, 30.0, -10.0, 45.0], [40.0, 0.0, 0.5, 40.0, -10.0, 270.0], [80.0, 0.0, 0.5, null, null, null]])
@@ -92,6 +92,12 @@ fn paintbrush_sends_pen_tilt_and_rotation() {
     // A pose that reads nothing is a mouse's.
     assert_eq!(stroke("paintbrush", 1.0, [Some(PenPose::default()); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
     assert_eq!(stroke("pencil", 0.5, [leaning(30.0, Some(45.0)); 3]), json!([[0.0, 0.0], [40.0, 0.0], [80.0, 0.0]]));
+    // An airbrush pen's finger wheel comes seventh, and a point without it sends null.
+    let wheel = |w: f32| Some(PenPose { wheel: Some(w), ..PenPose::default() });
+    assert_eq!(
+        stroke("paintbrush", 1.0, [wheel(0.0), wheel(0.25), None]),
+        json!([[0.0, 0.0, null, null, null, null, 0.0], [40.0, 0.0, null, null, null, null, 0.25], [80.0, 0.0, null, null, null, null, null]])
+    );
 }
 
 #[test]

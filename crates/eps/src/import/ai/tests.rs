@@ -9954,11 +9954,11 @@ fn a_gradients_br_is_not_a_brush() {
 
 /// The Brush Options codes for how a Calligraphic brush's values vary: Tilt, Bearing and Rotation
 /// are the pen's other channels (#372: a 6D Art Pen brush varies its diameter with the pressure,
-/// its roundness with the bearing and its angle with the barrel's rotation). The stylus wheel isn't
-/// read: it varies at random, as an unknown code does.
+/// its roundness with the bearing and its angle with the barrel's rotation), and code 3 is an
+/// airbrush pen's finger wheel. An unknown code varies at random.
 #[test]
 fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
-    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, Tilt};
+    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, StylusWheel, Tilt};
     let modes = |params: &str| {
         let d = brush::parse_tool_object(brush::Tool::Calligraphic, "Pen", params).unwrap();
         let brush::DraftKind::Calligraphic(c) = d.kind else { panic!("{d:?}") };
@@ -9966,8 +9966,9 @@ fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
     };
     assert_eq!(modes("1 51 69 13 57 -346 14 2 5 6 0"), [Rotation, Bearing, Pressure]);
     assert_eq!(modes("1 2 6 40 60 -30 10 4 4 4 0"), [Tilt, Tilt, Tilt]);
-    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [Random, Random, Random], "the stylus wheel");
-    assert_eq!(modes("1 4 4 50 50 10 10 3 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
+    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [StylusWheel, StylusWheel, StylusWheel], "the stylus wheel");
+    assert_eq!(modes("1 2 6 40 60 -30 10 7 9 7 0"), [Random, Random, Random], "unknown codes");
+    assert_eq!(modes("1 4 4 50 50 10 10 7 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
 }
 
 /// A 6D Art Pen brush: diameter 4 to 8 with the pressure, roundness 30 to 50 with the bearing and
