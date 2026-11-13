@@ -388,8 +388,6 @@ fn main() -> std::process::ExitCode {
             builder.with_msg_hook(|msg| {
                 // Alt + keypad codes (#5108), which winit drops; neither hook consumes a message.
                 windows_alt_codes::msg_hook(msg);
-                // Symbol-font characters (NHM Writer legacy Tamil), which egui-winit drops.
-                windows_symbol_chars::msg_hook(msg);
                 windows_stylus::msg_hook(msg)
             });
         }));
