@@ -517,8 +517,12 @@ fn mapped_handle(f: &impl Fn(Point) -> Point, p: Point, h: Point) -> Point {
     if len.is_nan() || len <= 0.0 || len.is_infinite() {
         return f(p);
     }
-    const STEP: f64 = 1e-3;
-    let d = (f(p + v * STEP) - f(p - v * STEP)) / (2.0 * STEP);
+    // A thousandth of the handle, or more where the coordinates are so large that so short a
+    // step would round away (#7069): the samples stay a billionth of the coordinates apart, and
+    // at most at the handle's own end.
+    let size = p.x.abs().max(p.y.abs()).max(1.0);
+    let step = (1e-3f64).max(size * 1e-9 / len).min(1.0);
+    let d = (f(p + v * step) - f(p - v * step)) / (2.0 * step);
     f(p) + d
 }
 
