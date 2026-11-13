@@ -704,6 +704,10 @@ font-technology	Variable	Варіативні
 	Corner Color	Колір кутів
 	Contiguous	Суміжні
 	Each Channel	Кожен канал
+	Color Mask…	Колірна маска…
+	Color Mask	Колірна маска
+	Remove Color Mask	Видалити колірну маску
+	Apply Color Mask	Застосувати колірну маску
 	Edit Path	Редагувати контур
 	Mask	Маска
 	Crop Marks	Мітки обрізання
@@ -4823,6 +4827,10 @@ axis	Both	Обидві
 @msg	a CMYK image has no transparency to set	зображення CMYK не має прозорості, яку можна задати
 @msg	every pixel matches the background: no image would be left	кожен піксель збігається з фоном: від зображення нічого не залишилося б
 @msg	an image of {w} × {h} pixels is too large to change	зображення розміром {w} × {h} пікселів завелике для зміни
+@msg	select an image with a color mask	виділіть зображення з колірною маскою
+@msg	the color mask's settings are out of range	параметри колірної маски поза допустимим діапазоном
+@msg	a CMYK image can't take a color mask	до зображення CMYK не можна застосувати колірну маску
+@msg	the mask would hide every pixel	маска приховала б усі пікселі
 @msg	select an object in perspective	виділіть об’єкт у перспективі
 @msg	select artwork (or a colour group) to recolor	виділіть малюнок (або колірну групу) для перефарбовування
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перефарбовування завершено; без змін: {locked} і {hidden}
@@ -5475,6 +5483,7 @@ lighting	Light	Світло
 @msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
 @msg	missing `{path}`	відсутнє `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` вкладено надто глибоко
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
@@ -6028,6 +6037,16 @@ axis	Y Axis	Вісь Y
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
 	Insert Menu Item…	Вставити пункт меню…
 	Insert Menu Item	Вставити пункт меню
+	Select Object…	Виділити об’єкт…
+	Select Object	Виділити об’єкт
+	Set Selection	Задати виділення
+	Case Sensitive	З урахуванням регістру
+	Whole Word	Ціле слово
+	Select Object: {note}	Виділити об’єкт: {note}
+	Select by Note	Виділити за приміткою
+@msg	the note is empty	примітка порожня
+@msg	the note is longer than 1,024 bytes	примітка довша за 1024 байти
+@msg	no object that can be selected has a note matching “{query}”	жоден об’єкт, який можна виділити, не має примітки, що збігається з «{query}»
 	Menu Item:	Пункт меню:
 	No menu item matches.	Немає відповідних пунктів меню.
 	Several menu items match. Choose one from the list.	Відповідає кілька пунктів меню. Виберіть один зі списку.

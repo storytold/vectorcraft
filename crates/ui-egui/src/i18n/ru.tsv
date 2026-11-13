@@ -708,6 +708,10 @@ font-technology	Variable	Вариативные
 	Corner Color	Цвет углов
 	Contiguous	Смежные
 	Each Channel	Каждый канал
+	Color Mask…	Цветовая маска…
+	Color Mask	Цветовая маска
+	Remove Color Mask	Удалить цветовую маску
+	Apply Color Mask	Применить цветовую маску
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -4825,6 +4829,10 @@ axis	Both	Оба
 @msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
 @msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
 @msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
+@msg	select an image with a color mask	выделите изображение с цветовой маской
+@msg	the color mask's settings are out of range	настройки цветовой маски вне допустимого диапазона
+@msg	a CMYK image can't take a color mask	к изображению CMYK нельзя применить цветовую маску
+@msg	the mask would hide every pixel	маска скрыла бы все пиксели
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}
@@ -5481,6 +5489,7 @@ lighting	Light	Свет
 @msg	unknown parameter `{path}`; it takes: {keys}	неизвестный параметр `{path}`; принимает: {keys}
 @msg	missing `{path}`	отсутствует `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` должно быть {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` вложено слишком глубоко
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP
@@ -6034,6 +6043,16 @@ axis	Y Axis	Ось Y
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
+	Select Object…	Выделить объект…
+	Select Object	Выделить объект
+	Set Selection	Задать выделение
+	Case Sensitive	С учетом регистра
+	Whole Word	Слово целиком
+	Select Object: {note}	Выделить объект: {note}
+	Select by Note	Выделить по примечанию
+@msg	the note is empty	примечание пустое
+@msg	the note is longer than 1,024 bytes	примечание длиннее 1024 байт
+@msg	no object that can be selected has a note matching “{query}”	ни у одного объекта, который можно выделить, нет примечания, совпадающего с «{query}»
 	Menu Item:	Пункт меню:
 	No menu item matches.	Нет подходящих пунктов меню.
 	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.

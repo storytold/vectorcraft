@@ -3499,6 +3499,25 @@ fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
 }
 
 #[test]
+fn type_keeps_its_manual_kerning() {
+    // GUARDS: the text document's manual kerning (key 8 of a story's text: runs of characters, each
+    // with its value or none) wasn't read, so type the file kerns by hand came in spaced by the
+    // font alone and drifted from the page from each kerned pair on. "Wave": "W" kerned by -140,
+    // "av" automatic, "e" by 60.
+    let doc = text_document(&[("Wave\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let run = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 5 >>";
+    assert!(doc.contains(run));
+    let kerns = "/8 << /0 [ << /0 << /0 -140 >> /1 1 >> << /0 << >> /1 2 >> << /0 << /0 60 >> /1 1 >> << /0 << >> /1 1 >> ] >>";
+    let doc = doc.replacen(run, &format!("{run} ] >> {kerns}"), 1).replacen(&format!("{kerns} ] >> >>"), &format!("{kerns} >>"), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let runs: Vec<(String, Option<f64>)> = texts[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("W".to_string(), Some(-140.0)), ("av".to_string(), None), ("e".to_string(), Some(60.0))]);
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)

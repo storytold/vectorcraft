@@ -1129,6 +1129,10 @@ antiAlias	Sharp	शार्प
 	Corner Color	कोनों का रंग
 	Contiguous	सन्निहित
 	Each Channel	प्रत्येक चैनल
+	Color Mask…	रंग मास्क…
+	Color Mask	रंग मास्क
+	Remove Color Mask	रंग मास्क हटाएँ
+	Apply Color Mask	रंग मास्क लागू करें
 	Crop Marks	क्रॉप मार्क
 	Crop To	करने के लिए फसल
 	Cross	क्रॉस
@@ -3466,6 +3470,16 @@ antiAlias	Sharp	शार्प
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
 	Insert Menu Item…	मेनू आइटम जोड़ें…
 	Insert Menu Item	मेनू आइटम जोड़ें
+	Select Object…	ऑब्जेक्ट सिलेक्ट करें…
+	Select Object	ऑब्जेक्ट सिलेक्ट करें
+	Set Selection	सिलेक्शन सेट करें
+	Case Sensitive	केस सेंसिटिव
+	Whole Word	पूरा शब्द
+	Select Object: {note}	ऑब्जेक्ट सिलेक्ट करें: {note}
+	Select by Note	नोट द्वारा चुनें
+@msg	the note is empty	नोट खाली है
+@msg	the note is longer than 1,024 bytes	नोट 1,024 बाइट से लंबा है
+@msg	no object that can be selected has a note matching “{query}”	सिलेक्ट किए जा सकने वाले किसी भी ऑब्जेक्ट का नोट “{query}” से मेल नहीं खाता
 	Menu Item:	मेनू आइटम:
 	No menu item matches.	कोई मेनू आइटम मेल नहीं खाता।
 	Several menu items match. Choose one from the list.	कई मेनू आइटम मेल खाते हैं। सूची से एक चुनें।
@@ -7655,6 +7669,10 @@ antiAlias	Sharp	शार्प
 @msg	a CMYK image has no transparency to set	CMYK इमेज में सेट करने के लिए कोई पारदर्शिता नहीं है
 @msg	every pixel matches the background: no image would be left	हर पिक्सेल पृष्ठभूमि से मेल खाता है: कोई इमेज नहीं बचेगी
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} पिक्सेल की इमेज बदलने के लिए बहुत बड़ी है
+@msg	select an image with a color mask	रंग मास्क वाली एक इमेज चुनें
+@msg	the color mask's settings are out of range	रंग मास्क की सेटिंग सीमा से बाहर हैं
+@msg	a CMYK image can't take a color mask	CMYK इमेज पर रंग मास्क नहीं लगाया जा सकता
+@msg	the mask would hide every pixel	मास्क हर पिक्सेल को छिपा देगा
 @msg	select an image (or an Image Trace group)	एक इमेज सिलेक्ट करें (या एक इमेज ट्रेस समूह)
 @msg	select an Image Trace object	एक इमेज ट्रेस ऑब्जेक्ट चुनें
 @msg	select an image, or pass id	एक इमेज सिलेक्ट करें, या आईडी पास करें
@@ -8228,6 +8246,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown parameter `{path}`; it takes: {keys}	अज्ञात पैरामीटर `{path}`; यह लेता है: {keys}
 @msg	missing `{path}`	लापता `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` {expected} होना चाहिए, {got} नहीं
+@msg	`{path}` is nested too deeply	`{path}` बहुत गहराई तक नेस्ट किया गया है
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (one, मानक या wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)

@@ -710,6 +710,10 @@ font-technology	Variable	Variabili
 	Corner Color	Colore degli angoli
 	Contiguous	Contiguo
 	Each Channel	Ogni canale
+	Color Mask…	Maschera colore…
+	Color Mask	Maschera colore
+	Remove Color Mask	Rimuovi maschera colore
+	Apply Color Mask	Applica maschera colore
 	Edit Path	Modifica tracciato
 	Mask	Maschera
 	Crop Marks	Segni di ritaglio
@@ -4839,6 +4843,10 @@ axis	Both	Entrambi
 @msg	a CMYK image has no transparency to set	un'immagine CMYK non ha trasparenza da impostare
 @msg	every pixel matches the background: no image would be left	ogni pixel corrisponde allo sfondo: non resterebbe alcuna immagine
 @msg	an image of {w} × {h} pixels is too large to change	un'immagine di {w} × {h} pixel è troppo grande per essere modificata
+@msg	select an image with a color mask	seleziona un'immagine con una maschera colore
+@msg	the color mask's settings are out of range	le impostazioni della maschera colore sono fuori intervallo
+@msg	a CMYK image can't take a color mask	un'immagine CMYK non può avere una maschera colore
+@msg	the mask would hide every pixel	la maschera nasconderebbe ogni pixel
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}
@@ -5495,6 +5503,7 @@ lighting	Light	Luce
 @msg	unknown parameter `{path}`; it takes: {keys}	parametro sconosciuto `{path}`; accetta: {keys}
 @msg	missing `{path}`	manca `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` deve essere {expected}, non {got}
+@msg	`{path}` is nested too deeply	`{path}` è annidato troppo in profondità
 	Load EPS into Clipboard	Carica EPS negli appunti
 @msg	an image of {w} × {h} pixels is too large to draw	un'immagine di {w} × {h} pixel è troppo grande per essere disegnata
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: non è un'immagine PNG, JPEG, WebP, TIFF o BMP
@@ -6048,6 +6057,16 @@ axis	Y Axis	Asse Y
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
 	Insert Menu Item…	Inserisci voce di menu…
 	Insert Menu Item	Inserisci voce di menu
+	Select Object…	Seleziona oggetto…
+	Select Object	Seleziona oggetto
+	Set Selection	Imposta selezione
+	Case Sensitive	Maiuscole/minuscole
+	Whole Word	Parola intera
+	Select Object: {note}	Seleziona oggetto: {note}
+	Select by Note	Seleziona per nota
+@msg	the note is empty	la nota è vuota
+@msg	the note is longer than 1,024 bytes	la nota supera 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	nessun oggetto selezionabile ha una nota corrispondente a “{query}”
 	Menu Item:	Voce di menu:
 	No menu item matches.	Nessuna voce di menu corrisponde.
 	Several menu items match. Choose one from the list.	Corrispondono più voci di menu. Sceglierne una dall’elenco.

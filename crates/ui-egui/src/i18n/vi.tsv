@@ -811,6 +811,10 @@ font-technology	Variable	Biến thiên
 	Corner Color	Màu góc
 	Contiguous	Liền kề
 	Each Channel	Từng kênh
+	Color Mask…	Mặt nạ màu…
+	Color Mask	Mặt nạ màu
+	Remove Color Mask	Xóa mặt nạ màu
+	Apply Color Mask	Áp dụng mặt nạ màu
 	Edit Path	Sửa đường dẫn
 	Crop Marks	Dấu cắt xén
 	Crop To	Cắt xén đến
@@ -5202,6 +5206,10 @@ theme	Appearance	Giao diện
 @msg	a CMYK image has no transparency to set	ảnh CMYK không có độ trong suốt để đặt
 @msg	every pixel matches the background: no image would be left	mọi điểm ảnh đều khớp với nền: sẽ không còn lại ảnh nào
 @msg	an image of {w} × {h} pixels is too large to change	ảnh {w} × {h} điểm ảnh quá lớn nên không thể thay đổi
+@msg	select an image with a color mask	hãy chọn ảnh có mặt nạ màu
+@msg	the color mask's settings are out of range	cài đặt của mặt nạ màu nằm ngoài phạm vi cho phép
+@msg	a CMYK image can't take a color mask	ảnh CMYK không thể có mặt nạ màu
+@msg	the mask would hide every pixel	mặt nạ sẽ ẩn mọi điểm ảnh
 @msg	select an Image Trace object	hãy chọn đối tượng vector hóa ảnh
 @msg	select an object in perspective	hãy chọn đối tượng trong phối cảnh
 @msg	select artwork (or a colour group) to recolor	hãy chọn tác phẩm (hoặc nhóm màu) để tô lại
@@ -5389,6 +5397,7 @@ theme	Appearance	Giao diện
 @msg	unknown parameter `{path}`; it takes: {keys}	tham số không xác định `{path}`; nhận: {keys}
 @msg	missing `{path}`	thiếu `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` phải là {expected}, không phải {got}
+@msg	`{path}` is nested too deeply	`{path}` lồng nhau quá sâu
 @msg	unknown preference `{key}`	tùy chọn không xác định `{key}`
 @msg	Preferences imported.	Đã nhập tùy chọn.
 @msg	not a preferences file: {e}	không phải tệp tùy chọn: {e}
@@ -6029,6 +6038,16 @@ axis	Y Axis	Trục Y
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
+	Select Object…	Chọn đối tượng…
+	Select Object	Chọn đối tượng
+	Set Selection	Đặt vùng chọn
+	Case Sensitive	Phân biệt chữ hoa chữ thường
+	Whole Word	Toàn bộ từ
+	Select Object: {note}	Chọn đối tượng: {note}
+	Select by Note	Chọn theo ghi chú
+@msg	the note is empty	ghi chú trống
+@msg	the note is longer than 1,024 bytes	ghi chú dài hơn 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	không có đối tượng nào có thể chọn có ghi chú khớp với “{query}”
 	Menu Item:	Mục menu:
 	No menu item matches.	Không có mục menu nào khớp.
 	Several menu items match. Choose one from the list.	Có nhiều mục menu khớp. Hãy chọn một mục trong danh sách.

@@ -380,6 +380,11 @@ fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_
 /// A Press Quality export of a 2 × 2 CMYK image masked by PNG `mask` on its own pixel grid
 /// (`clip`, `invert`): the file, and the decoded soft mask of each CMYK image (`None`: it has none).
 fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
+    export_smasks(&masked_doc(mask, clip, invert))
+}
+
+/// A document of a 2 × 2 CMYK image masked by PNG `mask` (key `alpha`) on its own pixel grid.
+fn masked_doc(mask: Vec<u8>, clip: bool, invert: bool) -> Document {
     let ink = [0u8, 102, 255, 0];
     let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
     d.images.insert("img".into(), ImageBlob::cmyk_tiff(&Inks::new(2, 2, flat(ink, 4)).unwrap()).unwrap());
@@ -400,8 +405,14 @@ fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Optio
     let n = Node::new(d.alloc_id(), image("img")).with_mask(Some(Box::new(mask)));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// A Press Quality export of `d`: the file, and the decoded soft mask of each CMYK image (`None`:
+/// it has none).
+fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
     let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
-    let out = export_with_report(&d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
+    let out = export_with_report(d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
     let file = Pdf::new(Arc::new(out.bytes.clone())).unwrap();
     let smasks = file
         .objects()
@@ -438,6 +449,34 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     let (bytes, smasks) = export_masked(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, true);
     assert_eq!(smasks, [None]);
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
+}
+
+/// A grey mask image with a color mask masks the CMYK image with the pixels it shows: its hidden
+/// pixels are clear in the image's `/SMask`.
+#[test]
+fn a_color_masked_grid_mask_image_writes_the_pixels_it_shows_as_the_smask() {
+    let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+    // The last pixel hidden.
+    d.images.insert(
+        "shown".into(),
+        ImageBlob::new("image/png", png(image::GrayAlphaImage::from_raw(2, 2, vec![255, 255, 128, 255, 0, 255, 64, 0]).unwrap())),
+    );
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut mask = d.node(id).unwrap().extras().mask.clone().unwrap();
+    let art = std::sync::Arc::make_mut(&mut mask.art);
+    art.extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "alpha".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[64, 64, 64]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    d.node_mut(id).unwrap().extras_mut().mask = Some(mask);
+    let (_, smasks) = export_smasks(&d);
+    assert_eq!(smasks, [Some(vec![255, 128, 0, 0])]);
 }
 
 /// A pixelated CMYK image (an envelope's with Anti-Alias off) masked by a grey image of its grid

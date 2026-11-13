@@ -171,6 +171,10 @@
 	Corner Color	კუთხეების ფერი
 	Contiguous	მომიჯნავე
 	Each Channel	თითოეული არხი
+	Color Mask…	ფერის ნიღაბი…
+	Color Mask	ფერის ნიღაბი
+	Remove Color Mask	ფერის ნიღბის მოშორება
+	Apply Color Mask	ფერის ნიღბის გამოყენება
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
@@ -4454,6 +4458,10 @@ font-technology	Variable	ცვლადი
 @msg	a CMYK image has no transparency to set	CMYK გამოსახულებას არ აქვს დასაყენებელი გამჭვირვალობა
 @msg	every pixel matches the background: no image would be left	ყველა პიქსელი ემთხვევა ფონს: გამოსახულება აღარ დარჩებოდა
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} პიქსელის გამოსახულება შესაცვლელად ზედმეტად დიდია
+@msg	select an image with a color mask	მონიშნეთ ფერის ნიღბიანი გამოსახულება
+@msg	the color mask's settings are out of range	ფერის ნიღბის პარამეტრები დასაშვებ დიაპაზონს სცდება
+@msg	a CMYK image can't take a color mask	CMYK გამოსახულებას ფერის ნიღაბი ვერ დაედება
+@msg	the mask would hide every pixel	ნიღაბი ყველა პიქსელს დამალავდა
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
@@ -5166,6 +5174,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown parameter `{path}`; it takes: {keys}	უცნობი პარამეტრი `{path}`; იღებს: {keys}
 @msg	missing `{path}`	აკლია `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` უნდა იყოს {expected} და არა {got}
+@msg	`{path}` is nested too deeply	`{path}` ზედმეტად ღრმადაა ჩადგმული
 file-filter	All readable files	ყველა წაკითხვადი ფაილი
 file-filter	All placeable files	ყველა განთავსებადი ფაილი
 file-filter	Swatch libraries	ფერის ნიმუშების ბიბლიოთეკები
@@ -6374,6 +6383,16 @@ axis	Y Axis	Y ღერძი
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
 	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
 	Insert Menu Item	მენიუს ელემენტის ჩასმა
+	Select Object…	ობიექტის მონიშვნა…
+	Select Object	ობიექტის მონიშვნა
+	Set Selection	მონიშვნის დაყენება
+	Case Sensitive	რეგისტრის გათვალისწინება
+	Whole Word	მთელი სიტყვა
+	Select Object: {note}	ობიექტის მონიშვნა: {note}
+	Select by Note	მონიშვნა შენიშვნის მიხედვით
+@msg	the note is empty	შენიშვნა ცარიელია
+@msg	the note is longer than 1,024 bytes	შენიშვნა 1024 ბაიტზე გრძელია
+@msg	no object that can be selected has a note matching “{query}”	არცერთ მოსანიშნ ობიექტს არ აქვს შენიშვნა, რომელიც ემთხვევა „{query}“-ს
 	Menu Item:	მენიუს ელემენტი:
 	No menu item matches.	მენიუს არცერთი ელემენტი არ ემთხვევა.
 	Several menu items match. Choose one from the list.	ემთხვევა მენიუს რამდენიმე ელემენტი. აირჩიეთ ერთი სიიდან.

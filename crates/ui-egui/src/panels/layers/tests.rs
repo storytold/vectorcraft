@@ -94,22 +94,30 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
 }
 
 fn button(pos: egui::Pos2, pressed: bool) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    button_by(pos, pressed, egui::PointerButton::Primary)
+}
+
+/// `pointer` pressed (or released) at `pos`.
+fn button_by(pos: egui::Pos2, pressed: bool, pointer: egui::PointerButton) -> egui::Event {
+    egui::Event::PointerButton { pos, button: pointer, pressed, modifiers: Default::default() }
 }
 
 /// Drag from `a` to `b` over a few frames (Alt held when `alt`).
 fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, alt: bool) {
-    let steps = [
-        vec![egui::Event::PointerMoved(a)],
-        vec![button(a, true)],
-        vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))],
-        vec![egui::Event::PointerMoved(b)],
-        vec![button(b, false)],
-        vec![],
-    ];
-    for e in steps {
-        frame(app, ctx, e, alt);
-    }
+    drag_by(app, ctx, a, b, alt, egui::PointerButton::Primary);
+}
+
+/// Drag from `a` to `b` with `pointer` over a few frames (Alt held when `alt`). Returns whether a
+/// drag-and-drop payload was held over `b` before the release.
+fn drag_by(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, alt: bool, pointer: egui::PointerButton) -> bool {
+    frame(app, ctx, vec![egui::Event::PointerMoved(a)], alt);
+    frame(app, ctx, vec![button_by(a, true, pointer)], alt);
+    frame(app, ctx, vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))], alt);
+    frame(app, ctx, vec![egui::Event::PointerMoved(b)], alt);
+    let held = egui::DragAndDrop::has_any_payload(ctx);
+    frame(app, ctx, vec![button_by(b, false, pointer)], alt);
+    frame(app, ctx, vec![], alt);
+    held
 }
 
 #[test]
@@ -1288,6 +1296,104 @@ fn the_selected_art_square_drags_the_selection_to_another_layer() {
     let d = &app.session.active().unwrap().doc;
     assert_eq!(d.node(d.layers[0].id).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), vec![c, sub, a, g]);
     assert_eq!(app.session.active().unwrap().selection.objects.len(), 2, "still selected");
+}
+
+/// The undo steps of the active document.
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// Drags from `a` to `b` with the secondary and then the middle button, each of which must carry
+/// nothing and leave the document and its undo steps as they were (`state` reads what the drag
+/// would change); then the same drag with the primary button, which must change `state`.
+fn only_the_primary_button_drags<S: PartialEq + std::fmt::Debug>(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    (a, b): (egui::Pos2, egui::Pos2),
+    state: impl Fn(&VectorcraftApp) -> S,
+    what: &str,
+) {
+    let (before, undo) = (state(app), undo_len(app));
+    for pointer in [egui::PointerButton::Secondary, egui::PointerButton::Middle] {
+        let held = drag_by(app, ctx, a, b, false, pointer);
+        assert!(!held, "{what}: a {pointer:?} drag carries nothing");
+        assert_eq!(state(app), before, "{what}: a {pointer:?} drag changes nothing");
+        assert_eq!(undo_len(app), undo, "{what}: a {pointer:?} drag records no undo step");
+    }
+    drag_by(app, ctx, a, b, false, egui::PointerButton::Primary);
+    assert_ne!(state(app), before, "{what}: the primary button drags");
+}
+
+/// Only the primary button drags in the panel: a drag with the secondary or middle button moves no
+/// row, guide or selected art, hides or locks no row and moves no appearance, and records no undo
+/// step. The secondary button still opens a row's menu.
+#[test]
+fn only_the_primary_button_drags_rows_guides_art_columns_and_appearances() {
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let rows = |app: &mut VectorcraftApp, ctx: &egui::Context| frame(app, ctx, vec![], false).0;
+
+    // A row, onto the middle of another layer's row.
+    let (mut app, [.., a, _]) = nested();
+    app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let parent = |app: &VectorcraftApp| app.session.active().unwrap().doc.parent_of(a);
+    only_the_primary_button_drags(&mut app, &ctx, (egui::pos2(150.0, c[5].y), egui::pos2(150.0, c[0].y)), parent, "a row");
+
+    // A guide row, onto another layer's row.
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "select.none", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let guide_row = egui::pos2(150.0, (c[1].y + c[2].y) / 2.0);
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides()[0].layer;
+    only_the_primary_button_drags(&mut app, &ctx, (guide_row, egui::pos2(150.0, c[0].y)), layer, "a guide row");
+
+    // The selected-art square, onto the layer's row.
+    let (mut app, [_, _, g, _, a, _]) = nested();
+    app.session.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let kids = |app: &VectorcraftApp| {
+        let d = &app.session.active().unwrap().doc;
+        d.node(d.layers[0].id).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>()
+    };
+    let square = c[1] + vec2(TARGET_X - SQUARE_X, 0.0);
+    only_the_primary_button_drags(&mut app, &ctx, (square, egui::pos2(150.0, c[0].y)), kids, "the selected-art square");
+
+    // Down the eye and the lock columns, from the group's row to a rectangle's.
+    for (x, what) in [(12.0, "the eye column"), (37.0, "the lock column")] {
+        let (mut app, [_, _, g, b, a, _]) = nested();
+        let ctx = egui::Context::default();
+        let c = rows(&mut app, &ctx);
+        let marks = move |app: &VectorcraftApp| [g, b, a].map(|id| (node(app, id).visible, node(app, id).locked));
+        only_the_primary_button_drags(&mut app, &ctx, (egui::pos2(x, c[2].y), egui::pos2(x, c[4].y)), marks, what);
+    }
+
+    // A target circle, onto another row's circle.
+    let (mut app, _, [a, b]) = two_rects();
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let opacities = move |app: &VectorcraftApp| [a, b].map(|id| node(app, id).opacity);
+    only_the_primary_button_drags(&mut app, &ctx, (c[2], c[1]), opacities, "a target circle");
+
+    // A secondary click on a row opens its menu.
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let c = frame(&mut app, &ctx, vec![], false).0;
+    let at = egui::pos2(150.0, c[0].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    assert_eq!(texts(&mut app, &ctx, vec![], "Collect for Export"), 1, "the row menu is open");
 }
 
 #[test]

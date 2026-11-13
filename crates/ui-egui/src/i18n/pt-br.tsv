@@ -636,6 +636,10 @@ antiAlias	Sharp	Nítido
 	Corner Color	Cor dos Cantos
 	Contiguous	Contíguo
 	Each Channel	Cada Canal
+	Color Mask…	Máscara de Cor…
+	Color Mask	Máscara de Cor
+	Remove Color Mask	Remover Máscara de Cor
+	Apply Color Mask	Aplicar Máscara de Cor
 	Edit Path	Editar caminho
 	Mask	Máscara
 	Crop Marks	Marcas de Corte
@@ -4244,6 +4248,10 @@ axis	Both	Ambos
 @msg	a CMYK image has no transparency to set	uma imagem CMYK não tem transparência para definir
 @msg	every pixel matches the background: no image would be left	todos os pixels correspondem ao fundo: nenhuma imagem restaria
 @msg	an image of {w} × {h} pixels is too large to change	uma imagem de {w} × {h} pixels é grande demais para ser alterada
+@msg	select an image with a color mask	selecione uma imagem com uma máscara de cor
+@msg	the color mask's settings are out of range	as configurações da máscara de cor estão fora do intervalo
+@msg	a CMYK image can't take a color mask	uma imagem CMYK não pode ter uma máscara de cor
+@msg	the mask would hide every pixel	a máscara ocultaria todos os pixels
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
@@ -4672,6 +4680,7 @@ axis	Both	Ambos
 @msg	unknown parameter `{path}`; it takes: {keys}	parâmetro desconhecido `{path}`; aceita: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` deve ser {expected}, não {got}
+@msg	`{path}` is nested too deeply	`{path}` está aninhado com profundidade excessiva
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
 	Drawer menu	Menu da gaveta
 	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles
@@ -6338,6 +6347,16 @@ axis	Y Axis	Eixo Y
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
+	Select Object…	Selecionar Objeto…
+	Select Object	Selecionar Objeto
+	Set Selection	Definir Seleção
+	Case Sensitive	Diferenciar Maiúsculas e Minúsculas
+	Whole Word	Palavra Inteira
+	Select Object: {note}	Selecionar Objeto: {note}
+	Select by Note	Selecionar por Nota
+@msg	the note is empty	a nota está vazia
+@msg	the note is longer than 1,024 bytes	a nota tem mais de 1.024 bytes
+@msg	no object that can be selected has a note matching “{query}”	nenhum objeto que pode ser selecionado tem uma nota correspondente a “{query}”
 	Menu Item:	Item de menu:
 	No menu item matches.	Nenhum item de menu corresponde.
 	Several menu items match. Choose one from the list.	Vários itens de menu correspondem. Escolha um da lista.

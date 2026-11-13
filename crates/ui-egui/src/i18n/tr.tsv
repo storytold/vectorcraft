@@ -690,6 +690,10 @@ font-technology	Variable	Değişken
 	Corner Color	Köşe Rengi
 	Contiguous	Bitişik
 	Each Channel	Her Kanal
+	Color Mask…	Renk Maskesi…
+	Color Mask	Renk Maskesi
+	Remove Color Mask	Renk Maskesini Kaldır
+	Apply Color Mask	Renk Maskesini Uygula
 	Mask	Maske
 	Crop Marks	Kırpma İşaretleri
 	Crop To	Kırpma Hedefi
@@ -4536,6 +4540,10 @@ axis	Both	Her İkisi
 @msg	a CMYK image has no transparency to set	CMYK görüntüsünde ayarlanacak saydamlık yok
 @msg	every pixel matches the background: no image would be left	her piksel arka planla eşleşiyor: hiç görüntü kalmaz
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} piksellik bir görüntü değiştirilemeyecek kadar büyük
+@msg	select an image with a color mask	renk maskesi olan bir resim seç
+@msg	the color mask's settings are out of range	renk maskesinin ayarları izin verilen aralığın dışında
+@msg	a CMYK image can't take a color mask	CMYK görüntüsüne renk maskesi uygulanamaz
+@msg	the mask would hide every pixel	maske her pikseli gizlerdi
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
@@ -5144,6 +5152,7 @@ lighting	Light	Işık
 @msg	unknown parameter `{path}`; it takes: {keys}	bilinmeyen parametre `{path}`; şunları alır: {keys}
 @msg	missing `{path}`	`{path}` eksik
 @msg	`{path}` must be {expected}, not {got}	`{path}` {expected} olmalıdır, {got} değil
+@msg	`{path}` is nested too deeply	`{path}` çok derin iç içe geçmiş
 	1 Layer	1 Katman
 	1 bit	1 bit
 	16 Colors	16 Renk
@@ -6379,6 +6388,16 @@ axis	Y Axis	Y ekseni
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
+	Select Object…	Nesne Seç…
+	Select Object	Nesne Seç
+	Set Selection	Seçimi Ayarla
+	Case Sensitive	Büyük/Küçük Harfe Duyarlı
+	Whole Word	Tam Sözcük
+	Select Object: {note}	Nesne Seç: {note}
+	Select by Note	Nota Göre Seç
+@msg	the note is empty	not boş
+@msg	the note is longer than 1,024 bytes	not 1.024 bayttan uzun
+@msg	no object that can be selected has a note matching “{query}”	seçilebilen hiçbir nesnenin notu “{query}” ile eşleşmiyor
 	Menu Item:	Menü öğesi:
 	No menu item matches.	Eşleşen menü öğesi yok.
 	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.

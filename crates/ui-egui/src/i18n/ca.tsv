@@ -1011,6 +1011,10 @@ antiAlias	Sharp	Nítid
 	Corner Color	Color de les cantonades
 	Contiguous	Contigu
 	Each Channel	Cada canal
+	Color Mask…	Màscara de color…
+	Color Mask	Màscara de color
+	Remove Color Mask	Elimina la màscara de color
+	Apply Color Mask	Aplica la màscara de color
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -4037,6 +4041,16 @@ digits	Malayalam	Malaiàlam
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
+	Select Object…	Selecciona un objecte…
+	Select Object	Selecciona un objecte
+	Set Selection	Defineix la selecció
+	Case Sensitive	Distingeix majúscules i minúscules
+	Whole Word	Paraula sencera
+	Select Object: {note}	Selecciona un objecte: {note}
+	Select by Note	Selecciona per nota
+@msg	the note is empty	la nota és buida
+@msg	the note is longer than 1,024 bytes	la nota té més de 1.024 bytes
+@msg	no object that can be selected has a note matching “{query}”	cap objecte que es pugui seleccionar té una nota que coincideixi amb “{query}”
 	Menu Item:	Element de menú:
 	No menu item matches.	Cap element de menú no coincideix.
 	Several menu items match. Choose one from the list.	Coincideixen diversos elements de menú. Trieu-ne un de la llista.
@@ -5957,6 +5971,10 @@ digits	Malayalam	Malaiàlam
 @msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
 @msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
 @msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
+@msg	select an image with a color mask	selecciona una imatge amb una màscara de color
+@msg	the color mask's settings are out of range	la configuració de la màscara de color és fora de l’interval
+@msg	a CMYK image can't take a color mask	una imatge CMYK no pot tenir una màscara de color
+@msg	the mask would hide every pixel	la màscara amagaria tots els píxels
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
@@ -6187,6 +6205,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` està imbricat massa profundament
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	Preferences imported.	S’han importat les preferències.
 @msg	not a preferences file: {e}	no és un fitxer de preferències: {e}

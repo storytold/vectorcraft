@@ -206,12 +206,14 @@ pub fn mesh_warp_cost(cells: usize) -> usize {
 /// that takes the triangle where `f` takes its corners (with `masked`, the image masked by the
 /// triangle instead; with `pixelated`, drawn without smoothing). Each piece reaches a little past
 /// its edges (at most half a point) so neighbors overlap and no seams show. Each piece keeps the
-/// color `n` colorizes a grayscale image with. The result is a group with `n`'s id, name,
+/// color `n` colorizes a grayscale image with, and `n`'s color mask. The result is a group with `n`'s id, name,
 /// transparency, opacity mask and appearance.
 pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
     let k = cells.max(1);
     // A grayscale image's fill color colorizes each piece; the group of pieces takes none.
     let colorize = n.extras().colorize.clone();
+    // Each piece shows what the image shows: its color mask's masked pixels.
+    let color_mask = n.extras().color_mask.clone();
     let (pw, ph) = (im.width as f64, im.height as f64);
     let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
     let mut pieces = Vec::with_capacity(2 * k * k);
@@ -236,6 +238,7 @@ pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, c
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 image.extras_mut().pixelated = pixelated;
                 image.extras_mut().colorize = colorize.clone();
+                image.extras_mut().color_mask = color_mask.clone();
                 if masked {
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
                     // white opacity mask) instead of its clipping path.

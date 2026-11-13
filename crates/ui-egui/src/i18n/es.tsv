@@ -710,6 +710,10 @@ font-technology	Variable	Variables
 	Corner Color	Color de las esquinas
 	Contiguous	Contiguo
 	Each Channel	Cada canal
+	Color Mask…	Máscara de color…
+	Color Mask	Máscara de color
+	Remove Color Mask	Quitar máscara de color
+	Apply Color Mask	Aplicar máscara de color
 	Edit Path	Editar trazado
 	Mask	Máscara
 	Crop Marks	Marcas de corte
@@ -4788,6 +4792,10 @@ axis	Both	Ambos
 @msg	a CMYK image has no transparency to set	una imagen CMYK no tiene transparencia que establecer
 @msg	every pixel matches the background: no image would be left	todos los píxeles coinciden con el fondo: no quedaría ninguna imagen
 @msg	an image of {w} × {h} pixels is too large to change	una imagen de {w} × {h} píxeles es demasiado grande para cambiarla
+@msg	select an image with a color mask	selecciona una imagen con una máscara de color
+@msg	the color mask's settings are out of range	los ajustes de la máscara de color están fuera de rango
+@msg	a CMYK image can't take a color mask	una imagen CMYK no puede tener una máscara de color
+@msg	the mask would hide every pixel	la máscara ocultaría todos los píxeles
 @msg	select an object in perspective	selecciona un objeto en perspectiva
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloreado completado; sin cambios: {locked} y {hidden}
@@ -5819,6 +5827,7 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{path}`; it takes: {keys}	parámetro desconocido `{path}`; acepta: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` debe ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` está anidado a demasiada profundidad
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
@@ -6365,6 +6374,16 @@ axis	Y Axis	Eje Y
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
 	Insert Menu Item…	Insertar elemento de menú…
 	Insert Menu Item	Insertar elemento de menú
+	Select Object…	Seleccionar objeto…
+	Select Object	Seleccionar objeto
+	Set Selection	Definir selección
+	Case Sensitive	Distinguir mayúsculas y minúsculas
+	Whole Word	Palabra completa
+	Select Object: {note}	Seleccionar objeto: {note}
+	Select by Note	Seleccionar por nota
+@msg	the note is empty	la nota está vacía
+@msg	the note is longer than 1,024 bytes	la nota ocupa más de 1024 bytes
+@msg	no object that can be selected has a note matching “{query}”	ningún objeto que se pueda seleccionar tiene una nota que coincida con “{query}”
 	Menu Item:	Elemento de menú:
 	No menu item matches.	Ningún elemento de menú coincide.
 	Several menu items match. Choose one from the list.	Coinciden varios elementos de menú. Elija uno de la lista.

@@ -911,6 +911,10 @@ font-technology	Variable	Változó
 	Corner Color	Sarokszín
 	Contiguous	Összefüggő
 	Each Channel	Minden csatorna
+	Color Mask…	Színmaszk…
+	Color Mask	Színmaszk
+	Remove Color Mask	Színmaszk eltávolítása
+	Apply Color Mask	Színmaszk alkalmazása
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -5539,6 +5543,10 @@ imageTrace	Outline	Körvonal
 @msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
 @msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
 @msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
+@msg	select an image with a color mask	jelölj ki egy színmaszkos képet
+@msg	the color mask's settings are out of range	a színmaszk beállításai a tartományon kívül esnek
+@msg	a CMYK image can't take a color mask	CMYK képre nem tehető színmaszk
+@msg	the mask would hide every pixel	a maszk minden képpontot elrejtene
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)
@@ -5861,6 +5869,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{path}`; it takes: {keys}	ismeretlen paraméter: `{path}`; ezeket fogadja el: {keys}
 @msg	missing `{path}`	hiányzik: `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}`: {expected} kell, nem ez: {got}
+@msg	`{path}` is nested too deeply	`{path}` túl mélyen van egymásba ágyazva
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
@@ -6406,6 +6415,16 @@ axis	Y Axis	Y tengely
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
+	Select Object…	Objektum kijelölése…
+	Select Object	Objektum kijelölése
+	Set Selection	Kijelölés beállítása
+	Case Sensitive	Kis- és nagybetűk megkülönböztetése
+	Whole Word	Teljes szó
+	Select Object: {note}	Objektum kijelölése: {note}
+	Select by Note	Kijelölés megjegyzés szerint
+@msg	the note is empty	a megjegyzés üres
+@msg	the note is longer than 1,024 bytes	a megjegyzés hosszabb 1024 bájtnál
+@msg	no object that can be selected has a note matching “{query}”	egyetlen kijelölhető objektum megjegyzése sem egyezik ezzel: „{query}”
 	Menu Item:	Menüelem:
 	No menu item matches.	Egy menüelem sem egyezik.
 	Several menu items match. Choose one from the list.	Több menüelem is egyezik. Válasszon egyet a listából.

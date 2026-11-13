@@ -244,6 +244,10 @@ fn read(bytes: &[u8]) -> Option<Val> {
 const MAX_SHEETS: usize = 4096;
 const MAX_SHEETS_BASED_ON: usize = 16;
 
+/// Most runs of manual kerning read of one story; the characters past them keep the automatic
+/// kerning.
+const MAX_KERN_RUNS: usize = 1 << 16;
+
 /// Most frames read of one story, and most path segments of a frame.
 pub(crate) const MAX_FRAMES: usize = 4096;
 pub(crate) const MAX_SEGMENTS: usize = 1 << 16;
@@ -428,6 +432,10 @@ pub(super) struct Story {
     paras: Vec<(usize, Para)>,
     /// `(characters, style)` in order.
     runs: Vec<(usize, Style)>,
+    /// `(characters, manual kerning)` in order: thousandths of an em after each of those characters
+    /// (key 8 of the story's text, a run's value its key 0), `None` where the automatic kerning
+    /// applies. Empty when the story has none.
+    kerns: Vec<(usize, Option<f64>)>,
     /// Type on a path: the spacing its first frame's layout implies ([`path_spacing`]).
     path_spacing: f64,
     /// Vertical type (Type › Type Orientation › Vertical): its lines are columns, from right to
@@ -718,12 +726,13 @@ impl Texts {
         if runs.is_empty() {
             runs.push((text.chars().count(), self.style(None)));
         }
+        let kerns = manual_kerning(s.get("0")?.get("8"));
         let mut budget = MAX_STORY_TABS;
         let mut tabs_left_out = false;
         for (_, p) in &mut paras {
             tabs_left_out |= p.tabs_truncated | spend_tabs(&mut p.tabs, &mut budget);
         }
-        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical, tabs_left_out: tabs_left_out.into() })
+        Some(Story { text, anchor, lines, frames, paras, runs, kerns, path_spacing, vertical, tabs_left_out: tabs_left_out.into() })
     }
 
     /// A paragraph's attributes (`run`: its attributes, key 5, and the paragraph style it is based
@@ -1182,19 +1191,16 @@ impl Story {
         let to_text = xf.inverse();
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
+        let mut kerns = Kerns::new(&self.kerns);
         let mut from = 0usize;
         for (n, st) in &self.runs {
             let to = from.saturating_add(*n).min(chars.len());
-            let piece: String = chars.get(from..to).unwrap_or_default().iter().collect();
+            kerns.split(&chars, from, to, &char_style(st, scale, to_text), &mut runs);
             from = to;
-            if piece.is_empty() {
-                continue;
-            }
-            runs.push(TextRun::new(piece, char_style(st, scale, to_text)));
         }
         if from < chars.len() {
             let last = self.runs.last().map(|r| &r.1)?;
-            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale, to_text)));
+            kerns.split(&chars, from, chars.len(), &char_style(last, scale, to_text), &mut runs);
         }
         let first = self.runs.first().map(|r| char_style(&r.1, scale, to_text))?;
         let mut t = TextObject::point(Point::ZERO, "", first);
@@ -1327,6 +1333,64 @@ impl Story {
             }
         }
         out
+    }
+}
+
+/// The manual kerning of a story (`list`: key 8 of its text): each run's characters and value
+/// (thousandths of an em), `None` for a run without one (the automatic kerning) or with a value
+/// that can't be read. Neighbouring runs of one value are one run. Empty without the key, and past
+/// [`MAX_KERN_RUNS`] runs the characters keep the automatic kerning.
+fn manual_kerning(list: Option<&Val>) -> Vec<(usize, Option<f64>)> {
+    let mut kerns: Vec<(usize, Option<f64>)> = vec![];
+    for run in list.and_then(|k| k.get("0")).map(Val::list).unwrap_or_default().iter().take(MAX_KERN_RUNS) {
+        let Some(n) = run.get("1").and_then(Val::num).filter(|n| *n >= 0.0 && n.fract() == 0.0) else { break };
+        let value = run.get("0").and_then(|v| v.get("0")).and_then(Val::num).filter(|v| v.abs() < 1e5);
+        match kerns.last_mut() {
+            Some((count, last)) if *last == value => *count = count.saturating_add(n as usize),
+            _ => kerns.push((n as usize, value)),
+        }
+    }
+    if kerns.iter().all(|(_, v)| v.is_none()) {
+        kerns.clear();
+    }
+    kerns
+}
+
+/// A walk along a story's manual kerning runs ([`Story::kerns`]), as its style runs are made into
+/// text runs.
+struct Kerns<'a> {
+    runs: &'a [(usize, Option<f64>)],
+    /// The run at the walk and the character it starts at.
+    at: usize,
+    start: usize,
+}
+
+impl<'a> Kerns<'a> {
+    fn new(runs: &'a [(usize, Option<f64>)]) -> Self {
+        Self { runs, at: 0, start: 0 }
+    }
+
+    /// Push the characters `from..to` of `chars` (`from` no earlier than any before) onto `out`,
+    /// in style `style`, as a text run for each manual kerning they have.
+    fn split(&mut self, chars: &[char], from: usize, to: usize, style: &CharStyle, out: &mut Vec<TextRun>) {
+        let mut at = from;
+        while at < to {
+            while let Some((n, _)) = self.runs.get(self.at)
+                && self.start.saturating_add(*n) <= at
+            {
+                self.start = self.start.saturating_add(*n);
+                self.at += 1;
+            }
+            let (end, kerning) = match self.runs.get(self.at) {
+                Some((n, kerning)) => (self.start.saturating_add(*n).min(to), *kerning),
+                None => (to, None),
+            };
+            let piece: String = chars.get(at..end).unwrap_or_default().iter().collect();
+            if !piece.is_empty() {
+                out.push(TextRun::new(piece, CharStyle { kerning, ..style.clone() }));
+            }
+            at = end;
+        }
     }
 }
 
@@ -1811,6 +1875,78 @@ mod tests {
         }
     }
 
+    /// Key 8 of a story's text is its manual kerning: runs of characters (key 1), each with its
+    /// value (key 0 of key 0, thousandths of an em) or empty where the automatic kerning applies.
+    /// Each character with a value takes it as the space after it, across the story's style runs;
+    /// a value that can't be read keeps the automatic kerning, and a run whose length can't be read
+    /// ends the reading there. In users' files a heading's first pair is kerned by -140 and the
+    /// letters of a line by 20 to 220, and the page draws those gaps that much tighter or wider.
+    #[test]
+    fn a_story_keeps_its_manual_kerning() {
+        // "Wave" at 20 points and a Horizontal Scale of 50%, then " tea" at 10 points.
+        let styles: &[u8] = b"/6 << /0 [ << /0 << /0 << /6 << /1 20.0 /6 0.5 >> >> >> /1 4 >> << /0 << /0 << /6 << /1 10.0 >> >> >> /1 5 >> ] >>";
+        let texts = |kerns: &[u8]| Texts {
+            stories: vec![read(&[b"/0 << /0 (Wave tea\r) ", styles, b" ", kerns, b" >> /1 << /0 [ << /0 0 >> ] >>"].concat()).unwrap()],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![read(b"/0 << /0 [ 0 0 ] /2 << /0 0 >> >>").unwrap()],
+            patterns: HashMap::new(),
+        };
+        let text = |kerns: &[u8]| -> TextObject {
+            let node = texts(kerns).story(0).unwrap().node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
+            let NodeKind::Text(t) = node.kind else { panic!("type") };
+            *t
+        };
+        let runs = |kerns: &[u8]| -> Vec<(String, f64, Option<f64>)> {
+            text(kerns).runs.iter().map(|r| (r.text.clone(), r.style.size, r.style.kerning)).collect()
+        };
+        let run = |text: &str, size: f64, kerning: Option<f64>| (text.to_string(), size, kerning);
+        // "W" -140, "av" none, "e t" 80 across the style runs, "e" a value that can't be read, "a" none.
+        let kerned: &[u8] = b"/8 << /0 [ << /0 << /0 -140 >> /1 1 >> << /0 << >> /1 2 >> << /0 << /0 80 >> /1 3 >> \
+            << /0 << /0 (x) >> /1 1 >> << /0 << >> /1 2 >> ] >>";
+        assert_eq!(
+            runs(kerned),
+            [run("W", 20.0, Some(-140.0)), run("av", 20.0, None), run("e", 20.0, Some(80.0)), run(" t", 10.0, Some(80.0)), run("ea", 10.0, None)]
+        );
+        // Without the key, or with no value in it, the style runs stay as they are.
+        let plain = [run("Wave", 20.0, None), run(" tea", 10.0, None)];
+        assert_eq!(runs(b""), plain);
+        assert_eq!(runs(b"/8 << /0 [ << /0 << >> /1 9 >> ] >>"), plain);
+        // Values out of range keep the automatic kerning, and a length that can't be read ends the runs.
+        let out_of_range: &[u8] = b"/8 << /0 [ << /0 << /0 1e9 >> /1 1 >> << /0 << /0 NaN >> /1 1 >> << /0 << /0 60 >> /1 1 >> ] >>";
+        assert_eq!(runs(out_of_range)[..2], [run("Wa", 20.0, None), run("v", 20.0, Some(60.0))]);
+        for bad in [b"-1".as_slice(), b"1.5", b"(1)", b"NaN"] {
+            let k = [b"/8 << /0 [ << /0 << /0 60 >> /1 1 >> << /0 << /0 60 >> /1 ".as_slice(), bad, b" >> << /0 << /0 60 >> /1 2 >> ] >>"].concat();
+            assert_eq!(runs(&k), [run("W", 20.0, Some(60.0)), run("ave", 20.0, None), run(" tea", 10.0, None)], "{}", String::from_utf8_lossy(bad));
+        }
+        // Laid out, the space after "W" is 140 thousandths of the em tighter than with a value of
+        // 0, of the em as the run's Horizontal Scale (50%) draws it.
+        let db = vectorcraft_text::FontDb::global();
+        let gap = |t: &TextObject| {
+            let laid = vectorcraft_text::layout(db, t);
+            laid.glyphs[1].origin.x - laid.glyphs[0].origin.x
+        };
+        let (with, zero) = (gap(&text(kerned)), gap(&text(b"/8 << /0 [ << /0 << /0 0 >> /1 1 >> ] >>")));
+        assert!((zero - with - 0.14 * 20.0 * 0.5).abs() < 1e-6, "{with} {zero}");
+    }
+
+    /// Past [`MAX_KERN_RUNS`] runs of manual kerning the characters keep the automatic kerning, so a
+    /// story makes no more text runs of its kerning than that.
+    #[test]
+    fn manual_kerning_reads_at_most_its_limit_of_runs() {
+        let dict = |entries: Vec<(&str, Val)>| Val::Dict(entries.into_iter().map(|(k, v)| (k.to_string(), v)).collect());
+        // One character each, the values alternating, so no two neighbouring runs are one.
+        let run = |i: usize| dict(vec![("0", dict(vec![("0", Val::Num(if i.is_multiple_of(2) { 10.0 } else { 20.0 }))])), ("1", Val::Num(1.0))]);
+        let list = dict(vec![("0", Val::List((0..MAX_KERN_RUNS + 2).map(run).collect()))]);
+        let kerns = manual_kerning(Some(&list));
+        assert_eq!(kerns.len(), MAX_KERN_RUNS);
+        assert_eq!(kerns.iter().map(|(n, _)| n).sum::<usize>(), MAX_KERN_RUNS);
+        assert_eq!(kerns.last(), Some(&(1, Some(20.0))));
+    }
+
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
     /// letters (a dimension's label " 120.5 mm " reads "mm 120.5"); a left-to-right one, or one
     /// that doesn't say, goes by its letters.
@@ -2090,6 +2226,7 @@ mod tests {
                     standard_vertical_roman: false,
                 },
             )],
+            kerns: vec![],
             path_spacing: 0.0,
             vertical: false,
             tabs_left_out: false.into(),

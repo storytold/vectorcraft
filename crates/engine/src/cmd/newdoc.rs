@@ -798,9 +798,9 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
         None => (None, None),
     };
     let applied = profile.is_some();
-    let mut d = match profile {
-        Some(p) => settings.document_from_profile(p),
-        None => settings.document(),
+    let (mut d, links_from, warnings) = match profile {
+        Some(p) => (settings.document_from_profile(p.doc), Some(p.file), p.warnings),
+        None => (settings.document(), None, vec![]),
     };
     d.grid = s.prefs.grid();
     d.title = match str_param(p, "name").or(str_param(p, "title")).map(str::trim).filter(|t| !t.is_empty()) {
@@ -811,6 +811,9 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     };
     d.metadata.created = clock_date(s, "created", date_param(p, "created", C)?);
     let i = s.add_document(d, None);
+    // The profile's links keep their relative paths, which name places from the profile's file, as
+    // a new document from a history state keeps its source's.
+    s.doc_mut()?.links_from = links_from;
     // Overprint Preview is the engine's (the UI turns Pixel Preview on from `previewMode`). Both
     // are views of the whole app, so Default leaves them as they are.
     if settings.preview_mode == PreviewMode::Overprint {
@@ -820,6 +823,9 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "index": i, "previewMode": settings.preview_mode.id() });
     if applied {
         out["profile"] = json!(settings.profile);
+    }
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
     }
     if let Some(e) = profile_error {
         out["profileError"] = json!({ "profile": settings.profile, "reason": e });
@@ -883,6 +889,19 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// larger one is reported and the document starts with the defaults.
 pub const MAX_PROFILE_BYTES: u64 = 64 << 20;
 
+/// `file.new`'s reason for a profile when the request being served may not read the profiles
+/// folder: the folder's path is left out.
+const PROFILE_DENIED: &str = "the request may not read the New Document profiles folder";
+
+/// A profile's file as [`Session::read_profile`] read it.
+struct ReadProfile {
+    doc: Document,
+    /// The file's path, which its links' relative paths name places from.
+    file: String,
+    /// A warning for each color profile the file carries that can't be used.
+    warnings: Vec<String>,
+}
+
 /// The New Document profiles' names: the built-in categories, in tab order.
 pub fn profile_names() -> impl Iterator<Item = &'static str> {
     CATEGORIES.iter().map(|c| c.0)
@@ -919,24 +938,29 @@ impl Session {
         self.profile_path(name).is_some_and(|p| p.is_file())
     }
 
-    /// Profile `name`'s document: `None` when it has no file (the shipped profile, the defaults),
+    /// Profile `name`'s document, its file's path and a warning for each color profile the file
+    /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
     /// the reason when the request being served may not read it, or its file can't be read, is
     /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
-    fn read_profile(&self, name: &str) -> std::result::Result<Option<Document>, String> {
+    fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
         let Some(path) = self.profile_path(name) else { return Ok(None) };
+        let file = path.to_string_lossy().to_string();
         // Checked before the file is looked for, so a request that may not read the folder learns
-        // nothing of its files.
-        crate::file_access::check_read(&path.to_string_lossy())?;
+        // nothing of its files, nor where the folder is.
+        let denied = |_| PROFILE_DENIED.to_string();
+        crate::file_access::check_read(&file).map_err(denied)?;
         if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
             return Ok(None);
         }
-        crate::file_access::check_read(&path.to_string_lossy())?;
+        crate::file_access::check_read(&file).map_err(denied)?;
         let bytes = crate::store::read_capped(&path, MAX_PROFILE_BYTES)?;
-        let mut doc = vectorcraft_format::load(&bytes).map_err(|e| e.to_string())?;
+        // The color profiles the file carries are installed where missing, as opening it installs
+        // them, so the new document's assigned profiles draw and are saved with it.
+        let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
         // Linked images in its symbols, patterns and brushes are read from their files, as placing
         // a document reads them.
-        super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&path.to_string_lossy())), false, false);
-        Ok(Some(doc))
+        super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&file)), false, false);
+        Ok(Some(ReadProfile { doc, file, warnings }))
     }
 }
 

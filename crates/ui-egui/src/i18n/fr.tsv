@@ -712,6 +712,10 @@ font-technology	Variable	Variables
 	Corner Color	Couleur des angles
 	Contiguous	Contigu
 	Each Channel	Chaque canal
+	Color Mask…	Masque de couleur…
+	Color Mask	Masque de couleur
+	Remove Color Mask	Supprimer le masque de couleur
+	Apply Color Mask	Appliquer le masque de couleur
 	Edit Path	Modifier le tracé
 	Mask	Masque
 	Crop Marks	Traits de coupe
@@ -4777,6 +4781,10 @@ axis	Both	Les deux
 @msg	a CMYK image has no transparency to set	une image CMJN n’a pas de transparence à définir
 @msg	every pixel matches the background: no image would be left	chaque pixel correspond à l’arrière-plan : il ne resterait aucune image
 @msg	an image of {w} × {h} pixels is too large to change	une image de {w} × {h} pixels est trop grande pour être modifiée
+@msg	select an image with a color mask	sélectionnez une image avec un masque de couleur
+@msg	the color mask's settings are out of range	les réglages du masque de couleur sont hors limites
+@msg	a CMYK image can't take a color mask	une image CMJN ne peut pas recevoir de masque de couleur
+@msg	the mask would hide every pixel	le masque cacherait tous les pixels
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}
@@ -5448,6 +5456,7 @@ lighting	Light	Lumière
 @msg	unknown parameter `{path}`; it takes: {keys}	paramètre inconnu `{path}` ; il accepte : {keys}
 @msg	missing `{path}`	`{path}` manquant
 @msg	`{path}` must be {expected}, not {got}	`{path}` doit être {expected}, pas {got}
+@msg	`{path}` is nested too deeply	`{path}` est imbriqué trop profondément
 	1 Layer	1 calque
 	1 bit	1 bit
 	16 Colors	16 couleurs
@@ -6418,6 +6427,16 @@ axis	Y Axis	Axe Y
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
+	Select Object…	Sélectionner un objet…
+	Select Object	Sélectionner un objet
+	Set Selection	Définir la sélection
+	Case Sensitive	Respecter la casse
+	Whole Word	Mot entier
+	Select Object: {note}	Sélectionner un objet : {note}
+	Select by Note	Sélectionner par remarque
+@msg	the note is empty	la remarque est vide
+@msg	the note is longer than 1,024 bytes	la remarque dépasse 1 024 octets
+@msg	no object that can be selected has a note matching “{query}”	aucun objet sélectionnable n’a de remarque correspondant à « {query} »
 	Menu Item:	Commande de menu :
 	No menu item matches.	Aucune commande de menu ne correspond.
 	Several menu items match. Choose one from the list.	Plusieurs commandes de menu correspondent. Choisissez-en une dans la liste.

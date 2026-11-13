@@ -177,9 +177,13 @@ solids are ([Groups](#groups)), turned about one shared axis.
 - The objects stay live: editing the clipping path, the blend's keys or the symbol reshapes the solid.
 - An image is refused, alone or in a group: trace it first with Object › Image Trace › Make. The help page routes
   images to 3D through Image Trace ([Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)).
-  A hidden image in a group is left out like any hidden member, and so is an image in a clipping group whose bounds
-  lie wholly outside the clipping path's bounds, when the image has no visible fills or strokes of its own and
-  neither the image nor a group holding it inside the clipping group has effects.
+  A hidden image in a group is left out like any hidden member. An image in a clipping group is left out when its
+  frame, as its transform places it, lies wholly outside the area that every clipping path around it fills together
+  (holes of an even-odd or compound clipping path included), when the image has no visible fills or strokes of its
+  own and neither the image nor a group holding it inside the clipping group has effects. A clipping path hides
+  everything outside its shape ([the help page](https://helpx.adobe.com/illustrator/using/clipping-masks.html)). An
+  image that the clips show any part of is refused. Resolving one effect's art cuts image frames to clipping paths at
+  most 1,024 times (VectorCraft's own limit); past that, the art is refused.
 
 ## Rotate
 

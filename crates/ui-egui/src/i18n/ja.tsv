@@ -243,6 +243,10 @@ digits	Malayalam	マラヤーラム数字
 	Corner Color	角の色
 	Contiguous	隣接
 	Each Channel	各チャンネル
+	Color Mask…	カラーマスク…
+	Color Mask	カラーマスク
+	Remove Color Mask	カラーマスクを削除
+	Apply Color Mask	カラーマスクを適用
 	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
@@ -4963,6 +4967,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	a CMYK image has no transparency to set	CMYK 画像には設定できる透明部分がありません
 @msg	every pixel matches the background: no image would be left	すべてのピクセルが背景に一致します: 画像が残りません
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} ピクセルの画像は大きすぎて変更できません
+@msg	select an image with a color mask	カラーマスクのある画像を選択してください
+@msg	the color mask's settings are out of range	カラーマスクの設定が範囲外です
+@msg	a CMYK image can't take a color mask	CMYK 画像にはカラーマスクを設定できません
+@msg	the mask would hide every pixel	マスクがすべてのピクセルを隠してしまいます
 @msg	the document has no artboards	ドキュメントにアートボードがありません
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです
@@ -5537,6 +5545,7 @@ lighting	Light	ライト
 @msg	unknown parameter `{path}`; it takes: {keys}	`{path}` は不明なパラメーターです。使えるパラメーター: {keys}
 @msg	missing `{path}`	`{path}` が指定されていません
 @msg	`{path}` must be {expected}, not {got}	`{path}` は {expected} にしてください ({got} は使えません)
+@msg	`{path}` is nested too deeply	`{path}` の入れ子が深すぎます
 	Load EPS into Clipboard	EPS をクリップボードに読み込む
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} ピクセルの画像は大きすぎて描画できません
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG、JPEG、WebP、TIFF、BMP のいずれの画像でもありません
@@ -6113,6 +6122,16 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
+	Select Object…	オブジェクトを選択…
+	Select Object	オブジェクトを選択
+	Set Selection	選択範囲を設定
+	Case Sensitive	大文字と小文字を区別
+	Whole Word	単語単位
+	Select Object: {note}	オブジェクトを選択: {note}
+	Select by Note	メモで選択
+@msg	the note is empty	メモが空です
+@msg	the note is longer than 1,024 bytes	メモが 1,024 バイトを超えています
+@msg	no object that can be selected has a note matching “{query}”	「{query}」に一致するメモを持つ選択可能なオブジェクトはありません
 	Menu Item:	メニュー項目:
 	No menu item matches.	一致するメニュー項目がありません。
 	Several menu items match. Choose one from the list.	複数のメニュー項目が一致します。リストから 1 つ選択してください。

@@ -153,25 +153,34 @@ fn colorized_key(key: &str) -> String {
 }
 
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
-/// `keys`. An image whose pixels in `images` don't take its colorize paint
-/// ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it shows.
+/// `keys`. A colorized image with a color mask is separated as it shows: its masked pixels
+/// ([`Document::shown_image`]). An image whose pixels it shows in `images` don't take its colorize
+/// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
+/// shows.
 fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
     let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
     if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
-    if colorized(node)
-        && let NodeKind::Image(im) = &node.kind
-        && images.get(&im.key).is_some_and(|b| !b.takes_colorize())
-    {
+    let shown = match &node.kind {
+        NodeKind::Image(im) if colorized(node) => {
+            let mask = Document::color_mask_of(node).filter(|m| m.made_for(im) && images.contains_key(&m.key));
+            Some(mask.map_or(&im.key, |m| &m.key).clone())
+        }
+        _ => None,
+    };
+    if shown.as_ref().and_then(|key| images.get(key)).is_some_and(|b| !b.takes_colorize()) {
         node.extras_mut().colorize = None;
     }
-    if colorized(node)
-        && let NodeKind::Image(im) = &mut node.kind
-    {
-        keys.insert(im.key.clone());
-        im.key = colorized_key(&im.key);
+    if let Some(key) = shown.filter(|_| colorized(node)) {
+        if let Some(e) = node.extras_if_any() {
+            e.color_mask = None;
+        }
+        if let NodeKind::Image(im) = &mut node.kind {
+            im.key = colorized_key(&key);
+            keys.insert(key);
+        }
     }
     if let Some(ch) = node.children_mut() {
         for c in ch.iter_mut() {
