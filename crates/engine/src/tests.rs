@@ -176,6 +176,7 @@ mod smartguides;
 mod smooth_path;
 mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;

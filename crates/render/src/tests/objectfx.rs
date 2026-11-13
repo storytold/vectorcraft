@@ -771,6 +771,27 @@ fn rasterize_on_an_image_takes_in_its_strokes_shape() {
     assert_eq!((lum(img.pixel(8, 35)), lum(img.pixel(12, 35)), img.pixel(35, 35)), (WHITE, 0, [255, 0, 0, 255]));
 }
 
+#[test]
+fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
+    // The opaque image's stroke runs along its frame, from 18 to 22.
+    let mut d = stroked_image_doc(vec![fx("path.outlineObject", json!({}))], false);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), img.pixel(26, 35)), (0, [255, 0, 0, 255]));
+    // New pixels under the same key, as Update Link stores them, with the node unchanged: an
+    // opaque disc of radius 8 pixels in the middle. The stroke follows its edge at 26.5.
+    let disc = image::RgbaImage::from_fn(30, 30, |x, y| {
+        let r = (f64::from(x) + 0.5 - 15.0).hypot(f64::from(y) + 0.5 - 15.0);
+        image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
+    });
+    let mut png = vec![];
+    disc.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
+}
+
 /// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
 fn glowing_square(fill: Color, id: &str, params: Value) -> Document {
     let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));

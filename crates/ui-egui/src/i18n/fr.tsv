@@ -5448,6 +5448,65 @@ lighting	Light	Lumière
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} ne peut pas créer de solide à partir d'une image : vectorisez-la d'abord avec Objet › Vectorisation de l’image › Créer.
 @msg	{label} requires a shape with at least two anchors	{label} nécessite une forme comportant au moins deux points d'ancrage
 @msg	The shape is too complex for a 3D effect	La forme est trop complexe pour un effet 3D
+@msg	Extrude & Bevel	Extrusion et biseautage
+@msg	Revolve	Révolution
+@msg	Inflate	Gonfler
+@msg	Rotate	Rotation
+@msg	Extrude & Bevel (Classic)	Extrusion et biseautage (classique)
+@msg	Revolve (Classic)	Révolution (classique)
+@msg	Rotate (Classic)	Rotation (classique)
+@msg	This effect	Cet effet
+@msg	clipping paths	tracés de découpe
+@msg	other objects	autres objets
+@msg	{label} requires a group holding a shape with at least two anchors	{label} nécessite un groupe contenant une forme comportant au moins deux points d'ancrage
+@msg	Revolve requires a group holding a shape with at least two anchors	Révolution nécessite un groupe contenant une forme comportant au moins deux points d'ancrage
+@msg	Revolve requires a shape with at least two anchors	Révolution nécessite une forme comportant au moins deux points d'ancrage
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} sur un groupe nécessite des tracés, tracés transparents, textes, groupes, groupes de découpe, dégradés de formes et occurrences de symbole : libérez ou développez d'abord ces éléments : {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} sur un groupe accepte au plus {MAX_MEMBERS} objets
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un effet 3D sur un groupe ou un calque s'applique au groupe lui-même, pas à son fond ni à son contour
+@msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien à exporter
+@msg	The 3D object is too complex to export	L'objet 3D est trop complexe pour être exporté
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'objet n'a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
+@msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
+@msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ne peut pas construire de volumes à partir de cette illustration : ses occurrences de symbole, dégradés de formes et groupes de découpe contiennent trop d'objets
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} ne peut pas construire de volume à partir de l'occurrence du symbole « {symbol} » : l'illustration du symbole n'est pas disponible
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1} : le tracé de découpe est trop complexe pour découper l'illustration
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} accepte au plus {MAX_MEMBERS} objets
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} ne peut pas construire de volumes à partir d'une illustration imbriquée sur plus de {MAX_DEPTH} niveaux
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	La peinture de Révolution est trop complexe pour cette surface ; réduisez Segments ou simplifiez le dégradé
+@msg	Revolve edge must be left or right	Révolution : edge doit valoir left ou right
+@msg	Revolve cap must be a boolean	Révolution : cap doit être un booléen
+@msg	the revolved object has no fill or stroke	l'objet en révolution n'a ni fond ni contour
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor doit être une couleur RVB opaque au format #rrggbb
+@msg	lights must contain one to ten lights	lights doit contenir de une à dix lumières
+@msg	each light must be an object	chaque lumière doit être un objet
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	réglage de lumière inconnu : utilisez color, intensity, rotation, height, softness ou behind
+@msg	light {key} must be a number from {min} to {max}	lumière : {key} doit être un nombre de {min} à {max}
+@msg	light color must use opaque #rrggbb	color d'une lumière doit être une couleur #rrggbb opaque
+@msg	light behind must be true or false	behind d'une lumière doit valoir true ou false
+@msg	shadow must be true or false	shadow doit valoir true ou false
+@msg	shadowPosition must be behind or below	shadowPosition doit valoir behind ou below
+@msg	{key} must be a number from {min} to {max}	{key} doit être un nombre de {min} à {max}
+@msg	each of `{GRAPHICS}` must be an object	chaque élément de `{GRAPHICS}` doit être un objet
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les éléments de `{GRAPHICS}` acceptent symbol, face, x, y, scale et rotation, pas `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	chaque élément de `{GRAPHICS}` nécessite `symbol`, le nom d'un symbole
+@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Les graphiques s'appliquent sur des faces planes : utilisez le type d'objet Extrusion ou Plan
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
+@msg	A plane has one face: map its graphics onto the front	Un plan n'a qu'une face : appliquez ses graphiques sur la face avant
+@msg	The graphics are too complex: simplify the symbols' art	Les graphiques sont trop complexes : simplifiez l'illustration des symboles
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	L'illustration d'un graphique peut être imbriquée sur {MAX_LEVELS} niveaux au plus : simplifiez l'illustration du symbole
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	L'illustration d'un graphique peut imbriquer des symboles sur {MAX_NESTING} niveaux au plus : simplifiez l'illustration du symbole
+@msg	A graphic's art holds too many objects: simplify the symbol's art	L'illustration d'un graphique contient trop d'objets : simplifiez l'illustration du symbole
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Un graphique dessine au plus {MAX_PIECES} fonds et contours : simplifiez l'illustration du symbole
+@msg	`surface` must be one of {_1}	`surface` doit valoir l’une de ces valeurs : {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} dessine l'illustration source de cet objet au lieu de sa surface 3D
+@msg	{label} draws no faces for this object	{label} ne dessine aucune face pour cet objet
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	le fil de fer comporte plus de {MAX_WIRE_EDGES} arêtes
 @msg	The 3D surface is too complex; simplify the shape	La surface 3D est trop complexe ; simplifiez la forme
 	Transform Objects	Transformer les objets
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paramètre inconnu `{key}` ; vouliez-vous dire `{near}` ?
@@ -6429,6 +6488,13 @@ axis	Y Axis	Axe Y
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
+	Insert Select Path	Insérer une sélection de tracé
+	Select Path	Sélectionner le tracé
+@msg	select one whole path or compound path	sélectionnez un tracé entier ou un tracé transparent
+@msg	select only one path	sélectionnez un seul tracé
+@msg	the path is hidden or locked, or cannot be selected here	le tracé est masqué ou verrouillé, ou ne peut pas être sélectionné ici
+@msg	object {value} is not the stored path: it changed, or the document is another one	l’objet {value} n’est pas le tracé enregistré : il a été modifié, ou il s’agit d’un autre document
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` doit être "v1:" suivi de 16 chiffres hexadécimaux en minuscules
 	Select Object…	Sélectionner un objet…
 	Select Object	Sélectionner un objet
 	Set Selection	Définir la sélection
