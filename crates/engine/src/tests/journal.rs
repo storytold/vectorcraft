@@ -192,6 +192,87 @@ fn fit_steps_take_the_batchs_artboard_and_actions_leave_out_their_index() {
     assert_eq!(action, [fit("artboard.fitToArt"), fit("artboard.fitToArt"), fit("artboard.fitToSelection")]);
 }
 
+/// A document of three artboards with art of its own on each → its artboards before any fit.
+fn three_artboards_with_art(s: &mut Session) -> Vec<vectorcraft_geom::Rect> {
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3, "created": null})).unwrap();
+    for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+    }
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect()
+}
+
+/// The artboards of [`three_artboards_with_art`], each fitted to its art.
+fn three_fitted_artboards() -> [vectorcraft_geom::Rect; 3] {
+    let rect = vectorcraft_geom::Rect::new;
+    [rect(10.0, 10.0, 30.0, 40.0), rect(130.0, 10.0, 150.0, 30.0), rect(250.0, 10.0, 270.0, 50.0)]
+}
+
+/// A Fit to Artwork Bounds step that names neither `index` nor `indices`, while the Artboard tool
+/// is chosen with several artboards selected, fits each of those (not the batch's artboard), as the
+/// command does on its own; a step's own `index` or `indices` wins, and with one artboard or none
+/// selected the step takes the batch's artboard.
+#[test]
+fn a_batch_fit_step_uses_the_artboard_tool_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let fit = |params: Value| json!({"artboard": 1, "commands": [{"command": "artboard.fitToArt", "params": params}]});
+    let session = |picks: &Value| {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", picks);
+        (s, was)
+    };
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({}))).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "artboards 1 and 3, the selected ones, and not the batch's artboard 2");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"index": 1}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "a step's own index");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"indices": [1, 2]}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], fitted[2]], "a step's own indices");
+    for picks in [json!([2]), json!([])] {
+        let (mut s, was) = session(&picks);
+        s.execute("command.batch", &fit(json!({}))).unwrap();
+        assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard with {picks} selected");
+    }
+}
+
+/// The journal records the artboards a batch's Fit to Artwork Bounds step took from the Artboard
+/// tool, so a replay in a new session fits the same ones; an action leaves them out and fits the
+/// artboards selected when it plays.
+#[test]
+fn a_batch_fit_selection_replays_but_an_action_uses_the_current_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([0, 2]));
+    let start = s.journal.len();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]]);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({"indices": [0, 2]})));
+    let r = replayed(&s);
+    assert_ne!(r.tool_id(), "artboard", "the new session's tool selects no artboards");
+    assert_eq!(boards(&r), boards(&s), "the replay fits the recorded artboards");
+    let action = s.journal_for_action(start);
+    assert_eq!(action, [("command.batch".to_string(), json!({"commands": steps}))]);
+    // Played on a fresh copy of the document with other artboards selected.
+    let mut a = Session::new();
+    three_artboards_with_art(&mut a);
+    a.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    a.set_tool_option("selected", &json!([1, 2]));
+    a.execute("command.batch", &json!({"artboard": 0, "commands": action[0].1["commands"]})).unwrap();
+    assert_eq!(boards(&a), [was[0], fitted[1], fitted[2]], "the action fits the artboards selected when it plays");
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
     let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();

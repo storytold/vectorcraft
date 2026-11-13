@@ -19,7 +19,9 @@ pub const ON_ACTIVE_ARTBOARD: [&str; 8] = [
 /// The commands that resize the artboards the app passes (Object › Artboards): the app passes the
 /// selected artboards to Fit to Artwork Bounds as its `indices`, and the active artboard to Fit to
 /// Selected Art as its `index`. A `command.batch` given `artboard` passes it on, as `index`, to
-/// each of their steps that names none.
+/// each of their steps that names none; a Fit to Artwork Bounds step that names neither `index` nor
+/// `indices`, while the Artboard tool is chosen with several artboards selected, gets those as its
+/// `indices` instead.
 pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitToSelection"];
 
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run

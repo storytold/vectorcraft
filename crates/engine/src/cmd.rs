@@ -780,6 +780,8 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
+/// Document Info's category titles and the Objects category's count labels.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

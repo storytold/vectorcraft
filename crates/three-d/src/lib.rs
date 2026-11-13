@@ -9,8 +9,8 @@
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelProfile, BevelShape, Extrude, FaceMap, Facet, Inflate, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, inflate,
-    inflate_each, inflate_together, plane, plane_face_map,
+    Bevel, BevelProfile, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map,
+    inflate, inflate_each, inflate_together, plane, plane_face_map,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;

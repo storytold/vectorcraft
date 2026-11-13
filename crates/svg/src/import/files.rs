@@ -3,11 +3,15 @@
 //! stays a linked image ([`LinkInfo`]); an SVG file becomes vector art. One that can't be read
 //! (missing, remote, not an image) becomes a placeholder that keeps the link and its place, so it
 //! can be relinked, and a warning.
+//!
+//! A raster image, linked or a data URL, whose orientation (EXIF, or a TIFF's Orientation tag)
+//! turns or flips its pixels is turned before usvg gets it, so it is sized, fitted and stored as
+//! it is shown.
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
@@ -44,6 +48,20 @@ pub(in crate::import) struct Files {
     svg_images: AtomicUsize,
     /// SVG images were left out for exceeding [`MAX_NESTED_SVG_IMAGES`].
     too_many_svg_images: AtomicBool,
+    /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
+    /// (kept here too, so the address stays its own).
+    cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
+}
+
+/// Encoded image bytes, shared.
+type Bytes = Arc<Vec<u8>>;
+
+/// Raster bytes as usvg gets them.
+struct Shown {
+    kind: RasterKind,
+    bytes: Arc<Vec<u8>>,
+    /// The CMYK TIFF stored in their place: a turned CMYK image's inks, turned.
+    cmyk: Option<Vec<u8>>,
 }
 
 /// How usvg holds the bytes of a raster of one format (`ImageKind::PNG`…).
@@ -174,25 +192,35 @@ impl Files {
         files
     }
 
-    /// What usvg gets for a file read (`bytes`, linked by `link`): a raster usvg reads (others are
-    /// stored as PNG) or an SVG; `None` for anything else.
+    /// What usvg gets for a file read (`bytes`, linked by `link`): a raster as [`shown`] gives it
+    /// (formats usvg doesn't read are stored as PNG) or an SVG; `None` for anything else.
     fn source(&mut self, bytes: Vec<u8>, link: LinkInfo) -> Option<Source> {
         let Ok(format) = image::guess_format(&bytes) else {
             // Unpacked once, here, within what the SVGZ images may unpack to.
             let text = crate::text_within(&bytes, &self.unpacked).ok()?;
             return text.contains("<svg").then(|| Source::Svg(Arc::from(text.as_ref())));
         };
-        let Some(kind) = raster(format) else {
-            let img = image::load_from_memory_with_format(&bytes, format).ok()?;
-            let mut png = Vec::new();
-            img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
-            let png = Arc::new(png);
-            self.links.insert(key(&png), Linked { link, missing: false });
-            return Some(Source::Raster(ImageKind::PNG, png));
-        };
-        let bytes = Arc::new(bytes);
+        let (kind, bytes) = self.keep(shown(Arc::new(bytes), format)?);
         self.links.insert(key(&bytes), Linked { link, missing: false });
         Some(Source::Raster(kind, bytes))
+    }
+
+    /// What usvg gets for `shown`, with its CMYK TIFF, when it has one, noted to store in its
+    /// place ([`Files::stored`]).
+    fn keep(&self, shown: Shown) -> (RasterKind, Arc<Vec<u8>>) {
+        if let Some(cmyk) = shown.cmyk
+            && let Ok(mut stored) = self.cmyk.lock()
+        {
+            stored.insert(key(&shown.bytes), (shown.bytes.clone(), Arc::new(cmyk)));
+        }
+        (shown.kind, shown.bytes)
+    }
+
+    /// The CMYK TIFF stored in place of the image whose data usvg got as `kind`: a CMYK JPEG or
+    /// TIFF its orientation turns, which usvg got as PNG.
+    pub(in crate::import) fn stored(&self, kind: &ImageKind) -> Option<Arc<Vec<u8>>> {
+        let ImageKind::PNG(b) = kind else { return None };
+        self.cmyk.lock().ok()?.get(&key(b)).map(|(_, tiff)| tiff.clone())
     }
 
     /// Does href `h` show a placeholder?
@@ -241,21 +269,24 @@ impl Files {
     pub(in crate::import) fn resolver(&self, height: usize) -> ImageHrefResolver<'_> {
         self.depth.store(height, Ordering::Relaxed);
         ImageHrefResolver {
-            // By type as usvg reads them; one without a type (`text/plain`) by its bytes: a
-            // raster usvg reads, else SVG.
+            // By type as usvg reads them, and TIFF; one without a type (`text/plain`) by its
+            // bytes: one of those rasters, else SVG. A raster as [`shown`] gives it.
             resolve_data: Box::new(move |mime, bytes, opts| {
-                let kind = match mime {
-                    "image/jpg" | "image/jpeg" => ImageKind::JPEG,
-                    "image/png" => ImageKind::PNG,
-                    "image/gif" => ImageKind::GIF,
-                    "image/webp" => ImageKind::WEBP,
+                use image::ImageFormat as F;
+                let format = match mime {
+                    "image/jpg" | "image/jpeg" => F::Jpeg,
+                    "image/png" => F::Png,
+                    "image/gif" => F::Gif,
+                    "image/webp" => F::WebP,
+                    "image/tiff" => F::Tiff,
                     "image/svg+xml" => return self.svg_data(&bytes, opts),
-                    "text/plain" => match image::guess_format(&bytes).ok().and_then(raster) {
-                        Some(kind) => kind,
+                    "text/plain" => match image::guess_format(&bytes).ok().filter(|f| raster(*f).is_some() || *f == F::Tiff) {
+                        Some(format) => format,
                         None => return self.svg_data(&bytes, opts),
                     },
                     _ => return None,
                 };
+                let (kind, bytes) = self.keep(shown(bytes, format)?);
                 Some(kind(bytes))
             }),
             resolve_string: Box::new(move |h, opts| match self.sources.get(h).or_else(|| self.sources.get(h.trim()))? {
@@ -310,6 +341,82 @@ fn raster(format: image::ImageFormat) -> Option<RasterKind> {
         F::WebP => Some(ImageKind::WEBP),
         _ => None,
     }
+}
+
+/// Encoded raster `bytes`, `format` by their type (or by their bytes when they have none), as usvg
+/// gets them, as Open and Place store them: unchanged when usvg reads the format and the image's
+/// orientation ([`vectorcraft_doc::cmyk::exif_orientation`], read for PNG, JPEG, GIF, WebP and
+/// TIFF) leaves the pixels as stored. Otherwise the pixels are read ([`decoded`],
+/// [`tiff_pixels`]), turned or flipped as the orientation says, and written as PNG, so usvg sizes
+/// and fits the image as it is shown. A CMYK TIFF also keeps its inks as a CMYK TIFF
+/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG or TIFF that is turned keeps them
+/// turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when the pixels can't be read, and for
+/// a TIFF with more strips or tiles than the decoder can count
+/// ([`vectorcraft_doc::cmyk::oversized_tiff`]), before any decoder opens it.
+fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
+    use image::ImageFormat as F;
+    if vectorcraft_doc::cmyk::oversized_tiff(&bytes).is_some() {
+        return None;
+    }
+    let orientation =
+        matches!(format, F::Png | F::Jpeg | F::Gif | F::WebP | F::Tiff).then(|| vectorcraft_doc::cmyk::exif_orientation(&bytes)).flatten();
+    if let Some(kind) = raster(format)
+        && orientation.is_none()
+    {
+        return Some(Shown { kind, bytes, cmyk: None });
+    }
+    let tiff = image::guess_format(&bytes).ok() == Some(F::Tiff);
+    let mut img = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
+    let cmyk = match orientation {
+        Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, None).map(|(tiff, _)| tiff),
+        None if tiff => vectorcraft_doc::cmyk::stored_cmyk_tiff(&bytes, None),
+        _ => None,
+    };
+    if let Some(orientation) = orientation {
+        img.apply_orientation(orientation);
+    }
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), F::Png).ok()?;
+    Some(Shown { kind: ImageKind::PNG, bytes: Arc::new(png), cmyk })
+}
+
+/// The pixels of encoded image `bytes` (`format` when their bytes don't say), as stored, decoded
+/// within [`vectorcraft_doc::MAX_RASTER_ALLOC`], counted as decoded and as RGBA, as Open and Place
+/// decode them; `None` when they can't be.
+fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<image::DynamicImage> {
+    use image::ImageDecoder as _;
+    let max = vectorcraft_doc::MAX_RASTER_ALLOC;
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
+    if reader.format().is_none() {
+        reader.set_format(format);
+    }
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(max);
+    reader.limits(limits);
+    let decoder = reader.into_decoder().ok()?;
+    let (w, h) = decoder.dimensions();
+    if decoder.total_bytes() > max || u64::from(w) * u64::from(h) * 4 > max {
+        return None;
+    }
+    image::DynamicImage::from_decoder(decoder).ok()
+}
+
+/// The pixels of TIFF `bytes`, as stored, read as Open and Place read them: a TIFF with extra
+/// samples (CMYK or gray with alpha) as RGBA, CMYK converted with the active color settings
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]); a 1-bit TIFF compressed with CCITT Group
+/// 3 as RGBA ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]); others by [`decoded`], a CMYK TIFF
+/// that stores one plane per ink with its inks written together first
+/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]). `None` when they can't be read.
+fn tiff_pixels(bytes: &[u8]) -> Option<image::DynamicImage> {
+    use image::DynamicImage::ImageRgba8;
+    let cms = vectorcraft_color::cms::active();
+    if let Some(img) = vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false)) {
+        return Some(ImageRgba8(img));
+    }
+    if let Some(read) = vectorcraft_doc::cmyk::group3_tiff_rgba(bytes) {
+        return read.ok().map(ImageRgba8);
+    }
+    decoded(bytes, image::ImageFormat::Tiff).or_else(|| decoded(&vectorcraft_doc::cmyk::stored_cmyk_tiff(bytes, None)?, image::ImageFormat::Tiff))
 }
 
 /// No image: left out, noted in `why` when `noted`.

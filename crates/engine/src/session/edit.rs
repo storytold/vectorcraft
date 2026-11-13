@@ -234,6 +234,27 @@ impl Session {
         self.active().and_then(|d| d.interaction.as_ref().filter(|it| std::sync::Arc::ptr_eq(&it.doc, &d.doc)).and_then(|it| it.preview.clone()))
     }
 
+    /// Keep `warning`, from a preview that settling an interaction applied, for whatever collects
+    /// such warnings now ([`Session::collect_settled_warnings`]). Nothing keeps it when nothing
+    /// collects, so it is never reported with a later, unrelated command.
+    pub(crate) fn note_settled_warning(&mut self, warning: &str) {
+        if let Some(kept) = &mut self.settled_warnings
+            && !kept.iter().any(|w| w == warning)
+        {
+            kept.push(warning.to_string());
+        }
+    }
+
+    /// Run `f`, and → its result with the warnings of the previews that settling an interaction
+    /// applied while it ran ([`Session::note_settled_warning`]). Warnings an outer `f` collects are
+    /// kept for it.
+    pub(crate) fn collect_settled_warnings<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, Vec<String>) {
+        let outer = self.settled_warnings.replace(Vec::new());
+        let r = f(self);
+        let settled = std::mem::replace(&mut self.settled_warnings, outer).unwrap_or_default();
+        (r, settled)
+    }
+
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);

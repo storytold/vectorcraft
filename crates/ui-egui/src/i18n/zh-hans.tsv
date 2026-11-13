@@ -2812,6 +2812,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
 	Color Theme Picker	色彩主题拾取器
 	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
+	Prominent Colors	主要颜色
+	Save All Colors	存储所有颜色
+	Save Prominent Colors	存储主要颜色
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -3327,6 +3330,19 @@ digits	Malayalam	马拉雅拉姆数字
 	Spot Color Objects	使用专色的对象
 	Pattern Objects	使用图案的对象
 	Gradient Objects	使用渐变的对象
+	Font Details	字体详细信息
+	Linked Images	链接的图像
+	Embedded Images	嵌入的图像
+	Compound Paths	复合路径
+	Text Objects	文本对象
+	Placed Documents	置入的文档
+	Symbol Instances	符号实例
+	Gradient Meshes	渐变网格
+	Blends	混合
+	Envelopes	封套
+	Intertwine Groups	交织编组
+	Opacity Masks	不透明度蒙版
+	Objects with Effects	使用效果的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -5444,6 +5460,10 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Dock to Left	停放到左侧
+	Dock to Right	停放到右侧
+	Dock Toolbar	停放工具栏
+	Float Toolbar	浮动工具栏
 	Control Bar Options	控制栏选项
 	Tool Options	工具选项
 	Object Options	对象选项
@@ -6378,6 +6398,7 @@ axis	Y Axis	Y 轴
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+@msg	Batch cannot play an action with a View menu step	批处理无法播放含有视图菜单步骤的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
 	Insert Select Path	插入选择路径
@@ -7188,6 +7209,19 @@ breakText	Glyphs	字形
 	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+	View more	查看更多
+	Finish tutorial	完成教程
+	Next Up	下一个
+	You finished the last tutorial in this skill.	你已完成此技能的最后一个教程。
+	Back to skills	返回技能
+	Open Tutorial Sample	打开教程示例
+	Finish Tutorial	完成教程
+	Next Tutorial	下一个教程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最后一个教程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果

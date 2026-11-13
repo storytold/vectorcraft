@@ -4,6 +4,7 @@ use std::rc::Rc;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::tests_folder::Folder;
 use crate::{FilePick, Services, theme};
 
 type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
@@ -197,7 +198,7 @@ fn board_files_of(app: &VectorcraftApp, boards: [bool; 4]) -> Vec<Option<String>
 #[test]
 fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
     let (mut app, written, _) = desktop("again.ai");
-    let dir = vectorcraft_testkit::temp_dir("ai-options-enter");
+    let dir = Folder::adopt(vectorcraft_testkit::temp_dir("ai-options-enter"));
     let orig = dir.join("orig.ai");
     std::fs::write(&orig, vectorcraft_testkit::ai::ai(&vectorcraft_testkit::ai::sample_data(), vectorcraft_testkit::ai::page_pdf())).unwrap();
     app.run("document.open", json!({"path": orig.to_string_lossy()})).unwrap();
@@ -215,7 +216,7 @@ fn the_enter_that_closed_the_save_panel_does_not_confirm_the_options() {
 #[test]
 fn save_a_copy_and_template_suggest_their_names() {
     let (mut app, written, picks) = desktop("copy.vectorcraft");
-    let folder = vectorcraft_testkit::temp_dir("save-template-dialog");
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-dialog"));
     app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
     app.run("file.saveCopy", json!({})).unwrap();
     assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
@@ -237,7 +238,8 @@ fn save_a_copy_and_template_suggest_their_names() {
 #[test]
 fn save_as_template_writes_ait_when_it_is_picked() {
     let (mut app, written, _) = desktop("flyer.ait");
-    app.session.prefs.templates_folder = vectorcraft_testkit::temp_dir("save-template-ait").to_string_lossy().into_owned();
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-ait"));
+    app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
     app.run("file.saveAsTemplate", json!({})).unwrap();
     assert!(app.ui.dialog.is_none(), "a template asks no options");
     let (path, bytes) = written.borrow()[0].clone();
@@ -285,9 +287,10 @@ fn the_native_options_have_no_precision_row() {
 /// replaced with the template's, as Save As replaces the extension of a format it doesn't write.
 #[test]
 fn save_as_template_replaces_a_save_formats_extension() {
+    let folder = Folder::adopt(vectorcraft_testkit::temp_dir("save-template-ext"));
     for (picked, saved) in [("card.pdf", "card.vctemplate"), ("card.vectorcraft", "card.vctemplate"), ("card.svg", "card.vctemplate")] {
         let (mut app, written, _) = desktop(picked);
-        app.session.prefs.templates_folder = vectorcraft_testkit::temp_dir("save-template-ext").to_string_lossy().into_owned();
+        app.session.prefs.templates_folder = folder.to_string_lossy().into_owned();
         app.run("file.saveAsTemplate", json!({})).unwrap();
         let (path, bytes) = written.borrow()[0].clone();
         assert_eq!(path, saved, "typed {picked}");

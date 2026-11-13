@@ -439,7 +439,10 @@ designer = false
 [[cursor]]
 id = "Eyedropper"
 group = "Colour and gradient"
-shown_when = ["The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead."]
+shown_when = [
+    "The Eyedropper tool, whatever the modifier keys. With Use Precise Cursors on, the crosshair shows instead.",
+    "The Live Paint Bucket with Alt held (a click samples paint).",
+]
 hotspot = "The pipette's tip."
 look = "A pipette."
 
@@ -475,8 +478,32 @@ hotspot = "Where the mesh point goes."
 [[cursor]]
 id = "LivePaintBucket"
 group = "Colour and gradient"
-shown_when = ["The Live Paint Bucket: a click fills a face (or an edge) of a Live Paint group."]
-hotspot = "Where the paint pours out."
+shown_when = [
+    "The Live Paint Bucket where a click paints nothing: away from Live Paint groups and the selected paths' regions, or over a part the Paint Fills and Paint Strokes options (and Shift) leave unpainted.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "An empty paint bucket tipped toward the hotspot, a small drop on it. LivePaintBucketFace is the same bucket filled."
+
+[[cursor]]
+id = "LivePaintBucketFace"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over a face of a Live Paint group, or a region of the selected paths, that a click fills.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The drop the paint pours onto."
+look = "LivePaintBucket filled, with a larger drop on the hotspot."
+
+[[cursor]]
+id = "LivePaintBucketEdge"
+group = "Colour and gradient"
+shown_when = [
+    "The Live Paint Bucket over an edge of a Live Paint group that a click paints with the stroke.",
+    "With Use Precise Cursors on, the crosshair shows instead.",
+]
+hotspot = "The brush's tip."
+look = "A brush pointing down-left: bristles at the hotspot, then a white ferrule and a dark handle."
 
 # ── Width, blend, slice and shape builder ─────────────────────────────────────────────────────────
 
