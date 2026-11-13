@@ -3943,6 +3943,42 @@ fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
     }
 }
 
+/// The text document holds no Mojikumi set: a paragraph with any of the predefined sets other
+/// than None is reported as left out, and reads back without the set; None and Line-end
+/// Punctuation Half Width are not reported.
+#[test]
+fn predefined_mojikumi_sets_are_reported_as_left_out() {
+    use vectorcraft_doc::{Mojikumi, TextObject};
+    for (set, reported) in [
+        (Mojikumi::None, false),
+        (Mojikumi::LineEndHalf, false),
+        (Mojikumi::YakumonoHankaku, true),
+        (Mojikumi::GyomatsuYakumonoHankaku, true),
+        (Mojikumi::GyomatsuYakumonoZenkaku, true),
+        (Mojikumi::YakumonoZenkaku, true),
+    ] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "「かな」。", style(14.0, Color::BLACK));
+        t.para.mojikumi = set;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{set:?}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let sets: Vec<Mojikumi> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).mojikumi),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sets.len(), 1, "{set:?}");
+        assert!(matches!(sets[0], Mojikumi::None | Mojikumi::LineEndHalf), "{set:?} reads back as {:?}", sets[0]);
+    }
+}
+
 /// The text document has no Bunri-Kinshi: a paragraph with it on and an inseparable pair in it is
 /// reported as left out, and comes back off; with it off, or with no pair, nothing is reported.
 #[test]

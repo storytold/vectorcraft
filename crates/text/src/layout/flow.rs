@@ -4,11 +4,13 @@ use super::breaking::{
     roman_share, set_width, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
-use super::vertical::{EM_CENTER, align_shift, compress_punctuation, glyph_em, punct_half, space_japanese_and_latin};
+use super::vertical::{
+    EM_CENTER, MojikumiRules, align_shift, compress_punctuation, dot_quarter, glyph_em, halve_punctuation, punct_half, space_japanese_and_latin,
+};
 use super::{
     Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, Kinsoku, KinsokuShoriType, LeadingModel, LineFit, LineInfo,
-    ListMarker, Mojikumi, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose,
-    fit_line, hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
+    ListMarker, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line,
+    hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
 use crate::shape::{keep_inseparable_pairs, keep_korean_words};
@@ -76,7 +78,7 @@ fn compose_para(
     // The same rule as the line loop below: an opening bracket starting a wrapped line gives up
     // the space before it.
     let start_credit = |i: usize| {
-        let flush = !rtl && para.mojikumi == Mojikumi::LineEndHalf;
+        let flush = !rtl && MojikumiRules::of(para.mojikumi).flush_start;
         sg.get(i).filter(|g| flush && g.lead <= 0.0).and_then(|g| punct_half(g, Punct::Opening)).unwrap_or(0.0)
     };
     let mut sim = pen.clone();
@@ -195,7 +197,8 @@ struct ParagraphData<'a, 'text> {
     wakan: Vec<f64>,
     /// How much narrower a line ending with each glyph is set ([`line_end_trim`]), for measuring
     /// where lines break; empty when the paragraph's lines are measured at full width (Mojikumi
-    /// None, or right-to-left text).
+    /// None or YakumonoZenkaku, or right-to-left text with a set that adds no space between
+    /// Japanese and Latin text).
     line_end: Vec<f64>,
     flex: Vec<Flex>,
     marker: usize,
@@ -234,14 +237,26 @@ fn prepare_paragraph<'a, 'text>(
     if para.bunri_kinshi && para.kinsoku != Kinsoku::None {
         keep_inseparable_pairs(text, &mut sg);
     }
-    // Japanese composition: consecutive punctuation shares one half-em space.
-    let mut compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
+    // Japanese composition (the paragraph's Mojikumi set): every punctuation mark set half width,
+    // or consecutive punctuation sharing one half-em space…
+    let rules = MojikumiRules::of(para.mojikumi);
+    let mut compressed = if rules.half {
+        halve_punctuation(&mut sg)
+    } else if rules.share {
+        compress_punctuation(&mut sg)
+    } else {
+        vec![]
+    };
     // …and a quarter em between Japanese and Latin text.
-    let mut wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
+    let mut wakan = if rules.wakan { space_japanese_and_latin(&mut sg) } else { vec![] };
     // Justification…: the glyphs at Desired word and letter spacing and glyph scaling, and how
     // far a justified line may move each one from it (Dynamic Text's Block on area type sets the
     // Desired word spacing to its word gap).
     let mut flex = apply_desired(&mut sg, &t.layout_justification(para), !cx.vertical);
+    // The Japanese–Latin space is part of the advance Desired glyph scaling scaled.
+    for (w, f) in wakan.iter_mut().zip(&flex) {
+        *w *= f.scale;
+    }
     // Threaded text: a first paragraph that continues from the frame before has its first
     // line, first-line indent and list marker there.
     let continued = pi == 0 && t.first_para_continues;
@@ -277,11 +292,9 @@ fn prepare_paragraph<'a, 'text>(
         pen.pending += para.space_before;
     }
     // A line fits when it fits as it is set: with its last character narrowed by Mojikumi.
-    let line_end = if para.mojikumi == Mojikumi::LineEndHalf && !rtl {
-        (0..sg.len()).map(|k| line_end_trim(&sg, &compressed, &wakan, k)).collect()
-    } else {
-        vec![]
-    };
+    let end_rules = rules.at_line_end(rtl);
+    let line_end =
+        if end_rules.trims_line_end() { (0..sg.len()).map(|k| line_end_trim(&sg, &compressed, &wakan, end_rules, k)).collect() } else { vec![] };
     let composed = compose_para(cx, &sg, &flex, &line_end, para, pen, rtl, continued);
     // Hyphenation options: the Hyphenation Zone applies with the Single-line Composer, and the
     // Hyphen Limit counts the lines in a row that end with a hyphen.
@@ -369,7 +382,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     // space before it goes), and the line has that much more room. At a paragraph's start
     // that is the first-line indent: JIS X 4051's principle (JLREQ 3.1.5, Figure 71 ①).
     if !*rtl
-        && para.mojikumi == Mojikumi::LineEndHalf
+        && MojikumiRules::of(para.mojikumi).flush_start
         && let Some(glyph) = sg.get_mut(*i)
         && glyph.lead <= 0.0
         && let Some(half) = punct_half(glyph, Punct::Opening)
@@ -536,14 +549,17 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
     true
 }
 
-/// Mojikumi (Line-end Punctuation Half Width): how much narrower a line ending with glyph `k` of
-/// `sg` is set. A closing bracket, comma or full stop ending the line is set half width, unless it
-/// already lost that half to the punctuation after it (`compressed`), and no Japanese–Latin space
-/// (`wakan`) is left after the line's last character. Never more than the glyph's advance, and 0
-/// for an advance or a space that is not finite.
-pub(super) fn line_end_trim(sg: &[SGlyph], compressed: &[bool], wakan: &[f64], k: usize) -> f64 {
+/// Mojikumi: how much narrower a line ending with glyph `k` of `sg` is set by the paragraph's set
+/// `rules`. With [`MojikumiRules::half_end`], a closing bracket, comma or full stop ending the line
+/// is set half width, and with [`MojikumiRules::dot_end`] a middle dot loses the quarter em after
+/// it, unless the glyph already lost that space (`compressed`); no Japanese–Latin space (`wakan`)
+/// is left after the line's last character. Never more than the glyph's advance, and 0 for an
+/// advance or a space that is not finite.
+pub(super) fn line_end_trim(sg: &[SGlyph], compressed: &[bool], wakan: &[f64], rules: MojikumiRules, k: usize) -> f64 {
     let Some(g) = sg.get(k) else { return 0.0 };
-    let half = if compressed.get(k).copied().unwrap_or(false) { None } else { punct_half(g, Punct::Closing) };
+    let lost = compressed.get(k).copied().unwrap_or(false);
+    let half = (!lost && rules.half_end).then(|| punct_half(g, Punct::Closing)).flatten();
+    let half = half.or_else(|| (!lost && rules.dot_end).then(|| dot_quarter(g)).flatten());
     let trim = half.unwrap_or(0.0) + wakan.get(k).copied().unwrap_or(0.0);
     if trim.is_finite() && g.adv.is_finite() { trim.min(g.adv).max(0.0) } else { 0.0 }
 }
@@ -563,10 +579,11 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         trimmed -= 1;
     }
     let hyphen = (position.hyph && position.end > index).then(|| hyphen_glyph(&sg[position.end - 1]));
+    let rules = MojikumiRules::of(para.mojikumi).at_line_end(paragraph.rtl);
     let end_trim = trimmed
         .checked_sub(1)
-        .filter(|&k| k >= index && para.mojikumi == Mojikumi::LineEndHalf)
-        .map_or(0.0, |k| line_end_trim(sg, &paragraph.compressed, &paragraph.wakan, k));
+        .filter(|&k| k >= index && rules.trims_line_end())
+        .map_or(0.0, |k| line_end_trim(sg, &paragraph.compressed, &paragraph.wakan, rules, k));
     let measured_width = set_width(sg, index, trimmed, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
     let line_start = sg.get(index).map_or(paragraph.pr.start, |g| g.byte);
     let line_end = sg.get(position.end).map_or(paragraph.pr.end, |g| g.byte);

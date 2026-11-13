@@ -7927,6 +7927,42 @@ styles carry it, and Reset Panel sets it back to none. The change is one undo st
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kashida":"medium"}}}
 ```
+## Mojikumi Set
+
+`text.setFormat {mojikumi: "none"|"yakumonoHankaku"|"gyomatsuYakumonoHankaku"|"gyomatsuYakumonoZenkaku"|"yakumonoZenkaku"|"lineEndHalf"}`
+sets the Paragraph panel's Mojikumi Set (shown with the East Asian options) of the paragraphs of the selected type (or
+`ids`, or the paragraphs a `start` / `end` range touches): how full-width Japanese punctuation is spaced. The menu lists
+the five predefined sets the help page names, then Line-end Punctuation Half Width
+(https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-mojikumi-for-japanese-text-composition.html).
+The spacing of each set below is VectorCraft's own rule. An opening bracket's empty half em is before it; a closing
+bracket's, a comma's and a full stop's is after it; a middle dot (・) has a quarter em on each side.
+
+- **None** sets every character at its full advance.
+- **YakumonoHankaku** sets every opening and closing bracket, comma and full stop half width, takes a quarter em off
+  each side of a middle dot, and puts a quarter em between Japanese and Latin letters or digits.
+- **GyomatsuYakumonoHankaku** keeps punctuation full width inside the line. An opening bracket starting a line is set
+  flush with the line's start, a closing bracket, comma or full stop ending a line is set half width, and a middle dot
+  ending a line loses the quarter em after it. A quarter em separates Japanese and Latin letters or digits.
+- **GyomatsuYakumonoZenkaku** keeps punctuation full width everywhere, at a line's end too, with a quarter em between
+  Japanese and Latin letters or digits.
+- **YakumonoZenkaku** keeps punctuation full width everywhere, with no added space between Japanese and Latin text; it
+  sets characters as None does.
+- **Line-end Punctuation Half Width** (new type made with the Type tools and `text.create`) lets consecutive
+  punctuation share one half-em space, sets an opening bracket starting a line flush with its start and a closing
+  bracket, comma or full stop ending a line half width, and puts a quarter em between Japanese and Latin letters or
+  digits.
+
+The space a set adds between Japanese and Latin text is not kept at a line's end. Both composers measure each line as it
+is set, and vertical type follows the same rules down the column. Punctuation that Proportional Metrics re-spaced, and
+tate-chu-yoko, keep their width. Documents from before the setting and imported text keep `none`, which isn't saved;
+paragraph styles carry the set, and Reset Panel sets Line-end Punctuation Half Width. Any other value is refused and
+the type is left as it was. One undo step. `.ai` editing data does not hold the set: a save reports a paragraph with
+any set other than None or Line-end Punctuation Half Width as left out, and the paragraph reads back without it.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"mojikumi":"yakumonoHankaku"}}}
+```
+
 ## Kinsoku Set
 
 `text.setFormat {kinsoku: "hard"|"soft"|"none"}` sets the Paragraph panel's Kinsoku Set of the selected type (or `ids`):

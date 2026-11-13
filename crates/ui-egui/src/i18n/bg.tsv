@@ -1971,6 +1971,10 @@ font-technology	Variable	Променливи
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Набор Kinsoku
 	Kinsoku Shori Type	Тип Kinsoku Shori
 	Push In First	Първо прибиране
