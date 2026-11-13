@@ -939,9 +939,12 @@ pub const INSERT_STOP: &str = "ui.action.insertStop";
 /// The panel state that holds the selected step as (the action's [`Action::id`], the step's index).
 const SELECTED_STEP: &str = "actions-selected-step";
 
-/// The panel state that holds the step being dragged as (the action's [`Action::id`], the step's
-/// index).
+/// The panel state that holds the step being dragged as a [`DraggedStep`].
 const DRAGGED_STEP: &str = "actions-dragged-step";
+
+/// A step being dragged: the action's [`Action::id`], the step's index, and the action's steps and
+/// excluded steps as they were when the drag started.
+type DraggedStep = (u64, usize, std::sync::Arc<(Vec<(String, Value)>, BTreeSet<usize>)>);
 
 /// `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}`: inserts a stop. With `set`
 /// and `action`, it goes into that action, after step `step`, else after its last step. Without
@@ -2100,8 +2103,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut expanded: BTreeSet<u64> = pstate(ui.ctx(), "actions-expanded");
     let mut inclusion_changes = Vec::new();
     let mut play_req = None;
-    // The step being dragged, as (its action's id, the step), from the frame its drag started.
-    let dragging: Option<(u64, usize)> = pstate(ui.ctx(), DRAGGED_STEP);
+    // The step being dragged, from the frame its drag started. The drag ends without a move when a
+    // command since then changed its action's steps or which of them are excluded, or deleted the
+    // action.
+    let dragging = pstate::<Option<DraggedStep>>(ui.ctx(), DRAGGED_STEP).filter(|(id, _, was)| {
+        let action = app.ui.action_sets.iter().flat_map(|s| &s.actions).find(|a| a.id == *id);
+        action.is_some_and(|a| (&a.steps, &a.excluded_steps) == (&was.0, &was.1))
+    });
     let mut drag_started = None;
     let mut drag_stopped = false;
     // The rows a dragged step can be dropped on: (row, set, action, where it goes on the row's upper
@@ -2202,7 +2210,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                         let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click_and_drag());
                         slots.push((r, si, ai, step, step + 1));
                         if resp.drag_started() {
-                            drag_started = Some((a.id, step));
+                            drag_started = Some((a.id, step, std::sync::Arc::new((a.steps.clone(), a.excluded_steps.clone()))));
                         }
                         drag_stopped |= resp.drag_stopped();
                         if step_selected == Some((a.id, step)) {
@@ -2253,7 +2261,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
     });
     // A released drag moves the step once, to where the line showed.
-    let move_req = drag_stopped.then_some(dragging.zip(drop)).flatten().and_then(|((id, step), (si, ai, before))| {
+    let dragged = dragging.as_ref().map(|(id, step, _)| (*id, *step));
+    let move_req = drag_stopped.then_some(dragged.zip(drop)).flatten().and_then(|((id, step), (si, ai, before))| {
         let (fs, fa) = app.ui.action_sets.iter().enumerate().find_map(|(fs, s)| Some((fs, s.actions.iter().position(|a| a.id == id)?)))?;
         Some(json!({"set": fs, "action": fa, "step": step, "toSet": si, "toAction": ai, "before": before}))
     });
@@ -5938,7 +5947,55 @@ mod tests {
         }
         assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 2", "object.move 4"], "the step stays where it was");
         assert_eq!(undo_steps(&app), undo, "no undo step");
-        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, DRAGGED_STEP), None, "the drag ends");
+        assert_eq!(pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP), None, "the drag ends");
+    }
+
+    #[test]
+    fn drag_step_ends_without_a_move_when_a_command_changes_its_action() {
+        use egui::{Event, PointerButton};
+        let (mut app, _) = app_with_three_moves();
+        let rotate = |angle: u32| ("object.rotate".to_string(), json!({"angle": angle}));
+        app.ui.action_sets[0].actions.push(Action::new("Turns", vec![rotate(5), rotate(6)]));
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        set_pstate(&ctx, "actions-expanded", BTreeSet::from([app.ui.action_sets[0].actions[0].id]));
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], show);
+        let mut rows: Vec<egui::Rect> = texts.iter().filter(|(s, _)| s == "object.move").map(|(_, r)| *r).collect();
+        rows.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        let (from, to) = (rows[0].center(), egui::pos2(rows[0].center().x, rows[1].center().y + 4.0));
+        let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        let start_drag = |app: &mut VectorcraftApp| {
+            frame(app, vec![button(from, true)]);
+            frame(app, vec![Event::PointerMoved(from + egui::vec2(0.0, 12.0))]);
+        };
+        // A command on another action leaves the drag as it is.
+        start_drag(&mut app);
+        app.run(DELETE_STEP, json!({"set": 0, "action": 1, "step": 0})).unwrap();
+        frame(&mut app, vec![Event::PointerMoved(to)]);
+        frame(&mut app, vec![button(to, false)]);
+        assert_eq!(step_names(&app, 0, 0), ["object.move 2", "object.move 1", "object.move 4"], "the dragged step moves");
+        // A command that deletes the dragged step's action's first step puts another step at the
+        // dragged index.
+        start_drag(&mut app);
+        app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        frame(&mut app, vec![Event::PointerMoved(to)]);
+        assert_eq!(pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP), None, "the drag ends");
+        frame(&mut app, vec![button(to, false)]);
+        assert_eq!(step_names(&app, 0, 0), ["object.move 1", "object.move 4"], "no other step moves");
+        // Two equal steps, one excluded, that change places put the other one at the dragged index.
+        let same = ("object.move".to_string(), json!({"dx": 1, "dy": 0}));
+        app.ui.action_sets[0].actions[0].steps = vec![same.clone(), same];
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([1]);
+        start_drag(&mut app);
+        app.run(MOVE_STEP, json!({"set": 0, "action": 0, "step": 1, "before": 0})).unwrap();
+        frame(&mut app, vec![Event::PointerMoved(to)]);
+        frame(&mut app, vec![button(to, false)]);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([0]), "the excluded step stays first");
     }
 
     #[test]
