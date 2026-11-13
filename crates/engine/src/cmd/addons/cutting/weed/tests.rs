@@ -541,6 +541,24 @@ fn indexed_crossings_find_the_same_stretches() {
     }
 }
 
+/// An outline that lies on a weeding line stops it even when the line's position rounds just past
+/// the outline's: the one line across 0.1 to 0.5 lies at 0.1 + 0.2, which is 0.30000000000000004,
+/// and (0.30000000000000004 - 0.1) / 0.2 is 1.0000000000000002.
+#[test]
+fn an_outline_on_a_rounded_line_position_stops_the_line() {
+    let doc = vectorcraft_doc::Document::new(800.0, 600.0);
+    let c = 0.1 + 0.2;
+    let mut p = BezPath::new();
+    p.move_to((20.0, c));
+    p.line_to((80.0, c));
+    let n = Node::path(NodeId(1), PathData::from_bezpath(&p), Appearance::default());
+    let region = super::geometry::Reader::new(&doc).read(&[&n]).unwrap().unwrap();
+    let outline = region.outline().unwrap();
+    let counts = super::geometry::Counts { horizontal: 1, vertical: 0 };
+    let pieces = super::geometry::lines(&region, &outline, Rect::new(0.0, 0.1, 100.0, 0.5), counts, 0.0, 100).unwrap();
+    assert_eq!(pieces, [(Point::new(0.0, c), Point::new(20.0, c)), (Point::new(80.0, c), Point::new(100.0, c))]);
+}
+
 #[test]
 fn art_nested_too_deep_is_refused() {
     // A rectangle inside `levels` groups, each holding the next. A document keeps none this deep,
