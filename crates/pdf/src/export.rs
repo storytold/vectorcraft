@@ -46,7 +46,7 @@ use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 #[cfg(test)]
-pub(crate) use nodes::MEASURES;
+pub(crate) use nodes::{KNOCKOUT_SHAPES, MAX_KNOCKOUT_MASK_OBJECTS, MEASURES};
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {

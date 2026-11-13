@@ -57,70 +57,119 @@ impl Exporter<'_> {
 
     /// The children of a group, as the elements of a knockout group when it is one.
     pub(super) fn children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect) {
-        self.measured_children(s, children, page, &[]);
+        self.measured_children(s, children, page, &[], false);
     }
 
-    /// [`Self::children`] with the boxes of the last members in `measured`.
-    fn measured_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
+    /// [`Self::children`] with the boxes of the last members in `measured`, in an isolated group
+    /// when `isolated`.
+    fn measured_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured], isolated: bool) {
         if !self.knockout {
+            if isolated {
+                s.push_isolated();
+            }
             let unmeasured = children.len().saturating_sub(measured.len());
             for (i, c) in children.iter().enumerate() {
                 self.measured_node(s, c, page, false, i.checked_sub(unmeasured).and_then(|i| measured.get(i)));
             }
+            if isolated {
+                s.pop();
+            }
             return;
         }
-        // The PDF writer has no knockout groups: each element is drawn through a soft mask of
-        // where the elements above it don't paint (the same look for Normal blending). The masks
-        // nest, so element i sits inside the masks of elements i+1…n: open them outermost first.
-        self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
-        let elements: Vec<_> = Node::knockout_elements(children)
+        let elements: Vec<(&Node, Measured)> = Node::knockout_elements(children)
             .into_iter()
-            .map(|c| (c, self.measure(c)))
+            .map(|c| (&**c, self.measure(c)))
             .filter(|(_, m)| m.bounds.is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
             .collect();
-        let Some(((first, measured), rest)) = elements.split_first() else { return };
-        for (c, m) in rest.iter().rev() {
-            let mask = self.knockout_mask(s, c, page, m);
-            s.push_mask(mask);
+        if elements.is_empty() {
+            return;
         }
-        self.measured_node(s, first, page, false, Some(measured));
-        for (c, m) in rest {
-            s.pop();
+        let several = elements.len() > 1;
+        // A PDF knockout group (`/K`) knocks out by the area each element paints. Where an element
+        // above another knocks out by less (its opacity or mask defines its knockout shape, or it
+        // paints translucently), each element is drawn through one soft mask of where the
+        // elements above it that overlap it paint, while those masks hold no more than
+        // [`MAX_KNOCKOUT_MASK_OBJECTS`] objects.
+        if several && !elements.iter().skip(1).all(|(c, _)| shape_is_coverage(c)) {
+            if let Some(above) = knockout_masks(&elements) {
+                if isolated {
+                    s.push_isolated();
+                }
+                for ((c, m), above) in elements.iter().zip(above) {
+                    if above.is_empty() {
+                        self.measured_node(s, c, page, false, Some(m));
+                    } else {
+                        let shapes: Vec<_> = above.into_iter().map(|j| &elements[j]).collect();
+                        let mask = self.knockout_mask(s, &shapes, page);
+                        s.push_mask(mask);
+                        self.measured_node(s, c, page, false, Some(m));
+                        s.pop();
+                    }
+                }
+                if isolated {
+                    s.pop();
+                }
+                return;
+            }
+            self.warn(KNOCKOUT_SHAPES);
+        }
+        let group = several || isolated;
+        if group {
+            s.push_group(krilla::blend::GroupOptions { isolated, knockout: several });
+        }
+        for (c, m) in &elements {
+            // In a PDF knockout group each painting operation knocks out the ones before it. An
+            // element drawn with several is one non-isolated group (drawn through a full alpha
+            // mask), so that its own fills and strokes don't knock each other out; its opacity
+            // or opacity mask makes it one already.
+            let unit = several && !one_paint(c) && c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled);
+            if unit {
+                let all = constant_mask(s, page, 1.0);
+                s.push_mask(all);
+            }
             self.measured_node(s, c, page, false, Some(m));
+            if unit {
+                s.pop();
+            }
+        }
+        if group {
+            s.pop();
         }
     }
 
-    /// A luminosity mask that is 1 − the knockout shape of `c`, whose box is in `measured`: white,
-    /// then black through an alpha mask of `c` (at full object opacity without its own mask, unless
-    /// those define its shape).
-    fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect, measured: &Measured) -> krilla::mask::Mask {
-        let shape = if c.knockout_shape {
-            c.clone()
-        } else {
-            let mut s = c.clone().with_mask(None);
-            s.opacity = 1.0;
-            s
-        };
+    /// A luminosity mask that is 1 − the knockout shapes of `shapes` (each with its box): white,
+    /// then black through an alpha mask of each (at full object opacity without its own mask,
+    /// unless those define its shape).
+    fn knockout_mask(&mut self, s: &mut Surface, shapes: &[&(&Node, Measured)], page: Rect) -> krilla::mask::Mask {
         let transform = s.group_transform();
         let mut sb = s.stream_builder();
         let mut ms = Surface::stream(sb.surface());
         ms.push_transform(&transform);
         cover(&mut ms, page, 255, 1.0);
-        let alpha = {
-            let transform = ms.group_transform();
-            let mut ab = ms.stream_builder();
-            let mut als = Surface::stream(ab.surface());
-            als.push_transform(&transform);
-            let overprint = std::mem::take(&mut self.overprint);
-            self.measured_node(&mut als, &shape, page, false, Some(measured));
-            self.overprint = overprint;
-            als.pop();
-            als.finish();
-            krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
-        };
-        ms.push_mask(alpha);
-        cover(&mut ms, page, 0, 1.0);
-        ms.pop();
+        for (c, measured) in shapes.iter().map(|e| (e.0, &e.1)) {
+            let shape = if c.knockout_shape {
+                c.clone()
+            } else {
+                let mut s = c.clone().with_mask(None);
+                s.opacity = 1.0;
+                s
+            };
+            let alpha = {
+                let transform = ms.group_transform();
+                let mut ab = ms.stream_builder();
+                let mut als = Surface::stream(ab.surface());
+                als.push_transform(&transform);
+                let overprint = std::mem::take(&mut self.overprint);
+                self.measured_node(&mut als, &shape, page, false, Some(measured));
+                self.overprint = overprint;
+                als.pop();
+                als.finish();
+                krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
+            };
+            ms.push_mask(alpha);
+            cover(&mut ms, page, 0, 1.0);
+            ms.pop();
+        }
         ms.pop();
         ms.finish();
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
@@ -177,23 +226,7 @@ impl Exporter<'_> {
         // Whether this container's children knock each other out (a knockout group is written as a group).
         let knockout = n.knocks_out(self.knockout);
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
-        let mut pushes = 0;
-        if n.blend != BlendMode::Normal {
-            s.push_blend_mode(blend(n.blend));
-            pushes += 1;
-        }
-        if n.opacity < 1.0 || (container && (n.isolate || n.blend != BlendMode::Normal || knockout)) {
-            if !n.isolate && n.blends_through() {
-                // Not isolated: blending inside reaches the art below the group.
-                let alpha = constant_mask(s, page, n.opacity);
-                s.push_mask(alpha);
-            } else if n.opacity < 1.0 {
-                s.push_opacity(norm(n.opacity));
-            } else {
-                s.push_isolated();
-            }
-            pushes += 1;
-        }
+        let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
             (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
@@ -214,7 +247,7 @@ impl Exporter<'_> {
         }
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
+                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()), isolated_children);
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The
@@ -674,4 +707,120 @@ impl Exporter<'_> {
         }
         true
     }
+}
+
+/// Opens the blend mode and the transparency group `n` is drawn with (`container` when it is a
+/// group or layer whose children `knockout` each other). Returns how many were opened, and
+/// whether the children are to be drawn in an isolated group of their own: the knockout group of
+/// an unclipped group's elements is its isolated group too.
+fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout: bool) -> (usize, bool) {
+    let mut pushes = 0;
+    if n.blend != BlendMode::Normal {
+        s.push_blend_mode(blend(n.blend));
+        pushes += 1;
+    }
+    let mut isolated_children = false;
+    if n.opacity < 1.0 || (container && (n.isolate || n.blend != BlendMode::Normal || knockout)) {
+        if !n.isolate && n.blends_through() {
+            // Not isolated: blending inside reaches the art below the group.
+            let alpha = constant_mask(s, page, n.opacity);
+            s.push_mask(alpha);
+            pushes += 1;
+        } else if n.opacity < 1.0 {
+            s.push_opacity(norm(n.opacity));
+            pushes += 1;
+        } else if knockout && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
+            isolated_children = true;
+        } else {
+            s.push_isolated();
+            pushes += 1;
+        }
+    }
+    (pushes, isolated_children)
+}
+
+/// The warning for a knockout group whose elements are too many to draw through soft masks: it is
+/// written as a PDF knockout group, where an element knocks out all of the area it paints.
+pub(crate) const KNOCKOUT_SHAPES: &str = "knockout groups with too many overlapping translucent elements are written as PDF knockout groups: \
+     their translucent elements knock out what they cover fully";
+
+/// The most objects the soft masks of one knockout group's elements draw between them: each mask
+/// draws the elements above its own element that overlap it.
+pub(crate) const MAX_KNOCKOUT_MASK_OBJECTS: usize = 1 << 16;
+
+/// The most elements of one knockout group drawn through soft masks: finding the elements that
+/// overlap compares every pair.
+pub(crate) const MAX_MASKED_ELEMENTS: usize = 2048;
+
+/// For each element of a knockout group (with its box), the indices of the elements above it whose
+/// boxes overlap its own. `None` when there are more than [`MAX_MASKED_ELEMENTS`] elements or the
+/// masks would draw more than [`MAX_KNOCKOUT_MASK_OBJECTS`] objects.
+fn knockout_masks(elements: &[(&Node, Measured)]) -> Option<Vec<Vec<usize>>> {
+    if elements.len() > MAX_MASKED_ELEMENTS {
+        return None;
+    }
+    let counts: Vec<usize> = elements.iter().map(|(c, _)| c.count_with_masks()).collect();
+    let mut objects = 0usize;
+    let mut out = Vec::with_capacity(elements.len());
+    for (i, (_, below)) in elements.iter().enumerate() {
+        let mut above = vec![];
+        for (j, (_, over)) in elements.iter().enumerate().skip(i + 1) {
+            if let (Some(a), Some(b)) = (below.bounds, over.bounds)
+                && rects_overlap(a.inflate(1.0, 1.0), b.inflate(1.0, 1.0))
+            {
+                objects = objects.checked_add(counts[j]).filter(|&o| o <= MAX_KNOCKOUT_MASK_OBJECTS)?;
+                above.push(j);
+            }
+        }
+        out.push(above);
+    }
+    Some(out)
+}
+
+/// Whether `n` is drawn with one painting operation at most: a path or compound path with at most
+/// one visible fill or stroke that paints, in a solid color, without effects, a brush or
+/// arrowheads.
+fn one_paint(n: &Node) -> bool {
+    let mut items = n.appearance.items.iter().filter(|i| i.visible() && !matches!(i.paint(), Paint::None));
+    let simple = items.next().is_none_or(|i| {
+        let plain = match i {
+            AppearanceItem::Fill(_) => true,
+            AppearanceItem::Stroke(st) => st.brush.is_none() && st.start_arrow.is_none() && st.end_arrow.is_none(),
+        };
+        plain && i.effects().is_empty() && matches!(i.paint(), Paint::Solid { .. })
+    });
+    matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && n.appearance.effects.is_empty() && simple && items.next().is_none()
+}
+
+/// Whether element `c` of a knockout group knocks out all of the area it paints, as an element of
+/// a PDF knockout group does: its opacity and opacity mask are full or don't define its knockout
+/// shape, and every part of it paints opaquely.
+fn shape_is_coverage(c: &Node) -> bool {
+    let own = !c.knockout_shape || (c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled));
+    own && paints_opaque(c)
+}
+
+/// Whether what `n` paints is opaque wherever it paints, at its own opacity and mask: its visible
+/// fills and strokes are solid colors or gradients with opaque stops, without effects or brushes,
+/// and so are the members of a group or compound path, at full opacity without an opacity mask.
+fn paints_opaque(n: &Node) -> bool {
+    let paint = |p: &Paint| match p {
+        Paint::None | Paint::Solid { .. } => true,
+        Paint::Gradient(g) => g.gradient.stops.iter().all(|s| s.opacity >= 1.0),
+        _ => false,
+    };
+    let items = n.appearance.items.iter().all(|i| {
+        let brush = matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some());
+        !i.visible() || (i.opacity() >= 1.0 && i.effects().is_empty() && !brush && paint(i.paint()))
+    });
+    let member =
+        |c: &std::sync::Arc<Node>| !c.visible || (c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled) && paints_opaque(c));
+    n.appearance.effects.is_empty()
+        && items
+        && match &n.kind {
+            NodeKind::Path { .. } => true,
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => children.iter().all(member),
+            NodeKind::Mesh(m) => m.points.iter().all(|p| p.opacity >= 1.0),
+            _ => false,
+        }
 }
