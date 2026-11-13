@@ -4,7 +4,7 @@
 use crate::*;
 use kurbo::{Affine, Shape};
 use vectorcraft_doc::text::Kashida;
-use vectorcraft_doc::{CharStyle, JustificationOptions, Justify, SingleWordJustify, TextKind, TextRun};
+use vectorcraft_doc::{CharStyle, JustificationOptions, Justify, SingleWordJustify, TabAlign, TabStop, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
 fn db() -> &'static FontDb {
@@ -410,6 +410,146 @@ fn single_word_lines_follow_single_word_justification() {
     assert!((r1 - w).abs() < 1e-3 && (r0 - 30.0).abs() < 1e-3, "{r0}..{r1}");
     let (c0, c1) = first(SingleWordJustify::AlignCenter);
     assert!((c0 - 15.0).abs() < 1e-3 && (c1 - (w - 15.0)).abs() < 1e-3, "centred: {c0}..{c1}");
+}
+
+/// Word spacing at 100% with no range: the line's room goes on its word spaces alone.
+fn no_ranges() -> JustificationOptions {
+    JustificationOptions { word_spacing: [100.0, 100.0, 100.0], ..JustificationOptions::default() }
+}
+
+/// `text` in a 300 pt wide frame with left tab stops at `stops` (a leader of `leader` on each).
+fn tabbed(text: &str, stops: &[f64], leader: &str, justify: Justify, j: JustificationOptions) -> TextLayout {
+    let mut t = area(text, 300.0, justify, j);
+    t.para.tabs = stops.iter().map(|&position| TabStop { position, align: TabAlign::Left, leader: leader.to_string(), align_on: '.' }).collect();
+    layout(db(), &t)
+}
+
+/// Where the glyph of the character at byte `b` ends.
+fn end(l: &TextLayout, b: usize) -> f64 {
+    at(l, b).origin.x + at(l, b).advance
+}
+
+/// A justified line with a tab: the text before its last tab keeps its spacing and the tab its
+/// stop, and the word spaces after the tab take the line's room, so the line ends on the far edge.
+#[test]
+fn a_justified_line_with_a_tab_spreads_the_text_after_it_to_the_edge() {
+    // A (0), A (1), space (2), B (3), B (4), tab (5), C (6), C (7), space (8), D (9), D (10); a
+    // soft return ends the line, so Justify Left justifies it.
+    let text = "AA BB\tCC DD\u{2028}x";
+    for j in [no_ranges(), JustificationOptions::default()] {
+        let natural = tabbed(text, &[150.0], "", Justify::Left, j.clone());
+        let l = tabbed(text, &[150.0], "", Justify::JustifyLeft, j);
+        for b in 0..5 {
+            assert!((at(&l, b).origin.x - at(&natural, b).origin.x).abs() < 1e-6, "byte {b} stays where it was");
+            assert!((at(&l, b).advance - at(&natural, b).advance).abs() < 1e-6, "byte {b} keeps its advance");
+        }
+        assert!((end(&l, 5) - 150.0).abs() < 1e-6, "the tab keeps its stop: {}", end(&l, 5));
+        assert!((end(&l, 10) - 300.0).abs() < 1e-6, "the last word ends on the edge: {}", end(&l, 10));
+        assert!((l.lines[0].x1 - 300.0).abs() < 1e-6, "the line's record ends there too: {}", l.lines[0].x1);
+        assert!(at(&l, 8).advance > at(&natural, 8).advance + 1.0, "the word space after the tab takes the room");
+    }
+}
+
+/// A leader stays inside its tab's gap on a justified line.
+#[test]
+fn a_justified_tab_keeps_its_leader_inside_its_gap() {
+    let l = tabbed("AA BB\tCC DD", &[150.0], ".", Justify::JustifyAll, no_ranges());
+    let tab = at(&l, 5);
+    let dots = tab.outline.bounding_box();
+    assert!(!tab.outline.elements().is_empty(), "the leader is drawn");
+    assert!(dots.x0 >= tab.origin.x - 1e-6 && dots.x1 <= 150.0 + 1e-6, "{dots:?} inside {}..150", tab.origin.x);
+    assert!((end(&l, 10) - 300.0).abs() < 1e-6, "{}", end(&l, 10));
+}
+
+/// Two words with a tab between them and no word space: the word after the tab is spread
+/// between its letters to the edge, whatever Single Word Justification says, since a tab
+/// separates two words.
+#[test]
+fn a_justified_word_tab_word_line_reaches_the_edge() {
+    // A (0), A (1), tab (2), B (3), B (4).
+    let text = "AA\tBB\u{2028}x";
+    for single_word in [SingleWordJustify::FullJustify, SingleWordJustify::AlignLeft, SingleWordJustify::AlignRight] {
+        let j = JustificationOptions { single_word, ..JustificationOptions::default() };
+        let natural = tabbed(text, &[150.0], "", Justify::Left, j.clone());
+        let l = tabbed(text, &[150.0], "", Justify::JustifyLeft, j);
+        assert!(at(&l, 0).origin.x.abs() < 1e-6, "{single_word:?}: starts at the left edge: {}", at(&l, 0).origin.x);
+        assert!((at(&l, 0).advance - at(&natural, 0).advance).abs() < 1e-6, "{single_word:?}: the word before the tab keeps its width");
+        assert!((end(&l, 2) - 150.0).abs() < 1e-6, "{single_word:?}: the tab keeps its stop: {}", end(&l, 2));
+        assert!((end(&l, 4) - 300.0).abs() < 1e-6, "{single_word:?}: ends on the edge: {}", end(&l, 4));
+    }
+}
+
+/// The last line of a paragraph: Justify All spreads the text after its tab to the edge, and
+/// Justify Left leaves it aligned left.
+#[test]
+fn the_last_line_with_a_tab_fills_the_measure_only_with_justify_all() {
+    let text = "AA BB\tCC DD";
+    let all = tabbed(text, &[150.0], "", Justify::JustifyAll, no_ranges());
+    assert!((end(&all, 5) - 150.0).abs() < 1e-6 && (end(&all, 10) - 300.0).abs() < 1e-6, "{} {}", end(&all, 5), end(&all, 10));
+    let left = tabbed(text, &[150.0], "", Justify::JustifyLeft, no_ranges());
+    let natural = tabbed(text, &[150.0], "", Justify::Left, no_ranges());
+    assert!((end(&left, 10) - end(&natural, 10)).abs() < 1e-6 && end(&left, 10) < 250.0, "{}", end(&left, 10));
+}
+
+/// A line with two tabs: both keep their stops, the word space between them keeps its width, and
+/// the text after the last tab takes the room.
+#[test]
+fn a_justified_line_takes_its_room_after_its_last_tab() {
+    // A (0), tab (1), B (2), space (3), C (4), tab (5), D (6), space (7), E (8).
+    let text = "A\tB C\tD E";
+    let natural = tabbed(text, &[80.0, 160.0], "", Justify::Left, no_ranges());
+    let l = tabbed(text, &[80.0, 160.0], "", Justify::JustifyAll, no_ranges());
+    assert!((end(&l, 1) - 80.0).abs() < 1e-6 && (end(&l, 5) - 160.0).abs() < 1e-6, "{} {}", end(&l, 1), end(&l, 5));
+    assert!((at(&l, 3).advance - at(&natural, 3).advance).abs() < 1e-6, "the space between the tabs keeps its width");
+    assert!((end(&l, 8) - 300.0).abs() < 1e-6, "{}", end(&l, 8));
+}
+
+/// Vertical area type: the tab keeps its stop down the column, and the text after it reaches the
+/// column's end.
+#[test]
+fn a_justified_vertical_line_with_a_tab_reaches_the_end_of_its_column() {
+    let mut t = area("AA BB\tCC DD", 100.0, Justify::JustifyAll, no_ranges());
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 300.0).to_path(0.1)) };
+    t.vertical = true;
+    t.para.tabs = vec![TabStop { position: 150.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    let l = layout(db(), &t);
+    let down = |b: usize| at(&l, b).origin.y + at(&l, b).advance;
+    assert!(at(&l, 0).origin.y.abs() < 1e-6, "{}", at(&l, 0).origin.y);
+    assert!((down(5) - 150.0).abs() < 1e-6, "the tab keeps its stop: {}", down(5));
+    assert!((down(10) - 300.0).abs() < 1e-6, "the last word ends at the column's end: {}", down(10));
+}
+
+/// Right-to-left area type: the glyphs drawn up to the last tab drawn keep their advances, the tab
+/// its stop, and the text drawn after it reaches the right edge.
+#[test]
+fn a_justified_right_to_left_line_with_a_tab_spans_its_measure() {
+    // א (0), ב (2), space (4), ג (5), ד (7), tab (9), ה (10), ו (12), space (14), ז (15), ח (17).
+    let text = "אב גד\tהו זח";
+    let natural = tabbed(text, &[150.0], "", Justify::Right, no_ranges());
+    let l = tabbed(text, &[150.0], "", Justify::JustifyAll, no_ranges());
+    let mut drawn: Vec<&PositionedGlyph> = l.glyphs.iter().collect();
+    drawn.sort_by(|a, b| a.origin.x.total_cmp(&b.origin.x));
+    assert!(drawn[0].origin.x.abs() < 1e-6, "starts at the left edge: {:?}", drawn[0].origin);
+    let tab = drawn.iter().position(|g| g.byte == 9).unwrap();
+    for g in &drawn[..tab] {
+        assert!((g.advance - at(&natural, g.byte).advance).abs() < 1e-6, "byte {} keeps its advance", g.byte);
+    }
+    assert!((end(&l, 9) - 150.0).abs() < 1e-6, "the tab keeps its stop: {}", end(&l, 9));
+    let last = drawn.last().unwrap();
+    assert!((last.origin.x + last.advance - 300.0).abs() < 1e-6, "ends on the right edge: {}", last.origin.x + last.advance);
+    assert!((l.lines[0].x1 - 300.0).abs() < 1e-6, "{}", l.lines[0].x1);
+}
+
+/// Point type has no measure to fill: a justified line with a tab keeps its natural width.
+#[test]
+fn justified_point_type_with_a_tab_keeps_its_width() {
+    let mut t = point("AA BB\tCC DD", no_ranges());
+    t.para.justify = Justify::JustifyAll;
+    t.para.tabs = vec![TabStop { position: 150.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    let l = layout(db(), &t);
+    t.para.justify = Justify::Left;
+    let natural = layout(db(), &t);
+    assert!((end(&l, 10) - end(&natural, 10)).abs() < 1e-6, "{} {}", end(&l, 10), end(&natural, 10));
 }
 
 /// An OpenType (GSUB) Arabic face with a tatweel: craft-fonts' Noto Sans Arabic when the build has
