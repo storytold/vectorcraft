@@ -2213,6 +2213,7 @@ file-filter	Templates	Modelli
 	Art Brush	Pennello artistico
 	Bristle Brush	Pennello a setole
 	Pattern Brush	Pennello motivo
+	missing from the Brushes panel	mancante nel pannello Pennelli
 	Select art to make a scatter, art or pattern brush.	Seleziona la grafica per creare un pennello a dispersione, artistico o motivo.
 	Brush Art	Grafica del pennello
 	New Calligraphic Brush	Nuovo pennello calligrafico
@@ -2662,6 +2663,8 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	Insert Aki Left	Inserisci aki a sinistra
+	Insert Aki Right	Inserisci aki a destra
 	Character Direction	Direzione caratteri
 	Digits	Cifre
 	Arabic	Arabe
@@ -2936,6 +2939,8 @@ digits	Malayalam	Malayalam
 	Reset Rotate View	Reimposta rotazione vista
 	Rotate View to Selection	Ruota vista in base alla selezione
 	Reset the rows to the artwork's colors	Reimposta le righe sui colori della grafica
+	Color Theme Picker	Selettore tema colore
+	Click or drag across the art to pick its colors; Shift adds more	Fai clic o trascina sulla grafica per prelevarne i colori; Maiusc ne aggiunge altri
 	Reset to Default	Reimposta valori predefiniti
 	Reset to White, Black	Reimposta su bianco, nero
 	Reset with Mesh	Reimposta con trama
@@ -3345,6 +3350,7 @@ digits	Malayalam	Malayalam
 	Show Note	Mostra nota
 	Show Options	Mostra opzioni
 	Show Recent Colors	Mostra colori recenti
+	Toggle RGB Percent	Alterna RGB in percentuale
 	Show Original Path	Mostra tracciato originale
 	Open this dialog with these settings next time	Apri questa finestra di dialogo con queste impostazioni la prossima volta
 	Auto-Simplify	Semplifica automaticamente
@@ -4261,6 +4267,85 @@ axis	Both	Entrambi
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando non riuscito ha modificato passaggi di annullamento che non è stato possibile ripristinare, quindi lo script è stato interrotto
 @msg	a recovery copy could not be written, so the script was not run	non è stato possibile scrivere una copia di recupero, quindi lo script non è stato eseguito
+@msg	Script file access denied	Accesso al file di script negato
+@msg	Script file exceeds 8 MiB	Il file di script supera 8 MiB
+@msg	Script file is not open	Il file di script non è aperto
+@msg	Script file cannot be decoded	Impossibile decodificare il file di script
+@msg	Script file is not a regular file	Il file di script non è un file normale
+@msg	Script file does not exist	Il file di script non esiste
+@msg	Script file could not be read	Impossibile leggere il file di script
+@msg	Script folder has more than 2,048 entries	La cartella di script contiene più di 2.048 voci
+@msg	Script file open mode must be r, w, e or a	La modalità di apertura del file di script deve essere r, w, e oppure a
+@msg	Script file writing is not available	La scrittura dei file di script non è disponibile
+@msg	Script file dialogs are not available	Le finestre di dialogo dei file di script non sono disponibili
+@msg	Script files cannot be opened in another application	I file di script non possono essere aperti in un'altra applicazione
+@msg	Script file access is unavailable on the web	L'accesso ai file di script non è disponibile sul web
+@msg	Script has 256 files open	Lo script ha 256 file aperti
+@msg	Script file path exceeds 32,767 characters	Il percorso del file di script supera 32.767 caratteri
+@msg	Script folder mask takes too many steps to match	La maschera della cartella di script richiede troppi passaggi per la corrispondenza
+@msg	the script opened more file data than one run may open (32 MiB)	lo script ha aperto più dati di file di quanti ne possa aprire un'esecuzione (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: accetta una posizione e una modalità
+@msg	vc.run: give a command id, as a string	vc.run: indica un id di comando, come stringa
+@msg	vc.run: takes a command id and an object of parameters	vc.run: accetta un id di comando e un oggetto di parametri
+@msg	vc.run: the parameters must be an object	vc.run: i parametri devono essere un oggetto
+@msg	vc.run: the result{place} is too large for a script	vc.run: il risultato{place} è troppo grande per uno script
+@msg	$.evalFile requires a file path	$.evalFile richiede un percorso di file
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: il timeout deve essere un numero finito di millisecondi, 0 o più
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: accetta un percorso di file e un timeout
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: riga {line}, colonna {column} di {file}: {e} (generato)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: riga {line}, colonna {column}: {e} (generato)
+@msg	{name}: {e} (thrown)	{name}: {e} (generato)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: riga {line}, colonna {column} di {file}: {e} (limite)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: riga {line}, colonna {column}: {e} (limite)
+@msg	{name}: {e} (limit)	{name}: {e} (limite)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: riga {line}, colonna {column} di {file}: {e} (errore di sintassi)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: riga {line}, colonna {column}: {e} (errore di sintassi)
+@msg	{name}: {e} (syntax)	{name}: {e} (errore di sintassi)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: riga {line}, colonna {column} di {file}: {e} (interrotto)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: riga {line}, colonna {column}: {e} (interrotto)
+@msg	{name}: {e} (stopped)	{name}: {e} (interrotto)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: riga {line}, colonna {column} di {file}: {e} (errore interno)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: riga {line}, colonna {column}: {e} (errore interno)
+@msg	{name}: {e} (internal)	{name}: {e} (errore interno)
+@msg	{e} (these files stay written: {paths})	{e} (questi file restano scritti: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indica un nome, come stringa
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indica una impostazione locale come "en" o "de_DE", oppure null per quella dell'interfaccia
+@msg	$.localize: give true or false	$.localize: indica true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: si può impostare solo 512, che attiva la localizzazione, oppure 0
+@msg	$.flags: give a number	$.flags: indica un numero
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: qui gli script leggono e scrivono solo UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indica il nome di una codifica, come stringa
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: la dimensione della cache di memoria non può essere impostata
+@msg	$.setenv: give a value, as a string	$.setenv: indica un valore, come stringa
+@msg	$.setenv: only {_1} can be set	$.setenv: si possono impostare solo {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valore ha al massimo {MAX_ENV_BYTES} lettere, cifre e _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indica un numero di millisecondi da 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indica un numero di millisecondi
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: un'esecuzione non può attendere dentro un callback di una funzione integrata, un getter, una conversione o un file eseguito da $.evalFile; chiamala dal codice dello script stesso
+@msg	$.bp: scripts here have no debugger	$.bp: qui gli script non hanno un debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: gli script non possono ancora mostrare una finestra di dialogo
+@msg	{name}: give a message	{name}: indica un messaggio
+@msg	{name}: give the text the field starts with	{name}: indica il testo con cui inizia il campo
+@msg	{name}: the message is longer than 16 KiB	{name}: il messaggio supera 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: il titolo supera 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: il testo con cui inizia il campo supera 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: una finestra di dialogo non può aprirsi dentro un callback di una funzione integrata, un getter, una conversione o un file eseguito da $.evalFile; chiamala dal codice dello script stesso
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la prossima risposta in `answers` è per {_1}, non per {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: in `answers` non rimangono risposte per questa finestra di dialogo
+@msg	vc.document{place} is too large for a script	vc.document{place} è troppo grande per uno script
+@msg	vc.log: the log of this run is full	vc.log: il registro di questa esecuzione è pieno
+@msg	this function's script run has ended	l'esecuzione dello script di questa funzione è terminata
+@msg	the script made more host calls than one run may make	lo script ha fatto più chiamate all'host di quante ne possa fare un'esecuzione
+@msg	the script passed more data to and from commands than one run may pass	lo script ha passato ai comandi e dai comandi più dati di quanti ne possa passare un'esecuzione
+@msg	the script added more objects and data to the documents than one run may add	lo script ha aggiunto ai documenti più oggetti e dati di quanti ne possa aggiungere un'esecuzione
+@msg	{what}: the object is not a File or a Folder	{what}: l'oggetto non è un File né un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: il conteggio deve essere un numero finito, 0 o più
+@msg	File.seek: the position must be a finite number	File.seek: la posizione deve essere un numero finito
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: la modalità deve essere 0, 1 o 2
+@msg	script file is compiled: {value}	il file di script è compilato: {value}
+@msg	`name` must be the name of a script engine	`name` deve essere il nome di un motore di script
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	il motore di script principale è nuovo a ogni esecuzione e non viene mai conservato, quindi non può essere eliminato
+@msg	there is no script engine named {name}	non esiste un motore di script chiamato {name}
 @msg	Running a script	Esecuzione di uno script
 @msg	Copied the script report	Rapporto dello script copiato
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato

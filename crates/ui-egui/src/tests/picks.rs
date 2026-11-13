@@ -210,6 +210,38 @@ fn save_as_goes_on_with_the_path_picked() {
     assert_eq!(*written.borrow(), ["/art/poster.svg"]);
 }
 
+/// Save as PDF with View PDF after Saving, asked for by automation without a path: the save panel
+/// it opened answers as automation's, so the PDF is written but not opened in the viewer, even
+/// when a person picked the file. The person's own Save as PDF opens it.
+#[test]
+fn a_pdf_automation_asked_for_is_not_opened_when_its_save_panel_answers() {
+    let opened = Rc::new(RefCell::new(Vec::<String>::new()));
+    let u = opened.clone();
+    let mut services =
+        Services { dialogs_are_sheets: true, open_url: Some(Box::new(move |p: &str| u.borrow_mut().push(p.to_string()))), ..Default::default() };
+    let (shown, written) = off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let view = json!({"viewAfterSaving": true});
+
+    app.ui.answering_control = true;
+    let _ = app.run("file.export.pdf", view.clone());
+    app.ui.answering_control = false;
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/automated.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf"]);
+    assert!(opened.borrow().is_empty(), "{:?}", opened.borrow());
+
+    let _ = app.run("file.export.pdf", view);
+    shown.answer(&["/art/mine.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf", "/art/mine.pdf"]);
+    assert_eq!(opened.borrow().len(), 1, "{:?}", opened.borrow());
+    assert!(opened.borrow()[0].ends_with("/art/mine.pdf"), "{:?}", opened.borrow());
+}
+
 #[test]
 fn a_dialogs_folder_button_fills_its_field_when_the_picker_answers() {
     let (mut app, shown, _) = app();

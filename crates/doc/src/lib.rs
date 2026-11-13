@@ -51,7 +51,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod profiles;

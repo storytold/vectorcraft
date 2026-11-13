@@ -699,6 +699,14 @@ pub struct UiState {
     /// recent colors keeps filling while the row is hidden.
     #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
     pub color_show_recent_colors: bool,
+    /// Color panel: RGB mode shows R, G and B in percent instead of 0 to 255 (a double-click right
+    /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
+    #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
+    pub color_rgb_percent: bool,
+    /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
+    /// row (#6617; read as [`Self::color_show_recent_colors`] is). Separate from the Color panel's.
+    #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
+    pub swatches_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
@@ -1148,6 +1156,8 @@ impl Default for UiState {
             color_mode: None,
             color_hide_options: false,
             color_show_recent_colors: true,
+            color_rgb_percent: false,
+            swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,

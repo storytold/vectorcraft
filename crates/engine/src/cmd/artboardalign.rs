@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             [],
             None,
-            "{index? | indices?: [n…], selectedArtboards?: [n…] (as artboard.duplicate; default: the artboards the Artboard tool has selected, else its active one), horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\" (one of the two is needed), to?: \"selection\"|\"artboard\" (default \"selection\": the bounds of the artboards together; \"artboard\": artboard `artboard`, which stays where it is), artboard?: n (0-based; the artboard to align to with to: \"artboard\"; default: the Artboard tool's active one; it need not be one of the artboards aligned), activeArtboard?: n (the journal records that default here, for a replay; `artboard` goes ahead of it), moveArt?: bool (the art fully inside each artboard moves with it; default: the Artboard tool's Move Artwork with Artboard option), patterns?: bool, lockedAndHidden?: bool (as artboard.move)} (Align panel › Align Objects with the Artboard tool chosen) each artboard moves until its edge or center is on that edge or center of what it aligns to, with its guides, in one undo step; a locked artboard stays where it is and still counts in the bounds, and the call fails with `the artboard is locked` when every artboard it names is locked; when no artboard moves, no undo step is recorded → {moved: [index…]}",
+            "{index? | indices?: [n…], selectedArtboards?: [n…] (as artboard.duplicate; default: the artboards the Artboard tool has selected, else its active one), horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\" (one of the two is needed), to?: \"selection\"|\"artboard\" (default \"selection\": the bounds of the artboards together; \"artboard\": artboard `artboard`, which stays where it is), artboard?: n (0-based; the artboard to align to with to: \"artboard\"; default: the Artboard tool's active one; it need not be one of the artboards aligned), activeArtboard?: n (the journal records that default here, for a replay; `artboard` goes ahead of it), moveArt?: bool (the art fully inside each artboard moves with it, art inside two of them with the first by index, which may stay; default: the Artboard tool's Move Artwork with Artboard option), patterns?: bool, lockedAndHidden?: bool (as artboard.move)} (Align panel › Align Objects with the Artboard tool chosen) each artboard moves until its edge or center is on that edge or center of what it aligns to, with its guides, in one undo step; a locked artboard stays where it is and still counts in the bounds, and the call fails with `the artboard is locked` when every artboard it names is locked; when no artboard moves, no undo step is recorded → {moved: [index…]}",
             has_doc,
             align
         ),
@@ -114,18 +114,27 @@ fn kept(b: &Boards, items: &[(usize, Rect)], gap: Option<f64>) -> Result<Option<
 }
 
 /// Moves each artboard of `moves` by its offset as undo step `label`, with its guides and, when
-/// `b` says so, the art inside it. Locked artboards stay where they are. When no artboard moves
+/// `b` says so, the art inside it; art inside two of the artboards `b` names goes with the one
+/// first in artboard order, and stays when that one stays. Locked artboards stay where they are.
+/// When no artboard moves
 /// more than 1e-9 pt on either axis, the document and its undo history stay as they are. The edit
 /// fails with nothing changed when an artboard would end up past the canvas, as every edit does.
 fn apply(s: &mut Session, label: &str, p: &Value, b: &Boards, moves: &[(usize, Vec2)]) -> Result<Value> {
     let d = &s.doc()?.doc;
-    let moves: Vec<(usize, Vec2)> =
+    let mut moves: Vec<(usize, Vec2)> =
         moves.iter().copied().filter(|(i, dv)| (dv.x.abs() > 1e-9 || dv.y.abs() > 1e-9) && d.artboards.get(*i).is_some_and(|a| !a.locked)).collect();
+    // In artboard order, as the other artboard edits take them, whatever order the Distribute
+    // commands spaced them in.
+    moves.sort_by_key(|(i, _)| *i);
     let moved: Vec<usize> = moves.iter().map(|(i, _)| *i).collect();
     if moves.is_empty() {
         return Ok(json!({ "moved": moved }));
     }
-    let arts = artboards_art(s, &moved, b.move_art, b.locked_art, true)?;
+    // The art of every artboard named, those that stay included, so that art on overlapping
+    // artboards goes with the first by index; then that of the artboards that move.
+    let named: Vec<usize> = b.items.iter().map(|(i, _)| *i).collect();
+    let arts: Vec<(usize, Vec<NodeId>)> =
+        artboards_art(s, &named, b.move_art, b.locked_art, true)?.into_iter().filter(|(i, _)| moved.contains(i)).collect();
     let ids: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &ids)?, ..Scaling::default() };
     s.edit(label, |d, _| {
