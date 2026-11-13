@@ -169,6 +169,10 @@ pub(crate) const NOT_FILES: &[(&str, &str)] = &[
     ("document.exportForScreens", "folders"),
 ];
 
+/// Commands and the keys from the top of their params down to a key in [`FILE_KEYS`] that, there,
+/// names part of the document, not a file: a custom arrowhead's outline in `stroke.set`.
+const NESTED_NOT_FILES: &[(&str, &[&str])] = &[("stroke.set", &["startArrow", "Custom", "path"]), ("stroke.set", &["endArrow", "Custom", "path"])];
+
 /// Is command id `id` one a plug-in may never call, from its id alone ([`DENIED_PREFIXES`],
 /// [`FILE_WORDS`])?
 fn denied_id(id: &str) -> bool {
@@ -232,20 +236,32 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
 
 /// Does `args`, the arguments of a call of command `id`, carry a key in [`FILE_KEYS`] at any depth
 /// (in objects and in arrays), such as an effect's `textureImage.path`? Only a key [`NOT_FILES`]
-/// names for `id`, at the top level, isn't counted. The walk keeps its own stack, so deep
-/// arguments can't overflow the thread's.
+/// names for `id`, at the top level, and one at the end of a [`NESTED_NOT_FILES`] key list for
+/// `id`, aren't counted. The walk keeps its own stack, so deep arguments can't overflow the
+/// thread's.
 fn names_file(id: &str, args: &Value) -> bool {
-    let mut stack = vec![(args, true)];
-    while let Some((v, top)) = stack.pop() {
+    // Each value, whether it is the params themselves, and the keys of a NESTED_NOT_FILES list
+    // still to follow below it.
+    let mut stack: Vec<(&Value, bool, Option<&[&str]>)> = vec![(args, true, None)];
+    while let Some((v, top, trail)) = stack.pop() {
         match v {
-            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false))),
+            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false, None))),
             Value::Object(o) => {
                 for (k, x) in o {
                     let k = k.as_str();
-                    if FILE_KEYS.contains(&k) && !(top && NOT_FILES.contains(&(id, k))) {
+                    let rest = if top {
+                        NESTED_NOT_FILES
+                            .iter()
+                            .find(|(c, keys)| *c == id && keys.first() == Some(&k))
+                            .map(|(_, keys)| keys.get(1..).unwrap_or_default())
+                    } else {
+                        trail.filter(|keys| keys.first() == Some(&k)).map(|keys| keys.get(1..).unwrap_or_default())
+                    };
+                    let document = (top && NOT_FILES.contains(&(id, k))) || rest.is_some_and(<[&str]>::is_empty);
+                    if FILE_KEYS.contains(&k) && !document {
                         return true;
                     }
-                    stack.push((x, false));
+                    stack.push((x, false, rest.filter(|keys| !keys.is_empty())));
                 }
             }
             _ => {}
@@ -585,6 +601,16 @@ mod tests {
         assert!(!names_file("object.setLiveShape", &json!({"path": [[0, 0], [1, 1]]})));
         assert!(names_file("object.setLiveShape", &json!({"options": {"path": "/tmp/x"}})));
         assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
+        // A custom arrowhead's outline in stroke.set, only where stroke.set takes one.
+        let outline = json!({"subpaths": []});
+        assert!(!names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline}}})));
+        assert!(!names_file("stroke.set", &json!({"startArrow": {"Custom": {"name": "A", "path": outline}}, "endArrow": "Triangle"})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline, "file": "/tmp/x"}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"Custom": {"path": {"path": "/tmp/x"}}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": {"path": "/tmp/x"}})));
+        assert!(names_file("stroke.set", &json!({"options": {"endArrow": {"Custom": {"path": "/tmp/x"}}}})));
+        assert!(names_file("stroke.set", &json!({"endArrow": [{"Custom": {"path": "/tmp/x"}}]})));
+        assert!(names_file("object.move", &json!({"endArrow": {"Custom": {"path": "/tmp/x"}}})));
         // Deep nesting is walked without recursion.
         let mut deep = json!({"file": "/tmp/x"});
         for _ in 0..10_000 {

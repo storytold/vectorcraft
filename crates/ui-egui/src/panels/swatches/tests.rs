@@ -901,3 +901,61 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
     assert!(matches!(tile(&app), Color::Cmyk { .. }));
 }
+
+/// One headless frame of the panel menu; returns its painted labels.
+fn menu_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// Click the panel menu's item `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let labels = menu_frame(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label} in the menu"));
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    menu_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+    menu_frame(app, ctx, vec![button(false)]);
+}
+
+/// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
+/// checked by default, applied colors still join the list while the row is hidden, and the Color
+/// panel keeps its own row and setting.
+#[test]
+fn show_recent_colors_hides_and_shows_the_swatches_row() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = context();
+    let menu_ctx = context();
+    // The first recent chip, if the panel draws one (the second frame's answer counts, since egui
+    // also answers for a widget the frame before drew).
+    let chip = |app: &mut VectorcraftApp| {
+        let mut chip = None;
+        for _ in 0..2 {
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
+                show(app, ui);
+                chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect);
+            });
+            out.textures_delta.clear();
+        }
+        chip
+    };
+    assert!(chip(&mut app).is_some(), "the row shows by default");
+    click_menu_item(&mut app, &menu_ctx, "✓ Show Recent Colors");
+    assert!(!app.ui.swatches_show_recent_colors);
+    assert!(chip(&mut app).is_none(), "unchecked, the row is hidden");
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(app.session.recent_colors.first().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "colors still join the list");
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["recentColors"], true, "the Color panel keeps its setting");
+    click_menu_item(&mut app, &menu_ctx, "Show Recent Colors");
+    assert!(chip(&mut app).is_some(), "checking the item shows the row again");
+    // The app keeps it with the preferences; a saved value that isn't true or false reads as on.
+    let saved = |v: Value| {
+        let mut prefs = serde_json::to_value(crate::UiState::default()).unwrap();
+        prefs["swatches_show_recent_colors"] = v;
+        serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
+    };
+    assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}

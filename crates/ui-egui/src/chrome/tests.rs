@@ -2669,6 +2669,53 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
 }
 
+/// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
+/// controls while it has room, and the Distribute buttons for two or more selected artboards with
+/// Align to Artboard and three or more with Align to Selection. A
+/// click aligns the selected artboards as the Align panel's button does. The group is left out
+/// while the panel menu has it off.
+#[test]
+fn the_control_bar_aligns_the_selected_artboards_with_the_artboard_tool() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let button = |app: &mut crate::VectorcraftApp, name: &str| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
+        n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+    };
+    app.session.set_tool_option("selected", &json!([1]));
+    assert!(button(&mut app, "Vertical Align Top").is_some(), "one artboard: the Align buttons");
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "one artboard: no Distribute buttons");
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "two artboards, Align to Selection: no Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Artboard;
+    assert!(button(&mut app, "Horizontal Distribute Left").is_some(), "two artboards, Align to Artboard: the Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Selection;
+    let r = button(&mut app, "Vertical Align Top").expect("Vertical Align Top");
+    let press =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
+        frame(&mut app, events);
+    }
+    let tops: Vec<f64> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.y0).collect();
+    assert_eq!(tops, [0.0, 0.0], "{}", app.ui.status);
+    app.run("window.control.options", json!({"group": "alignDistribute", "visible": false})).unwrap();
+    assert!(button(&mut app, "Vertical Align Top").is_none(), "the group is off");
+}
+
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
 /// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
 #[test]

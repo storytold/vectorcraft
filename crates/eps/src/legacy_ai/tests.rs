@@ -1894,12 +1894,12 @@ fn hidden_objects_go_to_a_hidden_layer_above_their_own() {
 #[test]
 fn hidden_objects_can_be_left_out_or_shown() {
     let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Omit, ..LegacyAiOptions::default() });
-    assert!(out.warnings.iter().any(|w| w == HIDDEN), "{:?}", out.warnings);
+    assert!(out.setting_notes.iter().any(|w| w == HIDDEN), "{:?}", out.setting_notes);
     let doc = crate::import(&out.bytes).unwrap().document;
     assert_eq!(doc.layers.len(), 2);
     assert_eq!(children(&children(&doc.layers[0])[0]).len(), 1);
     let out = write_with(&with_hidden(), LegacyAiOptions { hidden: HiddenObjects::Visible, ..LegacyAiOptions::default() });
-    assert!(out.warnings.iter().any(|w| w == HIDDEN_SHOWN), "{:?}", out.warnings);
+    assert!(out.setting_notes.iter().any(|w| w == HIDDEN_SHOWN), "{:?}", out.setting_notes);
     let doc = crate::import(&out.bytes).unwrap().document;
     assert_eq!(doc.layers.len(), 2);
     let pair = children(&children(&doc.layers[0])[0]);

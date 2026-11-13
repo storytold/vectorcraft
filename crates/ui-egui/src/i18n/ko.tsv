@@ -44,6 +44,8 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	Insert Aki Left	앞 아키 삽입
+	Insert Aki Right	뒤 아키 삽입
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -2410,6 +2412,7 @@ antiAlias	Sharp	날카롭게
 	Art Brush	아트 브러시
 	Bristle Brush	강모 브러시
 	Pattern Brush	패턴 브러시
+	missing from the Brushes panel	브러시 패널에 없음
 	Select art to make a scatter, art or pattern brush.	흩뿌리기, 아트 또는 패턴 브러시를 만들려면 아트웍을 선택하세요.
 	Brush Art	브러시 아트
 	New Calligraphic Brush	새 캘리그래피 브러시
@@ -2927,7 +2930,13 @@ mark-style	Japanese	일본식
 	Search Preferences	환경 설정 검색
 	No settings found	설정을 찾을 수 없음
 	Reset Profiles	프로필 재설정
+	Arrowheads	화살촉
+	Edit Arrowheads	화살촉 편집
+	Edit Arrowheads…	화살촉 편집…
+	Reload Arrowheads	화살촉 다시 불러오기
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
+	Color Theme Picker	색상 테마 피커
+	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
 	Reset to Default	기본값으로 재설정
 	Reset to White, Black	흰색, 검정으로 재설정
 	Reset {name}	{name} 재설정
@@ -3152,6 +3161,7 @@ mark-style	Japanese	일본식
 	Show Note	메모 표시
 	Show Options	옵션 표시
 	Show Recent Colors	최근 색상 표시
+	Toggle RGB Percent	RGB 백분율 표시 전환
 	Show Original Path	원래 패스 표시
 	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
 	Auto-Simplify	자동 단순화
@@ -4935,6 +4945,85 @@ theme	Appearance	외관
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	실패한 명령이 되돌릴 수 없는 실행 취소 단계를 변경하여 스크립트를 중지했습니다
 @msg	a recovery copy could not be written, so the script was not run	복구 사본을 쓸 수 없어 스크립트를 실행하지 않았습니다
+@msg	Script file access denied	스크립트 파일 접근이 거부되었습니다
+@msg	Script file exceeds 8 MiB	스크립트 파일이 8 MiB를 초과합니다
+@msg	Script file is not open	스크립트 파일이 열려 있지 않습니다
+@msg	Script file cannot be decoded	스크립트 파일을 디코딩할 수 없습니다
+@msg	Script file is not a regular file	스크립트 파일이 일반 파일이 아닙니다
+@msg	Script file does not exist	스크립트 파일이 없습니다
+@msg	Script file could not be read	스크립트 파일을 읽을 수 없습니다
+@msg	Script folder has more than 2,048 entries	스크립트 폴더의 항목이 2,048개를 초과합니다
+@msg	Script file open mode must be r, w, e or a	스크립트 파일 열기 모드는 r, w, e 또는 a여야 합니다
+@msg	Script file writing is not available	스크립트 파일 쓰기를 사용할 수 없습니다
+@msg	Script file dialogs are not available	스크립트 파일 대화 상자를 사용할 수 없습니다
+@msg	Script files cannot be opened in another application	스크립트 파일을 다른 응용 프로그램에서 열 수 없습니다
+@msg	Script file access is unavailable on the web	웹에서는 스크립트 파일에 접근할 수 없습니다
+@msg	Script has 256 files open	스크립트가 파일 256개를 열고 있습니다
+@msg	Script file path exceeds 32,767 characters	스크립트 파일 경로가 32,767자를 초과합니다
+@msg	Script folder mask takes too many steps to match	스크립트 폴더 마스크를 일치시키는 데 단계가 너무 많이 필요합니다
+@msg	the script opened more file data than one run may open (32 MiB)	스크립트가 한 번의 실행에서 열 수 있는 것보다 많은 파일 데이터를 열었습니다(32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: 위치와 모드를 받습니다
+@msg	vc.run: give a command id, as a string	vc.run: 명령 id를 문자열로 지정하세요
+@msg	vc.run: takes a command id and an object of parameters	vc.run: 명령 id와 매개변수 객체를 받습니다
+@msg	vc.run: the parameters must be an object	vc.run: 매개변수는 객체여야 합니다
+@msg	vc.run: the result{place} is too large for a script	vc.run: 결과{place}이(가) 스크립트에 비해 너무 큽니다
+@msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}의 {line}행 {column}열: {e} (발생)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}행 {column}열: {e} (발생)
+@msg	{name}: {e} (thrown)	{name}: {e} (발생)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}의 {line}행 {column}열: {e} (제한)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: {line}행 {column}열: {e} (제한)
+@msg	{name}: {e} (limit)	{name}: {e} (제한)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}의 {line}행 {column}열: {e} (구문 오류)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: {line}행 {column}열: {e} (구문 오류)
+@msg	{name}: {e} (syntax)	{name}: {e} (구문 오류)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}의 {line}행 {column}열: {e} (중지됨)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: {line}행 {column}열: {e} (중지됨)
+@msg	{name}: {e} (stopped)	{name}: {e} (중지됨)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}의 {line}행 {column}열: {e} (내부 오류)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: {line}행 {column}열: {e} (내부 오류)
+@msg	{name}: {e} (internal)	{name}: {e} (내부 오류)
+@msg	{e} (these files stay written: {paths})	{e} (이 파일은 쓰인 상태로 남습니다: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: 이름을 문자열로 지정하세요
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: "en" 또는 "de_DE" 같은 로캘을 지정하거나, 인터페이스 로캘에는 null을 지정하세요
+@msg	$.localize: give true or false	$.localize: true 또는 false를 지정하세요
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: 현지화를 켜는 512 또는 0만 설정할 수 있습니다
+@msg	$.flags: give a number	$.flags: 숫자를 지정하세요
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: 여기서 스크립트는 UTF-8만 읽고 씁니다
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: 인코딩 이름을 문자열로 지정하세요
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: 메모리 캐시 크기는 설정할 수 없습니다
+@msg	$.setenv: give a value, as a string	$.setenv: 값을 문자열로 지정하세요
+@msg	$.setenv: only {_1} can be set	$.setenv: {_1}만 설정할 수 있습니다
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: 값은 최대 {MAX_ENV_BYTES}자의 문자, 숫자 및 _ . - @입니다
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: 0부터 {MAX_SLEEP_MS}까지의 밀리초 수를 지정하세요
+@msg	$.sleep: give a number of milliseconds	$.sleep: 밀리초 수를 지정하세요
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: 기본 제공 함수의 콜백, getter, 변환 또는 $.evalFile이 실행하는 파일 안에서는 실행이 기다릴 수 없습니다. 스크립트 자체 코드에서 호출하세요
+@msg	$.bp: scripts here have no debugger	$.bp: 여기서는 스크립트에 디버거가 없습니다
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: 스크립트는 아직 대화 상자를 표시할 수 없습니다
+@msg	{name}: give a message	{name}: 메시지를 지정하세요
+@msg	{name}: give the text the field starts with	{name}: 필드의 시작 텍스트를 지정하세요
+@msg	{name}: the message is longer than 16 KiB	{name}: 메시지가 16 KiB보다 깁니다
+@msg	{name}: the title is longer than 256 bytes	{name}: 제목이 256바이트보다 깁니다
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: 필드의 시작 텍스트가 16 KiB보다 깁니다
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수의 콜백, getter, 변환 또는 $.evalFile이 실행하는 파일 안에서는 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers`의 다음 답은 {name}이(가) 아니라 {_1}에 대한 것입니다
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`에 이 대화 상자에 대한 답이 남아 있지 않습니다
+@msg	vc.document{place} is too large for a script	vc.document{place}이(가) 스크립트에 비해 너무 큽니다
+@msg	vc.log: the log of this run is full	vc.log: 이 실행의 로그가 가득 찼습니다
+@msg	this function's script run has ended	이 함수의 스크립트 실행이 끝났습니다
+@msg	the script made more host calls than one run may make	스크립트가 한 번의 실행에 허용된 것보다 많은 호스트 호출을 했습니다
+@msg	the script passed more data to and from commands than one run may pass	스크립트가 한 번의 실행에 허용된 것보다 많은 데이터를 명령과 주고받았습니다
+@msg	the script added more objects and data to the documents than one run may add	스크립트가 한 번의 실행에 허용된 것보다 많은 객체와 데이터를 문서에 추가했습니다
+@msg	{what}: the object is not a File or a Folder	{what}: 객체가 File도 Folder도 아닙니다
+@msg	{what}: the count must be a finite number, 0 or more	{what}: 개수는 0 이상의 유한한 숫자여야 합니다
+@msg	File.seek: the position must be a finite number	File.seek: 위치는 유한한 숫자여야 합니다
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: 모드는 0, 1 또는 2여야 합니다
+@msg	script file is compiled: {value}	스크립트 파일이 컴파일되어 있습니다: {value}
+@msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
+@msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
@@ -5369,6 +5458,7 @@ lighting	Light	광원
 @msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
 @msg	missing `{path}`	`{path}`이(가) 없습니다
 @msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
+@msg	`{path}` is nested too deeply	`{path}`이(가) 너무 깊게 중첩되어 있습니다
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
@@ -5922,6 +6012,16 @@ axis	Y Axis	Y축
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
+	Select Object…	개체 선택…
+	Select Object	개체 선택
+	Set Selection	선택 영역 설정
+	Case Sensitive	대/소문자 구분
+	Whole Word	전체 단어
+	Select Object: {note}	개체 선택: {note}
+	Select by Note	참고로 선택
+@msg	the note is empty	참고가 비어 있습니다
+@msg	the note is longer than 1,024 bytes	참고가 1,024바이트보다 깁니다
+@msg	no object that can be selected has a note matching “{query}”	선택할 수 있는 개체 중 참고가 “{query}”와(과) 일치하는 개체가 없습니다
 	Menu Item:	메뉴 항목:
 	No menu item matches.	일치하는 메뉴 항목이 없습니다.
 	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
@@ -6711,6 +6811,8 @@ breakText	Glyphs	글리프
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	기본 도구를 익히는 짧은 실습 튜토리얼을 기술별로 모았습니다. 기술을 선택하면 해당 튜토리얼이 표시됩니다.
 	List Tutorials	튜토리얼 목록
 	Show Tutorial	튜토리얼 표시
+	Show Tool Location	도구 위치 표시
+	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
 

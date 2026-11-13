@@ -528,9 +528,19 @@ impl Writer<'_> {
         })
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed ([`crate::Output::warnings`]). A note about an option goes to [`Self::note_setting`].
     pub(super) fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about an option that wasn't applied or was applied another way while the
+    /// art reaches the file as it looks ([`crate::Output::setting_notes`]).
+    pub(super) fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 }

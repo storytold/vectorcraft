@@ -204,6 +204,76 @@ fn glyphs_and_artboards_flyouts_keep_user_sizes() {
     }
 }
 
+/// An icon flyout's top edge and its free top corner (the canvas-side one) resize it upward:
+/// the bottom and the icon-column edge stay, and the new top is kept when the flyout closes
+/// and reopens and in a saved layout. The docking action that saves it is one VectorCraft
+/// accepts (#1094).
+#[test]
+fn an_icon_flyout_grows_upward_from_its_top_edge_and_free_corner() {
+    assert!(known(&Action::MoveFlyoutTop { panel: "glyphs".into(), offset: Some(-40.0) }));
+    let mut h = Harness::new();
+    let icon = h.hit(&Hit::Icon("glyphs".into())).unwrap().center();
+    h.click(icon);
+    for _ in 0..30 {
+        h.frame(vec![]);
+    }
+    let rect = |h: &Harness| {
+        let id = area_id().with("flyout");
+        let left = h.ctx.read_response(id.with("resize-left")).unwrap().rect;
+        let bottom = h.ctx.read_response(id.with("resize-bottom")).unwrap().rect;
+        let top = h.ctx.read_response(id.with("resize-top")).unwrap().rect;
+        Rect::from_min_max(pos2(left.left(), top.top()), pos2(bottom.right() + 12.0, bottom.bottom()))
+    };
+    let before = rect(&h);
+    assert!(before.top() > 200.0, "room above the Glyphs flyout: {before:?}");
+    for (at, cursor) in [
+        (pos2(before.center().x, before.top() + 2.0), egui::CursorIcon::ResizeVertical),
+        (before.left_top() + vec2(2.0, 2.0), egui::CursorIcon::ResizeNwSe),
+    ] {
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        assert_eq!(h.cursor, cursor, "at {at:?}, frame {before:?}");
+    }
+    let from = pos2(before.center().x, before.top() + 2.0);
+    h.drag(from, from - vec2(0.0, 80.0));
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let raised = rect(&h);
+    assert!((raised.top() - (before.top() - 80.0)).abs() < 1.0, "{before:?} -> {raised:?}");
+    assert_eq!(raised.bottom(), before.bottom());
+    assert_eq!(raised.right(), before.right(), "the icon-column edge stays anchored");
+    let from = raised.left_top() + vec2(2.0, 2.0);
+    h.drag(from, from + vec2(-60.0, -20.0));
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let grown = rect(&h);
+    assert!((grown.width() - raised.width() - 60.0).abs() < 1.0, "{raised:?} -> {grown:?}");
+    assert!((grown.top() - (raised.top() - 20.0)).abs() < 1.0, "{raised:?} -> {grown:?}");
+    assert_eq!(grown.bottom(), before.bottom());
+    assert_eq!(grown.right(), before.right());
+    h.click(icon);
+    assert_eq!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()), None);
+    h.click(icon);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert_eq!(rect(&h), grown, "reopened where it was");
+    let saved = serde_json::to_string(&h.layout()).unwrap();
+    assert!(saved.contains("flyout_offset"));
+    let mut restored = Harness::new();
+    restored.app.ui.docking = Some(serde_json::from_str(&saved).unwrap());
+    for _ in 0..3 {
+        restored.frame(vec![]);
+    }
+    restored.click(restored.hit(&Hit::Icon("glyphs".into())).unwrap().center());
+    for _ in 0..3 {
+        restored.frame(vec![]);
+    }
+    assert_eq!(rect(&restored), grown, "saved layout");
+}
+
 /// Footer controls stay at the resized panel's bottom, including empty or short lists.
 /// The same shared footer is used by the other icon panels and library windows.
 #[test]

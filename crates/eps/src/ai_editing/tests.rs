@@ -6758,6 +6758,70 @@ fn every_effect_setting_written_on_an_object_is_read_back() {
     assert!(matches!(&spot.appearance.fill().unwrap().paint, Paint::Solid { swatch: Some(s), .. } if s == "Ink"), "{spot:?}");
 }
 
+/// A drawn look's strokes warn only where its art style leaves them out: a path with a drop shadow and
+/// a stroke with a width profile is written with a style that holds the profile, and doesn't warn;
+/// a group with a drop shadow whose member has a stroke inside the path still warns.
+#[test]
+fn a_drawn_looks_strokes_warn_only_where_its_style_leaves_them_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let (n, warnings, p) = read_one(|doc| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], effects: vec![drop_shadow()], contents_index: None };
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut n =
+            Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), Appearance::basic(Paint::None, black_fill(), 2.0));
+        n.appearance.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Inside;
+        let mut g = group(doc, vec![n], false);
+        g.appearance.effects = vec![drop_shadow()];
+        g
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+}
+
+/// A path linked to a graphic style with a drop shadow and a stroke with a width profile is written
+/// with that style, which holds the profile, and doesn't warn; it reads back linked, with its
+/// profile. A linked path whose fill is half opaque in Screen mode isn't written with its style, which
+/// the reader reads on no object, and warns that the fill's transparency is left out.
+#[test]
+fn a_linked_paths_drawn_look_warns_only_for_what_its_style_leaves_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let linked = |doc: &mut Document, fill: FillLayer| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance {
+            items: vec![AppearanceItem::Fill(fill), AppearanceItem::Stroke(stroke)],
+            effects: vec![drop_shadow()],
+            contents_index: None,
+        };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Linked", ap.clone());
+        g.id = 7;
+        doc.graphic_styles.push(g);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+        n.extras_mut().graphic_style = Some(7);
+        n
+    };
+    let (n, warnings, p) = read_one(|doc| linked(doc, FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)))));
+    assert!(p.contains("1 (Linked) XW"), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert!(n.extras().graphic_style.is_some(), "{n:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile.clone()));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut fill = FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)));
+        fill.opacity = 0.5;
+        fill.blend = BlendMode::Screen;
+        linked(doc, fill)
+    });
+    assert!(!p.contains("1 (Linked) XW"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::ITEM_TRANSPARENCY), "{warnings:?}");
+}
+
 /// Each effect a graphic style can hold, in a style of its own, reads back with its settings, whatever
 /// the writer's conversions to the file's units.
 #[test]
@@ -7059,6 +7123,81 @@ fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
     let out = export_within(&doc, &opts(), room).unwrap();
     for w in [writer::OBJECT_LIMIT, writer::STYLE_LINKS] {
         assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
+    }
+}
+
+/// A link to a graphic style with Twist is kept where the reader reads Twist: on a curve, a curved
+/// compound path or a group with nothing stroked up to a quarter turn, and on a path with straight
+/// segments at any angle. A stroked curve, a group with a stroked member or a guide, or a curve,
+/// compound path or group twisted further, is written without the link and warns.
+#[test]
+fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
+    // A document with the object `make` builds from its appearance, `ap` with Twist at `angle`,
+    // linked to a graphic style of that appearance.
+    fn twisted(angle: f64, ap: Appearance, make: impl FnOnce(&mut Document, Appearance) -> Node) -> Document {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance { effects: vec![fx("distort.twist", serde_json::json!({"angle": angle}))], ..ap };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Twisted", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = make(&mut doc, ap);
+        n.extras_mut().graphic_style = Some(9);
+        put(&mut doc, n);
+        doc
+    }
+    let oval = || shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let square = || shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let red = solid(Color::rgb(1.0, 0.0, 0.0));
+    let filled = || Appearance::basic(black_fill(), Paint::None, 0.0);
+    let path = |p: PathData| move |doc: &mut Document, ap: Appearance| Node::path(doc.alloc_id(), p, ap);
+    let ring = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), oval(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
+    // A group of a filled square and `second`.
+    let group = |second: fn(&mut Document) -> Node| {
+        move |doc: &mut Document, ap: Appearance| {
+            let first = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), filled());
+            let second = second(doc);
+            let mut n = Node::group(doc.alloc_id(), vec![Arc::new(first), Arc::new(second)]);
+            n.appearance = ap.into();
+            n
+        }
+    };
+    let curve = |doc: &mut Document| {
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), Appearance::basic(black_fill(), Paint::None, 0.0))
+    };
+    let stroked_curve = |doc: &mut Document| {
+        let ap = Appearance::basic(black_fill(), solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), ap)
+    };
+    let guide = |doc: &mut Document| {
+        let path = shapes::rectangle(Rect::new(50.0, 10.0, 90.0, 60.0));
+        Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true })
+    };
+    for (what, doc, kept) in [
+        ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
+        ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
+        ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
+        ("a curved compound path", twisted(-60.0, filled(), ring), true),
+        ("a curved compound path twisted past a quarter turn", twisted(120.0, filled(), ring), false),
+        ("a twisted group", twisted(90.0, Appearance::default(), group(curve)), true),
+        ("a group twisted past a quarter turn", twisted(135.0, Appearance::default(), group(curve)), false),
+        ("a group with a stroked member", twisted(45.0, Appearance::default(), group(stroked_curve)), false),
+        ("a group with a guide", twisted(45.0, Appearance::default(), group(guide)), false),
+    ] {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), !kept, "{what}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        let style = n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str());
+        assert_eq!(style, kept.then_some("Twisted"), "{what}: {n:?}");
+        assert_eq!(n.appearance.effects.iter().any(|e| e.id == "distort.twist"), kept, "{what}: {n:?}");
     }
 }
 

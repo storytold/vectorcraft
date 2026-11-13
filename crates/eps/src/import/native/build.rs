@@ -247,6 +247,7 @@ pub(super) fn build_from(
         placed_pages,
         envelopes_drawn,
         styles_read,
+        text_patterns,
         canvas_scale,
         xml_ids,
         bindings,
@@ -405,7 +406,7 @@ pub(super) fn build_from(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = Texts::read(data);
+    let texts = Texts::read(data).map(|t| t.with_patterns(text_patterns));
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos

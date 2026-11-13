@@ -507,6 +507,22 @@ fn type_in_a_missing_family_is_named_once_for_every_format() {
     assert!(fallback[0].contains("Nonexistent Sans Probe"), "{fallback:?}");
 }
 
+/// What a later file loses comes before a note on the options that an earlier file gave: the
+/// first artboard's WebP gives only the lossy WebP note, the second's also says its type doesn't
+/// fit.
+#[test]
+fn what_any_file_loses_comes_before_the_notes_on_the_options() {
+    let mut s = session(2);
+    let second = s.doc().unwrap().doc.artboards[1].rect;
+    let area = json!({"width": 30, "height": 8});
+    s.execute("text.create", &json!({"x": second.x0 + 2.0, "y": second.y0 + 2.0, "size": 12, "area": area, "text": "Ab\nCd\nEf\nGh"})).unwrap();
+    let r = export(&mut s, json!({"formats": [{"format": "webp", "lossless": false}]}));
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].contains("doesn't fit its frame"), "{warnings:?}");
+    assert!(warnings[1].starts_with("lossy WebP"), "{warnings:?}");
+}
+
 #[test]
 fn full_document_gives_one_file_per_format() {
     let mut s = session(3);

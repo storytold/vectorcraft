@@ -32,6 +32,12 @@ const SHARP: f64 = 1.25;
 const HAIRPIN: f64 = 4.0;
 /// Rows of a mesh across the stroke (more where the gradient has stops).
 const MESH_ROWS: usize = 16;
+/// The most stops of the gradient [`gradient_meshes`] puts rows or columns at
+/// ([`Gradient::fitted`]: past it, the stops that change the colors least are left out).
+pub(crate) const MAX_MESH_STOPS: usize = 1024;
+/// The most points of one mesh [`gradient_meshes`] makes, unless a single pair of ribs needs more:
+/// a subpath with more ribs than leave room for a row at each stop becomes several meshes.
+pub(crate) const MAX_MESH_POINTS: usize = 1 << 20;
 /// The most of a subpath one column of a mesh along the stroke spans.
 const MESH_STEP: f64 = 1.0 / 32.0;
 /// The most of a subpath one slice spans while a width profile shapes the across gradient.
@@ -513,26 +519,33 @@ fn mesh_marks(g: &Gradient) -> Vec<f64> {
 
 /// Outline Stroke of stroke `st` of `bp` (filled with `rule`) whose gradient `g` runs along or
 /// across it: a gradient mesh per subpath over all the stroke can paint there (clip it to the
-/// stroke's outline), coloured as [`gradient_slices`] paint it.
+/// stroke's outline), coloured as [`gradient_slices`] paint it. The gradient's stops are fitted to
+/// [`MAX_MESH_STOPS`], and a subpath whose mesh would hold more than [`MAX_MESH_POINTS`] points is
+/// split into meshes of fewer ribs ([`rib_pieces`]).
 pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradient) -> Vec<GradientMesh> {
-    let g = &*g.unrolled();
+    let fitted = g.fitted(MAX_MESH_STOPS);
     let across = st.gradient_mode == StrokeGradientMode::Across;
-    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
-    let at_stops = mesh_marks(g);
     // Along: a column at each stop (colours are linear between columns), close enough to look smooth.
-    let marks: Vec<f64> = if across { vec![] } else { at_stops.clone() };
+    let marks: Vec<f64> = if across { vec![] } else { mesh_marks(&fitted) };
     let max_dt = match (across, st.profile.is_some()) {
         (false, _) => MESH_STEP,
         (true, true) => PROFILE_STEP,
         (true, false) => 1.0,
     };
     // Rows across: the strip's edges, then (across) the band's left edge to its right edge with a row at each stop.
-    let mut us: Vec<f64> = if across { (0..=MESH_ROWS).map(|i| i as f64 / MESH_ROWS as f64).chain(at_stops).collect() } else { vec![0.5] };
+    let mut us: Vec<f64> = if across { (0..=MESH_ROWS).map(|i| i as f64 / MESH_ROWS as f64).chain(mesh_marks(&fitted)).collect() } else { vec![0.5] };
     us.sort_by(f64::total_cmp);
     us.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let us = &us;
+    let g = &*fitted;
+    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
+    // A mesh is a point for each row (and its two edges) on each rib: a strip with more ribs than
+    // that leaves room for is split into meshes of fewer ribs.
+    let per_mesh = MAX_MESH_POINTS / (us.len() + 2);
     strips(bp, rule, st, SLICE_TOL, SLICE_MARGIN, &marks, max_dt)
         .into_iter()
         .filter(|ribs| ribs.len() > 1)
+        .flat_map(|ribs| rib_pieces(ribs.len(), per_mesh).into_iter().map(move |r| ribs.get(r).unwrap_or_default().to_vec()))
         .map(|ribs| {
             let (rows, cols) = (us.len() + 1, ribs.len() - 1);
             // Each level across: a point on each rib and the gradient position there.
@@ -568,4 +581,12 @@ pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradi
             GradientMesh { rows: rows as u32, cols: cols as u32, points }
         })
         .collect()
+}
+
+/// The ribs (index ranges of `n`, at least two) of each mesh [`gradient_meshes`] makes of a strip:
+/// at most `per_mesh` ribs each (at least two), each starting on the last rib of the one before,
+/// so the meshes meet without a gap.
+pub(crate) fn rib_pieces(n: usize, per_mesh: usize) -> Vec<std::ops::Range<usize>> {
+    let per_mesh = per_mesh.max(2);
+    (0..n.saturating_sub(1)).step_by(per_mesh - 1).map(|start| start..(start + per_mesh).min(n)).collect()
 }

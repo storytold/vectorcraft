@@ -1358,7 +1358,8 @@ pub(crate) fn with_found_paths(d: &mut Document, base: LinkBase) {
 /// `d`, a document saved at `doc_path`, as a reply to the caller asking now may show it: without
 /// read roots in force, `d` itself; with them, a copy in which each link [`path_shown`] does not
 /// allow names its file alone, without its relative path or the size and date kept of its file,
-/// and each data set's image value it does not allow names its file alone too. The folder Export
+/// and each data set's image value and linked JavaScript file (`svg_scripts`) it does not allow
+/// names its file alone too, while a JavaScript file given as a URL stays as it is. The folder Export
 /// for Screens last wrote to is left out of the export settings when it is outside the read roots.
 /// A link whose path is allowed but whose relative path leads outside the read roots loses its
 /// relative path. Links in the layers, symbols, graph designs, patterns, the pattern being edited
@@ -1423,6 +1424,10 @@ pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, base: LinkBase) -> Co
                 *path = LinkInfo::new(path.as_str()).name().to_string();
             }
         }
+    }
+    let script_hidden = |f: &str| !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url));
+    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f)) {
+        *f = LinkInfo::new(f.as_str()).name().to_string();
     }
     Cow::Owned(d)
 }

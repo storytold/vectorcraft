@@ -1561,6 +1561,8 @@ lighting	Light	Valo
 	Leading	Riviväli
 	No Break	Ei katkoa
 	Proportional Metrics	Suhteelliset metriikat
+	Insert Aki Left	Lisää aki vasemmalle
+	Insert Aki Right	Lisää aki oikealle
 	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
@@ -1580,6 +1582,7 @@ digits	Malayalam	Malajalam
 	Select a text object to edit its character attributes.	Valitse tekstiobjekti, jonka merkkimääritteitä haluat muokata.
 	Show Options	Näytä asetukset
 	Show Recent Colors	Näytä viimeisimmät värit
+	Toggle RGB Percent	Vaihda RGB prosentteina
 	Small Caps	Kapiteelit
 	Small Caps (on the roadmap)	Kapiteelit (suunnitteilla)
 	Standard Vertical Roman Alignment	Tavallinen pystysuuntainen latinalainen tasaus
@@ -2820,6 +2823,8 @@ digits	Malayalam	Malajalam
 	Randomly change saturation and brightness	Muuta kylläisyyttä ja kirkkautta satunnaisesti
 	Recolor this row	Väritä tämä rivi uudelleen
 	Reset the rows to the artwork's colors	Palauta rivit kuvituksen väreihin
+	Color Theme Picker	Väriteeman valitsin
+	Click or drag across the art to pick its colors; Shift adds more	Napsauta tai vedä kuvituksen yli poimiaksesi sen värit; Vaihto lisää useampia
 	Separate colors into rows	Erottele värit riveille
 	Unlink harmony colors	Poista harmoniavärien linkitys
 	1 Color Job	1 värin työ
@@ -3313,6 +3318,7 @@ theme	Appearance	Ulkoasu
 	Art Brush	Taidesivellin
 	Bristle Brush	Harjassivellin
 	Pattern Brush	Kuviosivellin
+	missing from the Brushes panel	puuttuu Siveltimet-paneelista
 	Select art to make a scatter, art or pattern brush.	Valitse kuvitus, jotta voit luoda sirote-, taide- tai kuviosiveltimen.
 	Brush Art	Siveltimen kuvitus
 	New Symbol	Uusi symboli
@@ -3878,6 +3884,10 @@ theme	Appearance	Ulkoasu
 	Add to Profiles	Lisää profiileihin
 	Delete Profile	Poista profiili
 	Reset Profiles	Palauta profiilit
+	Arrowheads	Nuolenkärjet
+	Edit Arrowheads	Muokkaa nuolenkärkiä
+	Edit Arrowheads…	Muokkaa nuolenkärkiä…
+	Reload Arrowheads	Lataa nuolenkärjet uudelleen
 	Stroke Options	Viivan asetukset
 	Width Profiles	Leveysprofiilit
 	Apply Graphic Style	Käytä grafiikkatyyliä
@@ -4432,6 +4442,85 @@ imageTrace	Outline	Ääriviiva
 @msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	epäonnistunut komento muutti kumoamisvaiheita, joita ei voitu palauttaa, joten komentosarja pysäytettiin
 @msg	a recovery copy could not be written, so the script was not run	palautuskopiota ei voitu kirjoittaa, joten komentosarjaa ei suoritettu
+@msg	Script file access denied	Pääsy komentosarjatiedostoon estettiin
+@msg	Script file exceeds 8 MiB	Komentosarjatiedosto on suurempi kuin 8 MiB
+@msg	Script file is not open	Komentosarjatiedosto ei ole auki
+@msg	Script file cannot be decoded	Komentosarjatiedostoa ei voi purkaa
+@msg	Script file is not a regular file	Komentosarjatiedosto ei ole tavallinen tiedosto
+@msg	Script file does not exist	Komentosarjatiedostoa ei ole olemassa
+@msg	Script file could not be read	Komentosarjatiedostoa ei voitu lukea
+@msg	Script folder has more than 2,048 entries	Komentosarjakansiossa on yli 2 048 kohdetta
+@msg	Script file open mode must be r, w, e or a	Komentosarjatiedoston avaustilan on oltava r, w, e tai a
+@msg	Script file writing is not available	Komentosarjatiedostojen kirjoittaminen ei ole käytettävissä
+@msg	Script file dialogs are not available	Komentosarjojen tiedostovalintaikkunat eivät ole käytettävissä
+@msg	Script files cannot be opened in another application	Komentosarjatiedostoja ei voi avata toisessa sovelluksessa
+@msg	Script file access is unavailable on the web	Komentosarjatiedostojen käyttö ei ole mahdollista verkossa
+@msg	Script has 256 files open	Komentosarjalla on 256 tiedostoa auki
+@msg	Script file path exceeds 32,767 characters	Komentosarjatiedoston polku on yli 32 767 merkkiä
+@msg	Script folder mask takes too many steps to match	Komentosarjakansion maskin täsmäytys vaatii liian monta vaihetta
+@msg	the script opened more file data than one run may open (32 MiB)	komentosarja avasi enemmän tiedostodataa kuin yksi suoritus saa avata (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: ottaa sijainnin ja tilan
+@msg	vc.run: give a command id, as a string	vc.run: anna komennon tunnus merkkijonona
+@msg	vc.run: takes a command id and an object of parameters	vc.run: ottaa komennon tunnuksen ja parametriobjektin
+@msg	vc.run: the parameters must be an object	vc.run: parametrien on oltava objekti
+@msg	vc.run: the result{place} is too large for a script	vc.run: tulos{place} on liian suuri komentosarjalle
+@msg	$.evalFile requires a file path	$.evalFile vaatii tiedostopolun
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: aikakatkaisun on oltava äärellinen määrä millisekunteja, 0 tai enemmän
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: ottaa tiedostopolun ja aikakatkaisun
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, rivi {line}, sarake {column}: {e} (heitetty)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rivi {line}, sarake {column}: {e} (heitetty)
+@msg	{name}: {e} (thrown)	{name}: {e} (heitetty)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file}, rivi {line}, sarake {column}: {e} (raja)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: rivi {line}, sarake {column}: {e} (raja)
+@msg	{name}: {e} (limit)	{name}: {e} (raja)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file}, rivi {line}, sarake {column}: {e} (syntaksivirhe)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: rivi {line}, sarake {column}: {e} (syntaksivirhe)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaksivirhe)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file}, rivi {line}, sarake {column}: {e} (pysäytetty)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: rivi {line}, sarake {column}: {e} (pysäytetty)
+@msg	{name}: {e} (stopped)	{name}: {e} (pysäytetty)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file}, rivi {line}, sarake {column}: {e} (sisäinen virhe)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: rivi {line}, sarake {column}: {e} (sisäinen virhe)
+@msg	{name}: {e} (internal)	{name}: {e} (sisäinen virhe)
+@msg	{e} (these files stay written: {paths})	{e} (nämä tiedostot jäävät kirjoitetuiksi: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: anna nimi merkkijonona
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: anna kieliasetus, kuten "en" tai "de_DE", tai null käyttöliittymän kieliasetukselle
+@msg	$.localize: give true or false	$.localize: anna true tai false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: vain 512, joka ottaa lokalisoinnin käyttöön, tai 0 voidaan asettaa
+@msg	$.flags: give a number	$.flags: anna luku
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: skriptit lukevat ja kirjoittavat täällä vain UTF-8:aa
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: anna merkistökoodauksen nimi merkkijonona
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: muistivälimuistin kokoa ei voi asettaa
+@msg	$.setenv: give a value, as a string	$.setenv: anna arvo merkkijonona
+@msg	$.setenv: only {_1} can be set	$.setenv: vain {_1} voidaan asettaa
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: arvossa on enintään {MAX_ENV_BYTES} kirjainta, numeroa ja merkkiä _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: anna millisekuntimäärä väliltä 0–{MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: anna millisekuntimäärä
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: ajo ei voi odottaa sisäänrakennetun funktion takaisinkutsussa, getterissä, muunnoksessa tai tiedostossa, jonka $.evalFile ajaa; kutsu sitä skriptin omasta koodista
+@msg	$.bp: scripts here have no debugger	$.bp: skripteillä ei ole täällä virheenjäljitintä
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: skriptit eivät vielä voi näyttää valintaikkunaa
+@msg	{name}: give a message	{name}: anna viesti
+@msg	{name}: give the text the field starts with	{name}: anna teksti, jolla kenttä alkaa
+@msg	{name}: the message is longer than 16 KiB	{name}: viesti on pidempi kuin 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: otsikko on pidempi kuin 256 tavua
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: teksti, jolla kenttä alkaa, on pidempi kuin 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: valintaikkuna ei voi avautua sisäänrakennetun funktion takaisinkutsussa, getterissä, muunnoksessa tai tiedostossa, jonka $.evalFile ajaa; kutsu sitä skriptin omasta koodista
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: seuraava vastaus kohteessa `answers` on kohteelle {_1}, ei kohteelle {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: kohteessa `answers` ei ole enää vastausta tälle valintaikkunalle
+@msg	vc.document{place} is too large for a script	vc.document{place} on liian suuri skriptille
+@msg	vc.log: the log of this run is full	vc.log: tämän ajon loki on täynnä
+@msg	this function's script run has ended	tämän funktion skriptiajo on päättynyt
+@msg	the script made more host calls than one run may make	skripti teki enemmän isäntäkutsuja kuin yksi ajo saa tehdä
+@msg	the script passed more data to and from commands than one run may pass	skripti välitti komennoille ja komennoilta enemmän tietoa kuin yksi ajo saa välittää
+@msg	the script added more objects and data to the documents than one run may add	skripti lisäsi asiakirjoihin enemmän objekteja ja tietoja kuin yksi ajo saa lisätä
+@msg	{what}: the object is not a File or a Folder	{what}: objekti ei ole File eikä Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: määrän on oltava äärellinen luku, 0 tai enemmän
+@msg	File.seek: the position must be a finite number	File.seek: sijainnin on oltava äärellinen luku
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: tilan on oltava 0, 1 tai 2
+@msg	script file is compiled: {value}	skriptitiedosto on käännetty: {value}
+@msg	`name` must be the name of a script engine	`name` on oltava skriptimoottorin nimi
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	pääskriptimoottori on uusi jokaisella ajolla eikä sitä koskaan säilytetä, joten sitä ei voi poistaa
+@msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
@@ -5673,6 +5762,7 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
 @msg	missing `{path}`	`{path}` puuttuu
 @msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
+@msg	`{path}` is nested too deeply	`{path}` on liian syvällä sisäkkäin
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva
@@ -6366,6 +6456,16 @@ axis	Y Axis	Y-akseli
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
+	Select Object…	Valitse objekti…
+	Select Object	Valitse objekti
+	Set Selection	Määritä valinta
+	Case Sensitive	Kirjainkoko merkitsevä
+	Whole Word	Koko sana
+	Select Object: {note}	Valitse objekti: {note}
+	Select by Note	Valitse huomautuksen mukaan
+@msg	the note is empty	huomautus on tyhjä
+@msg	the note is longer than 1,024 bytes	huomautus on pidempi kuin 1 024 tavua
+@msg	no object that can be selected has a note matching “{query}”	millään valittavissa olevalla objektilla ei ole huomautusta, joka vastaa hakua ”{query}”
 	Menu Item:	Valikkokohta:
 	No menu item matches.	Mikään valikkokohta ei vastaa hakua.
 	Several menu items match. Choose one from the list.	Useampi valikkokohta vastaa hakua. Valitse yksi luettelosta.
@@ -7156,6 +7256,8 @@ breakText	Glyphs	Merkit
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Lyhyitä käytännön opetusohjelmia tärkeimmistä työkaluista taidoittain ryhmiteltyinä. Valitse taito nähdäksesi sen opetusohjelmat.
 	List Tutorials	Luettele opetusohjelmat
 	Show Tutorial	Näytä opetusohjelma
+	Show Tool Location	Näytä työkalun sijainti
+	Show where this tool is	Näytä, missä tämä työkalu on
 @msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
 

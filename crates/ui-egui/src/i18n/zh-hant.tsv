@@ -2477,6 +2477,85 @@ file-filter	Templates	範本
 @msg	the script's run is no longer available	指令碼執行已無法使用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗的命令變更了無法還原的復原步驟，因此指令碼已停止
 @msg	a recovery copy could not be written, so the script was not run	無法寫入復原副本，因此未執行指令碼
+@msg	Script file access denied	指令碼檔案存取遭拒
+@msg	Script file exceeds 8 MiB	指令碼檔案超過 8 MiB
+@msg	Script file is not open	指令碼檔案未開啟
+@msg	Script file cannot be decoded	無法解碼指令碼檔案
+@msg	Script file is not a regular file	指令碼檔案不是一般檔案
+@msg	Script file does not exist	指令碼檔案不存在
+@msg	Script file could not be read	無法讀取指令碼檔案
+@msg	Script folder has more than 2,048 entries	指令碼資料夾的項目超過 2,048 個
+@msg	Script file open mode must be r, w, e or a	指令碼檔案的開啟模式必須是 r、w、e 或 a
+@msg	Script file writing is not available	無法使用指令碼檔案寫入
+@msg	Script file dialogs are not available	無法使用指令碼檔案對話方塊
+@msg	Script files cannot be opened in another application	指令碼檔案無法在其他應用程式中開啟
+@msg	Script file access is unavailable on the web	網頁版無法存取指令碼檔案
+@msg	Script has 256 files open	指令碼已開啟 256 個檔案
+@msg	Script file path exceeds 32,767 characters	指令碼檔案路徑超過 32,767 個字元
+@msg	Script folder mask takes too many steps to match	指令碼資料夾遮罩比對所需步驟過多
+@msg	the script opened more file data than one run may open (32 MiB)	指令碼開啟的檔案資料超過單次執行可開啟的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一個位置和一個模式
+@msg	vc.run: give a command id, as a string	vc.run：請以字串提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一個命令 ID 和一個參數物件
+@msg	vc.run: the parameters must be an object	vc.run：參數必須是物件
+@msg	vc.run: the result{place} is too large for a script	vc.run：結果{place}對指令碼來說過大
+@msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
+@msg	{name}: {e} (thrown)	{name}：{e}（擲回）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 欄：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（語法錯誤）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 欄：{e}（語法錯誤）
+@msg	{name}: {e} (syntax)	{name}：{e}（語法錯誤）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 欄：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（內部錯誤）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 欄：{e}（內部錯誤）
+@msg	{name}: {e} (internal)	{name}：{e}（內部錯誤）
+@msg	{e} (these files stay written: {paths})	{e}（這些檔案保持已寫入狀態：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：請以字串提供名稱
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：請提供 "en" 或 "de_DE" 之類的地區設定，或以 null 表示介面的地區設定
+@msg	$.localize: give true or false	$.localize：請提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能設定 512（開啟在地化）或 0
+@msg	$.flags: give a number	$.flags：請提供一個數字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此處指令碼只讀寫 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：請以字串提供編碼名稱
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：無法設定記憶體快取大小
+@msg	$.setenv: give a value, as a string	$.setenv：請以字串提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能設定 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 個字母、數字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：請提供 0 到 {MAX_SLEEP_MS} 之間的毫秒數
+@msg	$.sleep: give a number of milliseconds	$.sleep：請提供毫秒數
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：執行不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中等待；請從指令碼本身的程式碼呼叫
+@msg	$.bp: scripts here have no debugger	$.bp：此處指令碼沒有偵錯工具
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：指令碼目前還不能顯示對話框
+@msg	{name}: give a message	{name}：請提供訊息
+@msg	{name}: give the text the field starts with	{name}：請提供欄位的初始文字
+@msg	{name}: the message is longer than 16 KiB	{name}：訊息超過 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：標題超過 256 位元組
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：欄位的初始文字超過 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：對話框不能在內建函式的回呼、getter、轉換或 $.evalFile 執行的檔案中開啟；請從指令碼本身的程式碼呼叫
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一個回答是給 {_1} 的，而不是給 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已沒有此對話框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}對指令碼來說太大
+@msg	vc.log: the log of this run is full	vc.log：本次執行的記錄已滿
+@msg	this function's script run has ended	此函式的指令碼執行已結束
+@msg	the script made more host calls than one run may make	指令碼進行的主機呼叫超過一次執行允許的數量
+@msg	the script passed more data to and from commands than one run may pass	指令碼與命令之間傳遞的資料超過一次執行允許的數量
+@msg	the script added more objects and data to the documents than one run may add	指令碼加入文件的物件和資料超過一次執行允許的數量
+@msg	{what}: the object is not a File or a Folder	{what}：此物件既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：數量必須是 0 或更大的有限數
+@msg	File.seek: the position must be a finite number	File.seek：位置必須是有限數
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必須是 0, 1 或 2
+@msg	script file is compiled: {value}	指令碼檔案已編譯：{value}
+@msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
+@msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Exported {path}	已匯出 {path}
@@ -3177,6 +3256,7 @@ file-filter	Templates	範本
 	Art Brush	藝術筆刷
 	Bristle Brush	鬃毛筆刷
 	Pattern Brush	圖樣筆刷
+	missing from the Brushes panel	「筆刷」面板中沒有
 	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
 	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
@@ -3632,6 +3712,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在後方插入空白
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
@@ -3899,10 +3981,16 @@ digits	Malayalam	馬來亞拉姆數字
 	Search Preferences	搜尋偏好設定
 	No settings found	找不到設定
 	Reset Profiles	重設描述檔
+	Arrowheads	箭頭
+	Edit Arrowheads	編輯箭頭
+	Edit Arrowheads…	編輯箭頭…
+	Reload Arrowheads	重新載入箭頭
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
+	Color Theme Picker	色彩主題選取器
+	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設
@@ -4310,6 +4398,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Note	顯示註解
 	Show Options	顯示選項
 	Show Recent Colors	顯示最近使用的顏色
+	Toggle RGB Percent	切換 RGB 百分比顯示
 	Show Original Path	顯示原始路徑
 	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
 	Auto-Simplify	自動簡化
@@ -5496,6 +5585,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知的參數 `{path}`；它接受：{keys}
 @msg	missing `{path}`	未提供 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必須是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 巢狀層級過深
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
@@ -5979,6 +6069,16 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
+	Select Object…	選取物件…
+	Select Object	選取物件
+	Set Selection	設定選取範圍
+	Case Sensitive	區分大小寫
+	Whole Word	全字拼寫須相符
+	Select Object: {note}	選取物件：{note}
+	Select by Note	依註解選取
+@msg	the note is empty	註解是空的
+@msg	the note is longer than 1,024 bytes	註解超過 1,024 位元組
+@msg	no object that can be selected has a note matching “{query}”	沒有可選取物件的註解符合「{query}」
 	Menu Item:	選單項目：
 	No menu item matches.	沒有相符的選單項目。
 	Several menu items match. Choose one from the list.	有多個選單項目相符。請從清單中選擇一個。
@@ -6765,6 +6865,8 @@ breakText	Glyphs	字符
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	針對基本工具的簡短實作教學課程，依技能分組。選擇一項技能即可查看其教學課程。
 	List Tutorials	列出教學課程
 	Show Tutorial	顯示教學課程
+	Show Tool Location	顯示工具位置
+	Show where this tool is	顯示此工具的位置
 @msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
 

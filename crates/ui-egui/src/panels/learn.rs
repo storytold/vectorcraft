@@ -2,10 +2,12 @@
 //! hands-on tutorials grouped by skill ([`catalog::SKILLS`]). The For you tab holds the Get started
 //! section with the Quick skill guide card, which opens the Skills tab. The Skills tab lists each
 //! skill with an empty progress ring and its count of tutorials; a skill lists its tutorials, and a
-//! tutorial previews its numbered steps. Back goes up one level. `learn.list` lists the tutorials,
-//! `learn.show` opens one and `window.learn` shows or hides the panel.
+//! tutorial previews its numbered steps. A tool's name in a step is a link that shows where the tool
+//! is ([`locate`]). Back goes up one level. `learn.list` lists the tutorials, `learn.show` opens one,
+//! `learn.locateTool` shows where a tool is and `window.learn` shows or hides the panel.
 
 pub mod catalog;
+pub mod locate;
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -86,7 +88,7 @@ fn skills(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.ui.learn.skill = Some(skill.id);
             app.ui.learn.tutorial = None;
         }
-        steps(ui, tutorial);
+        steps(app, ui, tutorial);
         return;
     }
     if let Some(skill) = app.ui.learn.skill.and_then(catalog::skill) {
@@ -113,18 +115,52 @@ fn back(ui: &mut Ui) -> bool {
     crate::widgets::icon_button(ui, "chevron-left", tl!("Back"), false, 22.0).clicked()
 }
 
-/// A tutorial's title and its numbered steps.
-fn steps(ui: &mut Ui, tutorial: &catalog::Tutorial) {
+/// A tutorial's title and its numbered steps. The tool's name in a step is a blue link: a click, or
+/// Enter or Space while it has the keyboard focus, shows where the tool is (`learn.locateTool`).
+fn steps(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &catalog::Tutorial) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(tutorial.title).size(13.0).color(t.text_strong));
     ui.add_space(4.0);
+    let mut locate = None;
     for (i, step) in tutorial.steps.iter().enumerate() {
         ui.horizontal_top(|ui| {
             ui.label(egui::RichText::new(format!("{}.", i + 1)).color(t.text_dim));
-            ui.add(egui::Label::new(egui::RichText::new(step.text).color(t.text)).wrap());
+            let (Some(tool), Some((before, name, after))) = (step.tool, step.tool_name()) else {
+                ui.add(egui::Label::new(egui::RichText::new(step.text).color(t.text)).wrap());
+                return;
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                if !before.is_empty() {
+                    ui.add(egui::Label::new(egui::RichText::new(before).color(t.text)).wrap());
+                }
+                if tool_link(ui, &t, name).clicked() {
+                    locate = Some(tool);
+                }
+                if !after.is_empty() {
+                    ui.add(egui::Label::new(egui::RichText::new(after).color(t.text)).wrap());
+                }
+            });
         });
         ui.add_space(2.0);
     }
+    if let Some(tool) = locate {
+        if let Err(e) = app.run("learn.locateTool", json!({ "tool": tool })) {
+            app.status(e);
+        }
+        ui.ctx().request_repaint();
+    }
+}
+
+/// A tool's name in a step, drawn as a link: blue and underlined, with an outline while it has the
+/// keyboard focus.
+fn tool_link(ui: &mut Ui, t: &Tokens, name: &str) -> egui::Response {
+    let resp = ui.add(egui::Label::new(egui::RichText::new(name).color(t.selection).underline()).sense(Sense::click()));
+    if resp.has_focus() {
+        ui.painter().rect_stroke(resp.rect.expand(2.0), egui::CornerRadius::same(2), Stroke::new(1.0, t.selection), egui::StrokeKind::Outside);
+    }
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, ui.is_enabled(), name));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tl!("Show where this tool is"))
 }
 
 /// A clickable row: `title`, and for a skill (`tutorials`) a progress ring before it and the
@@ -155,12 +191,13 @@ fn row(ui: &mut Ui, title: &str, tutorials: Option<usize>) -> egui::Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// The Learn panel's UI commands: `window.learn`, `learn.list` and `learn.show`.
+/// The Learn panel's UI commands: `window.learn`, `learn.list`, `learn.show` and `learn.locateTool`.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     Some(match id {
         "window.learn" => toggle(app, p),
         "learn.list" => Ok(list()),
         "learn.show" => open(app, p),
+        "learn.locateTool" => locate::locate_tool(app, p),
         _ => return None,
     })
 }
@@ -206,7 +243,7 @@ fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (skill, tutorial) = catalog::tutorial(id).ok_or_else(|| format!("unknown tutorial `{id}` (see learn.list)"))?;
     crate::panel_docking::reveal_panel(app, ID)?;
     app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
-    let steps: Vec<&str> = tutorial.steps.iter().map(|s| s.text).collect();
+    let steps: Vec<String> = tutorial.steps.iter().map(catalog::Step::plain).collect();
     Ok(json!({"skill": skill.id, "tutorial": tutorial.id, "title": tutorial.title, "steps": steps}))
 }
 
