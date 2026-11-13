@@ -108,6 +108,7 @@
 	32 bit	32 bits
 	32 bits/pixel	32 bits/píxel
 	3D and Materials	3D i materials
+	Dark	Fosc
 	Plane	Pla
 	Extrude	Extrusió
 	Revolve	Revolució
@@ -473,6 +474,11 @@ antiAlias	Sharp	Nítid
 	Heal	Curació
 	Buff	Potenciació
 	Ult	Ult
+	Element Icons	Icones d'elements
+	Fire	Foc
+	Water	Aigua
+	Earth	Terra
+	Air	Aire
 	Sword	Espasa
 	Shield	Escut
 	Potion	Poció
@@ -1046,7 +1052,6 @@ antiAlias	Sharp	Nítid
 	Cutout	Retall
 	Cutout…	Retall…
 	Cyan	Cian
-	Dark	Fosc
 	Dark Gray	Gris fosc
 	Dark Intensity	Intensitat fosca
 	Dark Rough	Fosc aspre

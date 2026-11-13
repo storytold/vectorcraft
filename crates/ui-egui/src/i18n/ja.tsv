@@ -6324,6 +6324,11 @@ axis	Y Axis	Y 軸
 	Heal	回復
 	Buff	バフ
 	Ult	必殺
+	Element Icons	属性アイコン
+	Fire	火
+	Water	水
+	Earth	土
+	Air	風
 	Sword	剣
 	Shield	盾
 	Potion	ポーション

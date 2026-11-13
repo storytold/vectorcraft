@@ -73,6 +73,7 @@
 	 to zoom out  |  	 ज़ूम आउट करने के लिए  |  
 	 while dragging to move perpendicular to the plane  |  	 प्लेन के लंबवत खिसकाने के लिए ड्रैग करते समय  |  
 	:	:
+	Dark	डार्क
 	“{file}” is protected by a password.	“{file}” पासवर्ड से सुरक्षित है।
 	“{name}” already exists. Replace it?	“{name}” पहले से मौजूद है। क्या आप इसे बदलना चाहते हैं?
 	"In" Control Points	“इन” कंट्रोल पॉइंट्स
@@ -550,6 +551,11 @@ antiAlias	Sharp	शार्प
 	Heal	उपचार
 	Buff	बफ़
 	Ult	अल्ट
+	Element Icons	तत्व आइकन
+	Fire	अग्नि
+	Water	जल
+	Earth	पृथ्वी
+	Air	वायु
 	Sword	तलवार
 	Shield	ढाल
 	Potion	औषधि
@@ -1168,7 +1174,6 @@ antiAlias	Sharp	शार्प
 	Cyan	सियान
 	Czech	चेक
 	Danish	डैनिश
-	Dark	डार्क
 	Dark Gray	गहरा ग्रे
 	Dark Intensity	डार्क तीव्रता
 	Dark Rough	डार्क रफ़

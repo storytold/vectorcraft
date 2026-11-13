@@ -6662,6 +6662,11 @@ axis	Y Axis	Y-akseli
 	Heal	Parannus
 	Buff	Buffi
 	Ult	Ult
+	Element Icons	Elementtikuvakkeet
+	Fire	Tuli
+	Water	Vesi
+	Earth	Maa
+	Air	Ilma
 	Sword	Miekka
 	Shield	Kilpi
 	Potion	Taikajuoma
