@@ -300,15 +300,67 @@ fn curvature_remove_keeps_a_corner_neighbors_handle_direction() {
     assert_eq!((sp.anchors[1].h_in, sp.anchors[1].h_out), (corner.h_in, corner.p));
 }
 
-/// A curved end counts as smooth for the toggle: Alt-click turns it into a corner.
+/// A curved end counts as smooth for the toggle: a double-click turns it into a corner.
 #[test]
-fn alt_click_on_a_curved_end_makes_it_a_corner() {
+fn double_click_on_a_curved_end_makes_it_a_corner() {
     let sp = curvature_spline(&[(pt(100.0, 300.0), false), (pt(200.0, 200.0), false), (pt(300.0, 300.0), false)], false);
     let (d, id) = doc_with(sp);
     let (s, p) = (selected(id, None), paint());
     let cx = quiet(&d, &s, &p);
-    let a = press(&mut CurvatureTool::default(), &cx, 100.0, 300.0, true);
+    let a = CurvatureTool::default().pointer(&cx, &PointerEvent::new(PointerKind::DoubleClick, 100.0, 300.0));
     assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "path.convertAnchor" && v["anchor"] == 0 && v["to"] == "corner")), "{a:?}");
+}
+
+/// An Alt-click on either end of a selected open path makes it the current point without
+/// converting it, and the next click goes on from it.
+#[test]
+fn alt_click_on_an_open_end_goes_on_from_it() {
+    let (d, id) = doc_with(wave());
+    let (s, p) = (selected(id, None), paint());
+    let cx = quiet(&d, &s, &p);
+    let mut t = CurvatureTool::default();
+    let alt = Mods { alt: true, ..Mods::default() };
+    for (x, y, ai) in [(450.0, 60.0, 4), (0.0, 100.0, 0)] {
+        assert_eq!(t.cursor(&cx, pt(x, y), alt), Cursor::PenContinue);
+        let a = press(&mut t, &cx, x, y, true);
+        assert_eq!(a, vec![select_point((id, 0, ai))]);
+        assert!(!t.busy(), "an Alt-click does not grab the point");
+    }
+    // As the engine does it: the Alt-clicked end is current, and the next click goes on from it.
+    let s = selected(id, Some(0));
+    let a = press(&mut t, &quiet(&d, &s, &p), -50.0, 150.0, false);
+    assert!(matches!(edit_op(&a[0]), Some(("extend", v)) if v["end"] == "start" && v["from"] == "keep"), "{a:?}");
+    // With the start current, an Alt-click on the other end makes that end current; a plain click
+    // there closes the path.
+    let cx = quiet(&d, &s, &p);
+    assert_eq!(t.cursor(&cx, pt(450.0, 60.0), alt), Cursor::PenContinue);
+    assert_eq!(press(&mut t, &cx, 450.0, 60.0, true), vec![select_point((id, 0, 4))]);
+    assert_eq!(t.cursor(&cx, pt(450.0, 60.0), Mods::default()), Cursor::PenClose);
+    assert!(matches!(edit_op(&press(&mut t, &cx, 450.0, 60.0, false)[0]), Some(("close", v)) if v["end"] == "start"));
+    // A closed path has no ends: an Alt-click on its first point converts it.
+    let mut closed = wave();
+    closed.closed = true;
+    let (d, id) = doc_with(closed);
+    let s = selected(id, None);
+    let cx = quiet(&d, &s, &p);
+    assert_eq!(t.cursor(&cx, pt(0.0, 100.0), alt), Cursor::PenConvert);
+    let a = press(&mut t, &cx, 0.0, 100.0, true);
+    assert!(a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "path.convertAnchor" && v["anchor"] == 0)), "{a:?}");
+}
+
+/// An Alt-click that starts a path places a corner point, as later Alt-clicks do; a plain click
+/// places a smooth one.
+#[test]
+fn alt_click_starts_a_path_with_a_corner() {
+    let d = Document::new(800.0, 600.0);
+    let (s, p) = (Selection::default(), paint());
+    let cx = quiet(&d, &s, &p);
+    for alt in [true, false] {
+        let mut t = CurvatureTool::default();
+        let a = press(&mut t, &cx, 100.0, 120.0, alt);
+        assert!(matches!(&a[0], Action::Exec(c, v) if c == "path.curvature" && v["points"][0]["corner"] == alt), "{a:?}");
+        assert_eq!(t.pts, vec![(pt(100.0, 120.0), alt)]);
+    }
 }
 
 /// A document with one path, `sp`.
