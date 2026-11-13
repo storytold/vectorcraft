@@ -773,6 +773,11 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   starts at 1 pt, miter join, butt cap, miter limit 10.
 - An effect on a fill (`_context.item` `{"fill": i}`) returns only `fills`, which replace that fill on each piece; an
   effect on a stroke returns only `strokes`. The object's other fills and strokes stay where they are.
+- Each fill or stroke such an effect returns keeps the effects after it in that fill's or stroke's stack. A later
+  live effect, and a later geometry effect on strokes, runs once on each of them in paint order: it is given the
+  piece's `fills` and `strokes` with `_context.item` naming that one (`{"fill": 1}` for the second fill on the
+  piece), and its result replaces only that fill or stroke. A run that fails, is refused, is deferred or would pass
+  the budget leaves its own fill or stroke as it was, and the others still run.
 - The effects after it in the stack apply to the pieces together, the reference box being the bounds of all of them.
   Bounds, raster effects, Pathfinder effects, compound shapes and Envelope Options › Distort Appearance use the pieces
   as they are drawn. Outside outline mode, an image is also hit where the pieces of its own fills and strokes paint; a
