@@ -323,7 +323,8 @@ fn a_mask_that_hides_nothing_keeps_the_link() {
 #[test]
 fn color_mask_refuses_previews_and_images_too_large() {
     let preview = std::sync::Arc::new(framed());
-    let (mut s, id) = linked("missing", ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    let (mut s, id) =
+        linked("missing", ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() });
     let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
     assert!(e.contains(COLOR_MASK) && e.contains("the linked image shows its preview: embed or relink it first"), "{e}");
     assert_eq!(mask_of(doc(&s), id), None);
