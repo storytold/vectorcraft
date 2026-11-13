@@ -1960,6 +1960,8 @@ digits	Malayalam	Malajálamské
 	Modified since it was read: {path}	Upraveno od načtení: {path}
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Filtru Zobrazit nic neodpovídá.
+	Show DCS Transparency Interactions	Zobrazit interakce DCS s průhledností
+	Transparent, or overlaps transparent objects: check its separations	Je průhledný nebo překrývá průhledné objekty: zkontrolujte jeho separace
 	PPI	PPI
 	Relink…	Znovu propojit…
 	Find Linked Files	Najít propojené soubory
@@ -5876,6 +5878,65 @@ mark-style	Japanese	Japonské
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} nedokáže vytvořit těleso z obrazu: nejprve jej vektorizujte příkazem Objekt › Vektorizace obrazu › Vytvořit.
 @msg	{label} requires a shape with at least two anchors	{label} vyžaduje tvar alespoň se dvěma kotevními body
 @msg	The shape is too complex for a 3D effect	Tvar je pro 3D efekt příliš složitý
+@msg	Extrude & Bevel	Vysunutí a zkosení
+@msg	Revolve	Rotační těleso
+@msg	Inflate	Nafouknutí
+@msg	Rotate	Otočit
+@msg	Extrude & Bevel (Classic)	Vysunutí a zkosení (klasické)
+@msg	Revolve (Classic)	Rotační těleso (klasické)
+@msg	Rotate (Classic)	Otočit (klasické)
+@msg	This effect	Tento efekt
+@msg	clipping paths	ořezové cesty
+@msg	other objects	jiné objekty
+@msg	{label} requires a group holding a shape with at least two anchors	{label} vyžaduje skupinu obsahující tvar alespoň se dvěma kotevními body
+@msg	Revolve requires a group holding a shape with at least two anchors	Rotační těleso vyžaduje skupinu obsahující tvar alespoň se dvěma kotevními body
+@msg	Revolve requires a shape with at least two anchors	Rotační těleso vyžaduje tvar alespoň se dvěma kotevními body
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} na skupině potřebuje cesty, složené cesty, text, skupiny, ořezové skupiny, prolnutí a instance symbolů: nejprve uvolněte nebo rozdělte tyto položky: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} na skupině přijímá nejvýše {MAX_MEMBERS} objektů
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	3D efekt na skupině nebo vrstvě patří na samotnou skupinu, ne na její výplň nebo tah
+@msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
+@msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
+@msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
+@msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nemůže vytvořit těleso z instance symbolu „{symbol}“: kresba symbolu není k dispozici
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ořezová cesta je příliš složitá na oříznutí kresby
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} přijímá nejvýše {MAX_MEMBERS} objektů
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} nemůže vytvořit tělesa z kresby vnořené hlouběji než do {MAX_DEPTH} úrovní
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Barva rotačního tělesa je pro tento povrch příliš složitá; snižte Segmenty nebo zjednodušte přechod
+@msg	Revolve edge must be left or right	Rotační těleso: edge musí být left nebo right
+@msg	Revolve cap must be a boolean	Rotační těleso: cap musí být logická hodnota
+@msg	the revolved object has no fill or stroke	rotovaný objekt nemá výplň ani tah
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor musí být neprůhledná barva RGB ve tvaru #rrggbb
+@msg	lights must contain one to ten lights	lights musí obsahovat jedno až deset světel
+@msg	each light must be an object	každé světlo musí být objekt
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	neznámé nastavení světla: použijte color, intensity, rotation, height, softness nebo behind
+@msg	light {key} must be a number from {min} to {max}	světlo: {key} musí být číslo od {min} do {max}
+@msg	light color must use opaque #rrggbb	color světla musí být neprůhledná barva #rrggbb
+@msg	light behind must be true or false	behind světla musí být true nebo false
+@msg	shadow must be true or false	shadow musí být true nebo false
+@msg	shadowPosition must be behind or below	shadowPosition musí být behind nebo below
+@msg	{key} must be a number from {min} to {max}	{key} musí být číslo od {min} do {max}
+@msg	each of `{GRAPHICS}` must be an object	každá položka `{GRAPHICS}` musí být objekt
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	položky `{GRAPHICS}` přijímají symbol, face, x, y, scale a rotation, ne `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	každá položka `{GRAPHICS}` potřebuje `symbol`, název symbolu
+@msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
+@msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
+@msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Kresba grafiky smí být vnořena nejvýše do {MAX_LEVELS} úrovní: zjednodušte kresbu symbolu
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Kresba grafiky smí vnořovat symboly nejvýše do {MAX_NESTING} úrovní: zjednodušte kresbu symbolu
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Kresba grafiky obsahuje příliš mnoho objektů: zjednodušte kresbu symbolu
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafika kreslí nejvýše {MAX_PIECES} výplní a tahů: zjednodušte kresbu symbolu
+@msg	`surface` must be one of {_1}	`surface` musí být jedno z {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} pro tento objekt kreslí zdrojovou kresbu místo jeho 3D povrchu
+@msg	{label} draws no faces for this object	{label} pro tento objekt nekreslí žádné stěny
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	drátový model má více než {MAX_WIRE_EDGES} hran
 @msg	The 3D surface is too complex; simplify the shape	3D povrch je příliš složitý; zjednodušte tvar
 	Transform Objects	Transformovat objekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	neznámý parametr `{key}`; mysleli jste `{near}`?
@@ -6461,6 +6522,13 @@ axis	Y Axis	osa Y
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
+	Insert Select Path	Vložit výběr cesty
+	Select Path	Vybrat cestu
+@msg	select one whole path or compound path	vyberte jednu celou cestu nebo složenou cestu
+@msg	select only one path	vyberte jen jednu cestu
+@msg	the path is hidden or locked, or cannot be selected here	cesta je skrytá nebo zamčená, nebo ji zde nelze vybrat
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} není uložená cesta: změnila se, nebo jde o jiný dokument
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` musí být "v1:" a 16 šestnáctkových číslic malými písmeny
 	Select Object…	Vybrat objekt…
 	Select Object	Vybrat objekt
 	Set Selection	Nastavit výběr
