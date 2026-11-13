@@ -2820,6 +2820,83 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
     vectorcraft_plugins::registry::revoke(id);
 }
 
+/// An install refused because another session revoked the grant its checks relied on writes
+/// nothing: a store that kept the grant and lost the module gets no module back, its grants stay as
+/// they were, and the plug-in installed with the id and the other session's revoke stand. `grant`
+/// approves the module by itself.
+#[test]
+fn a_grant_revoked_while_installing_leaves_the_store_as_it_was() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    use vectorcraft_plugins::registry;
+    let folder = crate::tests_links::Folder::new("plugin-store-revoked-while-installing");
+    let id = "test.engine.permissions.revokedwhileinstalling";
+    let bytes = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+    std::fs::remove_file(&module).unwrap();
+
+    crate::cmd::plugin::BEFORE_INSTALL.set(Some(Box::new(move || {
+        registry::revoke(id);
+    })));
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read"), "{e}");
+    assert!(!module.exists(), "no module is stored");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grants stay as they were");
+    assert!(registry::granted(id).is_none(), "the other session's revoke stands");
+    assert_eq!(registry::get(id).map(|p| p.hash().to_string()), Some(sha256_hex(&bytes)), "the installed plug-in stays");
+
+    crate::cmd::plugin::BEFORE_INSTALL.set(Some(Box::new(move || {
+        registry::revoke(id);
+    })));
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert_eq!(std::fs::read(&module).unwrap(), bytes, "a module `grant` approves is stored");
+    assert!(registry::granted(id).is_some_and(|g| g.hash == sha256_hex(&bytes)));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in another session installs with the id while a module is checked takes the place the
+/// checks found free. Without `replace`, or with `replace: false`, the install is refused, writes no
+/// module and leaves that plug-in installed; with `replace: true` the module takes its place.
+#[test]
+fn a_plug_in_installed_while_installing_needs_replace() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    use vectorcraft_plugins::registry;
+    let folder = crate::tests_links::Folder::new("plugin-store-installed-while-installing");
+    let id = "test.engine.installedwhileinstalling";
+    let ours = asking(id, "[]", &json!({"objects": []}));
+    let theirs = asking(id, "[]", &json!({"objects": [], "documentData": null}));
+    let data = vectorcraft_format::base64_encode(&ours);
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+    let installed = || registry::get(id).map(|p| p.hash().to_string());
+    let meanwhile = |theirs: Vec<u8>| -> Option<Box<dyn FnOnce()>> {
+        Some(Box::new(move || {
+            registry::install_bytes(&theirs).unwrap();
+        }))
+    };
+
+    for (replace, why) in [(Value::Null, "is another module than"), (json!(false), "is already installed")] {
+        crate::cmd::plugin::BEFORE_INSTALL.set(meanwhile(theirs.clone()));
+        let e = s.execute("plugin.install", &json!({"dataBase64": data, "replace": replace})).unwrap_err().to_string();
+        assert!(e.contains(why), "{replace}: {e}");
+        assert!(!module.exists(), "{replace}: no module is stored");
+        assert_eq!(installed(), Some(sha256_hex(&theirs)), "{replace}: the other plug-in stays installed");
+        registry::remove(id);
+    }
+
+    crate::cmd::plugin::BEFORE_INSTALL.set(meanwhile(theirs));
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "replace": true}));
+    assert_eq!(std::fs::read(&module).unwrap(), ours);
+    assert_eq!(installed(), Some(sha256_hex(&ours)));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// Runs the test `name` of this module again in a process of its own → whether this is that
 /// process. The list of disabled plug-ins is kept for the whole process, and the other tests here
 /// read it again each time they attach a plug-in store.

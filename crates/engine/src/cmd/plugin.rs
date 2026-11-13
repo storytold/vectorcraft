@@ -672,13 +672,23 @@ fn takes_over(s: &Session, plugin: &Plugin) -> bool {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: runs once in the next `plugin.install` on this thread after its checks and before it
+    /// installs, as another session changing the plug-ins in between would.
+    pub(crate) static BEFORE_INSTALL: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
 /// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
 /// [`InstallApproval`] for this module nor the session allows, one that asks for a heavy budget
 /// unless `allowHeavy` says a person agreed, one that lists permissions no person has granted this
 /// very module unless `grant` lists them all, one that would take another module's place
-/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records
-/// the grant with the module's hash, keeps it for the next start and installs it → its
-/// `plugin.list` entry. A module that lists no permissions ends any grant held for its id.
+/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given. It then
+/// checks the plug-in installed under the id and its grant again while it records the grant with
+/// the module's hash and installs it ([`registry::install_checked`]), and only then keeps both for
+/// the next start → its `plugin.list` entry. A refused install changes neither the plug-in store
+/// nor the plug-ins and grants of the process. A module that lists no permissions ends any grant
+/// held for its id.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     // One use: spent whatever this install does.
@@ -696,21 +706,29 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "the module doesn't have the SHA-256 `hash` gives: nothing was installed"));
     }
-    if replace == Some(false) && registry::get(plugin.id()).is_some() {
-        return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
-    }
-    // Another module under the id gets the settings and cache kept for it: whoever installs it asks
-    // the user first.
-    if replace != Some(true) && takes_over(s, &plugin) {
+    // The grant the checks below count on. The install checks it again, with the plug-in installed
+    // under the id, before anything is stored: another session may change either in between.
+    let seen_grant = registry::granted(plugin.id());
+    let installed_already = || bad(C, format!("a plug-in with id {:?} is already installed", plugin.id()));
+    let taken_over = || {
         let name = permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME);
-        return Err(bad(
+        bad(
             C,
             format!(
                 "“{name}” is another module than the plug-in with id {:?} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees",
                 plugin.id()
             ),
-        ));
+        )
+    };
+    if replace == Some(false) && registry::get(plugin.id()).is_some() {
+        return Err(installed_already());
     }
+    // Another module under the id gets the settings and cache kept for it: whoever installs it asks
+    // the user first.
+    if replace != Some(true) && takes_over(s, &plugin) {
+        return Err(taken_over());
+    }
+    let (installed_already, taken_over) = (installed_already(), taken_over());
     // `grant` and `allowHeavy` say that a person agreed, and a request alone can't say that.
     let approval = approval.filter(|a| a.covers(&plugin));
     if !s.plugin_grants_from_requests && ((grant.is_some() && approval.is_none()) || (allow_heavy && !approval.is_some_and(|a| a.heavy))) {
@@ -744,34 +762,61 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     // this very module already covers all of them.
     let m = plugin.manifest();
     let wanted = m.permissions();
-    if !s.plugin_approved(&plugin) && !grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w))) {
+    let needs_approval = || {
         let name = permissions::display_text(&m.name, permissions::MAX_SHOWN_NAME);
         let asked = permissions::names(&wanted).join(", ");
-        return Err(bad(
+        bad(
             C,
             format!(
                 "“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants"
             ),
-        ));
+        )
+    };
+    let granted_here = grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w)));
+    if !s.plugin_approved(&plugin) && !granted_here {
+        return Err(needs_approval());
     }
+    let needs_approval = needs_approval();
+    let (id, hash, asks) = (m.id.clone(), plugin.hash().to_string(), m.asks_permissions());
+    let g = Grant { id: id.clone(), hash: hash.clone(), permissions: wanted };
+    let update = if asks { registry::GrantUpdate::Record(GrantToken::after_engine_approval(g.clone())) } else { registry::GrantUpdate::Revoke };
+    // Another module installed under the id since the checks above takes the place they found free,
+    // or held by these bytes. A grant that changed since no longer approves what they approved,
+    // unless `grant` approves this module by itself or the new grant covers it.
+    let check = |installed: Option<&Plugin>, held: Option<&Grant>| {
+        if let Some(installed) = installed {
+            match replace {
+                Some(false) => return Err(installed_already),
+                None if installed.hash() != hash => return Err(taken_over),
+                _ => {}
+            }
+        }
+        if asks && !granted_here && held != seen_grant.as_ref() && !held.is_some_and(|h| h.covers(&id, &hash, &g.permissions)) {
+            return Err(needs_approval);
+        }
+        Ok(())
+    };
+    #[cfg(test)]
+    if let Some(between) = BEFORE_INSTALL.take() {
+        between();
+    }
+    // The plug-in gets the settings and cache kept for its id. A module without permissions takes
+    // the id over, so nothing the user approved for the id applies any more.
+    let installed = registry::install_checked(plugin, update, check, || s.attach_plugin_storage(&id), err)?;
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
     // held back. A failed write of that module is only logged: the store then holds the new module,
     // which the grant doesn't cover. A write that reports a failure may still have put the old
     // module back, so the store is read again to tell which module it holds. A stored module that
     // can't be read back isn't replaced by one that needs a grant.
-    let previous = s.stored_plugin_bytes(plugin.id());
-    let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
-    let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
-    if m.asks_permissions() {
-        let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(GrantToken::after_engine_approval(g.clone()));
-        if stored && !s.store_grant(&m.id, Some(g)) {
-            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
+    let previous = s.stored_plugin_bytes(&id);
+    let mut stored = (previous.is_ok() || !asks) && s.store_plugin(&id, &bytes);
+    let holds_new = |s: &Session| s.stored_plugin_bytes(&id).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
+    if asks {
+        if stored && !s.store_grant(&id, Some(g)) {
+            stored = !s.put_back_plugin(&id, previous.ok().flatten().as_deref()) && holds_new(s);
         }
     } else {
-        // This module takes the id over, so nothing the user approved for the id applies any more.
-        registry::revoke(&m.id);
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
         // gets the module it held back. When that module can't be read or written back, or there
@@ -780,23 +825,21 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // approves nothing, and the new module stays; one that can't be opened or read may approve
         // the old bytes once it reads again.
         let writes = s.grant_writes();
-        if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
-            let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
+        if stored && !s.store_grant(&id, None) && s.holds_plugin_grant(&id) {
+            let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(&id, held.as_deref()));
             stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id, writes);
+                s.ignore_stored_grant(&id, writes);
             }
         }
     }
-    // It gets the settings and cache kept for its id.
-    s.attach_plugin_storage(plugin.id());
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
     // the new version could not replace the stored file, the old one stays disabled.
-    let file = s.stored_plugin_file(plugin.id());
+    let file = s.stored_plugin_file(&id);
     let mut changed = false;
     if file.is_none() || stored {
-        changed = safe_mode::set_enabled(&safe_mode::Item::of(&plugin), true);
+        changed = safe_mode::set_enabled(&safe_mode::Item::of(&installed), true);
         if let Some(file) = file {
             changed |= safe_mode::set_enabled(&safe_mode::Item::file(file), true);
         }
@@ -804,7 +847,6 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    let installed = registry::install(plugin).map_err(err)?;
     let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
