@@ -721,6 +721,8 @@ font-technology	Variable	Biến thiên
 	Convert to Artboards	Chuyển thành bảng vẽ
 	Convert to CMYK	Chuyển sang CMYK
 	Convert to Grayscale	Chuyển sang thang xám
+	Convert to Indexed Color	Chuyển sang màu chỉ mục
+	Convert to Indexed Color…	Chuyển sang màu chỉ mục…
 	Convert To Outlines	Chuyển thành đường bao
 	Convert To Point Type	Chuyển sang chữ điểm
 	Convert to RGB	Chuyển sang RGB

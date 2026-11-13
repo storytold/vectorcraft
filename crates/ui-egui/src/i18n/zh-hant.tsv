@@ -591,6 +591,8 @@ font-technology	Variable	可變
 	Convert to Artboards	轉換為工作區域
 	Convert to CMYK	轉換為 CMYK
 	Convert to Grayscale	轉換為灰階
+	Convert to Indexed Color	轉換為索引色彩
+	Convert to Indexed Color…	轉換為索引色彩…
 	Convert To Outlines	轉換為外框
 	Convert To Point Type	轉換為點狀文字
 	Convert to RGB	轉換為 RGB

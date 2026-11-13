@@ -158,6 +158,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "edit.colors.saturate",
     "edit.colors.toCMYK",
     "edit.colors.toGrayscale",
+    "edit.colors.toIndexed",
     "edit.colors.toRGB",
     "edit.duplicate",
     "edit.findNext",

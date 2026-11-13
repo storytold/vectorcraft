@@ -820,6 +820,8 @@ font-technology	Variable	Változó
 	Convert to destination (preserve numbers)	Átalakítás a célprofilra (az értékek megőrzésével)
 	Convert to Global	Átalakítás globálissá
 	Convert to Grayscale	Átalakítás szürkeárnyalatossá
+	Convert to Indexed Color	Átalakítás indexelt színűvé
+	Convert to Indexed Color…	Átalakítás indexelt színűvé…
 	Convert To Outlines	Átalakítás útvonallá
 	Convert To Point Type	Átalakítás pontszöveggé
 	Convert to RGB	Átalakítás RGB-re
