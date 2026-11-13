@@ -1978,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
+	Delete the selected items and their artwork?	Slet de valgte elementer og deres grafik?
+	Delete this layer and its artwork?	Slet dette lag og dets grafik?
 	Delete “{name}”?	Slet »{name}«?
 	Document Swatches	Dokumentfarveprøver
 	Edit or Apply Color Group	Redigér eller anvend farvegruppe

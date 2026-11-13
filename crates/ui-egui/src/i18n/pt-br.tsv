@@ -725,6 +725,8 @@ antiAlias	Sharp	Nítido
 	Delete theme	Excluir tema
 	Delete this saved preset	Excluir este predefinido salvo
 	Delete {kind} Style	Excluir Estilo de {kind}
+	Delete the selected items and their artwork?	Excluir os itens selecionados e suas ilustrações?
+	Delete this layer and its artwork?	Excluir esta camada e sua ilustração?
 	Delete “{name}”?	Excluir “{name}”?
 	Depth:	Profundidade:
 	Description	Descrição
@@ -4543,6 +4545,7 @@ axis	Both	Ambos
 @msg	choose the font files to add	escolha os arquivos de fonte a adicionar
 @msg	not a file	não é um arquivo
 @msg	not a font file	não é um arquivo de fonte
+@msg	the active document changed while the question was open; nothing was deleted	o documento ativo mudou enquanto a pergunta estava aberta; nada foi excluído
 @msg	that document is no longer open	esse documento não está mais aberto
 @msg	larger than 256 MB	maior que 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	os arquivos somam mais de 1 GB: adicione menos por vez

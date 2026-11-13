@@ -1042,6 +1042,8 @@ font-technology	Variable	Változó
 	Delete Width Point	Szélességi pont törlése
 	Delete Workspace	Munkaterület törlése
 	Delete {kind} Style	Stílus törlése: {kind}
+	Delete the selected items and their artwork?	Törlöd a kijelölt elemeket a grafikájukkal együtt?
+	Delete this layer and its artwork?	Törlöd ezt a réteget a grafikájával együtt?
 	Delete “{name}”?	Törlöd ezt: „{name}”?
 	Depth:	Színmélység:
 	Descender	Lenyúló szár
@@ -5604,6 +5606,7 @@ imageTrace	Outline	Körvonal
 @msg	SVG parse error: {0}	SVG-elemzési hiba: {0}
 @msg	Targa files are RGB: colorModel rgb	a Targa-fájlok RGB-k: colorModel rgb
 @msg	Text Wrap: select a wrap object	Szöveg körbefuttatása: jelölj ki egy körbefuttató objektumot
+@msg	the active document changed while the question was open; nothing was deleted	az aktív dokumentum megváltozott, amíg a kérdés nyitva volt; semmi sem lett törölve
 @msg	that document is no longer open	az a dokumentum már nincs megnyitva
 @msg	the art could not be sampled	a grafikából nem sikerült mintát venni
 @msg	the art has no bounds	a grafikának nincsenek határai

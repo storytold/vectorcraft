@@ -815,6 +815,8 @@ font-technology	Variable	Variables
 	Delete Width Point	Supprimer le point de largeur
 	Delete Workspace	Supprimer l’espace de travail
 	Delete {kind} Style	Supprimer le style de {kind}
+	Delete the selected items and their artwork?	Supprimer les éléments sélectionnés et leur illustration ?
+	Delete this layer and its artwork?	Supprimer ce calque et son illustration ?
 	Delete “{name}”?	Supprimer « {name} » ?
 	Depth:	Profondeur :
 	Description	Description
@@ -5081,6 +5083,7 @@ axis	Both	Les deux
 @msg	choose the font files to add	choisissez les fichiers de polices à ajouter
 @msg	not a file	n’est pas un fichier
 @msg	not a font file	n’est pas un fichier de police
+@msg	the active document changed while the question was open; nothing was deleted	le document actif a changé pendant que la question était ouverte ; rien n’a été supprimé
 @msg	that document is no longer open	ce document n’est plus ouvert
 @msg	larger than 256 MB	plus de 256 Mo
 @msg	the files come to more than 1 GB: add fewer at a time	les fichiers dépassent 1 Go : ajoutez-en moins à la fois

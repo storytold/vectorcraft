@@ -1163,6 +1163,8 @@ antiAlias	Sharp	Nítid
 	Delete Width Point	Suprimeix el punt d’amplada
 	Delete Workspace	Suprimeix l’espai de treball
 	Delete {kind} Style	Suprimeix l’estil de {kind}
+	Delete the selected items and their artwork?	Voleu suprimir els elements seleccionats i el seu art?
+	Delete this layer and its artwork?	Voleu suprimir aquesta capa i el seu art?
 	Delete “{name}”?	Voleu suprimir “{name}”?
 	Depth	Profunditat
 	Depth:	Profunditat:
@@ -6040,6 +6042,7 @@ digits	Malayalam	Malaiàlam
 @msg	t, dx and dy must be finite	t, dx i dy han de ser finits
 @msg	Targa files are RGB: colorModel rgb	Els fitxers Targa són RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ajustament de text: selecciona un objecte d’ajustament
+@msg	the active document changed while the question was open; nothing was deleted	el document actiu ha canviat mentre la pregunta era oberta; no s’ha suprimit res
 @msg	that document is no longer open	aquest document ja no està obert
 @msg	Extrude & Bevel	Extrudeix i bisella
 @msg	Revolve	Revoluciona

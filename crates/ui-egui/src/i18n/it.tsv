@@ -812,6 +812,8 @@ font-technology	Variable	Variabili
 	Delete Width Point	Elimina punto di larghezza
 	Delete Workspace	Elimina area di lavoro
 	Delete {kind} Style	Elimina stile {kind}
+	Delete the selected items and their artwork?	Eliminare gli elementi selezionati e la loro grafica?
+	Delete this layer and its artwork?	Eliminare questo livello e la sua grafica?
 	Delete “{name}”?	Eliminare “{name}”?
 	Depth:	Profondità:
 	Description	Descrizione
@@ -5145,6 +5147,7 @@ axis	Both	Entrambi
 @msg	choose the font files to add	scegli i file dei font da aggiungere
 @msg	not a file	non è un file
 @msg	not a font file	non è un file di font
+@msg	the active document changed while the question was open; nothing was deleted	il documento attivo è cambiato mentre la domanda era aperta; non è stato eliminato nulla
 @msg	that document is no longer open	quel documento non è più aperto
 @msg	larger than 256 MB	più grande di 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	i file superano 1 GB: aggiungine meno alla volta

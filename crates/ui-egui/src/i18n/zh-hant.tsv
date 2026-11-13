@@ -774,6 +774,8 @@ font-technology	Variable	可變
 	Delete Width Point	刪除寬度點
 	Delete Workspace	刪除工作區
 	Delete {kind} Style	刪除{kind}樣式
+	Delete the selected items and their artwork?	要刪除所選項目及其圖稿嗎？
+	Delete this layer and its artwork?	要刪除此圖層及其圖稿嗎？
 	Delete “{name}”?	要刪除「{name}」嗎？
 	Depth:	深度：
 	Description	描述
@@ -2664,6 +2666,7 @@ file-filter	Templates	範本
 @msg	choose the font files to add	請選擇要加入的字體檔案
 @msg	not a file	不是檔案
 @msg	not a font file	不是字體檔案
+@msg	the active document changed while the question was open; nothing was deleted	問題開啟期間作用中文件已變更；未刪除任何內容
 @msg	that document is no longer open	該文件已不再開啟
 @msg	larger than 256 MB	大於 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	檔案總計超過 1 GB：請每次少加入一些

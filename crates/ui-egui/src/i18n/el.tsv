@@ -771,6 +771,8 @@ font-technology	Variable	Μεταβλητές
 	Delete Width Point	Διαγραφή σημείου πλάτους
 	Delete Workspace	Διαγραφή χώρου εργασίας
 	Delete {kind} Style	Διαγραφή στυλ {kind}
+	Delete the selected items and their artwork?	Να διαγραφούν τα επιλεγμένα στοιχεία και τα γραφικά τους;
+	Delete this layer and its artwork?	Να διαγραφεί αυτό το επίπεδο και τα γραφικά του;
 	Delete “{name}”?	Να διαγραφεί το «{name}»;
 	Depth:	Βάθος:
 	Description	Περιγραφή
@@ -5041,6 +5043,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	choose the font files to add	επιλέξτε τα αρχεία γραμματοσειρών που θέλετε να προσθέσετε
 @msg	not a file	δεν είναι αρχείο
 @msg	not a font file	δεν είναι αρχείο γραμματοσειράς
+@msg	the active document changed while the question was open; nothing was deleted	το ενεργό έγγραφο άλλαξε ενώ η ερώτηση ήταν ανοιχτή· δεν διαγράφηκε τίποτα
 @msg	that document is no longer open	αυτό το έγγραφο δεν είναι πλέον ανοιχτό
 @msg	larger than 256 MB	μεγαλύτερο από 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	τα αρχεία ξεπερνούν το 1 GB: προσθέστε λιγότερα κάθε φορά

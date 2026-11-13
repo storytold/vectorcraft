@@ -810,6 +810,8 @@ font-technology	Variable	Вариативные
 	Delete Width Point	Удалить точку ширины
 	Delete Workspace	Удалить рабочую среду
 	Delete {kind} Style	Удалить стиль {kind}
+	Delete the selected items and their artwork?	Удалить выбранные элементы вместе с графикой?
+	Delete this layer and its artwork?	Удалить этот слой вместе с графикой?
 	Delete “{name}”?	Удалить «{name}»?
 	Depth:	Глубина:
 	Description	Описание
@@ -5131,6 +5133,7 @@ axis	Both	Оба
 @msg	choose the font files to add	выберите файлы шрифтов для добавления
 @msg	not a file	не файл
 @msg	not a font file	не файл шрифта
+@msg	the active document changed while the question was open; nothing was deleted	активный документ сменился, пока был открыт вопрос; ничего не удалено
 @msg	that document is no longer open	этот документ больше не открыт
 @msg	larger than 256 MB	больше 256 МБ
 @msg	the files come to more than 1 GB: add fewer at a time	файлы занимают больше 1 ГБ: добавляйте меньше за раз

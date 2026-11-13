@@ -2145,6 +2145,8 @@ digits	Malayalam	Malajalam
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}
+	Delete the selected items and their artwork?	Izbrisati odabrane stavke zajedno s njihovim crtežom?
+	Delete this layer and its artwork?	Izbrisati ovaj sloj zajedno s njegovim crtežom?
 	Delete “{name}”?	Izbrisati „{name}”?
 	Document Swatches	Uzorci boja dokumenta
 	Edit or Apply Color Group	Uredi ili primijeni grupu boja

@@ -755,6 +755,8 @@ antiAlias	Sharp	锐利
 	Delete Width Point	删除宽度点
 	Delete Workspace	删除工作区
 	Delete {kind} Style	删除{kind}样式
+	Delete the selected items and their artwork?	要删除所选项目及其图稿吗？
+	Delete this layer and its artwork?	要删除此图层及其图稿吗？
 	Delete “{name}”?	要删除“{name}”吗？
 	Depth:	深度：
 	Description	描述
@@ -4897,6 +4899,7 @@ imageTrace	Outline	轮廓
 @msg	choose the font files to add	请选择要添加的字体文件
 @msg	not a file	不是文件
 @msg	not a font file	不是字体文件
+@msg	the active document changed while the question was open; nothing was deleted	问题打开期间活动文档已更改；未删除任何内容
 @msg	that document is no longer open	该文档已不再打开
 @msg	larger than 256 MB	大于 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	文件总计超过 1 GB：请每次少添加一些
