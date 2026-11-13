@@ -127,6 +127,11 @@ The rest is our reading:
   grid stays flat.
 - A stroke whose outline takes more than 65,536 points, or whose solid takes more than 163,840 faces, is left out,
   and the fill's solid still draws.
+- The solids of one Extrude & Bevel or Inflate effect keep up to 163,840 faces together: the fill's and every
+  stroke's, and on a group or layer every member's (VectorCraft's own limit). The solids are built in order, and
+  once their faces pass it no later solid is built: the object draws its source art, and applying or editing the
+  effect, Export 3D Object and **Expand as Wireframes** report that the 3D surface is too complex. A stroke left
+  out for its own limits does not count.
 
 ## Groups
 
@@ -326,7 +331,8 @@ These rules are VectorCraft's own:
 
 - A graphic is drawn on the visible face of each of the object's solids (a fill's, and a stroke's outline),
   turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
-  with the face's light: each color is multiplied by the light that falls on the face, and drawn with the
+  with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
+  which keep their own colors. It is drawn with the
   opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
   the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round

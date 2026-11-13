@@ -82,7 +82,7 @@ pub mod rasterfx;
 mod recolor;
 pub mod recovery;
 pub mod scripts;
-mod select;
+pub(crate) mod select;
 pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;

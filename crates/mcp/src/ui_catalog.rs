@@ -732,6 +732,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
     ),
     (
+        "tool.toggleTouchMode",
+        "Switch Selection and Drawing Modes",
+        "",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
+    ),
+    (
         "effect.dialog",
         "Effect…",
         "",
@@ -944,6 +950,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Options for Selection…",
         "",
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
+    ),
+    (
+        "ui.layerDelete",
+        "Delete Selection",
+        "",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",
@@ -1438,6 +1450,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Insert Menu Item",
         "",
         "{set?: index, action?: index, step?: index, command, params?: object} insert the command of a menu item as a step, without running it; the step plays as choosing the item runs it. command and params (default {}) must be those of a menu item that can be a step: one that runs an engine command, whose label does not end with \"…\", outside the VectorCraft, File, Window and Help menus, and that is not Undo, Redo, a Paste, a batch (command.batch), a preference (prefs.*) or action (action.*) command, an Object › Align item, Image Trace's Make or Make and Expand, Pattern's Make or Edit Pattern, a saved selection, saved view or recent font item, or a plug-in's item. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. A command and params that no such menu item has, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Menu Item… (dialog `actionInsertMenuItem` with find, command, params, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+    ),
+    (
+        "ui.action.insertSelectPath",
+        "Insert Select Path",
+        "",
+        "{set?: index, action?: index, step?: index} insert a Select Path step for the path selected in the active document, without changing the selection: the step `select.storedPath {id, fingerprint}` stores the path's id and a fingerprint of its kind, fill rule and anchors, and playback selects only that path while it is still there unchanged and can be selected, else the step is an error. The selection must be one whole path or compound path that can be selected: not anchors or segments alone, several objects, a group, type or another kind of object, a guide, a member of a compound path, or a hidden or locked object. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. No document, a selection that is not such a path, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Select Path runs this, for the selected step or action or the recording in progress → {set, action, step}, or {recording: true}",
     ),
     (
         "ui.action.insertSelectObject",

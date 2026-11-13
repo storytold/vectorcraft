@@ -976,7 +976,10 @@ fn dithered_type_keeps_its_resolution_when_scaled_and_stays_searchable() {
 
 /// Exact craft-fonts face: a substituted Arabic font would miss Noto's dot decomposition.
 fn mark_text(text: &str) -> Option<TextObject> {
-    let face = FontDb::global().face("Noto Sans Arabic", "Regular").filter(|f| f.family == "Noto Sans Arabic");
+    // The craft-fonts build of the face: a system font of the same family (Linux distributions
+    // install one) can lack the Latin and digit glyphs these fixtures shape with it.
+    let bundled = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.family == "Noto Sans Arabic" && f.style == "Regular");
+    let face = FontDb::global().face("Noto Sans Arabic", "Regular").filter(|f| bundled && f.family == "Noto Sans Arabic");
     let Some(face) = face else {
         assert!(std::env::var("CRAFT_FONTS_REQUIRED").as_deref() != Ok("1"), "Noto Sans Arabic is required");
         eprintln!("SKIPPED: PDF mark-text regression needs craft-fonts Noto Sans Arabic");

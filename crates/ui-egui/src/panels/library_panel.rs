@@ -635,9 +635,17 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
             clicked = Some((row.name.to_string(), row.item.is_none(), ui.input(|i| i.modifiers)));
         }
     };
+    // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
+    // does; elsewhere it keeps its 220 pt (280 pt for large thumbnails).
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 280.0 } else { 220.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let max_height = if view == View::LargeThumb { 280.0 } else { 220.0 };
-        egui::ScrollArea::vertical().id_salt(key(&panel, "scroll")).max_height(max_height).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt(key(&panel, "scroll"))
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        scroll.show(ui, |ui| {
             ui.set_width(ui.available_width());
             if rows.is_empty() {
                 widgets::dim_label(ui, if query.trim().is_empty() { tl!("This library is empty.") } else { tl!("No matches.") });
