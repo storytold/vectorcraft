@@ -1,5 +1,6 @@
 use super::*;
-use vectorcraft_doc::{CharStyle, Justify, TextKind};
+use crate::edit::{slice_runs, style_at};
+use vectorcraft_doc::{Justify, TextKind};
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 fn frame(x: f64) -> TextObject {
@@ -446,6 +447,298 @@ fn list_levels_count_on_through_the_frames() {
     let expected: Vec<String> = std::iter::once("1.".to_string()).chain((1..=11).map(|n| format!("{n}."))).collect();
     assert_eq!(both, expected);
     assert_eq!((parts[1].list_count, parts[1].list_level_counts.clone()), (1, vec![first.len() as u32 - 1]));
+}
+
+/// The shares the frames would take if each one were measured with the whole rest of the story:
+/// what [`distribute_continuing_levels`] gives, measuring each frame with less of it.
+fn whole_rest_shares(
+    db: &FontDb,
+    frames: &[&TextObject],
+    runs: &[TextRun],
+    paras: &[ParaStyle],
+    continued: bool,
+    mut counts: ListCounts,
+) -> Vec<Slice> {
+    let fit_whole = |frame: &TextObject, runs: &[TextRun]| {
+        let lay = layout(db, frame);
+        let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+        if !lay.overflow {
+            return text.len();
+        }
+        let mut end = lay.lines.last().map_or(0, |l| l.end);
+        if lay.on_path {
+            return end;
+        }
+        let bytes = text.as_bytes();
+        while end < bytes.len() && bytes[end] == b' ' {
+            end += 1;
+        }
+        if end < bytes.len() && bytes[end] == b'\n' {
+            end += 1;
+        }
+        end
+    };
+    let mut rest = runs.to_vec();
+    let mut out = Vec::with_capacity(frames.len());
+    let mut next_para = 0;
+    let mut continues = continued;
+    for (i, f) in frames.iter().enumerate() {
+        let first_para = next_para;
+        let len = runs_len(&rest);
+        let own = [f.para.clone()];
+        let (paras, first_para) = if paras.is_empty() { (&own[..], 0) } else { (paras, first_para) };
+        let n = if i + 1 == frames.len() {
+            len
+        } else {
+            let mut probe = (*f).clone();
+            probe.runs = rest.clone();
+            probe.set_paragraph_styles(slice_paras(paras, first_para, &rest));
+            probe.set_list_counts(counts);
+            probe.first_para_continues = continues;
+            fit_whole(&probe, &rest)
+        };
+        let mut head = slice_runs(&rest, 0, n);
+        if head.is_empty() {
+            head.push(TextRun { text: String::new(), style: style_at(&rest, n), inline: None });
+        }
+        let tail = slice_runs(&rest, n, len);
+        rest = if tail.is_empty() { vec![TextRun { text: String::new(), style: style_at(&rest, len), inline: None }] } else { tail };
+        let head_paras = slice_paras(paras, first_para, &head);
+        next_para += head_paras.len().saturating_sub(1);
+        let next_counts = count_list_paragraphs(&head, &head_paras, counts);
+        let starts_continued = continues;
+        continues = continues_after(head.iter().rev().find_map(|r| r.text.bytes().last()), continues);
+        let (list_count, list_level_counts) = counts.parts();
+        out.push(Slice { runs: head, paras: head_paras, list_count, list_level_counts, continues: starts_continued });
+        counts = next_counts;
+    }
+    out
+}
+
+/// `frames` share `runs` as they would if each frame were measured with the whole rest, from the
+/// story's start and continuing from text before it; returns how many frames took text.
+fn same_as_whole_rest(db: &FontDb, frames: &[&TextObject], runs: &[TextRun], paras: &[ParaStyle], case: &str) -> usize {
+    let got = distribute(db, frames, runs, paras);
+    assert_eq!(got, whole_rest_shares(db, frames, runs, paras, false, ListCounts::default()), "{case}");
+    let counts = ListCounts::from_parts(3, &[2, 1]);
+    let continuing = distribute_continuing_levels(db, frames, runs, paras, true, counts);
+    assert_eq!(continuing, whole_rest_shares(db, frames, runs, paras, true, counts), "{case}, continuing");
+    got.iter().filter(|s| runs_len(&s.runs) > 0).count()
+}
+
+/// An area frame `w` by `h` at `x`.
+fn sized(x: f64, w: f64, h: f64) -> TextObject {
+    let mut t = frame(x);
+    t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(x, 0.0, x + w, h)) };
+    t
+}
+
+/// Numbered `n` short paragraphs.
+fn paragraphs(n: usize) -> String {
+    (1..=n).map(|i| format!("Item {i}: the quick brown fox jumps.")).collect::<Vec<_>>().join("\n")
+}
+
+/// Each frame takes the same share of a long story when it is measured with only the paragraphs
+/// it needs as when it is measured with the whole rest of the story, for every kind of frame,
+/// text and paragraph style that changes how much a frame holds.
+#[test]
+fn frames_take_the_shares_the_whole_rest_gives_them() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let db = FontDb::global();
+    let plain = CharStyle::default();
+    let big = CharStyle { size: 20.0, ..Default::default() };
+    let small = CharStyle { size: 7.0, ..Default::default() };
+    let story = |text: &str| vec![TextRun::new(text, plain.clone())];
+    let frames: Vec<TextObject> = (0..6).map(|k| frame(200.0 * k as f64)).collect();
+    fn refs(v: &[TextObject]) -> Vec<&TextObject> {
+        v.iter().collect()
+    }
+    let mut took = 0;
+
+    // Many short paragraphs, every one of its own style.
+    took += same_as_whole_rest(db, &refs(&frames), &story(&paragraphs(120)), &[], "short paragraphs");
+    let spaced: Vec<ParaStyle> = (0..120).map(|i| ParaStyle { space_before: (i % 4) as f64 * 3.0, ..Default::default() }).collect();
+    took += same_as_whole_rest(db, &refs(&frames), &story(&paragraphs(120)), &spaced, "spaced paragraphs");
+
+    // Frames of different sizes, one with no height and one too narrow for a word.
+    let uneven = vec![
+        sized(0.0, 120.0, 30.0),
+        sized(200.0, 120.0, 0.0),
+        sized(400.0, 200.0, 140.0),
+        sized(700.0, 4.0, 200.0),
+        sized(800.0, 60.0, 90.0),
+        frame(1000.0),
+    ];
+    took += same_as_whole_rest(db, &refs(&uneven), &story(&paragraphs(120)), &[], "uneven frames");
+
+    // A word longer than a line, and runs of spaces and empty paragraphs where frames end.
+    let long_word = format!("{}\n{}\n{}", "x".repeat(700), paragraphs(30), "y".repeat(900));
+    took += same_as_whole_rest(db, &refs(&frames), &story(&long_word), &[], "long words");
+    let breaks = (0..200).map(|i| if i % 5 == 0 { String::new() } else { format!("Line {i} ends here     ") }).collect::<Vec<_>>().join("\n");
+    took += same_as_whole_rest(db, &refs(&frames), &story(&breaks), &[], "spaces and empty paragraphs");
+    for k in [0usize, 1, 2, 3] {
+        let tall: Vec<TextObject> = (0..4).map(|i| sized(200.0 * i as f64, 120.0, 14.0 * (k + i + 1) as f64)).collect();
+        took += same_as_whole_rest(db, &refs(&tall), &story(&breaks), &[], &format!("frame heights {k}"));
+    }
+
+    // Style runs and inline graphics cut where frames end, and empty runs as given.
+    // Some runs start with a glyph choice, which a run cut after its first character loses.
+    let mut styled = vec![];
+    let text = paragraphs(90);
+    let words: Vec<&str> = text.split_inclusive(' ').collect();
+    for (i, three) in words.chunks(3).enumerate() {
+        let text = three.concat();
+        let mut style = [&plain, &big, &small][i % 3].clone();
+        if i % 4 == 0 {
+            let ch = text.chars().next().unwrap_or('I');
+            style.glyph_alternate = Some(vectorcraft_doc::GlyphChoice { ch, gid: 1, font: "Test".into(), version: String::new() });
+        }
+        styled.push(TextRun::new(text, style));
+        if i % 7 == 0 {
+            styled.push(TextRun::inline(vectorcraft_doc::InlineArt::new("sym"), plain.clone()));
+        }
+        if i % 11 == 0 {
+            styled.push(TextRun::new("", big.clone()));
+        }
+    }
+    took += same_as_whole_rest(db, &refs(&frames), &styled, &[], "style runs");
+
+    // Numbered lists at two levels, counted on from text before.
+    let at = |level| ParaStyle {
+        list: Some(ParaList::numbered(NumberStyle::Arabic).at_level(level)),
+        left_indent: 18.0,
+        first_line_indent: -18.0,
+        ..Default::default()
+    };
+    let listed: Vec<ParaStyle> = (0..120).map(|i| at(1 + i % 3 / 2)).collect();
+    took += same_as_whole_rest(db, &refs(&frames), &story(&paragraphs(120)), &listed, "lists");
+
+    // Justified and hyphenated paragraphs, long enough to run from frame to frame.
+    let text = "The quick brown fox jumps over the lazy dog, extraordinarily unbelievably. ".repeat(6);
+    let long_paras = (0..14).map(|_| text.trim_end()).collect::<Vec<_>>().join("\n");
+    let justified: Vec<ParaStyle> = (0..14)
+        .map(|i| ParaStyle { justify: [Justify::JustifyAll, Justify::JustifyLeft][i % 2], hyphenate: i % 3 != 0, ..Default::default() })
+        .collect();
+    took += same_as_whole_rest(db, &refs(&frames), &story(&long_paras), &justified, "justified and hyphenated");
+    // Paragraphs longer than a frame holds, each composed as a whole.
+    let tall: Vec<TextObject> = (0..5).map(|k| sized(200.0 * k as f64, 160.0, 160.0 + 40.0 * k as f64)).collect();
+    let very_long = (0..6).map(|_| text.repeat(4).trim_end().to_string()).collect::<Vec<_>>().join("\n");
+    for justify in [Justify::Left, Justify::JustifyLeft] {
+        let composed = [ParaStyle { justify, ..Default::default() }];
+        took += same_as_whole_rest(db, &refs(&tall), &story(&very_long), &composed, &format!("long paragraphs, {justify:?}"));
+    }
+
+    // Columns, vertical type, Shrink Text to Fit, lines aligned to the center, type on a path,
+    // and a last frame the story overflows.
+    let mut columns = frames.clone();
+    for f in &mut columns {
+        f.area.columns = 2;
+        f.area.gutter = 6.0;
+    }
+    took += same_as_whole_rest(db, &refs(&columns), &story(&paragraphs(120)), &[], "columns");
+    let mut vertical = frames.clone();
+    for f in &mut vertical {
+        f.vertical = true;
+    }
+    took += same_as_whole_rest(db, &refs(&vertical), &story(&paragraphs(80)), &[], "vertical type");
+    let mut mixed = frames.clone();
+    mixed[1].area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 60.0 };
+    mixed[2].area.vertical_align = vectorcraft_doc::VerticalAlign::Center;
+    mixed[3] = path_frame(300.0);
+    took += same_as_whole_rest(db, &refs(&mixed), &story(&paragraphs(120)), &[], "other kinds of frame");
+    let two = [&frames[0], &frames[1]];
+    took += same_as_whole_rest(db, &two, &story(&paragraphs(200)), &[], "overflowing last frame");
+
+    // Short stories, an empty one and one of empty runs.
+    took += same_as_whole_rest(db, &refs(&frames), &story("Hi"), &[], "short story");
+    took += same_as_whole_rest(db, &refs(&frames), &story(""), &[], "empty story");
+    took += same_as_whole_rest(db, &refs(&frames), &[TextRun::new("", big.clone()), TextRun::new("", small.clone())], &[], "empty runs");
+    assert!(took > 40, "the frames took text: {took}");
+}
+
+/// A seeded mix of run splits, sizes, paragraph styles and frame sizes: each frame takes the share
+/// the whole rest gives it.
+#[test]
+fn seeded_stories_take_the_shares_the_whole_rest_gives_them() {
+    let db = FontDb::global();
+    let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut next = |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    let words = ["fox", "a", "jumps", "extraordinary", "dog,", "the", "lazy", "over", "  ", "quick"];
+    for case in 0..12 {
+        let mut runs = vec![];
+        let mut paras = 1;
+        for _ in 0..(150 + next(250)) {
+            let mut text = words[next(words.len() as u64) as usize].to_string();
+            text.push(if next(6) == 0 {
+                paras += 1;
+                '\n'
+            } else {
+                ' '
+            });
+            let style = CharStyle { size: [12.0, 9.0, 16.0][next(3) as usize], tracking: [0.0, 50.0][next(2) as usize], ..Default::default() };
+            runs.push(TextRun::new(text, style));
+        }
+        normalize(&mut runs);
+        let styles: Vec<ParaStyle> = (0..paras)
+            .map(|_| ParaStyle {
+                justify: [Justify::Left, Justify::Center, Justify::JustifyLeft][next(3) as usize],
+                first_line_indent: [0.0, 12.0][next(2) as usize],
+                space_after: [0.0, 4.0][next(2) as usize],
+                ..Default::default()
+            })
+            .collect();
+        let frames: Vec<TextObject> = (0..2 + next(6)).map(|k| sized(200.0 * k as f64, 40.0 + next(120) as f64, 10.0 + next(120) as f64)).collect();
+        same_as_whole_rest(db, &frames.iter().collect::<Vec<_>>(), &runs, &styles, &format!("case {case}"));
+    }
+}
+
+/// A long story of short paragraphs through many frames: each frame is measured with about the
+/// text it takes and a little more, not with the whole rest of the story.
+#[test]
+fn many_frames_measure_about_the_text_they_take() {
+    let db = FontDb::global();
+    let text = paragraphs(1500);
+    let story = vec![TextRun::new(text.clone(), CharStyle::default())];
+    let frames: Vec<TextObject> = (0..40).map(|k| frame(200.0 * k as f64)).collect();
+    let refs: Vec<&TextObject> = frames.iter().collect();
+    let before = fit_bytes();
+    let parts = distribute(db, &refs, &story, &[]);
+    let measured = fit_bytes() - before;
+    let joined: String = parts.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+    assert_eq!(joined, text, "no character lost or duplicated");
+    let placed: usize = parts[..parts.len() - 1].iter().map(|p| runs_len(&p.runs)).sum();
+    let longest = text.split('\n').map(str::len).max().unwrap_or(0);
+    assert!(placed > 0 && placed < text.len() / 4, "the frames hold part of the story: {placed} of {}", text.len());
+    let bound = 4 * placed + frames.len() * 2 * (MIN_MEASURE + longest);
+    assert!(measured <= bound, "measured {measured} bytes for {placed} placed in {} frames (at most {bound})", frames.len());
+}
+
+/// Frames that already hold text and take a story over several measurements each: each frame's own
+/// text is copied once to measure it, not once for each measurement.
+#[test]
+fn frames_with_text_copy_it_once_to_measure_it() {
+    let db = FontDb::global();
+    let text = paragraphs(600);
+    let story = vec![TextRun::new(text.clone(), CharStyle::default())];
+    let mut frames: Vec<TextObject> = (0..4).map(|k| sized(400.0 * k as f64, 300.0, 600.0)).collect();
+    for f in &mut frames {
+        f.runs = vec![TextRun::new("Old text. ".repeat(500), CharStyle::default())];
+    }
+    let refs: Vec<&TextObject> = frames.iter().collect();
+    let (fit_before, copied_before) = (fit_bytes(), probe_copied());
+    let parts = distribute(db, &refs, &story, &[]);
+    let (measured, copied) = (fit_bytes() - fit_before, probe_copied() - copied_before);
+    let joined: String = parts.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+    assert_eq!(joined, text, "no character lost or duplicated");
+    let first = runs_len(&parts[0].runs);
+    assert!(measured > 2 * first, "the first frame is measured more than once: {measured} bytes for {first}");
+    let own: usize = frames[..frames.len() - 1].iter().map(|f| runs_len(&f.runs)).sum();
+    assert_eq!(copied, own, "each frame before the last copies its own text once to measure it");
 }
 
 #[test]

@@ -1387,6 +1387,10 @@ antiAlias	Sharp	शार्प
 	Dock Panel	पैनल डॉक करें
 	Dock to Top	ऊपर डॉक करें
 	Dock to Bottom	नीचे डॉक करें
+	Dock to Left	बाईं ओर डॉक करें
+	Dock to Right	दाईं ओर डॉक करें
+	Dock Toolbar	टूलबार डॉक करें
+	Float Toolbar	टूलबार फ़्लोट करें
 	Control Bar Options	नियंत्रण बार ऑप्शन्स
 	Tool Options	टूल ऑप्शन्स
 	Object Options	ऑब्जेक्ट ऑप्शन्स
@@ -1707,6 +1711,8 @@ antiAlias	Sharp	शार्प
 	Expand Live Paint	लाइव पेंट एक्सपैंड करें
 	Expand Object	ऑब्जेक्ट का विस्तार
 	Expand Objects on Path	पाथ पर ऑब्जेक्ट्स एक्सपैंड करें
+	Detach	अलग करें
+	Detach Object from Path	पाथ से ऑब्जेक्ट अलग करें
 	Expand Options	ऑप्शन्स एक्सपैंड करें
 	Expand Panels	पैनलों का विस्तार
 	Expand Repeat	रिपीट एक्सपैंड करें
@@ -4563,6 +4569,12 @@ antiAlias	Sharp	शार्प
 	Show Slice Numbers	स्लाइस नंबर दिखाएँ
 	Show Slices	स्लाइस दिखाएँ
 	Show smooth color wheel	चिकनी रंग पहिया दिखाएँ
+	Pixel Snapping Options	पिक्सेल पर स्नैप ऑप्शन्स
+	Pixel Snapping Options…	पिक्सेल पर स्नैप ऑप्शन्स…
+	Snap to Pixel While Drawing	ड्रॉ करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Moving	मूव करते समय पिक्सेल के लिए स्नैप
+	Snap to Pixel While Scaling	स्केल करते समय पिक्सेल के लिए स्नैप
+	These options take effect when View › Snap to Pixel is on.	ये ऑप्शन्स तब लागू होते हैं जब व्यू › पिक्सेल के लिए स्नैप चालू हो।
 	Show Snap to Glyph Options	ग्लिफ़ पर स्नैप ऑप्शन्स दिखाएँ
 	Show Swatch Bounds	स्वॉच की सीमाएँ दिखाएँ
 	Show Swatch Kinds	स्वॉच प्रकार दिखाएँ
@@ -4748,6 +4760,19 @@ antiAlias	Sharp	शार्प
 	Spot Color Objects	स्पॉट कलर्स के साथ ऑब्जेक्ट्स
 	Pattern Objects	पैटर्न्स के साथ ऑब्जेक्ट्स
 	Gradient Objects	ग्रेडिएंट्स के साथ ऑब्जेक्ट्स
+	Font Details	फ़ॉन्ट विवरण
+	Linked Images	लिंक्ड चित्र
+	Embedded Images	एम्बेडेड चित्र
+	Compound Paths	कंपाउंड पाथ्स
+	Text Objects	टेक्स्ट ऑब्जेक्ट्स
+	Placed Documents	प्लेस्ड डॉक्यूमेंट्स
+	Symbol Instances	सिंबल इंस्टेंस
+	Gradient Meshes	ग्रेडिएंट मेश
+	Blends	ब्लेंड्स
+	Envelopes	एन्वेलप्स
+	Intertwine Groups	इंटरट्वाइन समूह
+	Opacity Masks	ओपेसिटी मास्क
+	Objects with Effects	इफ़ेक्ट्स के साथ ऑब्जेक्ट्स
 	Spot Colors	स्पॉट रंग
 	Spot Colors (0)	स्पॉट कलर्स (0)
 	Spot Colors…	स्पॉट कलर्स…
@@ -7246,6 +7271,7 @@ antiAlias	Sharp	शार्प
 @msg	no library `{key}` (see {list})	कोई लाइब्रेरी `{key}` ({list} देखें)
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
 @msg	No linked files to look for	देखने के लिए कोई लिंक्ड फ़ाइल नहीं
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	लिंक किसी सिंबल, ग्राफ़ डिज़ाइन, पैटर्न या ओपेसिटी मास्क के अंदर है और कैनवास पर इसकी कोई जगह नहीं है
 @msg	no Live Paint edge near that point	उस बिंदु के पास कोई लाइव पेंट एज नहीं
 @msg	no Live Paint face at that point	उस बिंदु पर कोई लाइव पेंट फेस नहीं
 @msg	no metafile format	कोई मेटाफ़ाइल फ़ॉर्मैट
@@ -7653,6 +7679,7 @@ antiAlias	Sharp	शार्प
 @msg	Replace Spine: select a blend and a path	Spine: एक मिश्रण और एक पाथ चुनें
 @msg	replace: select the one object to replace	प्रतिस्थापित करने के लिए एक ऑब्जेक्ट सिलेक्ट करें
 @msg	replace: the object to replace was changed or deleted	प्रतिस्थापित करने के लिए ऑब्जेक्ट को बदल दिया गया था या हटा दिया गया
+@msg	the document it was prepared for is no longer active	जिस डॉक्यूमेंट के लिए इसे तैयार किया गया था, वह अब सक्रिय नहीं है
 @msg	Reset {_1}	रीसेट करें {_1}
 @msg	resolution must be a number or screen|medium|high	resolution: रिज़ॉल्यूशन एक नंबर या स्क्रीन होना चाहिए
 @msg	resolution must be between 1 and 2400 ppi	resolution: रिज़ॉल्यूशन 1 और 2400 ppi के बीच होना चाहिए
@@ -7736,6 +7763,7 @@ antiAlias	Sharp	शार्प
 @msg	select an object with a freeform gradient	एक फ्रीफॉर्म ग्रेडिएंट के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an object with an opacity mask	एक opacity मास्क के साथ एक ऑब्जेक्ट सिलेक्ट करें
 @msg	select an Objects on Path group	पाथ समूह पर एक ऑब्जेक्ट चुनें
+@msg	choose the object to detach with its Select/Move widget	अलग करने वाले ऑब्जेक्ट को उसके चुनें/ले जाएँ विजेट से चुनें
 @msg	select area type	एरिया टाइप सिलेक्ट करें
 @msg	select area type (text in a frame)	एरिया टाइप (फ़्रेम में टेक्स्ट) सिलेक्ट करें
 @msg	select area type and closed paths (at least one area type object)	एरिया टाइप और बंद पाथ सिलेक्ट करें (कम से कम एक एरिया टाइप ऑब्जेक्ट)
@@ -7926,7 +7954,9 @@ antiAlias	Sharp	शार्प
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	ग्राफ़िक्स समतल फ़ेस पर लगते हैं: एक्सट्रूड या समतल ऑब्जेक्ट प्रकार का उपयोग करें
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं
+@msg	Revolve maps graphics onto its side: map them onto the front	रिवॉल्व ग्राफ़िक्स को अपनी बगल वाली सतह पर लगाता है: उन्हें सामने वाले फ़ेस पर लगाएँ
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	ग्राफ़िक्स इस सतह के लिए बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ या सेगमेंट कम करें
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
 @msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
 @msg	The graphics are too complex: simplify the symbols' art	ग्राफ़िक्स बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ

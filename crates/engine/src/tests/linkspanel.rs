@@ -213,7 +213,7 @@ fn go_to_selects_the_image() {
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     assert_ne!(s.doc().unwrap().selection.objects, vec![id]);
     let r = run(&mut s, "links.goTo", json!({"id": id.0}));
-    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0]}));
+    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0], "onCanvas": true}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
     let rect = s.doc().unwrap().doc.layers[0].children().unwrap()[1].id;
     assert!(s.execute("links.goTo", &json!({"id": rect.0})).is_err(), "not an image");

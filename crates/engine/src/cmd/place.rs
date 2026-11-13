@@ -58,6 +58,9 @@ use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
 const QUEUE: &str = "file.place.queue";
+/// The error of a file read apart from the session while another document is active, or after the
+/// document it was read for closed ([`Session::place_read`], [`Session::place_queue_read`]).
+const NOT_ACTIVE: &str = "the document it was prepared for is no longer active";
 /// The most files one `file.place.queue` loads.
 const MAX_QUEUE: usize = 100;
 /// The longest thumbnail side `thumbnail` may ask for (px).
@@ -503,11 +506,13 @@ fn fit(natural: Rect, r: Rect) -> Affine {
     Affine::translate(r.center().to_vec2()) * Affine::scale(k) * Affine::translate(-natural.center().to_vec2())
 }
 
-/// What `file.place` takes from the session before it reads the file: the params, the object
-/// Replace swaps and the artboard under `at`, which a DXF drawing is laid out on
-/// ([`Session::prepare_place`]). [`PlaceJob::read`] reads and decodes the file without the session,
-/// on any thread.
+/// What `file.place` takes from the session before it reads the file: the document it places into,
+/// the params, the object Replace swaps and the artboard under `at`, which a DXF drawing is laid
+/// out on ([`Session::prepare_place`]). [`PlaceJob::read`] reads and decodes the file without the
+/// session, on any thread.
 pub struct PlaceJob {
+    /// The document it was prepared in (`DocState::uid`).
+    doc: u64,
     params: Value,
     old: Option<NodeId>,
     /// The object Replace swaps as it was when Place started.
@@ -560,10 +565,14 @@ impl Session {
 
     /// Run `file.place` with the params of `read` as a command (checked and journaled as any
     /// other) that places the file `read` holds instead of reading it again → `file.place`'s
-    /// reply. The object Replace swaps must still be in the document as it was when Place started;
-    /// when the selection changed meanwhile, `select.set` selects that object again first, so a
-    /// replay of the journal replaces the same object.
+    /// reply. The document Place started in must be the active one, and the object Replace swaps
+    /// must still be in it as it was when Place started; when the selection changed meanwhile,
+    /// `select.set` selects that object again first, so a replay of the journal replaces the same
+    /// object.
     pub fn place_read(&mut self, read: PlaceRead) -> Result<Value> {
+        if self.doc()?.uid != read.job.doc {
+            return Err(bad(PLACE, NOT_ACTIVE));
+        }
         let params = read.job.params.clone();
         if let Some(old) = read.job.old {
             let st = self.doc()?;
@@ -615,7 +624,7 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    Ok(PlaceJob { params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
+    Ok(PlaceJob { doc: st.uid, params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
 }
 
 /// Place the file `read` holds in the active document.
@@ -755,6 +764,8 @@ fn queued_files(p: &Value) -> Result<Vec<Value>> {
 /// ([`Session::prepare_place_queue`]). [`QueueJob::read`] reads them without the session, on any
 /// thread.
 pub struct QueueJob {
+    /// The document it was prepared in (`DocState::uid`).
+    doc: u64,
     params: Value,
     files: Vec<Value>,
 }
@@ -762,6 +773,8 @@ pub struct QueueJob {
 /// The files [`QueueJob::read`] read, which [`Session::place_queue_read`] loads the place cursor
 /// with.
 pub struct QueueRead {
+    /// The document the files were read for (`DocState::uid`).
+    doc: u64,
     params: Value,
     entries: Vec<Value>,
     files: Vec<Value>,
@@ -776,13 +789,13 @@ impl QueueJob {
 
     /// Read every file for its size and thumbnail, as `file.place.queue` does, without the session.
     pub fn read(self) -> Result<QueueRead> {
-        read_queue(self.params, self.files)
+        read_queue(self.doc, self.params, self.files)
     }
 }
 
-/// Read each of `queued`, the files of `file.place.queue` with params `p`, for its size and
-/// thumbnail.
-fn read_queue(p: Value, queued: Vec<Value>) -> Result<QueueRead> {
+/// Read each of `queued`, the files of `file.place.queue` with params `p` for the document `doc`,
+/// for its size and thumbnail.
+fn read_queue(doc: u64, p: Value, queued: Vec<Value>) -> Result<QueueRead> {
     let thumbnail = p.get("thumbnail").and_then(Value::as_f64);
     let (mut entries, mut files, mut skipped) = (vec![], vec![], vec![]);
     for mut q in queued {
@@ -823,7 +836,7 @@ fn read_queue(p: Value, queued: Vec<Value>) -> Result<QueueRead> {
             }
         }
     }
-    Ok(QueueRead { params: p, entries, files, skipped })
+    Ok(QueueRead { doc, params: p, entries, files, skipped })
 }
 
 impl Session {
@@ -834,12 +847,17 @@ impl Session {
         has_doc(self).map_err(|why| EngineError::Disabled(QUEUE.into(), why))?;
         check_switches(params, &["link", "template"], QUEUE)?;
         check_numbers(params, &["thumbnail"], QUEUE)?;
-        Ok(QueueJob { params: params.clone(), files: queued_files(params)? })
+        let files = queued_files(params)?;
+        Ok(QueueJob { doc: self.doc()?.uid, params: params.clone(), files })
     }
 
     /// Run `file.place.queue` with the params of `read` as a command that loads the place cursor
-    /// with the files `read` holds instead of reading them again → `file.place.queue`'s reply.
+    /// with the files `read` holds instead of reading them again → `file.place.queue`'s reply. The
+    /// document the files were read for must be the active one.
     pub fn place_queue_read(&mut self, read: QueueRead) -> Result<Value> {
+        if self.doc()?.uid != read.doc {
+            return Err(bad(QUEUE, NOT_ACTIVE));
+        }
         let params = read.params.clone();
         self.queue_hand_off = Some(read);
         let r = self.execute(QUEUE, &params);
@@ -944,7 +962,8 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         (None, [id]) => *id,
         _ => return Err(bad(C, "select one image or pass id")),
     };
-    let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+    // An image in opacity-mask art or a definition's art is found by its id too (`links.list`).
+    let n = st.doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
     // Effective resolution: 72 pt per inch over the points one pixel spans along each axis.
     let [a, b, c, d, ..] = im.xf.as_coeffs();

@@ -3287,6 +3287,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Spot Renkli Nesneler
 	Pattern Objects	Desenli Nesneler
 	Gradient Objects	Degradeli Nesneler
+	Font Details	Yazı Tipi Ayrıntıları
+	Linked Images	Bağlantılı Görseller
+	Embedded Images	Gömülü Görseller
+	Compound Paths	Bileşik Yollar
+	Text Objects	Metin Nesneleri
+	Placed Documents	Yerleştirilen Belgeler
+	Symbol Instances	Sembol Örnekleri
+	Gradient Meshes	Degrade Örgüler
+	Blends	Karışımlar
+	Envelopes	Zarflar
+	Intertwine Groups	İç İçe Geçme Grupları
+	Opacity Masks	Opaklık Maskeleri
+	Objects with Effects	Efektli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -3956,6 +3969,10 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Dock to Left	Sola yerleştir
+	Dock to Right	Sağa yerleştir
+	Dock Toolbar	Araç çubuğunu yerleştir
+	Float Toolbar	Araç Çubuğunu Yüzer Yap
 	Control Bar Options	Kontrol Çubuğu Seçenekleri
 	Tool Options	Araç Seçenekleri
 	Object Options	Nesne Seçenekleri
@@ -4506,6 +4523,7 @@ axis	Both	Her İkisi
 @msg	paths contain invalid coordinates	yollar geçersiz koordinatlar içeriyor
 @msg	paths: give at least one file	yollar: en az bir dosya verin
 @msg	replace: the object to replace was changed or deleted	değiştir: değiştirilecek nesne değiştirildi veya silindi
+@msg	the document it was prepared for is no longer active	hazırlandığı belge artık etkin değil
 @msg	pattern missing	desen eksik
 @msg	patterns nested too deeply are filled with mid-grey	çok derin iç içe geçmiş desenler orta gri renkle dolu
 @msg	percent must be above 0 and at most 6400, not {p}	percent 0'ın üzerinde ve en fazla 6400 olmalıdır, {p} değil
@@ -4844,6 +4862,7 @@ axis	Both	Her İkisi
 @msg	every numbered name for it is taken in the Fonts folder	bunun için numaralandırılmış her ad Yazı Tipleri klasöründe alınır
 @msg	every numbered name for {name} is taken in the document's folder	{name} için numaralandırılmış her ad belgenin klasöründe alınır
 @msg	No linked files to look for	Aranacak bağlantılı dosya yok
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Bağlantı bir sembolün, grafik tasarımının, desenin veya opaklık maskesinin içinde ve tuvalde yeri yok
 	Services	Hizmetler
 	Hide VectorCraft	VectorCraft'ı gizle
 	Zoom	Yakınlaştır
@@ -5208,7 +5227,9 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafikler düz yüzlere eşlenir: Ekstrüzyon veya Düzlem nesne türünü kullan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
 @msg	The graphics are too complex: simplify the symbols' art	Grafikler çok karmaşık: sembollerin resmini basitleştir
@@ -5981,6 +6002,7 @@ theme	Appearance	Görünüm
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
+@msg	choose the object to detach with its Select/Move widget	ayrılacak nesneyi Seç/Taşı denetimiyle seçin
 @msg	the Simplify slider is not open	Basitleştirme kaydırıcısı açık değil
 @msg	the Smooth slider is not open	Düzgünleştirme kaydırıcısı açık değil
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} bir dışa aktarma eklentisidir (Dosya › Dışa Aktar › Farklı Dışa Aktar…)
@@ -6013,6 +6035,8 @@ theme	Appearance	Görünüm
 	Chrome	Krom
 	Chrome…	Krom…
 	Expand Objects on Path	Yol Üzerindeki Nesneleri Genişlet
+	Detach	Ayır
+	Detach Object from Path	Nesneyi Yoldan Ayır
 	Graphic Pen	Grafik Kalemi
 	Graphic Pen…	Grafik Kalemi…
 	Move Anchor Point	Bağlantı Noktasını Taşı
@@ -6677,6 +6701,13 @@ axis	Y Axis	Y ekseni
 	Area Text	Alan Metni
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Piksel'e Yapışma Seçenekleri
+	Pixel Snapping Options…	Piksel'e Yapışma Seçenekleri…
+	Snap to Pixel While Drawing	Çizerken Piksel'e Yapış
+	Snap to Pixel While Moving	Taşırken Piksel'e Yapış
+	Snap to Pixel While Scaling	Ölçeklerken Piksel'e Yapış
+	These options take effect when View › Snap to Pixel is on.	Bu seçenekler Görünüm › Piksel'e Yapış açıkken etkili olur.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle

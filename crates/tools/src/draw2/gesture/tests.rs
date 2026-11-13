@@ -221,6 +221,52 @@ fn fidelity_is_in_screen_pixels_at_any_zoom() {
     }
 }
 
+/// The highest Fidelity (100 px) at the lowest zoom (3.13 %) is sent, while the stroke is drawn and
+/// at its release, as [`crate::draw2::MAX_FIT_TOLERANCE`], the coarsest tolerance `path.freehand`
+/// reads.
+#[test]
+fn highest_fidelity_at_the_lowest_zoom_sends_the_coarsest_tolerance() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.zoom = 0.0313;
+    let stroke: Vec<_> = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)].iter().map(|&(x, y)| (x / cx.zoom, y / cx.zoom)).collect();
+    for id in ["pencil", "paintbrush"] {
+        let mut t = GestureTool::new(id);
+        t.set_option("fidelity", &json!(100.0));
+        let acts = drag(&mut t, &cx, &stroke, Mods::default());
+        let sent: Vec<_> =
+            acts.concat().into_iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect();
+        assert_eq!(sent, [crate::draw2::MAX_FIT_TOLERANCE; 4], "{id}");
+    }
+}
+
+/// `path.freehand` rejects a `fidelity` outside `MIN_FIT_TOLERANCE..=MAX_FIT_TOLERANCE`, so at a zoom
+/// beyond the view's range the Pencil and the Paintbrush send the nearer end of it, while the stroke
+/// is drawn and at its release.
+#[test]
+fn fidelity_sent_stays_within_what_path_freehand_takes() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    let (lo, hi) = (crate::draw2::MIN_FIT_TOLERANCE, crate::draw2::MAX_FIT_TOLERANCE);
+    for (zoom, fidelity, release) in [(0.01, 100.0, hi), (1000.0, 0.01, lo)] {
+        cx.zoom = zoom;
+        let stroke: Vec<_> = [(0.0, 0.0), (40.0, 20.0), (80.0, 0.0), (120.0, 20.0)].iter().map(|&(x, y)| (x / zoom, y / zoom)).collect();
+        for id in ["pencil", "paintbrush"] {
+            let mut t = GestureTool::new(id);
+            t.set_option("fidelity", &json!(fidelity));
+            let acts = drag(&mut t, &cx, &stroke, Mods::default());
+            let sent: Vec<_> =
+                acts.concat().into_iter().filter_map(|a| if let Action::Preview(_, v) = a { v["fidelity"].as_f64() } else { None }).collect();
+            assert!(sent.iter().all(|f| (lo..=hi).contains(f)), "{id} at {zoom}x: {sent:?}");
+            assert_eq!(sent.last(), Some(&release), "{id} at {zoom}x: {sent:?}");
+        }
+    }
+}
+
 /// The Blob Brush's Fidelity stays in points (#5729 is the Pencil's and the Paintbrush's): its
 /// stroke, and another tool chosen while it is drawn, send it as set at any zoom.
 #[test]
@@ -1040,6 +1086,8 @@ fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws
     let selected_cx = cx(&d, &selected, &p);
     t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
     t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(alt));
+    // While drawing, Alt shows the closing ring though the selection could be smoothed.
+    assert_eq!(t.cursor(&selected_cx, Point::new(pts[1].0, pts[1].1), alt), Cursor::PaintbrushClose);
     let last = t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Up, pts[2].0, pts[2].1).with_mods(alt));
     assert!(matches!(last.first(), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
     let cx = cx(&d, &empty, &p);
@@ -1047,7 +1095,8 @@ fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws
     assert!(matches!(last.last().and_then(|a| a.first()), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
 }
 
-/// The Paintbrush shows Smooth before an Alt press only with a selected path.
+/// The Paintbrush shows Smooth before an Alt press only with a selected path, and through the
+/// drag that smooths it, with Alt let go too.
 #[test]
 fn paintbrush_alt_cursor_matches_selection_at_press() {
     let (d, id) = doc_with_rect();
@@ -1056,9 +1105,14 @@ fn paintbrush_alt_cursor_matches_selection_at_press() {
     let empty = Selection::default();
     let p = paint();
     let alt = Mods { alt: true, ..Default::default() };
-    let t = GestureTool::new("paintbrush");
+    let mut t = GestureTool::new("paintbrush");
     assert_eq!(t.cursor(&cx(&d, &selected, &p), Point::new(50.0, 150.0), alt), Cursor::Smooth);
     assert_eq!(t.cursor(&cx(&d, &empty, &p), Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let selected_cx = cx(&d, &selected, &p);
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), Mods::default()), Cursor::Smooth);
 }
 
 /// A selected text object leaves Alt Paintbrush drawing a closed stroke with its close cursor.

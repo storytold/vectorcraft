@@ -1410,6 +1410,8 @@ antiAlias	Sharp	Nítido
 	Objects on Path Tool	Ferramenta Objetos no Caminho
 	Attach Objects on Path	Anexar Objetos ao Caminho
 	Expand Objects on Path	Expandir Objetos no Caminho
+	Detach	Desanexar
+	Detach Object from Path	Desanexar Objeto do Caminho
 	Release Live Paint	Liberar Pintura ao Vivo
 	Release Repeat	Liberar Repetição
 	Release Slice	Liberar Fatia
@@ -2913,6 +2915,19 @@ digits	Malayalam	Malaiala
 	Spot Color Objects	Objetos com cores spot
 	Pattern Objects	Objetos com padrões
 	Gradient Objects	Objetos com gradientes
+	Font Details	Detalhes das fontes
+	Linked Images	Imagens vinculadas
+	Embedded Images	Imagens incorporadas
+	Compound Paths	Caminhos compostos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instâncias de símbolo
+	Gradient Meshes	Malhas de gradiente
+	Blends	Mesclagens
+	Envelopes	Envelopes
+	Intertwine Groups	Grupos entrelaçados
+	Opacity Masks	Máscaras de opacidade
+	Objects with Effects	Objetos com efeitos
 	Spot Colors	Cores Spot
 	Spot Colors…	Cores Spot…
 	Spread:	Propagação:
@@ -3382,6 +3397,10 @@ imageTrace	Outline	Contorno
 	Dock Panel	Encaixar Painel
 	Dock to Top	Encaixar na Parte Superior
 	Dock to Bottom	Encaixar na Parte Inferior
+	Dock to Left	Encaixar à Esquerda
+	Dock to Right	Encaixar à Direita
+	Dock Toolbar	Encaixar Barra de Ferramentas
+	Float Toolbar	Flutuar Barra de Ferramentas
 	Control Bar Options	Opções da Barra de Controle
 	Tool Options	Opções de Ferramenta
 	Object Options	Opções de Objeto
@@ -4207,6 +4226,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	os traçados contêm coordenadas inválidas
 @msg	paths: give at least one file	paths: informe pelo menos um arquivo
 @msg	replace: the object to replace was changed or deleted	replace: o objeto a ser substituído foi alterado ou excluído
+@msg	the document it was prepared for is no longer active	o documento para o qual foi preparado não está mais ativo
 @msg	pattern missing	padrão ausente
 @msg	patterns nested too deeply are filled with mid-grey	padrões aninhados com profundidade excessiva são preenchidos com cinza médio
 @msg	percent must be above 0 and at most 6400, not {p}	percent deve ser maior que 0 e no máximo 6400, não {p}
@@ -4242,6 +4262,7 @@ axis	Both	Ambos
 @msg	select a repeat	selecione uma repetição
 @msg	select an Intertwine group	selecione um grupo entrelaçado
 @msg	select an Objects on Path group	selecione um grupo de objetos no caminho
+@msg	choose the object to detach with its Select/Move widget	escolha o objeto a desanexar com o controle Selecionar/Mover dele
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	um caminho dentro de um caminho composto, mesclagem, envelope, repetição ou grupo entrelaçado não pode receber objetos
 @msg	a clipping path can't take objects	um caminho de recorte não pode receber objetos
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objetos dentro de uma mesclagem, envelope, repetição ou grupo entrelaçado não podem ser anexados a um caminho
@@ -5347,6 +5368,7 @@ axis	Both	Ambos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	O link está dentro de um símbolo, projeto de gráfico, padrão ou máscara de opacidade e não tem lugar na tela
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -5891,7 +5913,9 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` deve ser front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Os gráficos são mapeados em faces planas: use o tipo de objeto Extrusão ou Plano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver
+@msg	Revolve maps graphics onto its side: map them onto the front	Revolver mapeia os gráficos na sua lateral: mapeie-os na face frontal
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Os gráficos são complexos demais para esta superfície: simplifique a arte dos símbolos ou reduza Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` aceita no máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Um plano tem uma única face: mapeie seus gráficos na face frontal
 @msg	The graphics are too complex: simplify the symbols' art	Os gráficos são complexos demais: simplifique a arte dos símbolos
@@ -6636,6 +6660,13 @@ axis	Y Axis	Eixo Y
 	Area Text	Texto de Área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir Texto pelos Limites do Glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opções de Ajuste ao Pixel
+	Pixel Snapping Options…	Opções de Ajuste ao Pixel…
+	Snap to Pixel While Drawing	Ajustar ao Pixel ao Desenhar
+	Snap to Pixel While Moving	Ajustar ao Pixel ao Mover
+	Snap to Pixel While Scaling	Ajustar ao Pixel ao Dimensionar
+	These options take effect when View › Snap to Pixel is on.	Essas opções têm efeito quando Exibir › Ajustar ao Pixel está ativado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar Opções de Ajuste ao Glifo
 	Hide Snap to Glyph Options	Ocultar Opções de Ajuste ao Glifo

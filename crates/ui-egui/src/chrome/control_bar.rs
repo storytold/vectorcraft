@@ -78,7 +78,8 @@ pub(super) const ISOLATION_BUTTON: &str = "cb-isolation";
 /// less, the menu is left out so those controls still fit the narrowest window.
 const ARTBOARD_SNAPPING_WIDTH: f32 = 900.0;
 
-/// The Control bar's snapping quick access; every change uses its existing command.
+/// The Control bar's snapping quick access; every change uses its existing command, and Pixel
+/// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.menu_button(tl!("Snapping"), |ui| {
         for (label, cmd, on) in [
@@ -91,6 +92,10 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             if widgets::check(ui, label, on, true) {
                 crate::menus::invoke(app, cmd, json!({}));
             }
+        }
+        if ui.button(tl!("Pixel Snapping Options…")).clicked() {
+            ui.close();
+            crate::menus::invoke(app, "view.snapToPixel.options", json!({}));
         }
         ui.separator();
         for (key, label, on) in [
@@ -202,7 +207,7 @@ fn buttons_width(ui: &Ui, n: usize) -> f32 {
 /// The separator that ends a group of the Control bar's controls, as [`group_end_width`] measures it.
 fn group_end(ui: &mut Ui) {
     ui.add_space(GROUP_GAP);
-    separator(ui);
+    boundary(ui, separator);
 }
 
 fn group_end_width(ui: &Ui) -> f32 {
@@ -216,6 +221,66 @@ fn separator(ui: &mut Ui) {
 
 fn separator_width(ui: &Ui) -> f32 {
     SEPARATOR + ui.spacing().item_spacing.x
+}
+
+/// A separator between two groups of the Control bar's controls, drawn in the bar's row `ui`: the
+/// pass that drew it, the range of the paint list that holds it (between two empty shapes), the
+/// row's next widget id just after it, and whether it reaches the end of the row, leaving no room
+/// for a control after it.
+#[derive(Clone, Copy)]
+struct Boundary {
+    pass: u64,
+    shapes: (usize, usize),
+    after: egui::Id,
+    at_end: bool,
+}
+
+/// The key of the row `ui`'s last [`Boundary`].
+fn boundary_key(ui: &Ui) -> egui::Id {
+    ui.unique_id().with("cb-group-boundary")
+}
+
+/// A separator between two groups of the Control bar's controls, drawn with `draw`. It stays only
+/// while a control follows it in the row: [`erase_trailing`] erases it at the end of the row when no
+/// control does or none has room, and the next separator erases it when no control comes between
+/// them. The separator keeps its room either way.
+fn boundary(ui: &mut Ui, draw: impl FnOnce(&mut Ui)) {
+    erase_trailing(ui);
+    let start = ui.painter().add(egui::Shape::Noop);
+    draw(ui);
+    let end = ui.painter().add(egui::Shape::Noop);
+    let at_end = ui.cursor().min.x >= ui.max_rect().right();
+    let b = Boundary { pass: ui.ctx().cumulative_pass_nr(), shapes: (start.0, end.0), after: ui.next_auto_id(), at_end };
+    let key = boundary_key(ui);
+    ui.data_mut(|d| d.insert_temp(key, b));
+}
+
+/// The separator that ends a group of the Control bar's controls, drawn as `ui.separator()` draws
+/// one, and left out when no control follows it ([`boundary`]).
+pub(crate) fn group_separator(ui: &mut Ui) {
+    boundary(ui, |ui| {
+        ui.separator();
+    });
+}
+
+/// Erases the row `ui`'s last group separator when no control was drawn after it in this pass, or
+/// none had room in the row. The end of the Control bar's controls row calls it too.
+fn erase_trailing(ui: &mut Ui) {
+    let key = boundary_key(ui);
+    let Some(b) = ui.data_mut(|d| {
+        let b = d.get_temp::<Boundary>(key);
+        d.remove::<Boundary>(key);
+        b
+    }) else {
+        return;
+    };
+    if b.pass != ui.ctx().cumulative_pass_nr() || (b.after != ui.next_auto_id() && !b.at_end) {
+        return;
+    }
+    let painter = ui.painter();
+    for i in b.shapes.0 + 1..b.shapes.1 {
+        painter.set(egui::layers::ShapeIdx(i), egui::Shape::Noop);
+    }
 }
 
 /// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
@@ -276,7 +341,7 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
             }
         }
         if transform {
-            separator(ui);
+            boundary(ui, separator);
         }
     }
     transform
@@ -292,7 +357,7 @@ fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !group_on(app, "alignDistribute") || app.session.active().is_none() || ui.available_width() < separator_width(ui) + buttons_width(ui, 7) {
         return;
     }
-    separator(ui);
+    boundary(ui, separator);
     crate::panels::align::align_buttons(app, ui, BUTTON);
     if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x {
         crate::panels::align::align_to_menu(app, ui, BUTTON);
@@ -479,7 +544,7 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 }
 
 /// The Control bar's Fill and Stroke group: the fill and stroke chips, the Stroke link, the weight
-/// and the width profile, and the separator after them.
+/// and the width profile, and the separator after them while a control follows ([`group_separator`]).
 fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
     let shown_stroke = crate::panels::current_stroke(app);
     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
@@ -494,12 +559,12 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("stroke.set", json!({"profile": id})).ok();
     }
     ui.add_space(4.0);
-    ui.separator();
+    group_separator(ui);
 }
 
 /// The Control bar's Opacity group (its link and field, showing `opacity`) and, with something
 /// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
-/// the panel menu has it on, and the separator after them.
+/// the panel menu has it on, and the separator after them while a control follows.
 fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
     if opacity_on {
@@ -529,7 +594,7 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
         global_edit_options(app, ui);
     }
     if opacity_on || style_on {
-        ui.separator();
+        group_separator(ui);
     }
 }
 
@@ -680,6 +745,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
         if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
             artboard_align_group(app, ui);
+            erase_trailing(ui);
             return;
         }
         if anchors != AnchorControls::None && group_on(app, "anchors") {
@@ -713,6 +779,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             crate::panels::character::control_bar(app, ui);
         }
         if !groups_before_transform(app, ui, sel.len()) {
+            erase_trailing(ui);
             return;
         }
         // The Transform link opens the whole Transform panel (reference point, rotate,
@@ -750,6 +817,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
                 crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
             }
         }
+        erase_trailing(ui);
     });
     // Controls that keep their size can still run into the button's room in a narrow window;
     // the button is left out then. A floating bar clips them, so its button always shows.

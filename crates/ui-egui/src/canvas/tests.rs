@@ -184,6 +184,9 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
         Cursor::PencilNew,
         Cursor::PencilStraight,
         Cursor::PencilContinue,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
     ] {
         assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
         assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");
