@@ -1300,6 +1300,8 @@ font-technology	Variable	Variabili
 	Number:	Numero:
 	Longest:	Più lungo:
 	Path:	Tracciato:
+	Length:	Lunghezza:
+	Selection has no length to scale	La selezione non ha lunghezza da scalare
 	Largest:	Più grande:
 	Direction:	Direzione:
 	Symbolism Tools Options	Opzioni strumenti simboli
@@ -3268,6 +3270,7 @@ digits	Malayalam	Malayalam
 	Set Bounds	Imposta limiti
 	Set Current Layer	Imposta livello corrente
 	Set Keyboard Shortcut	Imposta scelta rapida da tastiera
+	Set Length	Imposta lunghezza
 	Set Mesh Point Color	Imposta colore punto trama
 	Set Preference	Imposta preferenza
 	Set Slice Rectangle	Imposta rettangolo sezione

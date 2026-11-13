@@ -1270,6 +1270,8 @@ font-technology	Variable	Variabel
 	Number:	Anzahl:
 	Longest:	Längster:
 	Path:	Pfad:
+	Length:	Länge:
+	Selection has no length to scale	Die Auswahl hat keine Länge zum Skalieren
 	Largest:	Größter:
 	Direction:	Richtung:
 	Symbolism Tools Options	Optionen für die Symbol-Werkzeuge
@@ -3192,6 +3194,7 @@ digits	Malayalam	Malayalam
 	Set Bounds	Begrenzung festlegen
 	Set Current Layer	Aktuelle Ebene festlegen
 	Set Keyboard Shortcut	Tastaturbefehl festlegen
+	Set Length	Länge festlegen
 	Set Mesh Point Color	Farbe des Gitterpunkts festlegen
 	Set Preference	Voreinstellung festlegen
 	Set Slice Rectangle	Slice-Rechteck festlegen

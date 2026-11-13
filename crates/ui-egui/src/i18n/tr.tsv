@@ -2299,6 +2299,8 @@ shape	Open	Açık
 	Pathfinders:	Yol Bulucular:
 	Paths	Yollar
 	Path Length	Yol Uzunluğu
+	Set Length	Uzunluğu Ayarla
+	Selection has no length to scale	Seçimin ölçeklenecek bir uzunluğu yok
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Yollar: {paths} Bağlantılar: {anchors} Renkler: {colors}
 	Pattern	Desen
 	Pattern Editing	Desen Düzenleme

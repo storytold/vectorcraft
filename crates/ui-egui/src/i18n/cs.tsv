@@ -1206,6 +1206,7 @@ lighting	Light	Světlo
 	Saved Selection 9	Uložený výběr 9
 	Select Tool	Vybrat nástroj
 	Set Keyboard Shortcut	Nastavit klávesovou zkratku
+	Set Length	Nastavit délku
 	Set Zoom	Nastavit zvětšení
 	Show Package	Zobrazit balíček
 	Show Panel	Zobrazit panel
@@ -2560,6 +2561,7 @@ digits	Malayalam	Malajálamské
 	Number:	Počet:
 	Longest:	Nejdelší:
 	Path:	Cesta:
+	Selection has no length to scale	Výběr nemá délku, kterou lze škálovat
 	Largest:	Největší:
 	Anti-alias Rasters	Vyhlazovat rastry
 	Clip Complex Regions	Oříznout složité oblasti

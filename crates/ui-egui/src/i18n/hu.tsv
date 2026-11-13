@@ -2992,6 +2992,7 @@ file-filter	Templates	Sablonok
 	Path Eraser	Útvonalradír
 	Path Eraser Tool	Útvonalradír
 	Path:	Útvonal:
+	Selection has no length to scale	A kijelölésnek nincs hossza a méretezéshez
 	Pathfinder	Útvonalkezelő
 	Pathfinder Options…	Útvonalkezelő beállításai…
 	Pathfinders:	Útvonalkezelők:
@@ -3842,6 +3843,7 @@ mark-style	Japanese	Japán
 	Set Bounds	Határok beállítása
 	Set Current Layer	Aktuális réteg beállítása
 	Set Keyboard Shortcut	Billentyűparancs beállítása
+	Set Length	Hossz beállítása
 	Set Mesh Point Color	Hálópont színének beállítása
 	Set Preference	Beállítás megadása
 	Set Slice Rectangle	Szelet téglalapjának beállítása

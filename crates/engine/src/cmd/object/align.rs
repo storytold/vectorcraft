@@ -1,4 +1,4 @@
-use super::transform::transform_patterns;
+use super::transform::{selection_length, transform_patterns};
 use super::{
     Affine, Document, EngineError, NodeId, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad, check_numbers, check_switches,
     effects, has_multi, ok, selected_roots, str_param,
@@ -23,6 +23,11 @@ impl Session {
     /// (`typeGlyphBounds`).
     pub fn bounds_measure(&self) -> effects::preview::Measure {
         effects::preview::Measure { preview: self.prefs.use_preview_bounds, glyphs: self.prefs.type_glyph_bounds }
+    }
+    /// The Path Length panel's reading for `ids`: the summed length of every path in their
+    /// subtrees ([`selection_length`]), or `None` with no document open.
+    pub fn selection_length(&self, ids: &[NodeId]) -> Option<f64> {
+        Some(selection_length(&self.doc().ok()?.doc, ids))
     }
 }
 

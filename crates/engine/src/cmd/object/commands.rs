@@ -5,7 +5,7 @@ use super::compound::{clip_edit, clip_make, clip_release, compound_make, compoun
 use super::pixelgrid::set_pixel_aligned;
 use super::props::set_props;
 use super::shape::{expand_shape, set_live_shape};
-use super::transform::{move_cmd, nudge, reflect, rotate, scale, shear, transform, transform_again};
+use super::transform::{move_cmd, nudge, reflect, rotate, scale, set_length, shear, transform, transform_again};
 use super::{CommandSpec, cmd, has_doc, has_multi, has_selection, has_selection_or_guides};
 use crate::cmd::has_selected_member;
 
@@ -46,6 +46,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: [id…] (selected first; default: the selection), sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} (strokes/corners default to the preferences). With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
             has_selection,
             scale
+        ),
+        cmd!(
+            "object.setLength",
+            "Set Length",
+            [],
+            None,
+            "{length: pt (must be > 0), origin?: [x,y], copy?, strokes?: bool, corners?: bool, patterns?: bool} (Path Length panel) uniformly scales the selection, about its centre by default, so the summed length of every path in it (a compound path's and a selected group's paths included) becomes `length`",
+            has_selection,
+            set_length
         ),
         cmd!(
             "object.reflect",

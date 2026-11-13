@@ -1232,6 +1232,7 @@ antiAlias	Sharp	锐利
 	Number:	数量：
 	Longest:	最长：
 	Path:	路径：
+	Selection has no length to scale	所选内容没有可缩放的长度
 	Largest:	最大：
 	Direction:	方向：
 	Symbolism Tools Options	符号工具选项
@@ -3086,6 +3087,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Set Bounds	设置边界
 	Set Current Layer	设为当前图层
 	Set Keyboard Shortcut	设置键盘快捷键
+	Set Length	设置长度
 	Set Mesh Point Color	设置网格点颜色
 	Set Preference	设置首选项
 	Set Slice Rectangle	设置切片矩形

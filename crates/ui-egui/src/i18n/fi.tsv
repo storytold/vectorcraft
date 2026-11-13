@@ -6196,6 +6196,8 @@ mark-style	Japanese	Japanilainen
 	Edge Only	Vain reunat
 	Overlay Edge	Reunat päällä
 	Path Length	Polun pituus
+	Set Length	Aseta pituus
+	Selection has no length to scale	Valinnassa ei ole pituutta skaalattavaksi
 swatch	[None]	[Ei mitään]
 swatch	[Registration]	[Kohdistus]
 swatch	White	Valkoinen

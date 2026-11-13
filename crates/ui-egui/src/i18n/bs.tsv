@@ -3418,6 +3418,8 @@ theme	Appearance	Izgled
 	Objects	Objekti
 	Paths	Putanje
 	Path Length	Dužina putanje
+	Set Length	Postavi dužinu
+	Selection has no length to scale	Odabir nema dužinu za skaliranje
 	Add Guide	Dodaj vodilicu
 	Edit Selection	Uredi odabir
 	Recall Selection	Vrati odabir
