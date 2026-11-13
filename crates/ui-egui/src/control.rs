@@ -652,7 +652,10 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 /// changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
     let decoded = if has_percent_escape(s) { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
-    let mut found = Found::default();
+    let mut found = Found { kept: readable_ids_in(s, None, r), ..Found::default() };
+    if let Some((text, spans)) = &decoded {
+        found.kept.extend(readable_ids_in(text, Some(spans.as_slice()), r));
+    }
     for group in &r.pairs {
         for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
             for (from, to) in group {
@@ -679,24 +682,28 @@ fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
     Some(out)
 }
 
-/// The spans of a text that [`replace_text`] replaces, each with its replacement, and every span it has
-/// taken: the ones it replaces and the loaded library ids it keeps.
+/// The spans of a text that [`replace_text`] replaces, each with its replacement, every span it has
+/// taken (the ones it replaces and the loaded library ids it keeps), and the whole readable library ids
+/// the text holds ([`readable_ids_in`]).
 #[derive(Default)]
 struct Found<'a> {
     cuts: Vec<(usize, usize, &'a str)>,
     taken: Vec<(usize, usize)>,
+    kept: Vec<(usize, usize)>,
 }
 
 impl<'a> Found<'a> {
-    /// Takes each occurrence of `from` in `text` that overlaps no span taken: as a span to write as `to`,
-    /// or, where it begins a loaded library's id ([`begins_known_id`]), that id's span, kept. `spans`
-    /// gives the range of the original text each byte of a decoded `text` was read from.
+    /// Takes each occurrence of `from` in `text` that overlaps no span taken and lies inside no whole
+    /// readable library id: as a span to write as `to`, or, where it begins a loaded library's id
+    /// ([`begins_known_id`]), that id's span, kept. `spans` gives the range of the original text each
+    /// byte of a decoded `text` was read from.
     fn claim(&mut self, text: &str, spans: Option<&[(usize, usize)]>, from: &str, to: &'a str, fold: bool, r: &Rewrite) {
         let span = |at: usize, end: usize| spans.map_or((at, end), |s| (s[at].0, s[end - 1].1));
         for at in occurrences(text, from, fold) {
             let end = at + from.len();
             let (start, stop) = span(at, end);
-            if self.taken.iter().any(|&(a, b)| start < b && a < stop) || ends_a_longer_path(text, at, from) {
+            let inside_readable = self.kept.iter().any(|&(a, b)| a <= start && stop <= b);
+            if inside_readable || self.taken.iter().any(|&(a, b)| start < b && a < stop) || ends_a_longer_path(text, at, from) {
                 continue;
             }
             match begins_known_id(text, at, end, r) {
@@ -823,6 +830,47 @@ fn begins_known_id(text: &str, at: usize, end: usize, r: &Rewrite) -> Option<usi
         let begins = id.len() > end - at && rest.get(..id.len()).is_some_and(|head| same(head, id)) && !continues_path(&rest[id.len()..]);
         begins.then_some(id.len())
     })
+}
+
+/// The spans of `text` that hold a whole loaded library id ([`Hiding::readable`]), written with or
+/// without its `loaded/` and with no `.` or `..` part: text that does not continue a path follows it
+/// ([`continues_path`]), and it begins the text or follows a space, a quote, `,`, `;`, an opening
+/// bracket or, written with its `loaded/`, `=`, unless a `file:` URL holds it ([`url_start`]). Any
+/// other character before it, such as `+` or `@`, can be part of a longer path's name, and so can `=`
+/// before a path. The URL must name no host or `localhost`
+/// ([`in_local_file_url`]).
+/// A hidden id or path found inside such a span stays, wherever it begins. `spans` gives the range of
+/// the original text each byte of a decoded `text` was read from.
+fn readable_ids_in(text: &str, spans: Option<&[(usize, usize)]>, r: &Rewrite) -> Vec<(usize, usize)> {
+    let span = |at: usize, end: usize| spans.map_or((at, end), |s| (s[at].0, s[end - 1].1));
+    let dotted = |id: &str| id.split(['/', '\\']).any(|part| part == "." || part == "..");
+    let mut kept = Vec::new();
+    for known in r.hiding.readable.iter().filter(|known| !dotted(known)) {
+        let bare = known.strip_prefix("loaded/").filter(|bare| !bare.is_empty());
+        for id in std::iter::once(known.as_str()).chain(bare) {
+            let prefixed = id.starts_with("loaded/");
+            for at in occurrences(text, id, r.fold) {
+                let end = at + id.len();
+                let after_delimiter = text[..at]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | ',' | ';' | '(' | '[' | '{' | '<') || (prefixed && c == '='));
+                if !continues_path(&text[end..]) && (after_delimiter || in_local_file_url(text, at, id)) {
+                    kept.push(span(at, end));
+                }
+            }
+        }
+    }
+    kept
+}
+
+/// Is `path`, an absolute path at `text[at..]`, held by a `file:` URL ([`url_start`]) that names no host
+/// or `localhost`, in any case of its letters?
+fn in_local_file_url(text: &str, at: usize, path: &str) -> bool {
+    let url = url_start(text, at, path);
+    let Some(between) = text.get(url + "file:".len()..at).filter(|_| url < at) else { return false };
+    let host = between.strip_prefix("//").unwrap_or(between).trim_end_matches('/');
+    host.is_empty() || host.eq_ignore_ascii_case("localhost")
 }
 
 /// Text that a person or a script wrote, by its key: a command palette query, a script's report and a
