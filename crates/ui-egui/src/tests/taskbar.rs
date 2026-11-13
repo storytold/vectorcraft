@@ -121,12 +121,10 @@ fn an_image_with_vector_art_offers_make_clipping_mask() {
     image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-taskbar-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("blue.png");
-    std::fs::write(&path, &png).unwrap();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar");
+    let path = dir.file("blue.png", &png);
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    app.run("file.place", json!({"path": path.to_string_lossy(), "link": false})).unwrap();
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
     let img = app.session.active().unwrap().selection.objects[0].0;
     assert!(matches!(kind(&app, img), NodeKind::Image(_)));
     let shape = id(app.run("shape.ellipse", json!({"x": 150, "y": 100, "width": 60, "height": 60})).unwrap());

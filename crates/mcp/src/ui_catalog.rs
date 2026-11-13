@@ -195,7 +195,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.pixelPreview", "Pixel Preview", "Cmd+Alt+Y", "{}"),
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
-    ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
+    (
+        "view.snapToPixel",
+        "Snap to Pixel",
+        "",
+        "{} toggle: drawing, moving and scaling land on whole pixels, each while its option in view.snapToPixel.options is on",
+    ),
     (
         "view.snapToGlyph",
         "Snap to Glyph",
@@ -563,7 +568,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name: string} delete the toolbar made with New Toolbar called `name`, and the groups torn off it, from the current workspace, as Manage Toolbars' trash can does",
     ),
-    ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
+    (
+        "window.toolbar.dock",
+        "Dock Toolbar",
+        "",
+        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` in the lane along the window's left or right edge (omitted: the edge it docked at last, the left at first), as Dock to Left and Dock to Right in its title bar's context menu and dropping its title bar on that edge do; `order` is its place in that edge's stack, 0 at the top (omitted: the end, or where it is when it is docked at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.float",
+        "Float Toolbar",
+        "",
+        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in screen points (both or neither; omitted: where it floated last), as Float Toolbar in its title bar's context menu and dragging its title bar out of its lane do; returns {toolbar, floating, side, order, pos}",
+    ),
+    (
+        "window.toolbar.list",
+        "List Toolbars",
+        "",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its place in that edge's stack while docked (else null)",
+    ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
         "window.pathfinder.compoundShapes",
@@ -647,6 +669,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
     ),
     (
+        "learn.skills",
+        "Back to Skills",
+        "",
+        "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",
@@ -657,6 +685,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show Tool Location",
         "",
         "{tool: a tool id, as tool.select takes} mark where that tool is for 3 seconds without choosing it, as the link on a tool's name in a Learn tutorial step does: its toolbar button, a row of its collapsed group's flyout (which opens), its group's torn-off strip (which comes to the front), or, when no shown toolbar holds it, its row in the All Tools drawer (which opens); a Tools panel hidden with Window › Tools shows again; Escape or the next locate removes the mark; a missing, non-string or unknown id is an error and changes nothing; returns {tool, location: toolbar|flyout|strip|allTools|unavailable, toolbar: the name of the toolbar made with New Toolbar that holds it, or null}, with reason when Presentation Mode or Tab hides the toolbars",
+    ),
+    (
+        "learn.openSample",
+        "Open Tutorial Sample",
+        "",
+        "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
+    ),
+    (
+        "learn.finish",
+        "Finish Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+    ),
+    (
+        "learn.next",
+        "Next Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (

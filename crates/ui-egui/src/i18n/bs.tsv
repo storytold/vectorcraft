@@ -908,6 +908,10 @@
 	Dock Panel	Usidri panel
 	Dock to Top	Usidri na vrh
 	Dock to Bottom	Usidri na dno
+	Dock to Left	Usidri lijevo
+	Dock to Right	Usidri desno
+	Dock Toolbar	Usidri traku s alatima
+	Float Toolbar	Odvoji traku s alatima
 	Control Bar Options	Opcije kontrolne trake
 	Tool Options	Opcije alata
 	Object Options	Opcije objekta
@@ -2855,6 +2859,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
 	Color Theme Picker	Birač teme boja
 	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
+	Prominent Colors	Istaknute boje
+	Save All Colors	Sačuvaj sve boje
+	Save Prominent Colors	Sačuvaj istaknute boje
 	Separate colors into rows	Razdvoji boje u redove
 	Unlink harmony colors	Prekini vezu boja harmonije
 	1 Color Job	Posao s 1 bojom
@@ -3956,6 +3963,19 @@ theme	Appearance	Izgled
 	Spot Color Objects	Objekti sa spot bojama
 	Pattern Objects	Objekti s uzorcima
 	Gradient Objects	Objekti s gradijentima
+	Font Details	Detalji fontova
+	Linked Images	Povezane slike
+	Embedded Images	Ugrađene slike
+	Compound Paths	Složene putanje
+	Text Objects	Tekstualni objekti
+	Placed Documents	Postavljeni dokumenti
+	Symbol Instances	Instance simbola
+	Gradient Meshes	Gradijentne mreže
+	Blends	Stapanja
+	Envelopes	Omotnice
+	Intertwine Groups	Grupe isprepletanja
+	Opacity Masks	Maske neprozirnosti
+	Objects with Effects	Objekti s efektima
 	Spot Colors	Spot boje
 	Spot Colors (0)	Spot boje (0)
 	Swatch Options	Opcije uzorka boje
@@ -6040,6 +6060,7 @@ axis	Y Axis	Y osa
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+@msg	Batch cannot play an action with a View menu step	Paketna obrada ne može reprodukovati akciju s korakom iz menija Prikaz
 	Insert Menu Item…	Umetni stavku menija…
 	Insert Menu Item	Umetni stavku menija
 	Insert Select Path	Umetni odabir putanje
@@ -6221,6 +6242,12 @@ axis	Y Axis	Y osa
 	Area Text	Tekst u oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
+	Pixel Snapping Options	Opcije prianjanja uz piksel
+	Pixel Snapping Options…	Opcije prianjanja uz piksel…
+	Snap to Pixel While Drawing	Prilijepi uz piksel pri crtanju
+	Snap to Pixel While Moving	Prilijepi uz piksel pri pomjeranju
+	Snap to Pixel While Scaling	Prilijepi uz piksel pri skaliranju
+	These options take effect when View › Snap to Pixel is on.	Ove opcije djeluju kada je uključeno Prikaz › Prilijepi uz piksel.
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif
@@ -6801,6 +6828,19 @@ shape	Open	Otvoren
 	Show where this tool is	Prikaži gdje je ovaj alat
 @msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
+	View more	Prikaži više
+	Finish tutorial	Završi tutorijal
+	Next Up	Sljedeće
+	You finished the last tutorial in this skill.	Završili ste posljednji tutorijal u ovoj vještini.
+	Back to skills	Nazad na vještine
+	Open Tutorial Sample	Otvori uzorak tutorijala
+	Finish Tutorial	Završi tutorijal
+	Next Tutorial	Sljedeći tutorijal
+	Back to Skills	Nazad na vještine
+@msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
+@msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je posljednji tutorijal u svojoj vještini
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

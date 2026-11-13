@@ -1114,6 +1114,10 @@ font-technology	Variable	Változó
 	Dock Panel	Panel dokkolása
 	Dock to Top	Dokkolás felülre
 	Dock to Bottom	Dokkolás alulra
+	Dock to Left	Dokkolás balra
+	Dock to Right	Dokkolás jobbra
+	Dock Toolbar	Eszköztár dokkolása
+	Float Toolbar	Eszköztár lebegtetése
 	Control Bar Options	Vezérlősáv beállításai
 	Tool Options	Eszközbeállítások
 	Object Options	Objektumbeállítások
@@ -3464,6 +3468,9 @@ mark-style	Japanese	Japán
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
 	Color Theme Picker	Színtéma-választó
 	Click or drag across the art to pick its colors; Shift adds more	Kattintson vagy húzzon a grafikán a színei felvételéhez; a Shift továbbiakat ad hozzá
+	Prominent Colors	Domináns színek
+	Save All Colors	Összes szín mentése
+	Save Prominent Colors	Domináns színek mentése
 	Reset to default	Alapérték visszaállítása
 	Reset to Default	Alapérték visszaállítása
 	Reset to Defaults	Alapértékek visszaállítása
@@ -4116,6 +4123,19 @@ mark-style	Japanese	Japán
 	Spot Color Objects	Direkt színeket használó objektumok
 	Pattern Objects	Mintázatokat használó objektumok
 	Gradient Objects	Színátmeneteket használó objektumok
+	Font Details	Betűtípus-részletek
+	Linked Images	Csatolt képek
+	Embedded Images	Beágyazott képek
+	Compound Paths	Összetett útvonalak
+	Text Objects	Szövegobjektumok
+	Placed Documents	Elhelyezett dokumentumok
+	Symbol Instances	Szimbólumpéldányok
+	Gradient Meshes	Színátmenetes hálók
+	Blends	Összemosások
+	Envelopes	Burkolók
+	Intertwine Groups	Összefonási csoportok
+	Opacity Masks	Átlátszósági maszkok
+	Objects with Effects	Effektusokat használó objektumok
 	Spot Colors	Direktszínek
 	Spot Colors (0)	Direktszínek (0)
 	Spot Colors…	Direktszínek…
@@ -5151,6 +5171,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -6516,6 +6537,7 @@ axis	Y Axis	Y tengely
 @msg	message must be text	message: szöveg kell
 @msg	allowContinue must be true or false	allowContinue: true vagy false kell
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
+@msg	Batch cannot play an action with a View menu step	A kötegelt feldolgozás nem játszhat le Nézet menübeli lépést tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
 	Insert Select Path	Útvonal kijelölésének beszúrása
@@ -6699,6 +6721,13 @@ axis	Y Axis	Y tengely
 	Area Text	Területszöveg
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pixelhez illesztés beállításai
+	Pixel Snapping Options…	Pixelhez illesztés beállításai…
+	Snap to Pixel While Drawing	Illesztés pixelhez rajzoláskor
+	Snap to Pixel While Moving	Illesztés pixelhez mozgatáskor
+	Snap to Pixel While Scaling	Illesztés pixelhez méretezéskor
+	These options take effect when View › Snap to Pixel is on.	Ezek a beállítások akkor érvényesek, ha a Nézet › Illesztés pixelhez be van kapcsolva.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
@@ -7327,6 +7356,19 @@ breakText	Glyphs	Glifák
 	Show where this tool is	Megmutatja, hol van ez az eszköz
 @msg	missing `tutorial` (see learn.list)	hiányzik: `tutorial` (lásd: learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ismeretlen oktatóanyag: `{id}` (lásd: learn.list)
+	View more	Továbbiak
+	Finish tutorial	Oktatóanyag befejezése
+	Next Up	Következő
+	You finished the last tutorial in this skill.	Befejezte a készség utolsó oktatóanyagát.
+	Back to skills	Vissza a készségekhez
+	Open Tutorial Sample	Oktatóanyag mintafájljának megnyitása
+	Finish Tutorial	Oktatóanyag befejezése
+	Next Tutorial	Következő oktatóanyag
+	Back to Skills	Vissza a készségekhez
+@msg	tutorial `{id}` has no practice sample	nincs gyakorló mintafájl ehhez az oktatóanyaghoz: `{id}`
+@msg	open the practice sample of `{id}` first (see learn.openSample)	előbb nyissa meg a gyakorló mintafájlt ehhez: `{id}` (lásd: learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	előbb fejezze be ezt: `{id}` (lásd: learn.finish)
+@msg	`{id}` is the last tutorial in its skill	a készsége utolsó oktatóanyaga: `{id}`
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Elhalasztott effektusok frissítése
