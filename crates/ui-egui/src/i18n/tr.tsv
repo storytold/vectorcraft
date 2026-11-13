@@ -791,6 +791,8 @@ font-technology	Variable	Değişken
 	Delete Width Point	Genişlik Noktasını Sil
 	Delete Workspace	Çalışma Alanını Sil
 	Delete {kind} Style	{kind} Stilini Sil
+	Delete the selected items and their artwork?	Seçili öğeler ve içlerindeki çizim silinsin mi?
+	Delete this layer and its artwork?	Bu katman ve içindeki çizim silinsin mi?
 	Delete “{name}”?	“{name}” silinsin mi?
 	Depth:	Derinlik:
 	Description	Açıklama
@@ -1003,6 +1005,7 @@ font-technology	Variable	Değişken
 	Enable Contextual Task Bar	Bağlamsal Görev Çubuğunu Etkinleştir
 	Enable copying of text, images and other content	Metin, resim ve diğer içeriklerin kopyalanmasını etkinleştirin
 	Enable in-menu font previews	Menü içi yazı tipi önizlemelerini etkinleştir
+	Show samples on white	Örnekleri beyaz üzerinde göster
 	Enable Missing Glyph Protection	Eksik Glif Korumasını Etkinleştir
 	Enable Opacity Mask	Opaklık Maskesini Etkinleştir
 	Enable plaintext metadata	Düz metin meta verilerini etkinleştir
@@ -1871,6 +1874,10 @@ font-technology	Variable	Değişken
 	Modify	Değiştir
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi Seti
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku Seti
 	Kinsoku Shori Type	Kinsoku Shori Türü
 	Push In First	Önce İçeri
@@ -4462,6 +4469,7 @@ axis	Both	Her İkisi
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
 @msg	not an HP-GL file	HP-GL dosyası değil
+@msg	not a PICT file	PICT dosyası değil
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 1 ile 255 arasında #rrggbb renginden oluşan bir dizi olmalıdır
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
@@ -4821,6 +4829,7 @@ axis	Both	Her İkisi
 @msg	choose the font files to add	eklenecek yazı tipi dosyalarını seçin
 @msg	not a file	dosya değil
 @msg	not a font file	yazı tipi dosyası değil
+@msg	the active document changed while the question was open; nothing was deleted	soru açıkken etkin belge değişti; hiçbir şey silinmedi
 @msg	that document is no longer open	bu belge artık açık değil
 @msg	larger than 256 MB	256 MB'tan büyük
 @msg	the files come to more than 1 GB: add fewer at a time	dosyalar 1 GB'tan fazla geliyor: bir kerede daha azını ekleyin
@@ -6340,6 +6349,35 @@ axis	Y Axis	Y ekseni
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
 @msg	true or false	true veya false
+@msg	a number >= {_1}	bir sayı >= {_1}
+@msg	a number > {_1}	bir sayı > {_1}
+@msg	a number <= {_1}	bir sayı <= {_1}
+@msg	a number < {_1}	bir sayı < {_1}
+@msg	a number {_1} to {_2}	{_1} ile {_2} arasında bir sayı
+@msg	a number >= {_1} and < {_2}	bir sayı >= {_1} ve < {_2}
+@msg	a number > {_1} and <= {_2}	bir sayı > {_1} ve <= {_2}
+@msg	a number > {_1} and < {_2}	bir sayı > {_1} ve < {_2}
+@msg	a number ({_1})	bir sayı ({_1})
+@msg	a number >= {_1} ({_2})	bir sayı >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	bir sayı > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	bir sayı <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	bir sayı < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} ile {_2} arasında bir sayı ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	bir sayı >= {_1} ve < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	bir sayı > {_1} ve <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	bir sayı > {_1} ve < {_2} ({_3})
+@msg	an integer	bir tam sayı
+@msg	an integer >= {_1}	bir tam sayı >= {_1}
+@msg	an integer <= {_1}	bir tam sayı <= {_1}
+@msg	an integer {_1} to {_2}	{_1} ile {_2} arasında bir tam sayı
+@msg	one of {_1}	{_1} değerlerinden biri
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` {_1} değerlerinden biri olmalıdır, {got} değil
+@msg	an object id (a non-negative integer)	bir nesne kimliği (negatif olmayan bir tam sayı)
+@msg	a list of object ids	bir nesne kimlikleri listesi
+@msg	a color (a string, [r, g, b] or an object)	bir renk (bir dize, [r, g, b] veya bir nesne)
+@msg	[x, y] (two numbers)	[x, y] (iki sayı)
+@msg	an object	bir nesne
+@msg	a list	bir liste
 @msg	unknown key `{k}`; the keys here are {_1}	bilinmeyen anahtar `{k}`; buradaki anahtarlar: {_1}
 @msg	{_1} is listed twice	{_1} iki kez listelenmiş
 @msg	{_1} is not the id of an input object	{_1} bir girdi nesnesinin kimliği değil
@@ -7176,7 +7214,9 @@ breakText	Glyphs	Glifler
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer": "{_2}"}} ile açın
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` bir dışa aktarma eklentisidir: document.export {{"format": "{_2}"}} ile dışa aktarın
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` canlı bir efekttir: effect.apply {{"effect": "{_2}"}} ile uygulayın
 @msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
 @msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	dosya, içe aktarma eklentisinin okuduğu {MAX_INPUT_BYTES} bayttan büyük

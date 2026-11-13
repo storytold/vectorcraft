@@ -2006,6 +2006,10 @@ digits	Malayalam	Malajalam
 	Long	Dugo
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku skup
 	Kinsoku Shori Type	Vrsta Kinsoku Shori
 	Push In First	Prvo uvlačenje
@@ -2141,6 +2145,8 @@ digits	Malayalam	Malajalam
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}
+	Delete the selected items and their artwork?	Izbrisati odabrane stavke zajedno s njihovim crtežom?
+	Delete this layer and its artwork?	Izbrisati ovaj sloj zajedno s njegovim crtežom?
 	Delete “{name}”?	Izbrisati „{name}”?
 	Document Swatches	Uzorci boja dokumenta
 	Edit or Apply Color Group	Uredi ili primijeni grupu boja
@@ -3729,6 +3735,7 @@ theme	Appearance	Izgled
 	Enable Background Export	Omogući izvoz u pozadini
 	Enable Background Save	Omogući čuvanje u pozadini
 	Enable in-menu font previews	Omogući preglede fontova u meniju
+	Show samples on white	Prikaži uzorke na bijeloj podlozi
 	Enable Missing Glyph Protection	Omogući zaštitu od nedostajućih glifova
 	Enable Rubber Band for	Omogući gumenu traku za
 	Enable Touch Gestures	Omogući pokrete dodirom
@@ -4555,6 +4562,7 @@ imageTrace	Outline	Obris
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` mora biti cijeli broj između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` mora biti između {min} i {max} (dobiveno {x})
 @msg	`{key}` must be one of {_1}	`{key}` mora biti jedno od {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` mora biti jedno od {_1}, a ne {got}
 @msg	`{key}` must be true or false	`{key}` mora biti true ili false
 @msg	`top` and `below` can't both be true	`top` i `below` ne mogu oba biti true
 @msg	`select` must be true or false	`select` mora biti true ili false

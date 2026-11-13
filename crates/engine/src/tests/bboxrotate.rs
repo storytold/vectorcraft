@@ -104,6 +104,92 @@ fn handles_turn_with_the_object_and_scale_along_its_axes() {
     assert!(near(selection_box(&s).rect.width(), 100.0));
 }
 
+/// Presses, drags and lets go with the current tool along `pts`, holding `mods`.
+fn drag_with(s: &mut Session, pts: &[Point], mods: Mods) {
+    let v = ViewInfo::default();
+    let kinds = std::iter::once(PointerKind::Down).chain(std::iter::repeat_n(PointerKind::Drag, pts.len().saturating_sub(2)));
+    for (kind, p) in kinds.chain([PointerKind::Up]).zip(pts) {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(mods), v).unwrap();
+    }
+}
+
+/// The anchors of path `id`, on the page.
+fn anchors(s: &Session, id: NodeId) -> Vec<Point> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect()
+}
+
+fn has_point(pts: &[Point], p: Point) -> bool {
+    pts.iter().any(|q| q.distance(p) < 1e-6)
+}
+
+#[test]
+fn free_transform_handles_turn_with_the_object_and_scale_along_its_axes() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    // The Right handle of the turned box, dragged 50 pt further out along the object's own x axis.
+    let right = b.to_doc() * Handle::Right.pos(b.rect);
+    let to = b.to_doc() * (Handle::Right.pos(b.rect) + vectorcraft_geom::Vec2::new(50.0, 0.0));
+    let n = undo_len(&s);
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    drag_with(&mut s, &[right, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Scale"));
+    // 150 × 50 along its own axes, still at exactly 45°, the left side where it was.
+    assert_eq!(angle(&s, a), b.angle);
+    let nb = selection_box(&s);
+    assert!(near(nb.rect.width(), 150.0) && near(nb.rect.height(), 50.0), "{nb:?}");
+    let left = |b: &OrientedBox| b.to_doc() * Handle::Left.pos(b.rect);
+    assert!(left(&nb).distance(left(&b)) < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(selection_box(&s).rect.width(), 100.0));
+}
+
+#[test]
+fn free_transform_shears_along_the_turned_side() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    // Dragging the Top handle 20 pt along the object's own top side with Cmd held once the drag
+    // started (a Cmd press is the temporary Selection tool) slides that side along itself; the
+    // bottom side stays.
+    let top = b.to_doc() * Handle::Top.pos(b.rect);
+    let along = b.to_doc() * (Handle::Top.pos(b.rect) + vectorcraft_geom::Vec2::new(20.0, 0.0));
+    let shift = along - top;
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    for (kind, p, m) in [(PointerKind::Down, top, Mods::default()), (PointerKind::Drag, along, cmd), (PointerKind::Up, along, cmd)] {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(m), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shear"));
+    let pts = anchors(&s, a);
+    for p in [tl + shift, tr + shift, br, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
+#[test]
+fn free_transform_distort_starts_from_the_turned_box() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    let to = br + vectorcraft_geom::Vec2::new(10.0, 20.0);
+    let n = undo_len(&s);
+    drag_with(&mut s, &[br, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    // The dragged corner of the turned box lands under the pointer; the other three stay.
+    let pts = anchors(&s, a);
+    for p in [tl, tr, to, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
 #[test]
 fn transform_panel_sizes_follow_the_turned_box() {
     let mut s = session();

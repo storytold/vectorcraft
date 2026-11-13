@@ -1839,6 +1839,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-sæt
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Skub ind først
@@ -1974,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
+	Delete the selected items and their artwork?	Slet de valgte elementer og deres grafik?
+	Delete this layer and its artwork?	Slet dette lag og dets grafik?
 	Delete “{name}”?	Slet »{name}«?
 	Document Swatches	Dokumentfarveprøver
 	Edit or Apply Color Group	Redigér eller anvend farvegruppe
@@ -3516,6 +3522,7 @@ theme	Appearance	Udseende
 	Enable Background Export	Aktivér eksport i baggrunden
 	Enable Background Save	Aktivér lagring i baggrunden
 	Enable in-menu font previews	Aktivér skrifttypeforhåndsvisning i menuer
+	Show samples on white	Vis eksempler på hvidt
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
@@ -4301,6 +4308,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` skal være et heltal mellem {min} og {max} (fik {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` skal være mellem {min} og {max} (fik {x})
 @msg	`{key}` must be one of {_1}	`{key}` skal være en af {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` skal være en af {_1}, ikke {got}
 @msg	`{key}` must be true or false	`{key}` skal være true eller false
 @msg	`{k}` must be [x, y]	`{k}` skal være [x, y]
 @msg	`{name}` has no options	`{name}` har ingen indstillinger

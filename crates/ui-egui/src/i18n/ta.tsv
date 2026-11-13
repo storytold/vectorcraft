@@ -1218,6 +1218,8 @@ antiAlias	Sharp	கூர்மையான
 	Define Perspective Grid…	முன்னோக்குக் கட்டத்தை வரையறு…
 	Definition	தெளிவுநிலை
 	Delete	நீக்கு
+	Delete the selected items and their artwork?	தேர்ந்தெடுத்த உருப்படிகளையும் அவற்றின் ஓவியத்தையும் நீக்கவா?
+	Delete this layer and its artwork?	இந்த அடுக்கையும் அதன் ஓவியத்தையும் நீக்கவா?
 	Delete “{name}”?	“{name}” ஐ நீக்கவா?
 	Delete {kind} Style	{kind} பாணியை நீக்கு
 	Delete Action Sets	செயல் தொகுப்புகளை நீக்கு
@@ -1608,6 +1610,7 @@ antiAlias	Sharp	கூர்மையான
 	Enable copying of text, images and other content	உரை, படங்கள் மற்றும் பிற உள்ளடக்கத்தை நகலெடுக்க அனுமதி
 	Enable Guides for 9-Slice Scaling	9-துண்டு அளவாக்கத்திற்கான வழிகாட்டிகளை இயக்கு
 	Enable in-menu font previews	மெனுவில் எழுத்துரு முன்காட்சிகளை இயக்கு
+	Show samples on white	மாதிரிகளை வெள்ளைப் பின்னணியில் காட்டு
 	Enable Missing Glyph Protection	காணாமல் போன குறியெழுத்துப் பாதுகாப்பை இயக்கு
 	Enable Opacity Mask	ஒளிபுகாநிலை முகமூடியை இயக்கு
 	Enable plaintext metadata	எளிய உரை மெட்டாடேட்டாவை இயக்கு
@@ -2813,6 +2816,10 @@ antiAlias	Sharp	கூர்மையான
 	Modify	திருத்தியமை
 	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi தொகுப்பு
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	மானிட்டர் RGB
 	Mono	ஒற்றை
 	Monochromatic	ஒற்றைநிறமான
@@ -5507,6 +5514,35 @@ antiAlias	Sharp	கூர்மையான
 @msg	the path has no anchor points	பாதையில் நங்கூரப் புள்ளிகள் இல்லை
 @msg	too many anchor points (limit {MAX_ANCHORS})	மிக அதிகமான நங்கூரப் புள்ளிகள் (வரம்பு {MAX_ANCHORS})
 @msg	true or false	true அல்லது false
+@msg	a number >= {_1}	ஓர் எண் >= {_1}
+@msg	a number > {_1}	ஓர் எண் > {_1}
+@msg	a number <= {_1}	ஓர் எண் <= {_1}
+@msg	a number < {_1}	ஓர் எண் < {_1}
+@msg	a number {_1} to {_2}	{_1} முதல் {_2} வரையிலான ஓர் எண்
+@msg	a number >= {_1} and < {_2}	ஓர் எண் >= {_1} மற்றும் < {_2}
+@msg	a number > {_1} and <= {_2}	ஓர் எண் > {_1} மற்றும் <= {_2}
+@msg	a number > {_1} and < {_2}	ஓர் எண் > {_1} மற்றும் < {_2}
+@msg	a number ({_1})	ஓர் எண் ({_1})
+@msg	a number >= {_1} ({_2})	ஓர் எண் >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	ஓர் எண் > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	ஓர் எண் <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	ஓர் எண் < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} முதல் {_2} வரையிலான ஓர் எண் ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	ஓர் எண் >= {_1} மற்றும் < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	ஓர் எண் > {_1} மற்றும் <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	ஓர் எண் > {_1} மற்றும் < {_2} ({_3})
+@msg	an integer	ஒரு முழு எண்
+@msg	an integer >= {_1}	ஒரு முழு எண் >= {_1}
+@msg	an integer <= {_1}	ஒரு முழு எண் <= {_1}
+@msg	an integer {_1} to {_2}	{_1} முதல் {_2} வரையிலான ஒரு முழு எண்
+@msg	one of {_1}	{_1} இல் ஒன்று
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` {got} ஆக அல்ல, {_1} இல் ஒன்றாக இருக்க வேண்டும்
+@msg	an object id (a non-negative integer)	ஒரு பொருள் அடையாளம் (எதிர்மறையற்ற முழு எண்)
+@msg	a list of object ids	பொருள் அடையாளங்களின் பட்டியல்
+@msg	a color (a string, [r, g, b] or an object)	ஒரு நிறம் (ஓர் உரைச்சரம், [r, g, b] அல்லது ஒரு பொருள்)
+@msg	[x, y] (two numbers)	[x, y] (இரண்டு எண்கள்)
+@msg	an object	ஒரு பொருள்
+@msg	a list	ஒரு பட்டியல்
 @msg	unknown key `{k}`; the keys here are {_1}	அறியப்படாத திறவுச்சொல் `{k}`; இங்குள்ள திறவுச்சொற்கள்: {_1}
 @msg	{_1} is listed twice	{_1} இருமுறை பட்டியலிடப்பட்டுள்ளது
 @msg	{_1} is not the id of an input object	{_1} எந்த உள்ளீட்டுப் பொருளின் ஐடியும் அல்ல
@@ -5728,8 +5764,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{_1}` has no brushes to apply	`{_1}` இல் பயன்படுத்துவதற்குத் தூரிகைகள் இல்லை
 @msg	`{_1}` has no symbols to place	`{_1}` இல் இடுவதற்குக் குறியீடுகள் இல்லை
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` என்பது `{_2}` வகைச் செருகுநிரல், ஏற்றுமதி செருகுநிரல் அல்ல
-@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` ஒரு நேரடி விளைவு: அதை effect.apply {{"effect"}"}} மூலம் பயன்படுத்தவும்
-@msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` ஒரு ஏற்றுமதி செருகுநிரல்: document.export {{"format"}"}} மூலம் ஏற்றுமதி செய்யவும்
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ஒரு நேரடி விளைவு: அதை effect.apply {{"effect": "{_2}"}} மூலம் பயன்படுத்தவும்
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` ஒரு ஏற்றுமதி செருகுநிரல்: document.export {{"format": "{_2}"}} மூலம் ஏற்றுமதி செய்யவும்
 @msg	`{_1}` is built in and always listed	`{_1}` உள்ளமைந்தது, எப்போதும் பட்டியலில் இருக்கும்
 @msg	`{_1}` is no save command	`{_1}` ஒரு சேமி கட்டளை அல்ல
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` என்பது கடைசி text.findFontFiles தேடலில் கிடைத்த எழுத்துருக் கோப்பு அல்ல
@@ -5988,7 +6024,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	`mode` must be "straight", "bezier" or "arc"	`mode` "straight", "bezier" அல்லது "arc" ஆக இருக்க வேண்டும்
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk அல்லது websafe ஆக இருக்க வேண்டும்
 @msg	`mode` must be one of {_1}	`mode` {_1} இல் ஒன்றாக இருக்க வேண்டும்
-@msg	`mojikumi` must be "none" or "lineEndHalf"	`mojikumi` "none" அல்லது "lineEndHalf" ஆக இருக்க வேண்டும்
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" அல்லது "lineEndHalf" ஆக இருக்க வேண்டும்
 @msg	`name` is empty	`name` காலியாக உள்ளது
 @msg	`name` must be 1-64 printable characters	`name` 1-64 அச்சிடக்கூடிய எழுத்துகளாக இருக்க வேண்டும்
 @msg	`names` is a list of preset names	`names` என்பது முன்னமைவுப் பெயர்களின் பட்டியல்
@@ -7341,12 +7377,12 @@ antiAlias	Sharp	கூர்மையான
 @msg	not an action set file	இது செயல் தொகுப்புக் கோப்பு அல்ல
 @msg	not an EMF or WMF file	EMF அல்லது WMF கோப்பு அல்ல
 @msg	not an HP-GL file	இது HP-GL கோப்பு அல்ல
+@msg	not a PICT file	இது PICT கோப்பு அல்ல
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ஆனது 1 முதல் 255 வரையிலான #rrggbb நிறங்களின் அணியாக இருக்க வேண்டும்
 @msg	not an export presets file (format `{_1}`)	இது ஏற்றுமதி முன்னமைவுக் கோப்பு அல்ல (வடிவம் `{_1}`)
 @msg	not an export presets file: {e}	இது ஏற்றுமதி முன்னமைவுக் கோப்பு அல்ல: {e}
 @msg	not an image VectorCraft reads (see document.formats)	இது VectorCraft படிக்கும் படம் அல்ல (document.formats ஐப் பார்க்கவும்)
 @msg	not an RTF file: it doesn't start with {\\rtf	RTF கோப்பு அல்ல: அது {\\rtf உடன் தொடங்கவில்லை
-@msg	not an RTF file: it doesn't start with not an RTF file: it doesn't start with {\rtf	இது RTF கோப்பு அல்ல: இது {\rtf உடன் தொடங்கவில்லை
 @msg	not area type (text in a frame) outside perspective	முன்னோக்குக்கு வெளியே உள்ள பரப்பு உரை (சட்டகத்தில் உள்ள உரை) அல்ல
 @msg	not editing an opacity mask	ஒளிபுகாநிலை முகமூடி எதுவும் திருத்தப்படவில்லை
 @msg	not found	கிடைக்கவில்லை
@@ -7791,6 +7827,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	textureImage: {e}	textureImage: {e}
 @msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ஒரு படக் கோப்பின் {path} அல்லது {name, dataBase64} ஐயோ, effect.list தருவது போன்ற ஓர் இழையமைப்பையோ கொடுக்கவும்
 @msg	that anchor can't slide: an end of an open path has nowhere to go	அந்த நங்கூரத்தைச் சறுக்க முடியாது: திறந்த பாதையின் முனைக்கு நகர இடமில்லை
+@msg	the active document changed while the question was open; nothing was deleted	கேள்வி திறந்திருந்தபோது செயலில் உள்ள ஆவணம் மாறியது; எதுவும் நீக்கப்படவில்லை
 @msg	that document is no longer open	அந்த ஆவணம் இனி திறந்திருக்கவில்லை
 @msg	that makes more than {MAX_PIECES} slices	அது {MAX_PIECES} க்கும் மேற்பட்ட துண்டுகளை உருவாக்கும்
 @msg	that makes too many pieces (at most 100000): make the dashes longer	அது மிக அதிகமான துண்டுகளை உருவாக்கும் (அதிகபட்சம் 100000): கோடுகளை நீளமாக்கவும்
@@ -8599,7 +8636,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` ஆனது ஒரு செருகுநிரல் வடிவ id ஆக இருக்க வேண்டும் (document.formats ஐப் பார்க்கவும்)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} கோப்புகளைத் திறக்கும், `{_2}`-ஐ அல்ல
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` என்பது `{_2}` வகைச் செருகுநிரல், இறக்குமதி செருகுநிரல் அல்ல
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` ஒரு இறக்குமதி செருகுநிரல்: document.open {{"importer"}"}} மூலம் கோப்பைத் திறக்கவும்
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` ஒரு இறக்குமதி செருகுநிரல்: document.open {{"importer": "{_2}"}} மூலம் கோப்பைத் திறக்கவும்
 @msg	the importer returned no objects	இறக்குமதியாக்கி எந்தப் பொருளையும் திருப்பித் தரவில்லை
 @msg	an importer returns `objects` and `warnings`, not `{key}`	இறக்குமதியாக்கி `objects`, `warnings` ஆகியவற்றைத் திருப்பித் தரும், `{key}`-ஐ அல்ல
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	இறக்குமதியாக்கி படிக்கும் {MAX_INPUT_BYTES} பைட்டுகளை விடக் கோப்பு பெரியது

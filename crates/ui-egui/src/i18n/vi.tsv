@@ -938,6 +938,8 @@ font-technology	Variable	Biến thiên
 	Delete Width Point	Xóa điểm chiều rộng
 	Delete Workspace	Xóa không gian làm việc
 	Delete {kind} Style	Xóa kiểu {kind}
+	Delete the selected items and their artwork?	Xóa các mục đã chọn và tác phẩm của chúng?
+	Delete this layer and its artwork?	Xóa lớp này và tác phẩm của nó?
 	Delete “{name}”?	Xóa “{name}”?
 	Depth	Độ sâu
 	Depth:	Độ sâu:
@@ -1198,6 +1200,7 @@ font-technology	Variable	Biến thiên
 	Enable Contextual Task Bar	Bật thanh tác vụ theo ngữ cảnh
 	Enable copying of text, images and other content	Bật sao chép văn bản, ảnh và nội dung khác
 	Enable in-menu font previews	Bật xem trước phông trong menu
+	Show samples on white	Hiển thị mẫu trên nền trắng
 	Enable Missing Glyph Protection	Bật bảo vệ glyph bị thiếu
 	Enable Opacity Mask	Bật mặt nạ độ mờ
 	Enable plaintext metadata	Bật siêu dữ liệu văn bản thuần
@@ -2388,6 +2391,10 @@ digits	Hindi	Hindi
 	Long	Dài
 	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	RGB màn hình
 	Mono	Đơn sắc
 	Monochrome images	Ảnh đơn sắc
@@ -5054,6 +5061,7 @@ theme	Appearance	Giao diện
 @msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not an HP-GL file	không phải tệp HP-GL
+@msg	not a PICT file	không phải tệp PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` phải là mảng từ 1 đến 255 màu #rrggbb
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
@@ -5261,6 +5269,7 @@ theme	Appearance	Giao diện
 @msg	t, dx and dy must be finite	t, dx và dy phải là số hữu hạn
 @msg	Targa files are RGB: colorModel rgb	Tệp Targa là RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Bọc chữ: hãy chọn đối tượng bọc
+@msg	the active document changed while the question was open; nothing was deleted	tài liệu đang hoạt động đã thay đổi khi câu hỏi đang mở; không có gì bị xóa
 @msg	that document is no longer open	tài liệu đó không còn mở
 @msg	Extrude & Bevel	Kéo dài & vát
 @msg	Revolve	Xoay tròn
@@ -5990,6 +5999,35 @@ axis	Y Axis	Trục Y
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
+@msg	a number >= {_1}	một số >= {_1}
+@msg	a number > {_1}	một số > {_1}
+@msg	a number <= {_1}	một số <= {_1}
+@msg	a number < {_1}	một số < {_1}
+@msg	a number {_1} to {_2}	một số từ {_1} đến {_2}
+@msg	a number >= {_1} and < {_2}	một số >= {_1} và < {_2}
+@msg	a number > {_1} and <= {_2}	một số > {_1} và <= {_2}
+@msg	a number > {_1} and < {_2}	một số > {_1} và < {_2}
+@msg	a number ({_1})	một số ({_1})
+@msg	a number >= {_1} ({_2})	một số >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	một số > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	một số <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	một số < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	một số từ {_1} đến {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	một số >= {_1} và < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	một số > {_1} và <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	một số > {_1} và < {_2} ({_3})
+@msg	an integer	một số nguyên
+@msg	an integer >= {_1}	một số nguyên >= {_1}
+@msg	an integer <= {_1}	một số nguyên <= {_1}
+@msg	an integer {_1} to {_2}	một số nguyên từ {_1} đến {_2}
+@msg	one of {_1}	một trong các giá trị {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` phải là một trong các giá trị {_1}, không phải {got}
+@msg	an object id (a non-negative integer)	một ID đối tượng (một số nguyên không âm)
+@msg	a list of object ids	một danh sách ID đối tượng
+@msg	a color (a string, [r, g, b] or an object)	một màu (một chuỗi, [r, g, b] hoặc một đối tượng)
+@msg	[x, y] (two numbers)	[x, y] (hai số)
+@msg	an object	một đối tượng
+@msg	a list	một danh sách
 @msg	unknown key `{k}`; the keys here are {_1}	khóa không xác định `{k}`; các khóa ở đây là {_1}
 @msg	{_1} is listed twice	{_1} được liệt kê hai lần
 @msg	{_1} is not the id of an input object	{_1} không phải là id của một đối tượng đầu vào
@@ -6830,7 +6868,9 @@ breakText	Glyphs	Glyph
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` là plug-in xuất: hãy xuất bằng document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` là hiệu ứng trực tiếp: hãy áp dụng bằng effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
 @msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc
