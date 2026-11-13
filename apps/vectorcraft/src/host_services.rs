@@ -71,7 +71,7 @@ fn open_extensions(exts: &[impl AsRef<str>], any_case: bool) -> Vec<String> {
 /// `d` set up for `request`: its title, file types, folder and suggested name.
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
-        PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
+        PickRequest::Open(pick) | PickRequest::Save(pick) | PickRequest::OpenFiles(pick) => pick,
         PickRequest::OpenMany => {
             return fileio::place_filters().fold(d.title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
                 d.filter(
@@ -81,8 +81,9 @@ fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
             });
         }
         PickRequest::Folder => return d,
+        PickRequest::FolderAt(folder) => return d.folder(folder),
     };
-    let any_case = CASE_SENSITIVE_FILTERS && matches!(request, PickRequest::Open(_));
+    let any_case = CASE_SENSITIVE_FILTERS && matches!(request, PickRequest::Open(_) | PickRequest::OpenFiles(_));
     let d = pick.filters.iter().fold(d, |d, (name, exts)| {
         d.filter(
             vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name.as_str()),
@@ -94,6 +95,37 @@ fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
         None => d,
     };
     if pick.name.is_empty() { d } else { d.file_name(&pick.name) }
+}
+
+#[cfg(test)]
+#[test]
+fn a_folder_picker_asked_for_a_folder_starts_there() {
+    /// The settings a dialog was given, by name.
+    #[derive(Default)]
+    struct Recorded(Vec<String>);
+    impl DialogSettings for Recorded {
+        fn parent(self, _: &winit::window::Window) -> Self {
+            self
+        }
+        fn title(mut self, title: &str) -> Self {
+            self.0.push(format!("title {title}"));
+            self
+        }
+        fn filter(mut self, name: &str, _: &[impl ToString]) -> Self {
+            self.0.push(format!("filter {name}"));
+            self
+        }
+        fn folder(mut self, folder: &str) -> Self {
+            self.0.push(format!("folder {folder}"));
+            self
+        }
+        fn file_name(mut self, name: &str) -> Self {
+            self.0.push(format!("name {name}"));
+            self
+        }
+    }
+    assert_eq!(dialog_for(Recorded::default(), &PickRequest::FolderAt("/a/b".into())).0, ["folder /a/b"]);
+    assert!(dialog_for(Recorded::default(), &PickRequest::Folder).0.is_empty());
 }
 
 /// A native file dialog for `request` over `parent` (on Linux the portal then shows it over the
@@ -128,9 +160,9 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) 
     }
     let paths = match request {
         PickRequest::Open(_) => dialog.pick_file().into_iter().collect(),
-        PickRequest::OpenMany => dialog.pick_files().unwrap_or_default(),
+        PickRequest::OpenMany | PickRequest::OpenFiles(_) => dialog.pick_files().unwrap_or_default(),
         PickRequest::Save(_) => dialog.save_file().into_iter().collect(),
-        PickRequest::Folder => dialog.pick_folder().into_iter().collect(),
+        PickRequest::Folder | PickRequest::FolderAt(_) => dialog.pick_folder().into_iter().collect(),
     };
     paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect()
 }
@@ -313,7 +345,7 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
             let picked = dialog.pick_file();
             Box::pin(async move { picked.await.iter().map(path).collect() })
         }
-        PickRequest::OpenMany => {
+        PickRequest::OpenMany | PickRequest::OpenFiles(_) => {
             let picked = dialog.pick_files();
             Box::pin(async move { picked.await.unwrap_or_default().iter().map(path).collect() })
         }
@@ -332,7 +364,7 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
             // on that nil; treat the pick as cancelled instead (#5980).
             Err(()) => Box::pin(async move { Vec::new() }),
         },
-        PickRequest::Folder => {
+        PickRequest::Folder | PickRequest::FolderAt(_) => {
             let picked = dialog.pick_folder();
             Box::pin(async move { picked.await.iter().map(path).collect() })
         }
@@ -353,7 +385,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         .and_then(|w| w.window_handle().ok())
         .is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)));
     let (clip, clip_probe) = (parent.clone(), parent.clone());
-    let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
+    let (p1, p2, p3, p4, p5, p6, p7) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     let sampled_ui = ui.clone();
     #[cfg(target_os = "linux")]
@@ -361,6 +393,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
+        pick_open_files: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::OpenFiles(pick.clone()), &p6))),
         pick_save: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Save(pick.clone()), &p3).into_iter().next())),
         // Linux shows dialogs on a thread of their own (#592), macOS as sheets (#867); Windows
         // dialogs run the window's events while they are open.
@@ -407,6 +440,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Edit Original of a raster image with Use System Defaults for Edit Original off (#5236).
         open_in_photocraft: Some(Box::new(open_in_photocraft)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
+        pick_folder_at: Some(Box::new(move |start: &str| pick_now(PickRequest::FolderAt(start.to_string()), &p7).into_iter().next())),
         // Sample Color from Screen: the system's color sampler.
         #[cfg(target_os = "macos")]
         screen_color: Some(mac_screen_color::sampler(sampled_ui)),

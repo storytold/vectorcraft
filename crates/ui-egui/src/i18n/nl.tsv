@@ -4227,6 +4227,13 @@ imageTrace	Outline	Contour
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
 	A Script Is Running	Er wordt een script uitgevoerd
 	Script Alert	Scriptmelding
+	Script File Access	Bestandstoegang van script
+	The script asks to read a file you choose.	Het script vraagt een bestand te lezen dat u kiest.
+	The script asks to read and write a file you choose.	Het script vraagt een bestand te lezen en te schrijven dat u kiest.
+	The script asks to read and write a folder you choose, with everything in it.	Het script vraagt een map die u kiest te lezen en te schrijven, met alles wat erin staat.
+	Allow Once	Eenmaal toestaan
+	Always Allow This Script	Dit script altijd toestaan
+	Deny	Weigeren
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.

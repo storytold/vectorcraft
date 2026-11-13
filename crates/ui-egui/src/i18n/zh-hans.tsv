@@ -4704,6 +4704,13 @@ imageTrace	Outline	轮廓
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
 	Script Alert	脚本提示
+	Script File Access	脚本文件访问
+	The script asks to read a file you choose.	脚本请求读取您选择的文件。
+	The script asks to read and write a file you choose.	脚本请求读写您选择的文件。
+	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
+	Allow Once	允许一次
+	Always Allow This Script	始终允许此脚本
+	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -4732,8 +4739,6 @@ imageTrace	Outline	轮廓
 @msg	Script file could not be read	无法读取脚本文件
 @msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
 @msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
-@msg	Script file writing is not available	脚本文件写入不可用
-@msg	Script file dialogs are not available	脚本文件对话框不可用
 @msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
 @msg	Script file access is unavailable on the web	网页版无法访问脚本文件
 @msg	Script has 256 files open	脚本已打开 256 个文件
@@ -4804,6 +4809,27 @@ imageTrace	Outline	轮廓
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Script file access denied: {path}	脚本的文件访问被拒绝：{path}
+@msg	Script file access to the app's own folders is not allowed	不允许脚本访问应用自身的文件夹
+@msg	Script file cannot encode the text	脚本的文件无法编码该文本
+@msg	Script file could not be written	无法写入脚本的文件
+@msg	Script file dialogs need a person to answer them	脚本的文件对话框需要有人回答
+@msg	Script file is not open for writing	脚本的文件未以写入方式打开
+@msg	Script file name is already in use	脚本的文件名已被使用
+@msg	Script file name must be a name without a folder	脚本的文件名必须是不含文件夹的名称
+@msg	Script file permission can be kept only for a script run from a file	只有从文件运行的脚本才能保留文件权限
+@msg	Script file permission could not be saved	无法保存脚本的文件权限
+@msg	Script folder is not empty	脚本的文件夹不为空
+@msg	Script files cannot make aliases	脚本的文件无法创建别名
+@msg	Script file hidden setting cannot be changed	无法更改脚本文件的隐藏设置
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：文件对话框不能在内置函数、getter、转换或 $.evalFile 运行的文件的回调中打开；请从脚本自身的代码中调用
+@msg	the script wrote more file data than one run may write (32 MiB)	脚本写入的文件数据超过了一次运行可写入的上限 (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
+@msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
+@msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
+@msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
+@msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`

@@ -457,10 +457,12 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `encode`, `decode`, `encodingAvailable`, `current` and `locations`, with the values `system`
-    /// and `lineFeed` and the messages `text.notOpen`, `text.noWrites`, `text.noPicker` and
-    /// `text.badMode`. Each object keeps its path, its `error` text, its open file's id, its
-    /// encoding and its line feed in properties that are not enumerable.
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `pick` (the file
+    /// dialogs, where a run may wait), `encode`, `decode`, `encodingAvailable`, `current` and
+    /// `locations`, with the values `system` and `lineFeed` and the messages `text.notOpen`,
+    /// `text.badMode`, `text.noAlias` and `text.noHidden`. Each object keeps its path, its `error`
+    /// text, its open file's id, its encoding and its line feed in properties that are not
+    /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
             Ok(()) => Ok(()),
@@ -530,6 +532,14 @@ impl Realm {
     /// default local time is UTC.
     pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
         self.interp.date_host.offset = std::rc::Rc::new(offset);
+    }
+
+    /// Calls `observe` with the text of each source the realm's scripts evaluate at run time, before
+    /// it is compiled: a string given to `eval` (direct or indirect), the parameters and body
+    /// `Function` joins, and a source an evaluator host function
+    /// ([`crate::HostItem::Evaluator`]) gives. Replaces an earlier observer.
+    pub fn observe_code(&mut self, observe: impl Fn(&[u16]) + 'static) {
+        self.interp.code_observer = Some(std::rc::Rc::new(observe));
     }
 
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.

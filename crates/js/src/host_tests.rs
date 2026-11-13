@@ -639,6 +639,24 @@ fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unkn
 }
 
 #[test]
+fn the_code_observer_sees_every_source_evaluated_at_run_time() {
+    let mut r = realm(10_000_000);
+    let seen = Rc::new(RefCell::new(Vec::<String>::new()));
+    let s = seen.clone();
+    r.observe_code(move |units| s.borrow_mut().push(String::from_utf16_lossy(units)));
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("40 + 2".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    let out = r.run("function f() { return eval('1 + 1'); } f() + (0, eval)('2') + Function('a', 'return a')(3) + host.load()").unwrap();
+    assert_eq!(out, JsValue::Number(49.0));
+    let want = ["1 + 1", "2", "(function anonymous(a\n) {\nreturn a\n})", "40 + 2"];
+    assert_eq!(*seen.borrow(), want, "the script's own text is not observed");
+    seen.borrow_mut().clear();
+    r.run("eval(7); Function.prototype.toString.call(f)").unwrap();
+    assert!(seen.borrow().is_empty(), "eval of a value that is not a string compiles nothing");
+}
+
+#[test]
 fn error_tags_stay_the_same_from_run_to_run_and_are_never_shared() {
     let mut r = realm(10_000_000);
     let source: HostFunction = Rc::new(|_| Ok(Data::String("function inEval() { throw new Error('in eval'); }".into())));

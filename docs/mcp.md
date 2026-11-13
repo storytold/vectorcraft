@@ -2218,8 +2218,8 @@ script reads files with them:
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
   and `close()` read it. `read`, `readln` and `readch` count characters, and `seek` and `tell` count bytes. `readln`
   and `readch` take CR, LF, CRLF and LF CR as one line end. `folder.getFiles([mask])` lists a folder, sorted by name;
-  the mask matches `*` and `?` without regard to case, and a function as the mask keeps the entries it returns true
-  for.
+  the mask matches `*` and `?`, without regard to case on Windows and macOS and with case elsewhere, and a function
+  as the mask keeps the entries it returns true for.
 - A method that fails returns `false`, `null` or an empty string and sets `error`, such as `Script file access
   denied`, `Script file does not exist` or `Script file is not open`. A count or a position that is not a finite
   number, or a negative count, throws a `RangeError`.
@@ -2234,7 +2234,9 @@ VectorCraft reads files by these rules of its own:
   `getFiles` leaves such an entry out. A missing file is refused the same way unless the nearest folder above it that
   exists is inside the script's folder. It is also refused when a link above it leads to a folder that does not exist.
 - `open` reads the whole file. A file larger than 8 MiB is refused from its size before any of it is read, with
-  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A run has at most 256
+  `Script file exceeds 8 MiB`, and a run that opens more than 32 MiB in all ends with an error. A file opened again
+  after its objects closed counts only the bytes it grew by, and a file that another object has open counts again. A
+  run has at most 256
   files open at once; another `open` returns `false` with `Script has 256 files open` until one is closed.
 - The encoding is the one the file's byte order mark gives (UTF-8, UTF-16LE or UTF-16BE), otherwise the `encoding`
   the script set before `open`, otherwise UTF-8 when the bytes are valid UTF-8, otherwise CP1252. `BINARY` reads each
@@ -2245,11 +2247,111 @@ VectorCraft reads files by these rules of its own:
   folder gives `null` with `Script folder mask takes too many steps to match`.
 - A path longer than 32,767 characters throws a `RangeError` (`Script file path exceeds 32,767 characters`) when a
   `File` or `Folder` is made from it.
-- Writing is not available yet: `open('w')`, `open('e')`, `open('a')`, `write`, `writeln`, `copy`, `remove`,
-  `rename`, `create` and `createAlias` return `false` with `Script file writing is not available`, and setting
-  `length`, `hidden` or `readonly` sets `error` to that message and changes nothing. The file
-  and folder dialogs return `null`, and `execute` opens nothing and returns `false`. In the web build every lookup
-  fails with `Script file access is unavailable on the web`.
+- `createAlias` returns `false` with `Script files cannot make aliases`, setting `hidden` sets `error` to `Script
+  file hidden setting cannot be changed` and changes nothing, and `execute` opens nothing and returns `false`. In the
+  web build every lookup fails with `Script file access is unavailable on the web`.
+
+The help page's writing members work as it describes
+(<https://extendscript.docsforadobe.dev/file-system-access/file-object/>,
+<https://extendscript.docsforadobe.dev/file-system-access/folder-object/>):
+
+- `open('w')` empties the file, or makes it, `open('e')` opens a file that is there, and `open('a')` opens it at its
+  end. `write(...values)` writes the values as `String(value)` gives them, and `writeln(...values)` adds the line end
+  `lineFeed` names: CR LF for `Windows`, CR for `Macintosh` and LF for `Unix`. A byte order mark is written only
+  when the script writes `﻿`.
+- `copy(target)` copies the file to a path or a `File` and replaces a file that is there. `remove()` deletes a file,
+  or a folder only when it is empty (`Script folder is not empty`), at once and without the trash. `rename(name)`
+  takes a name without a folder; a name that is in use gives `Script file name is already in use`, and the object
+  takes the new path; another object that has the file open writes to the new path. An object whose changes
+  `close` could not write does not remove or rename its file, and another object that has a removed file open
+  drops its changes and takes no more writes. `copy` of a file over 8 MiB gives `Script file exceeds 8 MiB`, and `copy` of a file that
+  is open copies what the open file holds; an object that has the target open then holds the copy. `folder.create()` makes the folder and the folders above it, and gives `Script file access denied` without making any when one of them is outside the places the script may write. Setting `length` cuts the file or
+  pads it with zero bytes, also in an object that has the file open, and setting `readonly` changes the file (on
+  Unix, setting it clears every write bit, and clearing it gives back the bits the run cleared, or else the owner's
+  write bit). `changePath` of an object whose changes cannot be written gives `false` with `error` set and keeps its path. `copy` onto the file itself leaves it as it is, and `open('w')` with an
+  encoding that is not one gives `false` and leaves the file as it is.
+- `File.openDialog(prompt, filter, multiSelect)`, `File.saveDialog(prompt, filter)` and `Folder.selectDialog(prompt)`,
+  and the objects' `openDlg`, `saveDlg` and `selectDlg`, give a `File` or a `Folder`, or `null` when the person
+  cancels; `multiSelect` gives an array of the files picked. A string `filter` such as `"JavaScript:*.jsx;All
+  files:*.*"` gives the file types the dialog shows: each `name:pattern` starts a type, a pattern without a name adds
+  to the type before it, and patterns are separated by `,` or `;`. `*.ext` patterns name extensions and `*` or `*.*`
+  every file; other patterns are left out. A `filter` that is a function is called with a `File` for each file
+  picked, and the files it gives a false value for are left out of the result; when none is left, the dialog
+  gives `null`. The dialog itself then shows every file.
+
+VectorCraft writes files by these rules of its own:
+
+- A script writes only in `Folder.temp`, `Folder.userData` and what a person allowed it in a file dialog. Its own
+  folder is only read. `Folder.temp` is a folder for the run, made when the script first names it and deleted when
+  the run ends; `new File()` names a new file there. `Folder.userData` is the script's own folder in the Script Data
+  folder next to the settings, kept between runs; a script given as `source`, or a session without a settings
+  folder, gets one inside `Folder.temp`. When that folder is a link, `Folder.userData` is `null` and the place the
+  link leads to is not granted. When automation write roots are set and do not take the folder, `Folder.temp` or
+  `Folder.userData` is `null` and the folder is not made; the same holds when they do not take a missing folder above it. When automation write roots are set, the place written must also be inside
+  them. Opening a file with `e` or `a` reads it, so the automation read roots apply to it as well. The folder that
+  holds the settings (the Scripts and Plug-ins folders among them) is kept out of every grant, also before it has
+  been made, apart from the script's own `Folder.userData`, and a folder that holds it cannot be renamed. Anything
+  else gives `false` with
+  `Script file access denied`.
+- What a script writes is written when it closes the file or when the run ends, also when the run fails. At the
+  run's end the files left open are written in the order they were opened. A file
+  that `close` could not write is written again when the run ends, and a `write` that would pass the run's limit
+  is not written. A run that
+  would otherwise succeed fails when a changed file it left open cannot be written, with
+  `Error: the script left open files that could not be written` and the files' paths. One file
+  holds at most 8 MiB, and a run that writes more than 32 MiB in all ends with an error. `write` encodes in the
+  file's encoding: `ASCII` and `ISO-8859-1` give `false` with `Script file cannot encode the text` for a character
+  they cannot hold, and `BINARY` writes each character's low byte. `write` and `writeln` turn their values into text
+  only for an open file, and stop once the text is longer than 16,777,216 UTF-16 code units, giving `false` with
+  `Script file exceeds 8 MiB`. Each object that has a file open holds its own bytes, so the 32 MiB counts what
+  setting `length` adds to the file and to each such object, and what `copy` writes to its target and to each such
+  object of the target. The report's `written` names each file written, at most 4,096 of them; a run that wrote more
+  also has `writtenMore: true`.
+- In the app a file dialog shows the script's prompt and what the script asks for: a file to read (open), a file to
+  read and write (save), or a folder to read and write with everything in it. The person chooses with Choose…, whose
+  dialog picks several files at once, and adds them to those chosen before, when the script asked for several with
+  `multiSelect` (Choose… keeps at most 2,048, and the dialog says when it left out the files picked after them), and
+  then picks Allow Once, Always Allow This Script or Deny; Deny, Enter, Escape and Cancel give `null`, and Stop ends
+  the run. Choose… for a folder's `selectDlg` opens the host's folder dialog in that folder.
+  The prompt and what the dialog says the script asks for come from the script's request, so `ui.dialog.set` on the
+  dialog's `kind` or `prompt` does not change them. Only the person at the keyboard allows access: an `answer` of
+  `once` or `always` from `ui.dialog.set`, `ui.dialog.confirm` or synthetic input gives `Only the person at the
+  keyboard can allow a script's file access`, and the dialog stays open; `deny` and `stop` are taken from automation.
+  Always Allow This Script keeps the grant in `Script Grants.json` next to the settings for that script file with
+  that text with the files it includes, by its SHA-256, so a changed or moved script, or a changed included file,
+  asks again. It is offered only for a script run from a file. The grant also keeps the SHA-256 of each source the
+  run evaluated up to its end (a file `$.evalFile` ran, a string given to `eval` or `Function`, at most 256). A later
+  run loses the grant before it evaluates a source the grant does not list, and from the start when its
+  `#targetengine` engine holds code the grant does not list, such as another script's. A kept grant stays on the
+  real path that was allowed: when that path now leads elsewhere, through a link put in its place or in a folder
+  above it, the grant is not used.
+- A command a script runs with `vc.run` reads and writes files only where the script's `File` and `Folder` objects
+  may, and in the files the open documents were opened from or saved to. Anything else fails with
+  `Script file access denied` and the path, saving into a user library (swatches, brushes, symbols or graphic
+  styles) included; reading the app's own libraries is allowed. A script given as `source` that a person allowed nothing writes only in
+  its `Folder.temp` and `Folder.userData` and to the open documents' own files.
+  A pick inside the folder that holds the settings gives `null` and sets `error` to `Script file access to the app's
+  own folders is not allowed`.
+- A run with nobody to ask, as over MCP or the command line, gives `null` from every file dialog and sets `error` to
+  `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
+  built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
+
+`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
+the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
+grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
+takes its place), and `file` the grants
+file's path, or `null` without a settings folder. `script.grants.revoke {script?, path?, all?}` removes the grants of
+a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. While a script
+runs it is refused with the busy error, as the run keeps the grants it started with. A script cannot run either
+command.
+
+```json
+{"name":"run_command","arguments":{"command":"script.grants.revoke","params":{"all":true}}}
+```
+
+```sh
+vectorcraft-cli run --cmd script.grants --params '{}'
+```
 
 Window › Script Console shows the session's script lines, oldest first: each run's start, its `$.write` and
 `$.writeln` output, its `vc.log` entries, its uncaught error as `name:line:column: message` (or `name: file:line:column: message` when the error is in another

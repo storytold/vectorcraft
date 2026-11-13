@@ -4435,6 +4435,13 @@ imageTrace	Outline	Ääriviiva
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
 	A Script Is Running	Komentosarja on käynnissä
 	Script Alert	Komentosarjan ilmoitus
+	Script File Access	Komentosarjan tiedostojen käyttö
+	The script asks to read a file you choose.	Komentosarja pyytää lupaa lukea valitsemasi tiedoston.
+	The script asks to read and write a file you choose.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi tiedoston.
+	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
+	Allow Once	Salli kerran
+	Always Allow This Script	Salli tämä komentosarja aina
+	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
 	Stop the script and undo what it did? Then quit again.	Pysäytetäänkö komentosarja ja kumotaan sen muutokset? Lopeta sitten uudelleen.
@@ -4463,8 +4470,6 @@ imageTrace	Outline	Ääriviiva
 @msg	Script file could not be read	Komentosarjatiedostoa ei voitu lukea
 @msg	Script folder has more than 2,048 entries	Komentosarjakansiossa on yli 2 048 kohdetta
 @msg	Script file open mode must be r, w, e or a	Komentosarjatiedoston avaustilan on oltava r, w, e tai a
-@msg	Script file writing is not available	Komentosarjatiedostojen kirjoittaminen ei ole käytettävissä
-@msg	Script file dialogs are not available	Komentosarjojen tiedostovalintaikkunat eivät ole käytettävissä
 @msg	Script files cannot be opened in another application	Komentosarjatiedostoja ei voi avata toisessa sovelluksessa
 @msg	Script file access is unavailable on the web	Komentosarjatiedostojen käyttö ei ole mahdollista verkossa
 @msg	Script has 256 files open	Komentosarjalla on 256 tiedostoa auki
@@ -4535,6 +4540,27 @@ imageTrace	Outline	Ääriviiva
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Script file access denied: {path}	Komentosarjan tiedostojen käyttö estettiin: {path}
+@msg	Script file access to the app's own folders is not allowed	Komentosarjat eivät saa käyttää sovelluksen omia kansioita
+@msg	Script file cannot encode the text	Komentosarjan tiedosto ei voi koodata tekstiä
+@msg	Script file could not be written	Komentosarjan tiedostoa ei voitu kirjoittaa
+@msg	Script file dialogs need a person to answer them	Komentosarjan tiedostovalintaikkunoihin tarvitaan vastaava henkilö
+@msg	Script file is not open for writing	Komentosarjan tiedosto ei ole auki kirjoittamista varten
+@msg	Script file name is already in use	Komentosarjan tiedoston nimi on jo käytössä
+@msg	Script file name must be a name without a folder	Komentosarjan tiedoston nimen on oltava nimi ilman kansiota
+@msg	Script file permission can be kept only for a script run from a file	Tiedostolupa voidaan säilyttää vain tiedostosta suoritetulle komentosarjalle
+@msg	Script file permission could not be saved	Komentosarjan tiedostolupaa ei voitu tallentaa
+@msg	Script folder is not empty	Komentosarjan kansio ei ole tyhjä
+@msg	Script files cannot make aliases	Komentosarjan tiedostot eivät voi luoda aliaksia
+@msg	Script file hidden setting cannot be changed	Komentosarjan tiedoston piilotusasetusta ei voi muuttaa
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: tiedostovalintaikkunaa ei voi avata sisäänrakennetun funktion, getterin, muunnoksen tai $.evalFile-funktion suorittaman tiedoston takaisinkutsussa; kutsu sitä komentosarjan omasta koodista
+@msg	the script wrote more file data than one run may write (32 MiB)	komentosarja kirjoitti enemmän tiedostodataa kuin yksi suoritus saa kirjoittaa (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
+@msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
+@msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
+@msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}

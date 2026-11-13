@@ -412,7 +412,12 @@ impl Interp {
                 Ok(units) => self.prepare_source(units.len().saturating_sub(floor)),
                 Err(_) => Ok(()),
             };
-            rest.map(|()| units.and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval)))
+            rest.map(|()| {
+                units.and_then(|units| {
+                    self.observe_code(&units);
+                    self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval)
+                })
+            })
         });
         let code = code.and_then(|c| c);
         self.source_tag = tag;

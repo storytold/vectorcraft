@@ -5016,6 +5016,13 @@ swatch	Bright Violet	ビビッドバイオレット
 	Show External Script Warning	外部スクリプトの警告を表示
 	A Script Is Running	スクリプトの実行中
 	Script Alert	スクリプトの通知
+	Script File Access	スクリプトのファイルアクセス
+	The script asks to read a file you choose.	スクリプトが、選択したファイルの読み取りを求めています。
+	The script asks to read and write a file you choose.	スクリプトが、選択したファイルの読み書きを求めています。
+	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
+	Allow Once	今回のみ許可
+	Always Allow This Script	このスクリプトを常に許可
+	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
@@ -5044,8 +5051,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Script file could not be read	スクリプトファイルを読み込めませんでした
 @msg	Script folder has more than 2,048 entries	スクリプトフォルダーの項目が 2,048 を超えています
 @msg	Script file open mode must be r, w, e or a	スクリプトファイルを開くモードは r、w、e、a のいずれかにしてください
-@msg	Script file writing is not available	スクリプトファイルの書き込みは利用できません
-@msg	Script file dialogs are not available	スクリプトファイルのダイアログは利用できません
 @msg	Script files cannot be opened in another application	スクリプトファイルを別のアプリケーションで開くことはできません
 @msg	Script file access is unavailable on the web	Web ではスクリプトファイルにアクセスできません
 @msg	Script has 256 files open	スクリプトが 256 個のファイルを開いています
@@ -5116,6 +5121,27 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
+@msg	Script file access denied: {path}	スクリプトのファイルアクセスが拒否されました: {path}
+@msg	Script file access to the app's own folders is not allowed	スクリプトからアプリ自身のフォルダーへのアクセスは許可されていません
+@msg	Script file cannot encode the text	スクリプトのファイルでテキストをエンコードできません
+@msg	Script file could not be written	スクリプトのファイルを書き込めませんでした
+@msg	Script file dialogs need a person to answer them	スクリプトのファイルダイアログには応答する人が必要です
+@msg	Script file is not open for writing	スクリプトのファイルが書き込み用に開かれていません
+@msg	Script file name is already in use	スクリプトのファイル名はすでに使用されています
+@msg	Script file name must be a name without a folder	スクリプトのファイル名はフォルダーを含まない名前にしてください
+@msg	Script file permission can be kept only for a script run from a file	ファイルの許可を保持できるのは、ファイルから実行したスクリプトだけです
+@msg	Script file permission could not be saved	スクリプトのファイルの許可を保存できませんでした
+@msg	Script folder is not empty	スクリプトのフォルダーが空ではありません
+@msg	Script files cannot make aliases	スクリプトのファイルではエイリアスを作成できません
+@msg	Script file hidden setting cannot be changed	スクリプトのファイルの非表示設定は変更できません
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数、ゲッター、変換、または $.evalFile が実行するファイルのコールバック内ではファイルダイアログを開けません。スクリプト自身のコードから呼び出してください
+@msg	the script wrote more file data than one run may write (32 MiB)	スクリプトが 1 回の実行で書き込める量を超えるファイルデータを書き込みました (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
+@msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
+@msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
+@msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
+@msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です

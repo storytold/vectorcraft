@@ -267,14 +267,339 @@ fn a_stop_names_the_files_the_run_left_written() {
     let dir = folder("written");
     let path = dir.join("out.svg");
     let p = path.to_string_lossy().into_owned();
-    let source = format!("vc.run('document.export', {{path: {p:?}, format: 'svg'}}); while (true) {{}}");
+    let source = format!("Folder.selectDialog('Folder'); vc.run('document.export', {{path: {p:?}, format: 'svg'}}); while (true) {{}}");
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.script_picker().is_some(), "the run waits at its folder dialog");
+    let paths = vec![dir.to_string_lossy().into_owned()];
+    assert!(app.session.script_pick(vectorcraft_engine::script::files::PickAnswer::Allow { paths, always: false }));
     script_runs::poll(&mut app);
     assert!(path.exists());
     app.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, json!({})));
     confirm(&mut app).unwrap();
     assert!(app.ui.status.contains(&p), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A script's open dialog with `multiSelect` shows the host's dialog for several files, with the
+/// file types of the script's filter, and the script gets every file picked.
+#[test]
+fn a_scripts_open_dialog_picks_several_files_of_its_types() {
+    let asked = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let dir = folder("several");
+    let paths: Vec<String> = ["a.txt", "b.txt"].iter().map(|n| dir.join(n).to_string_lossy().into_owned()).collect();
+    for p in &paths {
+        std::fs::write(p, "x").unwrap();
+    }
+    let (seen, given) = (asked.clone(), paths.clone());
+    let services = crate::Services {
+        pick_open: Some(Box::new(|_: &crate::FilePick| panic!("the dialog for one file"))),
+        pick_open_files: Some(Box::new(move |pick: &crate::FilePick| {
+            seen.borrow_mut().push(pick.filters.clone());
+            given.clone()
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({})).unwrap();
+    app.session.prefs.show_external_script_warning = false;
+    let source = "var f = File.openDialog('Pick', 'Text:*.txt;All files:*.*', true); vc.log([f.length, f[0].name, f[1].name]);";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let mut d = app.ui.dialog.take().expect("the script's file dialog");
+    assert_eq!(d.kind, dialogs::script_run::PICKER_KIND);
+    dialogs::script_run::choose(&mut app, &mut d);
+    assert_eq!(*asked.borrow(), vec![vec![("Text".to_string(), vec!["txt".to_string()]), ("All files".to_string(), vec!["*".to_string()])]]);
+    assert_eq!(app.script_picked, paths);
+    d.fields.insert("answer".into(), json!("once"));
+    app.ui.dialog = Some(d);
+    confirm(&mut app).unwrap();
+    finish(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!([[2, "a.txt", "b.txt"]]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A folder's `selectDlg` asks the host for a folder picker that starts in that folder, and
+/// `Folder.selectDialog` for one that starts where the host starts it.
+#[test]
+fn a_scripts_folder_dialog_starts_in_the_folder_it_was_asked_from() {
+    let dir = folder("selectstart");
+    let requests = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let seen = requests.clone();
+    let picked = dir.to_string_lossy().into_owned();
+    let services = crate::Services {
+        start_pick: Some(Box::new(move |request: crate::picks::PickRequest| {
+            seen.borrow_mut().push(request);
+            None
+        })),
+        pick_folder: Some(Box::new(move || Some(picked.clone()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({})).unwrap();
+    app.session.prefs.show_external_script_warning = false;
+    let source = format!(
+        "var a = new Folder({:?}).selectDlg('Pick'); var b = Folder.selectDialog('Pick'); vc.log([a !== null, b !== null]);",
+        dir.to_string_lossy()
+    );
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    for _ in 0..2 {
+        script_runs::poll(&mut app);
+        let mut d = app.ui.dialog.take().expect("the script's file dialog");
+        assert_eq!(d.kind, dialogs::script_run::PICKER_KIND);
+        dialogs::script_run::choose(&mut app, &mut d);
+        d.fields.insert("answer".into(), json!("once"));
+        app.ui.dialog = Some(d);
+        confirm(&mut app).unwrap();
+    }
+    finish(&mut app);
+    let start = app.session.script_report().map(|r| r["log"].clone());
+    assert_eq!(start, Some(json!([[true, true]])));
+    let r = requests.borrow();
+    let starts_in_dir = |s: &str| std::fs::canonicalize(s).ok() == std::fs::canonicalize(&dir).ok();
+    assert!(matches!(&r[..], [crate::picks::PickRequest::FolderAt(s), crate::picks::PickRequest::Folder] if starts_in_dir(s)), "{r:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Where the host shows file dialogs in line (Windows), a folder's `selectDlg` also opens the
+/// folder picker in that folder, and `Folder.selectDialog` the one that starts where the host
+/// starts it.
+#[test]
+fn a_scripts_folder_dialog_shown_in_line_starts_in_the_folder_it_was_asked_from() {
+    let dir = folder("selectstartinline");
+    let shown = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let (at, plain) = (shown.clone(), shown.clone());
+    let (picked_at, picked) = (dir.to_string_lossy().into_owned(), dir.to_string_lossy().into_owned());
+    let services = crate::Services {
+        pick_folder_at: Some(Box::new(move |start: &str| {
+            at.borrow_mut().push(Some(start.to_string()));
+            Some(picked_at.clone())
+        })),
+        pick_folder: Some(Box::new(move || {
+            plain.borrow_mut().push(None);
+            Some(picked.clone())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({})).unwrap();
+    app.session.prefs.show_external_script_warning = false;
+    let source = format!(
+        "var a = new Folder({:?}).selectDlg('Pick'); var b = Folder.selectDialog('Pick'); vc.log([a !== null, b !== null]);",
+        dir.to_string_lossy()
+    );
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    for _ in 0..2 {
+        script_runs::poll(&mut app);
+        let mut d = app.ui.dialog.take().expect("the script's file dialog");
+        assert_eq!(d.kind, dialogs::script_run::PICKER_KIND);
+        dialogs::script_run::choose(&mut app, &mut d);
+        d.fields.insert("answer".into(), json!("once"));
+        app.ui.dialog = Some(d);
+        confirm(&mut app).unwrap();
+    }
+    finish(&mut app);
+    assert_eq!(app.session.script_report().map(|r| r["log"].clone()), Some(json!([[true, true]])));
+    let r = shown.borrow();
+    let starts_in_dir = |s: &str| std::fs::canonicalize(s).ok() == std::fs::canonicalize(&dir).ok();
+    assert!(matches!(&r[..], [Some(s), None] if starts_in_dir(s)), "{r:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A control request, handled as the app handles one: while `answering_control` is set.
+fn control(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
+    let (req, _) = crate::control::ControlRequest::new(method, params);
+    app.ui.answering_control = true;
+    let outcome = crate::control::handle(app, &egui::Context::default(), &req);
+    app.ui.answering_control = false;
+    let crate::control::Outcome::Done(r) = outcome else { panic!("expected an immediate reply") };
+    r
+}
+
+const BY_PERSON: &str = "Only the person at the keyboard can allow a script's file access";
+
+/// The paths a script's file dialog allows come from Choose… alone: `ui.dialog.set` cannot set
+/// them, and fields set on the dialog do not let Always Allow keep a grant the run cannot keep.
+#[test]
+fn a_scripts_file_dialog_takes_no_paths_from_automation() {
+    let dir = folder("automated");
+    let secret = dir.join("secret.txt");
+    std::fs::write(&secret, "secret").unwrap();
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    let source = "var f = File.openDialog('Pick'); vc.log(f === null ? null : f.fsName);";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::script_run::PICKER_KIND));
+    let p = secret.to_string_lossy().into_owned();
+    let r = control(&mut app, "ui.dialog.set", json!({"field": "paths", "value": [p]}));
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("no field `paths`")), "{r}");
+    let always = json!({"fields": [{"field": "canAlways", "value": true}, {"field": "answer", "value": "always"}], "action": "confirm"});
+    let r = control(&mut app, "ui.dialog.set", always.clone());
+    assert_eq!(r["error"], BY_PERSON, "{r}");
+    let d = app.ui.dialog.as_mut().expect("the dialog stays open");
+    d.fields.insert("answer".into(), json!("once"));
+    assert_eq!(confirm(&mut app).unwrap_err(), "choose a file or folder first, or deny");
+    app.script_picked = vec![p];
+    let r = control(&mut app, "ui.dialog.set", always);
+    assert_eq!(r["error"], BY_PERSON, "{r}");
+    let d = app.ui.dialog.as_mut().expect("the dialog stays open");
+    d.fields.insert("canAlways".into(), json!(true));
+    d.fields.insert("answer".into(), json!("always"));
+    assert_eq!(confirm(&mut app).unwrap_err(), "this script's file access can be allowed only once");
+    let r = control(&mut app, "ui.dialog.set", json!({"fields": [{"field": "answer", "value": "deny"}], "action": "confirm"}));
+    assert!(r.get("error").is_none_or(Value::is_null), "{r}");
+    finish(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!([null]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Allow Once and Always Allow This Script are taken only from the person at the keyboard: a control
+/// request and synthetic input are refused and the dialog stays open, after a person picked a file
+/// with Choose… too, while Deny from automation is taken.
+#[test]
+fn a_scripts_file_access_is_allowed_only_by_the_person() {
+    let dir = folder("byperson");
+    let picked = dir.join("picked.txt");
+    std::fs::write(&picked, "picked").unwrap();
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    let source = "var f = File.openDialog('Pick'); vc.log(f === null ? null : f.name);";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    app.script_picked = vec![picked.to_string_lossy().into_owned()];
+    let r = control(&mut app, "ui.dialog.set", json!({"fields": [{"field": "answer", "value": "once"}], "action": "confirm"}));
+    assert_eq!(r["error"], BY_PERSON, "{r}");
+    assert!(app.session.script_picker().is_some(), "the run still waits");
+    let r = control(&mut app, "ui.dialog.set", json!({"fields": [{"field": "answer", "value": "deny"}], "action": "confirm"}));
+    assert!(r.get("error").is_none_or(Value::is_null), "Deny is taken from automation: {r}");
+    finish(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!([null]));
+
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    app.script_picked = vec![picked.to_string_lossy().into_owned()];
+    app.ui.dialog.as_mut().expect("the file dialog").fields.insert("answer".into(), json!("once"));
+    app.synthetic_frame = true;
+    assert_eq!(confirm(&mut app).unwrap_err(), BY_PERSON);
+    app.synthetic_frame = false;
+    assert!(app.session.script_picker().is_some(), "the run still waits");
+    confirm(&mut app).unwrap();
+    finish(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!(["picked.txt"]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The texts the dialog layer draws, once a few frames have let it settle.
+fn dialog_texts(app: &mut VectorcraftApp) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut v = vec![];
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        v.clear();
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    }
+    v
+}
+
+/// The dialog says what the run asks for and shows the script's prompt, also after `ui.dialog.set`
+/// changed the dialog's `kind` and `prompt` fields.
+#[test]
+fn a_scripts_file_dialog_says_what_the_run_asks_for() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    let source = "vc.log(Folder.selectDialog('Pick the export folder'));";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let r =
+        control(&mut app, "ui.dialog.set", json!({"fields": [{"field": "kind", "value": "open"}, {"field": "prompt", "value": "Nothing to see"}]}));
+    assert!(r.get("error").is_none_or(Value::is_null), "{r}");
+    let texts = dialog_texts(&mut app);
+    let folder = "The script asks to read and write a folder you choose, with everything in it.";
+    assert!(texts.iter().any(|t| t == folder), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Pick the export folder"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Nothing to see" || t == "The script asks to read a file you choose."), "{texts:?}");
+    dialogs::cancel(&mut app);
+    finish(&mut app);
+}
+
+/// Enter in the file dialog gives Deny, its default answer, also after the person picked a folder.
+#[test]
+fn enter_in_a_scripts_file_dialog_denies() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    let source = "vc.log(Folder.selectDialog('Pick'));";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    app.script_picked = vec![folder("enterdeny").to_string_lossy().into_owned()];
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    for events in [vec![], vec![], vec![enter]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::script_run::PICKER_KIND), "the dialog closes");
+    finish(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!([null]));
+}
+
+/// Enter on the file dialog's focused Choose… button goes to that button and does not deny.
+#[test]
+fn enter_on_a_focused_choose_button_does_not_deny() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "vc.log(Folder.selectDialog('Pick'));" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    let frame = |app: &mut VectorcraftApp, events| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    for events in [vec![], vec![], vec![key(egui::Key::Tab)], vec![]] {
+        frame(&mut app, events);
+    }
+    assert!(ctx.memory(|m| m.focused().is_some()), "Tab gives a button the keyboard focus");
+    frame(&mut app, vec![key(egui::Key::Enter)]);
+    frame(&mut app, vec![]);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::script_run::PICKER_KIND), "the dialog stays open");
+    assert!(app.session.script_picker().is_some(), "the run still waits");
+    dialogs::cancel(&mut app);
+    finish(&mut app);
+}
+
+/// Choose… keeps at most the 2,048 files a script is given, and the dialog says the files picked
+/// after them were left out.
+#[test]
+fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
+    let given: Vec<String> = (0..2050).map(|n| format!("/picked/{n}.txt")).collect();
+    let all = given.clone();
+    let services = crate::Services { pick_open_files: Some(Box::new(move |_: &crate::FilePick| all.clone())), ..Default::default() };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({})).unwrap();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "File.openDialog('Pick', '', true);" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let mut d = app.ui.dialog.take().expect("the script's file dialog");
+    dialogs::script_run::choose(&mut app, &mut d);
+    app.ui.dialog = Some(d);
+    assert_eq!(app.script_picked, given[..2048]);
+    let texts = dialog_texts(&mut app);
+    let note = "A script is given at most 2,048 files: the files picked after them were left out";
+    assert!(texts.iter().any(|t| t == note), "{texts:?}");
+    dialogs::cancel(&mut app);
+    finish(&mut app);
 }
 
 #[test]

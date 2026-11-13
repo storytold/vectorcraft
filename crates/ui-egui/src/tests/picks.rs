@@ -53,6 +53,7 @@ pub(crate) fn off_the_ui_thread(services: &mut Services) -> (Shown, Written) {
     services.pick_open = Some(Box::new(in_line));
     services.pick_save = Some(Box::new(in_line));
     services.pick_open_multi = Some(Box::new(|| panic!("no dialog on the UI thread")));
+    services.pick_open_files = Some(Box::new(|_: &FilePick| panic!("no dialog on the UI thread")));
     services.pick_folder = Some(Box::new(|| panic!("no dialog on the UI thread")));
     services.read = Some(Box::new(|_: &str| Ok(SVG.to_vec())));
     services.write = Some(Box::new(move |path: &str, _: &[u8]| {
@@ -1074,11 +1075,11 @@ fn without_tests(code: &str) -> String {
 }
 
 /// The calls in `code` (from [`code_only`]) of the host's in-line dialogs: [`Services`]'
-/// `pick_open`, `pick_save`, `pick_folder` and `pick_open_multi` used other than to ask whether
-/// the host has them (`.is_some()`, `.is_none()`).
+/// `pick_open`, `pick_save`, `pick_folder`, `pick_folder_at`, `pick_open_multi` and
+/// `pick_open_files` used other than to ask whether the host has them (`.is_some()`, `.is_none()`).
 fn in_line_dialogs(code: &str) -> Vec<String> {
     let mut found = vec![];
-    for name in ["pick_open", "pick_save", "pick_folder", "pick_open_multi"] {
+    for name in ["pick_open", "pick_save", "pick_folder", "pick_folder_at", "pick_open_multi", "pick_open_files"] {
         let field = format!(".{name}");
         let mut rest = code;
         while let Some(at) = rest.find(&field) {

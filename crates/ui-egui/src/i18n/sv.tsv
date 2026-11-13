@@ -4121,6 +4121,13 @@ axis	Both	Båda
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
 	Script Alert	Skriptmeddelande
+	Script File Access	Skriptets filåtkomst
+	The script asks to read a file you choose.	Skriptet ber om att läsa en fil som du väljer.
+	The script asks to read and write a file you choose.	Skriptet ber om att läsa och skriva en fil som du väljer.
+	The script asks to read and write a folder you choose, with everything in it.	Skriptet ber om att läsa och skriva en mapp som du väljer, med allt innehåll.
+	Allow Once	Tillåt en gång
+	Always Allow This Script	Tillåt alltid det här skriptet
+	Deny	Neka
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
@@ -4149,8 +4156,6 @@ axis	Both	Båda
 @msg	Script file could not be read	Skriptfilen kunde inte läsas
 @msg	Script folder has more than 2,048 entries	Skriptmappen har fler än 2 048 poster
 @msg	Script file open mode must be r, w, e or a	Skriptfilens öppningsläge måste vara r, w, e eller a
-@msg	Script file writing is not available	Skrivning av skriptfiler är inte tillgänglig
-@msg	Script file dialogs are not available	Fildialogrutor för skript är inte tillgängliga
 @msg	Script files cannot be opened in another application	Skriptfiler kan inte öppnas i ett annat program
 @msg	Script file access is unavailable on the web	Åtkomst till skriptfiler är inte tillgänglig på webben
 @msg	Script has 256 files open	Skriptet har 256 filer öppna
@@ -4221,6 +4226,27 @@ axis	Both	Båda
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
+@msg	Script file access denied: {path}	Skriptets filåtkomst nekades: {path}
+@msg	Script file access to the app's own folders is not allowed	Skript får inte komma åt appens egna mappar
+@msg	Script file cannot encode the text	Skriptets fil kan inte koda texten
+@msg	Script file could not be written	Skriptets fil kunde inte skrivas
+@msg	Script file dialogs need a person to answer them	Skriptets fildialoger behöver en person som svarar på dem
+@msg	Script file is not open for writing	Skriptets fil är inte öppen för skrivning
+@msg	Script file name is already in use	Namnet på skriptets fil används redan
+@msg	Script file name must be a name without a folder	Namnet på skriptets fil måste vara ett namn utan mapp
+@msg	Script file permission can be kept only for a script run from a file	Filbehörighet kan bara behållas för ett skript som körs från en fil
+@msg	Script file permission could not be saved	Skriptets filbehörighet kunde inte sparas
+@msg	Script folder is not empty	Skriptets mapp är inte tom
+@msg	Script files cannot make aliases	Skriptets filer kan inte skapa alias
+@msg	Script file hidden setting cannot be changed	Inställningen för dold för skriptets fil kan inte ändras
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en fildialog kan inte öppnas i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
+@msg	the script wrote more file data than one run may write (32 MiB)	skriptet skrev mer fildata än en körning får skriva (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
+@msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
+@msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
+@msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}

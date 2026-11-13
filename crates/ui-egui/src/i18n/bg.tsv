@@ -4094,6 +4094,13 @@ axis	Both	И двете
 	Show External Script Warning	Показвай предупреждение за външни скриптове
 	A Script Is Running	Изпълнява се скрипт
 	Script Alert	Известие от скрипт
+	Script File Access	Достъп на скрипт до файлове
+	The script asks to read a file you choose.	Скриптът иска да прочете файл, който изберете.
+	The script asks to read and write a file you choose.	Скриптът иска да чете и записва файл, който изберете.
+	The script asks to read and write a folder you choose, with everything in it.	Скриптът иска да чете и записва папка, която изберете, с цялото ѝ съдържание.
+	Allow Once	Разреши веднъж
+	Always Allow This Script	Винаги разрешавай този скрипт
+	Deny	Откажи
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скриптът може да променя отворените документи и да записва файлове чрез командите, които изпълнява. Изпълнявайте само скриптове, на които имате доверие.
 	Do not show this warning again	Не показвай повече това предупреждение
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.

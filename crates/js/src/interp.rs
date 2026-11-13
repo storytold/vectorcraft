@@ -162,6 +162,9 @@ pub(crate) struct Frame {
 /// Where the exception being thrown was raised: the code and the instruction.
 type ThrowSite = (Rc<Code>, usize);
 
+/// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
+pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
+
 pub(crate) struct Interp {
     pub(crate) heap: Heap,
     pub(crate) stack: Vec<Value>,
@@ -230,6 +233,9 @@ pub(crate) struct Interp {
     pub(crate) source_tag: u32,
     /// The sources [`crate::HostItem::Evaluator`] functions have given in this realm.
     pub(crate) evaluated: u32,
+    /// Called with the source text given to `eval`, `Function` and evaluator functions, before it
+    /// is compiled ([`crate::Realm::observe_code`]).
+    pub(crate) code_observer: Option<CodeObserver>,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
     /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
@@ -468,6 +474,7 @@ impl Interp {
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
+            code_observer: None,
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
@@ -2422,6 +2429,13 @@ impl Interp {
         crate::to_utf16(text, &self.remaining_source_options()).map_err(CompileError::Syntax)
     }
 
+    /// Gives `units`, source a script evaluates at run time, to the realm's code observer.
+    pub(crate) fn observe_code(&self, units: &[u16]) {
+        if let Some(f) = &self.code_observer {
+            f(units);
+        }
+    }
+
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
@@ -2460,6 +2474,7 @@ impl Interp {
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.prepare_source(s.len())?;
         let units = self.flat_reserved(s)?;
+        self.observe_code(&units);
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;

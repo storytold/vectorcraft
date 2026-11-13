@@ -329,6 +329,11 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) script_picked: Vec<String>,
+    /// Choose… left out files past the most a script is given.
+    pub(crate) script_picked_left_out: bool,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,

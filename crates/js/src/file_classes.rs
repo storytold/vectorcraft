@@ -12,6 +12,11 @@
 //! the host's `parse` of that path. `Folder.current` is kept in the realm and starts at the host's
 //! `current`.
 //!
+//! `write` and `writeln` join their values as `String(value)` gives them, and `writeln` adds the
+//! line end `lineFeed` names: CRLF for `Windows`, CR for `Macintosh` and LF otherwise. The file
+//! dialogs are functions of script code that call the host's `pick`, so that a run can wait there
+//! for the person's answer; they give a `File`, a `Folder`, an array of `File`s or `null`.
+//!
 //! A method whose host call fails sets `error` and returns `false`, `null` or an empty string. A
 //! count or position that is not a finite number, a negative count and a seek mode other than 0, 1
 //! or 2 throw a `RangeError`; a method called on an object that is not a `File` or `Folder` throws
@@ -20,6 +25,7 @@
 
 use crate::HostItem;
 use crate::builtins::{arg, constructor, data, method, native, put_at};
+use crate::bytecode::CodeKind;
 use crate::heap::{CONFIGURABLE, Class, HIDDEN, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
@@ -213,12 +219,16 @@ fn is_open(i: &Interp, o: ObjId) -> JsResult<Option<Value>> {
     Ok((this_run && matches!(h, Value::Number(n) if n >= 0.0)).then_some(h))
 }
 
-/// Closes the object's open file, if it has one.
-fn close_open(i: &mut Interp, o: ObjId) -> JsResult<()> {
+/// Closes the object's open file, if it has one, which writes what the script wrote to it. → false
+/// after setting `error` when that could not be written.
+fn close_open(i: &mut Interp, o: ObjId) -> JsResult<bool> {
+    let mut written = true;
     if let Some(h) = is_open(i, o)? {
-        host(i, "close", &[h])?;
+        let r = host(i, "close", &[h])?;
+        written = outcome(i, o, &r)?;
     }
-    set_slot(i, o, HANDLE, Value::Number(-1.0))
+    set_slot(i, o, HANDLE, Value::Number(-1.0))?;
+    Ok(written)
 }
 
 fn date(i: &mut Interp, ms: Value) -> JsResult<Value> {
@@ -375,7 +385,10 @@ fn get_relative_uri(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsR
 
 fn change_path(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (o, _) = this_path(i, &this, "changePath")?;
-    close_open(i, o)?;
+    // An object whose changes could not be written keeps its path; `error` says why.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
     let p = parse(i, &arg(args, 0))?;
     let fs = i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))?;
     set_slot(i, o, PATH, fs)?;
@@ -409,30 +422,282 @@ fn to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Valu
     parsed(i, &this, "toString", "uri")
 }
 
-/// A method that writes: it sets `error` and returns `false`.
-fn no_writes(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let (o, _) = this_path(i, &this, "write")?;
-    let m = message(i, "noWrites")?;
+/// Whether the host's answer `r` is not `{error}`; when it is, the object's `error` is set to it.
+fn outcome(i: &mut Interp, o: ObjId, r: &Value) -> JsResult<bool> {
+    let error = i.rooted(std::slice::from_ref(r), |i| field(i, r, "error"))?;
+    if matches!(error, Value::String(_)) {
+        set_slot(i, o, ERROR, error)?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+/// Calls the host function `name` with the object's path and `args`. → whether it did the work.
+fn path_call(i: &mut Interp, this: &Value, what: &str, name: &str, args: &[Value]) -> JsResult<Value> {
+    let (o, path) = this_path(i, this, what)?;
+    let mut all = vec![path];
+    all.extend_from_slice(args);
+    let r = i.rooted(&all, |i| host(i, name, &all))?;
+    Ok(Value::Bool(outcome(i, o, &r)?))
+}
+
+/// `createAlias`: not available, so it sets `error` and returns `false`.
+fn create_alias(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "createAlias")?;
+    let m = message(i, "noAlias")?;
     set_slot(i, o, ERROR, m)?;
     Ok(Value::Bool(false))
 }
 
-/// A setter that writes: it sets `error` and changes nothing.
-fn no_writes_setter(i: &mut Interp, this: Value, args: &[Value], construct: bool) -> JsResult<Value> {
-    no_writes(i, this, args, construct)?;
+/// Setting `hidden`: not available, so it sets `error` and changes nothing.
+fn set_hidden(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "hidden")?;
+    let m = message(i, "noHidden")?;
+    set_slot(i, o, ERROR, m)?;
     Ok(Value::Undefined)
 }
 
-/// A dialog method: it sets `error` and returns `null`.
-fn no_picker(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let (o, _) = this_path(i, &this, "dialog")?;
-    let m = message(i, "noPicker")?;
-    set_slot(i, o, ERROR, m)?;
-    Ok(Value::Null)
+/// `remove()`: the file, or the folder when it is empty, deleted at once.
+fn remove(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "remove")?;
+    // A file whose changes could not be written is not removed; `error` says why.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
+    path_call(i, &this, "remove", "remove", &[])
 }
 
-fn null_static(_: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    Ok(Value::Null)
+/// `rename(name)`: the object's file or folder named `name`, in the same folder; the object takes
+/// the new path.
+fn rename(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, path) = this_path(i, &this, "rename")?;
+    let name = Value::String(i.to_str(&arg(args, 0))?);
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
+    let r = i.rooted(&[path.clone(), name.clone()], |i| host(i, "rename", &[path.clone(), name.clone()]))?;
+    if !outcome(i, o, &r)? {
+        return Ok(Value::Bool(false));
+    }
+    let fs = i.rooted(std::slice::from_ref(&r), |i| field(i, &r, "fs"))?;
+    set_slot(i, o, PATH, fs)?;
+    Ok(Value::Bool(true))
+}
+
+/// `copy(target)`: the file copied to `target`, a path or a `File`, replacing a file there.
+fn copy(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "copy")?;
+    let p = parse(i, &arg(args, 0))?;
+    let fs = i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))?;
+    i.rooted(std::slice::from_ref(&fs), |i| path_call(i, &this, "copy", "copy", std::slice::from_ref(&fs)))
+}
+
+/// `Folder.prototype.create()`: the folder, with the folders above it that are missing.
+fn create(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    path_call(i, &this, "create", "create", &[])
+}
+
+/// Setting `length`: the file cut, or filled with zero bytes, to that many bytes.
+fn set_length(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "length")?;
+    let n = i.to_number(&arg(args, 0))?;
+    if !n.is_finite() || n < 0.0 {
+        return Err(i.throw(ErrorType::Range, "File.length: the length must be a finite number, 0 or more"));
+    }
+    path_call(i, &this, "length", "setLength", &[Value::Number(n.floor())])?;
+    Ok(Value::Undefined)
+}
+
+/// Setting `readonly`.
+fn set_readonly(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "readonly")?;
+    let on = arg(args, 0).truthy();
+    path_call(i, &this, "readonly", "setReadonly", &[Value::Bool(on)])?;
+    Ok(Value::Undefined)
+}
+
+/// The line end the object's `lineFeed` names: CRLF for `Windows`, CR for `Macintosh` and LF for
+/// anything else, without regard to case.
+fn line_end(i: &Interp, o: ObjId) -> JsResult<&'static str> {
+    Ok(match slot(i, o, LINE_FEED)? {
+        Value::String(s) => match s.to_rust_string().to_ascii_lowercase().as_str() {
+            "windows" => "\r\n",
+            "macintosh" => "\r",
+            _ => "\n",
+        },
+        _ => "\n",
+    })
+}
+
+/// `write(...values)` and, with `line`, `writeln(...values)`: the values as `String(value)` gives
+/// them, written at the position of the object's open file. The values are joined only for an open
+/// file, and only while the text stays within twice the host's `maxWrite` UTF-16 code units: each
+/// character takes at least one byte and at most two code units, so a longer text cannot fit in a
+/// file, and the write sets `error` to the host's `tooLarge` and returns `false`.
+fn write_values(i: &mut Interp, this: &Value, args: &[Value], what: &str, line: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, this, what)?;
+    let Some(h) = opened(i, o)? else { return Ok(Value::Bool(false)) };
+    let c = classes(i)?;
+    let max = match i.get_value(&Value::Object(c.host), &key("maxWrite"))? {
+        Value::Number(n) if n.is_finite() && n >= 0.0 => (n as usize).saturating_mul(2),
+        _ => usize::MAX,
+    };
+    let mut text = String::new();
+    let mut units = 0usize;
+    for a in args {
+        i.use_fuel()?;
+        let s = i.to_str(a)?;
+        units = units.saturating_add(s.len());
+        if units > max {
+            let m = message(i, "tooLarge")?;
+            set_slot(i, o, ERROR, m)?;
+            return Ok(Value::Bool(false));
+        }
+        text.push_str(&s.to_rust_string());
+    }
+    if line {
+        text.push_str(line_end(i, o)?);
+    }
+    i.reserve_heap(string_bytes(text.len()))?;
+    let text = Value::str(&text);
+    let r = i.rooted(&[h.clone(), text.clone()], |i| host(i, "write", &[h.clone(), text.clone()]))?;
+    Ok(Value::Bool(outcome(i, o, &r)?))
+}
+
+fn write(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    write_values(i, &this, args, "write", false)
+}
+
+fn writeln(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    write_values(i, &this, args, "writeln", true)
+}
+
+// ---- file dialogs ----
+
+/// The file dialogs, made from script code so the run can wait at the host's `pick` until the
+/// person answers: `ask` gives `pick`'s arguments and `wrap` turns its answer into objects. A
+/// `filter` that is a function is called with each file picked, and the files it gives a false
+/// value for are left out; when none is left, the dialog gives `null`.
+const DIALOGS: &str = "(function (ask, pick, wrap) {
+  var isArray = Array.isArray;
+  function kept(files, filter) {
+    if (files === null || typeof filter !== 'function') return files;
+    if (!isArray(files)) return filter(files) ? files : null;
+    var out = [];
+    for (var k = 0; k < files.length; k++) if (filter(files[k])) out[out.length] = files[k];
+    return out.length ? out : null;
+  }
+  function dialog(kind, self, prompt, multi, filter) { var a = ask(kind, self, prompt, multi, filter); return kept(wrap(kind, self, pick(a[0], a[1], a[2], a[3], a[4])), filter); }
+  return [
+    function openDialog(prompt, filter, multiSelect) { return dialog('open', null, prompt, multiSelect, filter); },
+    function saveDialog(prompt, filter) { return dialog('save', null, prompt, false, filter); },
+    function openDlg(prompt, filter, multiSelect) { return dialog('open', this, prompt, multiSelect, filter); },
+    function saveDlg(prompt, filter) { return dialog('save', this, prompt, false, filter); },
+    function selectDialog(prompt) { return dialog('folder', null, prompt, false, null); },
+    function selectDlg(prompt) { return dialog('folder', this, prompt, false, null); }
+  ];
+})";
+
+/// `ask(kind, self, prompt, multi, filter)`: `[kind, prompt, multi, start, filter]`, the arguments
+/// of the host's `pick`, where `start` is the path of `self` (a `File` or `Folder`, or `null` for the
+/// class's own dialog) and `filter` the file types, a string, or `""` for any other value. `self`
+/// must be a `File` or `Folder` when it is not `null`.
+fn ask(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let kind = arg(args, 0);
+    let start = match arg(args, 1) {
+        Value::Null => Value::str(""),
+        s => this_path(i, &s, "dialog")?.1,
+    };
+    let prompt = match arg(args, 2) {
+        Value::Undefined | Value::Null => Value::str(""),
+        p => Value::String(i.to_str(&p)?),
+    };
+    let multi = Value::Bool(arg(args, 3).truthy());
+    let filter = match arg(args, 4) {
+        f @ Value::String(_) => f,
+        _ => Value::str(""),
+    };
+    i.rooted(&[kind.clone(), start.clone(), prompt.clone(), filter.clone()], |i| {
+        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES)?;
+        let proto = i.intrinsics.array_proto;
+        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(proto)));
+        i.rooted(&[Value::Object(out)], |i| {
+            for (at, v) in [kind.clone(), prompt.clone(), multi.clone(), start.clone(), filter.clone()].into_iter().enumerate() {
+                put_at(i, out, at as f64, v)?;
+            }
+            Ok(Value::Object(out))
+        })
+    })
+}
+
+/// `wrap(kind, self, answer)`: the `File` (a `Folder` for a folder dialog) for each path `pick`
+/// gave, an array of them for a list, `null` for `null`, and `null` after setting `self`'s `error`
+/// for `{error}`.
+fn wrap(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let c = classes(i)?;
+    let proto = if matches!(arg(args, 0), Value::String(s) if s.to_rust_string() == "folder") { c.folder_proto } else { c.file_proto };
+    let answer = arg(args, 2);
+    match &answer {
+        Value::String(_) => return instance(i, proto, answer.clone()),
+        Value::Object(_) => {}
+        _ => return Ok(Value::Null),
+    }
+    let error = i.rooted(std::slice::from_ref(&answer), |i| field(i, &answer, "error"))?;
+    if matches!(error, Value::String(_)) {
+        if let Some(o) = arg(args, 1).as_object()
+            && matches!(slot(i, o, PATH)?, Value::String(_))
+        {
+            set_slot(i, o, ERROR, error)?;
+        }
+        return Ok(Value::Null);
+    }
+    i.rooted(std::slice::from_ref(&answer), |i| {
+        let length = i.get_value(&answer, &key("length"))?;
+        let n = i.to_number(&length)?;
+        i.reserve_heap(OBJECT_BYTES)?;
+        let array_proto = i.intrinsics.array_proto;
+        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(array_proto)));
+        i.rooted(&[Value::Object(out)], |i| {
+            let mut at = 0.0;
+            while at < n {
+                i.use_fuel()?;
+                let fs = i.get_value(&answer, &crate::value::number_to_str(at).flat())?;
+                let item = i.rooted(std::slice::from_ref(&fs), |i| instance(i, proto, fs.clone()))?;
+                put_at(i, out, at, item)?;
+                at += 1.0;
+            }
+            Ok(Value::Object(out))
+        })
+    })
+}
+
+/// Defines the file dialogs on `File`, `Folder` and their prototypes.
+fn dialogs(i: &mut Interp, file: ObjId, file_proto: ObjId, folder: ObjId, folder_proto: ObjId) -> JsResult<()> {
+    let units = i.encode_source(DIALOGS).map_err(|e| i.compile_error_to_abrupt(e))?;
+    let code = i.compile_source(&units, false, CodeKind::Eval).map_err(|e| i.compile_error_to_abrupt(e))?;
+    let make = i.run_global(code, true)?;
+    let c = classes(i)?;
+    let pick = i.rooted(std::slice::from_ref(&make), |i| i.get_value(&Value::Object(c.host), &key("pick")))?;
+    let ask = native(i, "ask", ask, 5, NativeKind::Plain, false)?;
+    let made = i.rooted(&[make.clone(), pick.clone(), Value::Object(ask)], |i| {
+        let wrap = native(i, "wrap", wrap, 3, NativeKind::Plain, false)?;
+        i.call(&make, &Value::Undefined, &[Value::Object(ask), pick.clone(), Value::Object(wrap)])
+    })?;
+    let on = [
+        (file, "openDialog"),
+        (file, "saveDialog"),
+        (file_proto, "openDlg"),
+        (file_proto, "saveDlg"),
+        (folder, "selectDialog"),
+        (folder_proto, "selectDlg"),
+    ];
+    i.rooted(std::slice::from_ref(&made), |i| {
+        for (at, (target, name)) in on.into_iter().enumerate() {
+            let f = i.get_value(&made, &crate::value::number_to_str(at as f64).flat())?;
+            data(i, target, name, f, HIDDEN)?;
+        }
+        Ok(())
+    })
 }
 
 fn text_static(i: &mut Interp, name: &str, args: &[Value]) -> JsResult<Value> {
@@ -530,19 +795,18 @@ fn open(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
         Value::Undefined => "r".to_string(),
         m => i.to_str(&m)?.to_rust_string().to_lowercase(),
     };
-    let refusal = match mode.as_str() {
-        "r" => None,
-        "w" | "e" | "a" => Some("noWrites"),
-        _ => Some("badMode"),
-    };
-    if let Some(name) = refusal {
-        let m = message(i, name)?;
+    if !matches!(mode.as_str(), "r" | "w" | "e" | "a") {
+        let m = message(i, "badMode")?;
         set_slot(i, o, ERROR, m)?;
         return Ok(Value::Bool(false));
     }
-    close_open(i, o)?;
+    // The object's earlier changes are written first; when they cannot be, it does not open again.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
     let encoding = slot(i, o, ENCODING)?;
-    let r = host(i, "open", &[path, encoding])?;
+    let mode = Value::str(&mode);
+    let r = host(i, "open", &[path, encoding, mode])?;
     let (error, id) = i.rooted(std::slice::from_ref(&r), |i| Ok((field(i, &r, "error")?, field(i, &r, "id")?)))?;
     if matches!(error, Value::String(_)) {
         set_slot(i, o, ERROR, error)?;
@@ -559,8 +823,7 @@ fn close(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     if opened(i, o)?.is_none() {
         return Ok(Value::Bool(false));
     }
-    close_open(i, o)?;
-    Ok(Value::Bool(true))
+    Ok(Value::Bool(close_open(i, o)?))
 }
 
 fn read(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -669,7 +932,7 @@ fn set_current(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
 
 /// `Folder.<place>`: a new `Folder` for the host's location `place`, or `null`.
 fn place(i: &mut Interp, place: &str) -> JsResult<Value> {
-    let all = host(i, "locations", &[])?;
+    let all = host(i, "locations", &[Value::str(place)])?;
     let fs = i.rooted(std::slice::from_ref(&all), |i| field(i, &all, place))?;
     if !matches!(fs, Value::String(_)) {
         return Ok(Value::Null);
@@ -735,8 +998,8 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "changePath", change_path, 1)?;
     method(i, proto, "resolve", resolve, 0)?;
     method(i, proto, "execute", execute, 0)?;
-    method(i, proto, "remove", no_writes, 0)?;
-    method(i, proto, "rename", no_writes, 1)?;
+    method(i, proto, "remove", remove, 0)?;
+    method(i, proto, "rename", rename, 1)?;
     method(i, ctor, "encode", encode, 1)?;
     method(i, ctor, "decode", decode, 1)?;
     method(i, ctor, "isEncodingAvailable", encoding_available, 1)?;
@@ -744,10 +1007,10 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     data(i, ctor, "fs", system, HIDDEN)
 }
 
-fn file_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
-    accessor(i, proto, "length", length, Some(no_writes_setter))?;
-    accessor(i, proto, "hidden", hidden, Some(no_writes_setter))?;
-    accessor(i, proto, "readonly", readonly, Some(no_writes_setter))?;
+fn file_members(i: &mut Interp, proto: ObjId) -> JsResult<()> {
+    accessor(i, proto, "length", length, Some(set_length))?;
+    accessor(i, proto, "hidden", hidden, Some(set_hidden))?;
+    accessor(i, proto, "readonly", readonly, Some(set_readonly))?;
     accessor(i, proto, "creator", four_question_marks, None)?;
     accessor(i, proto, "type", four_question_marks, None)?;
     accessor(i, proto, "eof", eof, None)?;
@@ -760,21 +1023,15 @@ fn file_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "readch", read_char, 0)?;
     method(i, proto, "seek", seek, 2)?;
     method(i, proto, "tell", tell, 0)?;
-    method(i, proto, "write", no_writes, 1)?;
-    method(i, proto, "writeln", no_writes, 1)?;
-    method(i, proto, "copy", no_writes, 1)?;
-    method(i, proto, "createAlias", no_writes, 1)?;
-    method(i, proto, "openDlg", no_picker, 0)?;
-    method(i, proto, "saveDlg", no_picker, 0)?;
-    method(i, ctor, "openDialog", null_static, 0)?;
-    method(i, ctor, "saveDialog", null_static, 0)
+    method(i, proto, "write", write, 1)?;
+    method(i, proto, "writeln", writeln, 1)?;
+    method(i, proto, "copy", copy, 1)?;
+    method(i, proto, "createAlias", create_alias, 1)
 }
 
 fn folder_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "getFiles", get_files, 1)?;
-    method(i, proto, "create", no_writes, 0)?;
-    method(i, proto, "selectDlg", no_picker, 0)?;
-    method(i, ctor, "selectDialog", null_static, 0)?;
+    method(i, proto, "create", create, 0)?;
     accessor(i, ctor, "current", get_current, Some(set_current))?;
     for (place, get) in PLACES.into_iter().zip(PLACE_GETTERS) {
         accessor(i, ctor, place, get, None)?;
@@ -814,8 +1071,9 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         constructor(i, "Folder", folder, folder_proto)?;
         common(i, file, file_proto)?;
         common(i, folder, folder_proto)?;
-        file_members(i, file, file_proto)?;
-        folder_members(i, folder, folder_proto)
+        file_members(i, file_proto)?;
+        folder_members(i, folder, folder_proto)?;
+        dialogs(i, file, file_proto, folder, folder_proto)
     })
 }
 
@@ -847,7 +1105,7 @@ mod tests {
                 ("parent", Data::String("/".into())),
             ])
         };
-        let messages = ["notOpen", "noWrites", "noPicker", "badMode"].map(|k| (k.to_string(), HostItem::Value(Data::String(k.into()))));
+        let messages = ["notOpen", "badMode", "noAlias", "noHidden"].map(|k| (k.to_string(), HostItem::Value(Data::String(k.into()))));
         let stat = move |a: Vec<Data>| -> Result<Data, crate::HostError> {
             let dir = text(&a, 0) == "/d";
             Ok(obj(vec![("exists", Data::Bool(dir)), ("dir", Data::Bool(dir))]))

@@ -4459,6 +4459,13 @@ imageTrace	Outline	Obris
 	Show External Script Warning	Prikaži upozorenje za vanjske skripte
 	A Script Is Running	Skripta se izvršava
 	Script Alert	Upozorenje skripte
+	Script File Access	Pristup skripte datotekama
+	The script asks to read a file you choose.	Skripta traži da pročita datoteku koju odaberete.
+	The script asks to read and write a file you choose.	Skripta traži da čita i piše datoteku koju odaberete.
+	The script asks to read and write a folder you choose, with everything in it.	Skripta traži da čita i piše folder koji odaberete, sa svim što je u njemu.
+	Allow Once	Dozvoli jednom
+	Always Allow This Script	Uvijek dozvoli ovu skriptu
+	Deny	Odbij
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
 	Do not show this warning again	Ne prikazuj više ovo upozorenje
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.

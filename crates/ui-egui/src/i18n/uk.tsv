@@ -4246,6 +4246,13 @@ axis	Both	Обидві
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
 	Script Alert	Повідомлення скрипту
+	Script File Access	Доступ скрипту до файлів
+	The script asks to read a file you choose.	Скрипт просить дозволу прочитати вибраний вами файл.
+	The script asks to read and write a file you choose.	Скрипт просить дозволу читати й записувати вибраний вами файл.
+	The script asks to read and write a folder you choose, with everything in it.	Скрипт просить дозволу читати й записувати вибрану вами папку з усім її вмістом.
+	Allow Once	Дозволити один раз
+	Always Allow This Script	Завжди дозволяти цей скрипт
+	Deny	Заборонити
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -4274,8 +4281,6 @@ axis	Both	Обидві
 @msg	Script file could not be read	Не вдалося прочитати файл скрипта
 @msg	Script folder has more than 2,048 entries	Тека скрипта має понад 2048 елементів
 @msg	Script file open mode must be r, w, e or a	Режим відкриття файлу скрипта має бути r, w, e або a
-@msg	Script file writing is not available	Запис файлів скрипта недоступний
-@msg	Script file dialogs are not available	Діалогові вікна файлів скрипта недоступні
 @msg	Script files cannot be opened in another application	Файли скрипта не можна відкрити в іншому застосунку
 @msg	Script file access is unavailable on the web	Доступ до файлів скрипта у вебверсії недоступний
 @msg	Script has 256 files open	Скрипт має 256 відкритих файлів
@@ -4346,6 +4351,27 @@ axis	Both	Обидві
 @msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
+@msg	Script file access denied: {path}	Доступ скрипту до файлів заборонено: {path}
+@msg	Script file access to the app's own folders is not allowed	Скрипту не дозволено доступ до власних папок застосунку
+@msg	Script file cannot encode the text	Файл скрипту не може закодувати текст
+@msg	Script file could not be written	Не вдалося записати файл скрипту
+@msg	Script file dialogs need a person to answer them	Для відповіді на файлові діалоги скрипту потрібна людина
+@msg	Script file is not open for writing	Файл скрипту не відкрито для запису
+@msg	Script file name is already in use	Ім’я файлу скрипту вже використовується
+@msg	Script file name must be a name without a folder	Ім’я файлу скрипту має бути іменем без папки
+@msg	Script file permission can be kept only for a script run from a file	Дозвіл на файли можна зберегти лише для скрипту, запущеного з файлу
+@msg	Script file permission could not be saved	Не вдалося зберегти дозвіл скрипту на файли
+@msg	Script folder is not empty	Папка скрипту не порожня
+@msg	Script files cannot make aliases	Файли скрипту не можуть створювати псевдоніми
+@msg	Script file hidden setting cannot be changed	Не можна змінити параметр прихованості файлу скрипту
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: файловий діалог не можна відкрити всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
+@msg	the script wrote more file data than one run may write (32 MiB)	скрипт записав більше даних файлів, ніж може записати один запуск (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового діалогу скрипту має бути одним із: once, always, deny, stop
+@msg	choose a file or folder first, or deny	спершу виберіть файл або папку чи відмовте
+@msg	the script file permissions could not be saved: {e}	не вдалося зберегти дозволи скриптів на файли: {e}
+@msg	this script's file access can be allowed only once	доступ цього скрипту до файлів можна дозволити лише один раз
+@msg	Only the person at the keyboard can allow a script's file access	Дозволити скрипту доступ до файлів може лише людина за клавіатурою
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт отримує щонайбільше 2 048 файлів: файли, вибрані після них, пропущено
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}

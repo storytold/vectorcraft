@@ -4213,6 +4213,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Vis advarsel om eksterne scripts
 	A Script Is Running	Et script kører
 	Script Alert	Scriptadvarsel
+	Script File Access	Scriptadgang til filer
+	The script asks to read a file you choose.	Scriptet beder om at læse en fil, du vælger.
+	The script asks to read and write a file you choose.	Scriptet beder om at læse og skrive en fil, du vælger.
+	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
+	Allow Once	Tillad én gang
+	Always Allow This Script	Tillad altid dette script
+	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.

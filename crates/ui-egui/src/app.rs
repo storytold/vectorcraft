@@ -177,6 +177,8 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            script_picked: Vec::new(),
+            script_picked_left_out: false,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]

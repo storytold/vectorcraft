@@ -2471,6 +2471,13 @@ file-filter	Templates	範本
 	Show External Script Warning	顯示外部指令碼警告
 	A Script Is Running	指令碼正在執行
 	Script Alert	指令碼提示
+	Script File Access	指令碼檔案存取
+	The script asks to read a file you choose.	指令碼要求讀取您選擇的檔案。
+	The script asks to read and write a file you choose.	指令碼要求讀寫您選擇的檔案。
+	The script asks to read and write a folder you choose, with everything in it.	指令碼要求讀寫您選擇的資料夾及其中的所有內容。
+	Allow Once	允許一次
+	Always Allow This Script	一律允許此指令碼
+	Deny	拒絕
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
@@ -2499,8 +2506,6 @@ file-filter	Templates	範本
 @msg	Script file could not be read	無法讀取指令碼檔案
 @msg	Script folder has more than 2,048 entries	指令碼資料夾的項目超過 2,048 個
 @msg	Script file open mode must be r, w, e or a	指令碼檔案的開啟模式必須是 r、w、e 或 a
-@msg	Script file writing is not available	無法使用指令碼檔案寫入
-@msg	Script file dialogs are not available	無法使用指令碼檔案對話方塊
 @msg	Script files cannot be opened in another application	指令碼檔案無法在其他應用程式中開啟
 @msg	Script file access is unavailable on the web	網頁版無法存取指令碼檔案
 @msg	Script has 256 files open	指令碼已開啟 256 個檔案
@@ -2571,6 +2576,27 @@ file-filter	Templates	範本
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
+@msg	Script file access denied: {path}	指令碼的檔案存取遭拒：{path}
+@msg	Script file access to the app's own folders is not allowed	不允許指令碼存取應用程式本身的資料夾
+@msg	Script file cannot encode the text	指令碼的檔案無法編碼該文字
+@msg	Script file could not be written	無法寫入指令碼的檔案
+@msg	Script file dialogs need a person to answer them	指令碼的檔案對話框需要有人回應
+@msg	Script file is not open for writing	指令碼的檔案未以寫入方式開啟
+@msg	Script file name is already in use	指令碼的檔案名稱已在使用中
+@msg	Script file name must be a name without a folder	指令碼的檔案名稱必須是不含資料夾的名稱
+@msg	Script file permission can be kept only for a script run from a file	只有從檔案執行的指令碼才能保留檔案權限
+@msg	Script file permission could not be saved	無法儲存指令碼的檔案權限
+@msg	Script folder is not empty	指令碼的資料夾不是空的
+@msg	Script files cannot make aliases	指令碼的檔案無法建立別名
+@msg	Script file hidden setting cannot be changed	無法變更指令碼檔案的隱藏設定
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：檔案對話框無法在內建函式、getter、轉換或 $.evalFile 執行的檔案的回呼中開啟；請從指令碼本身的程式碼中呼叫
+@msg	the script wrote more file data than one run may write (32 MiB)	指令碼寫入的檔案資料超過一次執行可寫入的上限 (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	指令碼檔案對話框的 `answer` 必須是下列之一：once、always、deny、stop
+@msg	choose a file or folder first, or deny	請先選擇檔案或資料夾，或拒絕
+@msg	the script file permissions could not be saved: {e}	無法儲存指令碼的檔案權限：{e}
+@msg	this script's file access can be allowed only once	此指令碼的檔案存取只能允許一次
+@msg	Only the person at the keyboard can allow a script's file access	只有鍵盤前的人才能允許指令碼存取檔案
+@msg	A script is given at most 2,048 files: the files picked after them were left out	指令碼最多取得 2,048 個檔案：之後選擇的檔案已略去
 @msg	Exported {path}	已匯出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	沒有可複製的 CSS：請選取有自己 CSS 的物件
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`

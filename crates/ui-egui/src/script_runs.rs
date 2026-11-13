@@ -1,7 +1,7 @@
 //! A running script, advanced one slice per frame: `script.run` starts it and [`poll`] takes it to
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
-//! `alert`, `confirm` or `prompt`, waits for the person's answer.
+//! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
 
 use serde_json::json;
 
@@ -44,6 +44,15 @@ pub fn poll(app: &mut VectorcraftApp) {
 /// question about its growth. Closes the script's dialog when the run no longer waits at it.
 /// → true while the run waits.
 fn ask(app: &mut VectorcraftApp) -> bool {
+    if let Some(picker) = app.session.script_picker() {
+        if app.ui.dialog.is_none() {
+            script_run::open_picker(app, &picker);
+        }
+        return true;
+    }
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::PICKER_KIND) {
+        app.ui.dialog = None;
+    }
     if let Some(dialog) = app.session.script_dialog() {
         if app.ui.dialog.is_none() {
             script_run::open_notice(app, &dialog);

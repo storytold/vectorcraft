@@ -4001,6 +4001,13 @@ axis	Both	Her İkisi
 	Show External Script Warning	Harici Betik Uyarısını Göster
 	A Script Is Running	Bir Betik Çalışıyor
 	Script Alert	Betik Uyarısı
+	Script File Access	Betik Dosya Erişimi
+	The script asks to read a file you choose.	Betik, seçtiğiniz bir dosyayı okumak için izin istiyor.
+	The script asks to read and write a file you choose.	Betik, seçtiğiniz bir dosyayı okumak ve yazmak için izin istiyor.
+	The script asks to read and write a folder you choose, with everything in it.	Betik, seçtiğiniz bir klasörü içindeki her şeyle birlikte okumak ve yazmak için izin istiyor.
+	Allow Once	Bir Kez İzin Ver
+	Always Allow This Script	Bu Betiğe Her Zaman İzin Ver
+	Deny	Reddet
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
 	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
@@ -4029,8 +4036,6 @@ axis	Both	Her İkisi
 @msg	Script file could not be read	Betik dosyası okunamadı
 @msg	Script folder has more than 2,048 entries	Betik klasöründe 2.048'den fazla öğe var
 @msg	Script file open mode must be r, w, e or a	Betik dosyası açma modu r, w, e veya a olmalıdır
-@msg	Script file writing is not available	Betik dosyası yazma kullanılamıyor
-@msg	Script file dialogs are not available	Betik dosyası iletişim kutuları kullanılamıyor
 @msg	Script files cannot be opened in another application	Betik dosyaları başka bir uygulamada açılamaz
 @msg	Script file access is unavailable on the web	Betik dosyası erişimi web'de kullanılamıyor
 @msg	Script has 256 files open	Betiğin 256 açık dosyası var
@@ -4101,6 +4106,27 @@ axis	Both	Her İkisi
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
+@msg	Script file access denied: {path}	Betiğin dosya erişimi reddedildi: {path}
+@msg	Script file access to the app's own folders is not allowed	Betiklerin uygulamanın kendi klasörlerine erişmesine izin verilmez
+@msg	Script file cannot encode the text	Betiğin dosyası metni kodlayamıyor
+@msg	Script file could not be written	Betiğin dosyası yazılamadı
+@msg	Script file dialogs need a person to answer them	Betiğin dosya iletişim kutularının yanıtlanması için bir kişi gerekir
+@msg	Script file is not open for writing	Betiğin dosyası yazmak için açık değil
+@msg	Script file name is already in use	Betiğin dosya adı zaten kullanılıyor
+@msg	Script file name must be a name without a folder	Betiğin dosya adı klasör içermeyen bir ad olmalıdır
+@msg	Script file permission can be kept only for a script run from a file	Dosya izni yalnızca bir dosyadan çalıştırılan betik için saklanabilir
+@msg	Script file permission could not be saved	Betiğin dosya izni kaydedilemedi
+@msg	Script folder is not empty	Betiğin klasörü boş değil
+@msg	Script files cannot make aliases	Betiğin dosyaları takma ad oluşturamaz
+@msg	Script file hidden setting cannot be changed	Betiğin dosyasının gizli ayarı değiştirilemez
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dosya iletişim kutusu yerleşik bir işlevin, bir getter'ın, bir dönüştürmenin veya $.evalFile'ın çalıştırdığı bir dosyanın geri çağrısı içinde açılamaz; onu betiğin kendi kodundan çağırın
+@msg	the script wrote more file data than one run may write (32 MiB)	betik, bir çalıştırmanın yazabileceğinden fazla dosya verisi yazdı (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	bir betiğin dosya iletişim kutusu için `answer` şunlardan biri olmalıdır: once, always, deny, stop
+@msg	choose a file or folder first, or deny	önce bir dosya veya klasör seçin ya da reddedin
+@msg	the script file permissions could not be saved: {e}	betiklerin dosya izinleri kaydedilemedi: {e}
+@msg	this script's file access can be allowed only once	bu betiğin dosya erişimine yalnızca bir kez izin verilebilir
+@msg	Only the person at the keyboard can allow a script's file access	Bir betiğin dosya erişimine yalnızca klavye başındaki kişi izin verebilir
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Bir betiğe en fazla 2.048 dosya verilir: bunlardan sonra seçilen dosyalar dışarıda bırakıldı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler
 @msg	Couldn't copy to the system clipboard: {e}	Sistem panosuna kopyalanamadı: {e}
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}

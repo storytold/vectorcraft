@@ -478,6 +478,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     units.extend(MID.encode_utf16());
     units.extend_from_slice(&body.flat());
     units.extend(TAIL.encode_utf16());
+    interp.observe_code(&units);
     interp.source_units = interp.source_units.saturating_add(units.len());
     let remaining = interp.options.max_source_units.saturating_sub(interp.source_units.saturating_sub(units.len()));
     let options = crate::Options { strict: false, max_source_units: remaining, ..interp.options.clone() };
@@ -557,6 +558,7 @@ fn eval(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
     interp.check_source_units(s.len()).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.prepare_source(s.len())?;
     let units = s.flat();
+    interp.observe_code(&units);
     let code = interp.compile_source(&units, false, CodeKind::Eval).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.run_global(code, true)
 }

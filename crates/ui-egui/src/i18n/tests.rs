@@ -1739,6 +1739,68 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// The errors a script's `File` and `Folder` objects and file dialogs give, and those of the
+/// commands that answer the dialogs and keep their permissions, have a translated row in every
+/// complete-message language. Each one in the first list is still a message the source gives; the
+/// second list holds the note the file dialog shows when it left out picked files, and texts a
+/// script reads only from a File or Folder object's `error`.
+#[test]
+fn script_file_messages_translate_in_every_complete_message_language() {
+    const SCANNED: &[&str] = &[
+        "Script file access denied",
+        "Script file access denied: {path}",
+        "Script file access is unavailable on the web",
+        "Script file access to the app's own folders is not allowed",
+        "Script file cannot be decoded",
+        "Script file cannot encode the text",
+        "Script file could not be read",
+        "Script file could not be written",
+        "Script file dialogs need a person to answer them",
+        "Script file does not exist",
+        "Script file exceeds 8 MiB",
+        "Script file is not a regular file",
+        "Script file is not open",
+        "Script file is not open for writing",
+        "Script file name is already in use",
+        "Script file name must be a name without a folder",
+        "Script file path exceeds 32,767 characters",
+        "Script file permission can be kept only for a script run from a file",
+        "Script file permission could not be saved",
+        "Script files cannot be opened in another application",
+        "Script folder has more than 2,048 entries",
+        "Script folder mask takes too many steps to match",
+        "{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code",
+        "the script opened more file data than one run may open (32 MiB)",
+        "the script wrote more file data than one run may write (32 MiB)",
+        "`answer` for a script's file dialog must be one of: once, always, deny, stop",
+        "choose a file or folder first, or deny",
+        "the script file permissions could not be saved: {e}",
+        "this script's file access can be allowed only once",
+        "Only the person at the keyboard can allow a script's file access",
+    ];
+    const ERROR_ONLY: &[&str] = &[
+        "A script is given at most 2,048 files: the files picked after them were left out",
+        "Script file open mode must be r, w, e or a",
+        "Script has 256 files open",
+        "Script folder is not empty",
+        "Script files cannot make aliases",
+        "Script file hidden setting cannot be changed",
+    ];
+    let messages = message_literals();
+    let gone: Vec<&&str> = SCANNED.iter().filter(|m| !messages.contains(**m)).collect();
+    assert!(gone.is_empty(), "no longer messages in the source: {gone:?}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for m in SCANNED.iter().chain(ERROR_ONLY) {
+            let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == m);
+            assert!(row.is_some_and(|(_, src, tr)| tr != src), "{code}: no translated row for {m:?}");
+        }
+    }
+    let de = Lang::from_code("de").expect("de registered");
+    assert_eq!(message(de, "Script file access denied: C:/x/a.txt"), "Dateizugriff des Skripts verweigert: C:/x/a.txt");
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(
@@ -2532,8 +2594,8 @@ fn script_errors_are_translated() {
         "Script file could not be read",
         "Script folder has more than 2,048 entries",
         "Script file open mode must be r, w, e or a",
-        "Script file writing is not available",
-        "Script file dialogs are not available",
+        "Script file is not open for writing",
+        "Script file dialogs need a person to answer them",
         "Script files cannot be opened in another application",
         "Script file access is unavailable on the web",
         "Script has 256 files open",

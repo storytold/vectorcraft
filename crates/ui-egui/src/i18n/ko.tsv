@@ -4943,6 +4943,13 @@ theme	Appearance	외관
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
 	Script Alert	스크립트 알림
+	Script File Access	스크립트 파일 접근
+	The script asks to read a file you choose.	스크립트가 선택한 파일을 읽도록 요청합니다.
+	The script asks to read and write a file you choose.	스크립트가 선택한 파일을 읽고 쓰도록 요청합니다.
+	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
+	Allow Once	한 번 허용
+	Always Allow This Script	이 스크립트 항상 허용
+	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
@@ -4971,8 +4978,6 @@ theme	Appearance	외관
 @msg	Script file could not be read	스크립트 파일을 읽을 수 없습니다
 @msg	Script folder has more than 2,048 entries	스크립트 폴더의 항목이 2,048개를 초과합니다
 @msg	Script file open mode must be r, w, e or a	스크립트 파일 열기 모드는 r, w, e 또는 a여야 합니다
-@msg	Script file writing is not available	스크립트 파일 쓰기를 사용할 수 없습니다
-@msg	Script file dialogs are not available	스크립트 파일 대화 상자를 사용할 수 없습니다
 @msg	Script files cannot be opened in another application	스크립트 파일을 다른 응용 프로그램에서 열 수 없습니다
 @msg	Script file access is unavailable on the web	웹에서는 스크립트 파일에 접근할 수 없습니다
 @msg	Script has 256 files open	스크립트가 파일 256개를 열고 있습니다
@@ -5043,6 +5048,27 @@ theme	Appearance	외관
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
+@msg	Script file access denied: {path}	스크립트 파일 접근이 거부되었습니다: {path}
+@msg	Script file access to the app's own folders is not allowed	스크립트는 앱 자체 폴더에 접근할 수 없습니다
+@msg	Script file cannot encode the text	스크립트 파일이 텍스트를 인코딩할 수 없습니다
+@msg	Script file could not be written	스크립트 파일을 쓸 수 없습니다
+@msg	Script file dialogs need a person to answer them	스크립트 파일 대화 상자에는 응답할 사람이 필요합니다
+@msg	Script file is not open for writing	스크립트 파일이 쓰기용으로 열려 있지 않습니다
+@msg	Script file name is already in use	스크립트 파일 이름이 이미 사용 중입니다
+@msg	Script file name must be a name without a folder	스크립트 파일 이름은 폴더 없는 이름이어야 합니다
+@msg	Script file permission can be kept only for a script run from a file	파일 권한은 파일에서 실행한 스크립트에만 유지할 수 있습니다
+@msg	Script file permission could not be saved	스크립트 파일 권한을 저장할 수 없습니다
+@msg	Script folder is not empty	스크립트 폴더가 비어 있지 않습니다
+@msg	Script files cannot make aliases	스크립트 파일은 별칭을 만들 수 없습니다
+@msg	Script file hidden setting cannot be changed	스크립트 파일의 숨김 설정을 변경할 수 없습니다
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수, getter, 변환 또는 $.evalFile이 실행하는 파일의 콜백 안에서는 파일 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
+@msg	the script wrote more file data than one run may write (32 MiB)	스크립트가 한 번의 실행에서 쓸 수 있는 것보다 많은 파일 데이터를 썼습니다(32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
+@msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
+@msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
+@msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
+@msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
 @msg	unknown highlight `{h}`	알 수 없는 강조 `{h}`
