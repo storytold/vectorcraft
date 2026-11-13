@@ -689,7 +689,7 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
 }
 
 /// A path node of `id` on `path` (filled under `rule`) painted by `ap`.
-fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
+pub(crate) fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
     let mut n = Node::path(id, path, ap);
     if let NodeKind::Path { rule: r, .. } = &mut n.kind {
         *r = rule;
