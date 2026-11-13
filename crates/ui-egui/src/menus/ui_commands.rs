@@ -1298,6 +1298,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Tate-chu-yoko Settings (the Character panel menu's Tate-chu-yoko Settings…, with Show East Asian Options) on the characters the Character panel acts on, filled in with the values they share (dialog `tateChuYokoSettings`: tcyUpDown, tcyLeftRight (pt, -1296..1296)): OK runs text.setFormat (text.setRangeStyle while the Type tool edits text) with the values that changed, as one undo step; an error with no type selected",
     ),
     (
+        "ui.warichuSettings",
+        "Warichu Settings…",
+        "",
+        "{} open Warichu Settings (the Character panel menu's Warichu Settings…, with Show East Asian Options) on the characters the Character panel acts on, filled in with the values they share (dialog `warichuSettings`: warichuLines 1..6, warichuGap (pt, 0..100), warichuScale (%, 10..100), warichuAlign): OK runs text.setFormat (text.setRangeStyle while the Type tool edits text) with the values that changed, as one undo step, and leaves Warichu itself as it is; an error with no type selected",
+    ),
+    (
         "ui.colorGuideLimit",
         "Limit Color Guide to Library",
         "",

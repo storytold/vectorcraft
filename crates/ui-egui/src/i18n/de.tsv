@@ -2692,6 +2692,11 @@ digits	Malayalam	Malayalam
 	Rating:	Bewertung:
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
+	Use Monitor Profile for Canvas	Monitorprofil für Arbeitsfläche verwenden
+	The canvas is drawn in sRGB.	Die Arbeitsfläche wird in sRGB dargestellt.
+	Canvas display profile:	Bildschirmprofil der Arbeitsfläche:
+	The system matches the window to the display's colors.	Das System passt das Fenster an die Farben des Bildschirms an.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kein verwendbares Bildschirmprofil gefunden: Die Arbeitsfläche wird in sRGB dargestellt.
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
 	Rearrange	Neu anordnen
 	Select All Artboards	Alle Zeichenflächen auswählen
@@ -3613,6 +3618,11 @@ effect	Points	Punkte
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-Einstellungen…
 	Tate-chu-yoko Settings	Tate-chu-yoko-Einstellungen
+	Warichu	Warichu
+	Warichu Settings…	Warichu-Einstellungen…
+	Warichu Settings	Warichu-Einstellungen
+	Lines:	Zeilen:
+	Line Gap:	Zeilenabstand:
 	Composite Fonts…	Zusammengesetzte Schriften…
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
@@ -4979,6 +4989,7 @@ theme	Appearance	Erscheinungsbild
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Mit {n} Hinweis geöffnet: {first}|Mit {n} Hinweisen geöffnet: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Mit {n} Hinweis geöffnet: {first}|{notice}. Mit {n} Hinweisen geöffnet: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} mit {n} Hinweis gespeichert: {first}|{path} mit {n} Hinweisen gespeichert: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet
@@ -6475,6 +6486,8 @@ anchor	Points:	Punkte:
 	Anchor Inspector	Ankerpunkt-Inspektor
 	Add Points at Crossings	Punkte an Kreuzungen hinzufügen
 	Split at Crossings	An Kreuzungen teilen
+	Trim at Crossings Tool	An-Kreuzungen-kürzen-Werkzeug
+	Trim at Crossings	An Kreuzungen kürzen
 	Extend Path	Pfad verlängern
 	Measure & Inspect	Messen und prüfen
 	Set Anchor	Ankerpunkt festlegen

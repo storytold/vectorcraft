@@ -3074,6 +3074,11 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Use Monitor Profile for Canvas	Dùng hồ sơ màn hình cho vùng vẽ
+	The canvas is drawn in sRGB.	Vùng vẽ được hiển thị ở sRGB.
+	Canvas display profile:	Hồ sơ màn hình của vùng vẽ:
+	The system matches the window to the display's colors.	Hệ thống điều chỉnh cửa sổ theo màu của màn hình.
+	No usable display profile was found: the canvas is drawn in sRGB.	Không tìm thấy hồ sơ màn hình dùng được: vùng vẽ được hiển thị ở sRGB.
 	Rearrange	Sắp xếp lại
 	Select All Artboards	Chọn tất cả các bảng vẽ
 	Switch Orientation	Chuyển hướng
@@ -4045,6 +4050,11 @@ mark-style	Japanese	Kiểu Nhật
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
 	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Cài đặt Warichu…
+	Warichu Settings	Cài đặt Warichu
+	Lines:	Dòng:
+	Line Gap:	Khoảng cách dòng:
 	Composite Fonts…	Phông chữ tổ hợp…
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
@@ -5159,6 +5169,7 @@ theme	Appearance	Giao diện
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
@@ -6490,6 +6501,8 @@ anchor	Points:	Điểm:
 	Anchor Inspector	Trình kiểm tra điểm neo
 	Add Points at Crossings	Thêm điểm tại chỗ giao nhau
 	Split at Crossings	Tách tại chỗ giao nhau
+	Trim at Crossings Tool	Công cụ Cắt xén tại chỗ giao nhau
+	Trim at Crossings	Cắt xén tại chỗ giao nhau
 	Extend Path	Kéo dài đường dẫn
 	Measure & Inspect	Đo và kiểm tra
 	Set Anchor	Đặt điểm neo

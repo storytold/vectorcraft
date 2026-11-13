@@ -23,6 +23,8 @@
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
 
+mod area;
+
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,9 +33,10 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, ParamCurve, PathData, PathSeg, Point, Rect, Vec2, shapes};
 use vectorcraft_pathops as po;
 
-use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
+use super::{FEEDBACK, blob_area, blob_tip, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use area::{AreaKey, AreaPreview};
 
 /// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
@@ -166,6 +169,15 @@ pub struct GestureTool {
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
+    /// A pen pressed less than fully at a point of the stroke whose pressure is kept.
+    light: bool,
+    /// The length of the stroke, in points.
+    length: f64,
+    /// The outline of the area a Blob Brush or Eraser drag covers, as far as it is built
+    /// ([`AreaPreview`]).
+    area: Cell<Option<AreaPreview>>,
+    /// The last [`Tool::overlays`] left part of that outline for later calls.
+    area_pending: Cell<bool>,
     /// The band the smoothing drag has shown so far ([`GestureTool::smooth_band`]).
     band: Cell<Option<SmoothBand>>,
     /// The band last shown does not cover the whole drag yet; the next call adds to it.
@@ -757,13 +769,15 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
     }
 }
 
-/// Whether the selection contains a path the Smooth command can act on.
+/// Whether the selection contains a path the Smooth command can act on: one with a subpath of three
+/// or more anchors, or of two anchors joined by a curve.
 fn has_selected_smooth_path(cx: &ToolContext) -> bool {
     let editable = cx.doc.editable();
+    let smoothable = |sp: &vectorcraft_geom::SubPath| sp.anchors.len() >= 3 || (0..sp.segment_count()).any(|i| !super::segment_is_straight(sp, i));
     cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
-            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(|sp| sp.anchors.len() >= 3))
+            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(smoothable))
                 && editable(child.id)
             {
                 found = true;
@@ -822,6 +836,10 @@ impl GestureTool {
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
             tip_at: None,
+            light: false,
+            length: 0.0,
+            area: Cell::new(None),
+            area_pending: Cell::new(false),
             band: Cell::new(None),
             band_pending: Cell::new(false),
         }
@@ -869,9 +887,13 @@ impl GestureTool {
 
     /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
     fn push(&mut self, p: Point, ev: &PointerEvent) {
+        if let Some(last) = self.points.last() {
+            self.length += last.distance(p);
+        }
         self.points.push(p);
         if self.id == "paintbrush" || (self.varies_size() && self.size_pressure) {
             self.pressures.push(ev.pressure);
+            self.light |= ev.pressure < 1.0;
         }
         if self.id == "paintbrush" {
             self.poses.push(ev.pen.map(PenPose::sanitized));
@@ -959,6 +981,10 @@ impl GestureTool {
         self.poses.clear();
         self.previewed = 0;
         self.shift_line = None;
+        self.light = false;
+        self.length = 0.0;
+        self.area.set(None);
+        self.area_pending.set(false);
         self.band.set(None);
         self.band_pending.set(false);
     }
@@ -1020,7 +1046,7 @@ impl GestureTool {
     /// Pressure, when a pen pressed less than fully anywhere along it (a stroke without pressure
     /// keeps its Size).
     fn size_pressures(&self) -> Option<&[f32]> {
-        let pressed = self.pressures.len() == self.points.len() && self.pressures.iter().any(|p| *p < 1.0);
+        let pressed = self.pressures.len() == self.points.len() && self.light;
         (self.varies_size() && self.size_pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
     }
 
@@ -1386,10 +1412,10 @@ impl Tool for GestureTool {
     fn wants_samples(&self) -> bool {
         matches!(self.id, "pencil" | "paintbrush" | "blobBrush" | "eraser" | "knife" | "smooth" | "pathEraser")
     }
-    /// A smoothing drag's band outlined again after a zoom change reaches the whole drag over
-    /// several frames.
+    /// The outline of a long Blob Brush or Eraser drag, and a smoothing drag's band outlined again
+    /// after a zoom change, reach the whole drag over several frames.
     fn overlays_pending(&self) -> bool {
-        self.band_pending.get()
+        self.area_pending.get() || self.band_pending.get()
     }
     /// `[` and `]` are the Blob Brush's and the Eraser's: their size (#1661).
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
@@ -1441,6 +1467,7 @@ impl Tool for GestureTool {
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        self.area_pending.set(false);
         self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
         // A path being drawn shows itself, except with the Pencil's Live preview off.
@@ -1465,24 +1492,24 @@ impl Tool for GestureTool {
         // A tip that is not round shows the outline of the area it covers, each step of the drag
         // as wide as the pen pressed there with Size set to Pressure. So does a round Blob Brush
         // tip: a line as wide as the brush would end square, where the stroke it adds is round at
-        // both ends (#4343).
+        // both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
         if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || self.id == "blobBrush") && !self.smoothing {
-            let area = |pts: &[Point], size| {
-                if self.id == "blobBrush" {
-                    blob_area(pts, size, self.angle, self.roundness)
-                } else {
-                    eraser_area(pts, size, self.angle, self.roundness)
-                }
+            let pressures = self.size_pressures();
+            let key = AreaKey {
+                blob: self.id == "blobBrush",
+                size: self.size,
+                variation: self.size_variation,
+                angle: self.angle,
+                roundness: self.roundness,
+                pressure: pressures.is_some(),
             };
-            if let Some(pressures) = self.size_pressures() {
-                for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
-                    let pressure = f64::from(p[0] + p[1]) / 2.0;
-                    let size = super::pressure_size(self.size, self.size_variation, pressure);
-                    o.push(Overlay::Path { path: area(seg, size).to_bezpath(), color, width: 1.0, dashed: false });
-                }
-            } else {
-                o.push(Overlay::Path { path: area(&self.points, self.size).to_bezpath(), color, width: 1.0, dashed: false });
+            let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
+            area.step(&self.points, pressures);
+            for path in area.paths(&self.points) {
+                o.push(Overlay::Path { path, color, width: 1.0, dashed: false });
             }
+            self.area_pending.set(area.pending(&self.points));
+            self.area.set(Some(area));
         } else if let Some(pressures) = self.size_pressures() {
             // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
             for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
@@ -1495,7 +1522,7 @@ impl Tool for GestureTool {
         }
         if cx.measurement_labels && self.id == "blobBrush" && !self.smoothing {
             let last = self.points[self.points.len() - 1];
-            let length = self.points.windows(2).map(|w| w[0].distance(w[1])).sum();
+            let length = self.length;
             o.push(Overlay::Measure { p: last + vectorcraft_geom::Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("L: {}", cx.len(length)) });
         }
         // Over the stroke's footprint, which reaches the tip's edge at the pointer.

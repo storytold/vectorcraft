@@ -1607,6 +1607,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
 	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Postavke za Warichu…
+	Warichu Settings	Postavke za Warichu
+	Lines:	Redovi:
+	Line Gap:	Razmak između redova:
 	Composite Fonts…	Kompozitni fontovi…
 	Composite Fonts	Kompozitni fontovi
 	Export Composite Fonts	Izvezi kompozitne fontove
@@ -3858,6 +3863,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…
@@ -5174,6 +5184,7 @@ imageTrace	Outline	Obris
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otvoreno s {n} bilješkom: {first}|{notice}. Otvoreno s {n} bilješke: {first}|{notice}. Otvoreno s {n} bilješki: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
@@ -6377,6 +6388,8 @@ anchor	Points:	Tačke:
 	Anchor Inspector	Pregled sidara
 	Add Points at Crossings	Dodaj tačke na presjecima
 	Split at Crossings	Razdvoji na presjecima
+	Trim at Crossings Tool	Alat obreži na presjecima
+	Trim at Crossings	Obreži na presjecima
 	Extend Path	Produži putanju
 	Measure & Inspect	Mjeri i pregledaj
 	Set Anchor	Postavi sidro

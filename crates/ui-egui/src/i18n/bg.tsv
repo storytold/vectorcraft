@@ -2648,6 +2648,11 @@ digits	Malayalam	Малаялам
 	Rating:	Оценка:
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
+	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
+	Canvas display profile:	Профил на дисплея за платното:
+	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
+	No usable display profile was found: the canvas is drawn in sRGB.	Не е намерен използваем профил на дисплея: платното се изобразява в sRGB.
 	Rearrange All Artboards	Пренареждане на всички работни области
 	Rearrange	Пренареждане
 	Select All Artboards	Избиране на всички работни области
@@ -3570,6 +3575,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Тате-чу-йоко
 	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
 	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Warichu	Варичу
+	Warichu Settings…	Настройки на Варичу…
+	Warichu Settings	Настройки на Варичу
+	Lines:	Редове:
+	Line Gap:	Разстояние между редовете:
 	Composite Fonts…	Съставни шрифтове…
 	Composite Fonts	Съставни шрифтове
 	Export Composite Fonts	Експортиране на съставни шрифтове
@@ -4769,6 +4779,7 @@ axis	Both	И двете
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Отворено с {n} бележка: {first}|{notice}. Отворено с {n} бележки: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 @msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
@@ -6326,6 +6337,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор на опорни точки
 	Add Points at Crossings	Добавяне на точки в пресичанията
 	Split at Crossings	Разделяне в пресичанията
+	Trim at Crossings Tool	Инструмент „Подрязване в пресичанията“
+	Trim at Crossings	Подрязване в пресичанията
 	Extend Path	Удължаване на път
 	Measure & Inspect	Измерване и проверка
 	Set Anchor	Задаване на опорна точка

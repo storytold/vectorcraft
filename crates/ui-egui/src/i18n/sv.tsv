@@ -2663,6 +2663,11 @@ digits	Malayalam	Malayalam
 	Rating:	Betyg:
 	Real World:	Verkligt mått:
 	Real-time Drawing and Editing	Ritning och redigering i realtid
+	Use Monitor Profile for Canvas	Använd skärmprofil för arbetsytan
+	The canvas is drawn in sRGB.	Arbetsytan ritas i sRGB.
+	Canvas display profile:	Arbetsytans skärmprofil:
+	The system matches the window to the display's colors.	Systemet anpassar fönstret till skärmens färger.
+	No usable display profile was found: the canvas is drawn in sRGB.	Ingen användbar skärmprofil hittades: arbetsytan ritas i sRGB.
 	Rearrange All Artboards	Ordna om alla ritytor
 	Rearrange	Ordna om
 	Select All Artboards	Markera alla ritytor
@@ -3583,6 +3588,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Inställningar för Warichu…
+	Warichu Settings	Inställningar för Warichu
+	Lines:	Rader:
+	Line Gap:	Radavstånd:
 	Composite Fonts…	Sammansatta typsnitt…
 	Composite Fonts	Sammansatta typsnitt
 	Export Composite Fonts	Exportera sammansatta typsnitt
@@ -4949,6 +4959,7 @@ axis	Both	Båda
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Öppnad med {n} anteckning: {first}|Öppnad med {n} anteckningar: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Öppnad med {n} anteckning: {first}|{notice}. Öppnad med {n} anteckningar: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sparade {path} med {n} anteckning: {first}|Sparade {path} med {n} anteckningar: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
 @msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
@@ -6864,6 +6875,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankarpunktsgranskare
 	Add Points at Crossings	Lägg till punkter vid korsningar
 	Split at Crossings	Dela vid korsningar
+	Trim at Crossings Tool	Trimma vid korsningar-verktyget
+	Trim at Crossings	Trimma vid korsningar
 	Extend Path	Förläng bana
 	Measure & Inspect	Mät och granska
 	Set Anchor	Ange ankarpunkt

@@ -172,6 +172,13 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
     Some(keys)
 }
 
+/// Every key the description `doc` takes, those of the commands its `…` entries name included, or
+/// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
+/// command in [`UNCHECKED`].
+pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
+    accepted(doc, 0)
+}
+
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
 pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {

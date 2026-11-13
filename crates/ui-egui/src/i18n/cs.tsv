@@ -1636,6 +1636,11 @@ digits	Malayalam	Malajálamské
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Nastavení Tate-chu-yoko…
 	Tate-chu-yoko Settings	Nastavení Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Nastavení Warichu…
+	Warichu Settings	Nastavení Warichu
+	Lines:	Řádky:
+	Line Gap:	Mezera mezi řádky:
 	Composite Fonts…	Složená písma…
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
@@ -3914,6 +3919,11 @@ theme	Appearance	Motiv
 	Primary	Primární
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
+	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
+	Canvas display profile:	Profil displeje pro plátno:
+	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nebyl nalezen použitelný profil displeje: plátno se vykresluje v sRGB.
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
 	Export Preferences…	Exportovat předvolby…
@@ -5363,6 +5373,7 @@ imageTrace	Outline	Obrys
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Zahozen {n} obnovený dokument|Zahozeny {n} obnovené dokumenty|Zahozeno {n} obnovených dokumentů
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Obnoven {n} dokument; pokud ho chcete zachovat, uložte ho|Obnoveny {n} dokumenty; pokud je chcete zachovat, uložte je|Obnoveno {n} dokumentů; pokud je chcete zachovat, uložte je
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otevřeno, {n} poznámka: {first}|Otevřeno, {n} poznámky: {first}|Otevřeno, {n} poznámek: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otevřeno, {n} poznámka: {first}|{notice}. Otevřeno, {n} poznámky: {first}|{notice}. Otevřeno, {n} poznámek: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Uloženo: {path}, {n} poznámka: {first}|Uloženo: {path}, {n} poznámky: {first}|Uloženo: {path}, {n} poznámek: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
 @msgplural	Embedded {n} image|Embedded {n} images	Vložen {n} obrázek|Vloženy {n} obrázky|Vloženo {n} obrázků
@@ -6883,6 +6894,8 @@ anchor	Points:	Body:
 	Anchor Inspector	Inspektor kotevních bodů
 	Add Points at Crossings	Přidat body v křížení
 	Split at Crossings	Rozdělit v křížení
+	Trim at Crossings Tool	Nástroj Zastřihnout v křížení
+	Trim at Crossings	Zastřihnout v křížení
 	Extend Path	Prodloužit cestu
 	Measure & Inspect	Měřit a zkoumat
 	Set Anchor	Nastavit kotevní bod
