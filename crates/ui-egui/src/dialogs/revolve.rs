@@ -238,17 +238,15 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     }
 }
 
-/// The Bevel Shape menu of Extrude & Bevel and Extrude & Bevel (Classic) (`effect`): None and the
-/// built-in shapes, then the custom bevels of the bevels file, and the effect's own custom bevel
-/// when the file does not list it (a document from elsewhere carries its points). Picking a
-/// custom bevel stores its name and a copy of its points. In the 3D and Materials panel, Edit
-/// Bevels… opens the bevels file (`__editBevels`, which the panel runs).
-pub(super) fn bevel_choice(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, effect: &str) {
-    const KEY: &str = "bevel";
-    // (shown label, value, the custom bevel's name and points). The built-in labels are
-    // translated; custom bevels show their names as they are.
-    type Choice = (String, Value, Option<(String, Value)>);
-    let mut options: Vec<Choice> = super::effect::own_choices(effect, KEY, false)
+/// A Bevel Shape menu entry: (shown label, value, the custom bevel's name and points).
+pub(crate) type BevelChoice = (String, Value, Option<(String, Value)>);
+
+/// The entries of [`bevel_choice`]'s menu for form `fields`, and how many are built in. The
+/// built-in labels are translated; custom bevels show their names as they are. The effect's own
+/// custom bevel, the panel's [`OWN_BEVEL`] else the form's, is listed unless the file lists it by
+/// name with the same points.
+pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<String, Value>, effect: &str) -> (Vec<BevelChoice>, usize) {
+    let mut options: Vec<BevelChoice> = super::effect::own_choices(effect, "bevel", false)
         .unwrap_or_default()
         .into_iter()
         .map(|(label, value)| (tl!(label).to_string(), json!(value), None))
@@ -257,16 +255,39 @@ pub(super) fn bevel_choice(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dial
     for b in app.session.bevels.bevels() {
         options.push((b.name.clone(), json!("custom"), Some((b.name.clone(), b.profile_json()))));
     }
+    let custom = fields.get("bevel").and_then(Value::as_str) == Some("custom");
+    let own = match fields.get(OWN_BEVEL).and_then(Value::as_array).map(Vec::as_slice) {
+        Some([n, p]) => Some((n.as_str().unwrap_or_default().to_string(), p.clone())),
+        _ => fields
+            .get(BEVEL_PROFILE)
+            .filter(|p| custom && !p.is_null())
+            .map(|p| (fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string(), p.clone())),
+    };
+    if let Some((n, p)) = own
+        && !options[builtin..].iter().any(|(_, _, c)| c.as_ref().is_some_and(|(cn, cp)| *cn == n && *cp == p))
+    {
+        let shown = if n.is_empty() { tl!("Custom").to_string() } else { n.clone() };
+        options.push((shown, json!("custom"), Some((n, p))));
+    }
+    (options, builtin)
+}
+
+/// The form field where the 3D and Materials panel puts the first selected effect's custom bevel,
+/// `[name, points]`, so Bevel Shape lists it while a mixed selection unsets the shown bevel.
+pub(crate) const OWN_BEVEL: &str = "__ownBevel";
+
+/// The Bevel Shape menu of Extrude & Bevel and Extrude & Bevel (Classic) (`effect`): None and the
+/// built-in shapes, then the custom bevels of the bevels file, and the effect's own custom bevel
+/// when the file does not list it (a document from elsewhere carries its points). Picking a
+/// custom bevel stores its name and a copy of its points. In the 3D and Materials panel, Edit
+/// Bevels… opens the bevels file (`__editBevels`, which the panel runs).
+pub(super) fn bevel_choice(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, effect: &str) {
+    const KEY: &str = "bevel";
+    let (options, builtin) = bevel_options(app, &d.fields, effect);
     let name = d.fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string();
     let points = d.fields.get(BEVEL_PROFILE).filter(|v| !v.is_null()).cloned();
     let custom = d.fields.get(KEY).and_then(Value::as_str) == Some("custom");
     let is = |c: &Option<(String, Value)>| c.as_ref().is_some_and(|(n, p)| *n == name && Some(p) == points.as_ref());
-    // The effect's own custom bevel, unless the file lists it by name with the same points.
-    let own = custom && !options[builtin..].iter().any(|(_, _, c)| is(c));
-    if own && let Some(p) = &points {
-        let shown = if name.is_empty() { tl!("Custom").to_string() } else { name.clone() };
-        options.push((shown, json!("custom"), Some((name.clone(), p.clone()))));
-    }
     let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get(KEY).cloned()).unwrap_or(Value::Null);
     let mixed = d.fields.get(KEY).is_some_and(Value::is_null);
     let value = d.fields.get(KEY).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| default.clone());

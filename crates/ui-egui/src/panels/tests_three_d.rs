@@ -273,6 +273,44 @@ fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
     }
 }
 
+/// Two custom bevels the bevels file does not list: the mixed selection unsets the shown points,
+/// and Bevel Shape still lists the first effect's own bevel, which then reaches both effects.
+#[test]
+fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
+    use crate::dialogs::revolve::{OWN_BEVEL, bevel_options};
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    let custom = |name: &str, points: &Value| json!({"bevel": "custom", "bevelName": name, "bevelProfile": points});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Notch", &notch)})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Steps", &steps)})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    let own = super::own_bevel(&fields).unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!(fields[vectorcraft_effects::BEVEL_PROFILE], Value::Null);
+    fields.insert(OWN_BEVEL.into(), own);
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    assert_eq!(options.len(), builtin + 1);
+    let (label, value, picked) = options[builtin].clone();
+    assert_eq!((label.as_str(), value), ("Notch", json!("custom")));
+    let (name, points) = picked.unwrap();
+    assert_eq!(points, notch);
+    // Picking it sends the whole bevel to both effects.
+    fields.remove(OWN_BEVEL);
+    let before = Value::Object(fields.clone());
+    fields.insert(vectorcraft_effects::BEVEL_NAME.into(), json!(name));
+    fields.insert(vectorcraft_effects::BEVEL_PROFILE.into(), points);
+    send(&mut app, &egui::Context::default(), changed_settings(&before, &Value::Object(fields)), false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Notch"), &notch), "{id}");
+    }
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();

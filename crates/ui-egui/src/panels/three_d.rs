@@ -13,6 +13,7 @@ use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_RE
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::dialogs::revolve::OWN_BEVEL;
 use crate::dialogs::three_d_materials as materials;
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -235,13 +236,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // The applied effect's settings in the dialog's form, with the controls' own state.
     let mut fields = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
+    let own_bevel = own_bevel(&fields);
     mark_mixed(app, &mut fields);
     fields.extend(pstate::<Map<String, Value>>(&ctx, UI_STATE));
     fields.insert("__effect".into(), json!(t.effect));
     fields.insert("__panel".into(), json!(true));
+    if let Some(own) = own_bevel {
+        fields.insert(OWN_BEVEL.into(), own);
+    }
     let mut d = Dialog { kind: ID.into(), fields };
     let before = crate::dialogs::form::params(&d);
     crate::dialogs::revolve::controls(app, ui, &mut d);
+    d.fields.remove(OWN_BEVEL);
     let edit_bevels = d.fields.remove("__editBevels").is_some();
     let action = d.fields.remove(materials::ACTION).and_then(|v| materials::Action::from_value(&v));
     let state: Map<String, Value> = d
@@ -488,6 +494,14 @@ pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) 
             }
         }
     }
+}
+
+/// The custom bevel of an effect's settings `fields`, `[name, points]`, when its `bevel` is
+/// `"custom"` with points (the Bevel Shape menu lists it while a mixed selection unsets them).
+pub(crate) fn own_bevel(fields: &Map<String, Value>) -> Option<Value> {
+    let points = fields.get(BEVEL_PROFILE).filter(|v| !v.is_null())?;
+    let name = fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default();
+    (fields.get("bevel").and_then(Value::as_str) == Some("custom")).then(|| json!([name, points]))
 }
 
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
