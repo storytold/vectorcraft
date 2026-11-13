@@ -648,6 +648,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
     ),
     (
+        "learn.skills",
+        "Back to Skills",
+        "",
+        "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",
@@ -658,6 +664,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show Tool Location",
         "",
         "{tool: a tool id, as tool.select takes} mark where that tool is for 3 seconds without choosing it, as the link on a tool's name in a Learn tutorial step does: its toolbar button, a row of its collapsed group's flyout (which opens), its group's torn-off strip (which comes to the front), or, when no shown toolbar holds it, its row in the All Tools drawer (which opens); a Tools panel hidden with Window › Tools shows again; Escape or the next locate removes the mark; a missing, non-string or unknown id is an error and changes nothing; returns {tool, location: toolbar|flyout|strip|allTools|unavailable, toolbar: the name of the toolbar made with New Toolbar that holds it, or null}, with reason when Presentation Mode or Tab hides the toolbars",
+    ),
+    (
+        "learn.openSample",
+        "Open Tutorial Sample",
+        "",
+        "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
+    ),
+    (
+        "learn.finish",
+        "Finish Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+    ),
+    (
+        "learn.next",
+        "Next Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (

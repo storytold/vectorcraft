@@ -8,10 +8,22 @@ use super::{
 
 // ---------- Smooth ----------
 
-/// Refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
-fn refit_run(anchors: &[Anchor], tol: f64) -> Vec<Anchor> {
+/// The spread (points) of the Gaussian the Smooth tool smooths a path along its length with before
+/// refitting it, as a share of the tool's reach: a third, so each point is averaged with the stretch
+/// of path within the reach on either side of it. VectorCraft's own value.
+const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
+
+/// The options the Smooth tool refits with: the path smoothed along its length by a Gaussian of
+/// spread `sigma` (none at 0), then refitted within `tol` of that and within twice the distance the
+/// smoothing moved it, keeping a corner only where the path turns back on itself.
+fn refit_options(tol: f64, sigma: f64) -> SimplifyOptions {
+    SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, smooth: sigma, smooth_moved_only: true }
+}
+
+/// Smooth and refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
+fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64) -> Vec<Anchor> {
     let piece = PathData::single(SubPath::new(anchors.to_vec(), false));
-    let fitted = po::simplify_with(&piece, &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, ..Default::default() });
+    let fitted = po::simplify_with(&piece, &refit_options(tol, sigma));
     let Some(mut out) = fitted.subpaths.into_iter().next().map(|s| s.anchors).filter(|a| a.len() >= 2) else { return anchors.to_vec() };
     let (f, l) = (anchors[0], anchors[anchors.len() - 1]);
     let last = out.len() - 1;
@@ -25,7 +37,7 @@ fn refit_run(anchors: &[Anchor], tol: f64) -> Vec<Anchor> {
     out
 }
 
-fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Option<SubPath> {
+fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Option<SubPath> {
     let n = sp.anchors.len();
     let marked: Vec<bool> = sp.anchors.iter().map(|a| near(a.p)).collect();
     if n < 3 || !marked.iter().any(|m| *m) {
@@ -33,11 +45,8 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
     }
     if sp.closed {
         let Some(k) = marked.iter().position(|m| !m) else {
-            // Everything is in range: smooth the whole closed path.
-            let f = po::simplify_with(
-                &PathData::single(sp.clone()),
-                &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, ..Default::default() },
-            );
+            // Everything is in range: smooth the whole closed path, across its start too.
+            let f = po::simplify_with(&PathData::single(sp.clone()), &refit_options(tol, sigma));
             return f.subpaths.into_iter().next();
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
@@ -48,14 +57,14 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
         open.anchors.push(open.anchors[0]);
         m.push(false);
         open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, near, tol);
+        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma);
         let l = res.pop()?;
         if let Some(r0) = res.first_mut() {
             r0.h_in = l.h_in;
         }
         return Some(SubPath::new(res, true));
     }
-    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol), false))
+    Some(SubPath::new(smooth_open(&sp.anchors, &marked, near, tol, sigma), false))
 }
 
 /// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
@@ -84,10 +93,11 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
     (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
 }
 
-/// `anchors` with each run of `marked` ones refitted, together with the stretch of the segments
-/// leading into the run that is in the drag's reach (`near`): a short drag smooths what is under
-/// it, and the rest of a long segment next to it stays as it was (#1512).
-fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64) -> Vec<Anchor> {
+/// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
+/// within `tol`, together with the stretch of the segments leading into the run that is in the
+/// drag's reach (`near`): a short drag smooths what is under it, and the rest of a long segment next
+/// to it stays as it was (#1512).
+fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool, tol: f64, sigma: f64) -> Vec<Anchor> {
     let n = anchors.len();
     let mut runs = vec![];
     let mut i = 0;
@@ -127,7 +137,7 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
             head = Some(Anchor { h_out: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, far.p2, reach.p1);
         }
-        let new = refit_run(&piece, tol);
+        let new = refit_run(&piece, tol, sigma);
         out.splice(lo..=hi, head.into_iter().chain(new).chain(tail));
     }
     out
@@ -138,6 +148,7 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     let pts = points_param(p, "points", C)?;
     let radius = number_or(p, "radius", 12.0, C)?.max(0.0);
     let tol = number_or(p, "fidelity", 2.5, C)?.clamp(vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    let sigma = radius * SMOOTH_SPREAD;
     let st = s.doc()?;
     let near = |q: Point| dist_to_polyline(&pts, q) <= radius;
     let mut plan = vec![];
@@ -148,7 +159,7 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
         let subs: Vec<SubPath> = pd
             .subpaths
             .iter()
-            .map(|sp| match smooth_subpath(sp, &near, tol) {
+            .map(|sp| match smooth_subpath(sp, &near, tol, sigma) {
                 Some(n) if n != *sp && n.anchors.len() >= 2 => {
                     changed = true;
                     n

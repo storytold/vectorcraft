@@ -2960,6 +2960,9 @@ mark-style	Japanese	日本式
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
 	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
+	Prominent Colors	主要カラー
+	Save All Colors	すべてのカラーを保存
+	Save Prominent Colors	主要カラーを保存
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット
@@ -6223,6 +6226,7 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message にはテキストを指定してください
 @msg	allowContinue must be true or false	allowContinue には true または false を指定してください
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
+@msg	Batch cannot play an action with a View menu step	バッチでは表示メニューのステップを含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
 	Insert Select Path	パスの選択を挿入
@@ -7037,6 +7041,19 @@ breakText	Glyphs	字形
 	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
+	View more	詳細を見る
+	Finish tutorial	チュートリアルを完了
+	Next Up	次へ
+	You finished the last tutorial in this skill.	このスキルの最後のチュートリアルを完了しました。
+	Back to skills	スキルに戻る
+	Open Tutorial Sample	チュートリアルのサンプルを開く
+	Finish Tutorial	チュートリアルを完了
+	Next Tutorial	次のチュートリアル
+	Back to Skills	スキルに戻る
+@msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
+@msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
+@msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)
+@msg	`{id}` is the last tutorial in its skill	`{id}` はこのスキルの最後のチュートリアルです
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新
