@@ -4852,6 +4852,31 @@ fn pencil_extend_closes_within_400_pt_at_any_fidelity() {
     }
 }
 
+/// `closed`, when given, decides whether a stroke continuing an open path closes it (the tools
+/// send it by Close Paths When Ends Are Within): false leaves it open even ending on the other end;
+/// true closes one ending 50 pt away with a straight segment back, the stroke's end kept, and one
+/// ending 2 pt away on the other end itself.
+#[test]
+fn pencil_extend_closes_as_closed_says() {
+    let mut s = session();
+    for (end, closed, ends_on_start) in [([0i32, 0], false, false), ([0, 50], true, false), ([0, 2], true, true)] {
+        let l = line(&mut s, 0.0, 0.0, 200.0, 0.0);
+        let points = json!([[200, 0], [200, 100], [100, 150], end]);
+        let p = json!({"points": points, "fidelity": 1.5, "closed": closed, "extend": {"id": l.0}, "keepSelected": false});
+        s.execute("path.freehand", &p).unwrap();
+        let pd = path(&s, l);
+        let sp = &pd.subpaths[0];
+        assert_eq!(sp.closed, closed, "ending at {end:?}");
+        if closed {
+            let stroke_end = Point::new(f64::from(end[0]), f64::from(end[1]));
+            let kept = sp.anchors.iter().any(|a| a.p.distance(stroke_end) < 1e-6);
+            assert_eq!(kept, !ends_on_start, "ending at {end:?}: {:?}", sp.anchors);
+            let on_start = sp.anchors.iter().filter(|a| a.p.distance(Point::new(0.0, 0.0)) < 1e-6).count();
+            assert_eq!((sp.anchors[0].p, on_start), (Point::new(0.0, 0.0), 1), "ending at {end:?}");
+        }
+    }
+}
+
 /// At Fidelity 0.01 short, one-point and repeated-point strokes still draw or are refused, never
 /// crash, and what they draw has finite anchors.
 #[test]

@@ -638,6 +638,7 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
     "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+    "The Pencil tool while a stroke continuing a selected open path, freehand or a straight line, is drawn to within Close Paths When Ends Are Within of that path's other end: releasing the mouse button there closes the path.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
@@ -647,14 +648,17 @@ id = "PencilStraight"
 group = "Drawing and editing tools"
 shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
 hotspot = "The lead tip."
-look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
+look = "The Pencil cursor with a short level-line badge, where PencilClose has its ring."
 
 [[cursor]]
 id = "PencilContinue"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool over an end of a selected open path, within Edit Selected Paths, with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line that continues the path from that end."]
+shown_when = [
+    "The Pencil tool over an end of a selected open path, within Edit Selected Paths, before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press continues the path from that end, freehand, or with a straight line when Shift or Alt is held.",
+    "The Pencil tool while a stroke continuing a selected path ends within Edit Selected Paths of an open end of another path selected at the press: releasing the mouse button connects the two.",
+]
 hotspot = "The lead tip."
-look = "PencilStraight's badge with a small filled square at the line's lower end (the end point the line continues from)."
+look = "The Pencil cursor with a short badge line rising to the right, where PencilClose has its ring (the stroke carries on from the path)."
 
 [[cursor]]
 id = "Paintbrush"

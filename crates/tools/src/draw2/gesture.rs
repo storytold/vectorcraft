@@ -97,6 +97,8 @@ pub struct GestureTool {
     near_start: bool,
     /// Pencil/Paintbrush continuing a selected open path: (path, continue from its start).
     extend: Option<(NodeId, bool)>,
+    /// The other end of the path `extend` continues: a release near it closes the path.
+    close_to: Option<Point>,
     /// A Pencil stroke continuing a selected open path: the other paths selected at the press,
     /// whose open ends it connects to.
     connect_to: Vec<NodeId>,
@@ -796,6 +798,7 @@ impl GestureTool {
             began: false,
             near_start: false,
             extend: None,
+            close_to: None,
             connect_to: vec![],
             redraw: None,
             fidelity,
@@ -1066,6 +1069,21 @@ impl GestureTool {
         self.find_end(cx, p, &cx.selection.objects)
     }
 
+    /// The other end of the open end `find_end` found: the opposite end of `id`'s last open
+    /// subpath.
+    fn other_end(cx: &ToolContext, id: NodeId, at_start: bool) -> Option<Point> {
+        let pd = cx.doc.node(id)?.path_data()?;
+        let sp = pd.subpaths.iter().rev().find(|s| !s.closed && !s.anchors.is_empty())?;
+        let a = if at_start { sp.anchors.last() } else { sp.anchors.first() };
+        a.map(|a| a.p)
+    }
+
+    /// Continues the path at the open end `find_extend` found, if any, noting its other end.
+    fn set_extend(&mut self, cx: &ToolContext, found: Option<(NodeId, bool, Point)>) {
+        self.extend = found.map(|(id, at_start, _)| (id, at_start));
+        self.close_to = found.and_then(|(id, at_start, _)| Self::other_end(cx, id, at_start));
+    }
+
     /// [`Self::find_extend`] among `ids`.
     fn find_end(&self, cx: &ToolContext, p: Point, ids: &[NodeId]) -> Option<(NodeId, bool, Point)> {
         if self.edit_within <= 0.0 {
@@ -1110,16 +1128,32 @@ impl GestureTool {
     }
 
     /// Does a stroke that ends at `end` end near its start (Close Paths When Ends Are Within, off
-    /// at 0 pixels)?
+    /// at 0 pixels)? A stroke continuing a selected path ends near that path's other end, a
+    /// straight line too; a new straight line never closes, as it would run back over itself.
     fn ends_near_start(&self, cx: &ToolContext, end: Point) -> bool {
-        self.close_within > 0.0 && self.points.len() > 2 && self.points[0].distance(end) <= cx.tol(self.close_within)
+        if self.close_within <= 0.0 {
+            return false;
+        }
+        let tol = cx.tol(self.close_within);
+        match (self.extend, self.close_to) {
+            (Some(_), Some(to)) => self.points.len() >= 2 && to.distance(end) <= tol,
+            (Some(_), None) => false,
+            (None, _) => !self.straight && self.points.len() > 2 && self.points.first().is_some_and(|s| s.distance(end) <= tol),
+        }
     }
 
-    /// Does a release now, with the stroke ending at `end`, close a freehand stroke because it ends
-    /// near its start (`finish`)? A stroke that redraws a selected path closes only when the engine
-    /// finds it does not end on that path, so it counts as not closing.
+    /// The open end of another path selected at the press that a continuing Pencil stroke ending
+    /// at `end` connects to (`finish`).
+    fn connects_at(&self, cx: &ToolContext, end: Point) -> Option<(NodeId, bool, Point)> {
+        self.extend.and_then(|_| self.find_end(cx, end, &self.connect_to))
+    }
+
+    /// Does a release now, with the stroke ending at `end`, close the stroke because it ends near
+    /// its start, or near the other end of the path it continues (`finish`)? A stroke that redraws
+    /// a selected path closes only when the engine finds it does not end on that path, so it counts
+    /// as not closing, and a stroke that connects to another path doesn't close.
     fn release_closes_near_start(&self, cx: &ToolContext, end: Point) -> bool {
-        self.draws_path() && !self.smoothing && !self.straight && self.extend.is_none() && self.redraw.is_none() && self.ends_near_start(cx, end)
+        self.draws_path() && !self.smoothing && self.redraw.is_none() && self.ends_near_start(cx, end) && self.connects_at(cx, end).is_none()
     }
 
     /// Parameters of `path.freehand` for the current stroke, fitted at Fidelity on screen. Only the
@@ -1160,14 +1194,16 @@ impl GestureTool {
                 if !self.began {
                     return vec![];
                 }
-                // Close Paths When Ends Are Within is off at 0 pixels.
+                // Close Paths When Ends Are Within is off at 0 pixels. A stroke continuing a
+                // selected path closes it near its other end, a straight line too.
                 let near = pts.last().is_some_and(|&end| self.ends_near_start(cx, end));
-                // A straight line has two points: closing it would draw it back over itself.
-                let closed = !self.straight && ((m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || (self.extend.is_none() && near));
-                let mut params = self.freehand_params(cx, closed);
+                // Alt at the release closes a freehand stroke; a new straight line has two points:
+                // closing it would draw it back over itself.
+                let closed = (!self.straight && m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || near;
                 // A Pencil stroke that continues a selected path and ends on an open end of another
-                // path selected at the press connects the two.
-                let connect = pts.last().and_then(|&end| self.find_end(cx, end, &self.connect_to));
+                // path selected at the press connects the two, and doesn't close.
+                let connect = pts.last().and_then(|&end| self.connects_at(cx, end));
+                let mut params = self.freehand_params(cx, closed && connect.is_none());
                 if let Some((other, at_start, _)) = connect {
                     params["connect"] = json!({"id": other.0, "end": if at_start { "start" } else { "end" }});
                 }
@@ -1241,7 +1277,7 @@ impl Tool for GestureTool {
                 self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
-                self.extend = extend.map(|(id, at_start, _)| (id, at_start));
+                self.set_extend(cx, extend);
                 // The stroke's previews select the path it continues, so the others are kept now.
                 self.connect_to = match self.extend {
                     Some((id, _)) if self.id == "pencil" => cx.selection.objects.iter().copied().filter(|o| *o != id).collect(),
@@ -1299,6 +1335,8 @@ impl Tool for GestureTool {
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
                     }
                     self.points.truncate(1);
+                    // The line ends at `p`, where its end snaps.
+                    end = p;
                 } else if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
                     // A release here keeps the last point unless it snaps (`Up`), so the ring
                     // follows the point `finish` will test.
@@ -1374,6 +1412,7 @@ impl Tool for GestureTool {
                 self.unconstrained = false;
                 self.clear();
                 self.extend = None;
+                self.close_to = None;
                 self.connect_to.clear();
                 self.redraw = None;
                 out
@@ -1517,6 +1556,11 @@ impl Tool for GestureTool {
         if !self.active && self.straight_at_press(m) {
             return if self.find_extend(cx, p).is_some() { Cursor::PencilContinue } else { Cursor::PencilStraight };
         }
+        // A continuing Pencil stroke that a release would connect to another selected path's open
+        // end (`finish`) shows that it continues on.
+        if self.id == "pencil" && self.active && self.points.last().is_some_and(|&end| self.connects_at(cx, end).is_some()) {
+            return Cursor::PencilContinue;
+        }
         // Alt held at the release closes the path (`finish`).
         // A straight line stays open, so its release has nothing to close, and before a press Alt
         // gives the Pencil a straight line.
@@ -1536,9 +1580,12 @@ impl Tool for GestureTool {
             "smooth" => Cursor::Smooth,
             "pathEraser" => Cursor::PathEraser,
             "join" => Cursor::Join,
+            // Before a press over an open end of a selected path the Pencil shows that the stroke
+            // continues it (`PointerKind::Down`).
+            _ if !self.active && self.find_extend(cx, p).is_some() => Cursor::PencilContinue,
             // Before a press that draws a new path the Pencil shows its star; over a selected path
-            // that the press continues from an end or redraws (`PointerKind::Down`), it does not.
-            _ if !self.active && self.find_extend(cx, p).is_none() && self.find_redraw(cx, p).is_none() => Cursor::PencilNew,
+            // that the press redraws (`PointerKind::Down`), it does not.
+            _ if !self.active && self.find_redraw(cx, p).is_none() => Cursor::PencilNew,
             _ => Cursor::Pencil,
         }
     }
