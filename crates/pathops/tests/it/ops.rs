@@ -417,6 +417,51 @@ fn simplify_keeps_square_corners() {
     assert!(!has_curves(&s));
 }
 
+/// The largest turn, in degrees, at an anchor of `sp` that is not an end of an open subpath: the
+/// angle between the direction a segment arrives along and the one the next leaves along.
+fn largest_join_turn(sp: &SubPath) -> f64 {
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    let n = sp.segment_count();
+    let first = usize::from(!sp.closed);
+    (first..n)
+        .map(|i| {
+            let (prev, next) = (sp.segment((i + n - 1) % n), sp.segment(i));
+            let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+            let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+            arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+/// A refitted curve becomes a line only when the line keeps the smooth joins on both sides of it:
+/// with no corners kept, the refit of a jagged line or of an arc running into a line turns by at most
+/// 0.5° at every anchor. Points that all lie on one line still become one line.
+#[test]
+fn simplify_turns_a_curve_into_a_line_only_where_the_joins_stay_smooth() {
+    let mut seed = 7u64;
+    let mut noise = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+    };
+    let jagged: Vec<Point> = (0..=60).map(|i| Point::new(100.0 + f64::from(i) * 5.0, 200.0 + 6.0 * noise())).collect();
+    let mut arc_into_line: Vec<Point> =
+        (0..=40).map(|i| Point::new(50.0 * (f64::from(i) / 80.0 * PI).cos(), 50.0 * (f64::from(i) / 80.0 * PI).sin())).collect();
+    arc_into_line.extend((1..=20).map(|i| Point::new(-f64::from(i) * 2.0, 50.0)));
+    for pts in [&jagged, &arc_into_line] {
+        let path = PathData::single(SubPath::polyline(pts, false));
+        for tolerance in [1.0, 2.5, 5.0] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, ..Default::default() });
+            let turn = largest_join_turn(&s.subpaths[0]);
+            assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+            assert!(max_deviation(&path, &s) <= tolerance + 1e-6, "{tolerance} pt: {}", max_deviation(&path, &s));
+        }
+    }
+    let in_line: Vec<Point> = [0.0, 3.0, 10.0, 11.0, 40.0, 41.5, 90.0, 100.0].map(|x| Point::new(x, 0.5 * x)).to_vec();
+    let s = simplify_with(&PathData::single(SubPath::polyline(&in_line, false)), &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    assert_eq!(s.anchor_count(), 2, "{s:?}");
+    assert!(!has_curves(&s), "{s:?}");
+}
+
 #[test]
 fn simplify_straight_lines_option() {
     let c = dense_circle(50.0, 200);
