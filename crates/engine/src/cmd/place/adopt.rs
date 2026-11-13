@@ -272,6 +272,8 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         if let Some(mut def) = src.symbols.iter().find(|s| s.name == old).cloned() {
             def.name = new.to_string();
             refs(Arc::make_mut(&mut def.art), &mut rename);
+            // The art takes ids of `dst`: those of `src` may name objects of `dst` already.
+            def.art = Arc::new(dst.reid(&def.art));
             dst.symbols.push(def);
         }
     }
@@ -280,6 +282,7 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             def.name = new.to_string();
             for a in &mut def.art {
                 refs(Arc::make_mut(a), &mut rename);
+                *a = Arc::new(dst.reid(a));
             }
             dst.patterns.push(def);
         }

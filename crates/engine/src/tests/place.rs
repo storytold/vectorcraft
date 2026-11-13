@@ -662,6 +662,33 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
     assert!(linked, "still linked to the swatch it brought");
 }
 
+/// The symbol and pattern art placed art brings takes ids of the document's own: the file's ids
+/// already name other objects there, and the Links panel names linked art in symbols by its id.
+#[test]
+fn placed_art_brings_its_symbols_and_patterns_with_ids_of_the_documents_own() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    // The document's objects take the same ids the file's do.
+    let mut s = session();
+    for x in [0, 20, 40, 60] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 5, "height": 5})).unwrap();
+    }
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.symbols.iter().any(|x| x.name == "Star") && doc.pattern("Dots").is_some());
+    let mut ids = vec![];
+    doc.visit_stored(|n, _| ids.push(n.id.0));
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+}
+
 #[test]
 fn placed_art_brings_its_brushes_renaming_on_conflict() {
     // The file: a path with its own brush, and one with a brush the defaults hold.

@@ -132,6 +132,52 @@ fn shift_click_selects_a_range_of_links_and_ctrl_click_toggles_one() {
     assert_eq!(selected(&app), id(&[3]));
 }
 
+/// A linked image kept only in a symbol's art has a row of its own: a click picks it in the panel
+/// (the canvas selection is cleared), Link Info shows it, Ctrl/Cmd-click adds an image in the
+/// layers, a change of the canvas selection drops the pick, and Go To clears the selection and
+/// says it has no place on the canvas.
+#[test]
+fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
+    let dir = Folder::new("nested");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let inside = dir.file("inside.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": inside, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({"ids": selected(&app)})).unwrap();
+    let outside = dir.file("layer.png", &png(20, 20));
+    let layer = app.run("file.place", json!({"path": outside, "at": [300, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "symbol", "{list}");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shown = |app: &mut VectorcraftApp, time: f64| -> Vec<String> {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect()
+    };
+    assert!(shown(&mut app, 0.5).iter().any(|t| t == "20 × 20 px"), "Link Info of the selected image in the layers");
+    click_row(&mut app, &ctx, "inside.png", egui::Modifiers::NONE, 1.0);
+    assert!(selected(&app).is_empty(), "the canvas can't select it");
+    assert!(shown(&mut app, 1.5).iter().any(|t| t == "30 × 20 px"), "Link Info of the symbol's image");
+    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 2.0);
+    assert_eq!(selected(&app), [layer]);
+    // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
+    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 3.0);
+    assert!(selected(&app).is_empty());
+    assert!(shown(&mut app, 3.5).iter().any(|t| t == "30 × 20 px"), "the symbol's image is still picked");
+    app.run("select.set", json!({"ids": [layer]})).unwrap();
+    assert!(shown(&mut app, 4.0).iter().any(|t| t == "20 × 20 px"));
+    app.run("select.set", json!({"ids": []})).unwrap();
+    let text = shown(&mut app, 4.5);
+    assert!(!text.iter().any(|t| t == "30 × 20 px" || t == "20 × 20 px"), "nothing is picked: {text:?}");
+    // Go To clears the selection and says the link has no place on the canvas.
+    app.run("select.set", json!({"ids": [layer]})).unwrap();
+    super::links::go_to(&mut app, row["id"].as_u64().unwrap());
+    assert_eq!(app.ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
+    assert!(selected(&app).is_empty(), "the image in the layers is no longer selected");
+}
+
 #[test]
 fn an_empty_document_shows_how_to_add_images() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

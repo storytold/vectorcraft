@@ -4966,6 +4966,7 @@ theme	Appearance	Giao diện
 @msg	no library `{id}`	không có thư viện `{id}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Liên kết nằm trong ký hiệu, thiết kế biểu đồ, họa tiết hoặc mặt nạ độ mờ và không có vị trí trên canvas
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó
 @msg	no Live Paint face at that point	không có mặt tô trực tiếp tại điểm đó
 @msg	no native format	không có định dạng gốc

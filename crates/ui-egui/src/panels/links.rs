@@ -8,6 +8,10 @@
 //! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size
 //! and Show in Folder.
 //!
+//! Images and placed documents in opacity-mask art and in the art of symbols, graph designs and
+//! patterns are listed after the layers' own, one row each; the canvas can't select them, so a
+//! click picks such a row in the panel, and the buttons act on it as on any other.
+//!
 //! Everything runs through the `links.*` commands (`links.editOriginal` and `links.reveal` are UI
 //! commands: they hand the file to the system).
 
@@ -52,6 +56,8 @@ struct Cache {
     at: f64,
     list: Value,
     info: Option<(u64, Value)>,
+    /// The objects of the rows outside the layer tree, by id, for their thumbnails.
+    nested: Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)>,
 }
 
 fn options(ctx: &egui::Context) -> Options {
@@ -69,13 +75,27 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
 fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
     let st = app.session.active()?;
     let key = Some((st.uid, st.revision, o.show, o.sort));
-    let first = selected_images(app).first().copied();
+    let first = selected_links(app, ctx).first().copied();
     let now = ctx.input(|i| i.time);
     let mut c: Cache = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
         c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort })).ok()?;
         (c.key, c.at) = (key, now);
+        // One pass over the stored art for the rows outside the layer tree, not one per frame.
+        let mut want: std::collections::HashSet<u64> =
+            c.list["links"].as_array().into_iter().flatten().filter(|r| nested_row(r)).filter_map(|r| r["id"].as_u64()).collect();
+        c.nested.clear();
+        if !want.is_empty()
+            && let Some(st) = app.session.active()
+        {
+            st.doc.visit_stored_arcs(|n, place| {
+                if !place.in_layers() && want.remove(&n.id.0) {
+                    c.nested.push((n.id.0, std::sync::Arc::clone(n)));
+                }
+            });
+            c.nested.sort_by_key(|(id, _)| *id);
+        }
     }
     let want = first.filter(|_| o.info);
     if stale || c.info.as_ref().map(|(id, _)| *id) != want {
@@ -94,6 +114,50 @@ fn selected_images(app: &VectorcraftApp) -> Vec<u64> {
         st.doc.node(*id).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_) | vectorcraft_doc::NodeKind::PlacedDocument(_)))
     };
     st.selection.objects.iter().filter(|id| image(id)).map(|id| id.0).collect()
+}
+
+/// Is row `r` of an object outside the layer tree (in opacity-mask art or the art of a symbol,
+/// graph design or pattern), which the canvas can't select?
+fn nested_row(r: &Value) -> bool {
+    r["owner"].is_object()
+}
+
+/// The active document's uid and the ids of its selected objects.
+fn canvas_selection(app: &VectorcraftApp) -> Option<(u64, Vec<u64>)> {
+    app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect()))
+}
+
+/// The rows outside the layer tree picked in the panel, with the canvas selection
+/// ([`canvas_selection`]) they were picked with.
+type NestedPicks = Option<((u64, Vec<u64>), Vec<u64>)>;
+
+/// The rows outside the layer tree picked in the panel, in the active document. A change of the
+/// canvas selection, or another document, drops them (the panel looks every frame).
+fn nested_picks(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<u64> {
+    let picks: NestedPicks = pstate(ctx, "links-nested");
+    let Some((at, ids)) = picks else { return vec![] };
+    if Some(&at) == canvas_selection(app).as_ref() {
+        return ids;
+    }
+    set_pstate::<NestedPicks>(ctx, "links-nested", None);
+    vec![]
+}
+
+/// Keep `ids` as the rows picked in the panel, with the canvas selection as it is now.
+fn set_nested_picks(app: &VectorcraftApp, ctx: &egui::Context, ids: Vec<u64>) {
+    set_pstate(ctx, "links-nested", canvas_selection(app).map(|at| (at, ids)));
+}
+
+/// The ids of the selected rows: the selected images and placed documents, then the rows outside
+/// the layer tree picked in the panel.
+fn selected_links(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<u64> {
+    let mut ids = selected_images(app);
+    for id in nested_picks(app, ctx) {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
 
 /// The rows of `list` whose image is selected.
@@ -170,9 +234,14 @@ fn relink_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     });
 }
 
-/// Select image `id` and scroll it into view.
+/// Select image `id` and scroll it into view; one outside the layer tree only says that it has no
+/// place on the canvas.
 pub(crate) fn go_to(app: &mut VectorcraftApp, id: u64) {
     let Ok(r) = app.run("links.goTo", json!({ "id": id })) else { return };
+    if r["onCanvas"] == false {
+        app.status("The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
+        return;
+    }
     let b: Vec<f64> = r["bounds"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
     if let (&[x0, y0, x1, y1], Some(v)) = (&b[..], app.view_mut()) {
         v.center = vectorcraft_geom::Point::new((x0 + x1) / 2.0, (y0 + y1) / 2.0);
@@ -290,25 +359,46 @@ fn status_tip(r: &Value) -> String {
 /// Ctrl/Cmd adds or removes it, and Shift selects the images of the rows from the last row clicked
 /// without Shift in this document to it, or with Ctrl/Cmd adds them to the selection. A
 /// Shift-click while that row is not shown, or after the last click was in another document, acts
-/// as a click without Shift.
+/// as a click without Shift. Rows outside the layer tree are picked in the panel itself, as the
+/// canvas can't select them; a click without Ctrl/Cmd replaces both kinds of selection.
 fn click(app: &mut VectorcraftApp, ctx: &egui::Context, rows: &[Value], id: u64, m: egui::Modifiers) {
     let Some(uid) = app.session.active().map(|st| st.uid) else { return };
     let anchor: Option<(u64, u64)> = pstate(ctx, "links-anchor");
     let at = |id: u64| rows.iter().position(|r| r["id"].as_u64() == Some(id));
+    let nested = |r: &Value| nested_row(r).then(|| r["id"].as_u64()).flatten();
+    let mut picks = if m.command { nested_picks(app, ctx) } else { vec![] };
     if m.shift
         && let Some((_, a)) = anchor.filter(|(doc, _)| *doc == uid)
         && let (Some(i), Some(j)) = (at(a), at(id))
     {
-        let range: Vec<u64> = rows.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().filter_map(|r| r["id"].as_u64()).collect();
-        app.run(if m.command { "select.add" } else { "select.set" }, json!({ "ids": range })).ok();
+        let range = rows.get(i.min(j)..=i.max(j)).unwrap_or_default();
+        let canvas: Vec<u64> = range.iter().filter(|r| !nested_row(r)).filter_map(|r| r["id"].as_u64()).collect();
+        picks.extend(range.iter().filter_map(nested).filter(|id| !picks.contains(id)).collect::<Vec<_>>());
+        app.run(if m.command { "select.add" } else { "select.set" }, json!({ "ids": canvas })).ok();
+        set_nested_picks(app, ctx, picks);
         return;
     }
     set_pstate(ctx, "links-anchor", Some((uid, id)));
+    let row = rows.iter().find(|r| r["id"].as_u64() == Some(id));
+    if row.is_some_and(nested_row) {
+        match picks.iter().position(|p| *p == id) {
+            Some(i) if m.command => {
+                picks.remove(i);
+            }
+            _ => picks.push(id),
+        }
+        if !m.command {
+            app.run("select.set", json!({ "ids": [] })).ok();
+        }
+        set_nested_picks(app, ctx, picks);
+        return;
+    }
     if m.command {
         app.run("select.toggle", json!({ "id": id })).ok();
     } else {
         app.run("select.set", json!({ "ids": [id] })).ok();
     }
+    set_nested_picks(app, ctx, picks);
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -322,7 +412,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let thumbs = super::layers::ThumbSource::of(app, st, &doc);
-    let selected = selected_images(app);
+    let selected = selected_links(app, ui.ctx());
     let rows: &[Value] = cache.list["links"].as_array().map_or(&[], Vec::as_slice);
     let mut clicked: Option<(u64, egui::Modifiers, bool)> = None;
     widgets::list_box(ui, |ui| {
@@ -354,7 +444,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if o.thumb > 0.0 {
                     let tr = egui::Rect::from_min_size(egui::pos2(x, rect.center().y - o.thumb / 2.0), vec2(o.thumb, o.thumb));
                     ui.painter().rect_filled(tr, 0.0, egui::Color32::WHITE);
-                    if let Some(n) = super::layers::node_arc(&doc, NodeId(id)) {
+                    let node = if nested_row(r) {
+                        cache
+                            .nested
+                            .binary_search_by_key(&id, |(n, _)| *n)
+                            .ok()
+                            .and_then(|i| cache.nested.get(i))
+                            .map(|(_, n)| std::sync::Arc::clone(n))
+                    } else {
+                        super::layers::node_arc(&doc, NodeId(id))
+                    };
+                    if let Some(n) = node {
                         super::layers::real_thumb(ui, &thumbs, &n, tr);
                     }
                     ui.painter().rect_stroke(tr, 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
@@ -411,7 +511,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::icon_button_enabled(ui, "pencil", tl!("Edit Original"), false, can_edit, 24.0).clicked() {
-                crate::menus::invoke(app, "links.editOriginal", json!({}));
+                crate::menus::invoke(app, "links.editOriginal", file_row(&sel));
             }
             if widgets::icon_button_enabled(ui, "rotate-cw", tl!("Update Link"), false, !modified.is_empty(), 24.0).clicked() {
                 let r = app.run("links.update", json!({ "ids": modified }));
@@ -450,6 +550,15 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
             )
         }
     });
+}
+
+/// The params of Edit Original and Show in Folder for the selected rows `sel`: the first linked
+/// row whose file is there (rows outside the layer tree included), else none (the selection's).
+fn file_row(sel: &[&Value]) -> Value {
+    match ids(sel, |r| r["linked"] == true && !status_is(r, "missing")).first() {
+        Some(id) => json!({ "id": id }),
+        None => json!({}),
+    }
 }
 
 /// Pick-a-file actions need a file dialog (the desktop app).
@@ -538,7 +647,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
     let list = pstate::<Cache>(ui.ctx(), "links-cache").list;
-    let selected = selected_images(app);
+    let selected = selected_links(app, ui.ctx());
     let sel = selected_rows(&list, &selected);
     let linked = ids(&sel, |r| r["linked"] == true);
     let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
@@ -563,7 +672,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         report(app, r, |v| updated_status(v["updated"].as_array().map_or(0, Vec::len)));
     }
     if menu_item(ui, tl!("Edit Original"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
-        crate::menus::invoke(app, "links.editOriginal", json!({}));
+        crate::menus::invoke(app, "links.editOriginal", file_row(&sel));
     }
     ui.separator();
     if menu_item(ui, tl!("Embed Image(s)"), !linked.is_empty(), false) {
@@ -594,7 +703,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": ids(&sel, |_| true) }));
     }
     if menu_item(ui, tl!("Show in Folder"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
-        crate::menus::invoke(app, "links.reveal", json!({}));
+        crate::menus::invoke(app, "links.reveal", file_row(&sel));
     }
     ui.separator();
     // Select Linked, Embedded, Missing and Modified: every such image in the document, not only

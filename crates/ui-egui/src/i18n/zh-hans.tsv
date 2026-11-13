@@ -4899,6 +4899,7 @@ imageTrace	Outline	轮廓
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}

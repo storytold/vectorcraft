@@ -5079,6 +5079,7 @@ axis	Both	Les deux
 @msg	every numbered name for it is taken in the Fonts folder	tous les noms numérotés pour ce fichier sont déjà pris dans le dossier Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services

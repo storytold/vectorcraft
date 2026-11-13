@@ -6403,8 +6403,8 @@ path isn't followed) when it isn't. The desktop app also checks the active docum
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
-`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other object in the layers linked to the same file as
-one of them; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
+`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other stored object linked to the same file as
+one of them, in the layers, opacity-mask art, symbols, graph designs and patterns; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
 `path`'s folder, and lists the names not there in `notFound` (with `copy`, only missing images are looked for); `each` takes `paths: [{ids, path}]` in place of `ids`,
 `path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
 `path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
@@ -6412,8 +6412,10 @@ errors, and nothing is relinked. Each call is one undo step. The Links panel's R
 (`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
-documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
-those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it
+documents inside symbols, graph designs, patterns and opacity masks that show the same content. Those objects have ids
+of their own: `links.list`, `links.check`, `links.findFiles`, the `missingLinks`, `modifiedLinks` and `updatedLinks`
+rows and the link watch list them, and every `links.*` command takes their ids. Opening a document gives an object
+there whose id is 0 or already used by another object a new id, and the next save writes it. Saving a document also reads it
 again for the placed documents of it inside that art in the other open documents. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
@@ -6653,8 +6655,11 @@ listed in `warnings`. Binary DXF and DWG files answer an error saying to save th
 ## Links panel
 
 `links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
-first, as the Links panel does: `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth,
-pixelHeight, path?, found?, page?, preview?, note?}` (`note`: the image takes more than the decode allowance, 2 GiB
+first, as the Links panel does, then every image and placed document in opacity-mask art and in the art of symbols,
+graph designs and patterns, one row per stored object (never one per symbol instance or pattern tile): `{id, name,
+linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?, page?, preview?, note?,
+owner?}` (`owner`, for an object outside the layer tree: `{kind: layers|symbol|graphDesign|pattern, name?, maskOf?}`,
+`maskOf` naming the object whose opacity mask holds it; `note`: the image takes more than the decode allowance, 2 GiB
 or 512 MiB in the web app, as RGBA or as decoded, and it is drawn at the largest size within the allowance ("shown at
 reduced size"; the document keeps the whole file) or, when it can't be read that way or has more pixels than the
 allowance has bytes, drawn as a crossed gray box on the canvas and left out of exports ("too large to draw"); `document.open` and `file.place` say the same in their `warnings`). `links.info {id?}` is the Link Info: `image.info`'s fields plus
@@ -6662,7 +6667,8 @@ allowance has bytes, drawn as a crossed gray box on the canvas and left out of e
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
 With automation read roots, a file outside them has no `path` or `found` in `links.list` and `links.check`, and no
 `link`, `path`, `location`, `fileSize` or `modified` in `links.info`; its row keeps the file's name.
-`links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
+`links.goTo {id}` selects an image (`onCanvas: true`); for an object outside the layer tree it clears the selection and
+returns `{id, onCanvas: false, owner}`, and the panel says the link has no place on the canvas. `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
 `links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeft…bottomRight,

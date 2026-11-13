@@ -141,6 +141,7 @@ mod graphic_style;
 mod guides;
 mod limits;
 mod records;
+mod stored_art;
 mod units;
 
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
@@ -153,6 +154,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
+pub use stored_art::{StoredPlace, StoredRoot};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

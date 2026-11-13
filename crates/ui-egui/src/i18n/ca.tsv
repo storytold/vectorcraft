@@ -5715,6 +5715,7 @@ digits	Malayalam	Malaiàlam
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu

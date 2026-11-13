@@ -5139,6 +5139,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
