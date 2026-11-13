@@ -3398,7 +3398,9 @@ already walks Image Trace. Short agent entry points:
   nothing when it touches none. `selectFills` off leaves the faces out, and `selectStrokes` off leaves the edges out. A click and a marquee run their command on the
   release, and Escape between the press and the release removes the marquee so that the release runs nothing. The
   tool does not highlight or select the faces and edges of a Live Paint group that is locked, on a locked layer or on
-  a locked artboard, or in isolation mode outside the isolated art.
+  a locked artboard, or in isolation mode outside the isolated art. In the app, the tool's cursor shows what a click
+  at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
+  and with an x for nothing. It keeps the look it had at the press until the release.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen

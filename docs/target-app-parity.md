@@ -2235,6 +2235,16 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
   `the_live_paint_bucket_shows_a_bucket_or_a_brush`. Behavior source:
   [the help page](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html).
   The cursor swatch preview is not built. Scores and estimates unchanged.
+- **Live Paint Selection cursors:** the pointer changes over a face, over an edge and outside the
+  Live Paint groups ([the help page](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/modify-live-paint-groups.html)).
+  The cursor is the arrow with a filled square where a click selects a face, with a short line
+  where it selects an edge, and with an x where it selects nothing. It follows Alt, Select Fills
+  and Select Strokes as a click does, shows nothing to select over a locked or hidden group or
+  outside the isolated art, keeps its look from the press to the release, and turns into the
+  crosshair with Use Precise Cursors. The drawings and these rules are VectorCraft's own. Tests:
+  `live_paint_selection_cursor_shows_what_a_click_selects`,
+  `live_paint_selection_shows_the_arrow_with_a_face_edge_or_x_badge`. An edge is still selected
+  with Alt-click while both options are on. Scores and estimates unchanged.
 
 ## Revision history
 
