@@ -380,3 +380,82 @@ fn deselect_uneditable_matches_removing_one_at_a_time() {
     }
     assert!(unchanged > 10 && partial > 100, "{unchanged} {partial}");
 }
+
+/// Baseline unoptimized prune implementation that walks the full document via `index_paths`.
+fn baseline_prune(s: &mut Selection, doc: &Document) {
+    let ids = s.objects.iter().chain(s.anchors.keys()).chain(s.segments.keys()).copied().chain(s.key).chain(s.target);
+    let found = doc.index_paths(ids);
+    s.objects.retain(|id| found.contains_key(id));
+    s.anchors.retain(|id, _| found.contains_key(id));
+    s.segments.retain(|id, refs| {
+        let Some(path) = found.get(id).and_then(|p| doc.node_at(p)).and_then(|n| n.path_data()) else { return false };
+        refs.retain(|&(si, seg)| path.subpaths.get(si).is_some_and(|sp| seg < sp.segment_count()));
+        !refs.is_empty() && s.objects.contains(id) && s.anchors.contains_key(id)
+    });
+    s.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
+    let keep = s.key.and_then(|k| found.get(&k)).and_then(|p| doc.node_at(p)).is_some_and(|n| {
+        let mut inside = BTreeSet::new();
+        n.walk(&mut |c| {
+            inside.insert(c.id);
+        });
+        s.objects.iter().any(|o| !inside.contains(o)) || (s.objects.contains(&n.id) && !s.guides.is_empty())
+    });
+    if !keep {
+        s.key = None;
+    }
+    if s.target.is_some_and(|t| !found.contains_key(&t)) {
+        s.target = None;
+    }
+    s.slices.retain(|id| doc.is_slice(*id));
+    if s.key.is_some() || s.objects.is_empty() || s.key_guide.is_some_and(|k| !s.guides.contains(&k)) {
+        s.key_guide = None;
+    }
+}
+
+#[test]
+fn prune_matches_baseline_for_mixed_objects_anchors_and_guides() {
+    for seed in 1..300u64 {
+        let mut r = seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
+        let (mut d, ids) = random_document(&mut r);
+        let layer = d.layers[0].id;
+        // Add several guides with mixed layers and editable states.
+        d.guides.push(crate::Guide { layer: Some(layer), ..crate::Guide::new(true, 10.0) });
+        d.guides.push(crate::Guide { layer: None, ..crate::Guide::new(false, 20.0) });
+        d.guides.push(crate::Guide { layer: Some(NodeId(9999)), ..crate::Guide::new(true, 30.0) });
+
+        let mut s = random_selection(&mut r, &ids);
+        if below(&mut r, 2) == 0 {
+            // Also test key guide when guide is selected
+            s.key_guide = s.guides.first().copied();
+        }
+
+        // Test across 3 distinct selection cases:
+        // 1. Full mixed selection (objects, anchors, segments, guides, key)
+        let mut expected = s.clone();
+        baseline_prune(&mut expected, &d);
+        let mut actual = s.clone();
+        actual.prune(&d);
+        assert_eq!(actual, expected, "mixed selection mismatch on seed {seed}");
+
+        // 2. Object-only selection (anchors & segments cleared)
+        let mut obj_only = s.clone();
+        obj_only.anchors.clear();
+        obj_only.segments.clear();
+        obj_only.key = None;
+        obj_only.target = None;
+        let mut expected_obj = obj_only.clone();
+        baseline_prune(&mut expected_obj, &d);
+        let mut actual_obj = obj_only.clone();
+        actual_obj.prune(&d);
+        assert_eq!(actual_obj, expected_obj, "object-only selection mismatch on seed {seed}");
+
+        // 3. Empty selection (only guides or slices remain)
+        let mut empty_sel = obj_only.clone();
+        empty_sel.objects.clear();
+        let mut expected_empty = empty_sel.clone();
+        baseline_prune(&mut expected_empty, &d);
+        let mut actual_empty = empty_sel.clone();
+        actual_empty.prune(&d);
+        assert_eq!(actual_empty, expected_empty, "empty selection mismatch on seed {seed}");
+    }
+}
