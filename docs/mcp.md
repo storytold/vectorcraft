@@ -2916,6 +2916,13 @@ already walks Image Trace. Short agent entry points:
   Tilt goes from its first value with the pen lying flat to its second upright, and on Bearing or Rotation from its
   first value at −180° to its second at 180°. A stroke without that input draws the brush's own value (a Scatter
   brush's value half way between the two).
+- Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
+  value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
+  is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
+  divided by the zoom (0.0313 to 640) and kept within that range, so a stroke is fitted at the same tolerance on screen
+  at every zoom. A stroke
+  that continues a path (`extend`) closes it when it ends within four times the Fidelity of the path's other end, at
+  least 6 pt and at most 400 pt. The Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt.
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
   (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
