@@ -92,4 +92,44 @@ impl Builder<'_> {
         }
         true
     }
+
+    /// A Type 3 glyph under an active ActualText span.
+    pub(super) fn actual_type3_glyph(
+        &mut self,
+        key: u128,
+        at: Placement,
+        look: Look,
+        opacity: f32,
+        advance: f64,
+    ) -> bool {
+        self.flush_glyphs();
+        self.flush_type3();
+        if let (Some(stroke), Some(line)) = (&look.stroke, &mut self.text)
+            && look.fill.is_none()
+            && line.stroke_actual(key, at, stroke.clone(), look.overprint_stroke)
+        {
+            return true;
+        }
+        let pending = self.actual.pending.take();
+        let content = match pending.as_deref() {
+            Some(text) if !text.is_empty() => TextContent::Actual(text),
+            _ => TextContent::Pen,
+        };
+        let place = |line: &mut TextLine| {
+            line.push_content(&look, at, opacity, advance, content)
+        };
+        if !self.text.as_mut().is_some_and(place) {
+            self.flush_text();
+            let mut line = TextLine::new(at, opacity);
+            if !place(&mut line) {
+                self.actual.pending = pending;
+                return false;
+            }
+            self.text = Some(line);
+        }
+        if let Some(line) = &mut self.text {
+            line.has_type3 = true;
+        }
+        true
+    }
 }

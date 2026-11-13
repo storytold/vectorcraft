@@ -13,6 +13,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use siphasher::sip128::{Hasher128, SipHasher13};
+
 use crate::import_color::items;
 use craft_pdf::interpret::CacheKey;
 use craft_pdf::syntax::Pdf;
@@ -250,6 +252,13 @@ fn pdf_doc_char(c: u8) -> char {
     mapped.copied().unwrap_or(char::from(c))
 }
 
+/// Calculate a 128-bit siphash of a value, matching hayro-interpret's `hash128`.
+pub(crate) fn hash128<T: std::hash::Hash + ?Sized>(value: &T) -> u128 {
+    let mut state = SipHasher13::new();
+    value.hash(&mut state);
+    state.finish128().as_u128()
+}
+
 /// One page as the interpreter walks it.
 #[derive(Default)]
 pub(crate) struct Scan {
@@ -282,6 +291,8 @@ pub(crate) struct Scan {
     /// fills and of its strokes (indices into [`Self::inks`]), where all of its text shown in an
     /// ink is shown in the same one.
     text_inks: Changes<[Option<u32>; 2]>,
+    /// Type 3 glyph cache key -> (font cache key, whether font has /ToUnicode).
+    pub type3_cache_map: HashMap<u128, (u128, bool)>,
 }
 
 impl Scan {
@@ -642,9 +653,65 @@ impl Walker<'_, '_> {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
                 && let Some(name) = font_name(&f)
             {
-                self.fonts.entry(f.cache_key()).or_insert_with(|| {
+                let is_type3 = f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3");
+                let to_unicode = f.get::<Object<'_>>(b"ToUnicode").is_some();
+                let f_key = f.cache_key();
+                const MAX_TYPE3_CACHE_MAP: usize = 1 << 20;
+                if is_type3 && self.out.type3_cache_map.len().saturating_add(257) <= MAX_TYPE3_CACHE_MAP {
+                    for gid in 0..=256u32 {
+                        let hash = hash128(&(f_key, skrifa::GlyphId::new(gid)));
+                        self.out.type3_cache_map.insert(hash, (f_key, to_unicode));
+                    }
+                }
+                let is_colour = if is_type3 {
+                    let mut colour = false;
+                    let mut seen_streams = HashSet::new();
+                    let mut decoded_bytes = 0usize;
+                    const MAX_CHARPROC_BYTES: usize = 16 << 20;
+                    if let Some(char_procs) = f.get::<Dict<'_>>(b"CharProcs") {
+                        for key in char_procs.keys() {
+                            if let Some(stream) = char_procs.get::<Stream<'_>>(key.as_ref()) {
+                                if !seen_streams.insert(stream.cache_key()) {
+                                    continue;
+                                }
+                                if decoded_bytes >= MAX_CHARPROC_BYTES {
+                                    colour = true;
+                                    break;
+                                }
+                                if let Ok(data) = stream.decoded() {
+                                    decoded_bytes = decoded_bytes.saturating_add(data.len());
+                                    let mut iter = TypedIter::new(data.as_ref());
+                                    while let Some(op) = iter.next() {
+                                        match op {
+                                            TypedInstruction::ColorGlyph(_) => {
+                                                colour = true;
+                                                break;
+                                            }
+                                            TypedInstruction::ShapeGlyph(_) => break,
+                                            _ => {}
+                                        }
+                                    }
+                                    if colour {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    colour
+                } else {
+                    false
+                };
+                self.fonts.entry(f_key).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
-                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded) }
+                    FontNote {
+                        name,
+                        embedded,
+                        vertical: vertical_metrics(&f, embedded),
+                        is_type3,
+                        to_unicode,
+                        is_colour,
+                    }
                 });
             }
         }
@@ -879,6 +946,12 @@ pub(crate) struct FontNote {
     pub embedded: bool,
     /// A composite font written vertically: its descendant's metrics.
     pub vertical: Option<Vertical>,
+    /// Whether this is a Type 3 font.
+    pub is_type3: bool,
+    /// Whether this font specifies a /ToUnicode map.
+    pub to_unicode: bool,
+    /// Whether this Type 3 font contains coloured glyph descriptions (d0/ColorGlyph).
+    pub is_colour: bool,
 }
 
 /// The most CIDs a vertical font's widths are read for (the most a CID-keyed font has).
@@ -1020,6 +1093,15 @@ fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
 /// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
 /// the `BaseFont` without the CMap's name on its end.
 fn font_name(f: &Dict<'_>) -> Option<String> {
+    if f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3") {
+        if let Some(base) = f.get::<Name<'_>>(b"BaseFont") {
+            return Some(String::from_utf8_lossy(base.as_ref()).into_owned());
+        }
+        if let Some(name) = f.get::<Name<'_>>(b"Name") {
+            return Some(String::from_utf8_lossy(name.as_ref()).into_owned());
+        }
+        return Some("Type3".to_string());
+    }
     let base = String::from_utf8_lossy(f.get::<Name<'_>>(b"BaseFont")?.as_ref()).into_owned();
     if f.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Type0") {
         return Some(base);
