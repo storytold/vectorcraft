@@ -1087,6 +1087,78 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(id, "livePaint.strokeEdge");
 }
 
+/// A double-click runs a click's command with `scope: "connected"` and a triple-click with
+/// `"samePaint"`, matching the paint the face or edge had before the first click there.
+#[test]
+fn bucket_double_and_triple_click_widen_what_a_click_paints() {
+    let (d, gid, f2, e) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    painted.node_mut(e).unwrap().appearance.set_stroke(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let face_before = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    let edge_before = serde_json::to_value(d.node(e).unwrap().appearance.stroke_paint()).unwrap();
+    let red_json = serde_json::to_value(&red).unwrap();
+    assert_ne!(face_before, red_json);
+    assert_ne!(edge_before, red_json);
+    let fill = |scope: &str, like: Option<&Value>| {
+        let mut v = json!({ "group": gid.0, "point": [75.0, 25.0], "scope": scope });
+        if let Some(like) = like {
+            v["match"] = like.clone();
+        }
+        vec![Action::Exec("livePaint.fill".into(), v)]
+    };
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64, m: Mods| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
+    };
+    let mut t = LivePaintBucketTool::default();
+    // The clicks paint the face as they arrive; the triple-click matches the fill from before them.
+    click(&mut t, &cx, 75.0, Mods::default());
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 75.0, 25.0)), fill("connected", None));
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&face_before)));
+    // A new click there starts again from the fill it finds.
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // A click before the triple-click's own three is not part of it.
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx, 75.0, Mods::default());
+    for _ in 0..3 {
+        click(&mut t, &later, 75.0, Mods::default());
+    }
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // Shift: the edge, matching its stroke from before the first click.
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str, like: &Value| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": like }),
+        )]
+    };
+    click(&mut t, &cx, 51.0, shift);
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected", &edge_before));
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint", &edge_before));
+    // With Alt held, or with both options off, a double-click or triple-click paints nothing.
+    let alt = Mods { alt: true, ..Default::default() };
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(alt)).is_empty(), "{k:?}");
+    }
+    t.set_option("paintFills", &json!(false));
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0)).is_empty(), "{k:?}");
+    }
+    // Outside every face, nothing is painted.
+    t.set_option("paintFills", &json!(true));
+    assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();

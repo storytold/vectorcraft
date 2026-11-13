@@ -169,6 +169,7 @@ impl Tool for CropImageTool {
             PointerKind::Up => self.drag = None,
             PointerKind::DoubleClick => return self.apply(cx),
             PointerKind::Move => self.last = ev.pos,
+            PointerKind::TripleClick => {}
         }
         vec![]
     }

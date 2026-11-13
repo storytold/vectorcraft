@@ -301,7 +301,7 @@ impl Tool for ParametricShapeTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
-            PointerKind::Move => vec![],
+            PointerKind::Move | PointerKind::TripleClick => vec![],
             PointerKind::Down => {
                 let tol = cx.point_tol();
                 let grip = selected(cx).and_then(|(id, s)| {

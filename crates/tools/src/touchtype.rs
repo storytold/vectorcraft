@@ -386,7 +386,7 @@ impl Tool for TouchTypeTool {
                 Some(d) if d.began => vec![Action::Commit],
                 _ => vec![],
             },
-            PointerKind::DoubleClick | PointerKind::Move => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick | PointerKind::Move => vec![],
         }
     }
 

@@ -653,6 +653,7 @@ impl Tool for CurvatureTool {
                 self.pts[i].1 = !self.pts[i].1;
                 vec![Action::Exec("path.curvature".into(), self.params())]
             }
+            PointerKind::TripleClick => vec![],
         }
     }
     fn notify(&mut self, cx: &ToolContext, what: &str) {

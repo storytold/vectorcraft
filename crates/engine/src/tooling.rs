@@ -650,7 +650,7 @@ impl Session {
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
-            PointerKind::DoubleClick => {}
+            PointerKind::DoubleClick | PointerKind::TripleClick => {}
         }
         match ev.kind {
             PointerKind::Down => {

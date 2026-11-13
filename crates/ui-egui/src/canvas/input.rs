@@ -179,6 +179,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     {
         double_click(app, ui, &f, p);
     }
+    if resp.triple_clicked()
+        && !f.modal
+        && let Some(p) = at
+    {
+        triple_click(app, ui, &f, p);
+    }
     if drag.is_some() || pointer.is_moving() || mods_changed {
         ui.ctx().request_repaint();
     }
@@ -587,6 +593,23 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             }
         }
     }
+}
+
+/// A triple-click at `p`: the tool gets it, unless it is on an artboard's name.
+fn triple_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
+    let Pointing { m, space, xf, view, .. } = *f;
+    if artboard_name_at(app, ui, &xf, p).is_some() {
+        return;
+    }
+    let ev = PointerEvent {
+        kind: PointerKind::TripleClick,
+        pos: xf.to_doc(p),
+        mods: mods(m, space),
+        backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+        pressure: 1.0,
+        pen: None,
+    };
+    dispatch(app, &ev, view);
 }
 
 /// Where `button` went up in this frame, if it did.

@@ -121,7 +121,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             for (i, e) in events.iter().enumerate() {
                 let kind = e.get("kind").and_then(Value::as_str).unwrap_or("");
                 if crate::headless::pointer_kind(kind).is_none() {
-                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick)"));
+                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick, tripleclick)"));
                 }
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
