@@ -961,10 +961,14 @@ fn a_preview_stays_put_while_the_menu_is_still() {
 }
 
 /// What an open font menu drew: each text with its rectangle and clip rectangle, the rectangles of
-/// the samples, and the menu's rectangle.
+/// the samples, each sample's tint, the filled rectangles with their fill, each text's color, and
+/// the menu's rectangle.
 struct Drawn {
     texts: Vec<(String, egui::Rect, egui::Rect)>,
     samples: Vec<egui::Rect>,
+    tints: Vec<egui::Color32>,
+    fills: Vec<(egui::Rect, egui::Color32)>,
+    text_colors: Vec<(String, egui::Color32)>,
     menu: egui::Rect,
 }
 
@@ -996,14 +1000,22 @@ impl Drawn {
 /// size `screen`, draws it until it settles and its samples are rendered, and returns what the
 /// last frame drew.
 fn open_menu(id: &str, left: f32, width: f32, screen: egui::Vec2) -> Drawn {
+    open_menu_with(id, left, width, screen, MenuLook::default(), None)
+}
+
+/// [`open_menu`] with the menu's look `look`, in the interface colors `tokens` when given.
+fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: MenuLook, tokens: Option<crate::theme::Tokens>) -> Drawn {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
+    if let Some(t) = tokens {
+        ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+    }
     let field = egui::Rect::from_min_size(egui::pos2(left, 10.0), egui::vec2(width, 30.0));
     let frame = |events: Vec<egui::Event>| {
         let input = egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen)), ..Default::default() };
         let mut out = ctx.run_ui(input, |ui| {
             ui.scope_builder(egui::UiBuilder::new().max_rect(field), |ui| {
-                font_menu(ui, id, "Inter", width, None, MenuLook::default());
+                font_menu(ui, id, "Inter", width, None, look);
             });
         });
         out.textures_delta.clear();
@@ -1014,24 +1026,84 @@ fn open_menu(id: &str, left: f32, width: f32, screen: egui::Vec2) -> Drawn {
     frame(vec![]);
     frame(vec![egui::Event::PointerMoved(click), button(true)]);
     frame(vec![button(false)]);
-    for _ in 0..5 {
+    // With interface colors given, enough frames for the menu to finish fading in, so the
+    // samples' tints are whole.
+    for _ in 0..if tokens.is_some() { 15 } else { 5 } {
         frame(vec![]);
     }
     crate::font_menu::wait_for_samples(&ctx);
     let shapes = frame(vec![]);
     let mut texts = vec![];
     let mut samples = vec![];
+    let mut tints = vec![];
+    let mut fills = vec![];
+    let mut text_colors = vec![];
     for s in &shapes {
         match &s.shape {
-            egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()), s.clip_rect)),
-            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => samples.push(m.calc_bounds()),
+            egui::Shape::Text(t) => {
+                texts.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()), s.clip_rect));
+                text_colors.push((t.galley.text().to_string(), t.fallback_color));
+            }
+            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
+                samples.push(m.calc_bounds());
+                tints.push(m.vertices.first().map_or(egui::Color32::TRANSPARENT, |v| v.color));
+            }
+            egui::Shape::Rect(r) => fills.push((r.rect, r.fill)),
             _ => {}
         }
     }
-    let mut drawn = Drawn { texts, samples, menu: egui::Rect::NOTHING };
+    let mut drawn = Drawn { texts, samples, tints, fills, text_colors, menu: egui::Rect::NOTHING };
     let filter = drawn.text(crate::i18n::t("Any Kind")).center();
     drawn.menu = ctx.layer_id_at(filter).and_then(|l| ctx.memory(|m| m.area_rect(l.id))).expect("the menu is open");
     drawn
+}
+
+/// The field is drawn while other threads ask the context for repaints, as the threads that
+/// render the samples do when they finish. A read of the context made while the menu already
+/// holds one waits behind such a request, and a debug build of egui panics after ten seconds.
+#[test]
+fn the_field_draws_while_other_threads_request_repaints() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// Stops the threads when the test ends, failed or not.
+    struct Stop(Arc<AtomicBool>);
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let stop = Stop(Arc::default());
+    let (started, running) = std::sync::mpsc::channel();
+    let threads: Vec<_> = (0..4)
+        .map(|_| {
+            let (ctx, stop, started) = (ctx.clone(), stop.0.clone(), started.clone());
+            std::thread::spawn(move || {
+                let _ = started.send(());
+                while !stop.load(Ordering::Relaxed) {
+                    ctx.request_repaint();
+                }
+            })
+        })
+        .collect();
+    for _ in &threads {
+        running.recv().expect("the thread started");
+    }
+    // The wheel on: the field also looks up its queued wheel input.
+    let look = MenuLook { wheel: true, ..Default::default() };
+    for _ in 0..2000 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            font_menu(ui, "test-repaints", "Inter", 200.0, None, look);
+        });
+        out.textures_delta.clear();
+    }
+    drop(stop);
+    for thread in threads {
+        thread.join().expect("the thread ended");
+    }
 }
 
 /// A narrow field, such as the Control bar's, opens a menu wide enough for the filters on their
@@ -1097,4 +1169,75 @@ fn samples_fill_their_rows_height() {
     for s in &d.samples {
         assert!((s.height() - row).abs() < 0.5, "a sample {} high in a row {row} high", s.height());
     }
+}
+
+/// Show samples on white: in every brightness each sample is drawn in the Light brightness's
+/// text color on a white area, with the row's highlight above and below it, while the families'
+/// names keep the interface's text color. Off
+/// (the default), the samples take the interface's text color with nothing white behind them.
+#[test]
+fn show_samples_on_white_draws_dark_type_on_white_in_every_brightness() {
+    use crate::theme::{Brightness, Tokens};
+    let dark = Tokens::for_brightness(Brightness::Light).text;
+    let families = FontDb::global().menu_family_list();
+    for b in Brightness::ALL {
+        let t = Tokens::for_brightness(b);
+        for on_white in [false, true] {
+            let look = MenuLook { on_white, ..Default::default() };
+            let d = open_menu_with(&format!("test-on-white-{}-{on_white}", b.id()), 20.0, 260.0, egui::vec2(1200.0, 800.0), look, Some(t));
+            assert!(!d.samples.is_empty(), "{}: samples are drawn", b.id());
+            for (sample, tint) in d.samples.iter().zip(&d.tints) {
+                let on_paper = d.fills.iter().any(|(r, fill)| *fill == egui::Color32::WHITE && r.expand(0.5).contains_rect(*sample));
+                if on_white {
+                    assert_eq!(*tint, dark, "{}: a sample on white is dark", b.id());
+                    assert!(on_paper, "{}: the sample at {sample:?} is on white", b.id());
+                } else {
+                    assert_eq!(*tint, t.text, "{}: a sample takes the interface's text color", b.id());
+                    assert!(!on_paper, "{}: nothing white behind the sample at {sample:?}", b.id());
+                }
+            }
+            // The current family's row opens highlighted; on white, the highlight shows above and
+            // below its paper.
+            let lit = d.fills.iter().find(|(r, fill)| *fill == t.selection && d.menu.contains_rect(*r)).map(|(r, _)| *r);
+            let lit = lit.unwrap_or_else(|| panic!("{}: a row is highlighted", b.id()));
+            let paper = d.fills.iter().find(|(r, fill)| *fill == egui::Color32::WHITE && lit.contains_rect(*r)).map(|(r, _)| *r);
+            if on_white {
+                let paper = paper.unwrap_or_else(|| panic!("{}: the highlighted row has paper", b.id()));
+                let inset = crate::font_menu::PAPER_INSET;
+                assert!(
+                    (paper.top() - lit.top() - inset).abs() < 0.01 && (lit.bottom() - paper.bottom() - inset).abs() < 0.01,
+                    "{}: {paper:?} in {lit:?}",
+                    b.id()
+                );
+            } else {
+                assert_eq!(paper, None, "{}: no paper in the highlighted row", b.id());
+            }
+            // The rows' names, not the closed field's.
+            let names: Vec<_> = d
+                .text_colors
+                .iter()
+                .zip(&d.texts)
+                .filter(|((name, _), (_, r, _))| d.menu.contains_rect(*r) && families.iter().any(|f| f == name))
+                .map(|(named, _)| named)
+                .collect();
+            assert!(!names.is_empty(), "{}: families are listed", b.id());
+            assert!(names.iter().all(|(_, c)| *c == t.text), "{}: the names keep the interface's text color: {names:?}", b.id());
+        }
+    }
+}
+
+/// Show samples on white is a Type preference, off by default, saved with the other preferences
+/// and passed to the font menus.
+#[test]
+fn show_samples_on_white_is_a_saved_preference_the_menus_follow() {
+    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    assert!(!MenuLook::of(&app).on_white, "off by default");
+    assert!(app.run("prefs.set", json!({"key": "fontSamplesOnWhite", "value": 1})).is_err(), "a value that is not a boolean is refused");
+    assert!(!app.session.prefs.font_samples_on_white);
+    app.run("prefs.set", json!({"key": "fontSamplesOnWhite", "value": true})).unwrap();
+    assert!(MenuLook::of(&app).on_white);
+    let saved: vectorcraft_engine::Prefs = serde_json::from_str(&serde_json::to_string(&app.session.prefs).unwrap()).unwrap();
+    assert!(saved.font_samples_on_white, "saved and read back");
+    let older: vectorcraft_engine::Prefs = serde_json::from_str("{}").unwrap();
+    assert!(!older.font_samples_on_white, "preferences saved before it read as off");
 }

@@ -607,6 +607,8 @@ font-technology	Variable	Variabel
 	Convert to Artboards	In Zeichenflächen umwandeln
 	Convert to CMYK	In CMYK konvertieren
 	Convert to Grayscale	In Graustufen konvertieren
+	Convert to Indexed Color	In indizierte Farben konvertieren
+	Convert to Indexed Color…	In indizierte Farben konvertieren…
 	Convert To Outlines	In Pfade umwandeln
 	Convert To Point Type	In Punkttext umwandeln
 	Convert to RGB	In RGB konvertieren
@@ -689,6 +691,10 @@ font-technology	Variable	Variabel
 	Corner Color	Eckfarbe
 	Contiguous	Zusammenhängend
 	Each Channel	Jeder Kanal
+	Color Mask…	Farbmaske…
+	Color Mask	Farbmaske
+	Remove Color Mask	Farbmaske entfernen
+	Apply Color Mask	Farbmaske anwenden
 	Edit Path	Pfad bearbeiten
 	Mask	Maske
 	Crop Marks	Schnittmarken
@@ -787,6 +793,8 @@ font-technology	Variable	Variabel
 	Delete Width Point	Breitenpunkt löschen
 	Delete Workspace	Arbeitsbereich löschen
 	Delete {kind} Style	{kind}format löschen
+	Delete the selected items and their artwork?	Die ausgewählten Elemente und ihr Bildmaterial löschen?
+	Delete this layer and its artwork?	Diese Ebene und ihr Bildmaterial löschen?
 	Delete “{name}”?	„{name}“ löschen?
 	Depth:	Tiefe:
 	Description	Beschreibung
@@ -1007,12 +1015,14 @@ font-technology	Variable	Variabel
 	Enable Contextual Task Bar	Kontextbezogene Taskleiste aktivieren
 	Enable copying of text, images and other content	Kopieren von Text, Bildern und anderen Inhalten zulassen
 	Enable in-menu font previews	Schriftvorschau im Menü aktivieren
+	Show samples on white	Muster auf Weiß anzeigen
 	Enable Missing Glyph Protection	Schutz vor fehlenden Glyphen aktivieren
 	Enable Opacity Mask	Deckkraftmaske aktivieren
 	Enable plaintext metadata	Klartext-Metadaten zulassen
 	Enable Rubber Band for	Gummiband aktivieren für
 	Enable text access for screen readers	Textzugriff für Bildschirmlesegeräte zulassen
 	Enable Touch Gestures	Touch-Gesten aktivieren
+	Switch Selection and Drawing Modes	Zwischen Auswahl- und Zeichenmodus wechseln
 	Enable Touch Workspace	Touch-Arbeitsbereich aktivieren
 	Encoding	Kodierung
 	Encoding:	Kodierung:
@@ -1584,6 +1594,8 @@ file-filter	Templates	Vorlagen
 	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
 	Attach Objects on Path	Objekte an Pfad anhängen
 	Expand Objects on Path	Objekte auf Pfad umwandeln
+	Detach	Lösen
+	Detach Object from Path	Objekt vom Pfad lösen
 	Release Live Paint	„Interaktiv malen“ zurückwandeln
 	Release Repeat	Wiederholung zurückwandeln
 	Release Slice	Slice zurückwandeln
@@ -2043,6 +2055,10 @@ file-filter	Templates	Vorlagen
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-Satz
 	Kinsoku Shori Type	Kinsoku-Shori-Typ
 	Push In First	Zuerst einziehen
@@ -2234,6 +2250,8 @@ file-filter	Templates	Vorlagen
 	Normal Screen Mode	Normaler Bildschirmmodus
 	Note:	Notiz:
 	Nothing matches the Show filter.	Nichts entspricht dem Filter „Anzeigen“.
+	Show DCS Transparency Interactions	DCS-Transparenzinteraktionen anzeigen
+	Transparent, or overlaps transparent objects: check its separations	Transparent oder überlappt transparente Objekte: Separationen prüfen
 	Nothing to print	Nichts zu drucken
 	Nudge	Schrittweise verschieben
 	Nudge in Perspective	In Perspektive schrittweise verschieben
@@ -2651,6 +2669,11 @@ digits	Malayalam	Malayalam
 	Rating:	Bewertung:
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
+	Use Monitor Profile for Canvas	Monitorprofil für Arbeitsfläche verwenden
+	The canvas is drawn in sRGB.	Die Arbeitsfläche wird in sRGB dargestellt.
+	Canvas display profile:	Bildschirmprofil der Arbeitsfläche:
+	The system matches the window to the display's colors.	Das System passt das Fenster an die Farben des Bildschirms an.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kein verwendbares Bildschirmprofil gefunden: Die Arbeitsfläche wird in sRGB dargestellt.
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
 	Rearrange	Neu anordnen
 	Select All Artboards	Alle Zeichenflächen auswählen
@@ -2865,6 +2888,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Color Theme Picker	Farbthema-Auswahl
 	Click or drag across the art to pick its colors; Shift adds more	Klicken oder ziehen Sie über die Grafik, um ihre Farben aufzunehmen; Umschalt fügt weitere hinzu
+	Prominent Colors	Hervorstechende Farben
+	Save All Colors	Alle Farben speichern
+	Save Prominent Colors	Hervorstechende Farben speichern
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
 	Reset with Mesh	Mit Gitter zurücksetzen
@@ -3418,6 +3444,20 @@ effect	Points	Punkte
 	Spot Color Objects	Objekte mit Volltonfarben
 	Pattern Objects	Objekte mit Mustern
 	Gradient Objects	Objekte mit Verläufen
+	Font Details	Schriftdetails
+	Linked Images	Verknüpfte Bilder
+	Embedded Images	Eingebettete Bilder
+	Compound Paths	Zusammengesetzte Pfade
+	Text Objects	Textobjekte
+	Placed Documents	Platzierte Dokumente
+	Symbol Instances	Symbolinstanzen
+	Gradient Meshes	Verlaufsgitter
+	Blends	Angleichungen
+	Envelopes	Hüllen
+	Intertwine Groups	Verflechtungsgruppen
+	Opacity Masks	Deckkraftmasken
+	Objects with Effects	Objekte mit Effekten
+	Pattern Swatches	Musterfarbfelder
 	Spot Colors	Volltonfarben
 	Spot Colors…	Volltonfarben…
 	Spread:	Ausbreitung:
@@ -4060,6 +4100,10 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Dock to Left	Links andocken
+	Dock to Right	Rechts andocken
+	Dock Toolbar	Werkzeugleiste andocken
+	Float Toolbar	Werkzeugleiste ablösen
 	Control Bar Options	Optionen der Steuerungsleiste
 	Tool Options	Werkzeugoptionen
 	Object Options	Objektoptionen
@@ -4077,6 +4121,7 @@ theme	Appearance	Erscheinungsbild
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
+@msg	the library has another item of that kind named `{name}`	die Bibliothek hat bereits ein anderes Element dieser Art namens `{name}`
 @msg	select some type first	wählen Sie zuerst Text aus
 @msg	kerning must be a number, "auto", or "optical"	kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
@@ -4226,6 +4271,9 @@ theme	Appearance	Erscheinungsbild
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde geschlossen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde geschlossen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't paste: the document it was pasted in was reverted	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde auf die letzte Version zurückgesetzt
 @msg	Couldn't read {name}: {e}	{name} konnte nicht gelesen werden: {e}
 @msg	Couldn't save recovery data: {e}	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}
 @msg	Create Outlines: select text objects	In Pfade umwandeln: Wählen Sie Textobjekte aus
@@ -4625,6 +4673,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not an HP-GL file	keine HP-GL-Datei
+@msg	not a PICT file	keine PICT-Datei
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
@@ -4655,6 +4704,7 @@ theme	Appearance	Erscheinungsbild
 @msg	paths contain invalid coordinates	die Pfade enthalten ungültige Koordinaten
 @msg	paths: give at least one file	paths: Geben Sie mindestens eine Datei an
 @msg	replace: the object to replace was changed or deleted	replace: Das zu ersetzende Objekt wurde geändert oder gelöscht
+@msg	the document it was prepared for is no longer active	das Dokument, für das es vorbereitet wurde, ist nicht mehr aktiv
 @msg	pattern missing	das Muster fehlt
 @msg	patterns nested too deeply are filled with mid-grey	zu tief verschachtelte Muster werden mit mittlerem Grau gefüllt
 @msg	percent must be above 0 and at most 6400, not {p}	percent muss über 0 und höchstens 6400 sein, nicht {p}
@@ -4690,6 +4740,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a repeat	wählen Sie eine Wiederholung aus
 @msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
 @msg	select an Objects on Path group	wählen Sie eine Gruppe „Objekte auf Pfad“ aus
+@msg	choose the object to detach with its Select/Move widget	wählen Sie das zu lösende Objekt mit seinem Steuerelement „Auswählen/Verschieben“ aus
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	ein Pfad in einem zusammengesetzten Pfad, einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe kann keine Objekte aufnehmen
 @msg	a clipping path can't take objects	ein Schnittpfad kann keine Objekte aufnehmen
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	die Objekte in einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe können nicht an einen Pfad angehängt werden
@@ -4713,6 +4764,10 @@ theme	Appearance	Erscheinungsbild
 @msg	a CMYK image has no transparency to set	ein CMYK-Bild hat keine Transparenz, die festgelegt werden kann
 @msg	every pixel matches the background: no image would be left	jedes Pixel entspricht dem Hintergrund: Es würde kein Bild übrig bleiben
 @msg	an image of {w} × {h} pixels is too large to change	ein Bild mit {w} × {h} Pixeln ist zu groß, um geändert zu werden
+@msg	select an image with a color mask	wählen Sie ein Bild mit einer Farbmaske aus
+@msg	the color mask's settings are out of range	die Einstellungen der Farbmaske liegen außerhalb des zulässigen Bereichs
+@msg	a CMYK image can't take a color mask	ein CMYK-Bild kann keine Farbmaske erhalten
+@msg	the mask would hide every pixel	die Maske würde jedes Pixel ausblenden
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}
@@ -5003,12 +5058,14 @@ theme	Appearance	Erscheinungsbild
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
 @msg	not a file	keine Datei
 @msg	not a font file	keine Schriftdatei
+@msg	the active document changed while the question was open; nothing was deleted	das aktive Dokument hat sich geändert, während die Frage offen war; es wurde nichts gelöscht
 @msg	that document is no longer open	dieses Dokument ist nicht mehr geöffnet
 @msg	larger than 256 MB	größer als 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	die Dateien sind zusammen größer als 1 GB: Fügen Sie weniger auf einmal hinzu
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Die Verknüpfung befindet sich in einem Symbol, einem Diagrammdesign, einem Muster oder einer Deckkraftmaske und hat keinen Platz auf der Zeichenfläche
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -5104,6 +5161,8 @@ theme	Appearance	Erscheinungsbild
 	Rename Library Group	Bibliotheksgruppe umbenennen
 	Delete Library Group	Bibliotheksgruppe löschen
 	Move Library Item to Group	Bibliothekselement in Gruppe verschieben
+	Rename Library Item	Bibliothekselement umbenennen
+	Add to Character Styles	Zu Zeichenformaten hinzufügen
 	Import Library	Bibliothek importieren
 	Export Library	Bibliothek exportieren
 	New Group	Neue Gruppe
@@ -5443,6 +5502,67 @@ lighting	Light	Licht
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kann aus einem Bild keinen Körper erstellen: Zeichnen Sie es zuerst mit Objekt › Bildnachzeichner › Erstellen nach.
 @msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
 @msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
+@msg	Extrude & Bevel	Extrudieren und abgeflachte Kante
+@msg	Revolve	Kreiseln
+@msg	Inflate	Aufblasen
+@msg	Rotate	Drehen
+@msg	Extrude & Bevel (Classic)	Extrudieren und abgeflachte Kante (klassisch)
+@msg	Revolve (Classic)	Kreiseln (klassisch)
+@msg	Rotate (Classic)	Drehen (klassisch)
+@msg	This effect	Dieser Effekt
+@msg	clipping paths	Schnittpfade
+@msg	other objects	andere Objekte
+@msg	{label} requires a group holding a shape with at least two anchors	{label} erfordert eine Gruppe mit einer Form mit mindestens zwei Ankerpunkten
+@msg	Revolve requires a group holding a shape with at least two anchors	Kreiseln erfordert eine Gruppe mit einer Form mit mindestens zwei Ankerpunkten
+@msg	Revolve requires a shape with at least two anchors	Kreiseln erfordert eine Form mit mindestens zwei Ankerpunkten
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} auf einer Gruppe braucht Pfade, zusammengesetzte Pfade, Text, Gruppen, Schnittgruppen, Angleichungen und Symbolinstanzen: Geben Sie zuerst Folgendes frei oder wandeln Sie es um: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} auf einer Gruppe nimmt höchstens {MAX_MEMBERS} Objekte auf
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Ein 3D-Effekt auf einer Gruppe oder Ebene gehört auf die Gruppe selbst, nicht auf ihre Fläche oder Kontur
+@msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
+@msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
+@msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
+@msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kann keinen Körper aus der Instanz des Symbols „{symbol}“ erstellen: Das Bildmaterial des Symbols ist nicht verfügbar
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: Der Schnittpfad ist zu komplex, um das Bildmaterial damit zu beschneiden
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} nimmt höchstens {MAX_MEMBERS} Objekte auf
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kann keine Körper aus Bildmaterial erstellen, das mehr als {MAX_DEPTH} Ebenen tief verschachtelt ist
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Die Farbe von Kreiseln ist für diese Oberfläche zu komplex; verringern Sie Segmente oder vereinfachen Sie den Verlauf
+@msg	Revolve edge must be left or right	Kreiseln: edge muss left oder right sein
+@msg	Revolve cap must be a boolean	Kreiseln: cap muss ein boolescher Wert sein
+@msg	the revolved object has no fill or stroke	das gekreiselte Objekt hat keine Fläche oder Kontur
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor muss eine deckende RGB-Farbe der Form #rrggbb sein
+@msg	lights must contain one to ten lights	lights muss ein bis zehn Lichter enthalten
+@msg	each light must be an object	jedes Licht muss ein Objekt sein
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	unbekannte Lichteinstellung: Verwenden Sie color, intensity, rotation, height, softness oder behind
+@msg	light {key} must be a number from {min} to {max}	Licht: {key} muss eine Zahl von {min} bis {max} sein
+@msg	light color must use opaque #rrggbb	color eines Lichts muss ein deckendes #rrggbb sein
+@msg	light behind must be true or false	behind eines Lichts muss true oder false sein
+@msg	shadow must be true or false	shadow muss true oder false sein
+@msg	shadowPosition must be behind or below	shadowPosition muss behind oder below sein
+@msg	{key} must be a number from {min} to {max}	{key} muss eine Zahl von {min} bis {max} sein
+@msg	each of `{GRAPHICS}` must be an object	jeder Eintrag von `{GRAPHICS}` muss ein Objekt sein
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-Einträge nehmen symbol, face, x, y, scale und rotation an, nicht `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jeder Eintrag von `{GRAPHICS}` braucht `symbol`, den Namen eines Symbols
+@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` muss front oder back sein
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
+@msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
+@msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
+@msg	The graphics are too complex: simplify the symbols' art	Die Grafiken sind zu komplex: Vereinfachen Sie das Bildmaterial der Symbole
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Das Bildmaterial einer Grafik darf höchstens {MAX_LEVELS} Ebenen tief verschachtelt sein: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Das Bildmaterial einer Grafik darf Symbole höchstens {MAX_NESTING} Ebenen tief verschachteln: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Das Bildmaterial einer Grafik enthält zu viele Objekte: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Eine Grafik zeichnet höchstens {MAX_PIECES} Flächen und Konturen: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	`surface` must be one of {_1}	`surface` muss einer der folgenden Werte sein: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} zeichnet für dieses Objekt das Ausgangsbildmaterial statt seiner 3D-Oberfläche
+@msg	{label} draws no faces for this object	{label} zeichnet für dieses Objekt keine Seiten
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	das Drahtmodell hat mehr als {MAX_WIRE_EDGES} Kanten
 @msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form
 	Transform Objects	Objekte transformieren
 @msg	unknown parameter `{key}`; did you mean `{near}`?	unbekannter Parameter `{key}`; meinten Sie `{near}`?
@@ -5453,6 +5573,7 @@ lighting	Light	Licht
 @msg	unknown parameter `{path}`; it takes: {keys}	unbekannter Parameter `{path}`; akzeptiert werden: {keys}
 @msg	missing `{path}`	`{path}` fehlt
 @msg	`{path}` must be {expected}, not {got}	`{path}` muss {expected} sein, nicht {got}
+@msg	`{path}` is nested too deeply	`{path}` ist zu tief verschachtelt
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: kein PNG-, JPEG-, WebP-, TIFF- oder BMP-Bild
@@ -5792,7 +5913,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
@@ -5905,6 +6028,35 @@ axis	Y Axis	Y-Achse
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
+@msg	a number >= {_1}	eine Zahl >= {_1}
+@msg	a number > {_1}	eine Zahl > {_1}
+@msg	a number <= {_1}	eine Zahl <= {_1}
+@msg	a number < {_1}	eine Zahl < {_1}
+@msg	a number {_1} to {_2}	eine Zahl von {_1} bis {_2}
+@msg	a number >= {_1} and < {_2}	eine Zahl >= {_1} und < {_2}
+@msg	a number > {_1} and <= {_2}	eine Zahl > {_1} und <= {_2}
+@msg	a number > {_1} and < {_2}	eine Zahl > {_1} und < {_2}
+@msg	a number ({_1})	eine Zahl ({_1})
+@msg	a number >= {_1} ({_2})	eine Zahl >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	eine Zahl > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	eine Zahl <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	eine Zahl < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	eine Zahl von {_1} bis {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	eine Zahl >= {_1} und < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	eine Zahl > {_1} und <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	eine Zahl > {_1} und < {_2} ({_3})
+@msg	an integer	eine ganze Zahl
+@msg	an integer >= {_1}	eine ganze Zahl >= {_1}
+@msg	an integer <= {_1}	eine ganze Zahl <= {_1}
+@msg	an integer {_1} to {_2}	eine ganze Zahl von {_1} bis {_2}
+@msg	one of {_1}	einer der Werte {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` muss einer der Werte {_1} sein, nicht {got}
+@msg	an object id (a non-negative integer)	eine Objekt-ID (eine nicht negative ganze Zahl)
+@msg	a list of object ids	eine Liste von Objekt-IDs
+@msg	a color (a string, [r, g, b] or an object)	eine Farbe (eine Zeichenkette, [r, g, b] oder ein Objekt)
+@msg	[x, y] (two numbers)	[x, y] (zwei Zahlen)
+@msg	an object	ein Objekt
+@msg	a list	eine Liste
 @msg	unknown key `{k}`; the keys here are {_1}	unbekannter Schlüssel `{k}`; die Schlüssel hier sind {_1}
 @msg	{_1} is listed twice	{_1} ist doppelt aufgeführt
 @msg	{_1} is not the id of an input object	{_1} ist nicht die ID eines Eingabeobjekts
@@ -6006,14 +6158,33 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+@msg	Batch cannot play an action with a View menu step	Die Stapelverarbeitung kann keine Aktion mit einem Schritt aus dem Menü Ansicht abspielen
 	Insert Menu Item…	Menübefehl einfügen…
 	Insert Menu Item	Menübefehl einfügen
+	Insert Select Path	Pfadauswahl einfügen
+	Select Path	Pfad auswählen
+@msg	select one whole path or compound path	wählen Sie einen ganzen Pfad oder zusammengesetzten Pfad aus
+@msg	select only one path	wählen Sie nur einen Pfad aus
+@msg	the path is hidden or locked, or cannot be selected here	der Pfad ist ausgeblendet oder gesperrt oder kann hier nicht ausgewählt werden
+@msg	object {value} is not the stored path: it changed, or the document is another one	Objekt {value} ist nicht der gespeicherte Pfad: Er wurde geändert, oder es ist ein anderes Dokument
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` muss aus "v1:" und 16 hexadezimalen Ziffern in Kleinbuchstaben bestehen
+	Select Object…	Objekt auswählen…
+	Select Object	Objekt auswählen
+	Set Selection	Auswahl festlegen
+	Case Sensitive	Groß-/Kleinschreibung beachten
+	Whole Word	Ganzes Wort
+	Select Object: {note}	Objekt auswählen: {note}
+	Select by Note	Nach Notiz auswählen
+@msg	the note is empty	die Notiz ist leer
+@msg	the note is longer than 1,024 bytes	die Notiz ist länger als 1.024 Byte
+@msg	no object that can be selected has a note matching “{query}”	kein auswählbares Objekt hat eine Notiz, die „{query}“ entspricht
 	Menu Item:	Menübefehl:
 	No menu item matches.	Kein Menübefehl passt.
 	Several menu items match. Choose one from the list.	Mehrere Menübefehle passen. Wählen Sie einen aus der Liste.
@@ -6159,6 +6330,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -6178,6 +6365,13 @@ axis	Y Axis	Y-Achse
 	Area Text	Flächentext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Text an Glyphenbegrenzung messen
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Optionen für „An Pixel ausrichten“
+	Pixel Snapping Options…	Optionen für „An Pixel ausrichten“…
+	Snap to Pixel While Drawing	Beim Zeichnen an Pixel ausrichten
+	Snap to Pixel While Moving	Beim Verschieben an Pixel ausrichten
+	Snap to Pixel While Scaling	Beim Skalieren an Pixel ausrichten
+	These options take effect when View › Snap to Pixel is on.	Diese Optionen wirken, wenn Ansicht › An Pixel ausrichten aktiviert ist.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
 	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden
@@ -6728,7 +6922,9 @@ breakText	Glyphs	Glyphen
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ öffnet {_1}-Dateien, nicht `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` ist ein Plug-in der Art `{_2}`, kein Import-Plug-in
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` ist ein Plug-in der Art `{_2}`, kein Export-Plug-in
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` ist ein Export-Plug-in: Exportieren Sie mit document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ist ein Live-Effekt: Wenden Sie ihn mit effect.apply {{"effect": "{_2}"}} an
 @msg	the importer returned no objects	das Import-Plug-in hat keine Objekte zurückgegeben
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ein Import-Plug-in gibt `objects` und `warnings` zurück, nicht `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	die Datei ist größer als die {MAX_INPUT_BYTES} Byte, die ein Import-Plug-in liest
@@ -6807,6 +7003,19 @@ breakText	Glyphs	Glyphen
 	Show where this tool is	Zeigen, wo sich dieses Werkzeug befindet
 @msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
+	View more	Mehr anzeigen
+	Finish tutorial	Lernprogramm abschließen
+	Next Up	Als Nächstes
+	You finished the last tutorial in this skill.	Sie haben das letzte Lernprogramm dieser Fertigkeit abgeschlossen.
+	Back to skills	Zurück zu den Fertigkeiten
+	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
+	Finish Tutorial	Lernprogramm abschließen
+	Next Tutorial	Nächstes Lernprogramm
+	Back to Skills	Zurück zu den Fertigkeiten
+@msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
+@msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	schließen Sie zuerst `{id}` ab (siehe learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` ist das letzte Lernprogramm seiner Fertigkeit
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren

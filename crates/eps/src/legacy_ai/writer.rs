@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -283,7 +283,8 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                let blob = self.doc.image_blob(im);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
@@ -692,6 +693,16 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient mixed around the hue wheel (the format's gradients mix their stops' colors
+        // directly): the stops on its curve, no more than the reader reads, in a definition of
+        // its own.
+        if g.gradient.method.is_hue() {
+            self.warn(HUE_STOPS);
+            let curve = g.gradient.as_classic_curve();
+            let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
+            let p = GradientPaint { gradient, swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         // A gradient that repeats or reflects (the format's gradients pad past their ends): its
         // stops repeated as many times as `bounds` needs, in a definition of its own, no more
         // stops than the reader reads.

@@ -70,6 +70,10 @@ digits	Malayalam	말라얄람어
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	긴소쿠 세트
 	Kinsoku Shori Type	긴소쿠 처리 유형
 	Push In First	밀어 넣기 우선
@@ -171,6 +175,8 @@ digits	Malayalam	말라얄람어
 	Blend Vertically	세로 혼합
 	Convert to CMYK	CMYK로 변환
 	Convert to Grayscale	회색조로 변환
+	Convert to Indexed Color	인덱스 색상으로 변환
+	Convert to Indexed Color…	인덱스 색상으로 변환…
 	Convert to RGB	RGB로 변환
 	Invert Colors	색상 반전
 	Overprint Black…	검정 겹쳐찍기…
@@ -236,6 +242,10 @@ digits	Malayalam	말라얄람어
 	Corner Color	모퉁이 색상
 	Contiguous	인접
 	Each Channel	각 채널
+	Color Mask…	색상 마스크…
+	Color Mask	색상 마스크
+	Remove Color Mask	색상 마스크 제거
+	Apply Color Mask	색상 마스크 적용
 	Edit Path	패스 편집
 	Mask	마스크
 	Rasterize…	래스터화…
@@ -1457,6 +1467,8 @@ antiAlias	Sharp	날카롭게
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
+	Delete the selected items and their artwork?	선택한 항목과 해당 아트워크를 삭제하시겠습니까?
+	Delete this layer and its artwork?	이 레이어와 해당 아트워크를 삭제하시겠습니까?
 	Delete “{name}”?	“{name}”을(를) 삭제하시겠습니까?
 	Depth:	깊이:
 	Description	설명
@@ -1621,9 +1633,11 @@ antiAlias	Sharp	날카롭게
 	Enable Opacity Mask	불투명 마스크 사용
 	Enable Rubber Band for	러버 밴드 사용 대상
 	Enable Touch Gestures	터치 제스처 사용
+	Switch Selection and Drawing Modes	선택 모드와 그리기 모드 전환
 	Enable Touch Workspace	터치 작업 영역 사용
 	Enable copying of text, images and other content	텍스트, 이미지 및 기타 콘텐츠 복사 허용
 	Enable in-menu font previews	메뉴에서 글꼴 미리 보기 사용
+	Show samples on white	흰색 바탕에 샘플 표시
 	Enable plaintext metadata	일반 텍스트 메타데이터 사용
 	Enable text access for screen readers	화면 읽기 프로그램의 텍스트 접근 허용
 	Encoding	인코딩
@@ -1970,6 +1984,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -2479,6 +2495,8 @@ antiAlias	Sharp	날카롭게
 	Normal	표준
 	Note:	참고:
 	Nothing matches the Show filter.	표시 필터와 일치하는 항목이 없습니다.
+	Show DCS Transparency Interactions	DCS 투명도 상호 작용 표시
+	Transparent, or overlaps transparent objects: check its separations	투명하거나 투명한 개체와 겹칩니다: 분판을 확인하세요
 	Nothing to print	인쇄할 항목 없음
 	Nudge	미세 이동
 	Nudge in Perspective	원근 미세 이동
@@ -2765,6 +2783,11 @@ mark-style	Japanese	일본식
 	Rating:	평점:
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
+	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
+	Canvas display profile:	캔버스 디스플레이 프로필:
+	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
+	No usable display profile was found: the canvas is drawn in sRGB.	사용할 수 있는 디스플레이 프로필이 없습니다. 캔버스는 sRGB로 그려집니다.
 	Rearrange All Artboards	모든 아트보드 재정렬
 	Rearrange	재정렬
 	Select All Artboards	모든 아트보드 선택
@@ -2935,6 +2958,9 @@ mark-style	Japanese	일본식
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
+	Prominent Colors	주요 색상
+	Save All Colors	모든 색상 저장
+	Save Prominent Colors	주요 색상 저장
 	Reset to Default	기본값으로 재설정
 	Reset to White, Black	흰색, 검정으로 재설정
 	Reset {name}	{name} 재설정
@@ -3259,6 +3285,20 @@ mark-style	Japanese	일본식
 	Spot Color Objects	별색을 사용한 개체
 	Pattern Objects	패턴을 사용한 개체
 	Gradient Objects	그레이디언트를 사용한 개체
+	Font Details	글꼴 세부 정보
+	Linked Images	연결된 이미지
+	Embedded Images	포함된 이미지
+	Compound Paths	컴파운드 패스
+	Text Objects	텍스트 개체
+	Placed Documents	가져온 문서
+	Symbol Instances	심볼 인스턴스
+	Gradient Meshes	그레이디언트 메시
+	Blends	블렌드
+	Envelopes	엔벨로프
+	Intertwine Groups	교차 그룹
+	Opacity Masks	불투명 마스크
+	Objects with Effects	효과를 사용한 개체
+	Pattern Swatches	패턴 견본
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
@@ -3339,6 +3379,8 @@ mark-style	Japanese	일본식
 	Rename Library Group	라이브러리 그룹 이름 바꾸기
 	Delete Library Group	라이브러리 그룹 삭제
 	Move Library Item to Group	라이브러리 항목을 그룹으로 이동
+	Rename Library Item	라이브러리 항목 이름 바꾸기
+	Add to Character Styles	문자 스타일에 추가
 	Library	라이브러리
 	Rename Library	라이브러리 이름 바꾸기
 	Show Library	라이브러리 표시
@@ -4113,6 +4155,10 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Dock to Left	왼쪽에 고정
+	Dock to Right	오른쪽에 고정
+	Dock Toolbar	도구 막대 고정
+	Float Toolbar	도구 막대 분리
 	Control Bar Options	컨트롤 막대 옵션
 	Tool Options	도구 옵션
 	Object Options	개체 옵션
@@ -4404,6 +4450,7 @@ theme	Appearance	외관
 @msg	the layer to flatten into is hidden	병합 대상 레이어가 숨겨져 있습니다
 @msg	there are no objects to release	해제할 개체가 없습니다
 @msg	no library `{id}`	`{id}` 라이브러리가 없습니다
+@msg	the library has another item of that kind named `{name}`	라이브러리에 같은 종류의 다른 항목 `{name}`이(가) 이미 있습니다
 @msg	{path}: not a file	{path}: 파일이 아닙니다
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 이미지는 쓸 수 없습니다
@@ -4466,6 +4513,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
@@ -4667,6 +4715,7 @@ theme	Appearance	외관
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
 @msg	not an HP-GL file	HP-GL 파일이 아닙니다
+@msg	not a PICT file	PICT 파일이 아닙니다
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`는 #rrggbb 색상 1~255개의 배열이어야 합니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
@@ -4890,6 +4939,10 @@ theme	Appearance	외관
 @msg	a CMYK image has no transparency to set	CMYK 이미지에는 설정할 투명도가 없습니다
 @msg	every pixel matches the background: no image would be left	모든 픽셀이 배경과 일치합니다: 남는 이미지가 없습니다
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h}픽셀 이미지는 너무 커서 변경할 수 없습니다
+@msg	select an image with a color mask	색상 마스크가 있는 이미지를 선택하세요
+@msg	the color mask's settings are out of range	색상 마스크 설정이 범위를 벗어났습니다
+@msg	a CMYK image can't take a color mask	CMYK 이미지에는 색상 마스크를 적용할 수 없습니다
+@msg	the mask would hide every pixel	마스크가 모든 픽셀을 숨기게 됩니다
 @msg	the document has no artboards	문서에 아트보드가 없습니다
 @msg	tool (a tool id) is required	도구(도구 id)가 필요합니다
 @msg	unknown tool `{t}`	알 수 없는 도구 `{t}`
@@ -5063,10 +5116,14 @@ theme	Appearance	외관
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
 @msg	Couldn't place {name}: the document it was placed in was closed	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 닫혔습니다
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name}을(를) 가져올 수 없습니다: 놓은 문서가 되돌려졌습니다
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 되돌려졌습니다
+@msg	Couldn't paste: the document it was pasted in was reverted	붙여넣을 수 없습니다: 붙여넣던 문서가 되돌려졌습니다
 @msg	no files to place	가져올 파일이 없습니다
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
 @msg	replace: the object to replace was changed or deleted	replace: 바꿀 개체가 변경되었거나 삭제되었습니다
+@msg	the document it was prepared for is no longer active	준비한 문서가 더 이상 활성 상태가 아닙니다
 @msg	Couldn't place {name}: {e}	{name}을(를) 가져올 수 없습니다: {e}
 @msg	no print service	인쇄 서비스가 없습니다
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
@@ -5123,12 +5180,14 @@ theme	Appearance	외관
 @msg	choose the font files to add	추가할 글꼴 파일을 선택하세요
 @msg	not a file	파일이 아닙니다
 @msg	not a font file	글꼴 파일이 아닙니다
+@msg	the active document changed while the question was open; nothing was deleted	질문이 열려 있는 동안 활성 문서가 바뀌어 아무것도 삭제되지 않았습니다
 @msg	that document is no longer open	해당 문서는 더 이상 열려 있지 않습니다
 @msg	larger than 256 MB	256MB보다 큽니다
 @msg	the files come to more than 1 GB: add fewer at a time	파일의 합계가 1GB를 넘습니다: 한 번에 적게 추가하세요
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5446,6 +5505,67 @@ lighting	Light	광원
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}은(는) 이미지로 입체를 만들 수 없습니다. 먼저 개체 › 이미지 추적 › 만들기로 추적하십시오.
 @msg	{label} requires a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양이 필요합니다
 @msg	The shape is too complex for a 3D effect	모양이 너무 복잡하여 3D 효과를 적용할 수 없습니다
+@msg	Extrude & Bevel	돌출 및 경사
+@msg	Revolve	회전체
+@msg	Inflate	부풀리기
+@msg	Rotate	회전
+@msg	Extrude & Bevel (Classic)	돌출 및 경사(클래식)
+@msg	Revolve (Classic)	회전체(클래식)
+@msg	Rotate (Classic)	회전(클래식)
+@msg	This effect	이 효과
+@msg	clipping paths	클리핑 패스
+@msg	other objects	기타 개체
+@msg	{label} requires a group holding a shape with at least two anchors	{label}에는 고정점이 두 개 이상인 모양을 포함한 그룹이 필요합니다
+@msg	Revolve requires a group holding a shape with at least two anchors	회전체에는 고정점이 두 개 이상인 모양을 포함한 그룹이 필요합니다
+@msg	Revolve requires a shape with at least two anchors	회전체에는 고정점이 두 개 이상인 모양이 필요합니다
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	그룹의 {label}에는 패스, 컴파운드 패스, 텍스트, 그룹, 클리핑 그룹, 블렌드, 심볼 인스턴스가 필요합니다. 먼저 다음을 놓거나 확장하십시오: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	그룹의 {label}은(는) 개체를 최대 {MAX_MEMBERS}개까지 받습니다
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	그룹이나 레이어의 3D 효과는 칠이나 획이 아니라 그룹 자체에 적용됩니다
+@msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
+@msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
+@msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
+@msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}은(는) 심볼 “{symbol}”의 인스턴스로 입체를 만들 수 없습니다. 심볼의 아트를 사용할 수 없습니다
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: 클리핑 패스가 너무 복잡하여 아트를 자를 수 없습니다
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}은(는) 개체를 최대 {MAX_MEMBERS}개까지 받습니다
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}은(는) {MAX_DEPTH}단계보다 깊이 중첩된 아트로 입체를 만들 수 없습니다
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	회전체의 칠이 이 표면에 비해 너무 복잡합니다. 세그먼트를 줄이거나 그레이디언트를 단순화하십시오
+@msg	Revolve edge must be left or right	회전체: edge는 left 또는 right여야 합니다
+@msg	Revolve cap must be a boolean	회전체: cap은 부울 값이어야 합니다
+@msg	the revolved object has no fill or stroke	회전체 개체에 칠이나 획이 없습니다
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor는 #rrggbb 형식의 불투명한 RGB 색상이어야 합니다
+@msg	lights must contain one to ten lights	lights에는 조명이 1개에서 10개까지 있어야 합니다
+@msg	each light must be an object	각 조명은 개체여야 합니다
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	알 수 없는 조명 설정입니다. color, intensity, rotation, height, softness 또는 behind를 사용하십시오
+@msg	light {key} must be a number from {min} to {max}	조명: {key}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	light color must use opaque #rrggbb	조명의 color는 불투명한 #rrggbb여야 합니다
+@msg	light behind must be true or false	조명의 behind는 true 또는 false여야 합니다
+@msg	shadow must be true or false	shadow는 true 또는 false여야 합니다
+@msg	shadowPosition must be behind or below	shadowPosition은 behind 또는 below여야 합니다
+@msg	{key} must be a number from {min} to {max}	{key}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`의 각 항목은 개체여야 합니다
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 항목에는 symbol, face, x, y, scale, rotation만 사용할 수 있으며 `{k}`은(는) 사용할 수 없습니다
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`의 각 항목에는 심볼 이름인 `symbol`이 필요합니다
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
+@msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
+@msg	The graphics are too complex: simplify the symbols' art	그래픽이 너무 복잡합니다. 심볼의 아트를 단순화하십시오
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	그래픽의 아트는 최대 {MAX_LEVELS}단계까지 중첩할 수 있습니다. 심볼의 아트를 단순화하십시오
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	그래픽의 아트는 심볼을 최대 {MAX_NESTING}단계까지 중첩할 수 있습니다. 심볼의 아트를 단순화하십시오
+@msg	A graphic's art holds too many objects: simplify the symbol's art	그래픽의 아트에 개체가 너무 많습니다. 심볼의 아트를 단순화하십시오
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	그래픽은 칠과 획을 최대 {MAX_PIECES}개까지 그립니다. 심볼의 아트를 단순화하십시오
+@msg	`surface` must be one of {_1}	`surface`은(는) {_1} 중 하나여야 합니다
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}은(는) 이 개체에 3D 표면 대신 원본 아트를 그립니다
+@msg	{label} draws no faces for this object	{label}은(는) 이 개체에 면을 그리지 않습니다
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	와이어프레임의 가장자리가 {MAX_WIRE_EDGES}개를 넘습니다
 @msg	The 3D surface is too complex; simplify the shape	3D 표면이 너무 복잡합니다. 모양을 단순화하십시오
 	Transform Objects	개체 변형
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
@@ -5456,6 +5576,7 @@ lighting	Light	광원
 @msg	unknown parameter `{path}`; it takes: {keys}	알 수 없는 매개변수 `{path}`: 받는 매개변수: {keys}
 @msg	missing `{path}`	`{path}`이(가) 없습니다
 @msg	`{path}` must be {expected}, not {got}	`{path}`은(는) {expected}이어야 합니다({got} 사용 불가)
+@msg	`{path}` is nested too deeply	`{path}`이(가) 너무 깊게 중첩되어 있습니다
 	Load EPS into Clipboard	EPS를 클립보드로 불러오기
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h}픽셀 이미지는 너무 커서 그릴 수 없습니다
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: PNG, JPEG, WebP, TIFF 또는 BMP 이미지가 아닙니다
@@ -5787,7 +5908,9 @@ axis	Y Axis	Y축
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither`는 그레이디언트 칠에 적용됩니다 (paint.setFill)
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
-@msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+	Hue Clockwise	색조 시계 방향
+	Hue Counterclockwise	색조 시계 반대 방향
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method`는 classic, perceptual, hue-clockwise 또는 hue-counterclockwise여야 합니다
 @msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다
@@ -5900,6 +6023,35 @@ axis	Y Axis	Y축
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
+@msg	a number >= {_1}	{_1} 이상인 숫자
+@msg	a number > {_1}	{_1} 초과인 숫자
+@msg	a number <= {_1}	{_1} 이하인 숫자
+@msg	a number < {_1}	{_1} 미만인 숫자
+@msg	a number {_1} to {_2}	{_1} 이상 {_2} 이하인 숫자
+@msg	a number >= {_1} and < {_2}	{_1} 이상 {_2} 미만인 숫자
+@msg	a number > {_1} and <= {_2}	{_1} 초과 {_2} 이하인 숫자
+@msg	a number > {_1} and < {_2}	{_1} 초과 {_2} 미만인 숫자
+@msg	a number ({_1})	숫자({_1})
+@msg	a number >= {_1} ({_2})	{_1} 이상인 숫자({_2})
+@msg	a number > {_1} ({_2})	{_1} 초과인 숫자({_2})
+@msg	a number <= {_1} ({_2})	{_1} 이하인 숫자({_2})
+@msg	a number < {_1} ({_2})	{_1} 미만인 숫자({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} 이상 {_2} 이하인 숫자({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	{_1} 이상 {_2} 미만인 숫자({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	{_1} 초과 {_2} 이하인 숫자({_3})
+@msg	a number > {_1} and < {_2} ({_3})	{_1} 초과 {_2} 미만인 숫자({_3})
+@msg	an integer	정수
+@msg	an integer >= {_1}	{_1} 이상인 정수
+@msg	an integer <= {_1}	{_1} 이하인 정수
+@msg	an integer {_1} to {_2}	{_1} 이상 {_2} 이하인 정수
+@msg	one of {_1}	{_1} 중 하나
+@msg	`{path}` must be one of {_1}, not {got}	`{path}`은(는) {_1} 중 하나여야 합니다({got} 사용 불가)
+@msg	an object id (a non-negative integer)	개체 ID(음수가 아닌 정수)
+@msg	a list of object ids	개체 ID 목록
+@msg	a color (a string, [r, g, b] or an object)	색상(문자열, [r, g, b] 또는 개체)
+@msg	[x, y] (two numbers)	[x, y](숫자 두 개)
+@msg	an object	개체
+@msg	a list	목록
 @msg	unknown key `{k}`; the keys here are {_1}	알 수 없는 키 `{k}`: 여기서 사용할 수 있는 키: {_1}
 @msg	{_1} is listed twice	{_1}이(가) 두 번 나열되었습니다
 @msg	{_1} is not the id of an input object	{_1}은(는) 입력 개체의 ID가 아닙니다
@@ -6001,14 +6153,33 @@ axis	Y Axis	Y축
 	Continue	계속
 	Continue Action	액션 계속
 	Delete Action Step	액션 단계 삭제
+	Move Action Step	액션 단계 이동
 	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
 	Stop: {message}	중지: {message}
 @msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+@msg	Batch cannot play an action with a View menu step	일괄 처리에서는 보기 메뉴 단계가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
+	Insert Select Path	패스 선택 삽입
+	Select Path	패스 선택
+@msg	select one whole path or compound path	전체 패스 또는 컴파운드 패스를 하나 선택하세요
+@msg	select only one path	패스를 하나만 선택하세요
+@msg	the path is hidden or locked, or cannot be selected here	패스가 숨겨져 있거나 잠겨 있거나 여기에서 선택할 수 없습니다
+@msg	object {value} is not the stored path: it changed, or the document is another one	개체 {value}은(는) 저장된 패스가 아닙니다: 변경되었거나 다른 문서입니다
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint`는 "v1:"과 소문자 16진수 16자리여야 합니다
+	Select Object…	개체 선택…
+	Select Object	개체 선택
+	Set Selection	선택 영역 설정
+	Case Sensitive	대/소문자 구분
+	Whole Word	전체 단어
+	Select Object: {note}	개체 선택: {note}
+	Select by Note	참고로 선택
+@msg	the note is empty	참고가 비어 있습니다
+@msg	the note is longer than 1,024 bytes	참고가 1,024바이트보다 깁니다
+@msg	no object that can be selected has a note matching “{query}”	선택할 수 있는 개체 중 참고가 “{query}”와(과) 일치하는 개체가 없습니다
 	Menu Item:	메뉴 항목:
 	No menu item matches.	일치하는 메뉴 항목이 없습니다.
 	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
@@ -6154,6 +6325,22 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+	Notched Ribbon	노치 리본
+	Double Line	이중선
+	Wave	물결
+	Teardrop	눈물방울
+	Striped Ribbon	줄무늬 리본
+	Fine Nib	가는 펜촉
+	Broad Nib	넓은 펜촉
+	Chisel	끌
+	Round Pen	둥근 펜
+	Pressure Pen	필압 펜
+	Beads	구슬
+	Dash Dot	일점쇄선
+	Scallops	스캘럽
+	Stars	별
+	Triangles	삼각형
+	Sparkles	반짝임
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)
@@ -6173,6 +6360,13 @@ axis	Y Axis	Y축
 	Area Text	영역 문자
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	픽셀에 스냅 옵션
+	Pixel Snapping Options…	픽셀에 스냅 옵션…
+	Snap to Pixel While Drawing	그리는 동안 픽셀에 스냅
+	Snap to Pixel While Moving	이동하는 동안 픽셀에 스냅
+	Snap to Pixel While Scaling	크기를 조절하는 동안 픽셀에 스냅
+	These options take effect when View › Snap to Pixel is on.	이 옵션은 보기 › 픽셀에 스냅이 켜져 있을 때 적용됩니다.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6723,7 +6917,9 @@ breakText	Glyphs	글리프
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}”은(는) {_1} 파일을 엽니다. `{_2}`은(는) 열지 않습니다
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`은(는) `{_2}` 종류의 플러그인이며 가져오기 플러그인이 아닙니다
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`은(는) `{_2}` 종류의 플러그인이며 내보내기 플러그인이 아닙니다
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer"}"}}로 파일을 여세요
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer": "{_2}"}}로 파일을 여세요
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}`은(는) 내보내기 플러그인입니다: document.export {{"format": "{_2}"}}로 내보내세요
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}`은(는) 라이브 효과입니다: effect.apply {{"effect": "{_2}"}}로 적용하세요
 @msg	the importer returned no objects	가져오기 플러그인이 개체를 반환하지 않았습니다
 @msg	an importer returns `objects` and `warnings`, not `{key}`	가져오기 플러그인은 `{key}`가 아닌 `objects`와 `warnings`를 반환합니다
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	파일이 가져오기 플러그인이 읽는 {MAX_INPUT_BYTES}바이트보다 큽니다
@@ -6802,6 +6998,19 @@ breakText	Glyphs	글리프
 	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
+	View more	자세히 보기
+	Finish tutorial	튜토리얼 완료
+	Next Up	다음
+	You finished the last tutorial in this skill.	이 기술의 마지막 튜토리얼을 완료했습니다.
+	Back to skills	기술로 돌아가기
+	Open Tutorial Sample	튜토리얼 샘플 열기
+	Finish Tutorial	튜토리얼 완료
+	Next Tutorial	다음 튜토리얼
+	Back to Skills	기술로 돌아가기
+@msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
+@msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
+@msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
+@msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

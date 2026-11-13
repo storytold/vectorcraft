@@ -365,6 +365,41 @@ fn members_with_their_own_blending_get_graphics_of_their_own() {
     assert_eq!(blended, 1);
 }
 
+#[test]
+fn a_graphic_stays_under_a_solid_painted_after_its_own() {
+    let d = document();
+    let member = |id: u64, r: Rect, color: Color, opacity: f32| {
+        let mut n = square(id, r, Paint::solid(color));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.opacity = opacity;
+        }
+        Arc::new(n)
+    };
+    let gray = Color::rgb(0.5, 0.5, 0.5);
+    // A and C share their fill's opacity; B, painted between them, has its own and covers part of A.
+    let a = member(1, Rect::new(0.0, 0.0, 60.0, 100.0), gray, 1.0);
+    let b = member(2, Rect::new(40.0, 0.0, 100.0, 100.0), Color::rgb(0.0, 0.0, 1.0), 0.5);
+    let c = member(4, Rect::new(200.0, 0.0, 260.0, 100.0), gray, 1.0);
+    let mut group = Node::group(NodeId(3), vec![a, b, c]);
+    let p = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0, "shade": false, "graphics": [{"symbol": "Mark", "scale": 3000.0}]});
+    group.appearance.effects.push(crate::new_effect(EXTRUDE, &p).unwrap());
+    let art = solid_art_in(Some(&d), &group).unwrap();
+    // In drawing order: 'G' for a graphic, 'B' for a face of B's solid.
+    let mut order = String::new();
+    art.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Group { clip: true, .. }) && !graphics_in(n).is_empty() {
+            order.push('G');
+        } else if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first()
+            && f.paint.color().is_some_and(|c| c.to_rgb()[2] > 0.9 && c.to_rgb()[0] < 0.1)
+        {
+            order.push('B');
+        }
+    });
+    // A's graphic is drawn right after A, under B; C's is drawn after B.
+    assert_eq!(graphics_in(&art).len(), 3, "{order}");
+    assert!(order.starts_with('G'), "{order}");
+}
+
 /// [`document`] with symbol "Dense" too: a red polygon of 30,000 sides, straight or `curved`.
 fn dense_document(curved: bool) -> Document {
     let mut d = document();
@@ -470,7 +505,10 @@ fn graphics_are_checked() {
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
     assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
-    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
+    // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
 }
@@ -585,6 +623,110 @@ fn a_solid_in_a_transparent_gradient_keeps_its_graphic() {
     assert_eq!(masks(&solid_art_in(Some(&d), &n).unwrap()), vec![true, false]);
 }
 
+/// The paths of `art`'s faces in drawing order (a face lit by a colored light is a clip group: its
+/// clipping path), leaving out the graphics (clip groups of solid-color paths).
+fn face_paths(art: &Node) -> Vec<PathData> {
+    fn walk(n: &Node, out: &mut Vec<PathData>) {
+        match &n.kind {
+            NodeKind::Group { children, clip: true } => {
+                let graphic = children.get(1).is_some_and(|inner| match &inner.kind {
+                    NodeKind::Group { children: paths, clip: false } => paths.iter().all(|p| {
+                        p.path_data().is_some()
+                            && p.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.paint.color().is_some()))
+                    }),
+                    _ => false,
+                });
+                if !graphic {
+                    out.extend(children.first().and_then(|c| c.path_data()).cloned());
+                }
+            }
+            NodeKind::Group { children, .. } => children.iter().for_each(|c| walk(c, out)),
+            _ => out.extend(n.path_data().cloned()),
+        }
+    }
+    let mut out = vec![];
+    walk(art, &mut out);
+    out
+}
+
+/// A turned solid in a gradient with transparent stops under a colored light, with a dashed stroke
+/// and a graphic, draws its fill's and its stroke's faces in the one order it draws them in without
+/// the graphic, and the graphic keeps the cap's mask and goes after the fill's cap, not the stroke's.
+#[test]
+fn a_transparent_gradient_with_a_graphic_keeps_the_shared_face_order() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let d = document();
+    let mut stop = GradientStop::new(1.0, red());
+    stop.opacity = 0.25;
+    let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, red()), stop]));
+    let solid = |graphics: Value| {
+        let mut n = object(
+            EXTRUDE,
+            json!({"rotationX": -20.0, "rotationY": -40.0, "depth": 60.0, "shade": true, "lights": [{"color": "#ff8080"}], "graphics": graphics}),
+        );
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.paint = Paint::Gradient(Box::new(gradient.clone()));
+        }
+        // A gradient stroke: a solid color under the colored light would be one composite.
+        let blues = Gradient::new(
+            GradientKind::Linear,
+            vec![GradientStop::new(0.0, Color::rgb(0.0, 0.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.5))],
+        );
+        let mut stroke = StrokeLayer::new(Paint::Gradient(Box::new(GradientPaint::new(blues))), 6.0);
+        stroke.dash = Some(vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+        n.appearance.items.push(AppearanceItem::Stroke(stroke));
+        solid_art_in(Some(&d), &n).unwrap()
+    };
+    let with = solid(json!([{"symbol": "Mark"}]));
+    let without = solid(json!([]));
+    assert!(face_paths(&without).len() > 20, "the faces are found");
+    assert_eq!(face_paths(&with), face_paths(&without), "the faces in one order");
+    // The graphic is drawn on the fill's cap and on the stroke's (the clip groups holding the
+    // symbol's red square); the fill's, whose surface carries the mask, carries it too.
+    let mut masked = vec![];
+    with.walk(&mut |c| {
+        if let NodeKind::Group { children, clip: true } = &c.kind
+            && let [_, inner] = children.as_slice()
+            && let NodeKind::Group { children: paths, clip: false } = &inner.kind
+            && paths.iter().any(|p| {
+                p.appearance.items.iter().any(|i| match i {
+                    AppearanceItem::Fill(f) => f.paint.color().is_some_and(|c| c.to_rgb()[1] < 0.1 && c.to_rgb()[0] > 0.3),
+                    AppearanceItem::Stroke(_) => false,
+                })
+            })
+        {
+            masked.push(c.extras().mask.is_some());
+        }
+    });
+    masked.sort_unstable();
+    assert_eq!(masked, [false, true], "the fill's graphic carries the cap's mask");
+    // The fill's graphic goes right after the fill's cap, so the dashes on the cap's edge, drawn
+    // after it, cover it. Drawn in order: the fill's graphic (the masked clip group), and each face,
+    // the fill's or the stroke's by its gradient's first stop (red or blue), with its bounds.
+    let mut drawn: Vec<(&str, Rect)> = vec![];
+    with.walk(&mut |c| {
+        if let NodeKind::Group { children, clip: true } = &c.kind
+            && c.extras().mask.is_some()
+            && let Some(bounds) = children.first().and_then(|clip| clip.path_data()).and_then(PathData::bounds)
+        {
+            drawn.push(("graphic", bounds));
+        }
+        let first_stop = c.appearance.items.iter().find_map(|i| match i {
+            AppearanceItem::Fill(f) => match &f.paint {
+                Paint::Gradient(g) => g.gradient.stops.first().map(|s| s.color.to_rgb()),
+                _ => None,
+            },
+            AppearanceItem::Stroke(_) => None,
+        });
+        if let (Some(rgb), Some(bounds)) = (first_stop, c.path_data().and_then(PathData::bounds)) {
+            drawn.push((if rgb[0] > rgb[2] { "fill" } else { "stroke" }, bounds));
+        }
+    });
+    let graphic = drawn.iter().position(|(kind, _)| *kind == "graphic").unwrap();
+    let covering = |(kind, b): &(&str, Rect)| *kind == "stroke" && b.intersect(drawn[graphic].1).area() > 0.0;
+    assert!(drawn[graphic..].iter().any(covering), "a dash on the cap's edge is drawn over the fill's graphic");
+}
+
 #[test]
 fn a_cap_with_a_hole_keeps_the_hole_out_of_the_graphic() {
     let d = document();
@@ -656,4 +798,73 @@ fn a_symbol_instance_in_a_graphic_draws_as_the_canvas_shows_it() {
     let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "WideShaded").unwrap()).unwrap();
     let area: f64 = pieces.iter().map(|p| p.path.to_bezpath().area().abs()).sum();
     assert!((area - 30_000.0).abs() < 1e-3, "{area}");
+}
+
+#[test]
+fn curves_are_cut_one_at_a_time_and_the_work_stops_at_the_limit() {
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 6.0)).to_bezpath();
+    // Cut curve by curve, a path gives the points it gives cut whole.
+    for scale in [1.0, 100.0, 10_000.0] {
+        let placed = Affine::scale(scale) * ellipse.clone();
+        let mut whole = vec![];
+        vectorcraft_geom::kurbo::flatten(placed.iter(), SURFACE_TOLERANCE, |el| {
+            if let PathEl::MoveTo(p) | PathEl::LineTo(p) = el {
+                whole.push(p);
+            }
+        });
+        let mut points = 0;
+        let cut: Vec<Point> = straight_pieces(&placed, &mut points).unwrap().into_iter().flatten().collect();
+        assert_eq!(points, cut.len());
+        assert_eq!(cut.len(), whole.len(), "{scale}");
+        assert!(cut.iter().zip(&whole).all(|(a, b)| a.distance(*b) < 1e-9), "{scale}");
+    }
+    // Past the limit no further curve is cut: of 1,000 ellipses that each take more than 3,000
+    // points, the count stops within one curve of the limit.
+    let mut many = BezPath::new();
+    (0..1000).for_each(|_| many.extend(Affine::scale(10_000.0) * ellipse.clone()));
+    let mut points = 0;
+    assert!(straight_pieces(&many, &mut points).is_none());
+    assert!(points > MAX_ELEMENTS && points < MAX_ELEMENTS + 2000, "{points}");
+    // A curve that reaches farther than any surface, or to no finite point, is not cut at all.
+    for scale in [1e12, f64::INFINITY] {
+        let mut points = 0;
+        assert!(straight_pieces(&(Affine::scale(scale) * ellipse.clone()), &mut points).is_none());
+        assert!(points <= 1, "{scale}: {points}");
+    }
+}
+
+#[test]
+fn a_line_that_reaches_farther_than_any_surface_is_not_cut() {
+    let triangle = |far: f64| {
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((far, 0.0));
+        b.line_to((0.0, 1.0));
+        b.close_path();
+        b
+    };
+    assert!(straight_pieces(&triangle(1e7), &mut 0).is_some());
+    for far in [1e12, 1e300] {
+        assert!(straight_pieces(&triangle(far), &mut 0).is_none(), "{far}");
+        assert!(straight_pieces(&(Affine::translate((far, 0.0)) * triangle(1.0)), &mut 0).is_none(), "{far}");
+    }
+}
+
+#[test]
+fn only_an_opaque_part_on_revolve_takes_a_seam_stroke() {
+    let piece = |paint: Paint, opacity: f32, blend: BlendMode| Unrolled {
+        polygons: vec![],
+        boxes: vec![],
+        bounds: Rect::ZERO,
+        rule: FillRule::NonZero,
+        paint,
+        opacity,
+        blend,
+        place: Affine::IDENTITY,
+    };
+    assert!(takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 0.5, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Multiply)));
+    // A pattern's tile may hold transparent art, which the overlap would show.
+    assert!(!takes_seam(&piece(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 1.0, BlendMode::Normal)));
 }

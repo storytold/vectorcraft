@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Node, NodeKind, Scaling};
+use vectorcraft_doc::{Node, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::edit::{outermost, selected_roots};
 use super::{
-    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, checked_ids_param, cmd, color_value, f64_or,
+    CommandSpec, NodeId, Result, Session, always, bad, bool_or, check_numbers, check_switches, checked_ids_param, cmd, color_value, f64_or, f64_req,
     find_command, finite_numbers, has_doc, index,
 };
 use crate::EngineError;
@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays",
             has_doc,
             distort
         ),
@@ -62,11 +62,14 @@ pub fn specs() -> Vec<CommandSpec> {
 pub struct Projective {
     m: [f64; 8],
     src: Rect,
+    /// Page → the frame `src` is measured in.
+    pre: Affine,
 }
 
 impl Projective {
-    /// Map `src`'s corners (TL, TR, BR, BL) onto `q`.
-    pub fn from_rect(src: Rect, q: [Point; 4]) -> Self {
+    /// Map the corners (TL, TR, BR, BL) of `src`, a box that may be turned, onto the page points `q`.
+    pub fn from_box(bx: OrientedBox, q: [Point; 4]) -> Self {
+        let src = bx.rect;
         let [p0, p1, p2, p3] = q;
         let (dx1, dx2, dx3) = (p1.x - p2.x, p3.x - p2.x, p0.x - p1.x + p2.x - p3.x);
         let (dy1, dy2, dy3) = (p1.y - p2.y, p3.y - p2.y, p0.y - p1.y + p2.y - p3.y);
@@ -80,11 +83,12 @@ impl Projective {
         let b = p3.x - p0.x + h * p3.x;
         let d = p1.y - p0.y + g * p1.y;
         let e = p3.y - p0.y + h * p3.y;
-        Self { m: [a, b, p0.x, d, e, p0.y, g, h], src }
+        Self { m: [a, b, p0.x, d, e, p0.y, g, h], src, pre: bx.to_doc().inverse() }
     }
 
     pub fn apply(&self, p: Point) -> Point {
         let [a, b, c, d, e, f, g, h] = self.m;
+        let p = self.pre * p;
         let u = if self.src.width().abs() > 1e-12 { (p.x - self.src.x0) / self.src.width() } else { 0.0 };
         let v = if self.src.height().abs() > 1e-12 { (p.y - self.src.y0) / self.src.height() } else { 0.0 };
         let w = g * u + h * v + 1.0;
@@ -152,17 +156,29 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "nothing to distort"));
     }
+    let angle = p.get("angle").filter(|v| !v.is_null()).map(|_| f64_req(p, "angle", C)).transpose()?.map_or(0.0, vectorcraft_geom::normalize_deg);
     let src = match p.get("from").filter(|v| !v.is_null()) {
-        None => s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?,
+        None if angle == 0.0 => OrientedBox::aligned(s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| bad(C, "nothing to distort"))?),
+        None => {
+            // The selection's bounds square to the turned frame.
+            let doc = &s.doc()?.doc;
+            let (symbols, to_local) = (doc.symbol_boxes(), OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse());
+            let rect = ids
+                .iter()
+                .filter_map(|id| doc.node(*id))
+                .fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.bounds_in(&symbols, to_local, false)));
+            OrientedBox { angle, rect: rect.ok_or_else(|| bad(C, "nothing to distort"))? }
+        }
         Some(v) => {
             let [x0, y0, x1, y1] = finite_numbers(v).ok_or_else(|| bad(C, "from must be [x0, y0, x1, y1]"))?;
-            Rect::new(x0, y0, x1, y1)
+            OrientedBox { angle, rect: Rect::new(x0, y0, x1, y1) }
         }
     };
-    if !src.width().is_finite() || !src.height().is_finite() || src.width().abs() < 1e-9 || src.height().abs() < 1e-9 {
+    let r = src.rect;
+    if !r.width().is_finite() || !r.height().is_finite() || r.width().abs() < 1e-9 || r.height().abs() < 1e-9 {
         return Err(bad(C, "cannot distort a zero-size or non-finite bounding box"));
     }
-    let pr = Projective::from_rect(src, [tl, tr, br, bl]);
+    let pr = Projective::from_box(src, [tl, tr, br, bl]);
     s.edit("Free Distort", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {

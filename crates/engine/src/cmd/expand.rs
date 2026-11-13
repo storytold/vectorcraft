@@ -18,8 +18,8 @@ use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint,
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer};
 use vectorcraft_doc::live::GradientMesh;
 use vectorcraft_doc::pattern::{PatternDef, place_art};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling};
-use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, Vec2, shapes};
+use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling, TextObject};
+use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, SubPath, Vec2, shapes};
 
 use super::dimension::EndedLink;
 use super::edit::selected_roots;
@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Options",
             [],
             None,
-            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands, which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
+            "{} what each Expand option would change in the selection → {object, fill, stroke, gradient, appearance, symbolArt?: {fill, stroke, gradient}} (true: something to expand; gradient: a gradient fill that Fill expands (in type, on the outline Object makes of a character), which Expand Gradient To applies to; appearance: appearance attributes Expand Appearance expands first, for which Object › Expand… is dimmed in the menus; symbolArt, when the selection holds symbol instances that Object expands: true when only their art holds it, which Fill and Stroke reach only with Object on)",
             has_selection,
             |s, _| {
                 let roots = selected_roots(s)?;
@@ -197,7 +197,7 @@ impl Expandable {
             // Once one is found, the next path is not measured.
             e.gradient = e.gradient
                 || match &c.kind {
-                    NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
+                    NodeKind::Text(t) => text_gradient_expands(d, t),
                     _ => shape && gradient_expands(d, c),
                 };
             e.fill |= e.gradient;
@@ -245,6 +245,34 @@ fn gradient_expands(d: &Document, l: &Node) -> bool {
                 && piece_gradient_expands(d, c));
     });
     any
+}
+
+/// Whether type `t` has a gradient fill that Fill expands once Object has outlined it: one of the
+/// paths `type.createOutlines` makes of its glyphs, ruby glyphs and underline and strikethrough
+/// bars, each painted as its run, has one ([`gradient_expands`] on that path's own box). Inline
+/// graphics and color glyphs become other art. Leaves the document as it is and stops at the
+/// first such path.
+fn text_gradient_expands(d: &Document, t: &TextObject) -> bool {
+    if !t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))) {
+        return false;
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let expands = |run: usize, outline: &BezPath| {
+        let style = t.runs.get(run).map(|r| &r.style);
+        if !matches!(style.map_or_else(|| t.first_style().fill, |s| s.fill.clone()), Paint::Gradient(_)) {
+            return false;
+        }
+        let path = PathData::from_bezpath(outline).transformed(t.xf);
+        if path.is_empty() {
+            return false;
+        }
+        let appearance = style.map_or_else(|| t.first_style().appearance(), |s| s.appearance());
+        gradient_expands(d, &Node::path(NodeId(u64::MAX), path, appearance))
+    };
+    let inline = |gi: usize| lay.inlines.iter().find(|i| i.glyph == gi).is_some_and(|i| t.runs.get(i.run).is_some_and(|r| r.inline.is_some()));
+    lay.glyphs.iter().enumerate().any(|(gi, g)| !inline(gi) && g.image.is_none() && g.colour.is_none() && expands(g.run, &g.outline))
+        || lay.ruby.iter().any(|g| expands(g.run, &g.outline))
+        || vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t).iter().any(|(run, bar)| expands(*run, bar))
 }
 
 /// [`gradient_expands`] for a path that no live-effect plug-in paints ([`expand_piece_fills`]).
@@ -606,7 +634,9 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    // So do the raster effects of its fills and strokes.
+    // So do the raster effects of it and of its fills and strokes, by the Transform effects that
+    // moved it.
+    carry.hide_skipped(&mut m.appearance.effects);
     vectorcraft_render::effects::follow_items(&mut m);
     m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
@@ -634,7 +664,8 @@ pub(crate) fn fill_shape(
     if carry.moves(&one) {
         carry.apply(&mut one);
     }
-    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    let mut moved = one.items.pop().unwrap_or_else(|| item.clone());
+    carry.hide_skipped(moved.effects_mut());
     Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
@@ -884,8 +915,8 @@ fn blended(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal
 }
 
-/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`), a
-/// colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
+/// Whether `n` (art of `d`) is or holds an image with see-through pixels (key in `keys`, a
+/// color-masked image's masked pixels counted as its own), a colorize paint that `colorize` counts, opacity or a blending mode of its own or of a group in
 /// `n`, or anywhere when `on`, also in the tile art of the pattern fills of the paths in `n`, down
 /// to `levels` patterns. Hidden art doesn't count.
 fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: &dyn Fn(&Document, &Node) -> bool, on: bool, levels: u32) -> bool {
@@ -894,7 +925,9 @@ fn transparent_image(d: &Document, n: &Node, keys: &BTreeSet<String>, colorize: 
     }
     let on = on || blended(n);
     match &n.kind {
-        NodeKind::Image(im) => on || keys.contains(&im.key) || (n.extras().colorize.is_some() && colorize(d, n)),
+        NodeKind::Image(im) => {
+            on || keys.contains(&im.key) || keys.contains(&d.shown_image(n, im).key) || (n.extras().colorize.is_some() && colorize(d, n))
+        }
         NodeKind::Path { .. } | NodeKind::Compound { .. } => {
             n.appearance.items.iter().any(|i| pattern_fill_holds_transparent_image(d, i, keys, colorize, on, levels))
         }
@@ -1358,8 +1391,9 @@ fn band_edges(lo: f64, hi: f64, n: usize, runs: Option<(f64, usize)>) -> Vec<f64
 fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32))> {
     let at = |t: f64| (t, g.sample_keep_model(t as f32));
     let mut v = vec![at(t0)];
-    // A Perceptual gradient curves between its stops: the mesh takes a column at each of the stops
-    // its expansion adds, so the linear mix between columns follows that curve.
+    // A Perceptual gradient, or one mixed around the hue wheel, curves between its stops: the mesh
+    // takes a column at each of the stops its expansion adds, so the linear mix between columns
+    // follows that curve.
     if !g.method.is_classic() {
         v.extend(g.expanded().map(|(o, ..)| f64::from(o)).filter(|o| *o > t0 && *o < t1).map(at));
     }

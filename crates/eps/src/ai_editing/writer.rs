@@ -16,6 +16,7 @@ use crate::ai_ops::{self, unit};
 use crate::ps;
 
 mod brushes;
+mod envelopes;
 mod images;
 mod paints;
 mod styles;
@@ -25,6 +26,8 @@ mod variables;
 
 #[cfg(test)]
 pub(super) use brushes::BRUSHES;
+#[cfg(test)]
+pub(super) use envelopes::ENVELOPES;
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, same_appearance};
@@ -33,7 +36,7 @@ pub(super) use images::PAYLOAD;
 #[cfg(test)]
 pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
-pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
+pub(super) use paints::{GRADIENT_HUE, GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 #[cfg(test)]
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
@@ -52,8 +55,7 @@ pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fil
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
-pub(super) const LIVE: &str =
-    "blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const LIVE: &str = "blends, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
@@ -262,6 +264,12 @@ pub(super) struct Writer<'a> {
     brush_set: brushes::Brushes,
     /// Brushes may be written; false on a large canvas, where they are left out.
     pub(super) brushes_live: bool,
+    /// The object just written is an envelope's distorted art, which the plugin's `XP` follows
+    /// ([`Self::envelope`]).
+    deform: bool,
+    /// How many more envelopes may be written live: as many as the reader checks in one file
+    /// ([`crate::import::ENVELOPE_CHECKS`]).
+    envelopes_left: usize,
 }
 
 impl<'a> Writer<'a> {
@@ -319,6 +327,8 @@ impl<'a> Writer<'a> {
             in_look: false,
             brush_set: brushes::Brushes::default(),
             brushes_live: true,
+            deform: false,
+            envelopes_left: crate::import::ENVELOPE_CHECKS,
             objects: 0,
             left_out: 0,
             definition_objects: 0,
@@ -644,7 +654,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => self.image(im, xy),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im), xy),
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
@@ -694,29 +704,16 @@ impl<'a> Writer<'a> {
                 }
                 self.end_group("U", xy);
             }
-            NodeKind::Blend { .. }
-            | NodeKind::Envelope { .. }
-            | NodeKind::Mesh(_)
-            | NodeKind::Repeat(_)
-            | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
-                if !self.open_group("u") {
-                    return;
-                }
-                self.warn(LIVE);
-                if self.nest < MAX_NEST {
-                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
-                    self.nest += 1;
-                    for c in g.children().map(Vec::as_slice).unwrap_or_default() {
-                        self.node(c);
-                    }
-                    self.nest -= 1;
-                }
-                self.end_group("U", xy);
+            NodeKind::Envelope { .. } if self.envelope(n, xy) => {}
+            NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES)),
+            NodeKind::Blend { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
+                self.drawn_art(n, xy, Some(LIVE));
             }
             // Ruler guides are kept in the document's native copy only.
             NodeKind::RulerGuide { .. } => {}
         }
+        // Taken before the dictionary, whose opacity mask art may hold envelopes of its own.
+        let deform = std::mem::take(&mut self.deform);
         if self.body.len() > start {
             // A group's dictionary goes between its end and its state block.
             let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
@@ -726,6 +723,29 @@ impl<'a> Writer<'a> {
                 self.body.push_str(&b);
             }
         }
+        // An envelope's plugin `XP` follows its distorted art, after the art's state block.
+        if deform {
+            self.line(&envelopes::plugin_line());
+        }
+    }
+
+    /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.
+    fn drawn_art(&mut self, n: &Node, xy: Xy, warning: Option<&str>) {
+        if !self.open_group("u") {
+            return;
+        }
+        if let Some(w) = warning {
+            self.warn(w);
+        }
+        if self.nest < MAX_NEST {
+            let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            self.nest += 1;
+            for c in g.children().map(Vec::as_slice).unwrap_or_default() {
+                self.node(c);
+            }
+            self.nest -= 1;
+        }
+        self.end_group("U", xy);
     }
 
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),

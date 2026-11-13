@@ -421,6 +421,8 @@ impl Session {
         if safe_mode::active() {
             return;
         }
+        // A `plugin.install` in another session writes the store before this reads it.
+        let _held = crate::cmd::plugin::hold_plugin_changes();
         let grants = self.counted_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;

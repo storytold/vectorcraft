@@ -1,6 +1,6 @@
 //! DXF export for every DXF path (`document.export {format: dxf}`, `document.exportDxf`, Export As
 //! → DXF Options): the options parsed from the params, one drawing per artboard with Use
-//! Artboards, and the formats that can't be written (DWG, PICT) with what to use instead.
+//! Artboards, and the formats that can't be written (DWG, PageMaker) with what to use instead.
 
 use std::sync::Arc;
 
@@ -105,12 +105,6 @@ pub const UNSUPPORTED: &[Unsupported] = &[
         label: "DWG",
         extensions: &["dwg"],
         hint: "DWG is not available (no openly licensed writer exists): export DXF instead, which CAD apps open",
-    },
-    Unsupported {
-        id: "pict",
-        label: "PICT",
-        extensions: &["pict", "pct", "pic"],
-        hint: "PICT is a retired format and is not supported: convert the file to PDF or PNG first",
     },
     Unsupported {
         id: "pmd",

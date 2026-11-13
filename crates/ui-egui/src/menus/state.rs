@@ -63,9 +63,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
-        "window.control.dock" => {
-            p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
-        }
+        "window.control.dock" => p.get("edge").and_then(Value::as_str) == Some(crate::chrome::control_bar_placement(&app.ui)),
         "window.control.options" => p
             .get("group")
             .and_then(Value::as_str)
@@ -288,7 +286,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" => crate::panels::character::text_style(app).is_some(),
-        "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.colorBalanceDialog" | "ui.saturateDialog" | "ui.indexedColorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
         "ui.flattenTransparencyDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),

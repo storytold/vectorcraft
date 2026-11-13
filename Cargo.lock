@@ -6341,7 +6341,6 @@ dependencies = [
  "raw-window-handle",
  "rfd",
  "serde_json",
- "smithay-clipboard",
  "socket2",
  "tempfile",
  "vectorcraft-engine",
@@ -6476,6 +6475,8 @@ dependencies = [
  "vectorcraft-plugins",
  "vectorcraft-text",
  "vectorcraft-three-d",
+ "vectorcraft-trace",
+ "wat",
 ]
 
 [[package]]
@@ -6664,6 +6665,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "siphasher",
  "skrifa 0.47.0",
  "smallvec",
  "thiserror 2.0.21",
@@ -6854,6 +6856,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",

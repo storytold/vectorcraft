@@ -123,7 +123,7 @@ impl Renderer {
     /// ([`effects::plugin_revision`]), drop what the caches keep from plug-in effects: the effect
     /// geometry of paths with a plug-in effect, the cull bounds of objects that have one or hold one,
     /// of symbol instances and of the objects that hold them, and the art drawn for the effects of
-    /// objects with a plug-in effect. Rasters of raster effects and evaluations of live objects hold
+    /// objects that have a plug-in effect or hold one. Rasters of raster effects and evaluations of live objects hold
     /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
     /// `live::resources_key`).
     ///
@@ -146,7 +146,8 @@ impl Renderer {
         if stale {
             self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
             self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
-            self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+            // The art of a group holds what its members' plug-in effects draw.
+            self.fx_arts.retain(|(node, ..)| !holds_plugin_effect(node));
         }
     }
 
@@ -250,7 +251,7 @@ impl Renderer {
             && let Some(region) = self.clip_of(&m.art)
             && shape_masked_image(a, im, &region.0)
         {
-            self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, a, f.ink), a.extras().pixelated);
+            self.draw_image_in(ctx, f, &f.doc.shown_image(a, im), Some(&region), images::image_tint(f.doc, a, f.ink), a.extras().pixelated);
             self.stats.drawn += 1;
             return;
         }
@@ -518,7 +519,8 @@ impl Renderer {
                         && let NodeKind::Image(im) = &image.kind
                         && plain_image(image, im, &region.0)
                     {
-                        self.draw_image_in(ctx, f, im, Some(&region), images::image_tint(f.doc, image, f.ink), image.extras().pixelated);
+                        let im = f.doc.shown_image(image, im);
+                        self.draw_image_in(ctx, f, &im, Some(&region), images::image_tint(f.doc, image, f.ink), image.extras().pixelated);
                         self.stats.drawn += 1;
                         return;
                     }
@@ -568,7 +570,9 @@ impl Renderer {
                 }
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
-            NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated),
+            NodeKind::Image(im) => {
+                self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
+            }
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
                     // The instance draws when the frame has room for its art's objects; a symbol

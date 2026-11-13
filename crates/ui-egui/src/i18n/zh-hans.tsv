@@ -575,6 +575,8 @@ antiAlias	Sharp	锐利
 	Convert to Artboards	转换为画板
 	Convert to CMYK	转换为 CMYK
 	Convert to Grayscale	转换为灰度
+	Convert to Indexed Color	转换为索引颜色
+	Convert to Indexed Color…	转换为索引颜色…
 	Convert To Outlines	转换为轮廓
 	Convert To Point Type	转换为点文字
 	Convert to RGB	转换为 RGB
@@ -655,6 +657,10 @@ antiAlias	Sharp	锐利
 	Corner Color	转角颜色
 	Contiguous	连续
 	Each Channel	每个通道
+	Color Mask…	颜色蒙版…
+	Color Mask	颜色蒙版
+	Remove Color Mask	移除颜色蒙版
+	Apply Color Mask	应用颜色蒙版
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -751,6 +757,8 @@ antiAlias	Sharp	锐利
 	Delete Width Point	删除宽度点
 	Delete Workspace	删除工作区
 	Delete {kind} Style	删除{kind}样式
+	Delete the selected items and their artwork?	要删除所选项目及其图稿吗？
+	Delete this layer and its artwork?	要删除此图层及其图稿吗？
 	Delete “{name}”?	要删除“{name}”吗？
 	Depth:	深度：
 	Description	描述
@@ -969,12 +977,14 @@ antiAlias	Sharp	锐利
 	Enable Contextual Task Bar	启用上下文任务栏
 	Enable copying of text, images and other content	启用复制文字、图像与其他内容
 	Enable in-menu font previews	启用菜单内字体预览
+	Show samples on white	在白色背景上显示样本
 	Enable Missing Glyph Protection	启用缺字保护
 	Enable Opacity Mask	启用不透明度蒙版
 	Enable plaintext metadata	启用纯文本元数据
 	Enable Rubber Band for	为这些工具启用橡皮筋预览
 	Enable text access for screen readers	启用屏幕阅读器的文字访问
 	Enable Touch Gestures	启用触控手势
+	Switch Selection and Drawing Modes	切换选择与绘图模式
 	Enable Touch Workspace	启用触控工作区
 	Encoding	编码
 	Encoding:	编码：
@@ -1535,6 +1545,8 @@ file-filter	Templates	模板
 	Objects on Path Tool	路径上的对象工具
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
+	Detach	分离
+	Detach Object from Path	将对象从路径分离
 	Release Live Paint	释放实时上色
 	Release Repeat	释放重复
 	Release Slice	释放切片
@@ -2169,6 +2181,8 @@ file-filter	Templates	模板
 	Normal Screen Mode	正常屏幕模式
 	Note:	注释：
 	Nothing matches the Show filter.	没有项目符合“显示”筛选条件。
+	Show DCS Transparency Interactions	显示 DCS 透明度交互
+	Transparent, or overlaps transparent objects: check its separations	透明或与透明对象重叠：请检查其分色
 	Nothing to print	没有可打印的内容
 	Nudge	微移
 	Nudge in Perspective	在透视中微移
@@ -2587,6 +2601,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Rating:	等级：
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
+	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
+	Canvas display profile:	画布显示配置文件：
+	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
+	No usable display profile was found: the canvas is drawn in sRGB.	未找到可用的显示器配置文件：画布以 sRGB 绘制。
 	Rearrange All Artboards	重新排列所有画板
 	Rearrange	重新排列
 	Select All Artboards	选择所有画板
@@ -2798,6 +2817,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
 	Color Theme Picker	色彩主题拾取器
 	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
+	Prominent Colors	主要颜色
+	Save All Colors	存储所有颜色
+	Save Prominent Colors	存储主要颜色
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -3313,6 +3335,19 @@ digits	Malayalam	马拉雅拉姆数字
 	Spot Color Objects	使用专色的对象
 	Pattern Objects	使用图案的对象
 	Gradient Objects	使用渐变的对象
+	Font Details	字体详细信息
+	Linked Images	链接的图像
+	Embedded Images	嵌入的图像
+	Compound Paths	复合路径
+	Text Objects	文本对象
+	Placed Documents	置入的文档
+	Symbol Instances	符号实例
+	Gradient Meshes	渐变网格
+	Blends	混合
+	Envelopes	封套
+	Intertwine Groups	交织编组
+	Opacity Masks	不透明度蒙版
+	Objects with Effects	使用效果的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -3434,6 +3469,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Rename Library Group	重命名库组
 	Delete Library Group	删除库组
 	Move Library Item to Group	将库项目移到组
+	Rename Library Item	重命名库项目
+	Add to Character Styles	添加到字符样式
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
@@ -4185,6 +4222,7 @@ imageTrace	Outline	轮廓
 @msg	the layer to flatten into is hidden	要拼合到的图层已隐藏
 @msg	there are no objects to release	没有可释放的对象
 @msg	no library `{id}`	没有库 `{id}`
+@msg	the library has another item of that kind named `{name}`	库中已有另一个同类项目名为 `{name}`
 @msg	{path}: not a file	{path}：不是文件
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	无法写入 .{ext} 图像
@@ -4246,6 +4284,7 @@ imageTrace	Outline	轮廓
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
 @msg	select an Objects on Path group	请选择一个路径上的对象组
+@msg	choose the object to detach with its Select/Move widget	请用对象的“选择/移动”控件选择要分离的对象
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	复合路径、混合对象、封套、重复对象或交织组中的路径无法附加对象
 @msg	a clipping path can't take objects	剪切路径无法附加对象
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	混合对象、封套、重复对象或交织组中的对象无法附加到路径
@@ -4438,6 +4477,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	not a PICT file	不是 PICT 文件
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
@@ -4655,6 +4695,10 @@ imageTrace	Outline	轮廓
 @msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
 @msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
+@msg	select an image with a color mask	请选择一个带颜色蒙版的图像
+@msg	the color mask's settings are out of range	颜色蒙版的设置超出范围
+@msg	a CMYK image can't take a color mask	CMYK 图像不能使用颜色蒙版
+@msg	the mask would hide every pixel	蒙版会隐藏所有像素
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
@@ -4828,10 +4872,14 @@ imageTrace	Outline	轮廓
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
 @msg	Couldn't place {name}: the document it was placed in was closed	无法置入 {name}：要置入的文档已关闭
+@msg	Couldn't place {name}: the document it was dropped on was reverted	无法置入 {name}：将它拖放到的文档已恢复
+@msg	Couldn't place {name}: the document it was placed in was reverted	无法置入 {name}：要置入的文档已恢复
+@msg	Couldn't paste: the document it was pasted in was reverted	无法粘贴：要粘贴到的文档已恢复
 @msg	no files to place	没有要置入的文件
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文档、PDF 或 PDF 兼容的 .ai 文件
 @msg	paths: give at least one file	paths：请至少给出一个文件
 @msg	replace: the object to replace was changed or deleted	replace：要替换的对象已被更改或删除
+@msg	the document it was prepared for is no longer active	为其准备的文档已不再处于活动状态
 @msg	Couldn't place {name}: {e}	无法置入 {name}：{e}
 @msg	no print service	没有打印服务
 @msg	the print job has no data	打印作业没有数据
@@ -4885,12 +4933,14 @@ imageTrace	Outline	轮廓
 @msg	choose the font files to add	请选择要添加的字体文件
 @msg	not a file	不是文件
 @msg	not a font file	不是字体文件
+@msg	the active document changed while the question was open; nothing was deleted	问题打开期间活动文档已更改；未删除任何内容
 @msg	that document is no longer open	该文档已不再打开
 @msg	larger than 256 MB	大于 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	文件总计超过 1 GB：请每次少添加一些
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5226,6 +5276,8 @@ imageTrace	Outline	轮廓
 	Outlined Text	轮廓化的文字
 	All Rasterized Regions	所有栅格化区域
 	Perceptual	可感知
+	Hue Clockwise	色相顺时针
+	Hue Counterclockwise	色相逆时针
 	Relative Colorimetric	相对比色
 	Absolute Colorimetric	绝对比色
 	Simulate	模拟
@@ -5335,6 +5387,10 @@ font-technology	Variable	可变
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 处理方式
 	Push In First	先推入
@@ -5417,6 +5473,10 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Dock to Left	停放到左侧
+	Dock to Right	停放到右侧
+	Dock Toolbar	停放工具栏
+	Float Toolbar	浮动工具栏
 	Control Bar Options	控制栏选项
 	Tool Options	工具选项
 	Object Options	对象选项
@@ -5741,6 +5801,68 @@ lighting	Light	光源
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}无法从图像生成立体：请先使用“对象 › 图像描摹 › 创建”进行描摹。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
 @msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
+@msg	Extrude & Bevel	突出与斜角
+@msg	Revolve	回转
+@msg	Inflate	膨胀
+@msg	Rotate	旋转
+@msg	Extrude & Bevel (Classic)	突出与斜角 (经典)
+@msg	Revolve (Classic)	回转 (经典)
+@msg	Rotate (Classic)	旋转 (经典)
+@msg	This effect	此效果
+@msg	clipping paths	剪切路径
+@msg	other objects	其他对象
+@msg	{label} requires a group holding a shape with at least two anchors	{label}需要一个包含至少有两个锚点的形状的编组
+@msg	Revolve requires a group holding a shape with at least two anchors	回转需要一个包含至少有两个锚点的形状的编组
+@msg	Revolve requires a shape with at least two anchors	回转需要至少有两个锚点的形状
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	编组上的{label}需要路径、复合路径、文字、编组、剪切组、混合和符号实例：请先释放或扩展以下内容：{what}。
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	编组上的{label}最多接受 {MAX_MEMBERS} 个对象
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	编组或图层上的 3D 效果应作用于编组本身，而不是其填色或描边
+@msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
+@msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
+@msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
+@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}最多接受 {MAX_MEMBERS} 个对象
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}无法从嵌套超过 {MAX_DEPTH} 层的图稿生成实体
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	回转的上色对此表面过于复杂；请减少分段数或简化渐变
+@msg	Revolve edge must be left or right	回转：edge 必须是 left 或 right
+@msg	Revolve cap must be a boolean	回转：cap 必须是布尔值
+@msg	the revolved object has no fill or stroke	回转对象没有填色或描边
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor 必须是 #rrggbb 格式的不透明 RGB 颜色
+@msg	lights must contain one to ten lights	lights 必须包含一到十个光源
+@msg	each light must be an object	每个光源必须是对象
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	未知的光源设置：请使用 color、intensity、rotation、height、softness 或 behind
+@msg	light {key} must be a number from {min} to {max}	光源：{key} 必须是 {min} 到 {max} 之间的数字
+@msg	light color must use opaque #rrggbb	光源的 color 必须是不透明的 #rrggbb
+@msg	light behind must be true or false	光源的 behind 必须是 true 或 false
+@msg	shadow must be true or false	shadow 必须是 true 或 false
+@msg	shadowPosition must be behind or below	shadowPosition 必须是 behind 或 below
+@msg	{key} must be a number from {min} to {max}	{key} 必须是 {min} 到 {max} 之间的数字
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每个条目必须是对象
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的条目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每个条目都需要 `symbol`，即符号的名称
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
+	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
+@msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
+@msg	The graphics are too complex: simplify the symbols' art	图形过于复杂：请简化符号的图稿
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	图形的图稿最多可嵌套 {MAX_LEVELS} 层：请简化符号的图稿
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	图形的图稿最多可嵌套 {MAX_NESTING} 层符号：请简化符号的图稿
+@msg	A graphic's art holds too many objects: simplify the symbol's art	图形的图稿包含过多对象：请简化符号的图稿
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	一个图形最多绘制 {MAX_PIECES} 个填色和描边：请简化符号的图稿
+@msg	`surface` must be one of {_1}	`surface` 必须是 {_1} 之一
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}为此对象绘制源图稿，而不是其 3D 表面
+@msg	{label} draws no faces for this object	{label}没有为此对象绘制任何面
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	线框的边超过 {MAX_WIRE_EDGES} 条
 @msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状
 	Transform Objects	变换对象
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
@@ -5751,6 +5873,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
 @msg	missing `{path}`	缺少 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 嵌套过深
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整
@@ -6039,7 +6162,7 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` 适用于渐变填色 (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
-@msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必须是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
@@ -6152,6 +6275,35 @@ axis	Y Axis	Y 轴
 @msg	the path has no anchor points	路径没有锚点
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
+@msg	a number >= {_1}	大于或等于 {_1} 的数字
+@msg	a number > {_1}	大于 {_1} 的数字
+@msg	a number <= {_1}	小于或等于 {_1} 的数字
+@msg	a number < {_1}	小于 {_1} 的数字
+@msg	a number {_1} to {_2}	{_1} 到 {_2} 之间的数字
+@msg	a number >= {_1} and < {_2}	大于或等于 {_1} 且小于 {_2} 的数字
+@msg	a number > {_1} and <= {_2}	大于 {_1} 且小于或等于 {_2} 的数字
+@msg	a number > {_1} and < {_2}	大于 {_1} 且小于 {_2} 的数字
+@msg	a number ({_1})	数字（{_1}）
+@msg	a number >= {_1} ({_2})	大于或等于 {_1} 的数字（{_2}）
+@msg	a number > {_1} ({_2})	大于 {_1} 的数字（{_2}）
+@msg	a number <= {_1} ({_2})	小于或等于 {_1} 的数字（{_2}）
+@msg	a number < {_1} ({_2})	小于 {_1} 的数字（{_2}）
+@msg	a number {_1} to {_2} ({_3})	{_1} 到 {_2} 之间的数字（{_3}）
+@msg	a number >= {_1} and < {_2} ({_3})	大于或等于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and <= {_2} ({_3})	大于 {_1} 且小于或等于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and < {_2} ({_3})	大于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	an integer	整数
+@msg	an integer >= {_1}	大于或等于 {_1} 的整数
+@msg	an integer <= {_1}	小于或等于 {_1} 的整数
+@msg	an integer {_1} to {_2}	{_1} 到 {_2} 之间的整数
+@msg	one of {_1}	{_1} 之一
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` 必须是 {_1} 之一，而不是 {got}
+@msg	an object id (a non-negative integer)	对象 ID（非负整数）
+@msg	a list of object ids	对象 ID 列表
+@msg	a color (a string, [r, g, b] or an object)	颜色（字符串、[r, g, b] 或对象）
+@msg	[x, y] (two numbers)	[x, y]（两个数字）
+@msg	an object	对象
+@msg	a list	列表
 @msg	unknown key `{k}`; the keys here are {_1}	未知键 `{k}`；此处可用的键：{_1}
 @msg	{_1} is listed twice	{_1} 列出了两次
 @msg	{_1} is not the id of an input object	{_1} 不是输入对象的 ID
@@ -6253,14 +6405,33 @@ axis	Y Axis	Y 轴
 	Continue	继续
 	Continue Action	继续动作
 	Delete Action Step	删除动作步骤
+	Move Action Step	移动动作步骤
 	Press Play Current Selection in the Actions panel to go on.	要继续，请按“动作”面板中的“播放当前选择项目”。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	没有动作在停止处等待
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+@msg	Batch cannot play an action with a View menu step	批处理无法播放含有视图菜单步骤的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
+	Insert Select Path	插入选择路径
+	Select Path	选择路径
+@msg	select one whole path or compound path	请选择一条完整路径或复合路径
+@msg	select only one path	请只选择一条路径
+@msg	the path is hidden or locked, or cannot be selected here	该路径已隐藏或锁定，或无法在此处选择
+@msg	object {value} is not the stored path: it changed, or the document is another one	对象 {value} 不是存储的路径：它已更改，或这是另一个文档
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必须为 "v1:" 加 16 位小写十六进制数字
+	Select Object…	选择对象…
+	Select Object	选择对象
+	Set Selection	设置选区
+	Case Sensitive	区分大小写
+	Whole Word	全字匹配
+	Select Object: {note}	选择对象：{note}
+	Select by Note	按注释选择
+@msg	the note is empty	注释为空
+@msg	the note is longer than 1,024 bytes	注释超过 1,024 字节
+@msg	no object that can be selected has a note matching “{query}”	没有可选对象的注释与“{query}”匹配
 	Menu Item:	菜单项：
 	No menu item matches.	没有匹配的菜单项。
 	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。
@@ -6406,6 +6577,22 @@ axis	Y Axis	Y 轴
 	Graphite Pencil	石墨铅笔
 	Wax Crayon	蜡笔
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口丝带
+	Double Line	双线
+	Wave	波浪
+	Teardrop	泪滴
+	Striped Ribbon	条纹丝带
+	Fine Nib	细笔尖
+	Broad Nib	宽笔尖
+	Chisel	凿形
+	Round Pen	圆头笔
+	Pressure Pen	压感笔
+	Beads	珠串
+	Dash Dot	点划线
+	Scallops	扇贝边
+	Stars	星形
+	Triangles	三角形
+	Sparkles	闪光
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6425,6 +6612,13 @@ axis	Y Axis	Y 轴
 	Area Text	区域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	按字形边界度量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	对齐像素选项
+	Pixel Snapping Options…	对齐像素选项…
+	Snap to Pixel While Drawing	绘制时对齐像素
+	Snap to Pixel While Moving	移动时对齐像素
+	Snap to Pixel While Scaling	缩放时对齐像素
+	These options take effect when View › Snap to Pixel is on.	这些选项在“视图 › 对齐像素”打开时生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项
@@ -6974,7 +7168,9 @@ breakText	Glyphs	字形
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 类型的增效工具，不是导入增效工具
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 类型的增效工具，不是导出增效工具
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer": "{_2}"}} 打开文件
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是导出增效工具：请用 document.export {{"format": "{_2}"}} 导出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是实时效果：请用 effect.apply {{"effect": "{_2}"}} 应用
 @msg	the importer returned no objects	导入增效工具未返回任何对象
 @msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节
@@ -7050,6 +7246,19 @@ breakText	Glyphs	字形
 	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+	View more	查看更多
+	Finish tutorial	完成教程
+	Next Up	下一个
+	You finished the last tutorial in this skill.	你已完成此技能的最后一个教程。
+	Back to skills	返回技能
+	Open Tutorial Sample	打开教程示例
+	Finish Tutorial	完成教程
+	Next Tutorial	下一个教程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最后一个教程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果

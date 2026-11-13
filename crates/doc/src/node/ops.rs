@@ -716,6 +716,37 @@ impl Node {
         out
     }
 
+    /// As a piece of a mesh-warped image ([`crate::NodeExtras::warp_piece`]), the art whose area is its
+    /// knockout shape at full coverage: the art of its opacity mask (on and not inverted), or the
+    /// clipping path of its clip group. `None` for other objects, whose knockout shape is what they
+    /// paint.
+    pub fn knockout_outline(&self) -> Option<&Arc<Node>> {
+        let e = self.extras();
+        if !e.warp_piece {
+            return None;
+        }
+        if let Some(m) = e.mask.as_deref() {
+            return (!m.disabled && !m.invert).then_some(&m.art);
+        }
+        match &self.kind {
+            NodeKind::Group { children, clip: true } => children.first(),
+            _ => None,
+        }
+    }
+
+    /// The image a piece of a mesh-warped image draws ([`Self::knockout_outline`]): the piece itself
+    /// when an opacity mask cuts it, else the image its clip group clips. `None` for other objects.
+    pub fn warp_piece_image(&self) -> Option<&Node> {
+        if !self.extras().warp_piece {
+            return None;
+        }
+        match &self.kind {
+            NodeKind::Image(_) => Some(self),
+            NodeKind::Group { children, clip: true } => children.get(1).map(|c| &**c).filter(|c| matches!(c.kind, NodeKind::Image(_))),
+            _ => None,
+        }
+    }
+
     /// Whether this is a clip group or a layer with a clipping mask: its first child clips the rest.
     /// A layer whose first child is a ruler guide holds no art, so a guide never clips it.
     pub fn clips(&self) -> bool {
@@ -819,7 +850,8 @@ impl Node {
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
     /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
-    /// stops or a colorized image. Hidden objects show none.
+    /// stops (characters' fills and strokes included) or a colorized image. Hidden objects show
+    /// none.
     pub fn shows_transparency(&self) -> bool {
         self.shows_transparency_with(&|_| true)
     }
@@ -827,21 +859,31 @@ impl Node {
     /// [`Self::shows_transparency`], counting a colorized image by itself only when `colorize`
     /// accepts it, for files that write some colorized images in their colorize paint (EPS).
     pub fn shows_transparency_with(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
+        self.visible && (self.own_transparency(colorize) || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+    }
+
+    /// [`Self::shows_transparency`] of the object alone, what it holds left out.
+    pub fn shows_own_transparency(&self) -> bool {
+        self.visible && self.own_transparency(&|_| true)
+    }
+
+    /// The object's own transparency, as [`Self::shows_transparency_with`] counts it.
+    fn own_transparency(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
         let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
-        self.visible
-            && (self.opacity < 1.0
-                || self.blend != BlendMode::Normal
-                || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
-                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
-                || effects(&self.appearance.effects)
-                || self
-                    .appearance
-                    .items
-                    .iter()
-                    .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
-                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+        self.opacity < 1.0
+            || self.blend != BlendMode::Normal
+            || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+            || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
+            || effects(&self.appearance.effects)
+            || self
+                .appearance
+                .items
+                .iter()
+                .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
+            // Characters' own fills and strokes, which draw with the object.
+            || matches!(&self.kind, NodeKind::Text(t) if t.runs.iter().any(|r| see_through(&r.style.fill) || (r.style.stroke_width > 0.0 && see_through(&r.style.stroke))))
     }
 }
 

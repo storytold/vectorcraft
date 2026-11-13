@@ -4,6 +4,8 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod imageoutline;
+mod painted;
 mod rasterfollow;
 mod scale;
 mod transformfx;
@@ -883,6 +885,108 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
         let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
         crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget, None);
         assert_eq!(end(&art.children().unwrap()[0].appearance), Some(550.0), "{}: the layer's gradient, inside the art", grow.id);
+    }
+}
+
+/// Under a Warp effect a hidden path in a layer that keeps its shape past the budget does not hold
+/// the layer's gradient in place either: it moves and scales from the layer's bounds to the warped
+/// square's bounds, as the art and inside the art.
+#[test]
+fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_follow_a_warp() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, LayerColor, NodeId, NodeKind, color::Paint};
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let ends = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.geom.map(|g| (g.start, g.end)),
+        _ => None,
+    };
+    let oval = || shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+    // A layer with a visible square and a hidden circle, both 0..100, and a gradient fill of its own.
+    let layer = || {
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut circle = Node::path(NodeId(4), oval(), Appearance::default());
+        circle.visible = false;
+        let mut layer = Node::layer(NodeId(2), "Layer 1", LayerColor::Preset(0));
+        if let NodeKind::Layer { children, .. } = &mut layer.kind {
+            *children = vec![square, Arc::new(circle)];
+        }
+        layer.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        layer
+    };
+    // The box map from the layer's bounds (the square's) to `b`: (0, 50) and (100, 50) go to the
+    // middles of b's sides.
+    let near = |got: Option<(Point, Point)>, b: Rect| {
+        let mid = (b.y0 + b.y1) / 2.0;
+        got.is_some_and(|(s, e)| s.distance(Point::new(b.x0, mid)) < 1e-6 && e.distance(Point::new(b.x1, mid)) < 1e-6)
+    };
+    for style in ["arc", "inflate", "flag"] {
+        let warp = fx(&format!("warp.{style}"), json!({"bend": 40.0, "horizontal": 20.0}));
+        // Room for the warped square beside the circle as it was, and not for the warped circle
+        // beside the warped square: the paths take the budget in turn, so the circle keeps its shape.
+        let mut probe = layer();
+        crate::reshape::reshape_leaves_within(&mut probe, &[&warp], Budget::EFFECTS, None);
+        let warped = |k: usize| util::line_estimate(probe.children().unwrap()[k].path_data().unwrap());
+        let circle = util::line_estimate(&oval());
+        assert!(warped(1) > circle, "warp.{style}: the warped circle is drawn with more lines");
+        let budget = Budget { anchors: usize::MAX, lines: warped(0) + circle };
+        let mut art = layer();
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&warp], budget, None);
+        assert_eq!(art.children().unwrap()[1].path_data(), Some(&oval()), "{}: the hidden circle keeps its shape", warp.id);
+        let square = art.children().unwrap()[0].geometric_bounds().unwrap();
+        assert!(square != Rect::new(0.0, 0.0, 100.0, 100.0), "{}: the square takes the effect: {square:?}", warp.id);
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert!(near(ends(&own), square), "{}: the layer's gradient, as the art: {:?} for {square:?}", warp.id, ends(&own));
+        let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
+        crate::reshape::reshape_leaves_within(&mut art, &[&warp], budget, None);
+        let got = ends(&art.children().unwrap()[0].appearance);
+        assert!(near(got, square), "{}: the layer's gradient, inside the art: {got:?} for {square:?}", warp.id);
+    }
+}
+
+/// A freeform gradient whose points were edited moves its points with a Warp effect from the
+/// bounds before the warp to the bounds after it, on a path, on a group inside the art and on the
+/// art itself, as a placed gradient does.
+#[test]
+fn edited_freeform_points_follow_a_warp() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let mut ramp = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Gradient::default() });
+    let pt = |x: f64, c| FreeformPoint::new(Point::new(x, 50.0), c);
+    ramp.set_freeform(Freeform { points: vec![pt(0.0, Color::BLACK), pt(100.0, Color::WHITE)], ..Default::default() });
+    assert!(ramp.geom.is_none() && !ramp.is_placed());
+    let freeform = Paint::Gradient(Box::new(ramp));
+    let points = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.freeform.as_ref().map(|f| f.points.iter().map(|p| p.at).collect::<Vec<_>>()),
+        _ => None,
+    };
+    let square = |ap: Appearance| Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap));
+    // The box map from the square's bounds to `b`: (0, 50) and (100, 50) go to the middles of b's sides.
+    let near = |got: Option<Vec<Point>>, b: Rect| {
+        let mid = (b.y0 + b.y1) / 2.0;
+        got.is_some_and(|p| p.len() == 2 && p[0].distance(Point::new(b.x0, mid)) < 1e-6 && p[1].distance(Point::new(b.x1, mid)) < 1e-6)
+    };
+    for style in ["arc", "inflate", "rise"] {
+        let e = fx(&format!("warp.{style}"), json!({"bend": 40.0, "vertical": 20.0}));
+        let mut inner = Node::group(NodeId(2), vec![square(Appearance::default())]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let mut art = Node::group(NodeId(9), vec![square(Appearance::basic(freeform.clone(), Paint::None, 0.0)), Arc::new(inner)]);
+        art.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS, None);
+        let b = art.geometric_bounds().unwrap();
+        assert!(b != Rect::new(0.0, 0.0, 100.0, 100.0), "{}: the warp changes the bounds: {b:?}", e.id);
+        let members = art.children().unwrap();
+        assert!(near(points(&members[0].appearance), b), "{}: the path's points {:?} for {b:?}", e.id, points(&members[0].appearance));
+        assert!(near(points(&members[1].appearance), b), "{}: the inner group's points {:?} for {b:?}", e.id, points(&members[1].appearance));
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert!(near(points(&own), b), "{}: the art's own points {:?} for {b:?}", e.id, points(&own));
     }
 }
 

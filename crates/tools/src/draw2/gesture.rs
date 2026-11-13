@@ -23,9 +23,13 @@
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
 
+use std::cell::Cell;
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{Affine, Point};
+use vectorcraft_geom::{Affine, BezPath, FillRule, ParamCurve, PathData, PathSeg, Point, Rect, Vec2, shapes};
+use vectorcraft_pathops as po;
 
 use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
@@ -35,12 +39,45 @@ use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, T
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
 const SMOOTH_RADIUS: f64 = 12.0;
 
+/// The most points of a drag that one step of its band adds, as when the band is outlined again
+/// at a new zoom.
+const BAND_STEP: usize = 32;
+/// The most steps one call adds to a band: a band outlined again for a long drag shows in full
+/// over several frames ([`Tool::overlays_pending`]).
+const BAND_STEPS_PER_CALL: usize = 8;
+/// The side of the squares a smoothing drag's band is kept in, in radii: a step of the drag adds
+/// its area only to the squares it reaches, so the work of a step does not grow with the drag.
+const BAND_TILE_RADII: f64 = 8.0;
+/// Where the grid of those squares starts, in squares from the origin, so that the edge of the
+/// band of a drag along whole coordinates does not run along a side of a square.
+const BAND_TILE_OFFSET: f64 = 0.381_966;
+/// The most squares one segment of a drag is checked against: a segment longer than 2,048 squares
+/// is kept outside the squares, and shows as the two sides of its band.
+const BAND_TILE_SAMPLES: f64 = 4096.0;
+/// The side of the cells of a coarser grid, in squares: each cell lists the squares and the long
+/// segments in it, so that a new square or long segment is checked only against those near it.
+const BAND_CELL_TILES: i64 = 1024;
+/// The most points, half a cell apart, along a long segment at which its cells are listed: a
+/// longer segment is listed in no cell and checked against every square and long segment.
+const BAND_CELL_SAMPLES: f64 = 4096.0;
+/// The most work one call does on the band's long segments: comparisons of a long segment with a
+/// square or another long segment, and pieces of an outline tested. The rest waits for the next
+/// call ([`Tool::overlays_pending`]), and the band shown until then is the last one finished.
+const BAND_WORK_PER_CALL: usize = 20_000;
+
 /// The finest Fidelity (screen pixels) a Pencil or Paintbrush stroke is fitted at while it is drawn:
 /// a fit's cost grows as its Fidelity shrinks (at 0.01 pt a long pen stroke lagged, #4565), and
 /// a preview within half a pixel of the stroke looks the same. The release fits it at its Fidelity.
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
 /// The Smooth tool's Fidelity until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
+
+/// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
+/// at the current zoom, within the range the command takes
+/// ([`super::MIN_FIT_TOLERANCE`]..[`super::MAX_FIT_TOLERANCE`]).
+fn fit_tolerance(cx: &ToolContext, px: f64) -> f64 {
+    cx.tol(px).clamp(super::MIN_FIT_TOLERANCE, super::MAX_FIT_TOLERANCE)
+}
 
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]); 0 when it was
@@ -129,6 +166,584 @@ pub struct GestureTool {
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
+    /// The band the smoothing drag has shown so far ([`GestureTool::smooth_band`]).
+    band: Cell<Option<SmoothBand>>,
+    /// The band last shown does not cover the whole drag yet; the next call adds to it.
+    band_pending: Cell<bool>,
+}
+
+/// The band a smoothing drag smooths, for the drag's first `used` points at `radius`, kept as its
+/// area in each square of a grid that it reaches.
+struct SmoothBand {
+    radius: f64,
+    used: usize,
+    first: Point,
+    last: Point,
+    tiles: BTreeMap<(i64, i64), BandTile>,
+    /// The segments of the drag too long for the squares ([`BAND_TILE_SAMPLES`]).
+    long: Vec<LongSegment>,
+    /// The squares and long segments listed in each cell of a coarser grid ([`BAND_CELL_TILES`]).
+    cells: BTreeMap<(i64, i64), BandCell>,
+    /// The long segments listed in no cell ([`BAND_CELL_SAMPLES`]).
+    wide: Vec<usize>,
+    /// The squares near a long segment whose `cut` is to be made again.
+    dirty_tiles: BTreeSet<(i64, i64)>,
+    /// The long segments whose `drawn` is to be made again.
+    dirty_long: BTreeSet<usize>,
+    /// The band changed since `shown` was made.
+    changed: bool,
+    /// The outline last finished.
+    shown: Option<BezPath>,
+    /// The work done on long segments in the current call ([`BAND_WORK_PER_CALL`]).
+    work: usize,
+}
+
+/// The squares and long segments (indexes into [`SmoothBand::long`]) in one cell of the coarser grid.
+#[derive(Default)]
+struct BandCell {
+    tiles: Vec<(i64, i64)>,
+    long: Vec<usize>,
+}
+
+/// The part of a band in one square of the grid, and its outline less the square's sides.
+struct BandTile {
+    area: PathData,
+    outline: BezPath,
+    /// The long segments whose band can reach the square (indexes into [`SmoothBand::long`]).
+    near_long: Vec<usize>,
+    /// `outline` less its parts inside the band of a long segment in `near_long`.
+    cut: BezPath,
+}
+
+/// A segment of a drag too long for the squares, from `a` to `b`, with the part of it outside the
+/// squares (`from` and `to`: 0 at `a`, 1 at `b`): the squares hold its band for a square's side
+/// from each end ([`SmoothBand::add_long`]).
+struct LongSegment {
+    a: Point,
+    b: Point,
+    from: f64,
+    to: f64,
+    /// The squares its band can reach.
+    near: BTreeSet<(i64, i64)>,
+    /// The other long segments whose band can meet its band.
+    meets: Vec<usize>,
+    /// The parts of the two sides of its band that show.
+    drawn: BezPath,
+}
+
+impl LongSegment {
+    /// The two sides of its band at `radius`, over its part outside the squares.
+    fn sides(&self, radius: f64) -> [vectorcraft_geom::Line; 2] {
+        let d = self.b - self.a;
+        let s = Vec2::new(-d.y, d.x) * (radius / d.hypot());
+        let (p, q) = (self.a.lerp(self.b, self.from), self.a.lerp(self.b, self.to));
+        [vectorcraft_geom::Line::new(p + s, q + s), vectorcraft_geom::Line::new(p - s, q - s)]
+    }
+}
+
+impl SmoothBand {
+    /// The band of a drag that starts at `first`, before it has moved.
+    fn new(first: Point, radius: f64) -> Self {
+        Self {
+            radius,
+            used: 1,
+            first,
+            last: first,
+            tiles: BTreeMap::new(),
+            long: vec![],
+            cells: BTreeMap::new(),
+            wide: vec![],
+            dirty_tiles: BTreeSet::new(),
+            dirty_long: BTreeSet::new(),
+            changed: true,
+            shown: None,
+            work: 0,
+        }
+    }
+
+    /// The cell of the coarser grid that holds square `key`.
+    fn cell_of((ix, iy): (i64, i64)) -> (i64, i64) {
+        (ix.div_euclid(BAND_CELL_TILES), iy.div_euclid(BAND_CELL_TILES))
+    }
+
+    /// The cells around points half a cell apart along the segment from `a` to `b`: every cell
+    /// holding a square its band can reach, or a point within the radius of its band. `None` for
+    /// a segment longer than [`BAND_CELL_SAMPLES`] half cells or reaching far outside any document.
+    fn cells_along(&self, a: Point, b: Point) -> Option<BTreeSet<(i64, i64)>> {
+        let n = (a.distance(b) / (0.5 * BAND_CELL_TILES as f64 * self.side())).ceil().max(1.0);
+        if !n.is_finite() || n > BAND_CELL_SAMPLES {
+            return None;
+        }
+        let mut cells = BTreeSet::new();
+        for k in 0..=(n as u32) {
+            let (cx, cy) = Self::cell_of(self.tile_of(a.lerp(b, f64::from(k) / n))?);
+            for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+                cells.insert((cx + dx, cy + dy));
+            }
+        }
+        Some(cells)
+    }
+
+    /// Whether the band of the segment from `a` to `b` can reach square `key`.
+    fn reaches(&self, key: (i64, i64), a: Point, b: Point) -> bool {
+        distance_to_segment(self.tile_rect(key).center(), a, b) <= self.radius + 0.5 * std::f64::consts::SQRT_2 * self.side()
+    }
+
+    /// Whether the segment from `a` to `b` is too long for the squares: longer than
+    /// [`BAND_TILE_SAMPLES`] half squares.
+    fn too_long(&self, a: Point, b: Point) -> bool {
+        let n = a.distance(b) / (0.5 * self.side());
+        n.is_finite() && n > BAND_TILE_SAMPLES
+    }
+
+    /// Add the band of the segment from `a` to `b`, too long for the squares: the squares take its
+    /// band for a square's side from each end, where they can, and the rest is kept as the
+    /// segment.
+    fn add_long(&mut self, a: Point, b: Point) {
+        let d = b - a;
+        let stub = d * (self.side() / d.hypot());
+        let from = if self.grow(&[a, a + stub]).is_some() { self.side() / d.hypot() } else { 0.0 };
+        let to = if self.grow(&[b - stub, b]).is_some() { 1.0 - self.side() / d.hypot() } else { 1.0 };
+        let i = self.long.len();
+        // The squares and long segments listed in its cells, or all of them.
+        let mut tiles = BTreeSet::new();
+        let mut others: BTreeSet<usize> = self.wide.iter().copied().collect();
+        match self.cells_along(a, b) {
+            Some(cells) => {
+                self.work += cells.len();
+                for c in cells {
+                    let cell = self.cells.entry(c).or_default();
+                    tiles.extend(cell.tiles.iter().copied());
+                    others.extend(cell.long.iter().copied());
+                    cell.long.push(i);
+                }
+            }
+            None => {
+                tiles.extend(self.tiles.keys().copied());
+                others.extend(0..i);
+                self.wide.push(i);
+            }
+        }
+        self.work += tiles.len() + others.len();
+        let near: BTreeSet<_> = tiles.into_iter().filter(|&k| self.reaches(k, a, b)).collect();
+        for k in &near {
+            if let Some(t) = self.tiles.get_mut(k) {
+                t.near_long.push(i);
+                self.dirty_tiles.insert(*k);
+            }
+        }
+        let reach = 2.0 * self.radius + 2e-3 * self.radius;
+        let meets: Vec<usize> = others.into_iter().filter(|&j| self.long.get(j).is_some_and(|o| segment_distance(a, b, o.a, o.b) <= reach)).collect();
+        for &j in &meets {
+            if let Some(o) = self.long.get_mut(j) {
+                o.meets.push(i);
+                self.dirty_long.insert(j);
+            }
+        }
+        self.long.push(LongSegment { a, b, from, to, near, meets, drawn: BezPath::new() });
+        self.dirty_long.insert(i);
+        self.last = b;
+        self.changed = true;
+    }
+
+    /// The side of the grid's squares.
+    fn side(&self) -> f64 {
+        BAND_TILE_RADII * self.radius
+    }
+
+    /// The square of the grid `key` names.
+    fn tile_rect(&self, (ix, iy): (i64, i64)) -> Rect {
+        let s = self.side();
+        let (x0, y0) = ((ix as f64 + BAND_TILE_OFFSET) * s, (iy as f64 + BAND_TILE_OFFSET) * s);
+        Rect::new(x0, y0, x0 + s, y0 + s)
+    }
+
+    /// The square of the grid that holds `p`; `None` far outside any document.
+    fn tile_of(&self, p: Point) -> Option<(i64, i64)> {
+        let s = self.side();
+        let (x, y) = ((p.x / s - BAND_TILE_OFFSET).floor(), (p.y / s - BAND_TILE_OFFSET).floor());
+        (x.abs() < 1e15 && y.abs() < 1e15).then_some((x as i64, y as i64))
+    }
+
+    /// The squares within the radius of `piece`: those around points along it half a square apart.
+    fn tiles_near(&self, piece: &[Point]) -> Option<BTreeSet<(i64, i64)>> {
+        let mut keys = BTreeSet::new();
+        for w in piece.windows(2) {
+            let n = (w[0].distance(w[1]) / (0.5 * self.side())).ceil().max(1.0);
+            if !n.is_finite() || n > BAND_TILE_SAMPLES {
+                return None;
+            }
+            for k in 0..=(n as u32) {
+                let (ix, iy) = self.tile_of(w[0].lerp(w[1], f64::from(k) / n))?;
+                for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+                    keys.insert((ix + dx, iy + dy));
+                }
+            }
+        }
+        Some(keys)
+    }
+
+    /// Add the area within the radius of `piece`, the drag from the last point covered so far, to
+    /// the squares it reaches. `None`, with the band unchanged, when the outlines cannot be
+    /// combined.
+    fn grow(&mut self, piece: &[Point]) -> Option<()> {
+        let (r, nz) = (self.radius, FillRule::NonZero);
+        let end = *piece.last()?;
+        // Within a hundredth of the radius at any zoom.
+        let precision = (0.01 * r).min(po::DEFAULT_PRECISION);
+        let keys = self.tiles_near(piece)?;
+        let added = blob_area(piece, 2.0 * r, 0.0, 100.0);
+        let mut changed = vec![];
+        for key in keys {
+            let rect = self.tile_rect(key);
+            let clip = po::try_boolean(&added, nz, &shapes::rectangle(rect), nz, po::BoolOp::Intersect, precision).ok()?;
+            if clip.is_empty() {
+                continue;
+            }
+            let area = match self.tiles.get(&key) {
+                Some(t) => po::try_boolean(&t.area, nz, &clip, nz, po::BoolOp::Union, precision).ok().filter(|a| !a.is_empty())?,
+                None => clip,
+            };
+            changed.push((key, area));
+        }
+        // A square's outline depends on the squares across its sides, so those are outlined
+        // again too.
+        let mut redo = BTreeSet::new();
+        for (key @ (ix, iy), area) in changed {
+            redo.extend([(ix, iy), (ix - 1, iy), (ix + 1, iy), (ix, iy - 1), (ix, iy + 1)]);
+            let near_long = match self.tiles.get(&key) {
+                Some(t) => t.near_long.clone(),
+                None => {
+                    // The long segments listed in the square's cell, and those in no cell.
+                    let cell = self.cells.entry(Self::cell_of(key)).or_default();
+                    cell.tiles.push(key);
+                    let mut listed: BTreeSet<usize> = cell.long.iter().copied().collect();
+                    listed.extend(self.wide.iter().copied());
+                    let near: Vec<usize> = listed.into_iter().filter(|&i| self.long.get(i).is_some_and(|l| self.reaches(key, l.a, l.b))).collect();
+                    for &i in &near {
+                        if let Some(l) = self.long.get_mut(i) {
+                            l.near.insert(key);
+                        }
+                    }
+                    near
+                }
+            };
+            // The sides of those long segments are cut where the square's area holds them.
+            self.dirty_long.extend(near_long.iter().copied());
+            self.tiles.insert(key, BandTile { area, outline: BezPath::new(), near_long, cut: BezPath::new() });
+        }
+        self.changed = true;
+        let outlines: Vec<_> = redo.into_iter().filter(|k| self.tiles.contains_key(k)).map(|k| (k, self.tile_outline(k))).collect();
+        for (key, outline) in outlines {
+            if let Some(t) = self.tiles.get_mut(&key) {
+                t.outline = outline;
+                if !t.near_long.is_empty() {
+                    self.dirty_tiles.insert(key);
+                }
+            }
+        }
+        self.last = end;
+        Some(())
+    }
+
+    /// The band's outline: the last one finished. While the band has changed since, the parts it
+    /// changed are made again, until [`BAND_WORK_PER_CALL`] is spent in the call; when all are
+    /// made, the outline is joined from them ([`SmoothBand::make_outline`]).
+    fn outline(&mut self) -> Option<BezPath> {
+        while self.changed {
+            if !self.dirty_tiles.is_empty() || !self.dirty_long.is_empty() {
+                if self.work >= BAND_WORK_PER_CALL {
+                    break;
+                }
+                if let Some(k) = self.dirty_tiles.pop_first() {
+                    let (cut, work) = self.tile_cut(k);
+                    self.work += work;
+                    if let Some(t) = self.tiles.get_mut(&k) {
+                        t.cut = cut;
+                    }
+                } else if let Some(i) = self.dirty_long.pop_first() {
+                    let (drawn, work) = self.long_drawn(i);
+                    self.work += work;
+                    if let Some(l) = self.long.get_mut(i) {
+                        l.drawn = drawn;
+                    }
+                }
+            } else {
+                self.shown = Some(self.make_outline());
+                self.changed = false;
+            }
+        }
+        self.shown.clone()
+    }
+
+    /// The band's outline: every square's, joined, then the parts that show of the two sides of
+    /// the band of each segment too long for the squares. A square near such a segment shows its
+    /// `cut` ([`SmoothBand::tile_cut`]), and such a segment its `drawn` ([`SmoothBand::long_drawn`]).
+    fn make_outline(&self) -> BezPath {
+        let tiles = self.tiles.values().flat_map(|t| (if t.near_long.is_empty() { &t.outline } else { &t.cut }).elements().iter().copied());
+        BezPath::from_vec(tiles.chain(self.long.iter().flat_map(|l| l.drawn.elements().iter().copied())).collect())
+    }
+
+    /// The outline of square `key` less its parts inside the band of a long segment near it (more
+    /// than a thousandth of the radius in), and the work that took.
+    fn tile_cut(&self, key: (i64, i64)) -> (BezPath, usize) {
+        let Some(t) = self.tiles.get(&key) else { return (BezPath::new(), 1) };
+        let (r, eps) = (self.radius, 1e-3 * self.radius);
+        let near: Vec<&LongSegment> = t.near_long.iter().filter_map(|&i| self.long.get(i)).collect();
+        let mut out = BezPath::new();
+        let mut pen = None;
+        let mut work = 1;
+        for seg in t.outline.segments() {
+            // The pieces of the segment between the points where it crosses a side of the band
+            // of a long segment, each left out when it lies inside that band.
+            let mut ts: Vec<f64> = near
+                .iter()
+                .flat_map(|l| l.sides(r))
+                .flat_map(|line| seg.intersect_line(line))
+                .map(|x| x.segment_t)
+                .filter(|t| *t > 0.0 && *t < 1.0)
+                .collect();
+            ts.extend([0.0, 1.0]);
+            ts.sort_by(f64::total_cmp);
+            ts.dedup();
+            work += near.len() * ts.len();
+            for w in ts.windows(2) {
+                let piece = if ts.len() == 2 { seg } else { seg.subsegment(w[0]..w[1]) };
+                let m = piece.eval(0.5);
+                if near.iter().any(|l| distance_to_segment(m, l.a, l.b) < r - eps) {
+                    pen = None;
+                } else {
+                    push_seg(&mut out, &mut pen, piece);
+                }
+            }
+        }
+        (out, work)
+    }
+
+    /// The parts that show of the two sides of the band of long segment `i`, outside the squares'
+    /// part of it, and the work that took. Left out: the parts inside the band area of a square,
+    /// inside the band of another long segment (more than a thousandth of the radius in), and on
+    /// a side of an earlier long segment, which already shows. Only the squares and long segments
+    /// near it are checked.
+    fn long_drawn(&self, i: usize) -> (BezPath, usize) {
+        let Some(l) = self.long.get(i) else { return (BezPath::new(), 1) };
+        let (r, eps) = (self.radius, 1e-3 * self.radius);
+        let others: Vec<(usize, &LongSegment)> = l.meets.iter().filter_map(|&j| self.long.get(j).map(|o| (j, o))).collect();
+        // Whether a square's band area holds `q`.
+        let in_tiles = |q: Point| {
+            self.tile_of(q).and_then(|k| self.tiles.get(&k)).is_some_and(|t| vectorcraft_geom::Shape::winding(&t.area.to_bezpath(), q) != 0)
+        };
+        let mut out = BezPath::new();
+        let mut work = 1;
+        for line in l.sides(r) {
+            // Where the side crosses the band area of a square it passes, a side of another long
+            // segment's band, or the end of a side it runs along.
+            let mut ts = vec![0.0, 1.0];
+            for t in l.near.iter().filter_map(|k| self.tiles.get(k)) {
+                ts.extend(t.area.to_bezpath().segments().flat_map(|seg| seg.intersect_line(line)).map(|x| x.line_t));
+            }
+            // The stretches of the side inside the band of another long segment, and those on a
+            // side of an earlier one.
+            let mut inside = vec![];
+            let mut along = vec![];
+            for &(j, other) in &others {
+                inside.extend(capsule_span(line, other.a, other.b, r - eps));
+                for s in other.sides(r) {
+                    ts.extend(PathSeg::Line(s).intersect_line(line).into_iter().map(|x| x.line_t));
+                    if j < i {
+                        ts.extend(
+                            [s.p0, s.p1]
+                                .into_iter()
+                                .filter(|&p| distance_to_segment(p, line.p0, line.p1) <= eps)
+                                .map(|p| (p - line.p0).dot(line.p1 - line.p0) / (line.p1 - line.p0).hypot2()),
+                        );
+                        along.extend(capsule_span(line, s.p0, s.p1, eps));
+                    }
+                }
+            }
+            let (inside, along) = (merge_spans(inside), merge_spans(along));
+            ts.retain(|t| (0.0..=1.0).contains(t));
+            ts.sort_by(f64::total_cmp);
+            ts.dedup();
+            work += l.near.len() + others.len() + ts.len();
+            let mut pen = None;
+            for w in ts.windows(2) {
+                let (p, q) = (line.p0.lerp(line.p1, w[0]), line.p0.lerp(line.p1, w[1]));
+                let mid = 0.5 * (w[0] + w[1]);
+                let hidden = in_tiles(p.midpoint(q)) || spans_cover(&inside, mid, mid) || spans_cover(&along, w[0], w[1]);
+                if !hidden {
+                    push_seg(&mut out, &mut pen, PathSeg::Line(vectorcraft_geom::Line::new(p, q)));
+                }
+            }
+        }
+        (out, work)
+    }
+
+    /// The outline of the band's part in square `key`, less the parts along a side of the square
+    /// (within a thousandth of the radius) where the band goes on across that side: where the
+    /// square across it holds band area a thousandth of the radius past it.
+    fn tile_outline(&self, key: (i64, i64)) -> BezPath {
+        let Some(tile) = self.tiles.get(&key) else { return BezPath::new() };
+        let (rect, eps) = (self.tile_rect(key), 1e-3 * self.radius);
+        let (ix, iy) = key;
+        // A point's distance across a side (x for a side that runs up and down) and along it.
+        let split = |upright: bool, p: Point| if upright { (p.x, p.y) } else { (p.y, p.x) };
+        // Each side with band area across it: whether it runs up and down, where it runs, the
+        // direction away from this square, the area across, and where along the side that area's
+        // outline has a point on the side (where the area across can start or stop).
+        let sides: Vec<_> = [
+            (true, rect.x0, (ix - 1, iy), -1.0),
+            (true, rect.x1, (ix + 1, iy), 1.0),
+            (false, rect.y0, (ix, iy - 1), -1.0),
+            (false, rect.y1, (ix, iy + 1), 1.0),
+        ]
+        .into_iter()
+        .filter_map(|(upright, at, k, away)| {
+            let area = self.tiles.get(&k)?.area.to_bezpath();
+            let cuts: Vec<f64> = area
+                .segments()
+                .flat_map(|s| [s.start(), s.end()])
+                .map(|p| split(upright, p))
+                .filter(|&(off, _)| (off - at).abs() <= eps)
+                .map(|(_, along)| along)
+                .collect();
+            Some((upright, at, away, area, cuts))
+        })
+        .collect();
+        let mut out = BezPath::new();
+        let mut pen = None;
+        for seg in tile.area.to_bezpath().segments() {
+            let (a, b, mid) = (seg.start(), seg.end(), seg.eval(0.5));
+            let Some((upright, at, away, area, cuts)) = sides.iter().find(|s| [a, b, mid].iter().all(|&p| (split(s.0, p).0 - s.1).abs() <= eps))
+            else {
+                push_seg(&mut out, &mut pen, seg);
+                continue;
+            };
+            // The parts of the segment between the points where the area across starts or stops
+            // (more than `eps` from its ends), each kept unless the area across holds the point
+            // `eps` past the side beside it: the square across holds band area there exactly when
+            // its own edge of the band lies farther out than `eps`, and so shows.
+            let (la, lb) = (split(*upright, a).1, split(*upright, b).1);
+            let mut ts: Vec<f64> = cuts
+                .iter()
+                .filter(|&&c| (c - la) * (c - lb) < 0.0 && (c - la).abs() > eps && (c - lb).abs() > eps)
+                .map(|&c| (c - la) / (lb - la))
+                .collect();
+            ts.sort_by(f64::total_cmp);
+            let whole = ts.is_empty();
+            ts.insert(0, 0.0);
+            ts.push(1.0);
+            for w in ts.windows(2) {
+                let (p, q) = (a.lerp(b, w[0]), a.lerp(b, w[1]));
+                let m = if whole { mid } else { p.midpoint(q) };
+                let past = at + away * eps;
+                let probe = if *upright { Point::new(past, m.y) } else { Point::new(m.x, past) };
+                if vectorcraft_geom::Shape::winding(area, probe) != 0 {
+                    pen = None;
+                } else if whole {
+                    push_seg(&mut out, &mut pen, seg);
+                } else {
+                    push_seg(&mut out, &mut pen, PathSeg::Line(vectorcraft_geom::Line::new(p, q)));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Add `seg` to `out`, starting a new subpath unless it starts at `pen`, where the last one ended.
+fn push_seg(out: &mut BezPath, pen: &mut Option<Point>, seg: PathSeg) {
+    let a = seg.start();
+    if *pen != Some(a) {
+        out.move_to(a);
+    }
+    match seg {
+        PathSeg::Line(l) => out.line_to(l.p1),
+        PathSeg::Quad(q) => out.quad_to(q.p1, q.p2),
+        PathSeg::Cubic(c) => out.curve_to(c.p1, c.p2, c.p3),
+    }
+    *pen = Some(seg.end());
+}
+
+/// How far `q` is from the segment from `a` to `b`.
+fn distance_to_segment(q: Point, a: Point, b: Point) -> f64 {
+    let d = b - a;
+    let t = if d.hypot2() > 0.0 { ((q - a).dot(d) / d.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+    q.distance(a + d * t)
+}
+
+/// How far the segment from `a` to `b` is from the segment from `c` to `d`.
+fn segment_distance(a: Point, b: Point, c: Point, d: Point) -> f64 {
+    let side = |p: Point, q: Point, s: Point| (q - p).cross(s - p);
+    if side(a, b, c) * side(a, b, d) < 0.0 && side(c, d, a) * side(c, d, b) < 0.0 {
+        return 0.0;
+    }
+    distance_to_segment(a, c, d).min(distance_to_segment(b, c, d)).min(distance_to_segment(c, a, b)).min(distance_to_segment(d, a, b))
+}
+
+/// The stretch of `line`, as `line_t` from and to (0 at its start, 1 at its end, and beyond),
+/// within `rad` of the segment from `a` to `b`; `None` when no point of the line is.
+fn capsule_span(line: vectorcraft_geom::Line, a: Point, b: Point, rad: f64) -> Option<(f64, f64)> {
+    let (p, d) = (line.p0, line.p1 - line.p0);
+    let dd = d.hypot2();
+    if dd <= 0.0 || rad.is_nan() || rad < 0.0 {
+        return None;
+    }
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    // The round ends.
+    for c in [a, b] {
+        let f = p - c;
+        let (half_b, k) = (d.dot(f), f.hypot2() - rad * rad);
+        let disc = half_b * half_b - dd * k;
+        if disc >= 0.0 {
+            let root = disc.sqrt();
+            lo = lo.min((-half_b - root) / dd);
+            hi = hi.max((-half_b + root) / dd);
+        }
+    }
+    // The part between them: along the segment from 0 to its length, and across it within `rad`.
+    let e = b - a;
+    let len = e.hypot();
+    if len > 0.0 {
+        let u = e / len;
+        let n = Vec2::new(-u.y, u.x);
+        let (mut s0, mut s1) = (f64::NEG_INFINITY, f64::INFINITY);
+        for (at, rate, min, max) in [((p - a).dot(u), d.dot(u), 0.0, len), ((p - a).dot(n), d.dot(n), -rad, rad)] {
+            if rate == 0.0 {
+                if at < min || at > max {
+                    s1 = f64::NEG_INFINITY;
+                }
+            } else {
+                let (x, y) = ((min - at) / rate, (max - at) / rate);
+                s0 = s0.max(x.min(y));
+                s1 = s1.min(x.max(y));
+            }
+        }
+        if s0 <= s1 {
+            lo = lo.min(s0);
+            hi = hi.max(s1);
+        }
+    }
+    (lo <= hi).then_some((lo, hi))
+}
+
+/// `spans` sorted and joined where they overlap.
+fn merge_spans(mut spans: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    spans.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let mut out: Vec<(f64, f64)> = Vec::with_capacity(spans.len());
+    for (a, b) in spans {
+        match out.last_mut() {
+            Some(last) if a <= last.1 => last.1 = last.1.max(b),
+            _ => out.push((a, b)),
+        }
+    }
+    out
+}
+
+/// Whether one of `spans` (from [`merge_spans`]) holds everything from `from` to `to`.
+fn spans_cover(spans: &[(f64, f64)], from: f64, to: f64) -> bool {
+    let i = spans.partition_point(|s| s.0 <= from);
+    i > 0 && spans.get(i - 1).is_some_and(|s| s.1 >= to)
 }
 
 /// The paths a stroke can redraw for selected object `id`: the path itself, or a compound path's
@@ -142,13 +757,15 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
     }
 }
 
-/// Whether the selection contains a path the Smooth command can act on.
+/// Whether the selection contains a path the Smooth command can act on: one with a subpath of three
+/// or more anchors, or of two anchors joined by a curve.
 fn has_selected_smooth_path(cx: &ToolContext) -> bool {
     let editable = cx.doc.editable();
+    let smoothable = |sp: &vectorcraft_geom::SubPath| sp.anchors.len() >= 3 || (0..sp.segment_count()).any(|i| !super::segment_is_straight(sp, i));
     cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
-            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(|sp| sp.anchors.len() >= 3))
+            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(smoothable))
                 && editable(child.id)
             {
                 found = true;
@@ -207,6 +824,8 @@ impl GestureTool {
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
             tip_at: None,
+            band: Cell::new(None),
+            band_pending: Cell::new(false),
         }
     }
 
@@ -216,10 +835,10 @@ impl GestureTool {
     }
 
     /// Does a straight Knife cut snap to anchors and paths? Only with Smart Guides on, which Snap to
-    /// Pixel and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the Pencil's straight
-    /// line's do: the press, and the release unless Shift keeps it on a 45° step.
+    /// Pixel (for drawing) and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the
+    /// Pencil's straight line's do: the press, and the release unless Shift keeps it on a 45° step.
     fn knife_snaps(&self, cx: &ToolContext) -> bool {
-        self.id == "knife" && self.straight && cx.smart_guides && !cx.snap_to_pixel && !cx.snap_to_grid
+        self.id == "knife" && self.straight && cx.smart_guides && !cx.snaps_to_pixel(crate::PixelOp::Drawing) && !cx.snap_to_grid
     }
 
     /// Does the end of a straight line snap: the Pencil's Alt line's, or a straight Knife cut's
@@ -342,6 +961,56 @@ impl GestureTool {
         self.poses.clear();
         self.previewed = 0;
         self.shift_line = None;
+        self.band.set(None);
+        self.band_pending.set(false);
+    }
+
+    /// The outline of the band a smoothing drag smooths: every point within `radius` of the drag,
+    /// round at both ends. The band shown last is kept and grown by the steps dragged since, at
+    /// most [`BAND_STEP`] points at a time and [`BAND_STEPS_PER_CALL`] steps a call; a new radius
+    /// (the zoom changed) or another drag starts it again. While the band covers less of the drag
+    /// than it can, [`Tool::overlays_pending`] holds, so the host draws again and the band reaches
+    /// the whole drag with the pointer still. When a step cannot be added whole, its segments are
+    /// added one at a time: a segment longer than [`BAND_TILE_SAMPLES`] half squares is kept
+    /// outside the squares, and one whose outlines cannot be combined adds nothing. Either way the
+    /// band goes on past it. The work on such long segments stops for the call once
+    /// [`BAND_WORK_PER_CALL`] is spent, and the drag is added to the band only once the outline of
+    /// what it holds is finished.
+    fn smooth_band(&self, radius: f64) -> Option<BezPath> {
+        let pts = &self.points;
+        let &first = pts.first()?;
+        let mut b = self
+            .band
+            .take()
+            .filter(|b| b.radius == radius && b.first == first && b.used.checked_sub(1).and_then(|i| pts.get(i)) == Some(&b.last))
+            .unwrap_or_else(|| SmoothBand::new(first, radius));
+        b.work = 0;
+        let mut outline = b.outline();
+        if !b.changed {
+            for _ in 0..BAND_STEPS_PER_CALL {
+                let Some(from) = b.used.checked_sub(1).filter(|_| b.used < pts.len() && b.work < BAND_WORK_PER_CALL) else { break };
+                let mut to = (from + BAND_STEP).min(pts.len() - 1);
+                let Some(piece) = pts.get(from..=to) else { break };
+                if b.grow(piece).is_none() {
+                    for (k, w) in piece.windows(2).enumerate() {
+                        if b.work >= BAND_WORK_PER_CALL {
+                            to = from + k;
+                            break;
+                        }
+                        if b.too_long(w[0], w[1]) {
+                            b.add_long(w[0], w[1]);
+                        } else if b.grow(w).is_none() {
+                            b.last = w[1];
+                        }
+                    }
+                }
+                b.used = to + 1;
+            }
+            outline = b.outline();
+        }
+        self.band_pending.set(b.used < pts.len() || b.changed);
+        self.band.set(Some(b));
+        outline.filter(|o| !o.elements().is_empty())
     }
 
     /// Does the tool's Size take Fixed or Pressure (the Blob Brush and the Eraser)?
@@ -460,7 +1129,7 @@ impl GestureTool {
     pub fn freehand_params(&self, cx: &ToolContext, closed: bool) -> Value {
         let mut v = json!({
             "points": self.stroke_json(),
-            "fidelity": cx.tol(self.fidelity),
+            "fidelity": fit_tolerance(cx, self.fidelity),
             "closed": closed,
             "style": if self.id == "paintbrush" { "brush" } else { "pencil" },
             "fill": self.fill,
@@ -654,7 +1323,7 @@ impl Tool for GestureTool {
                 if self.previews() && crate::previews_at(self.points.len()) {
                     let mut v = self.freehand_params(cx, false);
                     let fidelity = self.fidelity.max(PREVIEW_FIDELITY_PX);
-                    v["fidelity"] = json!(cx.tol(fidelity));
+                    v["fidelity"] = json!(fit_tolerance(cx, fidelity));
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
                     self.previewed = if fidelity > self.fidelity { 0 } else { self.points.len() };
                     if !self.live_fit {
@@ -719,6 +1388,11 @@ impl Tool for GestureTool {
     fn wants_samples(&self) -> bool {
         matches!(self.id, "pencil" | "paintbrush" | "blobBrush" | "eraser" | "knife" | "smooth" | "pathEraser")
     }
+    /// A smoothing drag's band outlined again after a zoom change reaches the whole drag over
+    /// several frames.
+    fn overlays_pending(&self) -> bool {
+        self.band_pending.get()
+    }
     /// `[` and `]` are the Blob Brush's and the Eraser's: their size (#1661).
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::BracketLeft | ToolKey::BracketRight) && matches!(self.id, "blobBrush" | "eraser")
@@ -769,11 +1443,20 @@ impl Tool for GestureTool {
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
         // A path being drawn shows itself, except with the Pencil's Live preview off.
         if !self.active || self.points.len() < 2 || (self.began && self.previews()) {
             o.extend(self.tip_outline(cx));
             return o;
+        }
+        // A smoothing drag with a selected path it can smooth also shows, dashed, the band its
+        // release smooths.
+        if (self.id == "smooth" || self.smoothing)
+            && has_selected_smooth_path(cx)
+            && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
+        {
+            o.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: true });
         }
         // A Blob Brush drag that smooths shows the Smooth tool's thin line.
         let width = match self.id {

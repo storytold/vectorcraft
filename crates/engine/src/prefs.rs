@@ -104,6 +104,9 @@ pub struct Prefs {
     pub font_names_in_english: bool,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
+    /// Type › Show samples on white: the font menus draw each family's sample in dark type on a
+    /// white area in every brightness (off by default).
+    pub font_samples_on_white: bool,
     pub font_preview_size: String,
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
@@ -217,6 +220,10 @@ pub struct Prefs {
     /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
     /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
+    /// The desktop canvas converts its sRGB into the ICC profile of the display that shows the
+    /// window, where the system doesn't (Windows without Advanced Color, X11). Display only: it
+    /// changes no document, proof or export.
+    pub monitor_profile_display: bool,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -257,6 +264,9 @@ pub struct Prefs {
     /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
     /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
     pub glyph_snap: vectorcraft_tools::GlyphSnap,
+    /// Pixel Snapping Options: whether View › Snap to Pixel snaps drawing, moving and scaling
+    /// (`view.snapToPixel.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub pixel_snap: vectorcraft_tools::PixelSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -427,6 +437,7 @@ impl Default for Prefs {
             font_names_in_english: true,
             auto_size_area_type: false,
             font_preview: true,
+            font_samples_on_white: false,
             font_preview_size: s("medium"),
             recent_fonts_count: 10,
             missing_glyph_protection: true,
@@ -492,6 +503,7 @@ impl Default for Prefs {
             real_time_drawing: true,
             render_threads: -1,
             linux_display_server: s("automatic"),
+            monitor_profile_display: true,
             background_save: true,
             background_export: true,
             autosave_recovery: true,
@@ -519,6 +531,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             pathfinder: Default::default(),
             glyph_snap: Default::default(),
+            pixel_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],

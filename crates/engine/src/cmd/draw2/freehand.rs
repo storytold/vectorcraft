@@ -151,7 +151,11 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pen = PenRecord::of_samples(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, vectorcraft_tools::draw2::MAX_FIT_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
@@ -200,7 +204,9 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        let close_tol = (tol * 4.0).max(6.0);
+        // An extending stroke that ends within four Fidelities of the path's other end closes it:
+        // at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
+        let close_tol = (tol * 4.0).clamp(6.0, 400.0);
         let closing = connect.is_none() && sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
         if closing && let Some(l) = pts.last_mut() {
             *l = first;

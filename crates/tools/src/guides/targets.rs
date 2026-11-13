@@ -168,13 +168,13 @@ impl Targets {
     /// or nothing for a copy, which leaves it behind), styled as `cx` asks, and with Smart Guides ›
     /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]). With Smart
     /// Guides › Snap to Last Location, a move (not a copy, which has nothing in `exclude`) goes back
-    /// to where it began when it comes near ([`Self::snap_back`]), unless Snap to Pixel is on.
+    /// to where it began when it comes near ([`Self::snap_back`]), unless Snap to Pixel snaps moves.
     pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
         let mut t = Self::collect(cx.doc, exclude, None).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
-        t.last_location = cx.snap_to_last_location && !cx.snap_to_pixel && !exclude.is_empty();
+        t.last_location = cx.snap_to_last_location && !cx.snaps_to_pixel(crate::PixelOp::Moving) && !exclude.is_empty();
         t
     }
 
@@ -189,9 +189,9 @@ impl Targets {
     /// Targets that hold nothing but Smart Guides › Snap to Last Location ([`Self::snap_back`]),
     /// styled as `cx` asks: for a move of the selection whose other snaps come from other targets,
     /// such as paths selected whole that Direct Selection moves held by an anchor. Snap to Pixel
-    /// turns it off, as it does every Smart Guides snap.
+    /// snapping moves turns it off, as it does every Smart Guides snap.
     pub fn last_location(cx: &ToolContext) -> Self {
-        Self { last_location: cx.snap_to_last_location && !cx.snap_to_pixel, ..Self::default() }.styled(cx)
+        Self { last_location: cx.snap_to_last_location && !cx.snaps_to_pixel(crate::PixelOp::Moving), ..Self::default() }.styled(cx)
     }
 
     /// Targets for scaling the selection: the other art, styled as `cx` asks, and with Smart Guides ›

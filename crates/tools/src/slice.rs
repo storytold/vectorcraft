@@ -161,7 +161,7 @@ struct ResizeSnap {
 
 impl ResizeSnap {
     fn new(cx: &ToolContext) -> Self {
-        Self { art: PointSnap::new(cx, || Targets::collect(cx.doc, &[], None)), rulers: Targets::rulers(cx) }
+        Self { art: PointSnap::scaling(cx, || Targets::collect(cx.doc, &[], None)), rulers: Targets::rulers(cx) }
     }
 
     /// Snap the resize `a` ([`scale_for_drag`]) of the slice `rect` by `handle` as [`snap`] snaps

@@ -3,7 +3,8 @@
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
-//! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
+//! of every kind with random contents) opened, placed or pasted, nor PICT pictures (damaged files,
+//! opcodes with random contents) opened or placed, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
@@ -2938,6 +2939,106 @@ proptest! {
     }
 }
 
+// ---------- PICT pictures: opened and placed ----------
+
+fn be16(v: &[i16]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_be_bytes()).collect()
+}
+
+/// A version 2 PICT file of a 200 × 100 pt frame holding `ops`, each padded to an even length.
+fn pict_of(ops: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    let mut b = vec![0; 512];
+    b.extend(be16(&[0, 0, 0, 100, 200]));
+    b.extend([0x00, 0x11, 0x02, 0xFF, 0x0C, 0x00]);
+    b.extend(be16(&[-1, 0]));
+    b.extend([0; 20]);
+    for (op, data) in ops {
+        b.extend(op.to_be_bytes());
+        b.extend(data);
+        if b.len() % 2 == 1 {
+            b.push(0);
+        }
+    }
+    b.extend([0x00, 0xFF]);
+    b
+}
+
+/// A picture with shapes, a region, text, a pattern and a packed pixel map.
+fn pict_sample() -> Vec<u8> {
+    let region = [be16(&[36, 0, 0, 20, 20]), be16(&[0, 0, 20, 0x7FFF, 10, 10, 20, 0x7FFF, 20, 0, 10, 0x7FFF, 0x7FFF])].concat();
+    let table = be16(&[0, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1]);
+    let pixmap = [
+        be16(&[0x8008u16 as i16, 0, 0, 2, 8]),
+        be16(&[0, 0, 0, 0, 72, 0, 72, 0, 0, 8, 1, 8, 0, 0, 0, 0, 0, 0]),
+        table,
+        be16(&[0, 0, 2, 8, 10, 20, 14, 36, 0]),
+        vec![2, 0xF9, 0, 9, 7, 1, 0, 1, 0, 1, 0, 1, 0],
+    ]
+    .concat();
+    pict_of(&[
+        (0x1A, be16(&[-1, 0, 0])),
+        (0x07, be16(&[2, 2])),
+        (0x31, be16(&[10, 20, 50, 80])),
+        (0x30, be16(&[10, 20, 50, 80])),
+        (0x0B, be16(&[8, 8])),
+        (0x41, be16(&[0, 100, 40, 160])),
+        (0x51, be16(&[50, 100, 90, 160])),
+        (0x61, be16(&[0, 0, 60, 60, 30, 120])),
+        (0x71, be16(&[22, 0, 0, 40, 40, 0, 0, 40, 40, 0, 40])),
+        (0x81, region.clone()),
+        (0x01, region),
+        (0x20, be16(&[70, 10, 70, 190])),
+        (0x21, be16(&[90, 100])),
+        (0x0A, vec![0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]),
+        (0x34, be16(&[0, 0, 10, 10])),
+        (0x2C, [be16(&[9, 3]), vec![6], b"Geneva".to_vec()].concat()),
+        (0x0D, be16(&[12])),
+        (0x28, [be16(&[80, 10]), vec![3], b"abc".to_vec()].concat()),
+        (0x98, pixmap),
+    ])
+}
+
+/// The sample the mutations start from opens with art and an image.
+#[test]
+fn the_pict_sample_opens() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pct", &pict_sample()).unwrap();
+    assert_eq!(l.format.id, "pict");
+    let (mut paths, mut images, mut texts) = (0, 0, 0);
+    l.doc.walk(|n| match n.kind {
+        vectorcraft_doc::NodeKind::Path { .. } => paths += 1,
+        vectorcraft_doc::NodeKind::Image(_) => images += 1,
+        vectorcraft_doc::NodeKind::Text(_) => texts += 1,
+        _ => {}
+    });
+    assert!(paths > 8 && images == 1 && texts == 1, "{paths} paths, {images} images, {texts} texts, warnings {:?}", l.warnings);
+}
+
+/// PICT opcodes VectorCraft reads, and reserved ones it skips.
+const PICT_OPS: [u16; 40] = [
+    0x01, 0x03, 0x04, 0x07, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x12, 0x13, 0x14, 0x1A, 0x1B, 0x20, 0x21, 0x22, 0x23, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x30,
+    0x31, 0x38, 0x41, 0x51, 0x61, 0x71, 0x81, 0x90, 0x91, 0x98, 0x99, 0x9A, 0x9B, 0xA1, 0x8200, 0x0024,
+];
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn mutated_pict_pictures_never_panic(cut in 0usize..4096, edits in prop::collection::vec((0usize..4096, any::<u8>()), 0..16)) {
+        let mut bytes = pict_sample();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[512 + at % (n - 512)] = b;
+        }
+        bytes.truncate(cut.max(512));
+        survive_metafile("mutated PICT", "x.pct", &bytes)?;
+    }
+
+    #[test]
+    fn random_pict_opcodes_never_panic(ops in prop::collection::vec((prop::sample::select(PICT_OPS.to_vec()), arb_body()), 0..32)) {
+        survive_metafile("PICT opcodes", "x.pct", &pict_of(&ops))?;
+    }
+}
+
 // ---------- HP-GL plot files: opened and placed ----------
 
 /// A plot file with every kind of instruction the reader plays, printer escapes around it.
@@ -4215,6 +4316,63 @@ proptest! {
         survive("style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, unit).0))?;
         let eps = ai::eps(library.as_bytes(), ai::page_ps());
         survive("style library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+
+    /// Graphic style libraries whose styles are one paint (`/SimpleStyle`): any paint operators in
+    /// any order, with any operands or none, `Xd` missing or repeated, and the paint left open. The
+    /// library is also loaded in the Graphic Style Libraries panel and its styles applied to artwork.
+    #[test]
+    fn ai_style_libraries_of_one_paint_styles_never_panic(
+        // Each operator, and whether it is a paint operator rather than any text.
+        ops in prop::collection::vec(prop_oneof![
+            prop::sample::select(vec![
+                "0 R", "0 O", "0 1 1 0 K", "1 0 0 0 k", "0 0 0 0 1 0 0 Xa", "0 0 0 0 1 0 0 XA", "0.5 G", "0 g", "K", "Xa",
+                "0 J 0 j 2 w 10 M []0 d", "-1 w", "1e400 w", "0 M", "[3 -1]0 d", "[]0 d",
+                "1 0 Xd", "0 1 Xd", "1 1 Xd", "0 0 Xd", "1 Xd", "Xd", "0 1 0 0 0 Xy", "1 0.5 1 1 0 Xy", "Xy",
+                "0 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+                "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P", "0 XR",
+            ]).prop_map(|op| (op.to_string(), true)),
+            "[ -~]{0,12}".prop_map(|text| (text, false)),
+        ], 0..12),
+        closed in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let close = if closed { "/Paint ;\n/Def ;\n" } else { "" };
+        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds.
+        let header = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             /KnownStyle :\n(A) /Name ,\n/SimpleStyle :\n{}\n{close}/KnownStyle :\n(B) /Name ,\n/SimpleStyle :\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             %AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(A)\n(B)\n(C)\n%AI9_EndArtStyleList\n",
+            ops.iter().map(|(op, _)| op.as_str()).collect::<Vec<_>>().join("\n")
+        );
+        let library = ai::editing_data(200.0, 100.0, &header);
+        survive("one-paint style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let file = ai::ai(library.as_bytes(), ai::page_pdf());
+        // How many objects C's look reached, what applying it answered, and whether that look is
+        // C's red 2 pt stroke with no fill.
+        let (mut styled, mut applied, mut red_stroke) = (0, Value::Null, false);
+        survive("one-paint styles applied", || {
+            let mut s = rich_session();
+            let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fuzz.ai"});
+            let library = no_panic(s.execute("graphicStyle.loadLibrary", &p)).ok()?["library"].clone();
+            no_panic(s.execute("select.all", &json!({}))).ok()?;
+            // Every style is added and the first one, A when it reads, applied; then C is applied.
+            let _ = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "apply": true})));
+            applied = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["C"], "apply": true}))).ok()?;
+            let d = (*s.doc().ok()?.doc).clone();
+            if let Some(look) = applied["applied"].as_str().and_then(|name| d.graphic_style(name)).map(|g| &g.appearance) {
+                let strokes = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).count();
+                red_stroke = look.fill().is_none()
+                    && strokes == 1
+                    && look.stroke().is_some_and(|s| (s.paint.color(), s.width) == (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0));
+                d.walk(|n| styled += usize::from(n.appearance == *look));
+            }
+            Some(d)
+        })?;
+        // Text that isn't a paint operator can leave a string or a comment open over the style list.
+        if ops.iter().all(|(_, paint)| *paint) {
+            prop_assert!(applied["applied"].is_string() && red_stroke && styled > 0, "the stroke style wasn't applied: {applied}");
+        }
     }
 
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
@@ -5984,7 +6142,8 @@ fn findme_wanted() -> vectorcraft_text::WantedFonts {
 
 /// Whether reading `bytes` as a font file a search reads panics.
 fn search_reads(what: &str, bytes: &[u8]) -> Result<Vec<usize>, TestCaseError> {
-    let path = vectorcraft_testkit::temp_dir("font-search-fuzz").join(format!("{:?}.ttc", std::thread::current().id()));
+    let dir = vectorcraft_testkit::TempDir::new("font-search-fuzz");
+    let path = dir.join("font.ttc");
     std::fs::write(&path, bytes).unwrap();
     catch_quiet(|| findme_wanted().provided_by(&path)).map_err(|e| TestCaseError::fail(format!("{what}: a search reading the file panicked: {e}")))
 }

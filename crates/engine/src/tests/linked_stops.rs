@@ -416,6 +416,34 @@ fn spot_gradients_drawn_as_images_warn() {
     assert!(!spot_warning(&warnings), "{warnings:?}");
 }
 
+/// A spot gradient mixed around the hue wheel is an image in process colors with the warning,
+/// where the same stops mixed by Perceptual are a Separation or DeviceN shading: the colors
+/// between its stops are not tints or mixes of the stops' inks.
+#[test]
+fn hue_wheel_spot_gradients_export_as_images_and_warn() {
+    let (mut s, _) = setup();
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 1, "m": 0, "y": 1, "k": 0}, "spot": true}));
+    let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
+    let ink_to_leaf = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "swatch": "Leaf"}]});
+    for method in ["hue-clockwise", "hue-counterclockwise"] {
+        for (what, stops) in [("Ink → paper", ink_to_white(80.0)), ("Ink → Leaf", ink_to_leaf.clone())] {
+            for kind in ["linear", "radial", "conic", "diamond"] {
+                run(&mut s, "paint.editGradient", with(stops.clone(), json!({"method": method, "kind": kind})));
+                let (pdf, warnings) = pdf_of(&s);
+                assert!(pdf.contains("/Subtype/Image"), "{method} {kind} {what}: an image");
+                assert!(!pdf.contains("/Separation") && !pdf.contains("/DeviceN"), "{method} {kind} {what}: no spot ink shading");
+                assert!(spot_warning(&warnings), "{method} {kind} {what}: {warnings:?}");
+            }
+        }
+        // Without spot inks: an image, without the warning.
+        let red_blue = json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}], "kind": "linear"});
+        run(&mut s, "paint.editGradient", with(red_blue, json!({"method": method})));
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(pdf.contains("/Subtype/Image"), "{method}: a process gradient is an image");
+        assert!(!spot_warning(&warnings), "{method}: {warnings:?}");
+    }
+}
+
 #[test]
 fn freeform_gradients_without_points_warn_about_spot_stops() {
     let (mut s, id) = setup();

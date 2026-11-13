@@ -12,6 +12,8 @@
 //! An image with hard edges (a GIF, a 1-bit scan) says nothing more than the cracks do: every crack
 //! moves by the same amount. There the staircase is read the classic way: a one-pixel step between
 //! two runs is a point of a sloped edge (its middle is on the edge, the corners beside it are not).
+//! A staircase of longer steps is read the same way where a smooth area was split into bands (see
+//! [`outline`]).
 
 use kurbo::Vec2;
 use vectorcraft_geom::Point;
@@ -118,6 +120,10 @@ pub(crate) fn low_contrast(steps: &[[f64; 5]]) -> bool {
 /// A change between colors (an RGB distance, 0 to 255 a channel) under which an area is nearly
 /// flat (see [`low_contrast`]).
 const FLAT: f64 = 12.0;
+
+/// The longest step (px) of a staircase read as the slope through it in a smooth area (see
+/// [`outline`]). An edge longer than this keeps its corners.
+const STAIR_MAX: usize = 8;
 
 /// What `across` says of a crack that is an edge whatever the image does there: a crack on the
 /// image's border, or one that the image's pixels cannot be read across (see [`low_contrast`]).
@@ -233,6 +239,50 @@ pub(crate) fn outline(
         if junctions[edges[i % n].first].is_some() { 0 } else { (a.0 * b.1 - a.1 * b.0).signum() }
     };
     let step: Vec<bool> = (0..n).map(|i| edges[i].len == 1 && turn(i) * turn(i + 1) < 0).collect();
+    // A staircase of longer steps, where a smooth area was split into bands: a run of three or more
+    // edges of one to `STAIR_MAX` pixels, each turning one way where it starts and the other where
+    // it ends, with no junction on it, whose cracks read as the contour of a smooth area (see
+    // `low_contrast`, applied to the run's own cracks; a run is cut at any step whose own cracks
+    // show half the step between the colors or more). Its edges are steps: no corner where two of
+    // them meet, and each gives one point, its middle. Where a run meets an edge that is not a
+    // step, that corner stays. A sharp edge drawn as a staircase keeps its corners. (The runs are
+    // the same from either side: they depend only on the edges, their turns and the junctions,
+    // which every region around a pixel corner shares.)
+    let stair = {
+        let candidate: Vec<bool> = (0..n)
+            .map(|i| {
+                let e = &edges[i];
+                (1..=STAIR_MAX).contains(&e.len) && turn(i) * turn(i + 1) < 0 && !(0..=e.len).any(|k| junction((e.first + k) % cracks))
+            })
+            .collect();
+        let own = |i: usize| (0..edges[i].len).filter_map(|j| steps.get(edges[i].first + j).copied()).collect::<Vec<_>>();
+        // Whether a step's own cracks show under half of the step between the two colors, as a
+        // contour does (an edge shows nearly all of it): a staircase that runs on from a contour
+        // into an edge is cut there. (Summed in sorted order: the same from either side.)
+        let gentle = |i: usize| {
+            let mut near: Vec<f64> = own(i).iter().map(|s| s[0]).filter(|s| !s.is_nan()).collect();
+            near.sort_by(f64::total_cmp);
+            !near.is_empty() && near.iter().sum::<f64>() < 0.5 * near.len() as f64
+        };
+        let mut stair = vec![false; n];
+        // A loop turns once round in all, so some edge is not a candidate: runs start after it.
+        if let Some(s0) = (0..n).find(|&i| !candidate[i]) {
+            let mut k = 1;
+            while k < n {
+                let run: Vec<usize> = (k..n).map(|j| (s0 + j) % n).take_while(|&i| candidate[i] && gentle(i)).collect();
+                k += run.len().max(1);
+                if run.len() < 3 {
+                    continue;
+                }
+                if low_contrast(&run.iter().flat_map(|&i| own(i)).collect::<Vec<_>>()) {
+                    for &i in &run {
+                        stair[i] = true;
+                    }
+                }
+            }
+        }
+        stair
+    };
     let outward = |d: (i32, i32)| Vec2::new(f64::from(d.1), f64::from(-d.0));
     // The pixel at a corner of the shape lies on both of the corner's edges, and what it lacks of
     // the inside's colour is the doing of both: read as one edge's alone it dents the corner. The
@@ -242,7 +292,7 @@ pub(crate) fn outline(
         let mut shifts = shifts;
         for i in 0..n {
             let (b, e) = ((i + n - 1) % n, i);
-            if step[b] || step[e] || turn(i) == 0 {
+            if step[b] || step[e] || (stair[b] && stair[e]) || turn(i) == 0 {
                 continue;
             }
             let (before, edge) = (&edges[b], &edges[e]);
@@ -276,6 +326,9 @@ pub(crate) fn outline(
             && edges[b].len >= 3
             && edges[s1].dir == edges[b].dir
             && edges[s2].dir == edges[a].dir
+            // The edges of a staircase of longer steps (see `stair`) make no corner here.
+            && !stair[a]
+            && !stair[b]
             && free(s1)
             && free(s2)
             && free(b)
@@ -311,7 +364,7 @@ pub(crate) fn outline(
             if k == 0 && first.is_some() {
                 // The junction itself: the one point every region around it has.
                 pts.push(junctions[crack].unwrap_or(corner));
-            } else if along_edge == 0 && !step[i] && !step[(i + n - 1) % n] {
+            } else if along_edge == 0 && !step[i] && !step[(i + n - 1) % n] && !(stair[i] && stair[(i + n - 1) % n]) {
                 // A true corner: where its two edges, each moved by its own shift, meet.
                 let before = &edges[(i + n - 1) % n];
                 pts.push(corner + outward(before.dir) * shifts[(crack + cracks - 1) % cracks] + outward(e.dir) * shifts[crack]);
@@ -319,6 +372,13 @@ pub(crate) fn outline(
             if !hard && let Some(sharp) = notch[i] {
                 // A corner whose own pixel went to the other side: the corner, not the two steps.
                 pts.extend(sharp);
+            } else if stair[i] {
+                if along_edge == e.len / 2 {
+                    // The middle of the step, moved by its cracks' mean shift (multiples of 1/1024,
+                    // so the same sum from either side).
+                    let shift = (0..e.len).map(|j| shifts[e.first + j]).sum::<f64>() / e.len as f64;
+                    pts.push(at(i) + Vec2::new(f64::from(e.dir.0), f64::from(e.dir.1)) * (e.len as f64 / 2.0) + outward(e.dir) * shift);
+                }
             } else if step[i] || !hard {
                 pts.push(corner + Vec2::new(f64::from(e.dir.0), f64::from(e.dir.1)) * 0.5 + outward(e.dir) * shifts[crack]);
             }
@@ -491,6 +551,218 @@ mod tests {
                     .filter(|p| p.pts.iter().all(|q| q.x == 0.0 || q.y == 0.0 || q.x == w as f64 || q.y == h as f64))
                     .all(|p| !p.contour)
             );
+        }
+    }
+
+    #[test]
+    fn a_staircase_of_longer_steps_in_a_smooth_area_becomes_the_slope_through_its_steps() {
+        // Left and right regions meet along a staircase of steps two pixels across and three down
+        // (rows 0 to 8), a straight run of ten rows, and the same staircase again (rows 19 to 27).
+        // The cracks above row 9 read as the contour of a smooth area, the others as an edge, so
+        // the piece as a whole is no contour.
+        let (w, h) = (18, 28);
+        let edge = |y: usize| match y {
+            0..9 => 2 + 2 * (y / 3),
+            9..19 => 8,
+            _ => 10 + 2 * ((y - 19) / 3),
+        };
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < edge(i / w)).collect();
+        let right: Vec<bool> = left.iter().map(|b| !b).collect();
+        let step = |c: Crack| if c.at(0).unwrap().min(c.at(1).unwrap()) / w < 9 { [0.1, 0.3, 4.0, 4.0, 4.0] } else { [1.0, 1.0, 40.0, 40.0, 0.0] };
+        let a = outline(&loop_of(&left, w, h), w, h, &|c| (0.0, 1, step(c)), &grid);
+        let b = outline(&loop_of(&right, w, h), w, h, &|c| (0.0, 2, step(c)), &grid);
+        let inner = |pieces: &[Piece]| {
+            pieces.iter().find(|p| p.pts.iter().any(|q| q.x > 0.0 && q.x < w as f64 && q.y > 0.0 && q.y < h as f64)).unwrap().clone()
+        };
+        let (mut ours, theirs) = (inner(&a), inner(&b));
+        assert!(!ours.contour);
+        ours.pts.reverse();
+        assert_eq!(ours, theirs);
+        let pts = &theirs.pts;
+        // The upper staircase: the middle of each of its steps, on one line, and none of its corners.
+        let middles = [(3.0, 3.0), (4.0, 4.5), (5.0, 6.0), (6.0, 7.5), (7.0, 9.0)].map(Point::from);
+        assert!(middles.iter().all(|m| pts.contains(m)), "{pts:?}");
+        assert!([(4.0, 3.0), (4.0, 6.0), (6.0, 6.0), (6.0, 9.0)].map(Point::from).iter().all(|c| !pts.contains(c)), "{pts:?}");
+        // The straight run keeps the corners at both its ends, so it stays straight.
+        assert!([(8.0, 9.0), (8.0, 19.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+        // The lower one is a sharp edge: it keeps its corners.
+        assert!([(8.0, 19.0), (10.0, 19.0), (10.0, 22.0), (12.0, 22.0), (12.0, 25.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+
+        // Steps longer than STAIR_MAX keep their corners, in a smooth area too.
+        let (w, h) = (40, 40);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 5 + 10 * (i / w / 10)).collect();
+        let pieces = outline(&loop_of(&left, w, h), w, h, &|_| (0.0, 1, [0.1, 0.3, 4.0, 4.0, 4.0]), &grid);
+        let pts = &inner(&pieces).pts;
+        assert!([(15.0, 10.0), (15.0, 20.0), (25.0, 20.0), (25.0, 30.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+    }
+
+    #[test]
+    fn a_staircase_that_runs_on_from_a_smooth_area_into_an_edge_keeps_the_edges_corners() {
+        // One staircase of steps two pixels across and three down, from the top of the image to its
+        // bottom: its cracks above row 18 read as the contour of a smooth area, the others as an
+        // edge. Read as a whole, the run would pass as a contour.
+        let (w, h) = (20, 27);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 2 + 2 * (i / w / 3)).collect();
+        let right: Vec<bool> = left.iter().map(|b| !b).collect();
+        let step = |c: Crack| if c.at(0).unwrap().min(c.at(1).unwrap()) / w < 18 { [0.1, 0.3, 4.0, 4.0, 4.0] } else { [1.0, 1.0, 40.0, 40.0, 0.0] };
+        let a = outline(&loop_of(&left, w, h), w, h, &|c| (0.0, 1, step(c)), &grid);
+        let b = outline(&loop_of(&right, w, h), w, h, &|c| (0.0, 2, step(c)), &grid);
+        let inner = |pieces: &[Piece]| {
+            pieces.iter().find(|p| p.pts.iter().any(|q| q.x > 0.0 && q.x < w as f64 && q.y > 0.0 && q.y < h as f64)).unwrap().clone()
+        };
+        let (mut ours, theirs) = (inner(&a), inner(&b));
+        ours.pts.reverse();
+        assert_eq!(ours, theirs);
+        let pts = &theirs.pts;
+        assert!([(3.0, 3.0), (4.0, 4.5), (9.0, 12.0), (11.0, 15.0), (12.0, 16.5)].map(Point::from).iter().all(|m| pts.contains(m)), "{pts:?}");
+        assert!([(4.0, 3.0), (10.0, 15.0)].map(Point::from).iter().all(|c| !pts.contains(c)), "{pts:?}");
+        // The corner where the staircase meets the edge's first step stays.
+        assert!([(14.0, 18.0), (14.0, 21.0), (16.0, 21.0), (16.0, 24.0), (18.0, 24.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+    }
+
+    #[test]
+    fn a_staircase_whose_cracks_do_not_read_as_a_contour_keeps_its_corners() {
+        // Each step's cracks show a tenth of the step near them, but nothing changes within either
+        // side: two flat colors, not a smooth area.
+        let (w, h) = (20, 27);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 2 + 2 * (i / w / 3)).collect();
+        let right: Vec<bool> = left.iter().map(|b| !b).collect();
+        let flat = [0.1, 0.3, 4.0, 4.0, 0.0];
+        let a = outline(&loop_of(&left, w, h), w, h, &|_| (0.0, 1, flat), &grid);
+        let b = outline(&loop_of(&right, w, h), w, h, &|_| (0.0, 2, flat), &grid);
+        let inner = |pieces: &[Piece]| {
+            pieces.iter().find(|p| p.pts.iter().any(|q| q.x > 0.0 && q.x < w as f64 && q.y > 0.0 && q.y < h as f64)).unwrap().clone()
+        };
+        let (mut ours, theirs) = (inner(&a), inner(&b));
+        ours.pts.reverse();
+        assert_eq!(ours, theirs);
+        let pts = &theirs.pts;
+        assert!([(4.0, 3.0), (4.0, 6.0), (6.0, 6.0), (10.0, 15.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+        assert!([(4.0, 4.5), (9.0, 12.0)].map(Point::from).iter().all(|m| !pts.contains(m)), "{pts:?}");
+    }
+
+    #[test]
+    fn a_staircase_step_moves_by_the_mean_shift_of_its_cracks() {
+        // The staircase of steps two pixels across and three down, in a smooth area. Down a step,
+        // its cracks move 0, 1/8 and 1/4 px; across one, 0 and 1/8 px (out of the left region; the
+        // right region sees them negated).
+        let (w, h) = (20, 27);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 2 + 2 * (i / w / 3)).collect();
+        let right: Vec<bool> = left.iter().map(|b| !b).collect();
+        let shift = |c: Crack| {
+            let (p, q) = (c.at(0).unwrap(), c.at(1).unwrap());
+            let v = if p / w == q / w { 0.125 * (p / w % 3) as f64 } else { 0.125 * (p % w % 2) as f64 };
+            if left[p] { v } else { -v }
+        };
+        let gentle = [0.1, 0.3, 4.0, 4.0, 4.0];
+        let a = outline(&loop_of(&left, w, h), w, h, &|c| (shift(c), 1, gentle), &grid);
+        let b = outline(&loop_of(&right, w, h), w, h, &|c| (shift(c), 2, gentle), &grid);
+        let inner = |pieces: &[Piece]| {
+            pieces.iter().find(|p| p.pts.iter().any(|q| q.x > 0.0 && q.x < w as f64 && q.y > 0.0 && q.y < h as f64)).unwrap().clone()
+        };
+        let (mut ours, theirs) = (inner(&a), inner(&b));
+        assert!(!ours.hard);
+        ours.pts.reverse();
+        assert_eq!(ours, theirs);
+        let pts = &theirs.pts;
+        // A step down at x = 4 moves right by 1/8 px; the step across at y = 6 moves up by 1/16 px.
+        assert!([(4.125, 4.5), (5.0, 5.9375), (6.125, 7.5), (7.0, 8.9375)].map(Point::from).iter().all(|m| pts.contains(m)), "{pts:?}");
+    }
+
+    #[test]
+    fn a_staircase_of_mixed_one_pixel_and_longer_steps_is_one_slope_without_a_notch() {
+        // Per four rows: three down, one across, one down, three across. Each three-pixel step meets
+        // the next one with no one-pixel step between them, and the one-pixel steps are a notch
+        // between two longer ones. All of it is the contour of a smooth area, and the cracks move by
+        // different amounts.
+        let (w, h) = (26, 24);
+        let edge = |y: usize| 2 + 4 * (y / 4) + usize::from(y % 4 == 3);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < edge(i / w)).collect();
+        let right: Vec<bool> = left.iter().map(|b| !b).collect();
+        let shift = |c: Crack| {
+            let (p, q) = (c.at(0).unwrap(), c.at(1).unwrap());
+            let v = 0.125 * ((p + q) % 3) as f64 - 0.125;
+            if left[p] { v } else { -v }
+        };
+        let gentle = [0.1, 0.3, 4.0, 4.0, 4.0];
+        let a = outline(&loop_of(&left, w, h), w, h, &|c| (shift(c), 1, gentle), &grid);
+        let b = outline(&loop_of(&right, w, h), w, h, &|c| (shift(c), 2, gentle), &grid);
+        let inner = |pieces: &[Piece]| {
+            pieces.iter().find(|p| p.pts.iter().any(|q| q.x > 0.0 && q.x < w as f64 && q.y > 0.0 && q.y < h as f64)).unwrap().clone()
+        };
+        let (mut ours, theirs) = (inner(&a), inner(&b));
+        assert!(!ours.hard);
+        ours.pts.reverse();
+        assert_eq!(ours, theirs);
+        let pts = &theirs.pts;
+        let near = |x: f64, y: f64, d: f64| pts.iter().any(|p| (p.x - x).hypot(p.y - y) < d);
+        for k in 1..5 {
+            let (c, y) = ((2 + 4 * k) as f64, (4 * k) as f64);
+            // The middle of each step, and no point at the corner where the three-pixel steps
+            // meet or at the corner the notch would make.
+            assert!(near(c, y + 1.5, 0.2) && near(c + 2.5, y + 4.0, 0.2), "{k}: {pts:?}");
+            assert!(!near(c, y, 0.4) && !near(c, y + 4.0, 0.4), "{k}: {pts:?}");
+        }
+    }
+
+    /// Every point of every piece that `mask` and the region around it get in a smooth area, with
+    /// `junction_at` and the near share of each crack from `near`.
+    fn both_sides(
+        mask: &[bool],
+        w: usize,
+        h: usize,
+        near: &dyn Fn(Crack) -> [f64; 5],
+        junction_at: &dyn Fn(i32, i32) -> Option<Point>,
+    ) -> [Vec<Point>; 2] {
+        let other: Vec<bool> = mask.iter().map(|b| !b).collect();
+        [(mask, 1), (&other[..], 2)]
+            .map(|(m, id)| outline(&loop_of(m, w, h), w, h, &|c| (0.0, id, near(c)), junction_at).into_iter().flat_map(|p| p.pts).collect())
+    }
+
+    #[test]
+    fn a_run_of_two_steps_keeps_its_corners() {
+        // Ten rows down, two across, three down, ten across: only two edges are short enough to
+        // be steps.
+        let (w, h) = (20, 20);
+        let edge = |y: usize| match y {
+            0..10 => 2,
+            10..13 => 4,
+            _ => 14,
+        };
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < edge(i / w)).collect();
+        for pts in both_sides(&left, w, h, &|_| [0.1, 0.3, 4.0, 4.0, 4.0], &grid) {
+            assert!([(2.0, 10.0), (4.0, 10.0), (4.0, 13.0), (14.0, 13.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+            assert!(!pts.contains(&Point::new(4.0, 11.5)), "{pts:?}");
+        }
+    }
+
+    #[test]
+    fn a_junction_on_a_step_ends_the_staircase_there() {
+        // The staircase of steps two pixels across and three down, in a smooth area, with a
+        // junction at (8, 10), on the step down from (8, 9) to (8, 12).
+        let (w, h) = (20, 27);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 2 + 2 * (i / w / 3)).collect();
+        let junction_at = |x: i32, y: i32| (x == 8 && y == 10).then(|| Point::new(8.0, 10.0));
+        for pts in both_sides(&left, w, h, &|_| [0.1, 0.3, 4.0, 4.0, 4.0], &junction_at) {
+            // The step keeps the corners at both its ends; the steps on either side of it are slopes.
+            assert!([(8.0, 9.0), (8.0, 10.0), (8.0, 12.0), (5.0, 6.0), (11.0, 15.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+            assert!(!pts.contains(&Point::new(8.0, 10.5)) && !pts.contains(&Point::new(6.0, 6.0)), "{pts:?}");
+        }
+    }
+
+    #[test]
+    fn a_step_whose_cracks_read_as_an_edge_ends_the_staircase_there() {
+        // The same staircase in a smooth area, but the cracks of the step down from (8, 9) to
+        // (8, 12) cannot be read across.
+        let (w, h) = (20, 27);
+        let left: Vec<bool> = (0..w * h).map(|i| i % w < 2 + 2 * (i / w / 3)).collect();
+        let near = |c: Crack| {
+            let (p, q) = (c.at(0).unwrap(), c.at(1).unwrap());
+            if p / w == q / w && (9..12).contains(&(p / w)) && (p % w).max(q % w) == 8 { EDGE_STEP } else { [0.1, 0.3, 4.0, 4.0, 4.0] }
+        };
+        for pts in both_sides(&left, w, h, &near, &grid) {
+            assert!([(8.0, 9.0), (8.0, 12.0), (5.0, 6.0), (11.0, 15.0)].map(Point::from).iter().all(|c| pts.contains(c)), "{pts:?}");
+            assert!(!pts.contains(&Point::new(8.0, 10.5)) && !pts.contains(&Point::new(6.0, 6.0)), "{pts:?}");
         }
     }
 
