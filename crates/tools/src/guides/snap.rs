@@ -257,10 +257,11 @@ impl Leave {
         self
     }
 
-    /// The straight segment from the anchor `at` to a point being dragged (an open path's end
-    /// moved with Direct Selection): the point may land square to a segment or grazing a curve,
-    /// but is not held to Shift's angles or the construction guides, which a moved anchor
-    /// does not follow.
+    /// The straight segment from the point `at` to a point being placed (an open path's end
+    /// moved with Direct Selection, or the Dimension tool's second Linear point after a first
+    /// point that is not on an anchor): the point may
+    /// land square to a segment or grazing a curve, but is not held to Shift's angles or the
+    /// construction guides through `at`.
     pub fn contact(at: Point) -> Self {
         Self { at, shift: None, angles: &[], contact: true }
     }

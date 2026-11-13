@@ -15,13 +15,17 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   path's length. A press on an anchor picks it when the pointer moves less than 8 pixels
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
-  anchors and centres, and the second onto the construction guides through the first; the guides
+  anchors and centres. With Snap to Perpendicular or Snap to Tangent on, the second point also
+  snaps onto a segment where the line from the first meets it square or grazes a curve. When the
+  first point was picked on an anchor, the second also snaps onto the construction guides through
+  it; any other first point has no construction guides through it. The guides
   show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
   anchor within 8 pixels takes it first; a point on a guide stays on the guide where the pointer
-  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or onto the
-  place where a construction guide crosses another object's alignment line within twice that
-  tolerance; a point that no anchor, guide, grid or pixel snapping places lands on the closest
-  point of a segment within 8 pixels.
+  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or, on a
+  construction guide or a Snap to Glyph guide that runs at an angle, onto the place where that
+  guide crosses another object's alignment line within twice that tolerance; a point that no
+  anchor, guide, grid or pixel snapping places lands on the closest point of a segment within 8
+  pixels.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
