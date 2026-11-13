@@ -84,19 +84,37 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 5, "{libs:?}");
-    assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
+    assert_eq!(libs.len(), 20, "{libs:?}");
+    let ids: Vec<&str> = libs.iter().map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(
+        ids,
+        [
+            "basic-shapes",
+            "ui-frames",
+            "map-markers",
+            "inventory-icons",
+            "skill-icons",
+            "currency-tokens",
+            "world-props",
+            "party-roles",
+            "loot-chests",
+            "resource-nodes",
+            "quest-marks",
+            "status-pips",
+            "vehicle-icons",
+            "dialogue-ui",
+            "crafting-stations",
+            "arrow-marks",
+            "nature-icons",
+            "ui-badges",
+            "hazard-signs",
+            "tool-icons",
+        ]
+    );
+    assert!(libs.iter().all(|l| l["category"] == "builtIn"));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
         (Some("ui-frames"), Some("UI Frames"), Some("builtIn"))
-    );
-    assert_eq!(
-        (libs[2]["id"].as_str(), libs[2]["name"].as_str(), libs[2]["category"].as_str()),
-        (Some("map-markers"), Some("Map Markers"), Some("builtIn"))
-    );
-    assert_eq!(
-        (libs[3]["id"].as_str(), libs[3]["name"].as_str(), libs[3]["category"].as_str()),
-        (Some("inventory-icons"), Some("Inventory Icons"), Some("builtIn"))
     );
     assert_eq!(
         (libs[4]["id"].as_str(), libs[4]["name"].as_str(), libs[4]["category"].as_str()),
@@ -187,6 +205,40 @@ fn skill_icons_symbols_add_without_nine_slice() {
         d.node(NodeId(placed[0])).map(|n| &n.kind),
         Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == "Attack"
     ));
+}
+
+#[test]
+fn gamedev_symbol_libraries_add_without_nine_slice() {
+    let expected: &[(&str, &[&str])] = &[
+        ("currency-tokens", &["Coin", "Gem Shard", "Ticket", "Token", "Keycard", "Crystal"]),
+        ("world-props", &["Town", "Dungeon", "Camp", "Portal", "Shop", "Boss Gate"]),
+        ("party-roles", &["Tank", "Healer", "DPS", "Support", "Scout", "Caster"]),
+        ("loot-chests", &["Wood Chest", "Iron Chest", "Gold Chest", "Locked Chest", "Open Chest", "Mimic"]),
+        ("resource-nodes", &["Ore", "Herb", "Wood Log", "Fish", "Crystal Vein", "Scrap"]),
+        ("quest-marks", &["New Quest", "Active Quest", "Turn In", "Failed Quest", "Hidden Quest", "Daily"]),
+        ("status-pips", &["Poison Pip", "Burn Pip", "Stun Pip", "Shield Pip", "Buff Pip", "Debuff Pip"]),
+        ("vehicle-icons", &["Cart", "Boat", "Airship", "Mount", "Bike", "Elevator"]),
+        ("dialogue-ui", &["Speech", "Whisper", "Shout", "Thought", "Choice", "Narration"]),
+        ("crafting-stations", &["Anvil", "Cauldron", "Loom", "Workbench", "Enchant Table", "Smelter"]),
+        ("arrow-marks", &["Left Arrow", "Right Arrow", "Up Arrow", "Down Arrow", "Bidirectional", "Chevron"]),
+        ("nature-icons", &["Tree", "Leaf", "Mountain", "Cloud", "Sun", "Moon"]),
+        ("ui-badges", &["New Badge", "Hot Badge", "Sale Badge", "Lock Badge", "Check Badge", "Alert Badge"]),
+        ("hazard-signs", &["Warning", "Danger", "Radiation", "Biohazard", "Slippery", "Electric"]),
+        ("tool-icons", &["Hammer", "Wrench", "Pickaxe", "Axe", "Fishing Rod", "Torch"]),
+    ];
+    for &(library, want) in expected {
+        let mut s = session();
+        let lib = run(&mut s, "symbol.library", json!({"library": library}));
+        let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+        assert_eq!(names, want, "{library}");
+        let first = want[0];
+        let r = run(&mut s, "symbol.addFromLibrary", json!({"library": library, "name": first, "place": true, "x": 40.0, "y": 50.0}));
+        assert_eq!(r["added"], json!([first]), "{library}");
+        let d = doc(&s);
+        assert_eq!(d.symbol_nine_slice(first), None, "{library}/{first}");
+        let placed = r["placed"].as_u64().unwrap();
+        assert!(matches!(d.node(NodeId(placed)).map(|n| &n.kind), Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == first), "{library}");
+    }
 }
 
 #[test]

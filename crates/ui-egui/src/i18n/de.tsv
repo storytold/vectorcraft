@@ -6224,6 +6224,111 @@ axis	Y Axis	Y-Achse
 	Heal	Heilung
 	Buff	Buff
 	Ult	Ult
+	Currency Tokens	Währungsmarken
+	Coin	Münze
+	Gem Shard	Edelsteinsplitter
+	Ticket	Ticket
+	Token	Marke
+	Keycard	Schlüsselkarte
+	Crystal	Kristall
+	World Props	Welt-Props
+	Town	Stadt
+	Dungeon	Dungeon
+	Camp	Lager
+	Portal	Portal
+	Shop	Laden
+	Boss Gate	Boss-Tor
+	Party Roles	Gruppenrollen
+	Tank	Tank
+	Healer	Heiler
+	DPS	DPS
+	Support	Support
+	Scout	Späher
+	Caster	Zauberer
+	Loot Chests	Beutetruhen
+	Wood Chest	Holztruhe
+	Iron Chest	Eisentruhe
+	Gold Chest	Goldtruhe
+	Locked Chest	Verschlossene Truhe
+	Open Chest	Offene Truhe
+	Mimic	Mimic
+	Resource Nodes	Ressourcenknoten
+	Ore	Erz
+	Herb	Kraut
+	Wood Log	Holzscheit
+	Fish	Fisch
+	Crystal Vein	Kristallader
+	Scrap	Schrott
+	Quest Marks	Quest Marks
+	New Quest	New Quest
+	Active Quest	Active Quest
+	Turn In	Turn In
+	Failed Quest	Failed Quest
+	Hidden Quest	Hidden Quest
+	Daily	Daily
+	Status Pips	Status Pips
+	Poison Pip	Poison Pip
+	Burn Pip	Burn Pip
+	Stun Pip	Stun Pip
+	Shield Pip	Shield Pip
+	Buff Pip	Buff Pip
+	Debuff Pip	Debuff Pip
+	Vehicle Icons	Vehicle Icons
+	Cart	Cart
+	Boat	Boat
+	Airship	Airship
+	Mount	Mount
+	Bike	Bike
+	Elevator	Elevator
+	Dialogue UI	Dialogue UI
+	Speech	Speech
+	Whisper	Whisper
+	Shout	Shout
+	Thought	Thought
+	Choice	Choice
+	Narration	Narration
+	Crafting Stations	Crafting Stations
+	Anvil	Anvil
+	Cauldron	Cauldron
+	Loom	Loom
+	Workbench	Workbench
+	Enchant Table	Enchant Table
+	Smelter	Smelter
+	Arrow Marks	Arrow Marks
+	Left Arrow	Left Arrow
+	Right Arrow	Right Arrow
+	Up Arrow	Up Arrow
+	Down Arrow	Down Arrow
+	Bidirectional	Bidirectional
+	Chevron	Chevron
+	Nature Icons	Natur-Icons
+	Tree	Baum
+	Leaf	Blatt
+	Mountain	Berg
+	Cloud	Wolke
+	Sun	Sonne
+	Moon	Mond
+	UI Badges	UI Badges
+	New Badge	New Badge
+	Hot Badge	Hot Badge
+	Sale Badge	Sale Badge
+	Lock Badge	Lock Badge
+	Check Badge	Check Badge
+	Alert Badge	Alert Badge
+	Hazard Signs	Hazard Signs
+	Warning	Warning
+	Danger	Danger
+	Radiation	Radiation
+	Biohazard	Biohazard
+	Slippery	Slippery
+	Electric	Electric
+	Tool Icons	Werkzeug-Icons
+	Hammer	Hammer
+	Wrench	Schraubenschlüssel
+	Pickaxe	Spitzhacke
+	Axe	Axt
+	Fishing Rod	Angel
+	Torch	Fackel
 	Sword	Schwert
 	Shield	Schild
 	Potion	Trank

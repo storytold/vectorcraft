@@ -6324,6 +6324,111 @@ axis	Y Axis	Y 軸
 	Heal	回復
 	Buff	バフ
 	Ult	必殺
+	Currency Tokens	通貨トークン
+	Coin	コイン
+	Gem Shard	ジェムのかけら
+	Ticket	チケット
+	Token	トークン
+	Keycard	キーカード
+	Crystal	クリスタル
+	World Props	ワールド小物
+	Town	街
+	Dungeon	ダンジョン
+	Camp	キャンプ
+	Portal	ポータル
+	Shop	店
+	Boss Gate	ボス門
+	Party Roles	パーティ役割
+	Tank	Tank
+	Healer	ヒーラー
+	DPS	DPS
+	Support	サポート
+	Scout	スカウト
+	Caster	キャスター
+	Loot Chests	ルート箱
+	Wood Chest	Wood Chest
+	Iron Chest	Iron Chest
+	Gold Chest	Gold Chest
+	Locked Chest	Locked Chest
+	Open Chest	Open Chest
+	Mimic	Mimic
+	Resource Nodes	Resource Nodes
+	Ore	Ore
+	Herb	Herb
+	Wood Log	Wood Log
+	Fish	Fish
+	Crystal Vein	Crystal Vein
+	Scrap	Scrap
+	Quest Marks	Quest Marks
+	New Quest	New Quest
+	Active Quest	Active Quest
+	Turn In	Turn In
+	Failed Quest	Failed Quest
+	Hidden Quest	Hidden Quest
+	Daily	Daily
+	Status Pips	Status Pips
+	Poison Pip	Poison Pip
+	Burn Pip	Burn Pip
+	Stun Pip	Stun Pip
+	Shield Pip	Shield Pip
+	Buff Pip	Buff Pip
+	Debuff Pip	Debuff Pip
+	Vehicle Icons	Vehicle Icons
+	Cart	Cart
+	Boat	Boat
+	Airship	Airship
+	Mount	Mount
+	Bike	Bike
+	Elevator	Elevator
+	Dialogue UI	Dialogue UI
+	Speech	Speech
+	Whisper	Whisper
+	Shout	Shout
+	Thought	Thought
+	Choice	Choice
+	Narration	Narration
+	Crafting Stations	Crafting Stations
+	Anvil	Anvil
+	Cauldron	Cauldron
+	Loom	Loom
+	Workbench	Workbench
+	Enchant Table	Enchant Table
+	Smelter	Smelter
+	Arrow Marks	Arrow Marks
+	Left Arrow	Left Arrow
+	Right Arrow	Right Arrow
+	Up Arrow	Up Arrow
+	Down Arrow	Down Arrow
+	Bidirectional	Bidirectional
+	Chevron	Chevron
+	Nature Icons	自然アイコン
+	Tree	木
+	Leaf	葉
+	Mountain	山
+	Cloud	雲
+	Sun	太陽
+	Moon	月
+	UI Badges	UI Badges
+	New Badge	New Badge
+	Hot Badge	Hot Badge
+	Sale Badge	Sale Badge
+	Lock Badge	Lock Badge
+	Check Badge	Check Badge
+	Alert Badge	Alert Badge
+	Hazard Signs	Hazard Signs
+	Warning	Warning
+	Danger	Danger
+	Radiation	Radiation
+	Biohazard	Biohazard
+	Slippery	Slippery
+	Electric	Electric
+	Tool Icons	ツールアイコン
+	Hammer	ハンマー
+	Wrench	レンチ
+	Pickaxe	つるはし
+	Axe	斧
+	Fishing Rod	釣竿
+	Torch	トーチ
 	Sword	剣
 	Shield	盾
 	Potion	ポーション

@@ -144,7 +144,31 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     let under = |e: &crate::menus::MenuEntry| e.path == ["Window", "Symbol Libraries"];
     let opened: Vec<_> =
         entries.iter().filter(|e| under(e) && e.command.as_deref() == Some("window.symbolLibrary")).map(|e| e.params["library"].clone()).collect();
-    assert_eq!(opened, [json!("basic-shapes"), json!("ui-frames"), json!("map-markers"), json!("inventory-icons"), json!("skill-icons")]);
+    assert_eq!(
+        opened,
+        [
+            json!("basic-shapes"),
+            json!("ui-frames"),
+            json!("map-markers"),
+            json!("inventory-icons"),
+            json!("skill-icons"),
+            json!("currency-tokens"),
+            json!("world-props"),
+            json!("party-roles"),
+            json!("loot-chests"),
+            json!("resource-nodes"),
+            json!("quest-marks"),
+            json!("status-pips"),
+            json!("vehicle-icons"),
+            json!("dialogue-ui"),
+            json!("crafting-stations"),
+            json!("arrow-marks"),
+            json!("nature-icons"),
+            json!("ui-badges"),
+            json!("hazard-signs"),
+            json!("tool-icons"),
+        ]
+    );
     let has = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(has("window.symbolLibrary.other"), Some(true));
     assert_eq!(has("ui.saveSymbolLibrary"), Some(false), "no symbols to save yet");
