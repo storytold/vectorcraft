@@ -526,6 +526,51 @@ fn distort_command_maps_corners() {
     assert!(close(bounds(&s, a), Rect::new(0.0, 0.0, 100.0, 100.0)));
 }
 
+/// Free Distort warps the art of a linked opacity mask with the object it masks, and one undo puts
+/// both back; an unlinked mask stays where it is.
+#[test]
+fn distort_command_warps_a_linked_opacity_mask_with_its_object() {
+    for linked in [true, false] {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        if !linked {
+            s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+        }
+        let mask_path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().extras().mask.as_ref().unwrap().art.path_data().cloned();
+        let path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+        let before = (path(&s), mask_path(&s));
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[10, 0], [90, 0], [100, 100], [0, 100]]})).unwrap();
+        assert!(path(&s) != before.0);
+        let want = if linked { path(&s) } else { before.1.clone() };
+        assert_eq!(mask_path(&s), want, "linked: {linked}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((path(&s), mask_path(&s)), before);
+    }
+}
+
+/// Free Distort of a group warps the linked opacity mask of a path inside it with the path.
+#[test]
+fn distort_command_warps_the_linked_mask_of_a_path_in_a_group() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let c = rect(&mut s, 150.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 0], [190, 0], [200, 100], [0, 100]]})).unwrap();
+    let a = s.doc().unwrap().doc.node(a).unwrap();
+    assert!(a.path_data().cloned() != before, "the path is warped");
+    assert_eq!(a.extras().mask.as_ref().unwrap().art.path_data(), a.path_data(), "and so is its mask");
+}
+
 #[test]
 fn distort_perspective_midpoint_is_projective() {
     // Distort a tiny probe at the centre of a 100×100 source box into a trapezoid: with a real
@@ -1143,6 +1188,32 @@ fn distort_rejects_malformed_coordinates_and_ids_without_editing_art() {
     }
     s.execute("object.distort", &json!({"corners": corners, "from": [0, 0, 100, 100], "ids": [a.0]})).unwrap();
     assert_eq!(undo_len(&s), history + 1);
+}
+
+/// `object.distort` with `angle` reads `from` as a box in the frame turned by it, as the Free
+/// Transform tool sends a turned bounding box: corners where that box already stands leave the art.
+#[test]
+fn distort_reads_from_in_a_turned_frame_and_rejects_a_bad_angle() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let original = bounds(&s, a);
+    let bx = vectorcraft_doc::OrientedBox { angle: 90.0, rect: Rect::new(-100.0, 0.0, 0.0, 100.0) };
+    let corners: Vec<serde_json::Value> = bx.corners().iter().map(|c| json!([c.x, c.y])).collect();
+    let history = undo_len(&s);
+    for p in [
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": "90", "ids": [a.0]}),
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": [90], "ids": [a.0]}),
+    ] {
+        assert!(s.execute("object.distort", &p).is_err(), "invalid input: {p}");
+        assert!(close(bounds(&s, a), original));
+        assert_eq!(undo_len(&s), history);
+    }
+    s.execute("object.distort", &json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), history + 1);
+    // Without `from`, the box is the objects' bounds in the turned frame: the same box here.
+    s.execute("object.distort", &json!({"corners": corners, "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
 }
 
 /// `artboard.move` and `artboard.delete` take several artboards at once (#1139): one undo step

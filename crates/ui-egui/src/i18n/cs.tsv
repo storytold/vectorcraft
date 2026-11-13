@@ -212,6 +212,10 @@
 	Corner Color	Barva rohů
 	Contiguous	Souvislé
 	Each Channel	Každý kanál
+	Color Mask…	Barevná maska…
+	Color Mask	Barevná maska
+	Remove Color Mask	Odstranit barevnou masku
+	Apply Color Mask	Použít barevnou masku
 	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
@@ -1426,6 +1430,7 @@ lighting	Light	Světlo
 	Rotate View Tool	Nástroj Otočení zobrazení
 	Trackpad Gesture to Rotate View	Otáčet zobrazení gestem na trackpadu
 	Hold a Tool Shortcut to Use the Tool Temporarily	Podržením klávesové zkratky nástroj dočasně použít
+	Show Bounding Box While Moving and Drawing	Zobrazit ohraničovací rámeček při přesouvání a kreslení
 	Rotate View	Otočení zobrazení
 	Rounded Rectangle Tool	Nástroj Zaoblený obdélník
 	Scale Tool	Nástroj Změna velikosti
@@ -1585,6 +1590,8 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	Insert Aki Left	Vložit aki vlevo
+	Insert Aki Right	Vložit aki vpravo
 	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
@@ -1605,6 +1612,7 @@ digits	Malayalam	Malajálamské
 	Select a text object to edit its character attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho znaků.
 	Show Options	Zobrazit možnosti
 	Show Recent Colors	Zobrazit nedávné barvy
+	Toggle RGB Percent	Přepnout RGB v procentech
 	Color Panel Options	Možnosti panelu Barva
 	Small Caps	Kapitálky
 	Small Caps (on the roadmap)	Kapitálky (v plánu)
@@ -1707,6 +1715,17 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	Select one character with the Type tool first.	Nejprve nástrojem Text vyberte jeden znak.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glyf písma {font}, ne písma, kterým je vybraný text nastaven ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} patří znaku {base} (U+{base_code}) {place}; váš výběr je {sel} (U+{code}).
+	at the start of a word	na začátku slova
+	in the middle of a word	uprostřed slova
+	at the end of a word	na konci slova
+	standing alone	když stojí samostatně
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} není alternativou znaku {sel} (U+{code}) tak, jak stojí ve svém slově.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvojklikem vložíte {base} (U+{code}): prezentační tvar se nespojuje, písmeno ano.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Vloženo {base} (U+{code}) místo prezentačního tvaru: písmo ho podle polohy spojí se sousedy.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Žádná funkce OpenType tento glyf zde nekreslí, proto nahradí glyf znaku a nemusí se spojit se sousedními znaky.
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}
@@ -1867,6 +1886,8 @@ digits	Malayalam	Malajálamské
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
 	Method:	Metoda:
+	Pad	Prodloužit
+	Repeats	Počet opakování
 	Mode:	Režim:
 	Noise	Šum
 	Create:	Vytvořit:
@@ -1939,6 +1960,8 @@ digits	Malayalam	Malajálamské
 	Modified since it was read: {path}	Upraveno od načtení: {path}
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Filtru Zobrazit nic neodpovídá.
+	Show DCS Transparency Interactions	Zobrazit interakce DCS s průhledností
+	Transparent, or overlaps transparent objects: check its separations	Je průhledný nebo překrývá průhledné objekty: zkontrolujte jeho separace
 	PPI	PPI
 	Relink…	Znovu propojit…
 	Find Linked Files	Najít propojené soubory
@@ -2014,6 +2037,10 @@ digits	Malayalam	Malajálamské
 	Long	Dlouhý
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Sada Kinsoku
 	Kinsoku Shori Type	Typ Kinsoku Shori
 	Push In First	Nejprve vtáhnout
@@ -2024,6 +2051,7 @@ digits	Malayalam	Malajálamské
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
 	Roman Hanging Punctuation	Visící latinková interpunkce
 	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Nastavení východoasijské sazby
 	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
@@ -2148,6 +2176,8 @@ digits	Malayalam	Malajálamské
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}
+	Delete the selected items and their artwork?	Odstranit vybrané položky i s kresbou?
+	Delete this layer and its artwork?	Odstranit tuto vrstvu i s kresbou?
 	Delete “{name}”?	Odstranit „{name}“?
 	Document Swatches	Vzorník dokumentu
 	Edit or Apply Color Group	Upravit nebo použít skupinu barev
@@ -2859,6 +2889,8 @@ digits	Malayalam	Malajálamské
 	Randomly change saturation and brightness	Náhodně změnit sytost a jas
 	Recolor this row	Přebarvit tento řádek
 	Reset the rows to the artwork's colors	Obnovit řádky na barvy kresby
+	Color Theme Picker	Výběr barevného motivu
+	Click or drag across the art to pick its colors; Shift adds more	Klepnutím nebo tažením přes kresbu převezmete její barvy; Shift přidá další
 	Separate colors into rows	Rozdělit barvy do řádků
 	Unlink harmony colors	Zrušit propojení barev harmonie
 	1 Color Job	Zakázka s 1 barvou
@@ -3112,6 +3144,7 @@ antiAlias	Sharp	Ostré
 	Hide Code	Skrýt kód
 	Images:	Obrázky:
 	Include Metadata	Zahrnout metadata
+	Include Variable Data	Zahrnout data proměnných
 	Internal CSS	Interní CSS
 	Layer Names	Názvy vrstev
 	Minify	Minimalizovat
@@ -3356,6 +3389,7 @@ theme	Appearance	Motiv
 	Art Brush	Obrazový štětec
 	Bristle Brush	Štětinový štětec
 	Pattern Brush	Vzorkový štětec
+	missing from the Brushes panel	chybí v panelu Štětce
 	Select art to make a scatter, art or pattern brush.	Vyberte kresbu, abyste mohli vytvořit rozptylový, obrazový nebo vzorkový štětec.
 	Brush Art	Kresba štětce
 	New Symbol	Nový symbol
@@ -3596,6 +3630,7 @@ theme	Appearance	Motiv
 	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
+	Blend Easing	Náběh prolnutí
 	Reset with Mesh	Obnovit sítí
 	Reset with Warp	Obnovit pokřivením
 	Set Mesh Point Color	Nastavit barvu bodu sítě
@@ -3754,9 +3789,11 @@ theme	Appearance	Motiv
 	Enable Background Export	Povolit export na pozadí
 	Enable Background Save	Povolit ukládání na pozadí
 	Enable in-menu font previews	Povolit náhledy písem v nabídce
+	Show samples on white	Zobrazit ukázky na bílém pozadí
 	Enable Missing Glyph Protection	Povolit ochranu chybějících glyfů
 	Enable Rubber Band for	Povolit gumovou čáru pro
 	Enable Touch Gestures	Povolit dotyková gesta
+	Switch Selection and Drawing Modes	Přepnout mezi režimem výběru a kreslení
 	Enable Touch Workspace	Povolit dotykový pracovní prostor
 	English: UK	Angličtina: Spojené království
 	Every (minutes)	Každých (minut)
@@ -3935,6 +3972,10 @@ theme	Appearance	Motiv
 	Add to Profiles	Přidat do profilů
 	Delete Profile	Odstranit profil
 	Reset Profiles	Obnovit profily
+	Arrowheads	Šipky
+	Edit Arrowheads	Upravit šipky
+	Edit Arrowheads…	Upravit šipky…
+	Reload Arrowheads	Znovu načíst šipky
 	Stroke Options	Možnosti tahu
 	Width Profiles	Profily šířky
 	Apply Graphic Style	Použít grafický styl
@@ -3966,6 +4007,9 @@ theme	Appearance	Motiv
 	Select All Unused	Vybrat všechny nepoužité
 	Sort by Kind	Seřadit podle druhu
 	Sort by Name	Seřadit podle názvu
+	Spot Color Objects	Objekty s přímými barvami
+	Pattern Objects	Objekty se vzorky
+	Gradient Objects	Objekty s přechody
 	Spot Colors	Přímé barvy
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
@@ -4496,6 +4540,85 @@ imageTrace	Outline	Obrys
 @msg	the script's run is no longer available	běh skriptu již není k dispozici
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	neúspěšný příkaz změnil kroky zpět, které nebylo možné obnovit, proto byl skript zastaven
 @msg	a recovery copy could not be written, so the script was not run	záložní kopii se nepodařilo zapsat, proto skript nebyl spuštěn
+@msg	Script file access denied	Přístup k souboru skriptu byl odepřen
+@msg	Script file exceeds 8 MiB	Soubor skriptu je větší než 8 MiB
+@msg	Script file is not open	Soubor skriptu není otevřen
+@msg	Script file cannot be decoded	Soubor skriptu nelze dekódovat
+@msg	Script file is not a regular file	Soubor skriptu není běžný soubor
+@msg	Script file does not exist	Soubor skriptu neexistuje
+@msg	Script file could not be read	Soubor skriptu se nepodařilo přečíst
+@msg	Script folder has more than 2,048 entries	Složka skriptu má více než 2 048 položek
+@msg	Script file open mode must be r, w, e or a	Režim otevření souboru skriptu musí být r, w, e nebo a
+@msg	Script file writing is not available	Zápis souborů skriptu není k dispozici
+@msg	Script file dialogs are not available	Dialogy souborů skriptu nejsou k dispozici
+@msg	Script files cannot be opened in another application	Soubory skriptu nelze otevřít v jiné aplikaci
+@msg	Script file access is unavailable on the web	Přístup k souborům skriptu není na webu k dispozici
+@msg	Script has 256 files open	Skript má otevřeno 256 souborů
+@msg	Script file path exceeds 32,767 characters	Cesta k souboru skriptu je delší než 32 767 znaků
+@msg	Script folder mask takes too many steps to match	Porovnání masky složky skriptu vyžaduje příliš mnoho kroků
+@msg	the script opened more file data than one run may open (32 MiB)	skript otevřel více dat ze souborů, než smí otevřít jeden běh (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: přijímá pozici a režim
+@msg	vc.run: give a command id, as a string	vc.run: zadejte ID příkazu jako řetězec
+@msg	vc.run: takes a command id and an object of parameters	vc.run: přijímá ID příkazu a objekt s parametry
+@msg	vc.run: the parameters must be an object	vc.run: parametry musí být objekt
+@msg	vc.run: the result{place} is too large for a script	vc.run: výsledek{place} je pro skript příliš velký
+@msg	$.evalFile requires a file path	$.evalFile vyžaduje cestu k souboru
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: časový limit musí být konečný počet milisekund, 0 nebo více
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: přijímá cestu k souboru a časový limit
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: řádek {line}, sloupec {column} v {file}: {e} (vyvolána výjimka)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: řádek {line}, sloupec {column}: {e} (vyvolána výjimka)
+@msg	{name}: {e} (thrown)	{name}: {e} (vyvolána výjimka)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: řádek {line}, sloupec {column} v {file}: {e} (omezení)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: řádek {line}, sloupec {column}: {e} (omezení)
+@msg	{name}: {e} (limit)	{name}: {e} (omezení)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: řádek {line}, sloupec {column} v {file}: {e} (syntaktická chyba)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: řádek {line}, sloupec {column}: {e} (syntaktická chyba)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaktická chyba)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: řádek {line}, sloupec {column} v {file}: {e} (zastaveno)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: řádek {line}, sloupec {column}: {e} (zastaveno)
+@msg	{name}: {e} (stopped)	{name}: {e} (zastaveno)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: řádek {line}, sloupec {column} v {file}: {e} (interní chyba)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: řádek {line}, sloupec {column}: {e} (interní chyba)
+@msg	{name}: {e} (internal)	{name}: {e} (interní chyba)
+@msg	{e} (these files stay written: {paths})	{e} (tyto soubory zůstávají zapsané: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: zadejte název jako řetězec
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: zadejte národní prostředí, například "en" nebo "de_DE", nebo null pro prostředí rozhraní
+@msg	$.localize: give true or false	$.localize: zadejte true nebo false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: lze nastavit jen 512, které zapíná lokalizaci, nebo 0
+@msg	$.flags: give a number	$.flags: zadejte číslo
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: skripty zde čtou a zapisují pouze UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: zadejte název kódování jako řetězec
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: velikost mezipaměti nelze nastavit
+@msg	$.setenv: give a value, as a string	$.setenv: zadejte hodnotu jako řetězec
+@msg	$.setenv: only {_1} can be set	$.setenv: lze nastavit pouze {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: hodnota má nejvýše {MAX_ENV_BYTES} písmen, číslic a znaků _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: zadejte počet milisekund od 0 do {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: zadejte počet milisekund
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: běh nemůže čekat uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
+@msg	$.bp: scripts here have no debugger	$.bp: skripty zde nemají ladicí program
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: skripty zatím nemohou zobrazit dialog
+@msg	{name}: give a message	{name}: zadejte zprávu
+@msg	{name}: give the text the field starts with	{name}: zadejte text, kterým pole začíná
+@msg	{name}: the message is longer than 16 KiB	{name}: zpráva je delší než 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: titulek je delší než 256 bajtů
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: text, kterým pole začíná, je delší než 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog se nemůže otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: další odpověď v `answers` je pro {_1}, ne pro {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` už nemá pro tento dialog žádnou odpověď
+@msg	vc.document{place} is too large for a script	vc.document{place} je pro skript příliš velký
+@msg	vc.log: the log of this run is full	vc.log: protokol tohoto běhu je plný
+@msg	this function's script run has ended	běh skriptu této funkce skončil
+@msg	the script made more host calls than one run may make	skript provedl více volání hostitele, než smí provést jeden běh
+@msg	the script passed more data to and from commands than one run may pass	skript předal příkazům a z příkazů více dat, než smí předat jeden běh
+@msg	the script added more objects and data to the documents than one run may add	skript přidal do dokumentů více objektů a dat, než smí přidat jeden běh
+@msg	{what}: the object is not a File or a Folder	{what}: objekt není File ani Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: počet musí být konečné číslo, 0 nebo více
+@msg	File.seek: the position must be a finite number	File.seek: pozice musí být konečné číslo
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: režim musí být 0, 1 nebo 2
+@msg	script file is compiled: {value}	soubor skriptu je zkompilovaný: {value}
+@msg	`name` must be the name of a script engine	`name` musí být název skriptovacího jádra
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
+@msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
@@ -4687,6 +4810,8 @@ imageTrace	Outline	Obrys
 @msg	the Smooth slider is not open	Posuvník Vyhladit není otevřený
 @msg	the screen color sampler is already open	nástroj pro nabírání barvy z obrazovky už je otevřený
 @msg	this system has no screen color sampler	tento systém nemá nástroj pro nabírání barvy z obrazovky
+@msg	the screen color sampler did not answer	nástroj pro nabírání barvy z obrazovky neodpověděl
+@msg	the screen color sampler failed	nástroj pro nabírání barvy z obrazovky selhal
 @msg	bad colour `{hex}` (#rrggbb)	chybná barva `{hex}` (#rrggbb)
 @msg	bad page tree	chybný strom stránek
 @msg	bad shortcut	chybná klávesová zkratka
@@ -4716,6 +4841,7 @@ imageTrace	Outline	Obrys
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
+@msg	command `{id}` is not available right now	příkaz `{id}` nyní není k dispozici
 @msg	compound paths can only contain paths	složené cesty mohou obsahovat jen cesty
 @msg	compressed (RLE) bitmaps can't be read yet	komprimované bitmapy (RLE) zatím nelze načíst
 @msg	damaged	poškozeno
@@ -4896,6 +5022,7 @@ imageTrace	Outline	Obrys
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not an HP-GL file	nejde o soubor HP-GL
+@msg	not a PICT file	nejde o soubor PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musí být pole 1 až 255 barev #rrggbb
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
@@ -4984,6 +5111,10 @@ imageTrace	Outline	Obrys
 @msg	a CMYK image has no transparency to set	obraz CMYK nemá průhlednost, kterou by bylo možné nastavit
 @msg	every pixel matches the background: no image would be left	každý obrazový bod odpovídá pozadí: nezbyl by žádný obraz
 @msg	an image of {w} × {h} pixels is too large to change	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na změnu
+@msg	select an image with a color mask	vyberte obraz s barevnou maskou
+@msg	the color mask's settings are out of range	nastavení barevné masky jsou mimo rozsah
+@msg	a CMYK image can't take a color mask	obraz CMYK nemůže mít barevnou masku
+@msg	the mask would hide every pixel	maska by skryla všechny obrazové body
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
@@ -5095,6 +5226,7 @@ imageTrace	Outline	Obrys
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	v režimu prezentace nelze panely zobrazit
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
 @msg	Preferences imported.	Předvolby byly importovány.
 @msg	not a preferences file: {e}	nejde o soubor předvoleb: {e}
@@ -5273,6 +5405,7 @@ imageTrace	Outline	Obrys
 @msg	choose the font files to add	vyberte soubory písem, které chcete přidat
 @msg	not a file	nejde o soubor
 @msg	not a font file	nejde o soubor písma
+@msg	the active document changed while the question was open; nothing was deleted	aktivní dokument se změnil, zatímco byla otázka otevřená; nic nebylo odstraněno
 @msg	that document is no longer open	tento dokument už není otevřen
 @msg	larger than 256 MB	větší než 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	soubory mají dohromady více než 1 GB: přidávejte jich méně najednou
@@ -5755,6 +5888,65 @@ mark-style	Japanese	Japonské
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} nedokáže vytvořit těleso z obrazu: nejprve jej vektorizujte příkazem Objekt › Vektorizace obrazu › Vytvořit.
 @msg	{label} requires a shape with at least two anchors	{label} vyžaduje tvar alespoň se dvěma kotevními body
 @msg	The shape is too complex for a 3D effect	Tvar je pro 3D efekt příliš složitý
+@msg	Extrude & Bevel	Vysunutí a zkosení
+@msg	Revolve	Rotační těleso
+@msg	Inflate	Nafouknutí
+@msg	Rotate	Otočit
+@msg	Extrude & Bevel (Classic)	Vysunutí a zkosení (klasické)
+@msg	Revolve (Classic)	Rotační těleso (klasické)
+@msg	Rotate (Classic)	Otočit (klasické)
+@msg	This effect	Tento efekt
+@msg	clipping paths	ořezové cesty
+@msg	other objects	jiné objekty
+@msg	{label} requires a group holding a shape with at least two anchors	{label} vyžaduje skupinu obsahující tvar alespoň se dvěma kotevními body
+@msg	Revolve requires a group holding a shape with at least two anchors	Rotační těleso vyžaduje skupinu obsahující tvar alespoň se dvěma kotevními body
+@msg	Revolve requires a shape with at least two anchors	Rotační těleso vyžaduje tvar alespoň se dvěma kotevními body
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} na skupině potřebuje cesty, složené cesty, text, skupiny, ořezové skupiny, prolnutí a instance symbolů: nejprve uvolněte nebo rozdělte tyto položky: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} na skupině přijímá nejvýše {MAX_MEMBERS} objektů
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	3D efekt na skupině nebo vrstvě patří na samotnou skupinu, ne na její výplň nebo tah
+@msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
+@msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
+@msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
+@msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nemůže vytvořit těleso z instance symbolu „{symbol}“: kresba symbolu není k dispozici
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ořezová cesta je příliš složitá na oříznutí kresby
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} přijímá nejvýše {MAX_MEMBERS} objektů
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} nemůže vytvořit tělesa z kresby vnořené hlouběji než do {MAX_DEPTH} úrovní
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Barva rotačního tělesa je pro tento povrch příliš složitá; snižte Segmenty nebo zjednodušte přechod
+@msg	Revolve edge must be left or right	Rotační těleso: edge musí být left nebo right
+@msg	Revolve cap must be a boolean	Rotační těleso: cap musí být logická hodnota
+@msg	the revolved object has no fill or stroke	rotovaný objekt nemá výplň ani tah
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor musí být neprůhledná barva RGB ve tvaru #rrggbb
+@msg	lights must contain one to ten lights	lights musí obsahovat jedno až deset světel
+@msg	each light must be an object	každé světlo musí být objekt
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	neznámé nastavení světla: použijte color, intensity, rotation, height, softness nebo behind
+@msg	light {key} must be a number from {min} to {max}	světlo: {key} musí být číslo od {min} do {max}
+@msg	light color must use opaque #rrggbb	color světla musí být neprůhledná barva #rrggbb
+@msg	light behind must be true or false	behind světla musí být true nebo false
+@msg	shadow must be true or false	shadow musí být true nebo false
+@msg	shadowPosition must be behind or below	shadowPosition musí být behind nebo below
+@msg	{key} must be a number from {min} to {max}	{key} musí být číslo od {min} do {max}
+@msg	each of `{GRAPHICS}` must be an object	každá položka `{GRAPHICS}` musí být objekt
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	položky `{GRAPHICS}` přijímají symbol, face, x, y, scale a rotation, ne `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	každá položka `{GRAPHICS}` potřebuje `symbol`, název symbolu
+@msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
+@msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
+@msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Kresba grafiky smí být vnořena nejvýše do {MAX_LEVELS} úrovní: zjednodušte kresbu symbolu
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Kresba grafiky smí vnořovat symboly nejvýše do {MAX_NESTING} úrovní: zjednodušte kresbu symbolu
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Kresba grafiky obsahuje příliš mnoho objektů: zjednodušte kresbu symbolu
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafika kreslí nejvýše {MAX_PIECES} výplní a tahů: zjednodušte kresbu symbolu
+@msg	`surface` must be one of {_1}	`surface` musí být jedno z {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} pro tento objekt kreslí zdrojovou kresbu místo jeho 3D povrchu
+@msg	{label} draws no faces for this object	{label} pro tento objekt nekreslí žádné stěny
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	drátový model má více než {MAX_WIRE_EDGES} hran
 @msg	The 3D surface is too complex; simplify the shape	3D povrch je příliš složitý; zjednodušte tvar
 	Transform Objects	Transformovat objekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	neznámý parametr `{key}`; mysleli jste `{near}`?
@@ -5765,6 +5957,7 @@ mark-style	Japanese	Japonské
 @msg	unknown parameter `{path}`; it takes: {keys}	neznámý parametr `{path}`; přijímá: {keys}
 @msg	missing `{path}`	chybí `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` musí být {expected}, nikoli {got}
+@msg	`{path}` is nested too deeply	`{path}` je vnořený příliš hluboko
 	Load EPS into Clipboard	Načíst EPS do schránky
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na vykreslení
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: není obraz PNG, JPEG, WebP, TIFF ani BMP
@@ -6089,6 +6282,9 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
 @msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Nainstalovat „{name}“, který žádá o velký výpočetní rozpočet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Každé spuštění může trvat až {minutes} minut a vykonat {times}krát víc práce, než smějí jiné zásuvné moduly. Běží na pozadí a můžete ho zrušit.
@@ -6101,6 +6297,139 @@ axis	Y Axis	osa Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živý efekt běží během vykreslování dokumentu, takže nemůže být `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	exportní zásuvný modul dostává vždy rozpočet exportu: klíč `budget` vynechte
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): musí ho schválit člověk v desktopové aplikaci, nebo předejte `allowHeavy: true` v relaci spuštěné s --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` musí mít 1-64 tisknutelných znaků
+@msg	`version`, `description` or `author` is too long	`version`, `description` nebo `author` je příliš dlouhé
+@msg	`warnings` must be a list of strings	`warnings` musí být seznam řetězců
+@msg	`{k}` must be one of {_1}	`{k}` musí být jedno z {_1}
+@msg	`{k}` must be {what}	`{k}` musí být {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	exportní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	mimo skupiny smí být nejvýše {MAX_UNGROUPED} parametrů: ostatním přiřaďte `group`
+@msg	can't encode the input	vstup nelze zakódovat
+@msg	expected {"dataBase64"}	očekáváno {"dataBase64"}
+@msg	expected {"objects"}	očekáváno {"objects"}
+@msg	export `{name}`: {e}	export `{name}`: {e}
+@msg	extension {e} is listed twice	přípona {e} je uvedena dvakrát
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	přípona {e}: použijte 1-16 malých písmen a číslic, bez tečky
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	neplatné ID {_1}: použijte 1-64 znaků z A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	neplatný název parametru {k}
+@msg	manifest is not UTF-8	manifest není v kódování UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifest je příliš dlouhý (limit {MAX_MANIFEST_BYTES} bajtů)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifest má {_1} bajtů (limit {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	modul má {_1} bajtů (limit {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
+@msg	not JSON: {e}	není JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	není binární soubor WebAssembly (chybí hlavička \0asm)
+@msg	parameter `{k}`: {what}	parametr `{k}`: {what}
+@msg	parameter `{name}`: {what}	parametr `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
+@msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
+@msg	the runtime panicked	běhové prostředí havarovalo
+@msg	unexpected host trap	neočekávaná chyba (trap) hostitele
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version vrátila {v}; tento hostitel implementuje verzi {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc vrátila 0 (nedostatek paměti)
+@msg	vc_alloc returned a block outside memory	vc_alloc vrátila blok mimo paměť
+@msg	vc_run returned error code {packed}	vc_run vrátila chybový kód {packed}
+@msg	{_1} is not a file	{_1} není soubor
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} má {_2} bajtů (limit {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektů (limit {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} ukazuje mimo paměť
+@msg	`angle` must be a number	`angle` musí být číslo
+@msg	`aspect` must be from 0.01 to 100	`aspect` musí být od 0.01 do 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` musí být "butt", "round" nebo "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` musí být "nonzero" nebo "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` musí být adresa https:// o nejvýše {MAX_HELP_URL} bajtech
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` musí mít 1-{MAX_HELP} tisknutelných znaků
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` musí být ID efektu o 1-{MAX_EFFECT_ID} bajtech
+@msg	`id` must be the id of an input object	`id` musí být ID vstupního objektu
+@msg	`join` must be "miter", "round" or "bevel"	`join` musí být "miter", "round" nebo "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` a `group` musí mít 1-{MAX_LABEL} tisknutelných znaků
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` musí být 1-{MAX_TEXT} a výchozí hodnota nesmí být delší
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` a `maxItems` musí být 0-{MAX_LIST}, `maxItems` alespoň 1 a výchozí hodnota musí mít tolik položek
+@msg	`name` must be a string	`name` musí být řetězec
+@msg	`opacity` must be a number	`opacity` musí být číslo
+@msg	`type` must be "path" or "compound"	`type` musí být "path" nebo "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musí mít 1-{MAX_UNIT} tisknutelných znaků
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musí uvádět 1 až {MAX_CONDITION_VALUES} hodnot pro `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` uvádí `{other}`, což není parametr deklarovaný před tímto
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` smí uvádět nejvýše {MAX_CONDITIONS} parametrů
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` přebírá hodnoty `{other}`, a to zaškrtávacího políčka nebo volby
+@msg	`visible` must be true or false	`visible` musí být true nebo false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` musí být číslo od {_1} do {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` musí být pole s nejvýše {MAX_ITEMS} položkami
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	výchozí barva musí být objekt barvy nebo šestnáctkový řetězec, například "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	objekt barvy nebo šestnáctkový řetězec, například "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	volný přechod obsahuje nejvýše {MAX_ITEMS} bodů a čar
+@msg	a freeform gradient line names a point it doesn't have	čára volného přechodu uvádí bod, který přechod nemá
+@msg	a gradient needs 1-{MAX_ITEMS} stops	přechod potřebuje 1-{MAX_ITEMS} zarážek
+@msg	a list of numbers	seznam čísel
+@msg	a list of {min_items} to {max_items} numbers	seznam {min_items} až {max_items} čísel
+@msg	a new object needs a `path`	nový objekt potřebuje `path`
+@msg	a number	číslo
+@msg	a painted live effect returns only `objects`	malující živý efekt vrací jen `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	část malujícího živého efektu má jen `path`, `fillRule`, `fills` a `strokes`
+@msg	a read-only object was left out	objekt jen pro čtení byl vynechán
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {"id"} nebo tak, jak byl předán
+@msg	a string	řetězec
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	tah má jen `paint`, `width`, `join`, `cap` a `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	tah musí být {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	efekt musí být {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	efekt na výplni vrací jen `fills`
+@msg	an effect on a stroke returns only `strokes`	efekt na tahu vrací jen `strokes`
+@msg	an object must be a JSON object	objekt musí být objekt JSON
+@msg	bad range	neplatný rozsah
+@msg	choices must be 1-64 non-empty, printable strings	volby musí být 1-64 neprázdných tisknutelných řetězců
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	souřadnice mimo rozsah (limit ±{MAX_COORD} pt)
+@msg	default is not one of the options	výchozí hodnota není jednou z možností
+@msg	each piece needs a `path`	každá část potřebuje `path`
+@msg	is listed twice	je uveden dvakrát
+@msg	pattern transform out of range	transformace vzorku mimo rozsah
+@msg	read-only field '{field}' changed	pole jen pro čtení '{field}' bylo změněno
+@msg	stops must be in order of `offset`	zarážky musí být seřazeny podle `offset`
+@msg	the document has no pattern {pattern}	dokument nemá vzorek {pattern}
+@msg	the document has no swatch {n}	dokument nemá vzorek barvy {n}
+@msg	the output	výstup
+@msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
+@msg	true or false	true nebo false
+@msg	a number >= {_1}	číslo >= {_1}
+@msg	a number > {_1}	číslo > {_1}
+@msg	a number <= {_1}	číslo <= {_1}
+@msg	a number < {_1}	číslo < {_1}
+@msg	a number {_1} to {_2}	číslo od {_1} do {_2}
+@msg	a number >= {_1} and < {_2}	číslo >= {_1} a < {_2}
+@msg	a number > {_1} and <= {_2}	číslo > {_1} a <= {_2}
+@msg	a number > {_1} and < {_2}	číslo > {_1} a < {_2}
+@msg	a number ({_1})	číslo ({_1})
+@msg	a number >= {_1} ({_2})	číslo >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	číslo > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	číslo <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	číslo < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	číslo od {_1} do {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	číslo >= {_1} a < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	číslo > {_1} a <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	číslo > {_1} a < {_2} ({_3})
+@msg	an integer	celé číslo
+@msg	an integer >= {_1}	celé číslo >= {_1}
+@msg	an integer <= {_1}	celé číslo <= {_1}
+@msg	an integer {_1} to {_2}	celé číslo od {_1} do {_2}
+@msg	one of {_1}	jedna z hodnot {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` musí být jedna z hodnot {_1}, nikoli {got}
+@msg	an object id (a non-negative integer)	ID objektu (nezáporné celé číslo)
+@msg	a list of object ids	seznam ID objektů
+@msg	a color (a string, [r, g, b] or an object)	barva (řetězec, [r, g, b] nebo objekt)
+@msg	[x, y] (two numbers)	[x, y] (dvě čísla)
+@msg	an object	objekt
+@msg	a list	seznam
+@msg	unknown key `{k}`; the keys here are {_1}	neznámý klíč `{k}`; zde platné klíče jsou {_1}
+@msg	{_1} is listed twice	{_1} je uveden dvakrát
+@msg	{_1} is not the id of an input object	{_1} není ID vstupního objektu
+@msg	{_1} is read-only	{_1} je jen pro čtení
+@msg	{what} must be from {lo} to {hi}	{what} musí být od {lo} do {hi}
+@msg	a color component	složka barvy
+@msg	a plate	deska
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
 	ID: {id}	ID: {id}
@@ -6203,6 +6532,23 @@ axis	Y Axis	osa Y
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
+	Insert Select Path	Vložit výběr cesty
+	Select Path	Vybrat cestu
+@msg	select one whole path or compound path	vyberte jednu celou cestu nebo složenou cestu
+@msg	select only one path	vyberte jen jednu cestu
+@msg	the path is hidden or locked, or cannot be selected here	cesta je skrytá nebo zamčená, nebo ji zde nelze vybrat
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} není uložená cesta: změnila se, nebo jde o jiný dokument
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` musí být "v1:" a 16 šestnáctkových číslic malými písmeny
+	Select Object…	Vybrat objekt…
+	Select Object	Vybrat objekt
+	Set Selection	Nastavit výběr
+	Case Sensitive	Rozlišovat velká a malá písmena
+	Whole Word	Celé slovo
+	Select Object: {note}	Vybrat objekt: {note}
+	Select by Note	Vybrat podle poznámky
+@msg	the note is empty	poznámka je prázdná
+@msg	the note is longer than 1,024 bytes	poznámka je delší než 1 024 bajtů
+@msg	no object that can be selected has a note matching “{query}”	žádný objekt, který lze vybrat, nemá poznámku odpovídající „{query}“
 	Menu Item:	Položka nabídky:
 	No menu item matches.	Žádná položka nabídky neodpovídá.
 	Several menu items match. Choose one from the list.	Odpovídá několik položek nabídky. Vyberte jednu ze seznamu.
@@ -6314,6 +6660,11 @@ axis	Y Axis	osa Y
 	User Brush Library 9	Uživatelská knihovna štětců 9
 	User Brush Library 10	Uživatelská knihovna štětců 10
 	Art Ribbons	Obrazové stuhy
+	Ink and Wash	Tuš a lavírování
+	Tapered Ink	Zužující se tuš
+	Brush Pen	Štětcový fix
+	Soft Wash	Jemná lavírka
+	Pooling Wash	Lavírka s okrajem
 	Zigzag	Cikcak
 	Burst Ray	Paprsek nárazu
 	Dash Trail	Čárkovaná stopa
@@ -6908,7 +7259,9 @@ breakText	Glyphs	Glyfy
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ otevírá soubory {_1}, ne `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` je zásuvný modul druhu `{_2}`, ne importní zásuvný modul
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` je zásuvný modul druhu `{_2}`, ne exportní zásuvný modul
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` je importní zásuvný modul: otevřete soubor pomocí document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` je importní zásuvný modul: otevřete soubor pomocí document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` je exportní zásuvný modul: exportujte pomocí document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` je živý efekt: použijte ho pomocí effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	importní zásuvný modul nevrátil žádné objekty
 @msg	an importer returns `objects` and `warnings`, not `{key}`	importní zásuvný modul vrací `objects` a `warnings`, ne `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	soubor je větší než {MAX_INPUT_BYTES} bajtů, které importní zásuvný modul čte
@@ -6983,6 +7336,8 @@ breakText	Glyphs	Glyfy
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krátké praktické výukové kurzy k základním nástrojům, seřazené podle dovedností. Vyberte dovednost a zobrazí se její kurzy.
 	List Tutorials	Vypsat výukové kurzy
 	Show Tutorial	Zobrazit výukový kurz
+	Show Tool Location	Zobrazit umístění nástroje
+	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
 
@@ -7003,3 +7358,8 @@ breakText	Glyphs	Glyfy
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Rámeček a linie pro vybírání…
+	Weed Box and Lines	Rámeček a linie pro vybírání
+	Margin	Okraj
+	Box	Rámeček
+	Swatch	Vzorek

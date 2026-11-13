@@ -136,5 +136,5 @@ fn separations_separate_with_a_cmyk_printer_profile() {
     assert_ne!(device, press, "the profile separates");
     // An RGB printer profile doesn't separate.
     let r = job(&d, json!({"output": {"mode": "separations"}, "color": {"profile": cms::SRGB}}));
-    assert!(r.warnings.iter().any(|w| w.contains("RGB printer profile")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("RGB printer profile")), "{:?}", r.setting_notes);
 }

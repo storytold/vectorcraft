@@ -519,6 +519,11 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             PrefKind::Bool if sp.key == "animatedZoom" => {
                 ui.add_enabled_ui(d.bool("gpuPerformance"), |ui| bool_row(ui, d, sp.key, sp.label));
             }
+            // Type › Show samples on white draws the samples that Enable in-menu font previews
+            // shows: dimmed while previews are off.
+            PrefKind::Bool if sp.key == "fontSamplesOnWhite" => {
+                ui.add_enabled_ui(d.bool("fontPreview"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             // Windows and Linux only: macOS always has the system's title bar, the web has none.
             PrefKind::Bool if sp.key == "systemTitleBar" => {
                 if cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) {

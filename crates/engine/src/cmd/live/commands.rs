@@ -1,6 +1,6 @@
 use super::blend::{
     blend_create_spine, blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine,
-    blend_reverse_stack, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
+    blend_reverse_stack, blend_set_easing, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
 };
 use super::common::{has_blend, has_envelope, has_mesh};
 use super::envelope::{
@@ -48,6 +48,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{mode?: auto|always|never} the Blend panel's Create Spine: whether new blends get a spine (auto and always: the straight lines between the key centers, as before; never: no spine to show, edit, reverse or release, and no easing, until Replace Spine gives one); with no `mode`, reads it; blends already made keep theirs (a tool setting kept with the preferences, not an undo step) → {mode}",
             always,
             blend_create_spine
+        ),
+        cmd!(
+            "object.blend.setEasing",
+            "Blend Easing",
+            [],
+            None,
+            "{id? (default: the first selected blend), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path); a blend made without a spine takes them once Replace Spine has given it one; out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
+            has_doc,
+            blend_set_easing
         ),
         cmd!(
             "object.blend.expand",
@@ -281,7 +290,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
+            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y), inside or on the edge, to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge; at a point that is already a mesh point it adds no line, and records no undo step unless `color` changes a gradient mesh's point (a mesh envelope's points have no color) → {index}",
             has_doc,
             mesh_add_line
         ),

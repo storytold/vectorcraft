@@ -196,8 +196,10 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
                         let at = if mirrored { 1.0 - s.offset } else { s.offset };
                         format!("{} {}%", css_color(&s.color, s.opacity), at * 100.0)
                     };
+                    // Stops that repeat or reflect run that many times across the box.
+                    let unrolled = g.gradient.unrolled();
                     let stops: Vec<String> =
-                        if mirrored { g.gradient.stops.iter().rev().map(stop).collect() } else { g.gradient.stops.iter().map(stop).collect() };
+                        if mirrored { unrolled.stops.iter().rev().map(stop).collect() } else { unrolled.stops.iter().map(stop).collect() };
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
                         // CSS sweeps clockwise from straight up; the angle is counted counterclockwise

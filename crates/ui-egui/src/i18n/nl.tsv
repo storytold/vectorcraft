@@ -213,6 +213,10 @@
 	Corner Color	Hoekkleur
 	Contiguous	Aaneengesloten
 	Each Channel	Elk kanaal
+	Color Mask…	Kleurmasker…
+	Color Mask	Kleurmasker
+	Remove Color Mask	Kleurmasker verwijderen
+	Apply Color Mask	Kleurmasker toepassen
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…
@@ -1349,6 +1353,7 @@ lighting	Light	Licht
 	Rotate View Tool	Weergave draaien-gereedschap
 	Trackpad Gesture to Rotate View	Weergave draaien met trackpadgebaar
 	Hold a Tool Shortcut to Use the Tool Temporarily	Sneltoets van een gereedschap ingedrukt houden om het tijdelijk te gebruiken
+	Show Bounding Box While Moving and Drawing	Begrenzingskader tonen tijdens verplaatsen en tekenen
 	Rotate View	Weergave draaien
 	Rounded Rectangle Tool	Afgeronde rechthoek-gereedschap
 	Scale Tool	Schalen-gereedschap
@@ -1507,6 +1512,8 @@ lighting	Light	Licht
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
+	Insert Aki Left	Aki links invoegen
+	Insert Aki Right	Aki rechts invoegen
 	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
@@ -1526,6 +1533,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
 	Show Recent Colors	Recente kleuren tonen
+	Toggle RGB Percent	RGB in procenten wisselen
 	Small Caps	Kleine kapitalen
 	Small Caps (on the roadmap)	Kleine kapitalen (op de roadmap)
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
@@ -1627,6 +1635,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
 	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
 	Double-click to replace	Dubbelklik om te vervangen
+	Select one character with the Type tool first.	Selecteer eerst één teken met het Type-gereedschap.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} is een glyph van {font}, niet van het lettertype van de geselecteerde tekst ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hoort bij {base} (U+{base_code}) {place}; uw selectie is {sel} (U+{code}).
+	at the start of a word	aan het begin van een woord
+	in the middle of a word	midden in een woord
+	at the end of a word	aan het einde van een woord
+	standing alone	los staand
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} is geen alternatief voor {sel} (U+{code}) zoals het in zijn woord staat.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklik om in plaats daarvan {base} (U+{code}) in te voegen: een presentatievorm sluit niet aan, de letter wel.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) ingevoegd in plaats van een presentatievorm: het lettertype verbindt het naar positie met de buren.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Geen enkele OpenType-functie tekent deze glyph hier, dus hij vervangt de glyph van het teken en sluit mogelijk niet aan op de buurtekens.
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}
@@ -1708,6 +1727,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
 	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
 	Method:	Methode:
+	Pad	Doortrekken
+	Repeats	Herhalingen
 	Mode:	Modus:
 	Noise	Ruis
 	Create:	Maken:
@@ -1768,6 +1789,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Gewijzigd sinds het is ingelezen: {path}
 	No Thumbnails	Geen miniaturen
 	Nothing matches the Show filter.	Niets komt overeen met het weergavefilter.
+	Show DCS Transparency Interactions	DCS-transparantie-interacties weergeven
+	Transparent, or overlaps transparent objects: check its separations	Transparant of overlapt transparante objecten: controleer de scheidingen
 	PPI	PPI
 	Relink…	Opnieuw koppelen…
 	Find Linked Files	Gekoppelde bestanden zoeken
@@ -1830,6 +1853,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-set
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Eerst inschuiven
@@ -1840,6 +1867,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
 	Korean Line Break Anywhere	Koreaans regeleinde overal
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
@@ -1964,6 +1992,8 @@ digits	Malayalam	Malayalam
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
+	Delete the selected items and their artwork?	De geselecteerde items en hun artwork verwijderen?
+	Delete this layer and its artwork?	Deze laag en het artwork erin verwijderen?
 	Delete “{name}”?	„{name}” verwijderen?
 	Document Swatches	Documentstalen
 	Edit or Apply Color Group	Kleurgroep bewerken of toepassen
@@ -2657,6 +2687,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Verzadiging en helderheid willekeurig wijzigen
 	Recolor this row	Deze rij opnieuw kleuren
 	Reset the rows to the artwork's colors	De rijen herstellen naar de kleuren van de artwork
+	Color Theme Picker	Kleurthemakiezer
+	Click or drag across the art to pick its colors; Shift adds more	Klik of sleep over het artwork om de kleuren ervan op te nemen; Shift voegt er meer toe
 	Separate colors into rows	Kleuren over rijen verdelen
 	Unlink harmony colors	Harmoniekleuren ontkoppelen
 	1 Color Job	Opdracht in 1 kleur
@@ -2910,6 +2942,7 @@ antiAlias	Sharp	Scherp
 	Hide Code	Code verbergen
 	Images:	Afbeeldingen:
 	Include Metadata	Metadata opnemen
+	Include Variable Data	Variabelegegevens opnemen
 	Internal CSS	Interne CSS
 	Layer Names	Laagnamen
 	Minify	Minify
@@ -3105,6 +3138,7 @@ theme	Appearance	Vormgeving
 	Art Brush	Artpenseel
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
+	missing from the Brushes panel	ontbreekt in het deelvenster Penselen
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
 	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool
@@ -3343,6 +3377,7 @@ theme	Appearance	Vormgeving
 	Move Mesh Points	Maaspunten verplaatsen
 	Move Spine Point	Aspunt verplaatsen
 	Reshape Spine Segment	Segment van de as opnieuw vormgeven
+	Blend Easing	Blend-easing
 	Reset with Mesh	Opnieuw instellen met maas
 	Reset with Warp	Opnieuw instellen met vervorming
 	Set Mesh Point Color	Kleur van maaspunt instellen
@@ -3501,9 +3536,11 @@ theme	Appearance	Vormgeving
 	Enable Background Export	Achtergrondexport inschakelen
 	Enable Background Save	Achtergrondopslag inschakelen
 	Enable in-menu font previews	Lettertypevoorbeelden in het menu inschakelen
+	Show samples on white	Voorbeelden op wit tonen
 	Enable Missing Glyph Protection	Beveiliging tegen ontbrekende glyphs inschakelen
 	Enable Rubber Band for	Rubberband inschakelen voor
 	Enable Touch Gestures	Touchgebaren inschakelen
+	Switch Selection and Drawing Modes	Wisselen tussen selectie- en tekenmodus
 	Enable Touch Workspace	Touch-werkruimte inschakelen
 	English: UK	Engels: VK
 	Every (minutes)	Elke (minuten)
@@ -3668,6 +3705,10 @@ theme	Appearance	Vormgeving
 	Add to Profiles	Aan profielen toevoegen
 	Delete Profile	Profiel verwijderen
 	Reset Profiles	Profielen opnieuw instellen
+	Arrowheads	Pijlpunten
+	Edit Arrowheads	Pijlpunten bewerken
+	Edit Arrowheads…	Pijlpunten bewerken…
+	Reload Arrowheads	Pijlpunten opnieuw laden
 	Stroke Options	Lijnopties
 	Width Profiles	Breedteprofielen
 	Apply Graphic Style	Grafische stijl toepassen
@@ -3699,6 +3740,9 @@ theme	Appearance	Vormgeving
 	Select All Unused	Alle ongebruikte selecteren
 	Sort by Kind	Sorteren op soort
 	Sort by Name	Sorteren op naam
+	Spot Color Objects	Objecten met spotkleuren
+	Pattern Objects	Objecten met patronen
+	Gradient Objects	Objecten met verlopen
 	Spot Colors	Spotkleuren
 	Spot Colors (0)	Spotkleuren (0)
 	Swatch Options	Kleurstaalopties
@@ -4279,6 +4323,7 @@ imageTrace	Outline	Contour
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` moet een geheel getal tussen {min} en {max} zijn (kreeg {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` moet tussen {min} en {max} liggen (kreeg {x})
 @msg	`{key}` must be one of {_1}	`{key}` moet een van {_1} zijn
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` moet een van {_1} zijn, niet {got}
 @msg	`{key}` must be true or false	`{key}` moet true of false zijn
 @msg	`{k}` must be [x, y]	`{k}` moet [x, y] zijn
 @msg	`{name}` has no options	`{name}` heeft geen opties
@@ -4373,6 +4418,7 @@ imageTrace	Outline	Contour
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
+@msg	command `{id}` is not available right now	opdracht `{id}` is nu niet beschikbaar
 @msg	compound paths can only contain paths	samengestelde paden kunnen alleen paden bevatten
 @msg	compressed (RLE) bitmaps can't be read yet	gecomprimeerde (RLE) bitmaps kunnen nog niet gelezen worden
 @msg	damaged	beschadigd
@@ -5523,6 +5569,8 @@ mark-style	Japanese	Japans
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer
+@msg	the screen color sampler did not answer	de schermkleurkiezer heeft niet geantwoord
+@msg	the screen color sampler failed	de schermkleurkiezer is mislukt
 swatch	[None]	[Geen]
 swatch	[Registration]	[Passers]
 swatch	White	Wit
@@ -6017,6 +6065,23 @@ axis	Y Axis	Y-as
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
+	Insert Select Path	Pad selecteren invoegen
+	Select Path	Pad selecteren
+@msg	select one whole path or compound path	selecteer één volledig pad of samengesteld pad
+@msg	select only one path	selecteer slechts één pad
+@msg	the path is hidden or locked, or cannot be selected here	het pad is verborgen of vergrendeld, of kan hier niet worden geselecteerd
+@msg	object {value} is not the stored path: it changed, or the document is another one	object {value} is niet het opgeslagen pad: het is gewijzigd, of het document is een ander
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` moet "v1:" zijn, gevolgd door 16 hexadecimale cijfers in kleine letters
+	Select Object…	Object selecteren…
+	Select Object	Object selecteren
+	Set Selection	Selectie instellen
+	Case Sensitive	Hoofdlettergevoelig
+	Whole Word	Heel woord
+	Select Object: {note}	Object selecteren: {note}
+	Select by Note	Selecteren op notitie
+@msg	the note is empty	de notitie is leeg
+@msg	the note is longer than 1,024 bytes	de notitie is langer dan 1024 bytes
+@msg	no object that can be selected has a note matching “{query}”	geen selecteerbaar object heeft een notitie die overeenkomt met „{query}”
 	Menu Item:	Menu-item:
 	No menu item matches.	Geen menu-item komt overeen.
 	Several menu items match. Choose one from the list.	Meerdere menu-items komen overeen. Kies er een uit de lijst.
@@ -6117,6 +6182,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Ink and Wash	Inkt en wassing
+	Tapered Ink	Taps toelopende inkt
+	Brush Pen	Penseelstift
+	Soft Wash	Zachte wassing
+	Pooling Wash	Wassing met rand
 	Zigzag	Zigzag
 	Burst Ray	Inslagstraal
 	Dash Trail	Streepspoor
@@ -6737,6 +6807,8 @@ breakText	Glyphs	Glyphs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktische tutorials voor de belangrijkste gereedschappen, gegroepeerd per vaardigheid. Kies een vaardigheid om de tutorials ervan te zien.
 	List Tutorials	Tutorials weergeven
 	Show Tutorial	Tutorial tonen
+	Show Tool Location	Locatie van gereedschap tonen
+	Show where this tool is	Tonen waar dit gereedschap zich bevindt
 @msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
 
@@ -6749,4 +6821,9 @@ breakText	Glyphs	Glyphs
 	Stencil Bridges…	Sjabloonbruggen…
 	Stencil Bridges	Sjabloonbruggen
 	Shortest Crossing	Kortste oversteek
+	Weed Box and Lines…	Wiedkader en wiedlijnen…
+	Weed Box and Lines	Wiedkader en wiedlijnen
+	Margin	Marge
+	Box	Kader
+	Swatch	Staal
 	Direction	Richting

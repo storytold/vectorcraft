@@ -517,7 +517,12 @@ fn rename(n: &mut Node, prefix: &str) {
                     paint(&mut r.style.stroke);
                 }
             }
-            NodeKind::Image(im) => im.key = format!("{prefix}{}", im.key),
+            NodeKind::Image(im) => {
+                im.key = format!("{prefix}{}", im.key);
+                if let Some(m) = n.extras.0.as_deref_mut().and_then(|e| e.color_mask.as_deref_mut()) {
+                    (m.key, m.from) = (format!("{prefix}{}", m.key), format!("{prefix}{}", m.from));
+                }
+            }
             NodeKind::PlacedDocument(p) => p.key = format!("{prefix}{}", p.key),
             NodeKind::SymbolInstance { symbol, .. } => *symbol = format!("{prefix}{symbol}"),
             _ => {}
@@ -679,6 +684,30 @@ mod tests {
             children.push(Arc::new(Node::new(NodeId(52), NodeKind::PlacedDocument(Box::new(inner)))));
         }
         Some((d, Node::new(NodeId(0), NodeKind::Group { children, clip: false }), Rect::new(0.0, 0.0, 40.0, 20.0)))
+    }
+
+    /// A color-masked image in a placed document's art keeps its masked pixels under the prefixed
+    /// names its resources get.
+    #[test]
+    fn a_color_mask_takes_the_prefixed_image_names() {
+        let im =
+            ImageObject { key: "own".into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        let mut n = Node::new(NodeId(7), NodeKind::Image(Box::new(im)));
+        n.extras_mut().color_mask = Some(Box::new(crate::color_mask::ColorMask {
+            key: "masked".into(),
+            from: "own".into(),
+            background: Default::default(),
+            colors: vec![],
+            contiguous: true,
+            measure: Default::default(),
+            tolerance: 10.0,
+            softness: 10.0,
+        }));
+        rename(&mut n, "p:");
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        let m = Document::color_mask_of(&n).unwrap();
+        assert_eq!((im.key.as_str(), m.key.as_str(), m.from.as_str()), ("p:own", "p:masked", "p:own"));
+        assert!(m.made_for(im));
     }
 
     #[test]
