@@ -899,7 +899,8 @@ line's rows even when the line already showed them. The other commands, an `appe
 included, store only what they change on a line's rows; the kind keeps its other attributes, also when the line still
 shows different ones until the graph is drawn again. An `appearance.copyFrom` that does not apply the object's
 transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as they are,
-also when the line still shows other ones. Rows equal to a kind's default stroke (0.5 pt black for axis lines and tick
+also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a line's kind
+even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows equal to a kind's default stroke (0.5 pt black for axis lines and tick
 marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
 each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label

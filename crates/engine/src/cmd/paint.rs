@@ -1020,7 +1020,10 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
             let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
+            // The graph keeps the default fill and stroke rows for every line of a kind it reached, also when one already
+            // showed them; the object opacity the kind keeps stays.
+            let lines = super::graph::capture_line_fill_stroke_rows(d, &ids);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
         })?;
     }
     super::newart::reset(s);

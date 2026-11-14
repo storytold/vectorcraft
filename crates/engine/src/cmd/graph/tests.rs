@@ -6753,6 +6753,23 @@ fn default_fill_and_stroke_and_fill_to_stroke_on_an_axis_line_are_kept() {
     assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#0000ff"), "the blue fill on the stroke");
 }
 
+/// Default Fill and Stroke on an axis line that already shows the default paint is kept for every axis line, in place of
+/// the stroke the kind keeps from another line, and leaves the object opacity the kind keeps from another line.
+#[test]
+fn default_fill_and_stroke_on_an_axis_line_that_shows_it_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "color": "#ff0000"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lines[1].id.0], "opacity": 50})).unwrap();
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| (l.0.as_str(), l.1) == ("#000000", 1.0)), "the 1 pt black default stroke: {looks:?}");
+    assert!(looks.iter().all(|l| (l.2 - 0.5).abs() < 1e-6), "the kind keeps its 50% opacity: {looks:?}");
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();
