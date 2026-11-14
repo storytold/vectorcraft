@@ -1103,6 +1103,15 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
+/// Is `n` a compound path with a guide member whose bounds reach past the bounds of its members that
+/// aren't guides, or with guide members only? Any other object counts as no.
+fn guides_reach_past(n: &Node) -> bool {
+    let NodeKind::Compound { children, .. } = &n.kind else { return false };
+    let bounds =
+        |guides: bool| children.iter().filter(|c| c.is_guide() == guides).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds()));
+    bounds(true).is_some_and(|g| bounds(false).is_none_or(|o| o.union(g) != o))
+}
+
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
 /// path or compound path with straight segments: VectorCraft's own limit. An object with a larger
 /// Twist keeps the file's drawn look.
@@ -1116,7 +1125,8 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
 /// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
 /// stroked and its angle is a number: up to [`MAX_STRAIGHT_TWIST`] degrees either way on a path or
-/// compound path with straight segments, or up to [`MAX_TWIST`] degrees either way on another object
+/// compound path with straight segments (only at 0° when its guide members reach past its other
+/// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
 /// (its reference point lies on the bounds without strokes).
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
@@ -1129,7 +1139,12 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && st.effects.iter().all(|e| match e.id.as_str() {
             "distort.twist" => {
                 let within = |limit: f64| e.params["angle"].as_f64().is_some_and(|a| a.abs() <= limit);
-                !stroked && if straight(object) { within(MAX_STRAIGHT_TWIST) } else { no_guides(object, 0) && within(MAX_TWIST) }
+                !stroked
+                    && if straight(object) {
+                        within(MAX_STRAIGHT_TWIST) && (e.params["angle"].as_f64() == Some(0.0) || !guides_reach_past(object))
+                    } else {
+                        no_guides(object, 0) && within(MAX_TWIST)
+                    }
             }
             "distort.transform" => {
                 let p = &e.params;

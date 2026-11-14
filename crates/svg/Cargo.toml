@@ -9,6 +9,7 @@ description = "VectorCraft SVG import and export"
 workspace = true
 
 [dependencies]
+craft-svg = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }

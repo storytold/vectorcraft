@@ -783,6 +783,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_clicked = false;
     let mut ok_enabled = true;
     let mut cancel = false;
     let mut reset = false;
@@ -843,7 +844,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                 && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
-                ok = true;
+                ok_clicked = true;
             }
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
@@ -878,6 +879,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    // A field that refused its text when the press on OK took its focus keeps the dialog open, as
+    // Enter does. Only a pointer click has such a press; the keyboard and screen readers press OK
+    // in one frame.
+    let press = egui::Id::unique("dialog-press-pass");
+    let (pressed, released) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_released()));
+    if pressed {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|m| m.insert_temp(press, pass));
+    }
+    let (pressed_at, refused_at) = ctx.data(|m| (m.get_temp::<u64>(press), m.get_temp::<u64>(widgets::dialog_reject_pass())));
+    let refused_during_click = released && matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    if ok_clicked && !rejected && !refused_during_click {
+        ok = true;
+    }
     if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
