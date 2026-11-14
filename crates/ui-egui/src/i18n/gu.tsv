@@ -4,7 +4,7 @@
 # in Gujarati script where that is how the words are spoken; established Gujarati words are used otherwise.
 # Product names, file extensions, keyboard keys, units and placeholders stay as in the English.
 # Original 4,286 rows reviewed by a native Gujarati-speaking contributor.
-# Later additions, marked below, are drafts awaiting native proofreading.
+# All 387 later additions reviewed and approved by the contributor on 2026-11-14; 11 wording corrections applied.
 	  — missing	  — ગુમ
 	  — substituted by {style}	  — {style} દ્વારા બદલ્યું
 	  — {n} characters from another font	  — બીજા ફોન્ટમાંથી {n} અક્ષરો
@@ -4291,7 +4291,7 @@ antiAlias	Sharp	શાર્પ
 @plural	{n} host call|{n} host calls	{n} હોસ્ટ કૉલ|{n} હોસ્ટ કૉલ
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} અગાઉની લાઇન છોડી|{n} અગાઉની લાઇનો છોડી
 @plural	{n} line cut|{n} lines cut	{n} લાઇન કાપી|{n} લાઇનો કાપી
-# Interface labels added since the original native review; draft translations awaiting proofreading.
+# Interface labels added since the original native review; contributor proofreading completed 2026-11-14.
 	Convert to Indexed Color	ઇન્ડેક્સ્ડ કલરમાં ફેરવો
 	Convert to Indexed Color…	ઇન્ડેક્સ્ડ કલરમાં ફેરવો…
 	Image Tools	ઇમેજ ટૂલ્સ
@@ -4323,7 +4323,7 @@ antiAlias	Sharp	શાર્પ
 	at the start of a word	શબ્દની શરૂઆતમાં
 	in the middle of a word	શબ્દની વચ્ચે
 	at the end of a word	શબ્દના અંતે
-	standing alone	અલગ ઊભેલો
+	standing alone	સ્વતંત્ર
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	શબ્દમાં તેના સ્થાન મુજબ {glyph} એ {sel} (U+{code})નો વૈકલ્પિક ગ્લિફ નથી.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	તેના બદલે {base} (U+{code}) દાખલ કરવા ડબલ-ક્લિક કરો: પ્રેઝન્ટેશન ફોર્મ જોડાતું નથી, અક્ષર જોડાય છે.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	પ્રેઝન્ટેશન ફોર્મના બદલે {base} (U+{code}) દાખલ કર્યો: ફોન્ટ તેને સ્થાન પ્રમાણે આસપાસના અક્ષરો સાથે જોડે છે.
@@ -4414,7 +4414,7 @@ antiAlias	Sharp	શાર્પ
 	Intertwine Groups	ઇન્ટરટ્વાઇન ગ્રુપ્સ
 	Opacity Masks	ઓપેસિટી માસ્ક્સ
 	Objects with Effects	ઇફેક્ટ્સવાળા ઑબ્જેક્ટ્સ
-	Pattern Swatches	પેટર્ન સ્વેચ
+	Pattern Swatches	પેટર્ન સ્વેચિસ
 	Tate-chu-yoko Up/Down	ટાટે-ચુ-યોકો ઉપર/નીચે
 	Tate-chu-yoko Left/Right	ટાટે-ચુ-યોકો ડાબે/જમણે
 	Add Tool…	ટૂલ ઉમેરો…
@@ -4468,7 +4468,7 @@ antiAlias	Sharp	શાર્પ
 	Pooling Wash	એકઠો થતો વૉશ
 	Bristle Brushes	બ્રિસલ બ્રશ
 	Fine Liner	ફાઇન લાઇનર
-	Pointed Flat	અણીદાર સપાટ
+	Pointed Flat	અણીદાર ફ્લેટ
 	Stubby Round	ટૂંકો ગોળ
 	Dry Scrub	સૂકું સ્ક્રબ
 	Soft Dome	સોફ્ટ ડોમ
@@ -4494,7 +4494,7 @@ antiAlias	Sharp	શાર્પ
 	Pressure Pen	પ્રેશર પેન
 	Beads	મણકા
 	Dash Dot	ડૅશ ડૉટ
-	Scallops	કમાનવાળી કિનારી
+	Scallops	કાંગરાવાળી કિનારી
 	Stars	તારા
 	Triangles	ત્રિકોણ
 	Sparkles	ચમકારા
@@ -4544,7 +4544,7 @@ antiAlias	Sharp	શાર્પ
 	Margin	માર્જિન
 	Box	બોક્સ
 	Swatch	સ્વેચ
-# Current-main coverage additions; draft translations awaiting native proofreading.
+# Current-main coverage additions; contributor proofreading completed 2026-11-14.
 	built in	બિલ્ટ-ઇન
 	embedding not allowed	એમ્બેડ કરવાની મંજૂરી નથી
 	embedding for editing	સંપાદન માટે એમ્બેડ કરવાની મંજૂરી
@@ -4575,9 +4575,9 @@ antiAlias	Sharp	શાર્પ
 	Line Gap:	રેખાઓ વચ્ચેનું અંતર:
 	Trim at Crossings Tool	છેદબિંદુઓ પર કાપવાનું ટૂલ
 	Trim at Crossings	છેદબિંદુઓ પર કાપો
-	Banner Hems and Grommets…	બેનરની મોડેલી કિનારીઓ અને ગ્રોમેટ્સ…
-	Banner Hems and Grommets	બેનરની મોડેલી કિનારીઓ અને ગ્રોમેટ્સ
-	Hem	મોડેલી કિનારી
+	Banner Hems and Grommets…	બેનરની વાળેલી કિનારીઓ અને ગ્રોમેટ્સ…
+	Banner Hems and Grommets	બેનરની વાળેલી કિનારીઓ અને ગ્રોમેટ્સ
+	Hem	વાળેલી કિનારી
 	Grommets	ગ્રોમેટ્સ
 	Grommet Inset	ગ્રોમેટનું અંદરની બાજુનું અંતર
 	Diameter	વ્યાસ
@@ -4592,7 +4592,7 @@ antiAlias	Sharp	શાર્પ
 	Justify with last line aligned center	છેલ્લી લાઇન મધ્યમાં રાખીને જસ્ટિફાઇ કરો
 	Justify with last line aligned right	છેલ્લી લાઇન જમણે રાખીને જસ્ટિફાઇ કરો
 	Leader:	લીડર:
-	Line Gap	લાઇન્સ વચ્ચેનું અંતર
+	Line Gap	રેખાઓ વચ્ચેનું અંતર
 	Manage Profiles	પ્રોફાઇલ્સનું સંચાલન કરો
 	Mapped graphics	મેપ કરેલા ગ્રાફિક્સ
 	Materials	મટિરિયલ્સ
@@ -4642,7 +4642,7 @@ swatch	Brights	તેજસ્વી
 swatch	Brown	ભૂરો
 swatch	Chocolate	ચૉકલેટ
 swatch	Coffee	કોફી
-swatch	Copper	તાંબાઈ
+swatch	Copper	કોપર
 swatch	Cyan	સાયન
 swatch	Cyan Green	સાયન લીલો
 swatch	Emerald	એમરાલ્ડ
@@ -4660,13 +4660,13 @@ swatch	Purple	જાંબલી
 swatch	Radial White, Black	રેડિયલ સફેદ, કાળો
 swatch	Red	લાલ
 swatch	Rose	રોઝ
-swatch	Rust	કાટિયો
+swatch	Rust	રસ્ટ
 swatch	Sand	રેતિયો
 swatch	Sunset	સૂર્યાસ્ત
 swatch	Tan	આછો ભૂરો
 swatch	Teal	ટીલ
 swatch	Violet	વાયોલેટ
-swatch	Walnut	અખરોટિયો
+swatch	Walnut	અખરોટી
 swatch	White	સફેદ
 swatch	White, Black	સફેદ, કાળો
 swatch	Yellow	પીળો

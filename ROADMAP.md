@@ -18,7 +18,7 @@ gate: all six core workflows (path drawing and editing, paint and style, type, l
 production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without
 blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## Headline numbers
 
@@ -98,7 +98,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Simplified Chinese | `zh-hans` | partial (messages in English) | 85% |
 | Spanish | `es` | full | 100% |
 | Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
-| Gujarati | `gu` | 4,673 catalog rows: original 4,286 contributor-reviewed; 387 additions are drafts | menus and dialogs; status/error messages partial; new rows need proofreading |
+| Gujarati | `gu` | 4,673 contributor-reviewed catalog rows; 11 corrections applied to the 387 additions | menus and dialogs; status/error messages partial |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
@@ -221,6 +221,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Tidy-up, no content change: the unheaded change bullets at the top of the file and a revision row inside the headline-numbers table move to this table under their commit dates. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Raster effects: Effect Gallery thumbnails and an in-dialog preview (an original drawing through each filter). Features-table Raster effects 85% → 88%, hours 1–2 → none. Headline numbers unchanged, so the progress log is unchanged. |
 | 2026-11-05 | minor | Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged. |

@@ -20,9 +20,9 @@ English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
 (`bflatastic`), with community contributors adding or correcting (German by `dwetscher`, Japanese and Traditional
-Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded as reviewed by native speakers; new Gujarati additions still need proofreading.
+Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded as reviewed by native speakers; the contributor approved all 387 later Gujarati additions on 2026-11-14.
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## The twelve key languages
 
@@ -32,7 +32,7 @@ Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded a
 | Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all (3,439 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 40 missing messages for it) | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
 | Spanish | `es` | 4,009 / 4,020 (99.7%) | all (604 messages) | Latin | no | full | — (review) |
 | Hindi | `hi` | 8,782 rows (2026-11-13): 3,014 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; 2026-11-13 wording pass on messages and longer labels, with a glossary-term test; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
-| Gujarati | `gu` | 4,673 rows (2026-11-14): 4,286 previously reviewed, 387 draft additions awaiting native proofreading | menus and dialogs; status/error messages partial | installed Gujarati fonts on desktop; optional `Gujr` craft-fonts fallback; no Gujarati face in the pinned CI/release fonts or web startup list | original catalog reviewed by the contributor; new rows pending | original reviewed catalog plus draft additions | native proofreading of additions, remaining messages and a bundled Gujarati web font |
+| Gujarati | `gu` | 4,673 rows (2026-11-14): original 4,286 unchanged; all 387 additions contributor-reviewed and approved | menus and dialogs; status/error messages partial | installed Gujarati fonts on desktop; optional `Gujr` craft-fonts fallback; no Gujarati face in the pinned CI/release fonts or web startup list | original catalog reviewed by a native speaker; all 387 later additions approved by the contributor, with 11 wording corrections | contributor-reviewed catalog | remaining messages and a bundled Gujarati web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
 | Portuguese | `pt-br` | 9,260 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 39 missing messages for it; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
@@ -100,6 +100,7 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Gujarati (`gu`): reviewed by a native speaker; zero/one singular plurals (CLDR); Gujarati craft-fonts faces join the UI fonts; strings added on main since branching translated (4,286 rows) |
 | 2026-11-11 | minor | Gujarati (`gu`): 4,235-row machine-assisted interface catalog, one/other plurals, desktop Gujarati font fallback and a glyph-coverage filter; status and error messages not yet translated; native review pending |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |

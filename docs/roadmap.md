@@ -12,7 +12,7 @@
 
 > **PDF import status (2026-11-14, #6957):** Outlined Indic glyphs retain their full stroke properties; translucent glyphs stay separate, and a soft mask attaches to each glyph separately. Scores and estimates unchanged.
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## Feature submission evidence
 
@@ -130,7 +130,7 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are implemented;
 native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
 
-Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule are implemented. The original 4,286 rows retain their contributor review; 387 additions need native proofreading. Status/error messages remain partial, and a bundled Gujarati web font remains to be supplied.
+Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule are implemented. The original 4,286 rows remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and a bundled Gujarati web font remains to be supplied.
 
 ## Current focus
 
@@ -173,7 +173,7 @@ Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule 
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance; width-point creation and adjoining adjustment regression-tested; dialog layout reviewed) | ⬜ (new ruler-guide Alt orientation implemented; existing-guide Escape cancellation regression-tested; broader pass remains) | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 PngSuite integrity and bounded fetching verified (#1729); real-world corpus/manual QA remain | 50–80 |
 | M14 follow-up | Color Picker layout (#2008) | ✅ Compact controls, centered header, stacked actions, aligned fields and screen sampling; narrow windows scroll vertically | Included above |
-| M14 follow-up | Gujarati interface (#6613) | 🟡 Zero/one singular plurals and desktop font fallback; 4,286 contributor-reviewed rows plus 387 draft additions needing proofreading; status/error messages remain partial and pinned fonts lack a Gujarati face | Included above |
+| M14 follow-up | Gujarati interface (#6613) | 🟡 Zero/one singular plurals and desktop font fallback; 4,673 contributor-reviewed rows, including 387 approved additions with 11 wording corrections; status/error messages remain partial and pinned fonts lack a Gujarati face | Included above |
 | | **Total to full parity** (one agent; from [target-app-parity.md](target-app-parity.md)) | | **~360–590** |
 
 Milestone estimates predate the 2026-10-10 re-measure for M1–M14; the area table in
@@ -207,6 +207,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Gujarati (`gu`): 4,286-row machine-assisted catalog reviewed by a native speaker, zero/one singular plurals, desktop font fallback and optional Gujarati craft-fonts fallback; all 72 translation tests pass; a web font and about 2,600 untranslated messages remain; scores and estimates unchanged |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |
 | 2026-11-12 | minor | M7: Glyphs panel applies feature-valued alternates and unencoded glyphs while keeping Arabic joining (#5514). Scores and estimates unchanged. |
