@@ -7522,3 +7522,121 @@ breakText	Glyphs	Glyphs
 	Grommets	Zeilringen
 	Grommet Inset	Afstand van zeilringen tot de rand
 	Diameter	Diameter
+
+# Status and error messages: 3D effects and Revolve, image export, color profiles, swatch exchange files and
+# color books, regular expressions in scripts, whole-number parameters, and DXF and DWG files.
+@msg	3D effects require finite coordinates within 100 million points	3D-effecten vereisen eindige coördinaten binnen 100 miljoen punten
+@msg	3D effects require one to ten lights	3D-effecten vereisen één tot tien lichten
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-diepte {_1}: 1, 4, 8, 16, 24 of 32 bits per pixel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP-codering mislukt: {width} × {height} pixels past niet in het formaat of in de pixelbuffer
+@msg	GIF encoding failed: the palette image is malformed	GIF-codering mislukt: de paletafbeelding is ongeldig
+@msg	GIF encoding failed: {e}	GIF-codering mislukt: {e}
+@msg	JPEG colour profile: {e}	JPEG-kleurprofiel: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG-codering mislukt: de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	JPEG encoding failed: {e}	JPEG-codering mislukt: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG-codering mislukt: de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	PNG encoding failed: the palette image is malformed	PNG-codering mislukt: de paletafbeelding is ongeldig
+@msg	PNG encoding failed: {e}	PNG-codering mislukt: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG-codering mislukt: {width} × {height} pixels is geen geldige afbeeldingsgrootte
+@msg	PSD colour profile: {e}	PSD-kleurprofiel: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD-codering mislukt: de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	Revolve profile contains invalid coordinates	Het profiel van Draaien bevat ongeldige coördinaten
+@msg	Revolve profile is too complex	Het profiel van Draaien is te complex
+@msg	Revolve projection is not finite	De projectie van Draaien is niet eindig
+@msg	Revolve requires finite profile coordinates within 100 million points	Draaien vereist eindige profielcoördinaten binnen 100 miljoen punten
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Het oppervlak van Draaien is te complex; verlaag Segmenten of vereenvoudig het profiel
+@msg	Revolve surface is too complex; simplify the profile	Het oppervlak van Draaien is te complex; vereenvoudig het profiel
+@msg	Revolve visibility cannot split the projected boundary	De zichtbaarheid van Draaien kan de geprojecteerde rand niet splitsen
+@msg	Revolve visibility creates too many fragments	De zichtbaarheid van Draaien maakt te veel fragmenten
+@msg	Revolve visibility creates too many vector anchors	De zichtbaarheid van Draaien maakt te veel vectorankerpunten
+@msg	Revolve visibility exceeds its geometry work limit	De zichtbaarheid van Draaien overschrijdt de werklimiet voor geometrie
+@msg	Revolve visibility exceeds its spatial index limit	De zichtbaarheid van Draaien overschrijdt de limiet van de ruimtelijke index
+@msg	Revolve visibility has too many boundary crossings	De zichtbaarheid van Draaien heeft te veel randkruisingen
+@msg	Revolve visibility has too many input anchors	De zichtbaarheid van Draaien heeft te veel invoerankerpunten
+@msg	Revolve visibility requires convex cap sectors	De zichtbaarheid van Draaien vereist convexe kapsectoren
+@msg	Revolve visibility requires finite projected faces	De zichtbaarheid van Draaien vereist eindige geprojecteerde vlakken
+@msg	SVG options: {e}	SVG-opties: {e}
+@msg	Save for Web settings: {e}	Instellingen van Opslaan voor web: {e}
+@msg	TIFF colour profile: {e}	TIFF-kleurprofiel: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF-codering mislukt: de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	TIFF encoding failed: {e}	TIFF-codering mislukt: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-diepte {_1}: 16, 24 of 32 bits per pixel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa-codering mislukt: de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	The 3D projection is not finite	De 3D-projectie is niet eindig
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	De 3D-schaduw is te complex; zet Schaduwen uit of vereenvoudig de illustratie
+@msg	The shape contains invalid coordinates	De vorm bevat ongeldige coördinaten
+@msg	Too many Revolve faces for visibility evaluation	Te veel vlakken van Draaien om de zichtbaarheid te bepalen
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft leest maximaal {ASE_MAX_ENTRIES} kleuren en groepen uit een uitwisselingsbestand voor stalen, en deze bibliotheek heeft er {entries}
+@msg	WebP encoding failed: {e}	WebP-codering mislukt: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index` moet een geheel getal zijn
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` moet smallThumb, mediumThumb, largeThumb, smallList of largeList zijn
+@msg	a line can't run from a point to itself	een lijn kan niet van een punt naar zichzelf lopen
+@msg	a line needs at least two points	een lijn heeft minstens twee punten nodig
+@msg	a number cannot be read	een getal kan niet worden gelezen
+@msg	a swatch exchange block is too long	een blok van een uitwisselingsbestand voor stalen is te lang
+@msg	a swatch exchange name is too long	een naam in een uitwisselingsbestand voor stalen is te lang
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	een afbeelding van {sw} × {sh} kan niet worden geschaald naar {width} × {height} pixels
+@msg	a {width} × {height} image is too large	een afbeelding van {width} × {height} is te groot
+@msg	a {width} × {height} image: {e}	een afbeelding van {width} × {height}: {e}
+@msg	an image could not be written: {e}	een afbeelding kon niet worden geschreven: {e}
+@msg	an image that couldn't be read was left out	een afbeelding die niet gelezen kon worden, is weggelaten
+@msg	can't open “{name}”: {e}	kan „{name}” niet openen: {e}
+@msg	cannot align zip entries to {align} bytes	zip-items kunnen niet op {align} bytes worden uitgelijnd
+@msg	cannot open the automation {kind} root `{_1}`: {e}	kan de hoofdmap voor automatisering ({kind}) `{_1}` niet openen: {e}
+@msg	cannot read profile: {0}	kan het profiel niet lezen: {0}
+@msg	color book version {version} isn't supported (only 1)	kleurenboekversie {version} wordt niet ondersteund (alleen 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	kleurenboeken in kleurruimte {other} worden niet ondersteund (alleen RGB, CMYK en Lab)
+@msg	file name too long to zip: {_1}	bestandsnaam te lang om te zippen: {_1}
+@msg	file name too long to zip: {name}	bestandsnaam te lang om te zippen: {name}
+@msg	freeform line {i}: {e}	lijn in vrije vorm {i}: {e}
+@msg	freeform point {i}: {e}	punt in vrije vorm {i}: {e}
+@msg	give `{key}` or `{other}`, not both	geef `{key}` of `{other}`, niet beide
+@msg	grayscale profiles can't be working spaces yet	grijswaardenprofielen kunnen nog geen werkruimte zijn
+@msg	input contains NaN or infinite coordinates	de invoer bevat NaN of oneindige coördinaten
+@msg	input path could not be closed	het invoerpad kon niet worden gesloten
+@msg	invalid ICC profile: {0}	ongeldig ICC-profiel: {0}
+@msg	invalid scale {scale}	ongeldige schaal {scale}
+@msg	its localized names take more than {_1} KB	de gelokaliseerde namen ervan nemen meer dan {_1} KB in beslag
+@msg	its objects are nested too deep ({e})	de objecten ervan zijn te diep genest ({e})
+@msg	its tag table lists the `{_1}` tag more than once	de tagtabel ervan vermeldt de tag `{_1}` meer dan eens
+@msg	not a graphic style library: {e}	geen bibliotheek met grafische stijlen: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	geen staalbibliotheek (.vcswatches of .gpl)
+@msg	not a swatch library (format `{_1}`)	geen staalbibliotheek (indeling `{_1}`)
+@msg	not a swatch library: {e}	geen staalbibliotheek: {e}
+@msg	not an action set file ({e})	geen actiesetbestand ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	profielkleurruimte {other} is geen RGB, CMYK of grijs
+@msg	regular expression too large	reguliere expressie te groot
+@msg	script file is not UTF-8 text: {value}	scriptbestand is geen UTF-8-tekst: {value}
+@msg	stop {i}: {e}	stop {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	versie {major}.{minor} van uitwisselingsbestanden voor stalen wordt niet ondersteund (alleen 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	het kleurenboek bevat meer dan {ASE_MAX_ENTRIES} kleuren
+@msg	the color book is cut short	het kleurenboek is afgebroken
+@msg	the color book's names take more than {_1} MB	de namen in het kleurenboek nemen meer dan {_1} MB in beslag
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	de afbeelding zou {w} × {h} pixels worden; rasterexports zijn beperkt tot {MAX_RASTER_SIDE} pixels per zijde en {_1} megapixels: verlaag de schaal of de resolutie
+@msg	the optimised image can't be read back: {e}	de geoptimaliseerde afbeelding kan niet worden teruggelezen: {e}
+@msg	the pixel buffer doesn't match the image size	de pixelbuffer komt niet overeen met de afbeeldingsgrootte
+@msg	the preview: {e}	de voorvertoning: {e}
+@msg	the request may not read the New Document profiles folder	het verzoek mag de map met profielen voor nieuwe documenten niet lezen
+@msg	the shapes are too degenerate to combine	de vormen zijn te gedegenereerd om te combineren
+@msg	the shapes cross themselves and each other too often to combine	de vormen kruisen zichzelf en elkaar te vaak om te combineren
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	het uitwisselingsbestand voor stalen bevat meer dan {ASE_MAX_ENTRIES} kleuren en groepen
+@msg	the swatch exchange file is cut short	het uitwisselingsbestand voor stalen is afgebroken
+@msg	the {_1} plate can't be read: {e}	de drukplaat {_1} kan niet worden gelezen: {e}
+@msg	this binary DXF file is damaged or cut short	dit binaire DXF-bestand is beschadigd of afgebroken
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	dit is een DWG-tekening, die niet gelezen kan worden: sla hem in de CAD-app op als DXF en open die
+@msg	too many classes	te veel tekenklassen
+@msg	too many groups	te veel groepen
+@msg	too many layers for PSD (at most 32767)	te veel lagen voor PSD (maximaal 32767)
+@msg	too many swatch exchange blocks	te veel blokken in het uitwisselingsbestand voor stalen
+@msg	unknown colour profile: {0}	onbekend kleurprofiel: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} botst met een ingebouwde profielnaam
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels is te groot voor GIF (maximaal 65535 pixels per zijde): verlaag de resolutie
+@msg	{_1}: no usable transform to/from sRGB	{_1}: geen bruikbare transformatie van of naar sRGB
+@msg	{name} is not a CMYK profile	{name} is geen CMYK-profiel
+@msg	{name} is not an RGB profile	{name} is geen RGB-profiel
+@msg	{path}: could not be read	{path}: kon niet worden gelezen
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor JPEG (maximaal 65535 pixels per zijde): verlaag de resolutie
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor Targa (maximaal 65535 pixels per zijde): verlaag de resolutie
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels is te groot voor PSD (maximaal {MAX_SIDE} pixels per zijde): verlaag de resolutie
