@@ -1187,6 +1187,32 @@ fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
     }
 }
 
+/// A live instance inside a stained instance's art, whose definition has no room left, is left out
+/// without upsetting the art around it: with room for any number of objects the export finishes,
+/// within that room.
+#[test]
+fn a_definition_without_room_inside_drawn_art_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    let inner = instance(&mut doc, "Leaf", Affine::translate((5.0, 5.0)));
+    let side = square(&mut doc, Rect::new(20.0, 0.0, 30.0, 10.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![inner, side], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Branch".into(), art: Arc::new(art) });
+    let mut stained = instance(&mut doc, "Branch", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    add_rect(&mut doc, Rect::new(150.0, 10.0, 160.0, 20.0));
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
 /// The writer's limit is the reader's, which its warning names.
 #[test]
 fn the_object_limit_is_the_readers() {
@@ -10017,7 +10043,8 @@ fn text_wrap_options_of_type_and_envelopes_are_read_back() {
 }
 
 /// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
-/// two objects: its text wrap options are written once, whether it has both or only strokes.
+/// two objects: its text wrap options are written once, whether it has both or only strokes, and
+/// with its strokes when an outer clipping object cuts its fills away.
 #[test]
 fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
     for fill in [solid(Color::gray(0.5)), Paint::None] {
@@ -10034,6 +10061,27 @@ fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
         doc.insert(Some(layer), usize::MAX, outer).unwrap();
         let text = program(&doc);
         assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{text}");
+        same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
+    }
+
+    // The outer clipping object ends at x = 100 and the clipping path's fill starts at x = 101: the
+    // fill is cut away and writes nothing, and its 4 pt stroke, which reaches x = 99, keeps the
+    // options, whether or not the fill's lock state is written before it.
+    for locked in [false, true] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(101.0, 20.0, 150.0, 80.0)));
+        cutter.appearance = Appearance::basic(solid(Color::gray(0.5)), solid(Color::BLACK), 4.0).into();
+        cutter.locked = locked;
+        let cutter = wrapped(cutter, 5.0, true);
+        let member = square(&mut doc, Rect::new(110.0, 30.0, 140.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
+        let inner = group(&mut doc, vec![cutter, member], true);
+        let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+        let frame = group(&mut doc, vec![frame], false);
+        let outer = group(&mut doc, vec![frame, inner], true);
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let text = program(&doc);
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "locked {locked}: {text}");
         same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
     }
 }
