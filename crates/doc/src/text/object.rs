@@ -507,6 +507,7 @@ impl crate::Document {
             st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
             st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
             st.aki_right = num("akiRight").unwrap_or(st.aki_right);
+            st.tsume = num("tsume").unwrap_or(st.tsume);
             st.warichu_gap = num("warichuGap").unwrap_or(st.warichu_gap);
             st.warichu_scale = num("warichuScale").unwrap_or(st.warichu_scale);
             st.keep_dimensions_in_range();
@@ -532,6 +533,7 @@ impl crate::Document {
                 ("tcyLeftRight", Some(st.tcy_left_right)),
                 ("akiLeft", Some(st.aki_left)),
                 ("akiRight", Some(st.aki_right)),
+                ("tsume", Some(st.tsume)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {
