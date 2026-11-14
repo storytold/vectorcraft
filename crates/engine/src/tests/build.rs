@@ -3079,6 +3079,59 @@ fn live_paint_bucket_scopes_follow_the_stroke_an_edge_draws() {
     };
     assert_eq!(stroke(&mut s, [25.0, 0.0]), json!(all.len() - clear.len() - hidden.len()), "the edges that draw black");
     assert_eq!(stroke(&mut s, [50.0, 25.0]), json!(clear.len() + hidden.len()), "the edges that draw no stroke");
+    // With the top edge between them fully transparent too, the connected scope walks from the edge
+    // at x = 50 through it to the edge at x = 100, and reaches no edge that draws black.
+    let top = edges_in(&s, g, Rect::new(50.0, 0.0, 100.0, 0.0));
+    assert_eq!(top.len(), 1);
+    s.edit("t", |d, _| {
+        d.node_mut(top[0]).unwrap().opacity = 0.0;
+        Ok(())
+    })
+    .unwrap();
+    let r =
+        s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "color": "#00ff00", "width": 3, "scope": "connected"})).unwrap();
+    assert_eq!(r["count"], json!(clear.len() + top.len() + hidden.len()));
+}
+
+/// `livePaint.strokeEdge` paints an edge's topmost stroke that is shown, so the edge then draws
+/// with the paint; an edge whose strokes are all hidden takes a new stroke above them. Painting
+/// again changes nothing.
+#[test]
+fn live_paint_stroke_edge_paints_the_shown_stroke() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 51.0));
+    paint_parts(&mut s, &all, &black, &[]);
+    let middle = edges_in(&s, g, Rect::new(50.0, 0.0, 50.0, 50.0));
+    let left: Vec<NodeId> = edges_in(&s, g, Rect::new(0.0, 0.0, 50.0, 50.0)).into_iter().filter(|e| !middle.contains(e)).collect();
+    let (&[m], &[l]) = (&middle[..], &left[..]) else { panic!("one middle edge and one other edge round the left face") };
+    // The middle edge draws red under a hidden black stroke; every stroke of the left face's other
+    // edge is hidden.
+    s.edit("t", |d, _| {
+        let n = d.node_mut(m).unwrap();
+        n.appearance.items.insert(0, AppearanceItem::Stroke(vectorcraft_doc::appearance::StrokeLayer::new(red.clone(), 1.0)));
+        n.appearance.stroke_mut().unwrap().visible = false;
+        d.node_mut(l).unwrap().appearance.stroke_mut().unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let drawn = |s: &Session, id: NodeId| vectorcraft_tools::builder::lp_stroke_paint(&node(s, id));
+    assert_eq!(drawn(&s, m), red);
+    let paint = |s: &mut Session, at: [f64; 2]| {
+        s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": at, "color": "#00ff00", "width": 2})).unwrap();
+    };
+    for (id, at) in [(m, [50.0, 25.0]), (l, [0.0, 25.0])] {
+        paint(&mut s, at);
+        assert_eq!(drawn(&s, id), green, "{id}");
+        let depth = history_state(&s).0;
+        paint(&mut s, at);
+        assert_eq!(history_state(&s).0, depth, "painting {id} again");
+    }
+    assert_eq!(node(&s, m).appearance.items.len(), 2, "the hidden stroke stays as it was");
+    assert_eq!(node(&s, l).appearance.items.len(), 2, "a new stroke above the hidden one");
 }
 
 /// With Cmd held, the Live Paint Bucket's presses go to the selection tool Cmd lends, and the

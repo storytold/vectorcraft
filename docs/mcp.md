@@ -3690,7 +3690,8 @@ already walks Image Trace. Short agent entry points:
   transparent or has no such stroke. Each click of a double-click or triple-click runs as it
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
   two clicks or the triple-click's three that painted it, so the clicks before the last do not change what it matches;
-  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. These rules
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
+  paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
   for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
   https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
@@ -3715,7 +3716,8 @@ already walks Image Trace. Short agent entry points:
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
   and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
-  `livePaint.strokeEdge` when the edge already has the paint and the width, `livePaint.gapOptions` (and the Gap Options
+  `livePaint.strokeEdge` when the topmost shown stroke of each edge it reaches already has the paint and the width,
+  `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.

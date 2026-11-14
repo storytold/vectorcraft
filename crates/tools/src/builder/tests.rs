@@ -1206,6 +1206,39 @@ fn bucket_double_and_triple_click_widen_what_a_click_paints() {
     assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
 }
 
+/// On an edge that stores a stroke paint but draws none (its stroke hidden, or the edge fully
+/// transparent), a double-click or triple-click matches no paint, with or without the clicks
+/// before it.
+#[test]
+fn bucket_multi_click_on_an_edge_matches_the_paint_it_draws() {
+    let (mut d, gid, _, e) = live_group_doc();
+    d.node_mut(e).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0)));
+    let mut hidden = d.clone();
+    hidden.node_mut(e).unwrap().appearance.stroke_mut().unwrap().visible = false;
+    let mut clear = d.clone();
+    clear.node_mut(e).unwrap().opacity = 0.0;
+    let none = serde_json::to_value(vectorcraft_color::Paint::None).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": none }),
+        )]
+    };
+    for doc in [&hidden, &clear] {
+        let cx = cx(doc, &s, &p);
+        let mut t = LivePaintBucketTool::default();
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected"));
+        for _ in 0..3 {
+            t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
+            t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift));
+        }
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint"));
+    }
+}
+
 /// A triple-click whose first click makes the Live Paint group matches the fill of the face the
 /// group makes there: an open path in front, whose outline bounds no face, does not give it.
 #[test]

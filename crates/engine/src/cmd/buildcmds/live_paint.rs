@@ -1,7 +1,7 @@
 use super::{
-    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
-    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, PathData, Point, Rect,
+    Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint, json,
+    number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -367,11 +367,12 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
 enum LpScope {
     /// The part under the pointer alone (a click).
     One,
-    /// A face and the faces reached from it across unstroked edges, or an edge and the edges
-    /// joined to it that have the same stroke (a double-click).
+    /// A face and the faces reached from it across edges that draw no stroke ([`b::flood_faces`]),
+    /// or an edge and the edges joined to it end to end that draw with the same stroke paint
+    /// ([`b::connected_edges`], [`b::lp_stroke_paint`]) (a double-click).
     Connected,
-    /// Every face with the same fill, or every edge with the same stroke, in the group (a
-    /// triple-click).
+    /// Every face with the same fill, or every edge that draws with the same stroke paint, in the
+    /// group (a triple-click).
     SamePaint,
 }
 
@@ -391,12 +392,12 @@ fn scope_param(p: &Value, c: &str) -> Result<LpScope> {
 /// The `match` of `livePaint.fill` and `livePaint.strokeEdge`: a paint as the document stores it,
 /// None when left out or null. With `allowed` false (a scope that compares no paints) a `match` is
 /// an error naming `scopes`, the scopes it applies to.
-fn match_param(p: &Value, c: &str, allowed: bool, scopes: &str) -> Result<Option<Paint>> {
+fn match_param(p: &Value, c: &str, allowed: bool, scopes: &str) -> Result<Option<super::Paint>> {
     let Some(v) = p.get("match").filter(|v| !v.is_null()) else { return Ok(None) };
     if !allowed {
         return Err(bad(c, format!("match applies only with scope {scopes}")));
     }
-    serde_json::from_value::<Paint>(v.clone()).map(Some).map_err(|_| bad(c, "match must be a paint as the document stores it"))
+    serde_json::from_value::<super::Paint>(v.clone()).map(Some).map_err(|_| bad(c, "match must be a paint as the document stores it"))
 }
 
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
@@ -570,12 +571,13 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
                 .collect(),
         };
         let count = targets.len();
-        // An edge that already has the paint and the width (or has no stroke and gets none) stays as
-        // it is; when every edge does, nothing changes and no undo step is recorded.
+        // An edge whose shown stroke already has the paint and the width (or that has no shown stroke
+        // and gets none) stays as it is; when every edge does, nothing changes and no undo step is
+        // recorded.
         let changed: Vec<NodeId> = targets
             .into_iter()
             .filter(|t| {
-                d.node(*t).is_none_or(|e| match e.appearance.stroke() {
+                d.node(*t).is_none_or(|e| match shown_stroke(e) {
                     Some(st) => !(st.paint == paint && st.width == width),
                     None => !paint.is_none(),
                 })
@@ -589,15 +591,36 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Live Paint Bucket", |d, _| {
         for target in &changed {
             let e = d.node_mut(*target).ok_or(EngineError::NoNode(*target))?;
-            e.appearance.set_stroke(paint.clone());
-            if let Some(st) = e.appearance.stroke_mut() {
-                st.width = width;
+            match shown_stroke_mut(e) {
+                Some(st) => {
+                    st.paint = paint.clone();
+                    st.width = width;
+                }
+                None => e.appearance.items.push(super::AppearanceItem::Stroke(super::StrokeLayer::new(paint.clone(), width))),
             }
         }
         Ok(())
     })?;
     s.remember_paint(&paint);
     Ok(json!({ "group": g.0, "edge": eid.0, "count": count }))
+}
+
+/// The stroke `livePaint.strokeEdge` paints on Live Paint edge `e`: its topmost stroke that is
+/// shown. None when it has no stroke or every stroke is hidden; the command then adds a stroke
+/// above the others.
+fn shown_stroke(e: &Node) -> Option<&super::StrokeLayer> {
+    e.appearance.items.iter().rev().find_map(|i| match i {
+        super::AppearanceItem::Stroke(s) if s.visible => Some(s),
+        _ => None,
+    })
+}
+
+/// [`shown_stroke`], to change.
+fn shown_stroke_mut(e: &mut Node) -> Option<&mut super::StrokeLayer> {
+    e.appearance.items.iter_mut().rev().find_map(|i| match i {
+        super::AppearanceItem::Stroke(s) if s.visible => Some(s),
+        _ => None,
+    })
 }
 
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {

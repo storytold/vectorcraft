@@ -223,7 +223,8 @@ struct LpPress {
     part: Option<NodeId>,
     /// Where the press was.
     at: Point,
-    /// Its fill (a face) or stroke paint (an edge) before the press.
+    /// Its fill (a face), or the stroke paint it draws with ([`lp_stroke_paint`], an edge), before
+    /// the press.
     before: Paint,
 }
 
@@ -907,7 +908,8 @@ impl Tool for LivePaintSelectionTool {
                     (false, false) => vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))],
                 }
             }
-            // The third click's press and release already selected what a click selects.
+            // The tool takes no action on a triple-click; its third press and release select as a
+            // click does.
             PointerKind::TripleClick => vec![],
         }
     }
