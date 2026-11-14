@@ -217,11 +217,18 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        // An extending stroke that ends within four Fidelities of the path's other end closes it:
-        // at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
+        // `closed`, when given, says whether the stroke closes the path: the Pencil and the
+        // Paintbrush send it, by their Close Paths When Ends Are Within and Alt at the release.
+        // Left out, an extending stroke that ends within four Fidelities of the path's other end
+        // closes it: at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
         let close_tol = (tol * 4.0).clamp(6.0, 400.0);
-        let closing = connect.is_none() && sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
-        if closing && let Some(l) = pts.last_mut() {
+        let near_first = pts.last().is_some_and(|p| p.distance(first) <= close_tol);
+        let wants_close = if p.get("closed").is_some_and(|v| !v.is_null()) { closed } else { near_first };
+        let closing = connect.is_none() && sp.anchors.len() >= 2 && wants_close;
+        // A stroke ending near the other end ends on it; one ending farther away closes with a
+        // straight segment back to it.
+        let ends_on_first = closing && near_first;
+        if ends_on_first && let Some(l) = pts.last_mut() {
             *l = first;
         }
         if let Some((_, _, y, _)) = &connect
@@ -238,13 +245,23 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             add.remove(0);
         }
         sp.anchors.extend(add);
-        if closing
+        if ends_on_first
             && sp.anchors.len() > 2
             && let Some(l) = sp.anchors.pop()
             && let Some(a0) = sp.anchors.first_mut()
         {
             a0.h_in = l.h_in;
             sp.closed = true;
+        } else if closing && !ends_on_first && sp.anchors.len() > 2 {
+            // Closed from away from the other end: a straight segment back to it, whatever
+            // handles the open ends carried.
+            sp.closed = true;
+            if let Some(l) = sp.anchors.last_mut() {
+                l.h_out = l.p;
+            }
+            if let Some(f) = sp.anchors.first_mut() {
+                f.h_in = f.p;
+            }
         }
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);

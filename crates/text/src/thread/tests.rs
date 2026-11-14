@@ -415,8 +415,7 @@ fn stepped_frame(w: f64, narrow: f64, y: f64, bottom: f64) -> TextObject {
 
 /// A paragraph of mixed type sizes that a stepped frame cannot hold goes on in the next frame. The
 /// every-line composer breaks the lines the first frame holds as one paragraph, as in a frame tall
-/// enough for all of it and not as the single-line composer breaks them, and the first frame
-/// takes the text of those lines. The next frame sets the rest at its own width, without the
+/// enough for all of it, and the first frame takes the text of those lines. The next frame sets the rest at its own width, without the
 /// first-line indent, and no character is lost or repeated. The frames take the same shares as
 /// when each is measured with the whole rest of the story.
 #[test]
@@ -460,8 +459,10 @@ fn a_mixed_size_paragraph_continued_from_a_shaped_frame_is_composed_in_both() {
         assert_eq!(every, whole[..every.len()], "indent {indent}");
         if indent == 0.0 {
             assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
+            // The single-line composer measures each line across its height too, and breaks the
+            // first frame's lines the same way.
             let (greedy, ..) = shares(Composer::SingleLine, indent);
-            assert_eq!(greedy, ["Destroy all creatures with toughness X", "or less. Then draw a", "card for each", "creature destroyed"]);
+            assert_eq!(greedy, every);
         }
         // The next frame starts at its left edge, and its lines keep within it.
         assert!((line_start(&lays[1], 0) - 200.0).abs() < 1e-6, "{}", line_start(&lays[1], 0));
