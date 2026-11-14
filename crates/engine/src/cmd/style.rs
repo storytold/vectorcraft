@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name?, id?} a style from object `id` or the first selected object: its appearance, opacity, blend mode, isolate and knockout (a group without fills or strokes of its own lends its topmost object's, type its characters'; a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own stands for the topmost path directly in it, and a graph's Axes or Legend group with none of these for its topmost line or label; placed gradients are kept relative to its bounds); links the object. Names are made unique → {name}",
+            "{name?, id?} a style from object `id` or the first selected object: its appearance, opacity, blend mode, isolate and knockout (a group without fills or strokes of its own lends its topmost object's, type its characters'; a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own stands for the topmost path directly in it, and a graph's Axes or Legend group with none of these for its topmost line or label; placed gradients are kept relative to its bounds); links the object, unless it is the art of a graph design in a series. Names are made unique → {name}",
             has_doc,
             style_new
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Graphic Style",
             ["Window", "Appearance"],
             None,
-            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
+            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. The art of a graph design in a series keeps its look and is unlinked, as the source or as a linked object. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
             has_doc,
             style_redefine
         ),
@@ -392,8 +392,10 @@ fn style_new(s: &mut Session, p: &Value) -> Result<Value> {
         None => d.new_graphic_style_name(),
     };
     let g = GraphicStyle { id: d.next_graphic_style_id(), ..GraphicStyle::of(name.clone(), captured(n), n) };
+    // The art of a graph design in a series is not linked: the graph draws it again from the design.
+    let link = (!super::graph::is_design_art(d, src)).then_some(g.id);
     s.edit("New Graphic Style", |d, _| {
-        set_link(d, &[src], Some(g.id));
+        set_link(d, &[src], link);
         d.graphic_styles.push(g);
         Ok(())
     })?;
@@ -491,10 +493,12 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
         let id = d.graphic_style_id(i);
         let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
-        // Objects still linked follow the new definition; edited ones are unlinked (they keep
-        // their look), and the source keeps its own.
+        // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
+        // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
+        // source or as a linked object: the graph draws it again from the design.
         let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && n.id != src);
-        let (follow, edited): (Vec<NodeId>, Vec<NodeId>) = linked.into_iter().partition(|nid| d.node(*nid).is_some_and(|n| in_sync(n, &old)));
+        let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
+            linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
         set_link(d, &edited, None);
         // A linked graph series group passes the style to the paths directly inside it, so the graph stores it, and
         // goes back to the empty appearance the graph draws it with. The source and the edited paths keep their look.
@@ -509,7 +513,8 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::appearance::capture_series_writes(&before, d, &follow_marks, (true, true), (true, true), false, true);
         super::graph::capture_label_rows(d, &follow_marks);
-        set_link(d, &[src], Some(id));
+        let link = (!super::graph::is_design_art(d, src)).then_some(id);
+        set_link(d, &[src], link);
         Ok(())
     })?;
     Ok(json!({ "name": name }))
