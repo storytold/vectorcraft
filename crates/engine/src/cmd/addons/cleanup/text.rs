@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Combine Point Text",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} merge one-line horizontal point type into as few objects as it can, every glyph staying where it was: pieces turned and sheared alike whose baselines line up (within 0.4 em; the difference becomes baseline shift) join left to right, a space goes between pieces at least half a space apart, and tracking on the character before each piece keeps the spacing; each object keeps its character styles, and the leftmost piece of each run its place and paint, as one undo step → {ids (the objects made, selected), combined (pieces merged into them)}",
+            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} merge one-line horizontal point type into as few objects as it can, every glyph staying where it was: pieces turned and sheared alike, as visible and as locked (their groups and layers included), whose baselines line up (within 0.4 em; the difference becomes baseline shift) join left to right, a space goes between pieces at least half a space apart, and tracking on the character before each piece keeps the spacing; each object keeps its character styles, and the leftmost piece of each run its place and paint, as one undo step → {ids (the objects made, selected), combined (pieces merged into them)}",
             has_selection,
             combine_text
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join Point Text",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
+            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one, and as visible and as locked (their groups and layers included), are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
             has_selection,
             join_text
         ),
@@ -466,6 +466,9 @@ fn split_text(s: &mut Session, _: &Value) -> Result<Value> {
 struct Piece {
     id: NodeId,
     t: TextObject,
+    /// Whether the object and every group and layer above it are visible, and whether they are all
+    /// unlocked.
+    state: (bool, bool),
     /// The object's turn and shear (`xf` without its move).
     turn: [f64; 4],
     /// Where its first character's glyph starts on its baseline, in that frame.
@@ -503,12 +506,18 @@ impl Piece {
         if !(at.x.is_finite() && at.y.is_finite() && size > 0.0) {
             return None;
         }
-        Some((Self { id, t, turn: [a, b, c, dd], at, end: at.x + end, size, pens }, node))
+        let state = d.ancestry(id)?.iter().filter_map(|i| d.node(*i)).fold((true, true), |(v, u), n| (v && n.visible, u && !n.locked));
+        Some((Self { id, t, state, turn: [a, b, c, dd], at, end: at.x + end, size, pens }, node))
     }
 
     /// Whether `o` is turned and sheared alike.
     fn turned_like(&self, o: &Piece) -> bool {
         self.turn.iter().zip(&o.turn).all(|(x, y)| (x - y).abs() <= 1e-6 * x.abs().max(y.abs()).max(1.0))
+    }
+
+    /// Whether `o` is turned and sheared alike and has the same `state`.
+    fn joins(&self, o: &Piece) -> bool {
+        self.turned_like(o) && self.state == o.state
     }
 }
 
@@ -612,13 +621,13 @@ fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.combineText";
     let d = &s.doc()?.doc;
     let mut pieces: Vec<(Piece, &Node)> = target_texts(s, p, C)?.into_iter().filter_map(|id| Piece::of(d, id)).collect();
-    // Lines: pieces turned alike and looking alike, by baseline, then left to right.
+    // Lines: pieces turned alike, as visible and as locked and looking alike, by baseline, then left
+    // to right.
     pieces.sort_by(|x, y| x.0.at.y.total_cmp(&y.0.at.y).then(x.0.at.x.total_cmp(&y.0.at.x)));
     let mut lines: Vec<Vec<(&Piece, &Node)>> = vec![];
     for (piece, node) in &pieces {
         let fits = |l: &Vec<(&Piece, &Node)>| {
-            l.first()
-                .is_some_and(|(f, n)| f.turned_like(piece) && same_look(n, node) && (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))
+            l.first().is_some_and(|(f, n)| f.joins(piece) && same_look(n, node) && (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))
         };
         match lines.iter_mut().find(|l| fits(l)) {
             Some(l) => l.push((piece, node)),
@@ -698,13 +707,14 @@ fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.joinText";
     let d = &s.doc()?.doc;
     let pieces: Vec<Piece> = target_texts(s, p, C)?.into_iter().filter_map(|id| Piece::of(d, id).map(|p| p.0)).collect();
-    // The piece top-left on the page sets the turn; the others turned like it are read in that frame.
+    // The piece top-left on the page sets the turn; the others turned like it, and as visible and as
+    // locked, are read in that frame.
     let on_page = |p: &Piece| Affine::new([p.turn[0], p.turn[1], p.turn[2], p.turn[3], 0.0, 0.0]) * p.at;
     let first = pieces.iter().min_by(|x, y| {
         let (a, b) = (on_page(x), on_page(y));
         a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
     });
-    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| p.turned_like(f)).collect()).unwrap_or_default();
+    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| f.joins(p)).collect()).unwrap_or_default();
     kept.sort_by(|x, y| x.at.y.total_cmp(&y.at.y).then(x.at.x.total_cmp(&y.at.x)));
     // Lines, top to bottom, by baseline; each line's pieces left to right.
     let mut lines: Vec<Vec<&Piece>> = vec![];
