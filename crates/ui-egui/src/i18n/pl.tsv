@@ -9132,7 +9132,6 @@ breakText	Glyphs	Glify
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	pliki {kind} nie obsługują przezroczystości, a plik zawierałby {what}: najpierw spłaszcz przezroczystość (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	obrazów {kind} nie można otwierać (patrz document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` nie jest jedną z dostępnych opcji
-@msg	{k} has control characters{_1}	{k} zawiera znaki sterujące{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} jest zbyt długie (najwyżej {MAX_TEXT} znaków)
 @msg	{k} must be > 0	{k} musi być > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} musi być liczbą (pt) lub długością, na przykład "210 mm"

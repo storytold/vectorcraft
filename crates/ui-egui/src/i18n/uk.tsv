@@ -8851,7 +8851,6 @@ breakText	Glyphs	Гліфи
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	файли {kind} не мають прозорості, а файл містив би таке: {what}; спочатку зведіть прозорість (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	зображення {kind} не можна відкрити (див. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не є одним із варіантів
-@msg	{k} has control characters{_1}	{k} містить керівні символи{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} задовгий (не більше {MAX_TEXT} символів)
 @msg	{k} must be > 0	{k} має бути > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} має бути числом (pt) або довжиною на зразок "210 mm"

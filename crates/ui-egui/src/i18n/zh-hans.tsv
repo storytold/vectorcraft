@@ -9118,7 +9118,6 @@ breakText	Glyphs	字形
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 文件不支持透明度，而该文件会包含 {what}：请先拼合 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	无法打开 {kind} 图像 (参见 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不在可选项之中
-@msg	{k} has control characters{_1}	{k} 含有控制字符{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 过长 (最多 {MAX_TEXT} 个字符)
 @msg	{k} must be > 0	{k} 必须 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必须是数字 (pt) 或 "210 mm" 这样的长度
