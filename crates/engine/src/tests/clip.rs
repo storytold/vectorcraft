@@ -129,6 +129,32 @@ fn text_on_top_clips_by_its_glyphs() {
 }
 
 #[test]
+fn a_hidden_member_of_a_clipping_group_leaves_clicks_on_the_type_frame() {
+    // The clipping path is a group of an "O" and a hidden rectangle with a Transform effect. The
+    // hidden rectangle does not clip, so clicks inside the clip group still count the type by its
+    // frame, the counter of the "O" included.
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap());
+    let t = id_of(&s.execute("text.create", &json!({"x": 5, "y": 80, "text": "O", "size": 90})).unwrap());
+    let b = s.doc().unwrap().doc.node(t).unwrap().geometric_bounds().unwrap();
+    let r = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 10, "height": 10})).unwrap());
+    s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 20}, "ids": [r.0], "item": null})).unwrap();
+    select(&mut s, &[art, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    // Make Clipping Mask takes no group on top, so the group goes in place of the type.
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let mut rect = (*d.remove(r).unwrap()).clone();
+    rect.visible = false;
+    let text = d.remove(t).unwrap();
+    let group = vectorcraft_doc::Node::group(d.alloc_id(), vec![text, Arc::new(rect)]);
+    d.insert(Some(g), 0, group).unwrap();
+    let leaf = |x: f64, y: f64| vectorcraft_doc::hit::hit_test(&d, vectorcraft_geom::Point::new(x, y), Default::default()).map(|h| h.leaf);
+    let middle = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+    assert_eq!(leaf(middle.0, middle.1), Some(art), "in the counter, inside the frame");
+    assert_eq!(leaf(b.x1 + 3.0, middle.1), None, "beside the text");
+}
+
+#[test]
 fn clicks_follow_the_region_a_clipping_paths_effects_give_it() {
     // Art from 10 to 90 pt, clipped by the artboard's left half, which a Transform effect moves
     // 50 pt right: the art shows on the right half, as clicks find it.
