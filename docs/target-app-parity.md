@@ -2106,6 +2106,11 @@ Line / Paragraph Breaks, Set Alignment, Keep Position, Reset Text Transform and 
 refusals), `addons::cleanup::tests` in `vectorcraft-ui-egui` (the submenu and the panel's Text row run them) and
 `cleanup_text_tools_with_junk_editing_ranges` in the command sweep.
 
+With `ids`, the text tools act on the type the ids name even when it, or its group or layer, is locked or hidden, as
+`text.convertListToText` does; from the selection they still take only type that can be edited (VectorCraft's own
+rule). Tests: `named_locked_and_hidden_type`, `remove_breaks_named_locked_and_hidden_type` and
+`remove_breaks_named_story_with_a_locked_frame` in `cmd::addons::cleanup::text::tests`.
+
 ## Path Precision Tools add-on (2026-10-30)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Path Precision Tools,

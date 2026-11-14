@@ -10780,8 +10780,12 @@ topmost piece.
 ### Text tools
 
 The add-on's text tools act on the selected type (or `ids`), each as one undo step, and refuse with an error when there
-is nothing for them to do. The pieces they make are point type that keeps its characters' styles, each placed so the
-glyph of its first character lands where it was drawn.
+is nothing for them to do. From the selection they take only type that can be edited; the type that `ids` names, or
+that is inside a group or layer it names, is taken even when it, its group or its layer is locked or hidden (not type
+on a locked artboard). The objects they make from locked or hidden type are not selected. Combine Point Text and Join
+Point Text join a piece only with pieces that are as visible and as locked as it is, counting their groups and layers.
+The pieces they make are point type that keeps its characters' styles, each placed so the glyph of its first character
+lands where it was drawn.
 
 - `addon.cleanup.breakText {by?, ids?}` turns each horizontal point or area type object into point type objects, one
   per line (`by: "lines"`, the default), paragraph (`"paragraphs"`), word (`"words"`) or glyph (`"glyphs"`; a ligature
@@ -10793,14 +10797,15 @@ glyph of its first character lands where it was drawn.
   staying where it was (within 0.01 pt). Pieces turned and sheared alike whose baselines lie within 0.4 em of each
   other join left to right (a baseline a little off becomes baseline shift); a space goes between pieces at least half
   a space apart, and tracking on the character before each piece keeps its place. A gap wider than 10 em, an overlap of
-  more than 1 em, another look (paint, opacity, effects) or a piece that can't keep its place once joined (a ligature
-  forming across the join) starts another object. Each object made takes the place and paint of its leftmost piece. The
-  main use is type from a PDF that arrives one glyph per object.
+  more than 1 em, another look (paint, opacity, effects), another visibility or lock state, or a piece that can't keep
+  its place once joined (a ligature forming across the join) starts another object. Each object made takes the place
+  and paint of its leftmost piece. The main use is type from a PDF that arrives one glyph per object.
 - `addon.cleanup.joinText {ids?}` (Join Point Text) joins one-line horizontal point type into one point type object,
-  for text that arrives one line or fragment per object. Pieces turned and sheared like the top-left one are read as
-  lines (baselines within 0.4 em), top to bottom; a line's pieces join left to right with a space between them. Each
-  line becomes a left-aligned paragraph whose leading is the distance from the baseline above, so the lines stay where
-  they were. Character styles stay; the object takes the top-left piece's place and paint. Returns `{id, joined, lines}`.
+  for text that arrives one line or fragment per object. Pieces turned and sheared like the top-left one, and as visible
+  and as locked as it is, are read as lines (baselines within 0.4 em), top to bottom; a line's pieces join left to
+  right with a space between them. Each line becomes a left-aligned paragraph whose leading is the distance from the
+  baseline above, so the lines stay where they were. Character styles stay; the object takes the top-left piece's
+  place and paint. Returns `{id, joined, lines}`.
 - `addon.cleanup.removeBreaks {kind, ids?}` removes the forced line breaks (`kind: "line"`) or paragraph returns
   (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. After
   Select All in a frame of threaded text, it removes them from the text of every frame of the story, as one undo step.

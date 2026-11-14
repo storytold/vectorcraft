@@ -379,6 +379,196 @@ fn remove_breaks_reads_the_threads_once() {
     }
 }
 
+/// Lock `id` (`locked`), else hide it, as an undo step of its own.
+fn lock_or_hide(s: &mut Session, id: NodeId, locked: bool) {
+    s.edit("Lock or Hide", |d, _| {
+        let n = d.node_mut(id).unwrap();
+        if locked {
+            n.locked = true;
+        } else {
+            n.visible = false;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Remove Breaks takes the locked and hidden type that `ids` names, and the locked member of a
+/// group it names, as one undo step; from the selection it takes only type that can be edited, and
+/// nothing changed makes no undo step.
+#[test]
+fn remove_breaks_named_locked_and_hidden_type() {
+    let mut s = session();
+    let locked = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb", "size": 12}));
+    let hidden = text(&mut s, json!({"x": 40, "y": 120, "text": "c\nd", "size": 12}));
+    let grouped = text(&mut s, json!({"x": 40, "y": 180, "text": "e\nf", "size": 12}));
+    let free = text(&mut s, json!({"x": 40, "y": 240, "text": "g\nh", "size": 12}));
+    select(&mut s, &[grouped, free]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    lock_or_hide(&mut s, locked, true);
+    lock_or_hide(&mut s, hidden, false);
+    lock_or_hide(&mut s, grouped, true);
+    select(&mut s, &[locked, hidden]);
+    let steps = undo_steps(&s);
+    assert_eq!(other(s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"}))), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps, "the selected locked and hidden type stays as it is");
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [locked.0, hidden.0, group.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(r["removed"], 4);
+    for (id, now) in [(locked, "a b"), (hidden, "c d"), (grouped, "e f"), (free, "g h")] {
+        assert_eq!(obj(&s, id).plain_text(), now);
+    }
+    assert_eq!(other(s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [locked.0]}))), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps + 1, "nothing changed, no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, locked).plain_text(), "a\nb");
+}
+
+/// A threaded story whose frames `ids` all names is read as one text even when a frame is locked.
+#[test]
+fn remove_breaks_named_story_with_a_locked_frame() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "one\ntwo");
+    lock_or_hide(&mut s, a, true);
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [a.0, b.0]})).unwrap();
+    assert_eq!(r["removed"], 1);
+    assert_eq!(obj(&s, a).plain_text(), "one two");
+}
+
+/// Type on a locked artboard stays as it is even when `ids` names it, with no undo step.
+#[test]
+fn remove_breaks_named_type_on_a_locked_artboard() {
+    let mut s = session();
+    let on_board = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb", "size": 12}));
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [on_board.0]}));
+    assert_eq!(other(r), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(obj(&s, on_board).plain_text(), "a\nb");
+}
+
+/// Break Text, Combine and Join Point Text, Set Alignment, Keep Position and Reset Text Transform
+/// act on the locked and hidden type that `ids` names (type in a locked layer included), each as
+/// one undo step, and leave it as it is when it is only selected.
+#[test]
+fn named_locked_and_hidden_type() {
+    let mut s = session();
+    let words = text(&mut s, json!({"x": 40, "y": 100, "text": "Two words", "size": 14}));
+    lock_or_hide(&mut s, words, true);
+    select(&mut s, &[words]);
+    assert!(s.execute("addon.cleanup.breakText", &json!({"by": "words"})).is_err());
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.breakText", &json!({"by": "words", "ids": [words.0]})).unwrap();
+    assert_eq!((ids(&r).len(), undo_steps(&s)), (2, steps + 1));
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the locked pieces stay unselected");
+
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    lock_or_hide(&mut s, a, false);
+    lock_or_hide(&mut s, b, false);
+    select(&mut s, &[a, b]);
+    assert!(s.execute("addon.cleanup.combineText", &json!({})).is_err());
+    let r = s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert_eq!(ids(&r), [a]);
+    assert_eq!(obj(&s, a).plain_text(), "Left Right");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the hidden object stays unselected");
+
+    let mut s = session();
+    let first = text(&mut s, json!({"x": 50, "y": 100, "text": "First", "size": 20}));
+    let second = text(&mut s, json!({"x": 50, "y": 130, "text": "Second", "size": 20}));
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    lock_or_hide(&mut s, layer, true);
+    select(&mut s, &[first, second]);
+    assert!(s.execute("addon.cleanup.joinText", &json!({})).is_err());
+    let r = s.execute("addon.cleanup.joinText", &json!({"ids": [first.0, second.0]})).unwrap();
+    assert_eq!(r["id"].as_u64(), Some(first.0));
+    assert_eq!(obj(&s, first).plain_text(), "First\nSecond");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the object in the locked layer stays unselected");
+
+    let mut s = session();
+    let lines = text(&mut s, json!({"x": 50, "y": 100, "text": "a\nlonger line", "size": 20}));
+    lock_or_hide(&mut s, lines, false);
+    select(&mut s, &[lines]);
+    assert!(s.execute("addon.cleanup.alignInPlace", &json!({"align": "center"})).is_err());
+    s.execute("addon.cleanup.alignInPlace", &json!({"align": "center", "ids": [lines.0]})).unwrap();
+    assert!(obj(&s, lines).para_styles().all(|p| p.justify == Justify::Center));
+
+    let mut s = session();
+    let turned = text(&mut s, json!({"x": 300, "y": 200, "text": "Turned", "size": 18, "rotation": 30}));
+    lock_or_hide(&mut s, turned, true);
+    select(&mut s, &[turned]);
+    assert!(s.execute("addon.cleanup.resetTextTransform", &json!({})).is_err());
+    let steps = undo_steps(&s);
+    s.execute("addon.cleanup.resetTextTransform", &json!({"ids": [turned.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let [_, b, c, _, _, _] = obj(&s, turned).xf.as_coeffs();
+    assert!(b.abs() < 1e-9 && c.abs() < 1e-9, "the rotation is gone");
+}
+
+/// Combine Point Text joins named pieces only with pieces as visible and as locked, a group's lock
+/// included: a visible piece and a hidden one beside it, or a free piece and one in a locked group,
+/// stay as they are, with no undo step.
+#[test]
+fn combine_keeps_hidden_and_locked_pieces_apart() {
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    lock_or_hide(&mut s, b, false);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, b.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("Left".into(), "Right".into()));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.is_visible(a) && !d.is_visible(b), "the visible text stays shown and the hidden text stays hidden");
+
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    select(&mut s, &[b]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    lock_or_hide(&mut s, group, true);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, group.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("Left".into(), "Right".into()));
+}
+
+/// Join Point Text joins only the named pieces as visible and as locked as the top-left one: a
+/// hidden piece between two visible lines stays as it is, hidden, and a hidden top-left piece
+/// with only a visible one below it joins nothing, with no undo step.
+#[test]
+fn join_keeps_a_hidden_piece_apart() {
+    let mut s = session();
+    let first = text(&mut s, json!({"x": 50, "y": 100, "text": "First", "size": 20}));
+    let hidden = text(&mut s, json!({"x": 50, "y": 130, "text": "Hidden", "size": 20}));
+    let third = text(&mut s, json!({"x": 50, "y": 160, "text": "Third", "size": 20}));
+    lock_or_hide(&mut s, hidden, false);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.joinText", &json!({"ids": [first.0, hidden.0, third.0]})).unwrap();
+    assert_eq!((r["id"].as_u64(), r["joined"].as_u64(), undo_steps(&s)), (Some(first.0), Some(2), steps + 1));
+    assert_eq!(obj(&s, first).plain_text(), "First\nThird");
+    assert_eq!(obj(&s, hidden).plain_text(), "Hidden");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.is_visible(first) && !d.is_visible(hidden), "the visible text stays shown and the hidden text stays hidden");
+    assert!(d.node(third).is_none());
+
+    let mut s = session();
+    let top = text(&mut s, json!({"x": 50, "y": 100, "text": "Top", "size": 20}));
+    let below = text(&mut s, json!({"x": 50, "y": 130, "text": "Below", "size": 20}));
+    lock_or_hide(&mut s, top, false);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.joinText", &json!({"ids": [top.0, below.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, top).plain_text(), obj(&s, below).plain_text()), ("Top".into(), "Below".into()));
+    assert!(s.doc().unwrap().doc.is_visible(below));
+}
+
 #[test]
 fn split_at_the_cursor_and_around_a_selection() {
     for (anchor, caret, want) in [(6, 6, &["Split", "here please"][..]), (6, 10, &["Split", "here", "please"][..])] {
