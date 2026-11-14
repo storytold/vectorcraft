@@ -2633,6 +2633,7 @@ mark-style	Japanese	Japanisch
 	Proportional Metrics	Proportionale Metrik
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
+	Tsume	Tsume
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -4669,6 +4670,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no action set to save	kein Aktionssatz zum Speichern
 @msg	the action set file can't be read in full	die Aktionssatzdatei kann nicht vollständig gelesen werden
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}“ geladen: {n} Schritt wurde ausgelassen|„{name}“ geladen: {n} Schritte wurden ausgelassen
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}“ geladen: {n} Schritt hat einen unbekannten Befehl und wurde behalten: „{action}“, Schritt {step}, `{command}`|„{name}“ geladen: {n} Schritte haben unbekannte Befehle und wurden behalten; der erste: „{action}“, Schritt {step}, `{command}`
 @msg	not an action set file	keine Aktionssatzdatei
 @msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: die Referenz wäre größer als {MAX_BYTES} Byte
@@ -4910,6 +4912,7 @@ theme	Appearance	Erscheinungsbild
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
 @msg	unknown command `{0}`	unbekannter Befehl `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	Schritt {step} von „{action}“ führt den unbekannten Befehl `{command}` aus
 @msg	unknown command `{0}`; did you mean `{1}`?	unbekannter Befehl `{0}`; meinten Sie `{1}`?
 @msg	unknown effect `{id}`	unbekannter Effekt `{id}`
 @msg	unknown format	unbekanntes Format
@@ -5986,8 +5989,8 @@ axis	Y Axis	Y-Achse
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ein Export-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	höchstens {MAX_UNGROUPED} Parameter außerhalb von Gruppen: Geben Sie den anderen eine `group`
 @msg	can't encode the input	die Eingabe kann nicht codiert werden
-@msg	expected {"dataBase64"}	erwartet: {"dataBase64"}
-@msg	expected {"objects"}	erwartet: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	erwartet: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	erwartet: {{"objects": [...]}}
 @msg	export `{name}`: {e}	Modulexport `{name}`: {e}
 @msg	extension {e} is listed twice	die Dateiendung {e} ist doppelt aufgeführt
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	Dateiendung {e}: Verwenden Sie 1-16 Kleinbuchstaben und Ziffern, ohne Punkt
@@ -6051,11 +6054,11 @@ axis	Y Axis	Y-Achse
 @msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
 @msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {"id"} allein oder so, wie es übergeben wurde
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
 @msg	a string	eine Zeichenkette
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	eine Kontur muss {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} sein
-@msg	an effect must be {"id", "params"?, "visible"?}	ein Effekt muss {"id", "params"?, "visible"?} sein
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	eine Kontur muss {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} sein
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ein Effekt muss {{"id", "params"?, "visible"?}} sein
 @msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
 @msg	an effect on a stroke returns only `strokes`	ein Effekt auf einer Kontur gibt nur `strokes` zurück
 @msg	an object must be a JSON object	ein Objekt muss ein JSON-Objekt sein
@@ -8894,6 +8897,134 @@ breakText	Glyphs	Glyphen
 @msg	the paths are too many or too tangled to find where they cross	die Pfade sind zu zahlreich oder zu verschlungen, um ihre Kreuzungen zu finden
 @msg	the rectangle or line reaches too many paths to check	das Rechteck oder die Linie erreicht zu viele Pfade, um sie zu prüfen
 @msg	{name} must be a number	{name} muss eine Zahl sein
+# Messages no catalog translated yet: image export and color profiles, color books and swatch exchange files, 3D and Revolve, and script and file errors.
+@msg	3D effects require finite coordinates within 100 million points	3D-Effekte erfordern endliche Koordinaten innerhalb von 100 Millionen Punkt
+@msg	3D effects require one to ten lights	3D-Effekte erfordern ein bis zehn Lichter
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-Farbtiefe {_1}: 1, 4, 8, 16, 24 oder 32 Bit pro Pixel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP-Kodierung fehlgeschlagen: {width} × {height} Pixel passen nicht zum Format oder zum Pixelpuffer
+@msg	GIF encoding failed: the palette image is malformed	GIF-Kodierung fehlgeschlagen: Das Palettenbild ist fehlerhaft
+@msg	GIF encoding failed: {e}	GIF-Kodierung fehlgeschlagen: {e}
+@msg	JPEG colour profile: {e}	JPEG-Farbprofil: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG-Kodierung fehlgeschlagen: Der Pixelpuffer passt nicht zur Bildgröße
+@msg	JPEG encoding failed: {e}	JPEG-Kodierung fehlgeschlagen: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG-Kodierung fehlgeschlagen: Der Pixelpuffer passt nicht zur Bildgröße
+@msg	PNG encoding failed: the palette image is malformed	PNG-Kodierung fehlgeschlagen: Das Palettenbild ist fehlerhaft
+@msg	PNG encoding failed: {e}	PNG-Kodierung fehlgeschlagen: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG-Kodierung fehlgeschlagen: {width} × {height} Pixel sind keine gültige Bildgröße
+@msg	PSD colour profile: {e}	PSD-Farbprofil: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD-Kodierung fehlgeschlagen: Der Pixelpuffer passt nicht zur Bildgröße
+@msg	Revolve profile contains invalid coordinates	Kreiseln: Das Profil enthält ungültige Koordinaten
+@msg	Revolve profile is too complex	Kreiseln: Das Profil ist zu komplex
+@msg	Revolve projection is not finite	Kreiseln: Die Projektion ist nicht endlich
+@msg	Revolve requires finite profile coordinates within 100 million points	Kreiseln erfordert endliche Profilkoordinaten innerhalb von 100 Millionen Punkt
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Kreiseln: Die Oberfläche ist zu komplex; verringern Sie „Segmente“ oder vereinfachen Sie das Profil
+@msg	Revolve surface is too complex; simplify the profile	Kreiseln: Die Oberfläche ist zu komplex; vereinfachen Sie das Profil
+@msg	Revolve visibility cannot split the projected boundary	Kreiseln: Die Sichtbarkeitsberechnung kann die projizierte Begrenzung nicht teilen
+@msg	Revolve visibility creates too many fragments	Kreiseln: Die Sichtbarkeitsberechnung erzeugt zu viele Fragmente
+@msg	Revolve visibility creates too many vector anchors	Kreiseln: Die Sichtbarkeitsberechnung erzeugt zu viele Vektor-Ankerpunkte
+@msg	Revolve visibility exceeds its geometry work limit	Kreiseln: Die Sichtbarkeitsberechnung überschreitet ihre Grenze für den Geometrieaufwand
+@msg	Revolve visibility exceeds its spatial index limit	Kreiseln: Die Sichtbarkeitsberechnung überschreitet ihre Grenze für den räumlichen Index
+@msg	Revolve visibility has too many boundary crossings	Kreiseln: Die Sichtbarkeitsberechnung hat zu viele Kreuzungen der Begrenzung
+@msg	Revolve visibility has too many input anchors	Kreiseln: Die Sichtbarkeitsberechnung hat zu viele Eingabe-Ankerpunkte
+@msg	Revolve visibility requires convex cap sectors	Kreiseln: Die Sichtbarkeitsberechnung erfordert konvexe Sektoren der Deckflächen
+@msg	Revolve visibility requires finite projected faces	Kreiseln: Die Sichtbarkeitsberechnung erfordert endliche projizierte Flächen
+@msg	SVG options: {e}	SVG-Optionen: {e}
+@msg	Save for Web settings: {e}	Einstellungen für „Für Web speichern“: {e}
+@msg	TIFF colour profile: {e}	TIFF-Farbprofil: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF-Kodierung fehlgeschlagen: Der Pixelpuffer passt nicht zur Bildgröße
+@msg	TIFF encoding failed: {e}	TIFF-Kodierung fehlgeschlagen: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-Farbtiefe {_1}: 16, 24 oder 32 Bit pro Pixel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa-Kodierung fehlgeschlagen: Der Pixelpuffer passt nicht zur Bildgröße
+@msg	The 3D projection is not finite	Die 3D-Projektion ist nicht endlich
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Der 3D-Schatten ist zu komplex; schalten Sie „Schatten“ aus oder vereinfachen Sie die Grafik
+@msg	The shape contains invalid coordinates	Die Form enthält ungültige Koordinaten
+@msg	Too many Revolve faces for visibility evaluation	Zu viele Kreiseln-Flächen für die Sichtbarkeitsberechnung
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft liest höchstens {ASE_MAX_ENTRIES} Farben und Gruppen aus einer Farbfeld-Austauschdatei, und diese Bibliothek hat {entries}
+@msg	WebP encoding failed: {e}	WebP-Kodierung fehlgeschlagen: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ist smallThumb, mediumThumb, largeThumb, smallList oder largeList
+@msg	a line can't run from a point to itself	eine Linie kann nicht von einem Punkt zu sich selbst verlaufen
+@msg	a line needs at least two points	eine Linie braucht mindestens zwei Punkte
+@msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
+@msg	a number cannot be read	eine Zahl kann nicht gelesen werden
+@msg	a swatch exchange block is too long	ein Block der Farbfeld-Austauschdatei ist zu lang
+@msg	a swatch exchange name is too long	ein Name in der Farbfeld-Austauschdatei ist zu lang
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	ein Bild mit {sw} × {sh} Pixeln kann nicht auf {width} × {height} Pixel skaliert werden
+@msg	a {width} × {height} image is too large	ein Bild mit {width} × {height} Pixeln ist zu groß
+@msg	a {width} × {height} image: {e}	ein Bild mit {width} × {height} Pixeln: {e}
+@msg	an image could not be written: {e}	ein Bild konnte nicht geschrieben werden: {e}
+@msg	an image that couldn't be read was left out	ein Bild, das nicht gelesen werden konnte, wurde ausgelassen
+@msg	can't open “{name}”: {e}	„{name}“ kann nicht geöffnet werden: {e}
+@msg	cannot align zip entries to {align} bytes	die ZIP-Einträge können nicht auf {align} Byte ausgerichtet werden
+@msg	cannot open the automation {kind} root `{_1}`: {e}	der Automatisierungs-Stammordner ({kind}) `{_1}` kann nicht geöffnet werden: {e}
+@msg	cannot read profile: {0}	das Profil kann nicht gelesen werden: {0}
+@msg	color book version {version} isn't supported (only 1)	die Farbbuchversion {version} wird nicht unterstützt (nur 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	Farbbücher im Farbraum {other} werden nicht unterstützt (nur RGB, CMYK und Lab)
+@msg	file name too long to zip: {_1}	der Dateiname ist zu lang für ein ZIP-Archiv: {_1}
+@msg	file name too long to zip: {name}	der Dateiname ist zu lang für ein ZIP-Archiv: {name}
+@msg	freeform line {i}: {e}	Freiformlinie {i}: {e}
+@msg	freeform point {i}: {e}	Freiformpunkt {i}: {e}
+@msg	give `{key}` or `{other}`, not both	geben Sie `{key}` oder `{other}` an, nicht beides
+@msg	grayscale profiles can't be working spaces yet	Graustufenprofile können noch keine Arbeitsfarbräume sein
+@msg	input contains NaN or infinite coordinates	die Eingabe enthält NaN oder unendliche Koordinaten
+@msg	input path could not be closed	der Eingabepfad konnte nicht geschlossen werden
+@msg	invalid ICC profile: {0}	ungültiges ICC-Profil: {0}
+@msg	invalid scale {scale}	ungültige Skalierung {scale}
+@msg	its localized names take more than {_1} KB	seine lokalisierten Namen belegen mehr als {_1} KB
+@msg	its objects are nested too deep ({e})	seine Objekte sind zu tief verschachtelt ({e})
+@msg	its tag table lists the `{_1}` tag more than once	seine Tag-Tabelle führt das Tag `{_1}` mehr als einmal auf
+@msg	not a graphic style library: {e}	keine Grafikstil-Bibliothek: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	keine Farbfeldbibliothek (.vcswatches oder .gpl)
+@msg	not a swatch library (format `{_1}`)	keine Farbfeldbibliothek (Format `{_1}`)
+@msg	not a swatch library: {e}	keine Farbfeldbibliothek: {e}
+@msg	not an action set file ({e})	keine Aktionssatzdatei ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	der Farbraum {other} des Profils ist nicht RGB, CMYK oder Graustufen
+@msg	regular expression too large	regulärer Ausdruck zu groß
+@msg	script file is not UTF-8 text: {value}	die Skriptdatei ist kein UTF-8-Text: {value}
+@msg	stop {i}: {e}	Farbstopp {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	die Version {major}.{minor} der Farbfeld-Austauschdatei wird nicht unterstützt (nur 1.x)
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	die Grafik eines Diagrammdesigns in einer Diagrammreihe wird aus dem Design neu gezeichnet: Bearbeiten Sie das Design, um sie zu ändern
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	das Farbbuch enthält mehr als {ASE_MAX_ENTRIES} Farben
+@msg	the color book is cut short	das Farbbuch ist unvollständig
+@msg	the color book's names take more than {_1} MB	die Namen des Farbbuchs belegen mehr als {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	das Bild hätte {w} × {h} Pixel; Rasterexporte sind auf {MAX_RASTER_SIDE} Pixel pro Seite und {_1} Megapixel begrenzt: Verringern Sie die Skalierung oder die Auflösung
+@msg	the optimised image can't be read back: {e}	das optimierte Bild kann nicht zurückgelesen werden: {e}
+@msg	the pixel buffer doesn't match the image size	der Pixelpuffer passt nicht zur Bildgröße
+@msg	the preview: {e}	die Vorschau: {e}
+@msg	the request may not read the New Document profiles folder	die Anfrage darf den Ordner der Profile für neue Dokumente nicht lesen
+@msg	the shapes are too degenerate to combine	die Formen sind zu entartet, um sie zu kombinieren
+@msg	the shapes cross themselves and each other too often to combine	die Formen überschneiden sich selbst und einander zu oft, um sie zu kombinieren
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	die Farbfeld-Austauschdatei enthält mehr als {ASE_MAX_ENTRIES} Farben und Gruppen
+@msg	the swatch exchange file is cut short	die Farbfeld-Austauschdatei ist unvollständig
+@msg	the {_1} plate can't be read: {e}	der Farbauszug {_1} kann nicht gelesen werden: {e}
+@msg	this binary DXF file is damaged or cut short	diese binäre DXF-Datei ist beschädigt oder unvollständig
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	dies ist eine DWG-Zeichnung, die nicht gelesen werden kann: Speichern Sie sie in der CAD-App als DXF und öffnen Sie diese Datei
+@msg	too many classes	zu viele Zeichenklassen
+@msg	too many groups	zu viele Gruppen
+@msg	too many layers for PSD (at most 32767)	zu viele Ebenen für PSD (höchstens 32767)
+@msg	too many swatch exchange blocks	zu viele Blöcke in der Farbfeld-Austauschdatei
+@msg	unknown colour profile: {0}	unbekanntes Farbprofil: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} kollidiert mit dem Namen eines integrierten Profils
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} Pixel ist zu groß für GIF (höchstens 65535 Pixel pro Seite): Verringern Sie die Auflösung
+@msg	{_1}: no usable transform to/from sRGB	{_1}: keine verwendbare Transformation von/nach sRGB
+@msg	{name} is not a CMYK profile	{name} ist kein CMYK-Profil
+@msg	{name} is not an RGB profile	{name} ist kein RGB-Profil
+@msg	{path}: could not be read	{path}: konnte nicht gelesen werden
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} Pixel ist zu groß für JPEG (höchstens 65535 Pixel pro Seite): Verringern Sie die Auflösung
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} Pixel ist zu groß für Targa (höchstens 65535 Pixel pro Seite): Verringern Sie die Auflösung
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} Pixel ist zu groß für PSD (höchstens {MAX_SIDE} Pixel pro Seite): Verringern Sie die Auflösung
+# Messages other catalogs translate and German did not: Banner Hems and Grommets and recovery data.
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` muss zwischen 0,01 und 1000 pt liegen
+@msg	select the banner, or mark every artboard	wählen Sie das Banner aus oder markieren Sie alle Zeichenflächen
+@msg	the banner has no width or height	das Banner hat keine Breite oder Höhe
+@msg	the grommet inset is too large for the banner	der Randabstand der Ösen ist zu groß für das Banner
+@msg	the hem is too deep for the banner	der Saum ist zu tief für das Banner
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	der Abstand ergibt mehr als {MAX_GROMMETS} Ösen
+@msg	there is no banner to mark	es gibt kein Banner zum Markieren
+@msg	turn on at least one side	aktivieren Sie mindestens eine Seite
+@msg	with no hem and no grommets there is nothing to mark	ohne Saum und ohne Ösen gibt es nichts zu markieren
+@msg	{saving} failed: {e}	{saving} fehlgeschlagen: {e}
 	Banner Hems and Grommets…	Bannersäume und Ösen…
 	Banner Hems and Grommets	Bannersäume und Ösen
 	Hem	Saum

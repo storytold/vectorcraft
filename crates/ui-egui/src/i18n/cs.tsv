@@ -1601,6 +1601,7 @@ lighting	Light	Světlo
 	Proportional Metrics	Proporcionální metrika
 	Insert Aki Left	Vložit aki vlevo
 	Insert Aki Right	Vložit aki vpravo
+	Tsume	Tsume
 	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
@@ -5055,6 +5056,7 @@ imageTrace	Outline	Obrys
 @msg	no action set to save	žádná sada akcí k uložení
 @msg	the action set file can't be read in full	soubor sady akcí nelze přečíst celý
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Načteno „{name}“: {n} krok má neznámý příkaz a byl ponechán: „{action}“, krok {step}, `{command}`|Načteno „{name}“: {n} kroky mají neznámé příkazy a byly ponechány; první: „{action}“, krok {step}, `{command}`|Načteno „{name}“: {n} kroků má neznámé příkazy a bylo ponecháno; první: „{action}“, krok {step}, `{command}`
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: reference by byla větší než {MAX_BYTES} bajtů
@@ -5295,6 +5297,7 @@ imageTrace	Outline	Obrys
 @msg	tool shortcuts must be a single key (optionally with Shift)	zkratky nástrojů musí být jediná klávesa (volitelně se Shift)
 @msg	truncated	zkráceno
 @msg	unknown command `{0}`	neznámý příkaz `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	krok {step} akce „{action}“ spouští neznámý příkaz `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	neznámý příkaz `{0}`; mysleli jste `{1}`?
 @msg	unknown effect `{id}`	neznámý efekt `{id}`
 @msg	unknown format	neznámý formát
@@ -6394,8 +6397,8 @@ axis	Y Axis	osa Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	exportní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	mimo skupiny smí být nejvýše {MAX_UNGROUPED} parametrů: ostatním přiřaďte `group`
 @msg	can't encode the input	vstup nelze zakódovat
-@msg	expected {"dataBase64"}	očekáváno {"dataBase64"}
-@msg	expected {"objects"}	očekáváno {"objects"}
+@msg	expected {{"dataBase64": "…"}}	očekáváno {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	očekáváno {{"objects": [...]}}
 @msg	export `{name}`: {e}	export `{name}`: {e}
 @msg	extension {e} is listed twice	přípona {e} je uvedena dvakrát
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	přípona {e}: použijte 1-16 malých písmen a číslic, bez tečky
@@ -6459,11 +6462,11 @@ axis	Y Axis	osa Y
 @msg	a painted live effect returns only `objects`	malující živý efekt vrací jen `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	část malujícího živého efektu má jen `path`, `fillRule`, `fills` a `strokes`
 @msg	a read-only object was left out	objekt jen pro čtení byl vynechán
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {"id"} nebo tak, jak byl předán
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {{"id": …}} nebo tak, jak byl předán
 @msg	a string	řetězec
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	tah má jen `paint`, `width`, `join`, `cap` a `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	tah musí být {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	efekt musí být {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	tah musí být {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musí být {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt na výplni vrací jen `fills`
 @msg	an effect on a stroke returns only `strokes`	efekt na tahu vrací jen `strokes`
 @msg	an object must be a JSON object	objekt musí být objekt JSON

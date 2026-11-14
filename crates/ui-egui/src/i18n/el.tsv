@@ -3429,6 +3429,7 @@ theme	Appearance	Εμφάνιση
 	Proportional Metrics	Αναλογικές μετρικές
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
+	Tsume	Tsume
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -4701,6 +4702,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
 @msg	the action set file can't be read in full	το αρχείο συνόλου ενεργειών δεν μπορεί να διαβαστεί ολόκληρο
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Φορτώθηκε το «{name}»: {n} βήμα έχει άγνωστη εντολή και διατηρήθηκε: «{action}», βήμα {step}, `{command}`|Φορτώθηκε το «{name}»: {n} βήματα έχουν άγνωστες εντολές και διατηρήθηκαν· το πρώτο: «{action}», βήμα {step}, `{command}`
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
@@ -4935,6 +4937,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	tool shortcuts must be a single key (optionally with Shift)	οι συντομεύσεις εργαλείων πρέπει να περιλαμβάνουν ένα πλήκτρο (προαιρετικά με Shift)
 @msg	truncated	περικομμένο
 @msg	unknown command `{0}`	άγνωστη εντολή `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	το βήμα {step} της ενέργειας «{action}» εκτελεί την άγνωστη εντολή `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	άγνωστη εντολή `{0}`· μήπως εννοείτε `{1}`;
 @msg	unknown effect `{id}`	άγνωστο εφέ `{id}`
 @msg	unknown format	άγνωστη μορφή
@@ -6346,8 +6349,8 @@ axis	Y Axis	Άξονας Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εξαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	το πολύ {MAX_UNGROUPED} παράμετροι εκτός ομάδων: δώστε στις υπόλοιπες ένα `group`
 @msg	can't encode the input	η είσοδος δεν μπορεί να κωδικοποιηθεί
-@msg	expected {"dataBase64"}	αναμενόταν {"dataBase64"}
-@msg	expected {"objects"}	αναμενόταν {"objects"}
+@msg	expected {{"dataBase64": "…"}}	αναμενόταν {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	αναμενόταν {{"objects": [...]}}
 @msg	export `{name}`: {e}	εξαγωγή `{name}`: {e}
 @msg	extension {e} is listed twice	η επέκταση {e} αναφέρεται δύο φορές
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	επέκταση {e}: χρησιμοποιήστε 1-16 πεζά γράμματα και ψηφία, χωρίς την τελεία
@@ -6411,11 +6414,11 @@ axis	Y Axis	Άξονας Y
 @msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {"id"} μόνο ή όπως δόθηκε
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ένα περίγραμμα πρέπει να είναι {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ένα εφέ πρέπει να είναι {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
 @msg	an effect on a stroke returns only `strokes`	ένα εφέ σε περίγραμμα επιστρέφει μόνο `strokes`
 @msg	an object must be a JSON object	ένα αντικείμενο πρέπει να είναι αντικείμενο JSON

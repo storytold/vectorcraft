@@ -80,6 +80,28 @@ fn basic_means_one_plain_fill_and_stroke() {
 }
 
 #[test]
+fn drawn_fills_and_strokes_count_every_row() {
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let black = || Paint::solid(Color::BLACK);
+    assert!(!Appearance::default().has_drawn_fill() && !Appearance::default().has_drawn_stroke());
+    // A painted lower row draws under an unpainted top row.
+    let a = Appearance { items: vec![fill(black()), stroke(black(), 2.0), fill(Paint::None), stroke(Paint::None, 1.0)], ..Appearance::default() };
+    assert!(a.has_drawn_fill() && a.has_drawn_stroke());
+    // A hidden painted row, a zero opacity or a zero weight draws nothing.
+    let mut b = Appearance { items: vec![fill(black()), stroke(black(), 2.0)], ..Appearance::default() };
+    b.fill_mut().unwrap().visible = false;
+    b.stroke_mut().unwrap().visible = false;
+    assert!(!b.has_drawn_fill() && !b.has_drawn_stroke());
+    let mut c = Appearance::default_art();
+    c.fill_mut().unwrap().opacity = 0.0;
+    c.stroke_mut().unwrap().opacity = 0.0;
+    assert!(!c.has_drawn_fill() && !c.has_drawn_stroke());
+    let d = Appearance::basic(Paint::None, black(), 0.0);
+    assert!(!d.has_drawn_fill() && !d.has_drawn_stroke());
+}
+
+#[test]
 fn set_creates_missing() {
     let mut a = Appearance::default();
     a.set_fill(Paint::solid(Color::BLACK));

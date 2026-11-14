@@ -2659,6 +2659,7 @@ font-technology	Variable	Variables
 	Proportional Metrics	Métrique proportionnelle
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
+	Tsume	Tsume
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
@@ -4734,6 +4735,7 @@ axis	Both	Les deux
 @msg	no action set to save	aucun jeu de scripts à enregistrer
 @msg	the action set file can't be read in full	le fichier de jeu de scripts ne peut pas être lu en entier
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	« {name} » chargé : {n} étape a été ignorée|« {name} » chargé : {n} étapes ont été ignorées
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	« {name} » chargé : {n} étape a une commande inconnue et a été conservée : « {action} », étape {step}, `{command}`|« {name} » chargé : {n} étapes ont des commandes inconnues et ont été conservées ; la première : « {action} », étape {step}, `{command}`
 @msg	not an action set file	ce n’est pas un fichier de jeu de scripts
 @msg	the action set file is larger than 8 MiB	le fichier de jeu de scripts dépasse 8 Mio
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}` : la référence dépasserait {MAX_BYTES} octets
@@ -4975,6 +4977,7 @@ axis	Both	Les deux
 @msg	tool shortcuts must be a single key (optionally with Shift)	les raccourcis d’outils doivent être une seule touche (éventuellement avec Maj)
 @msg	truncated	tronqué
 @msg	unknown command `{0}`	commande inconnue `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	l’étape {step} de « {action} » exécute la commande inconnue `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	commande inconnue `{0}` ; vouliez-vous dire `{1}` ?
 @msg	unknown effect `{id}`	effet inconnu `{id}`
 @msg	unknown format	format inconnu
@@ -6389,8 +6392,8 @@ axis	Y Axis	Axe Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’exportation déclare de 1 à {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	{MAX_UNGROUPED} paramètres au plus hors des groupes : donnez un `group` aux autres
 @msg	can't encode the input	impossible d’encoder l’entrée
-@msg	expected {"dataBase64"}	attendu : {"dataBase64"}
-@msg	expected {"objects"}	attendu : {"objects"}
+@msg	expected {{"dataBase64": "…"}}	attendu : {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	attendu : {{"objects": [...]}}
 @msg	export `{name}`: {e}	export du module `{name}` : {e}
 @msg	extension {e} is listed twice	l’extension {e} figure deux fois
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extension {e} : utilisez 1-16 lettres minuscules et chiffres, sans le point
@@ -6454,11 +6457,11 @@ axis	Y Axis	Axe Y
 @msg	a painted live effect returns only `objects`	un effet dynamique de peinture renvoie seulement `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	une pièce d’un effet dynamique de peinture a seulement `path`, `fillRule`, `fills` et `strokes`
 @msg	a read-only object was left out	un objet en lecture seule a été omis
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {"id"} seul ou tel qu’il a été fourni
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {{"id": …}} seul ou tel qu’il a été fourni
 @msg	a string	une chaîne
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un contour a seulement `paint`, `width`, `join`, `cap` et `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un contour doit être {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un effet doit être {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un contour doit être {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un effet doit être {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effet sur un fond renvoie seulement `fills`
 @msg	an effect on a stroke returns only `strokes`	un effet sur un contour renvoie seulement `strokes`
 @msg	an object must be a JSON object	un objet doit être un objet JSON

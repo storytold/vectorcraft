@@ -89,6 +89,18 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `(…) Xt n XD`: samples of the pen along the object before it. They aren't read, so the object
+    /// keeps its drawn look when its style has a Calligraphic brush with a setting that varies with
+    /// the pen ([`Self::style_marker`]).
+    fn pen_samples_op(&mut self) {
+        if !self.after_object || self.pen_samples.len() >= MAX_NODES {
+            return;
+        }
+        if let Some(n) = self.frames.last().and_then(|f| f.children.last()) {
+            self.pen_samples.insert(n.id);
+        }
+    }
+
     /// `/identifier (string) XT` (version 7 specification §7): a tag on the object before it. The
     /// `AdobeURL` tag sets the object's URL, and every other tag is added to the object's data in
     /// order, up to [`MAX_TAGS`]. A tag with no object before it, with an empty identifier, or with
@@ -418,6 +430,7 @@ impl<'a> Reader<'a> {
                     self.end_envelope();
                 }
             }
+            "XD" => self.pen_samples_op(),
             _ if IGNORED.contains(&w) => {}
             // Before the art, the setup runs procedures of the printing format.
             _ if self.frames.is_empty() => {}
@@ -559,9 +572,9 @@ impl<'a> Reader<'a> {
             return;
         }
         self.image_tail = false;
-        // An object's tags (`XT`, and a graph's `Go`) follow it one after another, and an image's
-        // follow the `XH` that ends its data.
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go") {
+        // An object's tags (`XT`, and a graph's `Go`) and samples of the pen (`Xt`, `XD`) follow it
+        // one after another, and an image's tags follow the `XH` that ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go" | "Xt" | "XD") {
             return;
         }
         self.after_object = false;
@@ -688,6 +701,8 @@ impl<'a> Reader<'a> {
     /// drawn look before it (all on `%_` lines inside another such object). Other markers end what
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
+        use crate::import::ai::brush::PathBrush;
+        use crate::import::ai::style::{ArtStyle, StyleItem};
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
         let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
@@ -754,8 +769,20 @@ impl<'a> Reader<'a> {
         } else {
             look
         };
-        // A style read here: the object, painted as it says.
-        let appearance = self.styles.get(&style).and_then(|st| {
+        // A style read here: the object, painted as it says. An object with samples of the pen
+        // keeps its drawn look when its style has a Calligraphic brush with a setting that varies
+        // with the pen: the samples aren't read, and the brush draws such a stroke at the pen's
+        // middle values.
+        let sampled = self.pen_samples.contains(&object.id);
+        let follows_pen = |st: &ArtStyle| {
+            st.items.iter().any(|i| match i {
+                StyleItem::Stroke { brush: Some((_, PathBrush::Calligraphic(c))), .. } => {
+                    c.modes().iter().zip(c.variation).any(|(m, v)| m.follows_pen() && v != 0.0)
+                }
+                _ => false,
+            })
+        };
+        let appearance = self.styles.get(&style).filter(|st| !(sampled && follows_pen(st))).and_then(|st| {
             styled(
                 object,
                 look,

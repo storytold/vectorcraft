@@ -272,6 +272,16 @@ impl Appearance {
             _ => None,
         })
     }
+    /// Does any fill draw: one that is shown, has paint and has an opacity above 0, wherever it
+    /// sits in the stack?
+    pub fn has_drawn_fill(&self) -> bool {
+        self.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() && f.opacity > 0.0))
+    }
+    /// Does any stroke draw: one that is shown, has paint, a weight above 0 and an opacity above
+    /// 0, wherever it sits in the stack?
+    pub fn has_drawn_stroke(&self) -> bool {
+        self.painted_strokes().any(|s| s.width > 0.0 && s.opacity > 0.0)
+    }
     /// Largest distance the painted area can extend beyond any geometry (see
     /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].
     pub fn outset(&self) -> f64 {

@@ -1514,6 +1514,7 @@ lighting	Light	Światło
 	Proportional Metrics	Metryka proporcjonalna
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
+	Tsume	Tsume
 	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
@@ -4879,6 +4880,7 @@ imageTrace	Outline	Kontur
 @msg	no action set to save	brak zestawu operacji do zapisania
 @msg	the action set file can't be read in full	nie można odczytać całego pliku zestawu operacji
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Wczytano „{name}”: {n} krok ma nieznane polecenie i został zachowany: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroki mają nieznane polecenia i zostały zachowane; pierwszy: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroków ma nieznane polecenia i zostało zachowanych; pierwszy: „{action}”, krok {step}, `{command}`
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
@@ -5122,6 +5124,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	skróty narzędzi muszą być pojedynczym klawiszem (opcjonalnie z Shift)
 @msg	truncated	obcięty
 @msg	unknown command `{0}`	nieznane polecenie `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	krok {step} operacji „{action}” uruchamia nieznane polecenie `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	nieznane polecenie `{0}`; czy chodziło o `{1}`?
 @msg	unknown effect `{id}`	nieznany efekt `{id}`
 @msg	unknown format	nieznany format
@@ -6249,8 +6252,8 @@ axis	Y Axis	Oś Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	wtyczka eksportu deklaruje od 1 do {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	najwyżej {MAX_UNGROUPED} parametrów poza grupami: pozostałym nadaj `group`
 @msg	can't encode the input	nie można zakodować danych wejściowych
-@msg	expected {"dataBase64"}	oczekiwano {"dataBase64"}
-@msg	expected {"objects"}	oczekiwano {"objects"}
+@msg	expected {{"dataBase64": "…"}}	oczekiwano {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	oczekiwano {{"objects": [...]}}
 @msg	export `{name}`: {e}	eksport modułu `{name}`: {e}
 @msg	extension {e} is listed twice	rozszerzenie {e} występuje dwa razy
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	rozszerzenie {e}: użyj 1-16 małych liter i cyfr, bez kropki
@@ -6314,11 +6317,11 @@ axis	Y Axis	Oś Y
 @msg	a painted live effect returns only `objects`	malujący efekt dynamiczny zwraca tylko `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	pominięto obiekt tylko do odczytu
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {"id"} lub w postaci, w jakiej został przekazany
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany
 @msg	a string	ciągiem znaków
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	obrys ma tylko `paint`, `width`, `join`, `cap` i `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	obrys musi mieć postać {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	efekt musi mieć postać {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	obrys musi mieć postać {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musi mieć postać {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt wypełnienia zwraca tylko `fills`
 @msg	an effect on a stroke returns only `strokes`	efekt obrysu zwraca tylko `strokes`
 @msg	an object must be a JSON object	obiekt musi być obiektem JSON
