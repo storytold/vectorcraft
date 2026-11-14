@@ -775,6 +775,9 @@ impl Tool for ShapeBuilderTool {
         self.cache.clear();
         self.cache.gap = self.gap();
     }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_builder_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
+    }
 }
 
 /// Why `tool.setOption` cannot give the builder-family tool `tool` the options `values`, checked

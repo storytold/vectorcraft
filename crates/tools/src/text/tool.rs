@@ -608,6 +608,25 @@ impl Tool for TypeTool {
             _ => {}
         }
     }
+    /// The calls [`Self::set_option`] takes: `commitTyping`, `endTyping`, `selectAll` and
+    /// `stopEditing` take any value, the others the shapes they read.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        let index = |a: &str, b: &str| v.get(a).or_else(|| v.get(b)).and_then(Value::as_u64).is_some();
+        let ok = match key {
+            "textSelection" => index("editing", "id") && index("anchor", "start") && index("caret", "end"),
+            "select" => index("start", "start") && index("end", "end"),
+            "prevTool" | "previousTool" => return crate::option_check::string_or_null(key, v),
+            "copy" => serde_json::from_value::<Vec<TextRun>>(v.clone()).is_ok(),
+            "commitTyping" | "endTyping" | "selectAll" | "stopEditing" => true,
+            _ => return Err(crate::option_check::unknown(key)),
+        };
+        let shape = match key {
+            "textSelection" => "{editing, anchor, caret} with whole numbers",
+            "select" => "{start, end} with whole numbers",
+            _ => "a list of text runs",
+        };
+        if ok { Ok(()) } else { Err(format!("`{key}` must be {shape}")) }
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let (Some((_, s)), Some(d)) = (self.press, self.drag) {

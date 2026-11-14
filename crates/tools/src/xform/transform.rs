@@ -337,6 +337,15 @@ impl Tool for TransformTool {
         }
     }
 
+    /// `origin` is `[x, y]`, or null to clear it.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        if key != "origin" {
+            return Err(crate::option_check::unknown(key));
+        }
+        let point = value.as_array().is_some_and(|a| a.len() == 2 && a.iter().all(|n| n.as_f64().is_some_and(f64::is_finite)));
+        if point || value.is_null() { Ok(()) } else { Err("`origin` must be [x, y] with finite numbers, or null".into()) }
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         if self.end_drag().is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }

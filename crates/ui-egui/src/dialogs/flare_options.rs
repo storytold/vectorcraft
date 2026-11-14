@@ -16,7 +16,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::extra::{FLARE_OPTIONS, flare_params};
 
 use super::document_setup::check;
-use super::{DialogResult, DialogSpec, form, run_and_close};
+use super::{DialogResult, DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -154,12 +154,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         values.insert(key.into(), json!(d.bool(key)));
     }
     if let Some((cmd, params)) = command {
+        // Options the tool would refuse leave the dialog open, before the flare is accepted.
+        vectorcraft_tools::option_check::check_values(vectorcraft_tools::create("flare").as_ref(), &values)?;
         // Accept the preview once; option persistence follows successful artwork creation.
         let result = form::commit_preview(app, &cmd, params)?;
         app.run("tool.setOption", json!({ "tool": "flare", "values": values }))?;
         Ok(result)
     } else {
-        run_and_close(app, "tool.setOption", json!({ "tool": "flare", "values": values }))
+        set_tool_options_and_close(app, json!({ "tool": "flare", "values": values }))
     }
 }
 
@@ -311,10 +313,11 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         let parts = flare_parts(&app);
         assert_eq!(parts.iter().filter(|p| *p == "Ring").count(), 3, "{parts:?}");
-        // Out-of-range values are kept within the option's range.
-        app.run("tool.setOption", json!({"tool": "flare", "values": {"opacity": 900, "diameter": -4}})).unwrap();
-        let o = app.session.tool_options_of("flare");
-        assert_eq!((o["opacity"].as_f64(), o["diameter"].as_f64()), (Some(100.0), Some(0.0)));
+        // An out-of-range value is an error, and no option changes.
+        let before = app.session.tool_options_of("flare");
+        let e = app.run("tool.setOption", json!({"tool": "flare", "values": {"opacity": 50, "diameter": -4}})).unwrap_err();
+        assert_eq!(e, "tool `flare`: `diameter` must be a number from 0 to 1000");
+        assert_eq!(app.session.tool_options_of("flare"), before);
     }
 
     #[test]

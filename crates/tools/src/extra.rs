@@ -267,6 +267,18 @@ impl Tool for FlareTool {
             }
         }
     }
+    /// The switches and [`FLARE_OPTIONS`] within their ranges, the counts whole.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        if matches!(key, "raysOn" | "ringsOn") {
+            return c::boolean(key, v);
+        }
+        let Some(&(_, _, lo, hi)) = FLARE_OPTIONS.iter().find(|(k, ..)| *k == key) else { return Err(c::unknown(key)) };
+        if is_count(key) && v.as_f64().is_none_or(|n| n.fract() != 0.0) {
+            return Err(format!("`{key}` must be a whole number from {lo} to {hi}"));
+        }
+        c::number(key, v, lo, hi)
+    }
 }
 
 /// Where a Reshape press landed on a selected path.

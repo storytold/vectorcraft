@@ -729,4 +729,33 @@ impl Tool for Box3dTool {
             _ => {}
         }
     }
+
+    /// The options within their ranges. Any finite arc angle is taken: it is kept from 0 to 360°.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        let max_radius = crate::shape::MAX_CORNER_RADIUS;
+        match key {
+            "shape" => c::one_of(key, v, &["box3d", "rectangle", "ellipse", "polygon", "star", "spiral"]),
+            "cornerRadius" => c::number(key, v, 0.0, max_radius),
+            "cornerRadii" => {
+                let radii = v.as_array().filter(|a| a.len() == 4);
+                if radii.is_some_and(|a| a.iter().all(|r| r.as_f64().is_some_and(|r| r.is_finite() && (0.0..=max_radius).contains(&r)))) {
+                    Ok(())
+                } else {
+                    Err(format!("`cornerRadii` must be four numbers from 0 to {max_radius}"))
+                }
+            }
+            "arcStart" | "arcEnd" => c::finite(key, v),
+            "arcMode" => c::one_of(key, v, &["whole", "pie", "chord", "arc"]),
+            "sides" | "points" => c::whole(key, v, 3, 1000),
+            "starRatio" => c::number(key, v, 0.01, 1.0),
+            "rounded" | "randomized" => c::number(key, v, -10.0, 10.0),
+            "turns" => c::number(key, v, 0.01, 1024.0),
+            "divergence" => c::number(key, v, 0.0, 1000.0),
+            "innerRadius" => c::number(key, v, 0.0, 0.999),
+            "angleX" | "angleY" | "angleZ" => c::number(key, v, -180.0, 180.0),
+            "cornerSymmetry" | "polyIsStar" | "clockwise" | "parallelX" | "parallelY" | "parallelZ" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }

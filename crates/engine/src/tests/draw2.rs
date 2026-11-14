@@ -5185,14 +5185,20 @@ fn pencil_at_the_lowest_fidelity_takes_degenerate_strokes() {
     }
 }
 
-/// The Pencil's Fidelity option takes 0.01, and the Smooth tool's stays at 0.05 or more.
+/// The Pencil's Fidelity option takes 0.01, and the Smooth tool's 0.05 or more: a lower Fidelity is
+/// an error that leaves the option as it was.
 #[test]
 fn pencil_option_takes_a_hundredth_and_smooth_keeps_its_floor() {
     let mut s = session();
-    for (tool, want) in [("pencil", 0.01), ("paintbrush", 0.01), ("smooth", 0.05)] {
-        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.001}})).unwrap();
-        assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(want), "{tool}");
-        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.02}})).unwrap();
+    for (tool, floor) in [("pencil", 0.01), ("paintbrush", 0.01), ("smooth", 0.05)] {
+        let before = s.tool_options_of(tool)["fidelity"].clone();
+        let e = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.001}})).unwrap_err();
+        assert_eq!(e, format!("tool `{tool}`: `fidelity` must be a number from {floor} to 100"));
+        assert_eq!(s.tool_options_of(tool)["fidelity"], before, "{tool}");
+        s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": floor}})).unwrap();
+        assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(floor), "{tool}");
+        let hundredth = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"fidelity": 0.02}}));
+        assert_eq!(hundredth.is_ok(), tool != "smooth", "{tool}");
         assert_eq!(s.tool_options_of(tool)["fidelity"].as_f64(), Some(if tool == "smooth" { 0.05 } else { 0.02 }), "{tool}");
     }
 }

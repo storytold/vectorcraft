@@ -517,6 +517,16 @@ impl Tool for EyedropperTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "stop" => c::string_or_null(key, value),
+            "brushKeyColor" => c::boolean(key, value),
+            "textSelection" => self.text_selection.check_option(key, value),
+            _ => Err(c::unknown(key)),
+        }
+    }
+
     /// Drop the range when its text is removed or no longer selected.
     fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.text_selection.after_command(cx)

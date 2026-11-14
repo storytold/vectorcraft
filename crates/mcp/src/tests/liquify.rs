@@ -28,6 +28,21 @@ fn tool_options_are_set_headless_and_kept_across_tool_switches() {
     assert_eq!(command(&mut h, "tool.setOption", json!({}))["detail"], json!(6.0));
 }
 
+/// A value the tool refuses is an error result naming the tool and the option, and the options
+/// stay as they were, the good value given with it included.
+#[test]
+fn a_refused_option_value_is_an_error_result() {
+    let mut h = Headless::with_document();
+    command(&mut h, "tool.select", json!({"tool": "warp"}));
+    let before = command(&mut h, "tool.setOption", json!({}));
+    for values in [json!({"width": 64, "detail": 99}), json!({"width": 64, "detail": "fine"})] {
+        let r = call_tool(&mut h, "run_command", &json!({"command": "tool.setOption", "params": {"values": values}}));
+        assert!(r.is_error, "{r:?}");
+        assert!(format!("{:?}", r.content).contains("tool `warp`: `detail` must be a number from 1 to 10"), "{r:?}");
+    }
+    assert_eq!(command(&mut h, "tool.setOption", json!({})), before);
+}
+
 #[test]
 fn pointer_gestures_carry_pen_pressure() {
     let bloat = |pressure: f64| {

@@ -775,7 +775,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.setOption",
         "Tool Option",
         "",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen. Every option is checked before any is set: an option the tool doesn't have, a value of the wrong type, a number out of the tool's range or an unknown choice is an error naming the tool and the option, and nothing changes. The Live Paint tools' width and the Shape Builder's gapLength are set to the nearest end of their range instead",
     ),
     (
         "tool.toggleTouchMode",

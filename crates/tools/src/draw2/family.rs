@@ -509,6 +509,25 @@ impl Tool for FamilyTool {
             }
         }
     }
+    /// The options the tool shows ([`Self::options`]): those of the arc, the spiral or the grid.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        if self.options().get(key).is_none() {
+            return Err(c::unknown(key));
+        }
+        let skew = vectorcraft_geom::shapes::GRID_SKEW_MAX;
+        match key {
+            "lengthX" | "lengthY" | "width" | "height" => c::positive(key, v, 1e6),
+            "reference" => c::whole(key, v, 0, 8),
+            "baseAlong" => c::one_of(key, v, &["x", "y", "X", "Y"]),
+            "slope" => c::number(key, v, -100.0, 100.0),
+            "decay" => c::number(key, v, 5.0, 150.0),
+            "segments" => c::whole(key, v, 2, 1000),
+            "rows" | "concentric" | "columns" | "radial" => c::whole(key, v, 0, 999),
+            "rowSkew" | "concentricSkew" | "columnSkew" | "radialSkew" => c::number(key, v, -skew, skew),
+            _ => c::boolean(key, v),
+        }
+    }
 }
 
 /// Arc segment length from a dialog or preference value.

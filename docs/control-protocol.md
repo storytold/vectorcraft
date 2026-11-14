@@ -921,7 +921,11 @@ Halftone… (`engine.execute {command: "ui.menuDialog", params: {command: "objec
 Tool options last: `tool.setOption {key, value}` or `{values: {…}}` (and `tool` to set another tool's) sets them, and
 the options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, Symbolism, drawing tools) stay
 when you switch tools or documents and are saved with the preferences. The Liquify tools share their Global Brush
-Dimensions (`width`, `height`, `angle`, `intensity`).
+Dimensions (`width`, `height`, `angle`, `intensity`). `{}` reads the options and sets nothing. Every option given is
+checked before any is set: an option the tool doesn't have, a value of the wrong type, a number outside the tool's
+range or an unknown choice is an error that names the tool and the option
+(``tool `smooth`: `fidelity` must be a number from 0.05 to 100``), and no option, preference or undo step changes.
+The Live Paint tools' `width` and the Shape Builder's `gapLength` are set to the nearest end of their range instead.
 
 Perspective grid: View → Perspective Grid → Define Grid… (`ui.perspectiveGridDialog`) opens the `perspectiveGrid`
 dialog prefilled from the grid. Its fields are those of `perspective.grid.define` (`kind`, `units`, `scale`,

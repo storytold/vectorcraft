@@ -339,6 +339,20 @@ fn rectangular_grid_failed_creation_does_not_save_counts() {
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
 }
 
+/// Tool Options with a width the tool refuses is an error that keeps the dialog open and sets
+/// nothing.
+#[test]
+fn rectangular_grid_tool_options_with_a_refused_width_stay_open() {
+    let mut app = app();
+    let before = app.session.tool_options_of(KIND);
+    super::shapes::open_options(&mut app, KIND).unwrap();
+    set(&mut app, "width", json!(0));
+    let e = super::confirm(&mut app).unwrap_err();
+    assert!(e.contains("`width`"), "{e}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+    assert_eq!(app.session.tool_options_of(KIND), before);
+}
+
 /// #1377: the dialog shows the tool's stored skews (sliders under their divider counts) and
 /// switches; OK draws with them and stores them, and the next drag uses them too.
 #[test]

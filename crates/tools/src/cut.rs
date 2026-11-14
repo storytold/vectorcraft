@@ -214,6 +214,15 @@ impl Tool for CutTool {
             _ => {}
         }
     }
+    /// Mirror & Cut's `axis` and `keep`; the other cutting tools have no options.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match (self.id, key) {
+            ("mirrorCut", "axis") => c::one_of(key, v, &["vertical", "horizontal", "free"]),
+            ("mirrorCut", "keep") => c::one_of(key, v, &["left", "right", "top", "bottom"]),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 #[cfg(test)]

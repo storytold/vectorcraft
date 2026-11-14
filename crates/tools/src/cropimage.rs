@@ -268,6 +268,19 @@ impl Tool for CropImageTool {
         };
     }
 
+    /// `rect` is `[x, y, width, height]`, or null to put the box back where it starts.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        if key != "rect" {
+            return Err(crate::option_check::unknown(key));
+        }
+        let numbers = value.as_array().filter(|a| a.len() == 4).and_then(|a| a.iter().map(Value::as_f64).collect::<Option<Vec<_>>>());
+        match numbers.as_deref() {
+            _ if value.is_null() => Ok(()),
+            Some([x, y, w, h]) if [x, y, w, h].iter().all(|n| n.is_finite()) && *w >= 0.0 && *h >= 0.0 => Ok(()),
+            _ => Err(format!("`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative")),
+        }
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.reset();
         vec![]

@@ -183,11 +183,67 @@ impl Tool for PlaceTool {
         }
     }
 
+    /// A queue whose every entry has its `params` object and a finite `width` and `height`, and
+    /// `current` within the queue held.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        match key {
+            "queue" => check_queue(value).map(drop),
+            "current" => check_current(value, self.entries.len()),
+            _ => Err(crate::option_check::unknown(key)),
+        }
+    }
+
+    /// As [`Self::check_option`], except that a `current` given with a `queue` is an index into
+    /// that queue (the queue is set first).
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        let mut held = self.entries.len();
+        if let Some(queue) = values.get("queue") {
+            held = check_queue(queue)?;
+        }
+        for (k, v) in values {
+            match k.as_str() {
+                "queue" => {}
+                "current" => check_current(v, held)?,
+                _ => self.check_option(k, v)?,
+            }
+        }
+        Ok(())
+    }
+
     /// Switching tools discards what the cursor holds.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.entries.clear();
         self.drag = None;
         vec![]
+    }
+}
+
+/// The number of files `queue` holds, or an error when an entry lacks its `params` object or a
+/// finite `width` and `height`.
+fn check_queue(queue: &Value) -> Result<usize, String> {
+    let entry = |e: &Value| {
+        e.get("params").is_some_and(Value::is_object)
+            && e.get("name").is_none_or(Value::is_string)
+            && ["width", "height"].iter().all(|k| e.get(k).and_then(Value::as_f64).is_some_and(f64::is_finite))
+    };
+    let entries = match queue.get("entries") {
+        None => Some(0),
+        Some(e) => e.as_array().filter(|a| a.iter().all(entry)).map(Vec::len),
+    };
+    match entries {
+        Some(n) if queue.is_object() && queue.get("prev").is_none_or(Value::is_string) => Ok(n),
+        _ => Err("`queue` must be {entries: [{params, name, width, height}], prev?}: each entry with a params object and a finite \
+                  width and height"
+            .into()),
+    }
+}
+
+/// `current` is the index of one of the `held` files.
+fn check_current(current: &Value, held: usize) -> Result<(), String> {
+    match held {
+        _ if current.as_u64().is_some_and(|i| i < held as u64) => Ok(()),
+        0 => Err("`current` can't be set: no file is queued".into()),
+        _ => Err(format!("`current` must be the index of a queued file, from 0 to {}", held - 1)),
     }
 }
 

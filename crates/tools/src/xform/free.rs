@@ -379,6 +379,15 @@ impl Tool for FreeTransformTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "mode" => c::one_of(key, value, &["free", "perspective", "distort", "freeDistort"]),
+            "constrain" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
+        }
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.quad = None;
         self.guides.clear();

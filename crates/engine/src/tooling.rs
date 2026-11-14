@@ -1273,9 +1273,14 @@ impl Session {
         }
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
+        // The Place queue and a parametric shape's kind are set first: setting the queue starts
+        // again at its first file, and a `current` given with it is an index into it; setting the
+        // kind puts the shape's other numbers back to that kind's, and those given with it are its.
+        let first = |k: &str| k == "queue" || k == "kind";
+        let ordered = || values.iter().filter(|(k, _)| first(k)).chain(values.iter().filter(|(k, _)| !first(k)));
         let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
         let t = other.as_deref_mut().unwrap_or(self.tool.as_mut());
-        for (k, v) in values {
+        for (k, v) in ordered() {
             t.set_option(k, v);
         }
         Self::store_tool_settings(&mut self.prefs, t);
@@ -1287,7 +1292,7 @@ impl Session {
             // active tool.
             if let Some(lender) = self.lender.as_deref_mut() {
                 if lender.id() == other.id() {
-                    for (k, v) in values {
+                    for (k, v) in ordered() {
                         lender.set_option(k, v);
                     }
                 }
@@ -1303,17 +1308,20 @@ impl Session {
 
     /// `tool.setOption {tool?, key?, value?, values?}` (a command of the desktop app and of the
     /// headless host): set one option (`key`, `value`) or several (`values`) of `tool` (default:
-    /// the active tool) → its options.
+    /// the active tool) → its options. With no option given, the options are read and nothing is
+    /// set. Every option given is checked first ([`vectorcraft_tools::Tool::check_option`]): an
+    /// unknown option, a value of the wrong type or a number out of range is an error that sets
+    /// none of them.
     pub fn set_tool_option_cmd(&mut self, p: &Value) -> std::result::Result<Value, String> {
-        let tool = p.get("tool").and_then(Value::as_str);
+        let (tool, values) = vectorcraft_tools::option_check::set_option_params(p)?;
         if let Some(t) = tool
             && vectorcraft_tools::tool_info(t).is_none()
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
-        if let Some(k) = p.get("key").and_then(Value::as_str) {
-            values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
+        let active = tool.is_none_or(|t| t == self.tool.id());
+        if values.is_empty() {
+            return Ok(self.tool_options_of(tool.unwrap_or(self.tool.id())));
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
         vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
@@ -1334,8 +1342,12 @@ impl Session {
                 return Err("Unknown dimension mode".into());
             }
         }
+        match tool.filter(|_| !active) {
+            Some(id) => vectorcraft_tools::option_check::check_values(self.make_tool(id).as_ref(), &values)?,
+            None => vectorcraft_tools::option_check::check_values(self.tool.as_ref(), &values)?,
+        }
         // The active tool's merge being computed is applied with the options it was started with.
-        if tool.is_none_or(|t| t == self.tool.id()) {
+        if active {
             self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         Ok(self.set_tool_options(tool, &values))

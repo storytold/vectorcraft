@@ -102,8 +102,8 @@ fn line_length_angle(d: &Dialog) -> (f64, f64) {
 fn arc_options(d: &Dialog) -> Value {
     json!({
         "closed": d.str("arcType").eq_ignore_ascii_case("closed"),
-        "lengthX": d.f64("lengthX", 100.0),
-        "lengthY": d.f64("lengthY", 100.0),
+        "lengthX": d.f64("lengthX", 100.0).abs(),
+        "lengthY": d.f64("lengthY", 100.0).abs(),
         "reference": arc_reference(d),
         "baseAlong": d.str("baseAlong"),
         "slope": d.f64("slope", 50.0),
@@ -371,13 +371,11 @@ fn box_origin(d: &Dialog) -> (f64, f64) {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // Tool Options: the options the tool's next drag and click use; nothing is drawn.
     if d.bool(TOOL_OPTIONS) {
-        let r = app.run("tool.setOption", json!({"tool": d.kind, "values": tool_options(d)}));
-        app.ui.dialog = None;
-        return r;
+        return super::set_tool_options_and_close(app, json!({"tool": d.kind, "values": tool_options(d)}));
     }
     let count = match d.kind.as_str() {
         "polygon" => Some(("sides", 6.0, 3.0)),
-        "star" => Some(("points", 5.0, 2.0)),
+        "star" => Some(("points", 5.0, 3.0)),
         _ => None,
     };
     let options = count
@@ -454,7 +452,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // On the active plane while the perspective grid shows, sized in plane units from the click;
     // else along General › Constrain Angle, turned about the point the dialog places at the click
     // (a grid's reference point, the other shapes' top-left corner or centre).
-    let options = options.or_else(|| (d.kind == "spiral").then(|| params.clone()));
+    let options = options.or_else(|| {
+        (d.kind == "spiral").then(|| json!({"decay": params["decay"], "segments": params["segments"], "clockwise": params["clockwise"]}))
+    });
+    // Options the tool would refuse leave the dialog open, before anything is drawn.
+    if let Some(Value::Object(o)) = &options {
+        vectorcraft_tools::option_check::check_values(vectorcraft_tools::create(&d.kind).as_ref(), o)?;
+    }
     let result = match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
         Some((id, params)) => run_and_close(app, &id, params),
         None => {
