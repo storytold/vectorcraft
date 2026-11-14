@@ -632,6 +632,7 @@ font-technology	Variable	Variabla
 	Copy All Styles	Kopiera alla stilar
 	Copy Color Value (Hex)	Kopiera färgvärde (hex)
 	Copy Fonts Used in the Document	Kopiera typsnitt som används i dokumentet
+	Copy Info	Kopiera info
 	Copy Links	Kopiera länkar
 	Copy Selected Style	Kopiera markerad stil
 	Copy to User Defined	Kopiera till användardefinierade
@@ -4287,6 +4288,7 @@ axis	Both	Båda
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
+@msg	Copied the link info	Kopierade länkinfo
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}

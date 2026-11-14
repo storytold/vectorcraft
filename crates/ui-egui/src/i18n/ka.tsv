@@ -2423,6 +2423,7 @@ digits	Malayalam	მალაიალამური
 	Transparent Background	გამჭვირვალე ფონი
 	Choose…	არჩევა…
 	Copy Fonts Used in the Document	დოკუმენტში გამოყენებული შრიფტების კოპირება
+	Copy Info	ინფორმაციის კოპირება
 	Copy Links	ბმულების კოპირება
 	Create Report	ანგარიშის შექმნა
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
@@ -5601,6 +5602,7 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა

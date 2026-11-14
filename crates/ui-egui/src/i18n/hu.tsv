@@ -838,6 +838,7 @@ font-technology	Variable	Változó
 	Copy Artboard	Rajztábla másolása
 	Copy Color Value (Hex)	Színérték másolása (hex)
 	Copy Fonts Used in the Document	A dokumentumban használt betűtípusok másolása
+	Copy Info	Adatok másolása
 	Copy Links	Csatolások másolása
 	Copy only fonts you own or are licensed to install.	Csak olyan betűtípust másolj, amely a tiéd, vagy amelynek telepítésére licenced van.
 	Copy Selected Style	Kijelölt stílus másolása
@@ -5189,6 +5190,7 @@ imageTrace	Outline	Körvonal
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}

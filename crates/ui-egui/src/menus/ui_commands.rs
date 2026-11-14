@@ -1457,6 +1457,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{id?} show the file of linked image `id` (default: the selected linked image) in the system's file manager → {path}",
     ),
     (
+        "links.copyInfo",
+        "Copy Info",
+        "",
+        "{ids?} copy the file names of images and placed documents `ids` (default: the selected ones and the rows picked in the Links panel, in links.list order) to the clipboard, one per line in that order; an embedded image gives the name its Links panel row shows (Links panel menu) → {text, names}",
+    ),
+    (
         "ui.placementOptionsDialog",
         "Placement Options…",
         "",

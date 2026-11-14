@@ -645,6 +645,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copiar todos los estilos
 	Copy Color Value (Hex)	Copiar valor de color (hex)
 	Copy Fonts Used in the Document	Copiar fuentes usadas en el documento
+	Copy Info	Copiar información
 	Copy Links	Copiar vínculos
 	Copy Selected Style	Copiar estilo seleccionado
 	Copy to User Defined	Copiar en Definido por el usuario
@@ -4377,6 +4378,7 @@ axis	Both	Ambos
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
+@msg	Copied the link info	Se copió la información del vínculo
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
