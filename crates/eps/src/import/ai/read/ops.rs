@@ -1141,7 +1141,8 @@ fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
 /// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode. Unless the look is on
+/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
+/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
 /// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
 fn image_warp_alike(
@@ -1161,10 +1162,22 @@ fn image_warp_alike(
     if !hidden {
         strip(&mut plain, hidden_ids);
     }
+    if !plain.visible {
+        show_members(&mut plain);
+    }
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+}
+
+/// Show every object in container `n`, at any depth.
+fn show_members(n: &mut Node) {
+    for c in n.children_mut().into_iter().flatten() {
+        let c = Arc::make_mut(c);
+        c.visible = true;
+        show_members(c);
+    }
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
