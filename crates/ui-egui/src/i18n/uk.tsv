@@ -4430,6 +4430,7 @@ axis	Both	Обидві
 @msg	Plug-ins can't be loaded from {path}: {e}	Не вдається завантажити модулі з {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
+@msg	select a path	виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення

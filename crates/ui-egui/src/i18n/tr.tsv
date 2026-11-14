@@ -4159,6 +4159,7 @@ axis	Both	Her İkisi
 @msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
+@msg	select a path	bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır

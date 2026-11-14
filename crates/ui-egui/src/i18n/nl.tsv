@@ -4814,6 +4814,7 @@ imageTrace	Outline	Contour
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Gegevensherstel heeft nergens ruimte om kopieën te bewaren: stel Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecteer met directe selectie ankerpunten om te knippen (niet de eindpunten van open paden)
 @msg	Divide Objects Below: select a path	Objecten eronder verdelen: selecteer een pad
+@msg	select a path	selecteer een pad
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving

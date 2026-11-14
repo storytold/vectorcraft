@@ -4383,6 +4383,7 @@ axis	Both	Les deux
 @msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
+@msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base

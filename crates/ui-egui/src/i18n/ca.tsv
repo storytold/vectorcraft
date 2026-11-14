@@ -5606,6 +5606,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
+@msg	select a path	seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
 @msg	docking action contains an unknown panel or an excessive split path	l’acció d’acoblament conté un panell desconegut o un camí de divisió excessiu
 @msg	Downloaded {what}	S’ha baixat {what}

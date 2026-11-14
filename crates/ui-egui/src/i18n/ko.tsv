@@ -4522,6 +4522,7 @@ theme	Appearance	외관
 @msg	direct-select anchor points to cut at (not the end points of open paths)	자를 앵커 포인트를 직접 선택하세요(열린 패스의 끝점 제외)
 @msg	select paths or anchor points	패스 또는 앵커 포인트를 선택하세요
 @msg	Divide Objects Below: select a path	아래 개체 분할: 패스를 선택하세요
+@msg	select a path	패스를 선택하세요
 @msg	Divide Objects Below: select exactly one path	아래 개체 분할: 패스를 하나만 선택하세요
 @msg	Offset Path: select paths	패스 오프셋: 패스를 선택하세요
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	패스 오프셋: 오프셋을 적용하면 선택한 패스가 남지 않습니다(안쪽 오프셋이 모양보다 큼)
