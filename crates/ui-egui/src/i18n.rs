@@ -97,7 +97,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 28] = [
+pub static LANGUAGES: [LangInfo; 29] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
@@ -352,6 +352,16 @@ pub static LANGUAGES: [LangInfo; 28] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Norwegian Bokmål: the whole interface, keeping product and workspace names in English.
+    // Windows, macOS and browsers report Bokmål as `nb`, POSIX locales as `no` or `nn`.
+    LangInfo {
+        code: "nb",
+        name: "Norsk",
+        source: include_str!("i18n/nb.tsv"),
+        plural: plural_one_other,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
 ];
 
 impl LangInfo {
@@ -434,6 +444,10 @@ fn candidates(tag: &str) -> Vec<String> {
     let mut out = Vec::new();
     for n in (1..=parts.len()).rev() {
         out.push(parts[..n].join("-"));
+    }
+    if matches!(primary, "no" | "nb" | "nn") && !parts.contains(&"nb") {
+        // Norwegian: `nb` from Windows, macOS and browsers, `no` or `nn` from POSIX locales.
+        out.insert(out.len() - 1, "nb".to_string());
     }
     if primary == "zh" && !parts.iter().any(|p| matches!(*p, "hans" | "hant")) {
         // Chinese by region when no script is given.
