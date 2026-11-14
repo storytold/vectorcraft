@@ -8031,7 +8031,6 @@ breakText	Glyphs	字符
 @msg	anchor `smooth` must be true or false	錨點的 `smooth` 必須是 true 或 false
 @msg	anchor `{key}` must be [x, y]	錨點的 `{key}` 必須是 [x, y]
 @msg	anchor `{key}` must be a number	錨點的 `{key}` 必須是數字
-@msg	angle and roundness must be finite	angle 和 roundness 必須是有限值
 @msg	angles must be a list as long as pins (degrees or null)	angles 必須是與 pins 等長的清單 (度數或 null)
 @msg	appearance must be flat|center|edge	appearance 必須是 flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply 是 "fill" 或 "stroke"，而非 `{other}`

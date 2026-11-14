@@ -7618,7 +7618,6 @@ breakText	Glyphs	Гліфи
 @msg	anchor `smooth` must be true or false	`smooth` опорної точки має бути true або false
 @msg	anchor `{key}` must be [x, y]	`{key}` опорної точки має бути [x, y]
 @msg	anchor `{key}` must be a number	`{key}` опорної точки має бути числом
-@msg	angle and roundness must be finite	angle і roundness мають бути скінченними
 @msg	angles must be a list as long as pins (degrees or null)	angles має бути списком такої самої довжини, як pins (градуси або null)
 @msg	appearance must be flat|center|edge	appearance має бути flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply — це "fill" або "stroke", а не `{other}`

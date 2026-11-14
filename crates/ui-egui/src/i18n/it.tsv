@@ -7880,7 +7880,6 @@ breakText	Glyphs	Glifi
 @msg	anchor `smooth` must be true or false	`smooth` del punto di ancoraggio deve essere true o false
 @msg	anchor `{key}` must be [x, y]	`{key}` del punto di ancoraggio deve essere [x, y]
 @msg	anchor `{key}` must be a number	`{key}` del punto di ancoraggio deve essere un numero
-@msg	angle and roundness must be finite	angle e roundness devono essere finiti
 @msg	angles must be a list as long as pins (degrees or null)	angles deve essere un elenco lungo quanto pins (gradi o null)
 @msg	appearance must be flat|center|edge	appearance deve essere flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply è "fill" o "stroke", non `{other}`

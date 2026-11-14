@@ -8199,7 +8199,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	anchor `smooth` must be true or false	`smooth` do ponto de ancoragem deve ser true ou false
 @msg	anchor `{key}` must be [x, y]	`{key}` do ponto de ancoragem deve ser [x, y]
 @msg	anchor `{key}` must be a number	`{key}` do ponto de ancoragem deve ser um número
-@msg	angle and roundness must be finite	angle e roundness devem ser finitos
 @msg	angles must be a list as long as pins (degrees or null)	angles deve ser uma lista do mesmo tamanho que pins (graus ou null)
 @msg	appearance must be flat|center|edge	appearance deve ser flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply é "fill" ou "stroke", não `{other}`

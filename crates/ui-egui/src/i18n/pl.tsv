@@ -8120,7 +8120,6 @@ breakText	Glyphs	Glify
 @msg	anchor `smooth` must be true or false	`smooth` punktu kontrolnego musi mieć wartość true lub false
 @msg	anchor `{key}` must be [x, y]	`{key}` punktu kontrolnego musi mieć postać [x, y]
 @msg	anchor `{key}` must be a number	`{key}` punktu kontrolnego musi być liczbą
-@msg	angle and roundness must be finite	kąt i okrągłość muszą być skończone
 @msg	angles must be a list as long as pins (degrees or null)	angles musi być listą tej samej długości co pins (stopnie lub null)
 @msg	appearance must be flat|center|edge	appearance musi mieć wartość flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply ma wartość "fill" lub "stroke", a nie `{other}`

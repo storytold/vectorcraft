@@ -2534,7 +2534,7 @@ fn blob_brush_range_refusals_translate_with_their_values() {
 }
 
 /// `path.freehand`'s refusals of an unknown `style`, `extend` end or `connect` end show in every
-/// complete-message language with the key and the accepted values as given.
+/// complete-message language with the accepted values as given.
 #[test]
 fn freehand_choice_refusals_translate_with_their_values() {
     use serde_json::json;
@@ -2544,18 +2544,19 @@ fn freehand_choice_refusals_translate_with_their_values() {
     let b = s.execute("path.create", &json!({"d": "M10 50 L20 50"})).unwrap()["id"].clone();
     let points = json!([[20, 10], [30, 30], [20, 50]]);
     let refusals = [
-        (json!({"points": points, "style": "ink"}), "style", ["pencil", "brush"]),
-        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), "extend", ["start", "end"]),
-        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), "connect", ["start", "end"]),
+        (json!({"points": points, "style": "ink"}), ["pencil", "brush"]),
+        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), ["start", "end"]),
+        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), ["start", "end"]),
     ];
-    // A catalog may put the accepted values in its own quotation marks (German „start“).
+    // A catalog may translate the parameter's name (Hindi कनेक्ट) and put the accepted values in its
+    // own quotation marks (German „start“); the values themselves stay as written.
     let quotes = [("\"", "\""), ("„", "“"), ("“", "”"), ("«", "»"), ("« ", " »"), ("「", "」"), ("‘", "’")];
-    for (p, key, values) in &refusals {
+    for (p, values) in &refusals {
         let e = s.execute("path.freehand", p).unwrap_err().to_string();
         assert!(e.starts_with("invalid parameters for `path.freehand`: ") && e.contains(" must be "), "{e}");
         for code in COMPLETE_MESSAGES {
             let shown = message(Lang::from_code(code).expect("registered"), &e);
-            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`") && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`"), "{code}: {e} -> {shown}");
             let quoted = |v: &str| quotes.iter().any(|(open, close)| shown.contains(&format!("{open}{v}{close}")));
             assert!(values.iter().all(|v| quoted(v)), "{code}: {e} -> {shown}");
         }

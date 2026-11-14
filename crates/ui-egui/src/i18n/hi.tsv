@@ -6575,7 +6575,7 @@ antiAlias	Sharp	शार्प
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
-@msg	connect end must be "start" or "end"	connect अंत "start" या "end" होना चाहिए
+@msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect के लिए बढ़ाए गए पाथ के अलावा कोई दूसरा पाथ चाहिए
 @msg	connect needs id	connect के लिए id चाहिए
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है

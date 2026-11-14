@@ -7728,7 +7728,6 @@ breakText	Glyphs	글리프
 @msg	anchor `smooth` must be true or false	앵커의 `smooth`은(는) true 또는 false여야 합니다
 @msg	anchor `{key}` must be [x, y]	앵커의 `{key}`은(는) [x, y]여야 합니다
 @msg	anchor `{key}` must be a number	앵커의 `{key}`은(는) 숫자여야 합니다
-@msg	angle and roundness must be finite	각도와 원형률은 유한해야 합니다
 @msg	angles must be a list as long as pins (degrees or null)	angles는 pins와 길이가 같은 목록이어야 합니다(도 또는 null)
 @msg	appearance must be flat|center|edge	appearance는 flat|center|edge여야 합니다
 @msg	apply is "fill" or "stroke", not `{other}`	apply는 "fill" 또는 "stroke"입니다: `{other}`

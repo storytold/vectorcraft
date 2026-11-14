@@ -8132,7 +8132,6 @@ breakText	Glyphs	Glyfy
 @msg	anchor `smooth` must be true or false	`smooth` kotevního bodu musí být true nebo false
 @msg	anchor `{key}` must be [x, y]	`{key}` kotevního bodu musí být [x, y]
 @msg	anchor `{key}` must be a number	`{key}` kotevního bodu musí být číslo
-@msg	angle and roundness must be finite	úhel a zaoblení musí být konečné
 @msg	angles must be a list as long as pins (degrees or null)	angles musí být seznam stejně dlouhý jako pins (stupně nebo null)
 @msg	appearance must be flat|center|edge	appearance musí být flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply je "fill" nebo "stroke", ne `{other}`

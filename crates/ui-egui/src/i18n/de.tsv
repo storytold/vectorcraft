@@ -7832,7 +7832,6 @@ breakText	Glyphs	Glyphen
 @msg	anchor `smooth` must be true or false	Ankerpunkt-`smooth` muss true oder false sein
 @msg	anchor `{key}` must be [x, y]	Ankerpunkt-`{key}` muss [x, y] sein
 @msg	anchor `{key}` must be a number	Ankerpunkt-`{key}` muss eine Zahl sein
-@msg	angle and roundness must be finite	angle und roundness müssen endlich sein
 @msg	angles must be a list as long as pins (degrees or null)	angles muss eine Liste so lang wie pins sein (Grad oder null)
 @msg	appearance must be flat|center|edge	appearance muss flat|center|edge sein
 @msg	apply is "fill" or "stroke", not `{other}`	apply ist „fill“ oder „stroke“, nicht `{other}`

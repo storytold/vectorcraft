@@ -6080,7 +6080,6 @@ imageTrace	Outline	Contour
 @msg	anchor `smooth` must be true or false	`smooth` van het anker moet true of false zijn
 @msg	anchor `{key}` must be [x, y]	`{key}` van het anker moet [x, y] zijn
 @msg	anchor `{key}` must be a number	`{key}` van het anker moet een getal zijn
-@msg	angle and roundness must be finite	hoek en ronding moeten eindig zijn
 @msg	angles must be a list as long as pins (degrees or null)	angles moet een lijst zijn die even lang is als pins (graden of null)
 @msg	appearance must be flat|center|edge	appearance moet flat|center|edge zijn
 @msg	apply is "fill" or "stroke", not `{other}`	apply is "fill" of "stroke", niet `{other}`
