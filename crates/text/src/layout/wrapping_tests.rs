@@ -1173,11 +1173,14 @@ fn justification_adds_no_gap_inside_a_warichu_block_drawn_right_to_left() {
         let mut glyphs = synthetic_glyphs(&[(0, 2, 10.0, first), (2, 2, 0.0, second)]);
         block(&mut glyphs[0], 0, 0.0);
         block(&mut glyphs[1], 0, 10.0);
-        assert!(!flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
-        assert!(!flow::is_cjk_gap(1, &[], &after, 0, &glyphs), "{first}{second}");
+        // Glyph 0 is drawn after glyph 1 of its block.
+        let begun = [true, false];
+        assert!(!flow::is_letter_gap(1, &[], (&after, &begun), 0, &glyphs, false), "{first}{second}");
+        assert!(!flow::is_cjk_gap(1, &[], (&after, &begun), 0, &glyphs), "{first}{second}");
         // The same two glyphs as the first glyphs of two blocks.
         block(&mut glyphs[1], 2, 0.0);
-        assert!(flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
-        assert_eq!(flow::is_cjk_gap(1, &[], &after, 0, &glyphs), first == '漢', "{first}{second}");
+        let begun = [false, false];
+        assert!(flow::is_letter_gap(1, &[], (&after, &begun), 0, &glyphs, false), "{first}{second}");
+        assert_eq!(flow::is_cjk_gap(1, &[], (&after, &begun), 0, &glyphs), first == '漢', "{first}{second}");
     }
 }
