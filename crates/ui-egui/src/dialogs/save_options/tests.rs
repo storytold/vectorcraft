@@ -125,6 +125,33 @@ fn save_as_ai_version_7_writes_a_file_per_artboard() {
     assert_eq!((st.save_options["hiddenObjects"].clone(), st.save_options["outlineText"].clone()), (json!("visible"), json!(true)));
 }
 
+/// Save Options sends a `.ai` save only the options its version reads, so a person's save gets no
+/// note about an option the file doesn't read, and the other version's choices stay as the last
+/// save left them.
+#[test]
+fn ai_save_options_send_only_the_options_the_version_reads() {
+    let (mut app, _, _) = desktop("art.ai");
+    for (round, legacy) in [true, false, true].into_iter().enumerate() {
+        assert_eq!(app.run("file.saveAs", json!({})).unwrap()["pending"], KIND);
+        frame(&mut app, false);
+        match round {
+            1 => assert!(dialog(&app).bool("outlineText"), "the legacy choice is shown as last saved"),
+            2 => assert!(!dialog(&app).bool("editingData"), "the PDF-compatible choice is shown as last saved"),
+            _ => {}
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("aiVersion".into(), json!(if legacy { "7" } else { "pdf" }));
+        let (key, value) = if legacy { ("outlineText", true) } else { ("editingData", false) };
+        d.fields.insert(key.into(), json!(value));
+        let d = d.clone();
+        app.ui.dialog = None;
+        let r = confirm(&mut app, &d).unwrap();
+        assert!(!r["warnings"].to_string().contains("was not used"), "round {round}: {r}");
+    }
+    let st = app.session.active().unwrap();
+    assert_eq!((st.save_options["outlineText"].clone(), st.save_options["editingData"].clone()), (json!(true), json!(false)));
+}
+
 /// An Illustrator file opened, then saved as `.ai`: the options dialog stays open through the
 /// Enter that closed the save panel, and only an Enter after it is let go confirms it.
 #[test]
