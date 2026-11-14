@@ -127,12 +127,13 @@ pub fn automatic_pens(doc: &Document, p: &Value) -> Vec<String> {
 
 /// Run `f` on the document an export of `doc` with `p` plots and the regions of its plots: with
 /// `useArtboards: false`, a copy of `doc` whose one artboard is the bounds of the visible art.
-/// Like the export, it leaves out an opacity-mask or symbol editing layer.
+/// Like the export, it leaves out an opacity-mask or symbol editing layer, and measures the bounds
+/// without the art a plot draws nothing for.
 fn with_plotted<T>(doc: &Document, p: &Value, f: impl FnOnce(&Document, Vec<Rect>) -> Result<T>) -> Result<T> {
     let doc = &*doc.without_edit_modes();
     let use_artboards = super::encode::use_artboards(C, p)?;
     if use_artboards == Some(false)
-        && let Some((art, q)) = super::encode::art_page(C, doc, p)?
+        && let Some((art, q)) = super::encode::art_page(C, doc, p, |n| vectorcraft_cad::hpgl::write::plots_nothing(doc, n))?
     {
         let (_, regions) = boards(&art, &q, None)?;
         return f(&art, regions);
