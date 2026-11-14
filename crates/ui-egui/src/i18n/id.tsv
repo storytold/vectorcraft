@@ -924,6 +924,7 @@
 	VectorCraft Title Bar on Every Desktop	Bilah judul VectorCraft di setiap desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Selama ditetapkan, variabel lingkungan VECTORCRAFT_TITLEBAR memilih bilah judul.
 	System Title Bar takes precedence over this option while it is on.	Selama aktif, Bilah judul sistem lebih diutamakan daripada opsi ini.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Selama Bilah judul VectorCraft di setiap desktop nonaktif, desktop ini menggambar bilah judul jendela, baik opsi ini aktif maupun tidak.
 	Exit	Keluar
 	Distort	Distorsi
 	Diffuse Glow…	Pendar difusi…

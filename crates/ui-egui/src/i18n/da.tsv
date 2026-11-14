@@ -1532,6 +1532,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCrafts titellinje på alle skriveborde
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljøvariablen VECTORCRAFT_TITLEBAR vælger titellinjen, så længe den er angivet.
 	System Title Bar takes precedence over this option while it is on.	Systemtitellinje har forrang for denne indstilling, så længe den er slået til.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Så længe VectorCrafts titellinje på alle skriveborde er slået fra, tegner dette skrivebord vinduets titellinje, uanset om denne indstilling er slået til eller fra.
 	Exit	Afslut
 	Distort	Forvræng
 	Diffuse Glow…	Diffus glød…
