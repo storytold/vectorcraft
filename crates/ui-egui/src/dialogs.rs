@@ -156,6 +156,9 @@ pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES,
 pub use export_as::open as open_export_as;
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
+pub(crate) fn export_artboard_name_editing(d: &Dialog) -> bool {
+    d.kind == export_for_screens::KIND && d.fields.contains_key(export_for_screens::RENAME_ARTBOARD)
+}
 pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
     import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
