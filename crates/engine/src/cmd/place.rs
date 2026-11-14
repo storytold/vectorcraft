@@ -6,8 +6,8 @@
 //!   `link` ([`super::links`]).
 //! - An SVG becomes one group of its art; so does a DXF drawing, read with the DXF options
 //!   (`dxf`, [`fileio::dxfimport`]), and an HP-GL plot file (`vectorcraft_cad::hpgl`).
-//! - An EMF or WMF picture becomes one group, clipped to its frame (`crop: "crop"`) or bounded by
-//!   its art (`crop: "bounding"`).
+//! - An EMF, WMF or PICT picture becomes one group, clipped to its frame (`crop: "crop"`) or
+//!   bounded by its art (`crop: "bounding"`).
 //! - An EPS file (or a PostScript .ai) becomes one group, clipped to its bounding box or bounded by
 //!   its art: the document an EPS file of ours carries, else what its PostScript draws, else its
 //!   preview ([`fileio::load`]).
@@ -58,6 +58,9 @@ use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
 const QUEUE: &str = "file.place.queue";
+/// The error of a file read apart from the session while another document is active, or after the
+/// document it was read for closed ([`Session::place_read`], [`Session::place_queue_read`]).
+const NOT_ACTIVE: &str = "the document it was prepared for is no longer active";
 /// The most files one `file.place.queue` loads.
 const MAX_QUEUE: usize = 100;
 /// The longest thumbnail side `thumbnail` may ask for (px).
@@ -72,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect; refused while an object of a symbol instance's art is selected), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings, image?: the id of the image of a DCS file placed in a clip group, which the Links commands take}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, HP-GL (.plt, .hpgl, .hgl, .hpg), PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns, swatches and brushes they use. A DCS file (an EPS file with one program per printing plate, DCS 1.0 or 2.0) is placed only from its path with link (else an error, as are document.open and links.embed): one linked image of its plates mixed into CMYK, clipped by the clipping path its composite is drawn through, its spot plates added as spot swatches in the process equivalents the file gives (a swatch of the same name is kept, with a warning); print separations and Separations Preview show each plate on its own ink, and plate files of their own are read from its folder. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect; refused while an object of a symbol instance's art is selected), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings, image?: the id of the image of a DCS file placed in a clip group, which the Links commands take}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, HP-GL (.plt, .hpgl, .hgl, .hpg), PDF/.ai, EMF/WMF and PICT (.pct, .pic, .pict; clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns, swatches and brushes they use. A DCS file (an EPS file with one program per printing plate, DCS 1.0 or 2.0) is placed only from its path with link (else an error, as are document.open and links.embed): one linked image of its plates mixed into CMYK, clipped by the clipping path its composite is drawn through, its spot plates added as spot swatches in the process equivalents the file gives (a swatch of the same name is kept, with a warning); print separations and Separations Preview show each plate on its own ink, and plate files of their own are read from its folder. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
             has_doc,
             place
         ),
@@ -503,11 +506,13 @@ fn fit(natural: Rect, r: Rect) -> Affine {
     Affine::translate(r.center().to_vec2()) * Affine::scale(k) * Affine::translate(-natural.center().to_vec2())
 }
 
-/// What `file.place` takes from the session before it reads the file: the params, the object
-/// Replace swaps and the artboard under `at`, which a DXF drawing is laid out on
-/// ([`Session::prepare_place`]). [`PlaceJob::read`] reads and decodes the file without the session,
-/// on any thread.
+/// What `file.place` takes from the session before it reads the file: the document it places into,
+/// the params, the object Replace swaps and the artboard under `at`, which a DXF drawing is laid
+/// out on ([`Session::prepare_place`]). [`PlaceJob::read`] reads and decodes the file without the
+/// session, on any thread.
 pub struct PlaceJob {
+    /// The document it was prepared in (`DocState::uid`).
+    doc: u64,
     params: Value,
     old: Option<NodeId>,
     /// The object Replace swaps as it was when Place started.
@@ -560,10 +565,14 @@ impl Session {
 
     /// Run `file.place` with the params of `read` as a command (checked and journaled as any
     /// other) that places the file `read` holds instead of reading it again → `file.place`'s
-    /// reply. The object Replace swaps must still be in the document as it was when Place started;
-    /// when the selection changed meanwhile, `select.set` selects that object again first, so a
-    /// replay of the journal replaces the same object.
+    /// reply. The document Place started in must be the active one, and the object Replace swaps
+    /// must still be in it as it was when Place started; when the selection changed meanwhile,
+    /// `select.set` selects that object again first, so a replay of the journal replaces the same
+    /// object.
     pub fn place_read(&mut self, read: PlaceRead) -> Result<Value> {
+        if self.doc()?.uid != read.job.doc {
+            return Err(bad(PLACE, NOT_ACTIVE));
+        }
         let params = read.job.params.clone();
         if let Some(old) = read.job.old {
             let st = self.doc()?;
@@ -615,7 +624,7 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    Ok(PlaceJob { params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
+    Ok(PlaceJob { doc: st.uid, params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
 }
 
 /// Place the file `read` holds in the active document.
@@ -755,6 +764,8 @@ fn queued_files(p: &Value) -> Result<Vec<Value>> {
 /// ([`Session::prepare_place_queue`]). [`QueueJob::read`] reads them without the session, on any
 /// thread.
 pub struct QueueJob {
+    /// The document it was prepared in (`DocState::uid`).
+    doc: u64,
     params: Value,
     files: Vec<Value>,
 }
@@ -762,6 +773,8 @@ pub struct QueueJob {
 /// The files [`QueueJob::read`] read, which [`Session::place_queue_read`] loads the place cursor
 /// with.
 pub struct QueueRead {
+    /// The document the files were read for (`DocState::uid`).
+    doc: u64,
     params: Value,
     entries: Vec<Value>,
     files: Vec<Value>,
@@ -776,13 +789,13 @@ impl QueueJob {
 
     /// Read every file for its size and thumbnail, as `file.place.queue` does, without the session.
     pub fn read(self) -> Result<QueueRead> {
-        read_queue(self.params, self.files)
+        read_queue(self.doc, self.params, self.files)
     }
 }
 
-/// Read each of `queued`, the files of `file.place.queue` with params `p`, for its size and
-/// thumbnail.
-fn read_queue(p: Value, queued: Vec<Value>) -> Result<QueueRead> {
+/// Read each of `queued`, the files of `file.place.queue` with params `p` for the document `doc`,
+/// for its size and thumbnail.
+fn read_queue(doc: u64, p: Value, queued: Vec<Value>) -> Result<QueueRead> {
     let thumbnail = p.get("thumbnail").and_then(Value::as_f64);
     let (mut entries, mut files, mut skipped) = (vec![], vec![], vec![]);
     for mut q in queued {
@@ -823,7 +836,7 @@ fn read_queue(p: Value, queued: Vec<Value>) -> Result<QueueRead> {
             }
         }
     }
-    Ok(QueueRead { params: p, entries, files, skipped })
+    Ok(QueueRead { doc, params: p, entries, files, skipped })
 }
 
 impl Session {
@@ -834,12 +847,17 @@ impl Session {
         has_doc(self).map_err(|why| EngineError::Disabled(QUEUE.into(), why))?;
         check_switches(params, &["link", "template"], QUEUE)?;
         check_numbers(params, &["thumbnail"], QUEUE)?;
-        Ok(QueueJob { params: params.clone(), files: queued_files(params)? })
+        let files = queued_files(params)?;
+        Ok(QueueJob { doc: self.doc()?.uid, params: params.clone(), files })
     }
 
     /// Run `file.place.queue` with the params of `read` as a command that loads the place cursor
-    /// with the files `read` holds instead of reading them again → `file.place.queue`'s reply.
+    /// with the files `read` holds instead of reading them again → `file.place.queue`'s reply. The
+    /// document the files were read for must be the active one.
     pub fn place_queue_read(&mut self, read: QueueRead) -> Result<Value> {
+        if self.doc()?.uid != read.doc {
+            return Err(bad(QUEUE, NOT_ACTIVE));
+        }
         let params = read.params.clone();
         self.queue_hand_off = Some(read);
         let r = self.execute(QUEUE, &params);
@@ -944,7 +962,8 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         (None, [id]) => *id,
         _ => return Err(bad(C, "select one image or pass id")),
     };
-    let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+    // An image in opacity-mask art or a definition's art is found by its id too (`links.list`).
+    let n = st.doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
     // Effective resolution: 72 pt per inch over the points one pixel spans along each axis.
     let [a, b, c, d, ..] = im.xf.as_coeffs();

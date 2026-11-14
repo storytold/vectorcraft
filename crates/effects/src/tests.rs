@@ -4,8 +4,11 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod imageoutline;
+mod painted;
 mod rasterfollow;
 mod scale;
+mod solidcontext;
 mod transformfx;
 
 fn fx(id: &str, params: Value) -> Effect {

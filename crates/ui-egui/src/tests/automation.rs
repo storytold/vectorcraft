@@ -242,6 +242,81 @@ fn control_export_refuses_an_option_no_format_takes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export`, and `file.exportAs` run as a command, write no SVG of a document that links a
+/// JavaScript file outside the read root, and the error names no file or folder; the person at the
+/// keyboard exports it with the link as stored.
+#[test]
+fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("svg-script");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let script = s(base.join("outside/menu.js"));
+    app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+    let path = s(base.join("out/a.svg"));
+    for (method, params) in [
+        ("app.export", json!({"path": path, "format": "svg", "wait": true})),
+        ("app.export", json!({"path": s(base.join("out/a.svgz")), "wait": true})),
+        ("app.export", json!({"format": "svg"})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": path, "format": "svg"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("menu.js") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap();
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains(&format!("<script xlink:href=\"{script}\"/>")), "{svg}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.export` with a path writes the file when given an option only another format reads, and
+/// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
+/// as a command does the same; an export that automation did not ask for gets no such note.
+#[test]
+fn control_export_notes_an_option_the_format_does_not_read() {
+    let (mut app, tx, base) = confined("export-unused");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let path = base.join("out/a.pdf");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.is_file() && r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg")), "wait": true}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+    let params = json!({"format": "pdf", "quality": 80, "path": s(base.join("out/b.pdf"))});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportAs", "params": params}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    assert!(app.ui.status.contains("`quality` was not used"), "{}", app.ui.status);
+    let r = crate::io::export(&mut app, Some("pdf"), Some(s(base.join("out/c.pdf"))), &json!({"quality": 80})).unwrap();
+    assert!(r["warnings"].as_array().is_some_and(|w| !w.contains(&note)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A Background Export replies before the file is written: its reply names the options the format
+/// does not read at once, as a background save's does, and has no `warnings` when there are none.
+#[test]
+fn control_background_export_notes_an_option_the_format_does_not_read() {
+    let shared: SharedWriteFn = std::sync::Arc::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()));
+    let (mut app, tx, base) = confined_with("export-unused-background", Some(shared));
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(base.join("out/a.pdf"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert_eq!(r["result"]["warnings"], json!(["`quality` was not used: PDF files don't read it"]), "{r}");
+    crate::background::wait_all(&mut app);
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert!(r["result"].get("warnings").is_none(), "{r}");
+    crate::background::wait_all(&mut app);
+    assert!(base.join("out/a.pdf").is_file() && base.join("out/a.jpg").is_file());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.save`, and `file.save` and `file.exportForScreens` run as commands, refuse a key no save
 /// format or no format takes before anything is written.
 #[test]
@@ -497,6 +572,30 @@ fn ui_inspect_checks_a_folder_preference_as_written() {
     let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
     assert_eq!(prefs.get("fontsFolder").and_then(Value::as_str), Some(inside.as_str()), "{r}");
     assert!(!prefs.contains_key("templatesFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` names the file selected in JavaScript Files by its file name alone when it is
+/// outside the read root, and keeps one inside it; the person sees the whole path.
+#[test]
+fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-javascript-files");
+    let (inside, outside) = (s(base.join("in/menu.js")), s(base.join("outside/menu.js")));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for f in [&inside, &outside] {
+        app.run("svgInteractivity.addFile", json!({ "file": f })).unwrap();
+    }
+    let kind = crate::dialogs::javascript_files::KIND;
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": outside})));
+    let selected = |v: &Value| v["ui"]["dialog"]["fields"]["selected"].clone();
+    assert_eq!(selected(&crate::control::inspect(&app, &egui::Context::default())), json!(outside), "the person's");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), "menu.js", "{r}");
+    assert!(!r.to_string().contains(&json!(outside).to_string().trim_matches('"').to_string()), "{r}");
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": inside})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), json!(inside), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("selected")), Some(inside), "the dialog is not changed");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -843,6 +942,62 @@ fn ui_inspect_leaves_out_relative_paths_in_recorded_steps() {
     let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
     let want = json!([["x.y", {"text": "a/b", "url": "https://example.com/a"}], ["x.z", {"list": ["a/b"]}]]);
     assert_eq!(steps, &want, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded `prefs.set` step the value of a folder preference outside the
+/// read root, given as `{key, value}` or in `values`, also in a batch step's commands at any depth: a
+/// bare name or a subfolder (in the working folder, outside the root), a path with spaces around it and
+/// a `file:` URL. A folder inside the root, an empty value, a scratch disk choice, other preferences and
+/// another command's params stay, and the UI state is not changed.
+#[test]
+fn ui_inspect_leaves_out_folder_preferences_in_recorded_prefs_steps() {
+    let (mut app, tx, base) = confined("inspect-prefs-steps");
+    let (inside, outside) = (s(base.join("in")), s(base.join("outside")));
+    let url = if outside.starts_with('/') { format!("file://{outside}") } else { format!("file:///{}", outside.replace('\\', "/")) };
+    let folders = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+    let mut steps: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k, "value": "scratch"}])).collect();
+    steps.push(json!(["prefs.set", {"values": folders.iter().map(|k| (k.to_string(), json!("tmp/scratch"))).collect::<serde_json::Map<_, _>>()}]));
+    steps.push(json!(["prefs.set", {"values": {
+        "scratchPrimary": format!(" {outside} "), "fontsFolder": url, "pluginsFolder": format!(" {url}"), "recoveryFolder": "Startup",
+        "templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green",
+    }}]));
+    steps.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    steps.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    steps.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let batch = |commands: Value| json!({"commands": commands});
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"scratchSecondary": "tmp/scratch", "uiAccent": "red"}}}]));
+    steps.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary", "value": "scratch"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    steps.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    let set: crate::panels::actions::ActionSet =
+        serde_json::from_value(json!({"name": "set", "actions": [{"name": "prefs", "steps": steps}]})).unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let mut want: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k}])).collect();
+    want.push(json!(["prefs.set", {"values": {}}]));
+    want.push(json!(["prefs.set", {"values": {"templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green"}}]));
+    want.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    want.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    want.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"uiAccent": "red"}}}]));
+    want.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    want.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    assert_eq!(shown, &json!(want), "{r}");
+    assert!(!r.to_string().contains("tmp/scratch") && !r.to_string().contains(&outside.replace('\\', "\\\\")), "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1, json!({"key": "fontsFolder", "value": "scratch"}), "the UI state is not changed");
     let _ = std::fs::remove_dir_all(base);
 }
 

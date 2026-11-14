@@ -771,6 +771,12 @@ impl Importer {
             .ok()
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
+        let cmyk = self.files.stored(i.kind());
+        let (bytes, mime) = match &cmyk {
+            Some(tiff) => (tiff, "image/tiff"),
+            None => (bytes, mime),
+        };
         // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);

@@ -225,7 +225,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 }
                 self.flush_glyphs();
                 self.flush_text();
-                let art = self.nested(self.page, |b| {
+                let art = self.nested(self.page, self.blend, |b| {
                     t3.interpret(b, transform, glyph_transform, paint);
                 });
                 if let Some(nodes) = art {

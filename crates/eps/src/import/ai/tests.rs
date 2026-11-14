@@ -3930,6 +3930,28 @@ fn point_type(attrs: &str, text: &str) -> String {
     format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n{attrs}\n({text}) Tx\nTO\n")
 }
 
+/// Legacy type is set in the installed face of exactly the PostScript name its `Tf` gives, as type
+/// from a text document is: not a face whose name differs only in case and loads first, nor the
+/// copy the family and style resolve to when the name's own is another (it names its version).
+#[test]
+fn legacy_type_takes_the_face_of_its_exact_postscript_name() {
+    use vectorcraft_text::test_fonts::named_copy;
+    let db = vectorcraft_text::FontDb::global();
+    for (inter, names) in [
+        (true, ("TWINLEGACY INK", "Regular", "Version 1.000", "TWINLEGACYINK-Regular")),
+        (false, ("Twinlegacy Ink", "Regular", "Version 2.000", "TwinlegacyInk-Regular")),
+    ] {
+        assert_eq!(db.add_font(named_copy(inter, names).unwrap()), 1, "{names:?}");
+    }
+    let face = |font: &str| {
+        let texts = legacy_texts(&point_type("", "Hi").replace("/_Helvetica 12 Tf", &format!("/_{font} 12 Tf")));
+        let f = db.style_face(&texts[0].runs[0].style).unwrap();
+        (f.postscript_name(), f.version.clone())
+    };
+    assert_eq!(face("TwinlegacyInk-Regular"), ("TwinlegacyInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face("TWINLEGACYINK-Regular"), ("TWINLEGACYINK-Regular".to_string(), "Version 1.000".to_string()));
+}
+
 /// `TC` and `TW` (§15.4.7) set the paragraph's letter and word spacing, `Tq` its hanging
 /// punctuation and `Th` (§22) its hyphenation; each paragraph keeps the values in force at its
 /// first character, and they last into the next text object.
@@ -4259,6 +4281,119 @@ fn legacy_end_render_and_text_matrix_pop_read() {
         let texts = legacy_texts(&point_type(te, "Hi"));
         let [t] = texts.as_slice() else { panic!("{te}: {texts:?}") };
         assert_eq!(t.plain_text(), "Hi", "{te}");
+    }
+}
+
+/// The text, manual kerning and space before each run of a legacy-format file's first text object.
+fn legacy_kerning(art: &str) -> Vec<(String, Option<f64>, f64)> {
+    legacy_texts(art)[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning, r.style.kerning_before)).collect()
+}
+
+/// `autoKern kernValue Tk` (§15.4.6.1) spaces the character before it from the one after it: with
+/// `autoKern` 0 by `kernValue` (1/1000 em, kept to -1000 to 10,000) as the manual kerning after the
+/// character before it, with 1 by the automatic kerning; `TK` does the same in overflow text. At
+/// the start of a line it is the space before the line's first character.
+#[test]
+fn legacy_manual_pair_kerning_is_kept() {
+    let s = |x: &str| x.to_string();
+    let runs = legacy_kerning(&point_type("0 TA\n(A) Tx\n0 -80 Tk", "V"));
+    assert_eq!(runs, [(s("A"), Some(-80.0), 0.0), (s("V"), Some(0.0), 0.0)]);
+    // Inside a run, the character before it takes the value alone.
+    let runs = legacy_kerning(&point_type("(WAVE) Tx\n0 50 Tk", "S"));
+    assert_eq!(runs, [(s("WAV"), None, 0.0), (s("E"), Some(50.0), 0.0), (s("S"), None, 0.0)]);
+    // `autoKern` 1 gives the pair the automatic kerning, whatever its value.
+    let runs = legacy_kerning(&point_type("0 TA\n(AV) Tx\n1 -50 Tk", "A"));
+    assert_eq!(runs, [(s("A"), Some(0.0), 0.0), (s("V"), None, 0.0), (s("A"), Some(0.0), 0.0)]);
+    // Pairs with the same value in a row stay one run.
+    let runs = legacy_kerning(&point_type("0 TA\n(A) Tx\n0 50 Tk\n(B) Tx\n0 50 Tk", "C"));
+    assert_eq!(runs, [(s("AB"), Some(50.0), 0.0), (s("C"), Some(0.0), 0.0)]);
+    // At the start of the text and of a paragraph, the space before the line's first character.
+    let runs = legacy_kerning(&point_type("0 -30 Tk", "Hi"));
+    assert_eq!(runs, [(s("H"), None, -30.0), (s("i"), None, 0.0)]);
+    let runs = legacy_kerning(&point_type("(a\\r) Tx\n0 40 Tk", "b"));
+    assert_eq!(runs, [(s("a\n"), None, 0.0), (s("b"), None, 40.0)]);
+    let runs = legacy_kerning(&point_type("(a) Tx\n(\\r) TX\n0 40 TK", "b"));
+    assert_eq!(runs, [(s("a\n"), None, 0.0), (s("b"), None, 40.0)]);
+    // In overflow text.
+    let runs = legacy_kerning(&point_type("(ab) Tx\n0 25 TK", "c").replace("(c) Tx", "(c) TX"));
+    assert_eq!(runs, [(s("a"), None, 0.0), (s("b"), Some(25.0), 0.0), (s("c"), None, 0.0)]);
+    // Kept to the range `text.setRangeStyle` takes.
+    let runs = legacy_kerning(&point_type("(a) Tx\n0 -5000 Tk\n(b) Tx\n0 20000 Tk", "c"));
+    assert_eq!(runs, [(s("a"), Some(-1000.0), 0.0), (s("b"), Some(10_000.0), 0.0), (s("c"), None, 0.0)]);
+    // The pair is spaced as the kerning says.
+    let x = |art: &str| legacy_origins(&legacy_texts(art)[0])[1].0;
+    let (plain, kerned) = (x(&point_type("0 TA\n(A) Tx", "V")), x(&point_type("0 TA\n(A) Tx\n0 -80 Tk", "V")));
+    assert!((plain - kerned - 0.96).abs() < 1e-6, "{plain} {kerned}");
+}
+
+/// A `Tk` whose operands are missing or are not numbers, or whose flag is not 0 or 1, and a `Tk`
+/// outside a text object leave the type as it was.
+#[test]
+fn legacy_pair_kerning_with_bad_operands_leaves_the_type_as_it_was() {
+    let want = legacy_kerning(&point_type("(H) Tx", "i"));
+    for bad in ["0 Tk", "Tk", "/x 50 Tk", "0 /x Tk", "2 50 Tk", "0.5 50 Tk", "(0) 50 Tk"] {
+        assert_eq!(legacy_kerning(&point_type(&format!("(H) Tx\n{bad}"), "i")), want, "{bad}");
+    }
+    let outside = legacy_kerning(&format!("0 50 Tk\n{}", point_type("(H) Tx", "i")));
+    assert_eq!(outside, want);
+}
+
+/// `T+` (a discretionary hyphen, §15.4.10.1) is a soft hyphen where it stands, in overflow text
+/// too; `T-` makes the printed hyphen before it a soft hyphen, or adds one. Outside a text object
+/// they add nothing.
+#[test]
+fn legacy_discretionary_hyphens_are_soft_hyphens() {
+    for (art, text) in [
+        (point_type("(co) Tx\nT+", "operate"), "co\u{ad}operate"),
+        (point_type("(co-) Tx\nT-", "operate"), "co\u{ad}operate"),
+        (point_type("(co) Tx\nT-", "operate"), "co\u{ad}operate"),
+        (point_type("(co) Tx\nT+", "operate").replace("(operate) Tx", "(operate) TX"), "co\u{ad}operate"),
+        (format!("T+\nT-\n{}", point_type("", "co")), "co"),
+    ] {
+        let texts = legacy_texts(&art);
+        assert_eq!(texts[0].plain_text(), text, "{art}");
+    }
+}
+
+/// `languageID XL` (§22.6) is the characters' language, 0 (U.S. English) the default; it lasts into
+/// the next text object, and an ID that is not 0 to 11 leaves the language as it was.
+#[test]
+fn legacy_hyphenation_language_is_kept() {
+    let lang = |t: &vectorcraft_doc::TextObject| t.runs.iter().map(|r| r.style.language.clone()).collect::<Vec<_>>();
+    let texts = legacy_texts(&format!("{}{}", point_type("%_ 3 XL\n(a) Tx\n%_ 0 XL\n(b) Tx\n%_ 8 XL", "c"), point_type("", "d")));
+    assert_eq!(lang(&texts[0]), [Some("de".to_string()), None, Some("nb".to_string())]);
+    assert_eq!(lang(&texts[1]), [Some("nb".to_string())]);
+    for bad in ["12 XL", "-1 XL", "1.5 XL", "/x XL", "XL"] {
+        let texts = legacy_texts(&point_type(&format!("2 XL\n{bad}"), "a"));
+        assert_eq!(lang(&texts[0]), [Some("fr".to_string())], "{bad}");
+    }
+}
+
+/// The line breaking value (`TG`) and the Japanese layout rules (`Xu`, `Tu`, §22.6) are not kept:
+/// a visible text object read while one is set gives a warning, once for each in a file. A copy of
+/// a text object on `%_` lines gives none, and the final-form positions (§15.4.7) give none.
+#[test]
+fn legacy_line_breaking_and_japanese_layout_rules_are_warned_once() {
+    const LINE_BREAKING: &str = "the Line Breaking setting of legacy type was left out";
+    const JAPANESE_LAYOUT: &str = "the Japanese layout rules of legacy type were left out";
+    let r = legacy_read(&format!("{}{}", point_type("50 TG\n0 1 120 150 Xu", "a"), point_type("60 TG", "b")));
+    assert_eq!(r.warnings, [LINE_BREAKING, JAPANESE_LAYOUT]);
+    assert_eq!(legacy_read(&point_type("0 1 120 150 Tu", "a")).warnings, [JAPANESE_LAYOUT]);
+    let hidden: String = point_type("50 TG", "a").lines().map(|l| format!("%_{l}\n")).collect();
+    assert_eq!(legacy_read(&hidden).warnings, Vec::<String>::new());
+    let final_form = point_type("1 0 0 1 10 50 Tm\n0 0 Td\nT*\n0 Tc\n0 Tw\n1 0 0 1 0 0 TR\nTe\nTM", "Hi");
+    let r = legacy_read(&final_form);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(art_texts(&r.doc)[0].plain_text(), "Hi");
+}
+
+/// `TG`, `Xu` and `Tu` with missing or non-numeric operands set nothing, so they give no warning.
+#[test]
+fn legacy_line_breaking_and_japanese_layout_rules_with_bad_operands_are_not_warned() {
+    for attrs in ["TG", "(a) TG", "1 120 150 Xu", "0 1 (a) 150 Xu", "Tu", "0 1 120 (a) Tu"] {
+        let r = legacy_read(&point_type(attrs, "a"));
+        assert!(r.warnings.is_empty(), "{attrs}: {:?}", r.warnings);
+        assert_eq!(art_texts(&r.doc)[0].plain_text(), "a", "{attrs}");
     }
 }
 
@@ -7137,7 +7272,6 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
     let object = |hidden: &str| {
         format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
     };
-    let square = object(&format!("{}f\n", rect_path(20.0, 20.0, 60.0, 50.0)));
     let oval = "20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n";
     let curved = object(&format!("{oval}f\n"));
     let ring = object(&format!("*u\n{oval}f\n30 35 m\n30 40 50 40 50 35 c\n50 30 30 30 30 35 c\nf\n*U\n"));
@@ -7162,8 +7296,11 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a twisted group", read(&twist(90.0, None), &distort_group()), 2),
         ("a group with a hidden member", read(&twist(45.0, None), &hidden_member), 2),
         ("a curve twisted a quarter turn back", read(&twist(-90.0, BLUE_FILL), &curved), 0),
-        ("a square twisted three quarters of a turn, as before", read(&twist(270.0, BLUE_FILL), &square), 0),
-        ("a straight compound path with a guide, as before", read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(20.0, 20.0, 60.0, 50.0))), 2),
+        (
+            "a straight compound path with a guide inside it, as before",
+            read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(0.0, 0.0, 60.0, 50.0))),
+            2,
+        ),
     ] {
         assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
         let a = art(&r.doc);
@@ -7183,6 +7320,87 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a curve twisted past a quarter turn", read(&twist(91.0, BLUE_FILL), &curved)),
         ("a curve twisted half a turn back", read(&twist(-180.0, BLUE_FILL), &curved)),
         ("a group twisted past a quarter turn", read(&twist(135.0, None), &distort_group())),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
+    // GUARDS: a path or compound path with straight segments was read with a live Twist at any angle.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    let square = object(&format!("{}f\n", rect_path(20.0, 20.0, 60.0, 50.0)));
+    let frame = object(&format!("*u\n{}f\n{}f\n*U\n", rect_path(20.0, 20.0, 60.0, 50.0), rect_path(30.0, 30.0, 50.0, 40.0)));
+    let twist = |angle: f64| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), BLUE_FILL);
+    let read = |angle: f64, art_: &str| read_ok(&format!("{}{}", twist(angle), layer(art_)));
+    for (what, r, members, angle) in [
+        ("a square twisted half a turn", read(180.0, &square), 0, 180.0),
+        ("a square twisted half a turn back", read(-180.0, &square), 0, -180.0),
+        ("a straight compound path twisted half a turn", read(180.0, &frame), 2, 180.0),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), members, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!((e.id.as_str(), e.params["angle"].as_f64()), ("distort.twist", Some(angle)), "{what}");
+    }
+    for (what, r) in [
+        ("a square twisted just past half a turn", read(181.0, &square)),
+        ("a square twisted just past half a turn back", read(-181.0, &square)),
+        ("a square twisted three quarters of a turn", read(270.0, &square)),
+        ("a square twisted three quarters of a turn back", read(-270.0, &square)),
+        ("a square twisted two turns", read(720.0, &square)),
+        ("a square twisted ten turns", read(3600.0, &square)),
+        ("a straight compound path twisted a full turn", read(360.0, &frame)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn twist_on_a_straight_compound_path_keeps_the_drawn_look_where_a_guide_reaches_past_its_other_members() {
+    // GUARDS: a straight compound path whose guide members reach past its other members was read
+    // with a live Twist measured from bounds that take in those guides, which draws differently from
+    // the art saved with it.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    // A compound path of a square and the guide from `from` to `to`.
+    let with_guide = |from: (f64, f64), to: (f64, f64)| {
+        object(&format!("*u\n{}f\n{} {} m\n{} {} L\n(N) *\n*U\n", rect_path(20.0, 20.0, 60.0, 50.0), from.0, from.1, to.0, to.1))
+    };
+    let twist = |angle: f64| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), BLUE_FILL);
+    let read = |angle: f64, art_: &str| read_ok(&format!("{}{}", twist(angle), layer(art_)));
+    for (what, r) in [
+        ("a guide inside the square", read(45.0, &with_guide((25.0, 25.0), (35.0, 35.0)))),
+        ("a guide on the square's corners", read(180.0, &with_guide((20.0, 20.0), (60.0, 50.0)))),
+        ("a guide inside the square, half a turn back", read(-180.0, &with_guide((30.0, 40.0), (50.0, 30.0)))),
+        ("a guide outside the square, not turned", read(0.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), 2, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, "distort.twist", "{what}");
+    }
+    for (what, r) in [
+        ("a guide outside the square", read(45.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+        ("a guide reaching past the square's right side", read(45.0, &with_guide((30.0, 30.0), (70.0, 40.0)))),
+        ("a guide reaching past the square's top, half a turn", read(180.0, &with_guide((30.0, 30.0), (40.0, 51.0)))),
+        ("a guide around the square, a quarter turn back", read(-90.0, &with_guide((0.0, 0.0), (80.0, 70.0)))),
+        ("a compound path of guides only", read(45.0, &object("*u\n25 25 m\n35 35 L\n(N) *\n40 25 m\n50 35 L\n(N) *\n*U\n"))),
     ] {
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{what}: {a:#?}");
@@ -7708,6 +7926,55 @@ fn a_top_object_envelope_opens_live_with_its_outline() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// A top object whose saved grid has three patches across, its top edge one curve split into
+/// thirds, maps its contents along that one curve. In this synthetic file the drawn art is drawn by
+/// VectorCraft's own map of the unsplit curve, so the envelope opens live only when the split side
+/// maps the same way, and the contents' first quarter ends a quarter of the way along the curve.
+#[test]
+fn a_top_object_whose_top_is_one_curve_split_in_thirds_opens_live() {
+    use kurbo::{CubicBez, ParamCurve};
+    use vectorcraft_doc::live::EnvelopeKind;
+    // In the document: the top runs from (40, 20) to (160, 20), its parameter fast at the start.
+    let top = CubicBez::new((40.0, 20.0), (112.0, -16.0), (154.0, 2.0), (160.0, 20.0));
+    let thirds = [top.subsegment(0.0..1.0 / 3.0), top.subsegment(1.0 / 3.0..2.0 / 3.0), top.subsegment(2.0 / 3.0..1.0)];
+    // Art space has y up: row 1 is the top. The bottom row and the columns are straight.
+    let up = |p: Point| (p.x, 100.0 - p.y);
+    let at = move |(i, j): (usize, usize)| {
+        if j == 1 { up(if i == 0 { top.p0 } else { thirds[i - 1].p3 }) } else { (40.0 + 40.0 * i as f64, 20.0) }
+    };
+    let handle = move |p: (usize, usize), q: (usize, usize)| match (p, q) {
+        ((i, 1), (k, 1)) if k == i + 1 => up(thirds[i].p1),
+        ((i, 1), (k, 1)) if k + 1 == i => up(thirds[k].p2),
+        _ => {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        }
+    };
+    let shape = mesh_text(3, 1, &at, &handle, None);
+    // The contents: two red bars at the box's left and right ends, drawn by the unsplit curve.
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to(top.p0);
+    bp.curve_to(top.p1, top.p2, top.p3);
+    bp.line_to((160.0, 80.0));
+    bp.line_to((40.0, 80.0));
+    bp.close_path();
+    let one_curve = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: Some([0, 1, 2, 3]) };
+    let src = Rect::new(40.0, 20.0, 160.0, 80.0);
+    let bars = [Rect::new(40.0, 20.0, 70.0, 80.0), Rect::new(130.0, 20.0, 160.0, 80.0)];
+    let content: String = bars.iter().map(|b| format!("{RED}{}f\n", rect_path(b.x0, b.y0, b.x1, b.y1))).collect();
+    let drawn: String = bars.iter().map(|b| drawn_box(&one_curve, src, *b)).collect();
+    let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &content, 3, &drawn)));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (_, kind, ..) = live_envelope(&a[0]);
+    let EnvelopeKind::TopObject { path, .. } = kind else { panic!("{kind:?}") };
+    assert_eq!(path.anchor_count(), 8, "{path:?}");
+    let map = vectorcraft_doc::live::envelope_mapper(kind, src);
+    let (p, want) = (map(Point::new(70.0, 20.0)), top.eval(0.25));
+    assert!((p - want).hypot() < 0.02, "{p:?}, want {want:?}");
+}
+
 /// Envelope Options come from the options word, Fidelity from its own key.
 #[test]
 fn an_envelope_reads_its_options_and_fidelity() {
@@ -8209,7 +8476,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page, alone: None };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
@@ -10326,6 +10593,7 @@ fn type_with_an_art_brush_keeps_its_drawn_look() {
 }
 
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};
+use vectorcraft_doc::{GraphKind, TickLength};
 
 /// Editing data in the legacy format (version 7 specification, chapter 2): `%AI5_FileFormat 2.0`,
 /// the art size and the template box in the header, then `body`.
@@ -10465,6 +10733,223 @@ fn a_graphs_records_take_their_operands() {
     assert!(matches!(kids.last().map(|k| &k.kind), Some(NodeKind::Path { .. })), "the bar is kept after the empty groups: {kids:?}");
     assert_eq!(paths(&a[0]), 1, "the empty groups hold no art");
     assert_eq!(r.warnings, [GRAPH_PLAIN]);
+}
+
+/// A graph's style record (`Gy`) for a grouped column graph: no shadow, legends as in column
+/// graphs, lines without marks, measured against the left axis.
+const LIVE_STYLE: &str = "%_5 0 0 14 0 1 0 0 6 44 Gy\n";
+
+/// A graph's dialog record (`Gd`): columns 90% wide in clusters 80% wide.
+const LIVE_DIALOG: &str = "%_10 2 0 0 90 80 0 Gd\n";
+
+/// A graph's axes, bottom, left and right: the bottom one with no tick marks, between its labels;
+/// the left one labeled `$` … ` units`, with two tick marks a division.
+const LIVE_AXES: &str = "%_1 () Ga\n%_0 13 0 0 0 0 1 () GA\n%_2 ($) Ga\n%_0 14 0 0 0 2 0 ( units) GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n";
+
+/// A graph's table: series East and West, categories Q1 to Q3, and an empty cell (West in Q2).
+const LIVE_TABLE: &str = "%_4 3 1 1 Gz\n%_() Gc (East) Gc (West) Gc\n%_(Q1) Gc 5 3 (Q2) Gc 7 () Gc (Q3) Gc 4 6 Gc GC\n";
+
+/// A column of a graph's series at `x`, tagged as one data bar.
+fn series_bar(x: f64) -> String {
+    format!("0 0 0 1 k\n{}f\n%_4 1 0 0 Go\n", rect_path(x, 100.0, x + 20.0, 150.0))
+}
+
+/// The first series' mark in [`live_art`].
+fn series_mark() -> String {
+    format!("0 0 0 1 k\n{}f\n", rect_path(110.0, 100.0, 130.0, 150.0))
+}
+
+/// [`series_mark`] filled and stroked, then an outline stroked alike with no fill.
+fn series_mark_and_outline() -> String {
+    format!("0 0 0 1 k\n0 0 0 1 K\n{}B\n{}S\n", rect_path(110.0, 100.0, 130.0, 150.0), rect_path(112.0, 100.0, 118.0, 120.0))
+}
+
+/// The drawn art of the graph [`live_graph`] gives: two series groups, each tagged as one series by
+/// its table column, and the axes on the plot's left and bottom edges.
+fn live_art() -> String {
+    format!(
+        "u\n{}U\n%_2 1 0 0 Go\nu\n{}U\n%_2 2 0 0 Go\nu\n0 0 0 1 K\n100 200 m\n100 100 L\n300 100 L\nS\nU\n%_9 0 0 2 Go\n",
+        series_bar(110.0),
+        series_bar(140.0)
+    )
+}
+
+/// A graph whose records read whole, written from the version 7 specification's appendix A, on the
+/// plot 100 100 300 200 (art space).
+fn live_graph() -> String {
+    format!("%_Gs\n%_100 200 300 100 Gb\n{LIVE_STYLE}{LIVE_DIALOG}{LIVE_AXES}{LIVE_TABLE}u\n{}U\n%_GS\n", live_art())
+}
+
+/// The graphs in `doc`'s art, and the series groups tagged in them.
+fn live_graphs(doc: &Document) -> (Vec<Node>, usize) {
+    let (mut graphs, mut tagged) = (vec![], 0);
+    doc.walk(|n| {
+        if n.extras().graph.is_some() {
+            graphs.push(n.clone());
+        }
+        tagged += usize::from(n.extras().series_index.is_some());
+    });
+    (graphs, tagged)
+}
+
+fn same_rect(a: Rect, b: Rect) -> bool {
+    (a.x0 - b.x0).abs() + (a.y0 - b.y0).abs() + (a.x1 - b.x1).abs() + (a.y1 - b.y1).abs() < 1e-9
+}
+
+/// A graph whose records read whole keeps its data and settings on its group, which holds its
+/// drawn art as it is, each series group tagged with its index.
+#[test]
+fn a_graph_whose_records_read_whole_keeps_its_data_and_settings() {
+    let r = read(stream7(&layer7("Graph", &live_graph())).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    let g = a[0].extras().graph.clone().expect("a live graph");
+    assert_eq!(g.kind, GraphKind::Column);
+    assert_eq!(g.series, ["East", "West"]);
+    assert_eq!(g.categories, ["Q1", "Q2", "Q3"]);
+    assert_eq!(g.cells(), [[Some(5.0), Some(3.0)], [Some(7.0), None], [Some(4.0), Some(6.0)]]);
+    assert_eq!((g.column_width, g.cluster_width), (90.0, 80.0));
+    assert_eq!((g.prefix.as_str(), g.suffix.as_str(), g.tick_length, g.tick_marks), ("$", " units", TickLength::Short, 2));
+    assert_eq!((g.category_tick_length, g.ticks_between_labels), (TickLength::None, true));
+    assert_eq!((g.ticks, g.axis_min, g.axis_max), (0, None, None));
+    assert!(g.legend && !g.legend_across_top && !g.mark_points && g.connect_points && !g.drop_shadow && !g.edge_to_edge, "{g:?}");
+    // The drawn art: two series groups and the axes, as written.
+    let kids = a[0].children().unwrap();
+    assert_eq!(kids.len(), 3);
+    let index: Vec<_> = kids.iter().map(|k| k.extras().series_index).collect();
+    assert_eq!(index, [Some(0), Some(1), None]);
+    assert!(kids[..2].iter().all(|k| k.children().is_some_and(|c| c.len() == 1)));
+    // Each series keeps its marks' fill, and no stroke, for when the graph is drawn again.
+    assert_eq!(g.series_paints.len(), 2);
+    let fill = kids[0].children().unwrap()[0].appearance.items.iter().find(|i| i.is_fill()).map(|i| i.paint().clone());
+    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke.as_ref().is_some_and(|s| s.is_none())), "{:?}", g.series_paints);
+    let axes = kids[2].children().unwrap()[0].geometric_bounds().unwrap();
+    assert!(same_rect(g.rect, axes), "the plot is where the axes are: {:?} {axes:?}", g.rect);
+    assert_eq!(g.placed, a[0].geometric_bounds());
+}
+
+/// The graph types the records give: 5 grouped column, 6 stacked column, 7 line, 10 area; and the
+/// style and dialog settings, each kept as the graph's.
+#[test]
+fn a_graphs_type_and_settings_come_from_its_records() {
+    let live = |style: &str, dialog: &str, axes: &str| {
+        let text = live_graph().replace(LIVE_STYLE, style).replace(LIVE_DIALOG, dialog).replace(LIVE_AXES, axes);
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{style}{dialog}: {:?}", r.warnings);
+        art(&r.doc)[0].extras().graph.clone().expect("a live graph")
+    };
+    for (ty, kind) in [(5, GraphKind::Column), (6, GraphKind::StackedColumn), (7, GraphKind::Line), (10, GraphKind::Area)] {
+        let g = live(&format!("%_{ty} 0 0 14 0 1 0 0 6 44 Gy\n"), LIVE_DIALOG, LIVE_AXES);
+        assert_eq!(g.kind, kind, "{ty}");
+    }
+    let axes = LIVE_AXES.replace("%_0 14 0 0 0 2 0 ( units) GA", "%_1 15 0 100 25 0 0 () GA");
+    let g = live("%_7 1 1 14 1 0 0 1 6 44 0 2 Gy\n", "%_10 2 1 0 120 50 1 Gd\n", &axes);
+    assert!(g.drop_shadow && g.first_row_in_front && g.mark_points && !g.connect_points && g.legend_across_top, "{g:?}");
+    assert!(g.first_column_in_front && g.edge_to_edge, "{g:?}");
+    assert_eq!((g.column_width, g.cluster_width), (120.0, 50.0));
+    assert_eq!((g.ticks, g.axis_min, g.axis_max, g.tick_length, g.tick_marks), (4, Some(0.0), Some(100.0), TickLength::Full, 1));
+    // A line graph's series draws its line unfilled beside its filled marks.
+    let text = live_graph().replace(LIVE_STYLE, "%_7 0 0 14 0 1 0 0 6 44 Gy\n").replacen(&series_mark(), &series_mark_and_outline(), 1);
+    let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(art(&r.doc)[0].extras().graph.is_some());
+    // An empty list of customizations, of the version appendix A gives (2), sets nothing.
+    let text = live_graph().replace("GC\n", "GC\n%_2 Gt\n%_GT\n");
+    let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(art(&r.doc)[0].extras().graph.is_some());
+}
+
+/// A graph keeps its drawn art and stays plain, with one note, when a record has a shape or value
+/// appendix A doesn't give, sets what the model doesn't keep, or the table, the series tags or the
+/// art don't fit the graph.
+#[test]
+fn graphs_the_model_cant_keep_stay_plain_art() {
+    let cases: Vec<(&str, String)> = vec![
+        ("an eleventh style value", live_graph().replace(LIVE_STYLE, "%_5 0 0 14 0 1 0 0 6 44 0 Gy\n")),
+        ("eleven dialog values", live_graph().replace(LIVE_DIALOG, "%_10 2 0 0 90 80 0 0 0 0 0 Gd\n")),
+        ("a fourth axis", live_graph().replace(LIVE_AXES, &format!("{LIVE_AXES}%_8 () Ga\n%_0 14 0 0 0 0 0 () GA\n"))),
+        ("ten axis values", live_graph().replace("%_0 14 0 0 0 0 0 () GA", "%_0 14 0 0 0 0 0 () 0 0 GA")),
+        ("a pie graph", live_graph().replace("%_5 0 0 14", "%_8 0 0 14")),
+        ("a scatter graph", live_graph().replace("%_5 0 0 14", "%_9 0 0 14")),
+        ("type 11", live_graph().replace("%_5 0 0 14", "%_11 0 0 14")),
+        ("legends in wedges", live_graph().replace("%_5 0 0 14", "%_5 0 0 15")),
+        ("the right axis", live_graph().replace("6 44 Gy", "6 45 Gy")),
+        ("lines as shapes", live_graph().replace("%_5 0 0 14 0 1 0", "%_5 0 0 14 0 1 1")),
+        ("both axes alike", live_graph().replace(LIVE_DIALOG, "%_10 2 0 1 90 80 0 Gd\n")),
+        ("a subscription", live_graph().replace(LIVE_DIALOG, &format!("{LIVE_DIALOG}%_0 0 1 1 1 Gj\n"))),
+        ("a customization", live_graph().replace("GC\n", "GC\n%_2 Gt\n%_(Bars) GD\n%_GT\n")),
+        ("customizations without their version", live_graph().replace("GC\n", "GC\n%_Gt\n%_GT\n")),
+        ("customizations of another version", live_graph().replace("GC\n", "GC\n%_3 Gt\n%_GT\n")),
+        ("bounds upside down", live_graph().replace("%_100 200 300 100 Gb", "%_100 100 300 200 Gb")),
+        ("a plot the axes aren't on", live_graph().replace("%_100 200 300 100 Gb", "%_50 200 300 100 Gb")),
+        ("a text data cell", live_graph().replace("7 () Gc", "(seven) Gc () Gc")),
+        ("a table of empty cells", live_graph().replace(LIVE_TABLE, "%_4 3 1 1 Gz\n%_() Gc (East) Gc (West) Gc\n%_GC\n")),
+        ("a cell past the table", live_graph().replace("4 6 Gc GC", "4 6 1 Gc GC")),
+        ("too many categories", live_graph().replace("%_4 3 1 1 Gz", "%_10002 3 1 1 Gz")),
+        ("a table too large", live_graph().replace("%_4 3 1 1 Gz", "%_4000000000 4000000000 1 1 Gz")),
+        ("a number as a label", live_graph().replace("(West) Gc", "2025 Gc")),
+        ("a series untagged", live_graph().replace("%_2 2 0 0 Go", "%_4 2 0 0 Go")),
+        ("a series tagged twice", live_graph().replace("%_2 2 0 0 Go", "%_2 1 0 0 Go")),
+        ("a path tagged as a series", live_graph().replacen("%_4 1 0 0 Go", "%_2 1 0 0 Go", 1)),
+        ("a target the specification doesn't list", live_graph().replace("%_9 0 0 2 Go", "%_3 0 0 2 Go")),
+        ("art before its group", live_graph().replace("GC\nu\n", &format!("GC\n{}f\nu\n", rect_path(0.0, 0.0, 5.0, 5.0)))),
+        ("a record on a line that shows", live_graph().replace("%_10 2 0 0 90 80 0 Gd", "10 2 0 0 90 80 0 Gd")),
+        ("series groups inside another group", live_graph().replace("GC\nu\n", "GC\nu\nu\n").replace("U\n%_GS", "U\nU\n%_GS")),
+        (
+            "two fills in one series",
+            live_graph().replacen(
+                "f\n%_4 1 0 0 Go\nU\n",
+                &format!("f\n%_4 1 0 0 Go\n0 0 0 0.5 k\n{}f\nU\n", rect_path(112.0, 100.0, 118.0, 120.0)),
+                1,
+            ),
+        ),
+        ("axes filled, not stroked", live_graph().replace("300 100 L\nS\n", "300 100 L\nf\n")),
+        ("a series tagged on a row", live_graph().replace("%_2 2 0 0 Go", "%_2 2 1 0 Go")),
+        ("a series tagged on the right axis", live_graph().replace("%_2 2 0 0 Go", "%_2 2 0 4 Go")),
+        ("an unfilled mark in a column series", live_graph().replacen(&series_mark(), &series_mark_and_outline(), 1)),
+        ("a series' mark in a group of its own", live_graph().replacen(&series_mark(), &format!("u\n{}U\n", series_mark()), 1)),
+        (
+            "an untagged graph of one series",
+            live_graph()
+                .replace(LIVE_TABLE, "%_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n")
+                .replace("%_2 2 0 0 Go", "%_4 1 0 0 Go")
+                .replace("%_2 1 0 0 Go", "%_4 1 0 0 Go"),
+        ),
+    ];
+    for (what, text) in cases {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(r.warnings, [GRAPH_PLAIN], "{what}");
+        assert_eq!(live_graphs(&r.doc), (vec![], 0), "{what}");
+        let mut kept = false;
+        r.doc.walk(|n| kept |= n.children().is_some_and(|c| c.len() == 3));
+        assert!(kept, "{what}: the drawn art is kept");
+    }
+}
+
+/// A graph in a group or a clipping group keeps its data on its own group, not the container's; of
+/// two graphs in one layer, each is kept or left plain on its own, and the note is given once.
+#[test]
+fn graphs_are_kept_one_by_one_wherever_they_are() {
+    let clip = format!("q\n{}W n\n{}Q\n", rect_path(0.0, 0.0, 400.0, 400.0), live_graph());
+    for (what, text) in [("in a group", format!("u\n{}U\n", live_graph())), ("in a clipping group", clip)] {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{what}: {:?}", r.warnings);
+        let outer = &art(&r.doc)[0];
+        assert!(outer.extras().graph.is_none(), "{what}");
+        let (graphs, tagged) = live_graphs(&r.doc);
+        assert_eq!((graphs.len(), tagged), (1, 2), "{what}");
+        assert!(outer.children().unwrap().iter().any(|c| c.id == graphs[0].id), "{what}: the graph's own group");
+    }
+    let pie = live_graph().replace("%_5 0 0 14", "%_8 0 0 14");
+    let body = format!("{}{pie}{}", live_graph(), live_graph());
+    let r = read(stream7(&layer7("Graph", &body)).as_bytes()).unwrap();
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3);
+    let live: Vec<bool> = a.iter().map(|n| n.extras().graph.is_some()).collect();
+    assert_eq!(live, [true, false, true]);
 }
 
 /// Editing data in the legacy format (`%AI5_FileFormat 2.0`, ten `Lb` operands), then `body`.

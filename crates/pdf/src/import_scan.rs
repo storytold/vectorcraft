@@ -678,7 +678,7 @@ impl Walker<'_, '_> {
                                     colour = true;
                                     break;
                                 }
-                                if let Ok(data) = stream.decoded() {
+                                if let Ok(data) = stream.decoded_within(MAX_CHARPROC_BYTES.saturating_sub(decoded_bytes)) {
                                     decoded_bytes = decoded_bytes.saturating_add(data.len());
                                     let mut iter = TypedIter::new(data.as_ref());
                                     while let Some(op) = iter.next() {
@@ -704,14 +704,7 @@ impl Walker<'_, '_> {
                 };
                 self.fonts.entry(f_key).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
-                    FontNote {
-                        name,
-                        embedded,
-                        vertical: vertical_metrics(&f, embedded),
-                        is_type3,
-                        to_unicode,
-                        is_colour,
-                    }
+                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded), is_type3, to_unicode, is_colour }
                 });
             }
         }

@@ -15,13 +15,14 @@
 //!
 //! [`import`] reads either format back into a document of one artboard (the picture's frame) and
 //! one layer: paths with fills and strokes, clipping, images and text. Records it doesn't read are
-//! skipped, with one warning.
+//! skipped, with one warning. [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2)
+//! into the same kind of document.
 //!
 //! - `bytes`: little-endian writing and bounds-checked reading.
 //! - `dib`: device-independent bitmaps, both ways.
 //! - `scene`: the document walk both writers share.
 //! - `emf`, `wmf`: the writers.
-//! - `import`: the reader.
+//! - `import`: the readers.
 
 mod bytes;
 mod dib;
@@ -105,6 +106,29 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     let mut i = import::import(bytes)?;
     i.document.limit_depth_noting(&mut i.warnings);
     Ok(i)
+}
+
+/// A QuickDraw picture read into a document.
+#[derive(Clone, Debug)]
+pub struct Picture {
+    pub document: Document,
+    /// What was approximated or skipped.
+    pub warnings: Vec<String>,
+}
+
+/// Do `bytes` hold a version 2 QuickDraw picture, after a PICT file's 512 bytes of application
+/// data or on their own? A version 1 picture is known by its file's name.
+pub fn is_pict(bytes: &[u8]) -> bool {
+    import::pict::is_pict(bytes)
+}
+
+/// Read a QuickDraw picture (version 1 or 2; a PICT file, or a picture on its own) into a document
+/// whose one artboard is the picture's frame.
+pub fn import_pict(bytes: &[u8]) -> Result<Picture, String> {
+    let i = import::pict::play(bytes)?;
+    let mut p = Picture { document: i.document, warnings: i.warnings };
+    p.document.limit_depth_noting(&mut p.warnings);
+    Ok(p)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use super::{
     Affine, GlyphSnap, GuideStyle, Handle, HitOptions, Line, NodeId, OrientedBox, Overlay, ParamCurve, ParamCurveDeriv, ParamCurveNearest, PathSeg,
     Point, Rect, ScreenFrame, ToolContext, Vec2, constrain_angle_from, hit_test,
 };
+use crate::PixelOp;
 
 /// Where curves `a` and `b` cross near `p`: a point projected from one onto the other and back
 /// settles where they meet (none when they don't nearby).
@@ -100,11 +101,29 @@ pub struct PointSnap {
     /// The smart guide targets, or with Smart Guides off those of Snap to Point, and how near (in
     /// screen pixels) they pull; none with pixels or the grid snapping instead, or nothing on.
     targets: Option<(Targets, f64)>,
+    /// The kind of edit the point serves: whether Snap to Pixel rounds it
+    /// ([`ToolContext::snaps_to_pixel`]).
+    op: PixelOp,
 }
 
 impl PointSnap {
+    /// Snapping for a drawn point.
     pub fn new(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
-        let targets = if cx.snap_to_pixel || cx.snap_to_grid {
+        Self::for_op(cx, PixelOp::Drawing, targets)
+    }
+
+    /// Snapping for a moved point (an anchor, or the selection held by one).
+    pub fn moving(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
+        Self::for_op(cx, PixelOp::Moving, targets)
+    }
+
+    /// Snapping for a dragged handle that scales ([`Self::snap_scale`]).
+    pub fn scaling(cx: &ToolContext, targets: impl FnOnce() -> Targets) -> Self {
+        Self::for_op(cx, PixelOp::Scaling, targets)
+    }
+
+    fn for_op(cx: &ToolContext, op: PixelOp, targets: impl FnOnce() -> Targets) -> Self {
+        let targets = if cx.snaps_to_pixel(op) || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
             // Snap to Point keeps pulling points onto the ruler guides with Smart Guides on (#812).
@@ -116,7 +135,7 @@ impl PointSnap {
         } else {
             None
         };
-        Self { targets }
+        Self { targets, op }
     }
 
     /// Snapping for a point placed anywhere, as a drawing tool's ([`DrawSnap`]) is: the art in the
@@ -135,7 +154,7 @@ impl PointSnap {
     /// showing why. Pixels and the grid round it before Shift turns it onto its angle.
     pub fn snap_from(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> (Point, Vec<Overlay>) {
         let keep = |q: Point| from.and_then(|f| f.constrained(q)).unwrap_or(q);
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(self.op) {
             return (keep(Point::new(p.x.round(), p.y.round())), vec![]);
         }
         if cx.snap_to_grid {
@@ -148,9 +167,10 @@ impl PointSnap {
     }
 
     /// Snap a bounding-box resize ([`Targets::snap_scale`]) as [`Self::snap`] snaps a point. With
-    /// Snap to Pixel on, the corner or side the handle moves lines up with whole pixels, and with
-    /// Snap to Grid on it lines up with the nearest gridline, however far that is; neither shows
-    /// guides. Otherwise the handle snaps to the targets [`Self::new`] gathered.
+    /// Snap to Pixel on for scaling, the corner or side the handle moves lines up with whole
+    /// pixels, and with Snap to Grid on it lines up with the nearest gridline, however far that
+    /// is; neither shows guides. Otherwise the handle snaps to the targets [`Self::scaling`]
+    /// gathered.
     pub fn snap_scale(
         &self,
         cx: &ToolContext,
@@ -160,7 +180,7 @@ impl PointSnap {
         proportional: bool,
         from_center: bool,
     ) -> (Affine, Vec<Overlay>) {
-        let step = if cx.snap_to_pixel {
+        let step = if cx.snaps_to_pixel(PixelOp::Scaling) {
             Some(1.0)
         } else if cx.snap_to_grid {
             Some(cx.grid_step()).filter(|s| s.is_finite() && *s > 0.0)
@@ -327,7 +347,15 @@ impl SnapKey {
             revision: cx.revision,
             exclude: exclude.to_vec(),
             screen: cx.screen,
-            view: [cx.smart_guides, cx.snap_to_point, cx.snap_to_pixel, cx.snap_to_grid, cx.guides, cx.snap_tangent, cx.snap_perpendicular],
+            view: [
+                cx.smart_guides,
+                cx.snap_to_point,
+                cx.snaps_to_pixel(PixelOp::Drawing),
+                cx.snap_to_grid,
+                cx.guides,
+                cx.snap_tangent,
+                cx.snap_perpendicular,
+            ],
             snap_to_glyph: (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap),
             style: GuideStyle::of(cx),
             tolerances: [cx.snapping_tolerance, cx.snap_tolerance],
@@ -381,7 +409,7 @@ impl DrawSnap {
     /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
     pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
         let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
-        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)) }));
+        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)), op: PixelOp::Drawing }));
         self.snap(cx, p, None)
     }
 

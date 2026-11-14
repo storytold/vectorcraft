@@ -1,5 +1,5 @@
 //! DXF export through the commands: options, artboards, selection, images, and the formats that
-//! can't be written (DWG, PICT).
+//! can't be written (DWG, PageMaker).
 
 use serde_json::{Value, json};
 
@@ -275,23 +275,24 @@ fn formats_list_dxf_and_what_can_not_be_written() {
     }
     assert!(r["writable"].as_array().unwrap().contains(&json!("dxf")));
     let unsupported: Vec<&str> = r["unsupported"].as_array().unwrap().iter().map(|u| u["id"].as_str().unwrap()).collect();
-    assert_eq!(unsupported, ["dwg", "pict", "pmd"]);
+    assert_eq!(unsupported, ["dwg", "pmd"]);
 }
 
 #[test]
-fn dwg_and_pict_say_what_to_use_instead() {
+fn dwg_and_pagemaker_say_what_to_use_instead() {
     let mut s = two_boards();
     for p in [json!({"format": "dwg"}), json!({"path": "/tmp/plan.DWG"})] {
         let e = s.execute("document.export", &p).unwrap_err().to_string();
         assert!(e.contains("DWG is not available") && e.contains("DXF"), "{p}: {e}");
     }
+    // PICT opens; it isn't written.
     let e = s.execute("document.export", &json!({"format": "pict"})).unwrap_err().to_string();
-    assert!(e.contains("PICT is a retired format"), "{e}");
+    assert!(e.contains("PICT files can be opened but not written"), "{e}");
     let e = s
         .execute("document.open", &json!({"name": "old.pct", "dataBase64": vectorcraft_format::base64_encode(&[0u8; 600])}))
         .unwrap_err()
         .to_string();
-    assert!(e.contains("old.pct") && e.contains("PICT"), "{e}");
+    assert!(e.contains("not a PICT file"), "{e}");
     let e = s
         .execute("document.open", &json!({"name": "site.dwg", "dataBase64": vectorcraft_format::base64_encode(b"AC1032\0\0")}))
         .unwrap_err()

@@ -979,7 +979,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.separator();
         let section = d.str("section");
         let content_w = ui.available_width();
-        egui::ScrollArea::both()
+        let shown = egui::ScrollArea::both()
             .id_salt(("para-style-sections", section))
             .max_height(room)
             .min_scrolled_height(room)
@@ -987,15 +987,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.vertical(|ui| section_body(ui, d));
-            })
-            .inner_rect
-            .height()
+            });
+        // `inner_rect` is the height offered before a short section shrinks the area to its content.
+        shown.inner_rect.height().min(shown.content_size.y)
     });
     let content_h = drawn.inner;
     let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
     ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
+    // A new height lays the frame out again before it is shown, so the window is placed at its new
+    // size and OK and Cancel stay on the screen in the frame of a section switch.
     if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
-        ui.ctx().request_repaint();
+        ui.ctx().request_discard("paragraph style content height changed");
     }
     reset_button(ui, d);
     match edited_attrs(d) {

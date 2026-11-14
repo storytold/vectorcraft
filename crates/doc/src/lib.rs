@@ -33,8 +33,8 @@ pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
-    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
-    charge_symbol_art,
+    EditedNineSlice, MAX_GUIDE_FRACTION, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE,
+    SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
@@ -92,8 +92,8 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, PiePosition,
-    PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
+    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -117,6 +117,7 @@ pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOption
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
+pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
@@ -142,6 +143,7 @@ mod graphic_style;
 mod guides;
 mod limits;
 mod records;
+mod stored_art;
 mod units;
 
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
@@ -154,6 +156,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
+pub use stored_art::{StoredPlace, StoredRoot};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -265,8 +268,8 @@ pub struct Document {
     /// File → Document Setup (bleed, transparency grid, paper, type options).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub setup: DocSetup,
-    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers (by name)
-    /// they were copied from instead of the current layer.
+    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers and
+    /// sublayers they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
     /// File → File Info (its title is [`Document::info_title`]).
@@ -360,6 +363,10 @@ pub struct Document {
     /// The ruler guides as [`Document::ruler_guides`] lists them: a cache, never saved.
     #[serde(skip)]
     guide_cache: document_guides::GuideCache,
+    /// The symbols that show themselves inline ([`Document::inline_art_bounds`]): a cache, never
+    /// saved.
+    #[serde(skip)]
+    inline_cycles: inline::InlineCycles,
 }
 
 fn ppi72() -> f64 {

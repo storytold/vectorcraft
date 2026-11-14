@@ -4,7 +4,7 @@ use super::entry::{
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
 use super::reshaped;
-use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
+use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, same_stroke, stroke_layer};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -445,21 +445,35 @@ impl<'p> Builder<'p> {
         if let Some((t, opacity, facts)) = line.finish() {
             if checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink) {
                 outlined = true;
+                if self.mask.is_some() {
+                    self.flush_glyphs();
+                    self.flush_masked();
+                }
                 for g in glyphs {
-                    let same = self.glyphs.as_ref().is_some_and(|r| {
-                        r.paint == g.paint
-                            && r.opacity == g.opacity
-                            && r.overprint == g.overprint
-                            && r.stroke.is_some() == g.stroke.is_some()
-                            && r.stroke.as_ref().map(|s| s.line_width) == g.stroke.as_ref().map(|s| s.line_width)
-                            && (r.scale - g.scale).abs() < 1e-9
-                    });
+                    // Glyphs the file fills one by one composite where they overlap: only opaque
+                    // ones, drawn alike down to the stroke, and not under a soft mask (which
+                    // would be applied once to all of them), share a path.
+                    let same = g.opacity >= 0.999
+                        && self.mask.is_none()
+                        && self.glyphs.as_ref().is_some_and(|r| {
+                            r.paint == g.paint
+                                && r.opacity == g.opacity
+                                && r.overprint == g.overprint
+                                && same_stroke(r.stroke.as_ref(), g.stroke.as_ref())
+                                && (r.scale - g.scale).abs() < 1e-9
+                        });
                     match &mut self.glyphs {
                         Some(r) if same => r.path.extend(g.path.iter()),
                         _ => {
                             self.flush_glyphs();
                             self.glyphs = Some(g);
                         }
+                    }
+                    // Under a soft mask each glyph is masked on its own: the art queued for the
+                    // mask is drained at each glyph, or one group of them all takes it once.
+                    if self.mask.is_some() {
+                        self.flush_glyphs();
+                        self.flush_masked();
                     }
                 }
                 self.warn(RESHAPED_TEXT_NOTE);
@@ -558,7 +572,7 @@ impl<'p> Builder<'p> {
 
     /// Read a soft mask, pattern cell or type 3 glyph (`read`) on its own: its art, in the
     /// coordinates `page` has. `None` when nested too deeply.
-    pub(super) fn nested(&mut self, page: Rect, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
+    pub(super) fn nested(&mut self, page: Rect, blend: BlendMode, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
         if self.nested >= MAX_NESTED {
             return None;
         }
@@ -567,7 +581,7 @@ impl<'p> Builder<'p> {
         let saved = Saved {
             stack: std::mem::replace(&mut self.stack, vec![Frame::new(FrameKind::Root)]),
             root_groups: std::mem::take(&mut self.root_groups),
-            blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
+            blend: std::mem::replace(&mut self.blend, blend),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
             type3_run: outer_type3,
@@ -589,7 +603,7 @@ impl<'p> Builder<'p> {
         }
         let page = self.page;
         let saved = std::mem::replace(&mut self.white_images, m.mask_type() == MaskType::Alpha);
-        let art = self.nested(page, |b| m.interpret(b));
+        let art = self.nested(page, BlendMode::Normal, |b| m.interpret(b));
         self.white_images = saved;
         let spec = match art {
             Some(art) => {
@@ -653,7 +667,7 @@ impl<'p> Builder<'p> {
         // A swatch is shared with uses outside an alpha mask, and pattern paints keep their
         // colours there: its images are read as they are.
         let white = std::mem::take(&mut self.white_images);
-        let art = self.nested(Rect::ZERO, |b| {
+        let art = self.nested(Rect::ZERO, BlendMode::Normal, |b| {
             // A cell whose content can't be decoded is empty.
             let _ = t.interpret(b, Affine::IDENTITY, stroke);
         });
@@ -971,7 +985,8 @@ impl<'p> Builder<'p> {
     }
 
     /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
-    /// its outline (no Unicode text, mirrored, or not type mode). No `paint`: invisible text,
+    /// its outline (no Unicode text, mirrored, not type mode, or in a span whose ActualText is
+    /// empty). No `paint`: invisible text,
     /// type with neither fill nor stroke.
     pub(super) fn type_glyph(
         &mut self,
@@ -982,7 +997,7 @@ impl<'p> Builder<'p> {
         stroke: Option<&StrokeProps>,
         overprint: bool,
     ) -> bool {
-        if self.text_as != TextAs::Text || self.nested > 0 {
+        if self.text_as != TextAs::Text || self.nested > 0 || self.actual.textless() {
             return false;
         }
         let authored = self.actual.active();
