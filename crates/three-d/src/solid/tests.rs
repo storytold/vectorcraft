@@ -1030,6 +1030,105 @@ fn a_flat_twisted_inflate_matches_the_extrusion() {
     }
 }
 
+/// With no volume nothing puffs, so each shape's membrane is solved only when its solid is taken:
+/// a caller that stops early (past the object's face limit) solves none after. With volume, the
+/// eye waits on the highest puff, so every membrane is solved first.
+#[test]
+fn a_flat_inflate_solves_each_puff_as_its_solid_is_taken() {
+    let shapes: Vec<PathData> = (0..3).map(|i| shape(&square(120.0 * i as f64, 0.0, 100.0)).0).collect();
+    let shapes: Vec<(&PathData, FillRule)> = shapes.iter().map(|p| (p, FillRule::NonZero)).collect();
+    let b = Rect::new(0.0, 0.0, 340.0, 100.0);
+    let puffed = || PUFFED.with(std::cell::Cell::get);
+    let start = puffed();
+    let mut each = inflate_each(&shapes, b, Inflate { depth: 20.0, volume: 0.0, ..Inflate::default() }, front());
+    assert_eq!(puffed(), start, "no puff is solved before the first solid is taken");
+    assert!(each.next().is_some_and(|f| f.is_ok_and(|f| !f.is_empty())));
+    assert_eq!(puffed(), start + 1, "the later puffs wait until their solids are taken");
+    drop(each);
+    assert_eq!(puffed(), start + 1);
+    let start = puffed();
+    let each = inflate_each(&shapes, b, Inflate { depth: 20.0, ..Inflate::default() }, front());
+    assert_eq!(puffed(), start + 3, "with volume, every puff places the eye");
+    assert_eq!(each.count(), 3);
+}
+
+/// With no volume, solving each puff as its solid is taken gives the very solids that solving
+/// every puff first gives: their facets, their faces before projection and their projection, bit
+/// for bit, with an empty shape and one that cannot be inflated among them.
+#[test]
+fn a_flat_inflate_solved_as_taken_matches_one_solved_first() {
+    let mut frame = square(-10.0, -10.0, 260.0);
+    frame.extend(square(-8.0, -8.0, 256.0));
+    let mut circle = BezPath::new();
+    circle.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((180.0, 60.0), 50.0), 0.01));
+    let mut bad = vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0)], true);
+    bad.anchors[1].h_out = Point::new(f64::NAN, 0.0);
+    let paths = [shape(&square(0.0, 0.0, 100.0)).0, shape(&frame).0, PathData::new(vec![]), PathData::new(vec![bad]), shape(&circle).0];
+    let shapes: Vec<(&PathData, FillRule)> = paths.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+    let b = Rect::new(-10.0, -10.0, 250.0, 250.0);
+    let turned = View { rotation_x: -20.0, rotation_y: 30.0, ..front() };
+    let options = [
+        Inflate { volume: 0.0, ..Inflate::default() },
+        Inflate { volume: 0.0, depth: 40.0, twist: 90.0, taper: 0.5, ..Inflate::default() },
+        Inflate { volume: 0.0, depth: 10.0, both_sides: true, cap: false, ..Inflate::default() },
+    ];
+    for view in [front(), turned, View { perspective: 60.0, ..turned }, View { perspective: 100.0, rotation_y: 150.0, ..turned }] {
+        for o in options {
+            for (keep, facets, mesh) in [(build::Keep::Facets, true, false), (build::Keep::Faces, false, true), (build::Keep::Both, true, true)] {
+                let solids = |first: bool| {
+                    SOLVE_FIRST.with(|s| s.set(first));
+                    let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, view, keep).collect();
+                    SOLVE_FIRST.with(|s| s.set(false));
+                    out
+                };
+                let (taken, first) = (solids(false), solids(true));
+                assert_eq!(taken.len(), 5);
+                // The solid keeps its facets, its faces before projection, or both, as asked.
+                let built = |r: &Result<build::Built, String>| {
+                    r.as_ref().is_ok_and(|(f, m, _)| (!facets || !f.is_empty()) && (!mesh || m.as_ref().is_ok_and(|m| !m.is_empty())))
+                };
+                assert!(built(&taken[0]) && built(&taken[1]) && built(&taken[4]), "{o:?} {view:?} facets {facets} mesh {mesh}");
+                assert!(
+                    taken[2].as_ref().is_ok_and(|(f, m, p)| f.is_empty() && m.as_ref().is_ok_and(Vec::is_empty) && p.is_none()) && taken[3].is_err()
+                );
+                assert_eq!(format!("{taken:?}"), format!("{first:?}"), "{o:?} {view:?} facets {facets} mesh {mesh}");
+            }
+        }
+    }
+}
+
+/// With no volume, a shape with too many anchors or contours for the solid is refused before it
+/// is kept for later, with the error that solving every puff first gives it.
+#[test]
+fn a_flat_inflate_refuses_a_shape_past_the_point_limit_as_one_solved_first() {
+    use super::inflate::might_fit;
+    let many = MAX_SOLID_POINTS * 3 + 10;
+    let anchors: Vec<Point> = (0..many).map(|i| Point::new((i % 200) as f64, (i / 200) as f64 / 10.0)).collect();
+    let long = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&anchors, true)]);
+    let mut nan = anchors.clone();
+    if let Some(last) = nan.last_mut() {
+        *last = Point::new(f64::NAN, 0.0);
+    }
+    let invalid = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&nan, true)]);
+    let dots = PathData::new((0..=MAX_SOLID_POINTS).map(|i| vectorcraft_geom::SubPath::polyline(&[Point::new(i as f64, 0.0)], false)).collect());
+    let square = shape(&square(0.0, 0.0, 100.0)).0;
+    assert!(might_fit(&square) && !might_fit(&long) && !might_fit(&invalid) && !might_fit(&dots));
+    let paths = [square, long, invalid, dots];
+    let shapes: Vec<(&PathData, FillRule)> = paths.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+    let b = Rect::new(-10.0, -10.0, 250.0, 250.0);
+    let o = Inflate { volume: 0.0, ..Inflate::default() };
+    let solids = |first: bool| {
+        SOLVE_FIRST.with(|s| s.set(first));
+        let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, front(), build::Keep::Facets).collect();
+        SOLVE_FIRST.with(|s| s.set(false));
+        out
+    };
+    let (taken, first) = (solids(false), solids(true));
+    assert!(taken[0].as_ref().is_ok_and(|(f, ..)| !f.is_empty()));
+    assert!(taken[1..].iter().all(Result::is_err), "{:?}", taken[1..].iter().map(|r| r.as_ref().err()).collect::<Vec<_>>());
+    assert_eq!(format!("{taken:?}"), format!("{first:?}"));
+}
+
 /// #1724: under the nonzero rule a contour inside another that runs the same way cuts no hole
 /// (the middle is filled, as the art is drawn); one running the other way does, and so does
 /// either under the even-odd rule.

@@ -172,8 +172,8 @@ impl ShadowCaster {
 
     /// Add Inflate's solids for several shapes of one object ([`crate::inflate_together`]), each
     /// shape whose entry in `casts` is true: the eye is placed for every shape, as for the solids
-    /// drawn, but the faces of the others are not kept (their range is empty). A shape that does
-    /// not inflate is left out, as its solid is; the result says which, in order.
+    /// drawn, but the solids of the others are not built (their range is empty). A casting shape
+    /// that does not inflate is left out, as its solid is; the result says which, in order.
     pub fn inflate(
         &mut self,
         shapes: &[(&PathData, FillRule)],
@@ -182,11 +182,15 @@ impl ShadowCaster {
         options: Inflate,
         view: View,
     ) -> Vec<Result<Range<usize>, String>> {
-        inflate_faces(shapes, bounds, options, view, Keep::Faces)
-            .enumerate()
-            .map(|(i, r)| {
-                let (_, faces, projection) = r?;
-                if casts.get(i).copied().unwrap_or(true) { self.add(faces?, projection) } else { Ok(self.faces.len()..self.faces.len()) }
+        let mut solids = inflate_faces(shapes, bounds, options, view, Keep::Faces);
+        (0..shapes.len())
+            .map(|i| {
+                if !casts.get(i).copied().unwrap_or(true) {
+                    solids.pass();
+                    return Ok(self.faces.len()..self.faces.len());
+                }
+                let (_, faces, projection) = solids.next().unwrap_or_else(|| Ok((vec![], Ok(vec![]), None)))?;
+                self.add(faces?, projection)
             })
             .collect()
     }
