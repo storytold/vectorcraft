@@ -296,10 +296,14 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
   placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Greek, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan and Dutch
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
-  message literals the scan finds that one of them has no row for. The scan reads `Err("…")`, `Other(…)`,
+  message literals the scan finds, and the phrases a parameter schema's error builds at run time
+  (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
+  effects and the crates whose errors the engine passes on included. It reads `Err("…")`, `Other(…)`,
   `#[error(…)]` and `status(…)` messages, messages given to an error enum's variant (`PsError::Limit(…)`, the reason
   in `EngineError::Disabled(id, …)`), to the engine's `bad(cmd, …)`, `err(…)` or `error(…)`, and to the PDF writer's
-  `bad(…)` or `failed(…)`, and skips calls inside comments
+  `bad(…)` or `failed(…)`, and the messages a `.map_err(|e| …)` closure returns (from each `if` branch,
+  `match` arm and statement of a block) or the handler a `.map_err(name)` names returns (a closure bound with `let name = |e| …;` or a
+  function `fn name(…)`), and skips calls inside comments
   (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists them
   all). A missing row shows the English message. Other languages show messages in English until they add `@msg`
   rows.

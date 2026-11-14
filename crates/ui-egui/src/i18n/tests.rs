@@ -1486,7 +1486,8 @@ fn string_literals(e: &str, keep: impl Fn(&str, &str) -> bool) -> Vec<String> {
 
 /// For translators, `cargo test -p vectorcraft-ui-egui dump_source_strings` writes every English
 /// interface string to `VECTORCRAFT_I18N_DUMP=<file>`, and every status and error message as a
-/// catalog template to `VECTORCRAFT_I18N_DUMP_MESSAGES=<file>`, one per line.
+/// catalog template that [`untranslated_report`] checks to `VECTORCRAFT_I18N_DUMP_MESSAGES=<file>`,
+/// one per line.
 #[test]
 fn dump_source_strings() {
     if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP") {
@@ -1498,8 +1499,25 @@ fn dump_source_strings() {
         std::fs::write(path, text).expect("write dump");
     }
     if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP_MESSAGES") {
-        std::fs::write(path, message_literals().iter().map(|m| format!("{m}\n")).collect::<String>()).expect("write dump");
+        std::fs::write(path, message_dump()).expect("write dump");
     }
+}
+
+/// The text [`dump_source_strings`] writes to `VECTORCRAFT_I18N_DUMP_MESSAGES`.
+fn message_dump() -> String {
+    reported_messages().iter().map(|m| format!("{m}\n")).collect()
+}
+
+/// The translators' message dump lists every message the untranslated report checks, the
+/// phrases a parameter schema's error builds included.
+#[test]
+fn message_dump_lists_the_reported_messages() {
+    let dump = message_dump();
+    let lines: std::collections::BTreeSet<&str> = dump.lines().collect();
+    for phrase in SCHEMA_PHRASES {
+        assert!(lines.contains(phrase), "the dump skips {phrase:?}");
+    }
+    assert!(lines.contains("the color book is cut short"));
 }
 
 fn cs() -> Lang {
@@ -1640,7 +1658,7 @@ fn untranslated_report() {
     undo.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
     assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
     assert!(scan.templates.len() >= 3, "scan found only the templates {:?}", scan.templates);
-    let messages = message_literals();
+    let messages = reported_messages();
     assert!(messages.len() > 300, "scan found only {} messages", messages.len());
     let (swatches, groups) = vectorcraft_color::default_swatches(vectorcraft_color::cms::Model::Rgb);
     // The greys' `K=` values read the same in any language.
@@ -1739,6 +1757,36 @@ fn untranslated_report() {
         }
     }
     println!("{out}");
+}
+
+/// The status and error messages [`untranslated_report`] checks: the message literals of
+/// [`MESSAGE_CRATES`] and the phrases a parameter schema's error builds at run time
+/// ([`SCHEMA_PHRASES`]), which no literal holds.
+fn reported_messages() -> std::collections::BTreeSet<String> {
+    let mut messages = message_literals();
+    messages.extend(SCHEMA_PHRASES.iter().map(|p| p.to_string()));
+    messages
+}
+
+/// The untranslated report checks the messages of the effects and of the crates whose errors the
+/// engine and the effects pass on, and the phrases a parameter schema's error builds.
+#[test]
+fn untranslated_report_checks_every_message_crate_and_schema_phrase() {
+    let reported = reported_messages();
+    let passed_on = [
+        ("effects", "the SVG filter has no primitives"),
+        ("color", "not a swatch library (.vcswatches or .gpl)"),
+        ("render", "invalid scale {scale}"),
+        ("three-d", "3D effects require one to ten lights"),
+        ("pathops", "the shapes are too degenerate to combine"),
+    ];
+    for (krate, m) in passed_on {
+        assert!(message_literals_in(&[krate]).contains(m), "{krate}: {m}");
+        assert!(reported.contains(m), "the report skips {krate}: {m}");
+    }
+    for phrase in SCHEMA_PHRASES {
+        assert!(reported.contains(*phrase), "the report skips the schema phrase {phrase:?}");
+    }
 }
 
 /// The names [`MENU_KEEP_AS_IS`] lists are menu labels, and no catalog that keeps them in English
@@ -2721,6 +2769,84 @@ fn f(i: &mut Interp, interp: &mut Interp) -> JsResult<Value> {
     let js: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "js").map(|&(_, call, before)| (call, before)).collect();
     let found = source_messages(code, &js, &Default::default());
     assert_eq!(found, ["{what}: the object is not a File or a Folder", "File.seek: the mode must be 0, 1 or 2", "the path has an empty step"]);
+}
+
+/// The scan reads the message a `.map_err` closure returns, a literal, a `format!` string or a
+/// constant, whatever the closure's parameter, from each branch of an `if` and each arm of a
+/// `match`, and given to a variant of an enum whose name ends in `Fail`, and not a closure that
+/// passes the error on, a `json!` value's keys, nor the steps of a script result's path
+/// ([`NOT_MESSAGES`]).
+#[test]
+fn message_scan_reads_map_err_closures() {
+    let code = r#"
+fn f(text: &str, n: usize) -> Result<u32, String> {
+    let doc = parse(text).map_err(|e| format!("the filter isn't valid XML: {e}"))?;
+    let a = at(doc).map_err(|place| format!("[{i}]{place}"))?;
+    let b = at(doc).map_err(|place| format!(".{k}{place}"))?;
+    let c = at(doc).map_err(|e| format!("{name}: {e}"))?;
+    let n = u32::try_from(n).map_err(|_| "too many blocks".to_string())?;
+    let m = u16::try_from(n).map_err(move |(a, b)| LIMIT.into())?;
+    let k = read(doc).map_err(|e| e.to_string())?;
+    let j = read(doc).map_err(|e| bad(C, e))?;
+    let i = read(doc).map_err(|e| if e == "{x}" { CUT_SHORT.into() } else { e })?;
+    let h = read(doc).map_err(|e| match e {
+        Error::Io(_) => "the file can't be read".to_string(),
+        other => fail(json!({"objects": [other.to_string()]})),
+    })?;
+    let g = i32::try_from(n).map_err(|_| CompileFail::Syntax("the pattern is too large".into()))?;
+    let f = read(doc).map_err(|e| {
+        self.published = None;
+        format!("the clipboard can't be read: {e}")
+    })?;
+    Ok(n)
+}
+"#;
+    let consts =
+        [("LIMIT", "the name is too long"), ("CUT_SHORT", "the book is cut short")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = [
+        "the pattern is too large",
+        "the filter isn't valid XML: {e}",
+        "{name}: {e}",
+        "too many blocks",
+        "the name is too long",
+        "the book is cut short",
+        "the file can't be read",
+        "the clipboard can't be read: {e}",
+    ];
+    assert_eq!(source_messages(code, &[], &consts), want);
+    assert!(message_literals_in(&["color"]).contains("the color book is cut short"));
+    assert!(message_literals_in(&["color"]).contains("not a swatch library: {e}"));
+    assert!(message_literals_in(&["js"]).contains("regular expression too large"));
+    assert!(message_literals_in(&["effects"]).contains("the SVG filter isn't valid XML: {e}"));
+}
+
+/// The scan reads the messages of an error handler that a `.map_err(name)` names: a closure bound
+/// to that name, up to its `;`, and a function of that name, each of its statements.
+#[test]
+fn message_scan_reads_named_map_err_handlers() {
+    let code = r#"
+fn encode(img: &Image) -> Result<Vec<u8>, String> {
+    let fail = |e: gif::EncodingError| format!("GIF encoding failed: {e}");
+    let gone = move |_| GONE.to_string();
+    let size = if img.is_empty() { WRONG.into() } else { 0 };
+    let mut enc = Encoder::new(img).map_err(fail)?;
+    enc.write(img).map_err(fail)?;
+    enc.check().map_err(gone)?;
+    enc.close().map_err(unreadable)?;
+    enc.into_inner().map_err(Error::Io)
+}
+
+fn unreadable(e: impl std::fmt::Display) -> String {
+    let e = e.to_string();
+    format!("the file can't be read: {e}")
+}
+"#;
+    let consts = [("GONE", "the encoder is gone"), ("WRONG", "the image is wrong")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = ["GIF encoding failed: {e}", "the encoder is gone", "the file can't be read: {e}"];
+    assert_eq!(source_messages(code, &[], &consts), want);
+    let render = message_literals_in(&["render"]);
+    assert!(render.contains("GIF encoding failed: {e}") && render.contains("JPEG encoding failed: {e}"));
+    assert!(message_literals_in(&["engine"]).contains("Data Recovery can't keep copies in {path}: {e}"));
 }
 
 /// The scan stops at a test module whose `cfg` is `test` or `all(test, …)`, and reads on past a
@@ -3880,8 +4006,13 @@ const COMPLETE_MESSAGES: &[&str] = &[
     "nl",
 ];
 
-/// Crates whose error and status messages reach the status bar.
-const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace", "js"];
+/// Crates whose error and status messages reach the status bar, the crates whose errors the
+/// engine and the effects pass on included (effects, swatch libraries, raster sizes and encoders,
+/// 3D solids, path operations).
+const MESSAGE_CRATES: &[&str] = &[
+    "ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace", "js", "effects", "color", "render",
+    "three-d", "pathops",
+];
 
 /// Where a message literal starts: a status, an error value, a `thiserror` message.
 const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Other(", "Err(", "ok_or(", "ok_or_else(|| ", "#[error("];
@@ -3926,9 +4057,10 @@ const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
 /// `EngineError::Disabled(command id, reason)`.
 const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
 
-/// Messages that are signals, not text for people, and the name of a plug-in export that an
-/// error message holds (`vc_manifest points outside memory`).
-const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest"];
+/// Messages that are signals, not text for people, the name of a plug-in export that an error
+/// message holds (`vc_manifest points outside memory`), and the steps of the path to a script
+/// result's part that an error message holds (`vc.run: the result{place} is too large for a script`).
+const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest", "[{i}]{place}", ".{k}{place}"];
 
 /// Every status and error message literal in [`MESSAGE_CRATES`] (test modules aside), as catalog
 /// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`).
@@ -4046,8 +4178,11 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 
 /// The message literals in `code` outside its comments, as catalog templates (see
 /// [`message_literals`]): the literal after each of [`MESSAGE_MARKERS`], the message argument of an
-/// error enum's variant (the first, as in `PsError::Limit(…)` and `Error::Manifest(…)`, or the one
+/// error enum's variant, an enum whose name ends in `Error` or `Fail` (the first argument, as in
+/// `PsError::Limit(…)`, `Error::Manifest(…)` and `CompileFail::Syntax(…)`, or the one
 /// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
+/// the messages a `.map_err` closure returns (`.map_err(|e| format!("…: {e}"))`, see
+/// [`closure_returns`]) or the handler a `.map_err(name)` names returns (see [`handler_returns`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal, a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
@@ -4055,20 +4190,34 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
-    let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
+    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(|enum_end| code.match_indices(enum_end)).filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
         let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
         if named { skip_args(args.strip_prefix('(')?, before) } else { None }
     });
+    let in_map_err = code.match_indices(".map_err(").flat_map(|(at, m)| {
+        let rest = code[at + m.len()..].trim_start();
+        let params = rest.strip_prefix("move").map_or(rest, str::trim_start).strip_prefix('|');
+        params.and_then(|p| p.find('|').map(|end| &p[end + 1..])).map(closure_returns).unwrap_or_default()
+    });
+    let mut handlers = vec![];
+    for (at, m) in code.match_indices(".map_err(") {
+        let rest = &code[at + m.len()..];
+        let name = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len())];
+        if name.starts_with(|c: char| c.is_ascii_lowercase()) && rest[name.len()..].starts_with(')') && !handlers.contains(&name) {
+            handlers.push(name);
+        }
+    }
+    let in_handlers = handlers.into_iter().flat_map(|name| handler_returns(code, name));
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
             .filter_map(move |(at, _)| skip_args(&code[at + call.len()..], before))
     });
     let mut out = vec![];
-    for rest in after_markers.chain(in_variants).chain(in_helpers) {
+    for rest in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_helpers) {
         let rest = rest.trim_start();
         let rest = rest.strip_prefix('&').map_or(rest, str::trim_start);
         let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
@@ -4117,6 +4266,94 @@ fn skip_args(args: &str, n: usize) -> Option<&str> {
         }
     }
     None
+}
+
+/// Where each value the error handler `name` of a `.map_err(name)` in `code` can return starts:
+/// the closure the file binds to that name (`let fail = |e| format!("…: {e}");`, up to its `;`)
+/// or the body of the function of that name (`fn unreadable(e: …) -> String { … }`), read as
+/// [`closure_returns`] reads a closure.
+fn handler_returns<'a>(code: &'a str, name: &str) -> Vec<&'a str> {
+    let (bound, declared) = (format!("let {name} = "), format!("fn {name}("));
+    let mut out = vec![];
+    for (at, m) in code.match_indices(bound.as_str()).chain(code.match_indices(declared.as_str())) {
+        if code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_') {
+            continue;
+        }
+        let rest = &code[at + m.len()..];
+        if m == bound {
+            let rest = rest.strip_prefix("move").map_or(rest, str::trim_start);
+            if let Some(body) = rest.strip_prefix('|').and_then(|p| p.find('|').map(|end| &p[end + 1..])) {
+                out.extend(closure_returns(statement(body)));
+            }
+        } else if let Some(open) = rest.find('{') {
+            out.extend(closure_returns(&rest[open + 1..]));
+        }
+    }
+    out
+}
+
+/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in.
+fn statement(code: &str) -> &str {
+    let (mut depth, mut chars) = (0usize, code.char_indices());
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => depth = d,
+                None => return &code[..at],
+            },
+            ';' if depth == 0 => return &code[..at],
+            '"' => loop {
+                match chars.next() {
+                    Some((_, '\\')) => {
+                        chars.next();
+                    }
+                    Some((_, '"')) | None => break,
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+    code
+}
+
+/// Where each value a closure can return starts, `body` being the text after its parameters: the
+/// body itself, each block or `if`/`else` branch in it (`{ ACB_CUT_SHORT.into() }`, not the
+/// `{` of a `json!({…})` value), each `match` arm (`=>`) and each statement after a `;` (the
+/// last expression of a block or a function body), up to the bracket that closes the call the
+/// closure is given to or the function.
+fn closure_returns(body: &str) -> Vec<&str> {
+    let mut out = vec![body];
+    let (mut depth, mut chars) = (0usize, body.char_indices());
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '(' | '[' => depth += 1,
+            '{' => {
+                depth += 1;
+                if !body[..at].trim_end().ends_with('(') {
+                    out.push(&body[at + 1..]);
+                }
+            }
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => depth = d,
+                None => break,
+            },
+            ';' => out.push(&body[at + 1..]),
+            '=' if body[at + 1..].starts_with('>') => out.push(&body[at + 2..]),
+            '"' => loop {
+                match chars.next() {
+                    Some((_, '\\')) => {
+                        chars.next();
+                    }
+                    Some((_, '"')) | None => break,
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Source up to its inline test module (`#[cfg(test)] mod tests {`, or a `cfg(all(test, …))` one);
