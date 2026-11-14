@@ -46,7 +46,7 @@ const ROWS: &[Row] = &[
     // Live Paint Selection Tool Options (`builder::LivePaintSelectionTool`).
     (&["livePaintSelection"], None, &["selectFills", "selectStrokes", "color", "width"]),
     // Live Paint Bucket Options (`builder::LivePaintBucketTool`).
-    (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "highlight", "color", "width"]),
+    (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
     (&["freeTransform"], None, &["constrain"]),
