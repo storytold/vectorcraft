@@ -2610,6 +2610,10 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
+	Preserve RGB Numbers	Pertahankan angka RGB
+	Device to Simulate:	Perangkat yang disimulasikan:
+	Simulate Paper Color	Simulasikan warna kertas
+	Simulate Black Ink	Simulasikan tinta hitam
 	Previous page	Halaman sebelumnya
 	Print Layers:	Lapisan cetak:
 	Print Preset:	Preset cetak:

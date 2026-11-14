@@ -2567,6 +2567,10 @@ diagnostics	ui	Oberfläche
 	Preserve Alpha Transparency	Alphatransparenz beibehalten
 	Preserve Appearance and Overprints	Aussehen und Überdrucken beibehalten
 	Preserve CMYK Numbers	CMYK-Werte beibehalten
+	Preserve RGB Numbers	RGB-Werte beibehalten
+	Device to Simulate:	Zu simulierendes Gerät:
+	Simulate Paper Color	Papierfarbe simulieren
+	Simulate Black Ink	Schwarze Druckfarbe simulieren
 	Preserve Editing Capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve editing capabilities	Bearbeitungsfunktionen beibehalten
 	Preserve Lightness	Helligkeit beibehalten

@@ -2,6 +2,9 @@
 //!
 //! * **Proof Colors** post-processes the rendered frame: every pixel goes display sRGB → proof
 //!   space (CMYK press or RGB/colour-blindness simulation) → display, through a cached 17³ LUT.
+//!   With Preserve CMYK or RGB Numbers ([`preserves`]) each color is proofed from its own numbers
+//!   as it is painted instead ([`crate::ink::Ink::Proofed`]), and placed images from their own
+//!   inks or pixels ([`plate_image`]).
 //! * **Separations Preview** recolours the *document* before rendering: each paint colour is split
 //!   into process inks (colour-managed), or a spot ink at the colour's tint when it's linked to a
 //!   spot swatch (solid colours and gradient stops alike), with the process plates a gradient stop
@@ -43,6 +46,21 @@ use crate::images::{self, ImageKey};
 /// Whether overprinting shows: Overprint Preview, or Separations Preview (which implies it).
 pub(crate) fn overprints(opts: &RenderOptions) -> bool {
     opts.overprint_preview || opts.proof.as_ref().is_some_and(|p| p.separations.is_some())
+}
+
+/// Whether Proof Colors sends the colors' own numbers to the device it simulates (Preserve CMYK
+/// or RGB Numbers on a CMYK or RGB device, outside Separations Preview): each color is proofed as
+/// it is painted ([`crate::ink::Ink::Proofed`]) and placed images from their own inks or pixels
+/// ([`plate_image`]), and the drawn frame is not proofed again ([`post`]).
+pub(crate) fn preserves(proof: &ProofSetup) -> bool {
+    proof.preserve_numbers
+        && proof.separations.is_none()
+        && matches!(proof.target, ProofTarget::WorkingCmyk | ProofTarget::Cmyk(_) | ProofTarget::Rgb(_))
+}
+
+/// The proof of [`RenderOptions::proof`] when it [`preserves`] the colors' numbers.
+pub(crate) fn preserving(opts: &RenderOptions) -> Option<&ProofSetup> {
+    opts.proof.as_ref().filter(|p| preserves(p))
 }
 
 /// What the `visible` plates print of `ink`, as display sRGB, without the spot inks over several
@@ -101,10 +119,26 @@ pub(crate) struct PlateLut {
 }
 
 impl PlateLut {
-    /// What the visible plates show of process inks `cmyk`, as display sRGB.
+    /// What the visible plates show of process inks `cmyk`, as display sRGB; with Preserve
+    /// Numbers outside Separations Preview, the inks as the proof's device shows them.
     fn shown(&self, cmyk: [f32; 4]) -> [f32; 3] {
-        let visible = self.proof.separations.as_deref().unwrap_or_default();
-        plate_rgb(&self.cms, &self.proof, visible, &Inks { cmyk, spot: None, registration: false })
+        match self.proof.separations.as_deref() {
+            Some(visible) => plate_rgb(&self.cms, &self.proof, visible, &Inks { cmyk, spot: None, registration: false }),
+            None => {
+                let [c, m, y, k] = cmyk;
+                self.cms.proof_color(&Color::Cmyk { c, m, y, k }, &self.proof)
+            }
+        }
+    }
+
+    /// What display pixel `rgb` shows as: its inks separated with the proof's intent through the
+    /// visible plates, or with Preserve Numbers outside Separations Preview, its numbers as the
+    /// proof's device shows them.
+    fn shown_rgb(&self, rgb: [f32; 3]) -> [f32; 3] {
+        match self.proof.separations {
+            Some(_) => self.shown(self.cms.srgb_to_cmyk(rgb, self.proof.intent)),
+            None => self.cms.proof_srgb(rgb, &self.proof),
+        }
     }
 }
 
@@ -114,10 +148,19 @@ static PLATE_LUTS: Mutex<Vec<Arc<PlateLut>>> = Mutex::new(Vec::new());
 /// The last [`PlateLut::generation`] handed out.
 static PLATE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+/// The tables the placed images of `doc` show through in art drawn with `ink` apart from a frame's
+/// options (a pattern's tiles): with a proof that preserves the colors' numbers
+/// ([`crate::ink::Ink::Proofed`]), that proof's ([`plate_lut`]); else `None`.
+pub(crate) fn ink_plate_lut(ink: crate::ink::Ink, doc: &Document) -> Option<Arc<PlateLut>> {
+    let proof = crate::ink::proof_of(ink)?;
+    plate_lut(&RenderOptions { proof: Some(proof), ..Default::default() }, doc)
+}
+
 /// The tables the placed images of `doc` show Separations Preview's visible plates through with
-/// `opts`, or `None` when it is off.
+/// `opts`, or their colors as a proof that [`preserves`] the numbers shows them; `None` when
+/// neither is on.
 pub(crate) fn plate_lut(opts: &RenderOptions, doc: &Document) -> Option<Arc<PlateLut>> {
-    let proof = opts.proof.as_ref().filter(|p| p.separations.is_some())?;
+    let proof = opts.proof.as_ref().filter(|p| p.separations.is_some() || preserves(p))?;
     let (c, profiles) = (cms::active(), cms::profiles_generation());
     // The spot ones are the spot plates of `vectorcraft_doc::inks::plates`; their colors are part
     // of the tables' identity, so a swatch edit shows.
@@ -151,12 +194,17 @@ pub(crate) fn plate_image(lut: &PlateLut, key: &ImageKey, pm: &Pixmap, blob: Opt
         return (want, p);
     }
     // An image placed from a DCS file shows its own plates, spot plates included.
-    if let Some(s) = blob.filter(|b| crate::ink::shows_own_inks(key) && b.is_separated()).and_then(ImageBlob::separated) {
+    if let Some(s) =
+        blob.filter(|b| lut.proof.separations.is_some() && crate::ink::shows_own_inks(key) && b.is_separated()).and_then(ImageBlob::separated)
+    {
         let out = images::store().insert(want.clone(), Arc::new(plates_shown(lut, &s, pm)));
         return (want, out);
     }
     let size = (u32::from(pm.width()), u32::from(pm.height()));
-    let raw = crate::ink::key_inks(key, blob).filter(|i| (i.width, i.height) == size);
+    // A proof that preserves the numbers shows darkened pixels (a shadow's) as they are drawn,
+    // not the image's own inks.
+    let darkened = lut.proof.separations.is_none() && key.ink.is_darkened();
+    let raw = crate::ink::key_inks(key, blob).filter(|i| !darkened && (i.width, i.height) == size);
     let mut out = pm.clone();
     match raw {
         Some(inks) => {
@@ -173,7 +221,7 @@ pub(crate) fn plate_image(lut: &PlateLut, key: &ImageKey, pm: &Pixmap, blob: Opt
             }
         }
         None => {
-            let t = lut.rgb.get_or_init(|| ProofLut::build(|rgb| lut.shown(lut.cms.srgb_to_cmyk(rgb, lut.proof.intent))));
+            let t = lut.rgb.get_or_init(|| ProofLut::build(|rgb| lut.shown_rgb(rgb)));
             for px in out.data_mut().iter_mut().filter(|p| p.a > 0) {
                 let a = f32::from(px.a);
                 let un = |v: u8| (f32::from(v) / a).min(1.0);
@@ -460,7 +508,7 @@ fn prepare_node(n: &Arc<Node>, earlier: Option<(&Arc<Node>, &Arc<Node>)>, how: &
 /// Soft-proof the rendered (premultiplied RGBA8) pixels in place.
 pub(crate) fn post(pixels: &mut [u8], opts: &RenderOptions) {
     let Some(proof) = opts.proof.as_ref() else { return };
-    if proof.separations.is_some() || matches!(proof.target, ProofTarget::MonitorRgb | ProofTarget::Srgb) {
+    if proof.separations.is_some() || preserves(proof) || matches!(proof.target, ProofTarget::MonitorRgb | ProofTarget::Srgb) {
         return;
     }
     let lut = cms::active().proof_lut(proof);
@@ -483,6 +531,16 @@ pub(crate) fn post(pixels: &mut [u8], opts: &RenderOptions) {
         }
         last_out.copy_from_slice(px);
     }
+}
+
+/// Solid color `[r, g, b, a]` (straight alpha) under the art of a frame drawn with `opts`: with a
+/// proof that [`preserves`] the numbers, whose art [`prepare`] proofs before drawing, as the
+/// proof's device shows it (white paper takes Simulate Paper Color's tint), so the art's
+/// transparency and edges mix with it as they print; else as it is.
+pub(crate) fn under_art(opts: &RenderOptions, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    let Some(proof) = preserving(opts) else { return [r, g, b, a] };
+    let [r, g, b] = cms::active().proof_srgb([r, g, b].map(|v| f32::from(v) / 255.0), proof).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    [r, g, b, a]
 }
 
 /// View-level proof state (View → Proof Setup / Proof Colors / Overprint Preview, Separations

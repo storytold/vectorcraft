@@ -550,7 +550,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Color blindness – Protanopia-type", "view.proofSetup", json!({"target": "protanopia", "proof": true})),
                         cp("Color blindness – Deuteranopia-type", "view.proofSetup", json!({"target": "deuteranopia", "proof": true})),
                         cp("Color blindness – Tritanopia-type", "view.proofSetup", json!({"target": "tritanopia", "proof": true})),
-                        cp("Customize…", "window.panel", json!({"panel": "separations"})),
+                        c("Customize…", "ui.proofSetupDialog"),
                     ],
                 ),
                 c("Proof Colors", "view.proofColors"),

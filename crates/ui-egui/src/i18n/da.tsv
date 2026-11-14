@@ -2610,6 +2610,10 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Placér siderne igen med placeringen
 	Placement:	Placering:
 	Preserve CMYK Numbers	Bevar CMYK-tal
+	Preserve RGB Numbers	Bevar RGB-tal
+	Device to Simulate:	Enhed, der simuleres:
+	Simulate Paper Color	Simulér papirfarve
+	Simulate Black Ink	Simulér sort blæk
 	Previous page	Forrige side
 	Print Layers:	Udskriv lag:
 	Print Preset:	Udskriftsforudindstilling:

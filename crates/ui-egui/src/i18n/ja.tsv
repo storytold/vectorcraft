@@ -2740,6 +2740,10 @@ diagnostics	ui	UI
 	Preserve Alpha Transparency	アルファ透明を保持
 	Preserve Appearance and Overprints	アピアランスとオーバープリントを保持
 	Preserve CMYK Numbers	CMYK 値を保持
+	Preserve RGB Numbers	RGB 値を保持
+	Device to Simulate:	シミュレートするデバイス:
+	Simulate Paper Color	用紙の色をシミュレート
+	Simulate Black Ink	インキの黒をシミュレート
 	Preserve Editing Capabilities	編集機能を保持
 	Preserve Lightness	明度を保持
 	Preserve Overprints and Spot Colors	オーバープリントと特色を保持

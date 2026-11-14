@@ -104,6 +104,13 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        // Customize… is checked while the proof simulates a profile it chose.
+        "ui.proofSetupDialog" => {
+            matches!(
+                vectorcraft_render::proof::view().setup.target,
+                vectorcraft_color::cms::ProofTarget::Cmyk(_) | vectorcraft_color::cms::ProofTarget::Rgb(_)
+            )
+        }
         "perspective.grid.snap" => perspective_grid(app).is_some_and(|g| g.snap),
         "perspective.grid.lockStation" => perspective_grid(app).is_some_and(|g| g.lock_station),
         "file.documentColorMode" | "object.convertDocumentColorMode" => {

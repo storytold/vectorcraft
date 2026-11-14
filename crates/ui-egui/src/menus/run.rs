@@ -816,6 +816,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "ui.proofSetupDialog" => {
+            crate::dialogs::proof_setup::open(app);
+            Ok(Value::Null)
+        }
         "ui.indexedColorDialog" => {
             crate::dialogs::indexed_color::open(app);
             Ok(Value::Null)

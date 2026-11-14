@@ -2595,6 +2595,10 @@ font-technology	Variable	Variables
 	Preserve Alpha Transparency	Conserver la transparence alpha
 	Preserve Appearance and Overprints	Conserver l’aspect et les surimpressions
 	Preserve CMYK Numbers	Conserver les valeurs CMJN
+	Preserve RGB Numbers	Conserver les valeurs RVB
+	Device to Simulate:	Périphérique à simuler :
+	Simulate Paper Color	Simuler la couleur du papier
+	Simulate Black Ink	Simuler l’encre noire
 	Preserve Editing Capabilities	Conserver les fonctions d’édition
 	Preserve editing capabilities	Conserver les fonctions d’édition
 	Preserve Lightness	Conserver la luminosité

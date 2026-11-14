@@ -3384,6 +3384,10 @@ theme	Appearance	Εμφάνιση
 	Preserve Alpha Transparency	Διατήρηση διαφάνειας άλφα
 	Preserve Appearance and Overprints	Διατήρηση εμφάνισης και υπερεκτυπώσεων
 	Preserve CMYK Numbers	Διατήρηση τιμών CMYK
+	Preserve RGB Numbers	Διατήρηση τιμών RGB
+	Device to Simulate:	Συσκευή προς προσομοίωση:
+	Simulate Paper Color	Προσομοίωση χρώματος χαρτιού
+	Simulate Black Ink	Προσομοίωση μαύρης μελάνης
 	Preserve Editing Capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve editing capabilities	Διατήρηση δυνατοτήτων επεξεργασίας
 	Preserve Lightness	Διατήρηση φωτεινότητας

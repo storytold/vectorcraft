@@ -610,6 +610,44 @@ fn proof_setup_simulates_tritanopia() {
     s.execute("view.proofSetup", &json!({"target": "workingCmyk", "proof": false})).unwrap();
 }
 
+/// View › Proof Setup › Customize's settings: an RGB profile as the device, Preserve Numbers and
+/// Simulate Black Ink, kept in the proof view, read back and drawn; bad values are refused and
+/// leave the view as it was.
+#[test]
+fn proof_setup_takes_the_custom_proof_settings() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0, json!("#000000"));
+    let r = s.execute("view.proofSetup", &json!({})).unwrap();
+    assert_eq!((r["preserveNumbers"].as_bool(), r["simulateBlack"].as_bool()), (Some(false), Some(false)));
+    let device = format!("cmyk:{}", cms::GENERIC_CMYK);
+    let r = s.execute("view.proofSetup", &json!({"target": device, "simulateBlack": true, "proof": true})).unwrap();
+    assert_eq!((r["target"].as_str(), r["simulateBlack"].as_bool(), r["proofColors"].as_bool()), (Some(device.as_str()), Some(true), Some(true)));
+    let setup = vectorcraft_render::proof::active_proof().unwrap();
+    assert!(setup.simulate_black && !setup.preserve_numbers);
+    let doc = s.doc().unwrap().doc.clone();
+    let gray = render(&doc, RenderOptions { proof: Some(setup.clone()), ..Default::default() }).pixel(50, 50);
+    let black = render(&doc, RenderOptions { proof: Some(ProofSetup { simulate_black: false, ..setup }), ..Default::default() }).pixel(50, 50);
+    assert!(gray[0] > black[0] + 10, "the press black shows as a gray: {gray:?} vs {black:?}");
+    let rgb = format!("rgb:{}", cms::DISPLAY_P3);
+    let r = s.execute("view.proofSetup", &json!({"target": rgb, "preserveNumbers": true})).unwrap();
+    assert_eq!((r["target"].as_str(), r["preserveNumbers"].as_bool()), (Some(rgb.as_str()), Some(true)));
+    assert_eq!(vectorcraft_render::proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+    // Unchanged settings leave the revision alone.
+    let rev = s.doc().unwrap().revision;
+    s.execute("view.proofSetup", &json!({"target": rgb, "preserveNumbers": true, "simulateBlack": true})).unwrap();
+    assert_eq!(s.doc().unwrap().revision, rev);
+    let view = vectorcraft_render::proof::view();
+    refused(&mut s, "view.proofSetup", json!({"target": "rgb:Nope"}), "unknown RGB profile `Nope`");
+    refused(&mut s, "view.proofSetup", json!({"target": format!("rgb:{}", cms::GENERIC_CMYK)}), "unknown RGB profile");
+    refused(&mut s, "view.proofSetup", json!({"target": "rgb:"}), "unknown RGB profile");
+    refused(&mut s, "view.proofSetup", json!({"target": "workingCmyk", "preserveNumbers": "yes"}), "`preserveNumbers` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"simulateBlack": 1}), "`simulateBlack` must be true or false");
+    assert_eq!(vectorcraft_render::proof::view(), view, "the proof view is unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+}
+
 /// Whether the content has a DeviceCMYK fill/stroke operator (`c m y k k` / `K`).
 fn has_cmyk_op(pdf: &str) -> bool {
     let toks: Vec<&str> = pdf.split_ascii_whitespace().collect();

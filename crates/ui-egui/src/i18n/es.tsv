@@ -2603,6 +2603,10 @@ font-technology	Variable	Variables
 	Preserve Alpha Transparency	Conservar transparencia alfa
 	Preserve Appearance and Overprints	Conservar apariencia y sobreimpresiones
 	Preserve CMYK Numbers	Conservar valores CMYK
+	Preserve RGB Numbers	Conservar valores RGB
+	Device to Simulate:	Dispositivo que simular:
+	Simulate Paper Color	Simular color del papel
+	Simulate Black Ink	Simular tinta negra
 	Preserve Editing Capabilities	Conservar capacidades de edición
 	Preserve editing capabilities	Conservar capacidades de edición
 	Preserve Lightness	Conservar luminosidad

@@ -96,6 +96,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod proof_setup;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -349,6 +350,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    ProofSetup: [proof_setup::KIND] => proof_setup::SPEC,
     IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
@@ -676,6 +678,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
+        }
+        if d.kind == proof_setup::KIND {
+            proof_setup::cancel(app, &d);
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

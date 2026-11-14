@@ -2630,6 +2630,10 @@ diagnostics	ui	интерфейс
 	Preserve Alpha Transparency	Сохранять альфа-прозрачность
 	Preserve Appearance and Overprints	Сохранять оформление и наложения
 	Preserve CMYK Numbers	Сохранять значения CMYK
+	Preserve RGB Numbers	Сохранять значения RGB
+	Device to Simulate:	Имитируемое устройство:
+	Simulate Paper Color	Имитировать цвет бумаги
+	Simulate Black Ink	Имитировать чёрную краску
 	Preserve Editing Capabilities	Сохранять возможности редактирования
 	Preserve editing capabilities	Сохранять возможности редактирования
 	Preserve Lightness	Сохранять светлоту

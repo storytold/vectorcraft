@@ -362,6 +362,25 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// View › Proof Setup › Customize's labels.
+#[test]
+fn proof_setup_dialog_labels_are_in_complete_catalogs() {
+    let labels = [
+        "Proof Setup",
+        "Device to Simulate:",
+        "Preserve CMYK Numbers",
+        "Preserve RGB Numbers",
+        "Rendering intent:",
+        "Simulate Paper Color",
+        "Simulate Black Ink",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in labels {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {

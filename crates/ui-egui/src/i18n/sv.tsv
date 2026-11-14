@@ -2540,6 +2540,10 @@ font-technology	Variable	Variabla
 	Preserve Alpha Transparency	Bevara alfatransparens
 	Preserve Appearance and Overprints	Bevara utseende och övertryck
 	Preserve CMYK Numbers	Bevara CMYK-värden
+	Preserve RGB Numbers	Bevara RGB-värden
+	Device to Simulate:	Enhet att simulera:
+	Simulate Paper Color	Simulera pappersfärg
+	Simulate Black Ink	Simulera svart bläck
 	Preserve Editing Capabilities	Bevara redigeringsmöjligheter
 	Preserve editing capabilities	Bevara redigeringsmöjligheter
 	Preserve Lightness	Bevara ljushet

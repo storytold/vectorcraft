@@ -2643,6 +2643,10 @@ diagnostics	ui	interfaccia
 	Preserve Alpha Transparency	Mantieni trasparenza alfa
 	Preserve Appearance and Overprints	Mantieni aspetto e sovrastampe
 	Preserve CMYK Numbers	Mantieni valori CMYK
+	Preserve RGB Numbers	Mantieni valori RGB
+	Device to Simulate:	Dispositivo da simulare:
+	Simulate Paper Color	Simula colore carta
+	Simulate Black Ink	Simula inchiostro nero
 	Preserve Editing Capabilities	Mantieni possibilità di modifica
 	Preserve editing capabilities	Mantieni possibilità di modifica
 	Preserve Lightness	Mantieni luminosità

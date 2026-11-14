@@ -6,7 +6,7 @@
 use std::sync::{Mutex, MutexGuard};
 
 use serde_json::json;
-use vectorcraft_color::cms;
+use vectorcraft_color::{Color, cms};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, doc_profiles};
 use vectorcraft_engine::store::MAX_PRESET_FILE;
@@ -864,4 +864,59 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
         let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
         assert!(!saved.bpc && saved.cmyk == cms::GENERIC_CMYK, "written over by the next change: {saved:?}");
     }
+}
+
+/// View › Proof Setup › Customize's Preserve CMYK Numbers proofs each color from its own inks:
+/// with Device CMYK as the working space, C50 M50 Y50 and K50 show as the same gray, and on
+/// VectorCraft Generic CMYK they print, and so proof, as different grays; a pattern's tile art
+/// proofs the same way. Without it the proof starts from the drawn pixels, which are the same.
+#[test]
+fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let k50 = json!({"c": 0, "m": 0, "y": 0, "k": 50});
+    let cmy = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [cmy.0], "color": {"c": 50, "m": 50, "y": 50, "k": 0}}));
+    let k = rect(&mut s, 100.0, 0.0, 100.0, 100.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [k.0], "color": k50}));
+    // A pattern whose tile is all K50, filling a band below the squares.
+    let tile = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [tile.0], "color": k50}));
+    exec(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "K50 Tile", "edit": false}));
+    let band = rect(&mut s, 0.0, 130.0, 200.0, 40.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [band.0], "swatch": "K50 Tile"}));
+    let proof = |preserve_numbers| vectorcraft_render::proof::ProofSetup {
+        target: vectorcraft_render::proof::ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        preserve_numbers,
+        ..Default::default()
+    };
+    let doc = s.doc().unwrap().doc.clone();
+    let pixel = |px: &[u8], x: usize, y: usize| [px[(y * 200 + x) * 4], px[(y * 200 + x) * 4 + 1], px[(y * 200 + x) * 4 + 2]];
+    // The pixels at the centers of the two squares and in the patterned band.
+    let shown = |proof: Option<vectorcraft_render::proof::ProofSetup>| {
+        let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
+        let px = Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels;
+        (pixel(&px, 50, 50), pixel(&px, 150, 50), pixel(&px, 55, 155))
+    };
+    let (a, b, _) = shown(None);
+    let (pa, pb, _) = shown(Some(proof(false)));
+    let (ca, cb, cp) = shown(Some(proof(true)));
+    let want = |c: Color| cms::active().proof_color(&c, &proof(true)).map(|v| (v * 255.0).round() as i32);
+    let cmy_want = want(Color::cmyk(0.5, 0.5, 0.5, 0.0));
+    let k_want = want(Color::cmyk(0.0, 0.0, 0.0, 0.5));
+    // With Simulate Paper Color the art sits on the device's paper, not on white.
+    let paper = vectorcraft_render::proof::ProofSetup { simulate_paper: true, ..proof(true) };
+    let tint = cms::active().proof_srgb([1.0; 3], &paper).map(|v| (v * 255.0).round() as i32);
+    let opts = RenderOptions { proof: Some(paper), background: Some([255, 255, 255, 255]), ..Default::default() };
+    let bare = pixel(&Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels, 50, 115);
+    cms::set_active(&old).unwrap();
+    assert_eq!(a, b, "the two builds show as one gray in Device CMYK");
+    assert_eq!(pa, pb, "proofed from the pixels, they stay one gray");
+    assert!(ca != cb, "proofed from their inks, they print differently: {ca:?} vs {cb:?}");
+    let near = |got: [u8; 3], want: [i32; 3]| got.iter().zip(want).all(|(g, w)| (i32::from(*g) - w).abs() <= 2);
+    assert!(near(ca, cmy_want) && near(cb, k_want), "{ca:?} {cmy_want:?}, {cb:?} {k_want:?}");
+    assert!(near(cp, k_want), "the pattern's tile proofs from its inks: {cp:?} vs {k_want:?}");
+    assert!(tint != [255; 3] && near(bare, tint), "the bare page shows the paper: {bare:?} vs {tint:?}");
 }

@@ -100,7 +100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Proof Setup",
             ["View", "Proof Setup"],
             None,
-            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\", intent?, simulatePaper?, proof?: bool (also turn Proof Colors on)} → proof state",
+            "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"rgb:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\" (cmyk: and rgb: name a CMYK or RGB profile of color.loadProfile or the built-in ones: the device to simulate), intent? (used while preserveNumbers is off), simulatePaper?: bool, preserveNumbers?: bool (Preserve CMYK or RGB Numbers: the colors' numbers in the document's space go to the device unchanged), simulateBlack?: bool (Simulate Black Ink: the device's black shows as the dark gray it prints; simulatePaper does this too; CMYK devices only, as simulatePaper), proof?: bool (also turn Proof Colors on)} → proof state",
             always,
             proof_setup
         ),
@@ -235,7 +235,7 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
         use_front_profiles(s);
         touch_all(s);
     } else if proof_targets(&info.name) {
-        // A new file of the CMYK profile View → Proof Setup targets: redraw.
+        // A new file of the profile View → Proof Setup targets: redraw.
         touch_all(s);
     } else {
         // Documents behind the front one draw through their own profiles: those assigned it redraw.
@@ -266,7 +266,7 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if active.rgb == name || active.cmyk == name {
         use_front_profiles(s);
     }
-    // The CMYK profile View → Proof Setup targets: redraw.
+    // The profile View → Proof Setup targets: redraw.
     if proof_targets(&info.name) {
         touch_all(s);
     }
@@ -285,9 +285,9 @@ fn touch_assigned(s: &mut Session, name: &str) {
     }
 }
 
-/// Whether View → Proof Setup targets the CMYK profile `name`.
+/// Whether View → Proof Setup targets the CMYK or RGB profile `name`.
 fn proof_targets(name: &str) -> bool {
-    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) if t == name)
+    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) | ProofTarget::Rgb(t) if t == name)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -799,6 +799,8 @@ fn view_json(v: &proof::ProofView) -> Value {
         "target": v.setup.target.id(),
         "intent": v.setup.intent.id(),
         "simulatePaper": v.setup.simulate_paper,
+        "preserveNumbers": v.setup.preserve_numbers,
+        "simulateBlack": v.setup.simulate_black,
         "proofColors": v.proof_colors,
         "overprintPreview": v.overprint,
         "separations": v.separations,
@@ -815,12 +817,19 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
         {
             return Err(bad(C, format!("unknown CMYK profile `{name}`")));
         }
+        if let ProofTarget::Rgb(name) = &t
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Rgb)
+        {
+            return Err(bad(C, format!("unknown RGB profile `{name}`")));
+        }
         v.setup.target = t;
     }
     if let Some(i) = intent_param(p, C)? {
         v.setup.intent = i;
     }
     v.setup.simulate_paper = switch_or(p, "simulatePaper", v.setup.simulate_paper, C)?;
+    v.setup.preserve_numbers = switch_or(p, "preserveNumbers", v.setup.preserve_numbers, C)?;
+    v.setup.simulate_black = switch_or(p, "simulateBlack", v.setup.simulate_black, C)?;
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }

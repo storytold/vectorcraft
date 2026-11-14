@@ -2945,6 +2945,10 @@ diagnostics	ui	giao diện
 	Preserve Alpha Transparency	Bảo lưu trong suốt kênh Alpha
 	Preserve Appearance and Overprints	Bảo lưu diện mạo và in chồng
 	Preserve CMYK Numbers	Bảo lưu giá trị CMYK
+	Preserve RGB Numbers	Bảo lưu giá trị RGB
+	Device to Simulate:	Thiết bị cần giả lập:
+	Simulate Paper Color	Giả lập màu giấy
+	Simulate Black Ink	Giả lập mực đen
 	Preserve Editing Capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve editing capabilities	Bảo lưu khả năng chỉnh sửa
 	Preserve Lightness	Bảo lưu độ sáng

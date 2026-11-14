@@ -2387,6 +2387,10 @@ shape	Open	Açık
 	Preserve Alpha Transparency	Alfa Şeffaflığını Koruyun
 	Preserve Appearance and Overprints	Görünümü ve Üst Baskıları Koru
 	Preserve CMYK Numbers	CMYK Numaralarını Koru
+	Preserve RGB Numbers	RGB Numaralarını Koru
+	Device to Simulate:	Simüle Edilecek Aygıt:
+	Simulate Paper Color	Kağıt Rengini Simüle Et
+	Simulate Black Ink	Siyah Mürekkebi Simüle Et
 	Preserve Editing Capabilities	Düzenleme Yeteneklerini Koruyun
 	Preserve editing capabilities	Düzenleme yeteneklerini koruyun
 	Preserve Lightness	Hafifliği Koruyun

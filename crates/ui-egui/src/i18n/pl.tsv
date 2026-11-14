@@ -2741,6 +2741,10 @@ digits	Malayalam	Malajalam
 	Place the pages with the placement again	Ponownie rozmieść strony według położenia
 	Placement:	Położenie:
 	Preserve CMYK Numbers	Zachowaj wartości CMYK
+	Preserve RGB Numbers	Zachowaj wartości RGB
+	Device to Simulate:	Symulowane urządzenie:
+	Simulate Paper Color	Symuluj kolor papieru
+	Simulate Black Ink	Symuluj czarną farbę
 	Previous page	Poprzednia strona
 	Print Layers:	Drukuj warstwy:
 	Print Preset:	Ustawienie drukowania:

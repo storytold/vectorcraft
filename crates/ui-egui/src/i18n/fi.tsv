@@ -2772,6 +2772,10 @@ digits	Malayalam	Malajalam
 	Place the pages with the placement again	Sijoita sivut uudelleen sijoittelun mukaan
 	Placement:	Sijoittelu:
 	Preserve CMYK Numbers	Säilytä CMYK-arvot
+	Preserve RGB Numbers	Säilytä RGB-arvot
+	Device to Simulate:	Simuloitava laite:
+	Simulate Paper Color	Simuloi paperin väriä
+	Simulate Black Ink	Simuloi mustaa mustetta
 	Previous page	Edellinen sivu
 	Print Layers:	Tulosta tasot:
 	Print Preset:	Tulostuksen esiasetus:

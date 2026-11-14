@@ -3280,6 +3280,10 @@ digits	Malayalam	Malaiàlam
 	Preserve Appearance	Conserva l’aparença
 	Preserve Appearance and Overprints	Conserva l’aparença i les sobrempressions
 	Preserve CMYK Numbers	Conserva els valors CMYK
+	Preserve RGB Numbers	Conserva els valors RGB
+	Device to Simulate:	Dispositiu que se simula:
+	Simulate Paper Color	Simula el color del paper
+	Simulate Black Ink	Simula la tinta negra
 	Preserve Editing Capabilities	Conserva les capacitats d’edició
 	Preserve editing capabilities	Conserva les capacitats d’edició
 	Preserve Lightness	Conserva la lluminositat

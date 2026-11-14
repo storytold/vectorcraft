@@ -3153,6 +3153,10 @@ diagnostics	ui	felület
 	Preserve Appearance	Megjelenés megőrzése
 	Preserve Appearance and Overprints	Megjelenés és felülnyomások megtartása
 	Preserve CMYK Numbers	CMYK-értékek megtartása
+	Preserve RGB Numbers	RGB-értékek megtartása
+	Device to Simulate:	Szimulálandó eszköz:
+	Simulate Paper Color	Papírszín szimulálása
+	Simulate Black Ink	Fekete festék szimulálása
 	Preserve editing capabilities	Szerkeszthetőség megtartása
 	Preserve Editing Capabilities	Szerkeszthetőség megtartása
 	Preserve Lightness	Világosság megtartása

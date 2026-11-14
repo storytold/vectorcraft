@@ -2532,6 +2532,10 @@ digits	Malayalam	მალაიალამური
 	Place the pages with the placement again	გვერდების ხელახლა განთავსება განთავსების მიხედვით
 	Placement:	განთავსება:
 	Preserve CMYK Numbers	CMYK მნიშვნელობების შენარჩუნება
+	Preserve RGB Numbers	RGB მნიშვნელობების შენარჩუნება
+	Device to Simulate:	სიმულირებადი მოწყობილობა:
+	Simulate Paper Color	ქაღალდის ფერის იმიტაცია
+	Simulate Black Ink	შავი მელნის იმიტაცია
 	Previous page	წინა გვერდი
 	Print Layers:	შრეების ბეჭდვა:
 	Print Preset:	ბეჭდვის პრესეტი:

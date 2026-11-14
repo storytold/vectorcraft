@@ -3128,6 +3128,10 @@ digits	Malayalam	Malayalam
 	Place the pages with the placement again	Plaats de pagina's opnieuw met de plaatsing
 	Placement:	Plaatsing:
 	Preserve CMYK Numbers	CMYK-waarden behouden
+	Preserve RGB Numbers	RGB-waarden behouden
+	Device to Simulate:	Te simuleren apparaat:
+	Simulate Paper Color	Papierkleur simuleren
+	Simulate Black Ink	Zwarte inkt simuleren
 	Previous page	Vorige pagina
 	Print Layers:	Lagen afdrukken:
 	Print Preset:	Afdrukvoorinstelling:

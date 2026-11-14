@@ -321,6 +321,33 @@ mod tests {
         }
     }
 
+    /// A proof that preserves the colors' numbers proofs an art brush's own colors, as it proofs
+    /// the document's: the brush's blue shows as the simulated device shows that color's numbers.
+    #[test]
+    fn a_proof_that_preserves_numbers_proofs_brush_art() {
+        use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization};
+        use vectorcraft_color::cms;
+
+        let mut d = doc_with_line(Some("Blue art"), 1.0);
+        let blue = Color::rgb(0.0, 0.0, 1.0);
+        let art =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, -10.0, 10.0, 10.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+        let brush = Brush {
+            name: "Blue art".into(),
+            kind: BrushKind::Art(ArtBrush { art, scale: ArtScale::Stretch, colorization: Colorization::None, ..Default::default() }),
+        };
+        vectorcraft_brush::store(&mut d, &[brush]);
+        let proof = cms::ProofSetup { target: cms::ProofTarget::Cmyk(cms::DEVICE_CMYK.into()), preserve_numbers: true, ..Default::default() };
+        let want = cms::active().proof_color(&blue, &proof).map(|v| (v * 255.0).round() as i32);
+        let opts = RenderOptions { proof: Some(proof), background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        for _ in 0..2 {
+            let px = r.render(&d, 200, 100, Affine::IDENTITY, &opts).pixel(100, 50);
+            assert!(want != [0, 0, 255], "{want:?}");
+            assert!(px.iter().zip(want).all(|(p, w)| (i32::from(*p) - w).abs() <= 2), "{px:?} vs {want:?}");
+        }
+    }
+
     /// Object opacity fades a brushed stroke's art as a whole, with or without a dash and a fill:
     /// the same as the object at full opacity inside a group at that opacity.
     #[test]

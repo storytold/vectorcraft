@@ -2525,6 +2525,10 @@ font-technology	Variable	Променливи
 	Preserve Alpha Transparency	Запазване на алфа прозрачността
 	Preserve Appearance and Overprints	Запазване на визията и надпечатите
 	Preserve CMYK Numbers	Запазване на CMYK стойностите
+	Preserve RGB Numbers	Запазване на RGB стойностите
+	Device to Simulate:	Устройство за симулиране:
+	Simulate Paper Color	Симулиране на цвета на хартията
+	Simulate Black Ink	Симулиране на черното мастило
 	Preserve Editing Capabilities	Запазване на възможностите за редактиране
 	Preserve editing capabilities	Запазване на възможностите за редактиране
 	Preserve Lightness	Запазване на светлината

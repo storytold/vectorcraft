@@ -2828,6 +2828,10 @@ digits	Malayalam	Malajálamské
 	Place the pages with the placement again	Znovu rozmístit stránky podle umístění
 	Placement:	Umístění:
 	Preserve CMYK Numbers	Zachovat hodnoty CMYK
+	Preserve RGB Numbers	Zachovat hodnoty RGB
+	Device to Simulate:	Simulované zařízení:
+	Simulate Paper Color	Simulovat barvu papíru
+	Simulate Black Ink	Simulovat černou barvu
 	Previous page	Předchozí stránka
 	Print Layers:	Tisknout vrstvy:
 	Print Preset:	Přednastavení tisku:

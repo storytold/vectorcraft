@@ -2793,6 +2793,10 @@ digits	Malayalam	Malajalam
 	Place the pages with the placement again	Ponovo postavi stranice s postavljanjem
 	Placement:	Postavljanje:
 	Preserve CMYK Numbers	Očuvaj CMYK brojeve
+	Preserve RGB Numbers	Očuvaj RGB brojeve
+	Device to Simulate:	Uređaj za simulaciju:
+	Simulate Paper Color	Simuliraj boju papira
+	Simulate Black Ink	Simuliraj crnu tintu
 	Previous page	Prethodna stranica
 	Print Layers:	Štampaj slojeve:
 	Print Preset:	Predložak štampanja:
