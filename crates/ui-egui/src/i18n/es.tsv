@@ -7430,6 +7430,8 @@ breakText	Glyphs	Glifos
 @msg	No bridge of this width fits across the selected art	Ningún puente de este ancho cabe en la ilustración seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` debe estar entre -180 y 180 grados
+@msg	`roundness` must be from 1 to 100%	`roundness` debe estar entre 1 y 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caja y líneas de pelado…
 	Weed Box and Lines	Caja y líneas de pelado

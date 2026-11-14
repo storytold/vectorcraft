@@ -7467,6 +7467,8 @@ breakText	Glyphs	Glifs
 @msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
 @msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
 @msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` ha d’estar entre -180 i 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` ha d’estar entre 1 i 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa i línies de pelat…
 	Weed Box and Lines	Caixa i línies de pelat

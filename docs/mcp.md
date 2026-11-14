@@ -5271,6 +5271,12 @@ rotation that is neither a number nor null with `` `pressure` must be a number, 
 (`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
+`path.eraseRegion` refuses an `angle` outside -180° to 180° with `` `angle` must be from -180 to 180 degrees `` and a
+`roundness` outside 1% to 100% with `` `roundness` must be from 1 to 100% ``. `path.split` refuses a `t` outside 0 to 1
+with `` `t` must be from 0 to 1 ``, with `segment` or with `anchor`. The document does not change and no undo step is
+recorded. Left out or null, `angle` is 0° and `roundness` is 100%; left out, `t` is 0.5. The Eraser's ranges are
+VectorCraft's own values.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
 `independent` in `path.close` and `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and

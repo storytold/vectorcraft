@@ -8924,6 +8924,8 @@ digits	Hindi	Hindi
 @msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` måste vara från -180 till 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` måste vara från 1 till 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rensningsram och rensningslinjer…
 	Weed Box and Lines	Rensningsram och rensningslinjer
