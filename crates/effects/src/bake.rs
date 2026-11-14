@@ -26,20 +26,20 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
-use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
+use crate::reshape::{as_art, clipping_text_outline, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, reshape,
 };
 
-fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
+pub(crate) fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,
         AppearanceItem::Stroke(s) => &s.effects,
     }
 }
 
-fn clear_item_effects(item: &mut AppearanceItem) {
+pub(crate) fn clear_item_effects(item: &mut AppearanceItem) {
     match item {
         AppearanceItem::Fill(f) => f.effects = crate::raster::without_geometry(&f.effects),
         AppearanceItem::Stroke(s) => s.effects = crate::raster::without_geometry(&s.effects),
@@ -74,7 +74,7 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
 
 /// `path` with the geometry effects of `effects` applied, and how gradients follow them
 /// ([`crate::Carry`]).
-fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> (PathData, crate::Carry) {
+pub(crate) fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> (PathData, crate::Carry) {
     if !has_geometry(effects) || path.is_empty() {
         return (path.clone(), crate::Carry::default());
     }
@@ -86,7 +86,7 @@ fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext
 /// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
 /// moved along with them and the Transform effects the geometry pass left out hidden
 /// ([`crate::Carry::hide_skipped`]).
-fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
+pub(crate) fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
     let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
     let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
     if carry.moves(&ap) {
@@ -201,14 +201,88 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         {
             return bake_leaf(d, n);
         }
+        if let Some(m) = clip_group_with_type_clip(d, n) {
+            return Some(m);
+        }
         let mut m = n.clone();
-        let baked: Vec<Arc<Node>> = ch.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
+        // A clipping path takes the geometry effects in it as the canvas clips by it, those of a
+        // compound path's paths before the compound path's own ([`crate::clip::with_clip_effects_applied`]);
+        // the pieces it is made of then get ids of their own.
+        let clip = usize::from(n.clips());
+        let baked: Vec<Arc<Node>> = ch
+            .iter()
+            .enumerate()
+            .map(|(i, c)| match (i < clip).then(|| crate::clip::with_clip_effects_applied(c)).flatten() {
+                Some(a) => {
+                    let mut a = bake_node(d, &a).unwrap_or(a);
+                    fresh_ids(d, &mut a, &mut std::collections::HashSet::new());
+                    Arc::new(a)
+                }
+                None => bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()),
+            })
+            .collect();
         if let Some(ch) = m.children_mut() {
             *ch = baked;
         }
         return Some(m);
     }
     bake_leaf(d, n)
+}
+
+/// Clip group or clipping layer `n` whose clipping path is type with geometry effects (its own, its
+/// fills' or strokes', or a perspective), baked as the canvas draws it: the type becomes a
+/// clipping path of the region the canvas clips to ([`crate::clip_outline`]), its fills (with their
+/// effects baked) paint behind the clipped art inside the clip, and its strokes paint over it
+/// outside the clip, in a group that `n` becomes with its clip group inside ([`Node::clip_paint`]).
+/// The other members are baked as usual. `None` for other objects and when the type has nothing to
+/// clip by.
+fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
+    let (first, rest) = n.children()?.split_first()?;
+    if !n.clips()
+        || !matches!(first.kind, NodeKind::Text(_))
+        || !(has_geometry(&first.appearance.effects) || first.projection().is_some() || has_item_geometry(first))
+    {
+        return None;
+    }
+    let (bp, rule) = crate::clip_outline(first)?;
+    let mut clip = Node::path(first.id, PathData::from_bezpath(&bp), Appearance::default());
+    if let NodeKind::Path { rule: r, clipping, .. } = &mut clip.kind {
+        (*r, *clipping) = (rule, true);
+    }
+    clip.name = first.name.clone();
+    clip.visible = first.visible;
+    let paint = first.clip_paint();
+    // The type's fills and strokes as art: baked with the type's id, as the renderer draws them,
+    // then given ids of their own.
+    let mut seen = std::collections::HashSet::from([n.id, first.id]);
+    let mut art = |d: &mut Document, part: Option<Node>| {
+        part.map(|p| {
+            let mut a = bake_node(d, &p).unwrap_or(p);
+            fresh_ids(d, &mut a, &mut seen);
+            Arc::new(a)
+        })
+    };
+    let fill = art(d, paint.fill);
+    let stroke = art(d, paint.stroke);
+    let members: Vec<Arc<Node>> =
+        std::iter::once(Arc::new(clip)).chain(fill).chain(rest.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()))).collect();
+    let mut m = n.clone();
+    let Some(stroke) = stroke else {
+        if let Some(ch) = m.children_mut() {
+            *ch = members;
+        }
+        return Some(m);
+    };
+    // `n` keeps its id, name and transparency, and holds the clip group and the strokes over it.
+    let inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    match &mut m.kind {
+        NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
+            *children = vec![Arc::new(inner), stroke];
+            *clip = false;
+        }
+        _ => return None,
+    }
+    Some(m)
 }
 
 /// `m`, art evaluated from an object, with its children baked and then given ids of their own (the
@@ -407,7 +481,7 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
                         last => Some(Node::group(c.id, copies.into_iter().chain(last).map(Arc::new).collect())),
                     }
                 }
-                None if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+                None if clipping => clipping_text_outline(c),
                 None => as_art(Some(d), c, None),
             };
             if let Some(o) = art {
@@ -469,7 +543,7 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
 
 /// `n`'s geometry with its object-level geometry effects applied, its fill rule, the context of
 /// its effects, and `n` without those effects, its gradients moved along with them.
-fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
+pub(crate) fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     let (base, rule) = geometry(n)?;
     let ctx = GeomContext::of(n);
     let mut m = n.clone();

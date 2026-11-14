@@ -66,6 +66,69 @@ fn stop_reach_matches_scanning_the_stops() {
     }
 }
 
+/// A gradient's stops color what draws where they color a stretch that draws, for stops in any
+/// order: the sampler mixes stop `k` with stop `k + 1` above every offset of the stops before it,
+/// so an out-of-order stop's pair can have no width.
+#[test]
+fn drawn_stops_follow_the_sampled_stretches() {
+    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
+    let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
+    // In order: the clear stop next to the opaque one, not the one after it.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![true, true, false]);
+    // Out of order: the pair (0.8, 0.3) has no width, so the clear stop at 0.3 mixes only with
+    // the clear stop at 0.8 before it, and the pair (0.3, 1.0) is sampled above 0.8.
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 0.0), stop(1.0, 1.0)]).drawn_stops(), vec![false, false, true, true]);
+    // An opaque stop out of order: the pairs (0, 0.8) and (0.7, 1) cover every offset, so the
+    // pairs next to the stop at 0.3 have no width and it colors nothing.
+    let out_of_order = |o: f32| g(vec![stop(0.0, 0.0), stop(0.8, o), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
+    assert_eq!(out_of_order(0.0).drawn_stops(), vec![false; 5]);
+    // With the stop at 0.8 opaque, the pairs next to it with width are drawn.
+    assert_eq!(out_of_order(1.0).drawn_stops(), vec![true, true, false, false, false]);
+    // The last stop colors the offsets above every stop's, even when it is out of order.
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(0.6, 0.0), stop(0.5, 1.0)]).drawn_stops(), vec![false, false, true]);
+    // The first stop colors the offsets up to its own.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.0, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![true, false, false]);
+    // One stop, every stop clear, and no stops at all.
+    assert_eq!(g(vec![stop(0.5, 1.0)]).drawn_stops(), vec![true]);
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![false, false]);
+    assert!(g(vec![]).drawn_stops().is_empty());
+    // A freeform gradient draws from its points: its stops count while any is above opacity 0.
+    let mut free = g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]);
+    free.kind = GradientKind::Freeform;
+    assert_eq!(free.drawn_stops(), vec![true, true, true]);
+    free.stops.iter_mut().for_each(|s| s.opacity = 0.0);
+    assert_eq!(free.drawn_stops(), vec![false; 3]);
+}
+
+/// Taken as opaque, every stop that colors a stretch of positive width counts, and the first and
+/// last stops, whatever their opacity; an out-of-order stop whose pairs have no width does not.
+#[test]
+fn reached_stops_leave_out_only_stops_without_width() {
+    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
+    let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
+    // Clear stops in order color their stretches once opaque.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]).reached_stops(), vec![true; 3]);
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(1.0, 0.0)]).reached_stops(), vec![true, true]);
+    // The stop at 0.3 sits inside the stretch the stops at 0 and 0.8 cover.
+    let out_of_order = g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
+    assert_eq!(out_of_order.reached_stops(), vec![true, true, false, true, true]);
+    // A stop at the offset of the stop before it: its pair has no width, the next one does.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.0, 1.0), stop(1.0, 1.0)]).reached_stops(), vec![true, true, true]);
+    assert_eq!(
+        g(vec![stop(0.0, 1.0), stop(0.6, 1.0), stop(0.6, 1.0), stop(0.2, 1.0), stop(1.0, 1.0)]).reached_stops(),
+        vec![true, true, false, true, true]
+    );
+    assert!(g(vec![]).reached_stops().is_empty());
+    // Every pair the sampler picks between the ends has both its stops counted.
+    let stops: Vec<GradientStop> = [0.1, 0.4, 0.4, 0.2, 0.9, 0.5].iter().map(|&o| stop(o, 1.0)).collect();
+    let g = g(stops);
+    let (reached, reach) = (g.reached_stops(), StopReach::new(&g.stops));
+    for t in (5..=95).map(|k| k as f32 / 100.0).filter(|&t| t > 0.1 && t <= 0.9) {
+        let k = reach.0.partition_point(|r| *r < t);
+        assert!(reached[k] && reached[k + 1], "pair {k} at {t}: {reached:?}");
+    }
+}
+
 /// Repeated offsets turn off the direct midpoint mix, and the midpoints still come out as
 /// `sample` gives them, with work that stays near linear in the stops (thousands of stops at one
 /// offset used to scan them all for each midpoint).
