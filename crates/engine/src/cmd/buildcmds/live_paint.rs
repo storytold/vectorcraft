@@ -1,7 +1,8 @@
 use super::{
     Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, PathData, Point, Rect,
-    Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint, json,
-    number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, fit_to_old_edge, ids_json,
+    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
+    switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -125,15 +126,15 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
     // Paint to carry over: (point inside face, paint) for faces that draw, and (point on edge,
-    // paint) for every edge.
+    // paint, outline) for every edge.
     let keep_faces: Vec<(Point, Carried)> =
         b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
-    let keep_edges: Vec<(Point, Carried)> = b::edges(&old)
+    let keep_edges: Vec<(Point, Carried, PathData)> = b::edges(&old)
         .iter()
         .filter_map(|e| {
             let pd = e.path_data()?;
             let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e)))
+            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e), pd.clone()))
         })
         .collect();
     let mut sources = source_nodes(&old);
@@ -161,12 +162,15 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
             carried.onto(Arc::make_mut(f));
         }
     }
-    for (pt, carried) in keep_edges {
+    // An edge that an added path cuts from an old one takes the old edge's rows fitted to its part.
+    for (pt, carried, outline) in keep_edges {
         if let Some(eid) = edge_near(&g, pt, 0.5).map(|e| e.id)
             && let Some(ch) = g.children_mut()
             && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
         {
-            carried.onto(Arc::make_mut(e));
+            let e = Arc::make_mut(e);
+            carried.onto(e);
+            fit_to_old_edge(e, &outline);
         }
     }
     let mut merged = Beside::replacing(d, roots);

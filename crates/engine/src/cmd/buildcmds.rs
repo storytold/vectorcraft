@@ -779,18 +779,27 @@ fn repaint_from(g: &mut Node, old: &Node) {
             // An edge cut from the old one takes the old edge's dashes, arrowheads, width profile
             // and brush as they fall on its part of the old edge.
             if c.name.as_deref() == Some(EDGE_NAME)
-                && n.appearance.items.iter().any(depends_on_place)
                 && let Some(old_path) = was.path_data()
             {
-                let tracks: Vec<Track> = old_path.subpaths.iter().map(Track::new).collect();
-                let run = n.path_data_mut().and_then(|path| edge_run(&tracks, path));
-                let mut a = (*n.appearance).clone();
-                for r in &mut a.items {
-                    fit_to_edge(r, run);
-                }
-                n.appearance = a.into();
+                fit_to_old_edge(&mut n, old_path);
             }
             *c = Arc::new(n);
         }
     }
+}
+
+/// Fit the stroke rows of edge `n`, which it took from an old edge whose outline is `old`, to the
+/// part of the old edge that `n` runs, as [`fit_to_edge`] fits a source's rows to an edge cut from
+/// it; `n` is reversed when it runs against the old edge.
+fn fit_to_old_edge(n: &mut Node, old: &PathData) {
+    if !n.appearance.items.iter().any(depends_on_place) {
+        return;
+    }
+    let tracks: Vec<Track> = old.subpaths.iter().map(Track::new).collect();
+    let run = n.path_data_mut().and_then(|path| edge_run(&tracks, path));
+    let mut a = (*n.appearance).clone();
+    for r in &mut a.items {
+        fit_to_edge(r, run);
+    }
+    n.appearance = a.into();
 }

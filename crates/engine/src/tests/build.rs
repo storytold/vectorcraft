@@ -2753,10 +2753,10 @@ fn live_paint_make_fits_dashes_and_arrowheads_to_each_edge() {
     assert_eq!(edges, vec![rows]);
 }
 
-/// When Gap Options cuts an edge in two, each piece keeps the edge's dashes going on from where it
-/// starts along the edge, an arrowhead only at the end of the edge it ends at, and no brush.
+/// When Gap Options or Merge cuts an edge in two, each piece keeps the edge's dashes going on from
+/// where it starts along the edge, an arrowhead only at the end of the edge it ends at, and no brush.
 #[test]
-fn live_paint_gap_options_fits_an_edge_look_to_each_piece() {
+fn live_paint_gap_options_and_merge_fit_an_edge_look_to_each_piece() {
     use vectorcraft_doc::{Arrowhead, Dash};
     let mut s = session();
     let l = line(&mut s, (0.0, 50.0), (100.0, 50.0));
@@ -2770,7 +2770,7 @@ fn live_paint_gap_options_fits_an_edge_look_to_each_piece() {
     let rows = set_rows(&mut s, l, vec![row]);
     s.execute("select.set", &json!({"ids": [l.0, stub.0]})).unwrap();
     let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
-    let dashed = |s: &Session| {
+    let dashed = |s: &Session, g: NodeId| {
         let mut out: Vec<(f64, f64, vectorcraft_doc::StrokeLayer)> = vectorcraft_tools::builder::edges(&node(s, g))
             .iter()
             .filter_map(|e| {
@@ -2782,16 +2782,33 @@ fn live_paint_gap_options_fits_an_edge_look_to_each_piece() {
         out.sort_by(|p, q| p.0.total_cmp(&q.0));
         out
     };
-    let before = dashed(&s);
+    let before = dashed(&s, g);
     assert_eq!(before.len(), 1, "nothing cuts the line yet");
     assert_eq!(vec![AppearanceItem::Stroke(before[0].2.clone())], rows);
     let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
     assert_eq!(r["closed"], json!(1));
-    let pieces = dashed(&s);
+    let pieces = dashed(&s, g);
     let ends: Vec<(f64, f64)> = pieces.iter().map(|p| (p.0, p.1)).collect();
     assert_eq!(ends, vec![(0.0, 50.0), (50.0, 100.0)], "the line is cut where the gap closes");
     let offsets: Vec<f64> = pieces.iter().map(|p| (p.2.dash.as_ref().unwrap().offset * 1e3).round() / 1e3).collect();
     assert_eq!(offsets, vec![2.0, 52.0], "the dashes go on along the line");
+    let arrows: Vec<_> = pieces.iter().map(|p| (p.2.start_arrow.clone(), p.2.end_arrow.clone())).collect();
+    assert_eq!(arrows, vec![(Some(Arrowhead::Triangle), None), (None, Some(Arrowhead::Circle))]);
+    assert!(pieces.iter().all(|p| p.2.brush.is_none()), "a brush spreads over the whole line");
+    // Merge: the piece of the edge that an added path cuts off, which takes the edge's look, gets
+    // it fitted to where it lies along the edge in the same way.
+    let mut s = session();
+    let l = line(&mut s, (0.0, 50.0), (100.0, 50.0));
+    set_rows(&mut s, l, rows.clone());
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let cut = line(&mut s, (25.0, 0.0), (25.0, 100.0));
+    s.execute("livePaint.merge", &json!({"ids": [g.0, cut.0]})).unwrap();
+    let pieces = dashed(&s, g);
+    let ends: Vec<(f64, f64)> = pieces.iter().map(|p| (p.0, p.1)).collect();
+    assert_eq!(ends, vec![(0.0, 25.0), (25.0, 100.0)], "the added line cuts the edge");
+    let offsets: Vec<f64> = pieces.iter().map(|p| (p.2.dash.as_ref().unwrap().offset * 1e3).round() / 1e3).collect();
+    assert_eq!(offsets, vec![2.0, 27.0], "the dashes go on along the line");
     let arrows: Vec<_> = pieces.iter().map(|p| (p.2.start_arrow.clone(), p.2.end_arrow.clone())).collect();
     assert_eq!(arrows, vec![(Some(Arrowhead::Triangle), None), (None, Some(Arrowhead::Circle))]);
     assert!(pieces.iter().all(|p| p.2.brush.is_none()), "a brush spreads over the whole line");
