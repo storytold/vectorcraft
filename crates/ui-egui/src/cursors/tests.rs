@@ -244,7 +244,7 @@ fn the_pencil_new_path_cursor_is_the_crosshair_with_a_star() {
     }
 }
 
-/// The Pencil's straight-line cursor is the crosshair with a short straight line below right,
+/// The Pencil's straight-line cursor is the crosshair with a short level line below right,
 /// through the point where the closing cursor's ring is hollow.
 #[test]
 fn the_pencil_straight_line_cursor_is_the_crosshair_with_a_line() {
@@ -264,15 +264,18 @@ fn the_pencil_straight_line_cursor_is_the_crosshair_with_a_line() {
         assert_eq!(at(&cross, 8.5, 8.5)[3], 0, "the crosshair has no badge at {ppp}");
         // Along the line, not across it: no ink off its ends.
         assert!(!inked(at(&img, 5.0, 5.0)) && !inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
+        // Level: inked at both ends of it, and not where the continuation cursor's line rises.
+        assert!(inked(at(&img, 4.5, 8.5)) && inked(at(&img, 12.5, 8.5)), "a level line at {ppp}");
+        assert!(!inked(at(&img, 6.0, 11.0)) && !inked(at(&img, 11.0, 6.0)), "not a rising one at {ppp}");
         assert_ne!(img, ring, "at {ppp}");
         assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
     }
 }
 
-/// The Pencil's continuation cursor is the straight-line cursor with a filled square on the
-/// line's lower end, beside the line where the straight-line cursor has no ink.
+/// The Pencil's continuation cursor is the crosshair with a short line rising to the right below
+/// right, where the straight-line cursor's line is level.
 #[test]
-fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point() {
+fn the_pencil_continuation_cursor_is_the_crosshair_with_a_rising_line() {
     for ppp in [1.0, 2.0] {
         let cross = rasterize(Cursor::Crosshair, ppp).unwrap();
         let img = rasterize(Cursor::PencilContinue, ppp).unwrap();
@@ -285,8 +288,10 @@ fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point(
         };
         let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
         assert!(inked(at(&img, 8.5, 8.5)), "the line crosses the badge's middle at {ppp}");
-        assert!(inked(at(&img, 3.5, 13.5)), "the end point's square at {ppp}");
-        assert!(!inked(at(&straight, 3.5, 13.5)), "the straight-line cursor has no end point at {ppp}");
+        assert!(inked(at(&img, 5.0, 11.0)) && inked(at(&img, 10.0, 6.0)), "the line rises to the right at {ppp}");
+        assert!(!inked(at(&straight, 6.0, 11.0)), "the straight-line cursor's line is level at {ppp}");
+        assert!(!inked(at(&img, 4.5, 8.5)) && !inked(at(&img, 12.5, 8.5)), "not a level one at {ppp}");
+        assert!(!inked(at(&img, 3.5, 13.5)), "no end point square at {ppp}");
         assert!(!inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
         assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
     }
