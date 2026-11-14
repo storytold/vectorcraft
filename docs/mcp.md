@@ -4327,7 +4327,11 @@ with); without `path` it returns `{data}`, and `user: true` saves into the user 
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
 file, or another document's graphic styles, as a library to add from (a `.ai` or EPS whose editing data holds graphic
 styles and no layers gives the styles of its style list, in that order); a file in the user library folder, or a file
-with the same extension and bytes as one there, loads as that User Defined library.
+with the same extension and bytes as one there, loads as that User Defined library. A `.ai` or EPS style that paints a
+fill or stroke with one of the file's gradients by name loads with that gradient at the style's angle. The style stores
+only the gradient's name and angle, so the gradient is fitted to the bounds of each object the style is applied to; this
+placement is VectorCraft's own rule. A style that names a gradient the file doesn't define, or paints with a pattern, is
+left out.
 
 ## Symbol libraries
 

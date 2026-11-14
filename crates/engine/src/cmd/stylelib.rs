@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Graphic Style Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library; a .ai or EPS style painting with one of the file's gradients by name takes it at the style's angle, fitted to each object it is applied to, VectorCraft's own placement) → {library: id, name, count}",
             always,
             load
         ),

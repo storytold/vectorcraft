@@ -1147,7 +1147,7 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let Some(st) = self.styles.get(&name) else { continue };
-            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients) else { continue };
             // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
             if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
                 appearance.scale_strokes(s);
