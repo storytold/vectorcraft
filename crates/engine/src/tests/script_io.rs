@@ -889,6 +889,35 @@ fn script_file_copy_of_an_open_file_has_its_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// An object that has a file open for reading holds what `copy` writes over the file and the length
+/// `length` sets, as an object open for writing does, also after the file is renamed, and not after
+/// it is removed.
+#[test]
+fn script_file_open_for_reading_holds_a_copy_and_a_new_length() {
+    let base = folder("copyreader");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('copied'); s.close();\n\
+         var t = new File(d + '/t.txt'); t.open('w'); t.write('old'); t.close(); t.open('r');\n\
+         var out = [s.copy(t.fsName), t.read()]; t.close();\n\
+         var u = new File(d + '/u.txt'); u.open('w'); u.write('abcdef'); u.close(); u.open('r');\n\
+         new File(u.fsName).length = 2; out.push(u.read()); u.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, "copied", "ab"]]));
+    // A renamed file is held at its new path; a removed one is not held by a file made at its path.
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, s = new File(d + '/s.txt'); s.open('w'); s.write('copied'); s.close();\n\
+         var v = new File(d + '/v.txt'); v.open('w'); v.write('old'); v.close(); v.open('r');\n\
+         var w = new File(d + '/v.txt'); var out = [w.rename('w.txt'), s.copy(d + '/v.txt'), v.read()];\n\
+         v.seek(0); out.push(s.copy(w.fsName), v.read()); v.close();\n\
+         var x = new File(d + '/x.txt'); x.open('w'); x.write('kept'); x.close(); x.open('r');\n\
+         out.push(new File(x.fsName).remove(), s.copy(d + '/x.txt'), x.read()); x.close(); vc.log(out);",
+    );
+    assert_eq!(r["log"], json!([[true, true, "old", true, "copied", true, true, "kept"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A file whose `close` could not write it stays open, so a later `close` writes it.
 #[test]
 fn script_file_close_that_fails_can_be_tried_again() {

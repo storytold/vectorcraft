@@ -1448,6 +1448,9 @@ struct Open {
     /// The run may no longer read the file the object holds: `read`, `readln`, `readch` and `seek`
     /// give [`ACCESS_DENIED`], and `eof` is true.
     unreadable: bool,
+    /// The file the object holds was removed, so a file made later at its path is not the one it
+    /// holds.
+    removed: bool,
 }
 
 impl Open {
@@ -1477,7 +1480,17 @@ impl Open {
             dirty: false,
             withdrawn: false,
             unreadable: false,
+            removed: false,
         })
+    }
+
+    /// Does the object hold the bytes of the file at the real path `real`: the file it writes to, or,
+    /// when it writes to none, the file it was opened on while that file was not removed?
+    fn holds(&self, real: &Path) -> bool {
+        match self.target.as_deref() {
+            Some(t) => t == real,
+            None => !self.removed && self.read_from.as_deref() == Some(real),
+        }
     }
 
     /// Writes `text` at the position, over what is there and past the end, when it takes at most
@@ -1797,7 +1810,7 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     };
     // The target's open objects each take a copy of the bytes, which count as written too, as does
     // the copy itself when it is written.
-    let holders = disk.open.values().filter(|o| o.target.as_deref() == Some(target.as_path())).count();
+    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
     disk.charge_write(copied.len().saturating_mul(holders.saturating_add(usize::from(!itself))))?;
     // The copy takes the source's permissions, as `std::fs::copy` gives them.
     let permissions = std::fs::metadata(&source).map(|m| m.permissions());
@@ -1806,9 +1819,10 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     if !itself && (r.is_ok() || target.exists()) {
         disk.wrote(&target);
     }
-    // Open objects of the target hold the copy, so closing them does not write their older bytes.
+    // Open objects of the target hold the copy, so those opened for reading read it and closing the
+    // others does not write their older bytes.
     if r.is_ok() {
-        for file in disk.open.values_mut().filter(|o| o.target.as_deref() == Some(target.as_path())) {
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
             file.bytes.clone_from(&copied);
             file.pos = file.pos.min(copied.len());
             file.dirty = false;
@@ -1843,10 +1857,12 @@ fn remove(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     };
     if r.is_ok() {
         // Other open objects of the file drop their changes and take no more writes, so neither
-        // their close nor the run's end makes the file again.
-        for file in disk.open.values_mut().filter(|o| o.target.as_deref() == Some(target.as_path())) {
+        // their close nor the run's end makes the file again, and no object holds a file made later
+        // at its path.
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
             file.dirty = false;
             file.target = None;
+            file.removed = true;
         }
         disk.wrote(&target);
     }
@@ -1952,11 +1968,7 @@ fn set_length(host: &Host, a: &[Data]) -> Result<Data, HostError> {
         Ok(m) => {
             // Each open object of the file holds its own bytes, so what each one grows by counts too.
             let len = usize::try_from(n).unwrap_or(usize::MAX);
-            let held = disk
-                .open
-                .values()
-                .filter(|o| o.target.as_deref() == Some(target.as_path()))
-                .fold(0usize, |sum, o| sum.saturating_add(len.saturating_sub(o.bytes.len())));
+            let held = disk.open.values().filter(|o| o.holds(&target)).fold(0usize, |sum, o| sum.saturating_add(len.saturating_sub(o.bytes.len())));
             disk.charge_write(usize::try_from(n.saturating_sub(m.len())).unwrap_or(usize::MAX).saturating_add(held))?;
             // The file's open objects write what they hold first, and then hold the new length.
             let ids: Vec<u32> = disk.open.iter().filter(|(_, o)| o.target.as_deref() == Some(target.as_path())).map(|(id, _)| *id).collect();
@@ -1967,7 +1979,7 @@ fn set_length(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     };
     if r.is_ok() {
         let len = usize::try_from(n).unwrap_or(usize::MAX);
-        for file in disk.open.values_mut().filter(|o| o.target.as_deref() == Some(target.as_path())) {
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
             file.bytes.resize(len, 0);
             file.pos = file.pos.min(len);
         }
