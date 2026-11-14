@@ -202,14 +202,14 @@ pub fn cancel(app: &mut VectorcraftApp) {
 }
 
 /// `ui.conceptVector.cancel`, the panel's Cancel: stops the styles being made, and says so in the
-/// status bar → `{cancelled: 0 or 1}`.
+/// status bar → `{canceled: 0 or 1}`.
 pub fn cancel_run(app: &mut VectorcraftApp) -> Value {
     if !app.concept_runs.busy() {
-        return json!({ "cancelled": 0 });
+        return json!({ "canceled": 0 });
     }
     cancel(app);
     app.status(vectorcraft_engine::EngineError::Cancelled.to_string());
-    json!({ "cancelled": 1 })
+    json!({ "canceled": 1 })
 }
 
 /// Each frame: makes the next part of a run made one part a frame, and keeps a finished run's

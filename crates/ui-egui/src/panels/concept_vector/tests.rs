@@ -213,7 +213,7 @@ fn the_cancel_command_stops_a_run_as_the_button_does() {
     assert!(!menus::enabled(&app, CANCEL));
     generate(&mut app).unwrap();
     assert!(menus::enabled(&app, CANCEL));
-    assert_eq!(app.run(CANCEL, json!({})).unwrap(), json!({"cancelled": 1}));
+    assert_eq!(app.run(CANCEL, json!({})).unwrap(), json!({"canceled": 1}));
     assert!(!app.concept_runs.busy() && !menus::enabled(&app, CANCEL));
     assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
     poll(&mut app);

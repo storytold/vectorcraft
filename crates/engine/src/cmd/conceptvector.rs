@@ -149,7 +149,7 @@ impl ConceptRun {
             Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(styles_error)?,
             _ => return Err(styles_error()),
         };
-        // The count first: the scan for repeats takes time that grows with its square.
+        // Checks the count before the scan for repeats.
         if styles.is_empty() || styles.len() > MAX_STYLES {
             return Err(styles_error());
         }
@@ -422,7 +422,7 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let (doc, source, image, bytes, picked, label_of) = {
         let j = s.concept.jobs.get(at).ok_or_else(|| no_job(C, job))?;
         let Outcome::Done(all) = &j.outcome else { return Err(bad(C, format!("job {job} has no results to insert: it was canceled"))) };
-        // The count first: the scan for repeats takes time that grows with its square.
+        // Checks the count before the scan for repeats.
         if chosen.len() > all.len() {
             return Err(list_error());
         }

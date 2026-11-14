@@ -806,7 +806,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.conceptVector.cancel",
         "Cancel Concept to Vector",
         "",
-        "{} the Concept to Vector panel's Cancel: stop the styles being made off the UI thread (on the web, before the next part); nothing is kept or shown → {cancelled: 0 or 1}",
+        "{} stop the styles the Concept to Vector panel is making off the UI thread (the panel's Cancel; on the web, before the next part): nothing is kept or shown → {canceled: 0 or 1}",
     ),
     (
         "ui.cropImage",

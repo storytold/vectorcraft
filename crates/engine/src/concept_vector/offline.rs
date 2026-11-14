@@ -113,8 +113,7 @@ pub(super) fn fit_within(img: tr::Raster, max: u64) -> tr::Raster {
         let (y0, y1) = (u64::from(y) * h / u64::from(nh), (u64::from(y + 1) * h / u64::from(nh)).max(u64::from(y) * h / u64::from(nh) + 1));
         for x in 0..nw {
             let (x0, x1) = (u64::from(x) * w / u64::from(nw), (u64::from(x + 1) * w / u64::from(nw)).max(u64::from(x) * w / u64::from(nw) + 1));
-            // Color weighted by alpha, so that a clear pixel does not darken the colors beside it;
-            // a box with nothing opaque in it is clear black.
+            // Each pixel's color is weighted by its alpha. A box with nothing opaque in it is clear black.
             let mut sum = [0u64; 4];
             for sy in y0..y1.min(h) {
                 for sx in x0..x1.min(w) {
