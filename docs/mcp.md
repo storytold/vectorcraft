@@ -8756,10 +8756,13 @@ on or off for the paragraphs of the selected type (or `ids`, or the paragraphs a
 line never breaks inside an inseparable pair: two em dashes (U+2014), two horizontal ellipses (U+2026), two two-dot
 leaders (U+2025), or the upper half of a vertical kana repeat mark (U+3033 or U+3034) followed by its lower half
 (U+3035), the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08), which are VectorCraft's
-set. A chain of em dashes stays together as well. A pair is two neighboring characters, whatever their fonts and
-styles; a forced line break between them ends the line as before. Both composers, vertical type, Kinsoku Shori Type,
-hyphenation and No Break follow it, and a pair wider than the line stays whole on it. Justification adds no space inside
-a pair. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
+set for Hard and Soft. A chain of em dashes stays together as well. With a custom Kinsoku Set, the set's inseparable
+sequences (Kinsoku Shori Settings) replace these pairs: a line never breaks between two characters of an occurrence of
+one of them, such as `AB` or `あいう`, and occurrences may overlap. A custom set keeps a built-in pair together only
+when it lists that pair, as a set based on Hard or Soft does. A pair or sequence is neighboring characters, whatever
+their fonts and styles; a forced line break between them ends the line as before. Both composers, vertical type,
+Kinsoku Shori Type, hyphenation and No Break follow it, and a pair or sequence wider than the line stays whole on it.
+Justification adds no space inside a pair or sequence. The setting works only with a Kinsoku Set: with Kinsoku Set None the paragraph keeps the value without effect,
 and the menu item is unavailable. Off by default, for new type and for paragraphs saved before the option. It is saved
 with the paragraph (`bunri_kinshi` in `para`) only when on, paragraph styles carry it (Paragraph Style Options › East
 Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
