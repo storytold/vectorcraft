@@ -12,7 +12,7 @@ use super::draw2::usize_opt;
 use super::pathops::Beside;
 use super::{
     CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selected_path,
-    has_selection, ids_param, index, number_or, object_param, ok, str_param, switch_or, targets,
+    has_selection, ids_param, index_opt, number_or, object_param, ok, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -170,7 +170,7 @@ pub(super) fn path_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Result<
 fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.appendAnchor")?.ok_or_else(|| bad("path.appendAnchor", "missing id"))?;
     let a = anchor_from_json(p, "path.appendAnchor")?;
-    let subpath = p.get("subpath").and_then(Value::as_u64).map(|u| u as usize);
+    let subpath = index_opt(p, "subpath", "path.appendAnchor")?;
     s.edit("Pen", |d, sel| {
         let path = path_mut(d, id)?;
         let si = match subpath {
@@ -208,7 +208,7 @@ fn append_anchor(s: &mut Session, p: &Value) -> Result<Value> {
 /// `at` first moves the anchor, its handles with it (the Pen's closing drag with Space held).
 fn close(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.close")?.ok_or_else(|| bad("path.close", "missing id"))?;
-    let subpath = p.get("subpath").and_then(Value::as_u64).map(|u| u as usize);
+    let subpath = index_opt(p, "subpath", "path.close")?;
     let handle = |key: &str| match p.get(key).filter(|h| !h.is_null()) {
         None => Ok(None),
         Some(h) => finite_numbers(h).map(|[x, y]| Some(Point::new(x, y))).ok_or_else(|| bad("path.close", format!("`{key}` must be [x, y]"))),
@@ -310,7 +310,7 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
 fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.setHandle")?.ok_or_else(|| bad("path.setHandle", "missing id"))?;
     let si = usize_opt(p, "subpath", "path.setHandle")?.unwrap_or(0);
-    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad("path.setHandle", "missing anchor"))?;
+    let ai = index_opt(p, "anchor", "path.setHandle")?.ok_or_else(|| bad("path.setHandle", "missing anchor"))?;
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
@@ -337,7 +337,7 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
 fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.moveAnchor")?.ok_or_else(|| bad("path.moveAnchor", "missing id"))?;
     let si = usize_opt(p, "subpath", "path.moveAnchor")?.unwrap_or(0);
-    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad("path.moveAnchor", "missing anchor"))?;
+    let ai = index_opt(p, "anchor", "path.moveAnchor")?.ok_or_else(|| bad("path.moveAnchor", "missing anchor"))?;
     let pos = Point::new(f64_req(p, "x", "path.moveAnchor")?, f64_req(p, "y", "path.moveAnchor")?);
     // An anchor already at (x, y) changes nothing and records no undo step.
     if let Some(a) = anchor_of(s, id, si, ai)?
@@ -453,7 +453,7 @@ pub(super) fn paths_in(d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Vec<Nod
 fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.reverse";
     let want = p.get("reversed").map(|v| v.as_bool().ok_or_else(|| bad(C, "`reversed` must be true or false"))).transpose()?;
-    let subpath = p.get("subpath").and_then(Value::as_u64).map(|u| u as usize);
+    let subpath = index_opt(p, "subpath", C)?;
     let ids = paths_in(&s.doc()?.doc, &targets(s, p)?);
     if ids.is_empty() {
         return Err(bad(C, "select paths"));
@@ -1786,7 +1786,7 @@ fn reshape(s: &mut Session, p: &Value) -> Result<Value> {
 fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "path.insertAnchor")?.ok_or_else(|| bad("path.insertAnchor", "missing id"))?;
     let si = usize_opt(p, "subpath", "path.insertAnchor")?.unwrap_or(0);
-    let seg = p.get("segment").and_then(Value::as_u64).map(index).ok_or_else(|| bad("path.insertAnchor", "missing segment"))?;
+    let seg = index_opt(p, "segment", "path.insertAnchor")?.ok_or_else(|| bad("path.insertAnchor", "missing segment"))?;
     let t = number_or(p, "t", 0.5, "path.insertAnchor")?.clamp(0.0, 1.0);
     let idx = s.edit("Add Anchor Point", |d, sel| {
         let path = path_mut(d, id)?;
