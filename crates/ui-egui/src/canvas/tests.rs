@@ -10260,8 +10260,10 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
         frame(app, &ctx, vec![]);
         frame(app, &ctx, vec![]);
         let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Left to right: the frame's margin, the handle and its spacing, then the first button.
-        let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.center().y);
+        // Left to right: the frame's margin, the handle and its spacing, then the first button, in
+        // the middle of the first row (the frame's margin and half a 30 pt row), since an image's
+        // actions can wrap onto a second row.
+        let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.top() + 7.0 + 15.0);
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
         frame(app, &ctx, vec![button(true)]);
