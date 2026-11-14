@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gamut Warning",
             [],
             None,
-            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
+            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colors that can't be printed in the document's assigned CMYK profile, else the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
             has_doc,
             gamut_check
         ),
@@ -665,6 +665,11 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
     for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
         map_paint_colors(&mut st.fill, f);
         map_paint_colors(&mut st.stroke, f);
+    }
+    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {
+        for paint in [&mut r.paint.fill, &mut r.paint.stroke].into_iter().flatten() {
+            map_paint_colors(paint, f);
+        }
     }
 }
 

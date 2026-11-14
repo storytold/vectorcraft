@@ -631,6 +631,39 @@ fn the_profile_follows_the_preset_access_and_reset() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn profile_errors_name_the_file_by_its_name_outside_the_read_roots() {
+    let (mut s, dir) = with_profiles("errors");
+    let elsewhere = dir.with_extension("elsewhere");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let whole = dir.join("Print.vectorcraft").to_string_lossy().to_string();
+    let run = |s: &mut Session, roots: &std::sync::Arc<crate::file_access::AutomationRoots>, cmd: &str| {
+        crate::file_access::confine(Some(roots), || s.execute(cmd, &json!({"name": "Print"}))).unwrap_err().to_string()
+    };
+    // No write access: edit and reset are refused before anything is written or deleted.
+    let read_only = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[]).unwrap().unwrap();
+    for cmd in ["file.newProfiles.edit", "file.newProfiles.reset"] {
+        let e = run(&mut s, &read_only, cmd);
+        assert!(e.ends_with(": Print.vectorcraft") && !e.contains(&whole), "{cmd}: {e}");
+    }
+    // Write access without read access: edit is refused, and nothing is written.
+    let write_only = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let e = run(&mut s, &write_only, "file.newProfiles.edit");
+    assert!(e.contains("outside the read root") && e.ends_with(": Print.vectorcraft") && !e.contains(&whole), "{e}");
+    assert!(!dir.join("Print.vectorcraft").exists());
+    // A file reset cannot delete (a folder in its place) is named by its file name too.
+    std::fs::create_dir_all(dir.join("Print.vectorcraft")).unwrap();
+    let e = run(&mut s, &write_only, "file.newProfiles.reset");
+    assert!(e.starts_with("Print.vectorcraft: ") && !e.contains(&whole), "{e}");
+    // Inside the read roots the error names the whole path.
+    let inside = crate::file_access::AutomationRoots::new(&[dir.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let e = run(&mut s, &inside, "file.newProfiles.reset");
+    assert!(e.starts_with(&format!("{whole}: ")), "{e}");
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The new document's links find their files from the profile's file, as a document opened from
 /// that file does; a document without a profile has no such file.
 #[test]

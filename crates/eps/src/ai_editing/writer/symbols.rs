@@ -204,8 +204,10 @@ impl Writer<'_> {
         if sym.dynamic || doc.symbol_export_type(name) != SymbolExportType::default() || doc.symbol_nine_slice(name).is_some() {
             self.warn(SYMBOL_OPTIONS);
         }
-        // The art's effects are its own, not those of a drawn look that first places it.
+        // The art's effects are its own, not those of a drawn look that first places it, and its
+        // text wrap options are its own, not left out with the drawn art that first places it.
         let in_look = std::mem::take(&mut self.in_look);
+        let drawn = std::mem::take(&mut self.drawn);
         self.defining_symbols.push(name.to_string());
         // The objects of this definition and of those it defines first.
         let before = self.charges();
@@ -222,7 +224,7 @@ impl Writer<'_> {
             self.defining_symbols.pop();
             self.keep_since(before);
             self.warn(SYMBOL_COUNT);
-            self.in_look = in_look;
+            (self.in_look, self.drawn) = (in_look, drawn);
             return false;
         }
         // The group that holds the art is an object of the definition ([`Self::take_objects`]);
@@ -243,7 +245,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas, self.instance_space),
             self.state.replace((false, false)),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             (self.block_start, self.block_end),
             (std::mem::replace(&mut self.in_symbol, true), std::mem::take(&mut self.hidden)),
             self.root_entries.take(),
@@ -300,7 +302,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas, self.instance_space),
             self.state,
             self.gs,
-            self.clip,
+            (self.clip, self.shown),
             (self.block_start, self.block_end),
             (self.in_symbol, self.hidden),
             self.root_entries,
@@ -308,7 +310,7 @@ impl Writer<'_> {
             (self.wrote_fixed, self.inner_scale),
         ) = saved;
         self.doc = page_doc;
-        self.in_look = in_look;
+        (self.in_look, self.drawn) = (in_look, drawn);
         let art = std::mem::replace(&mut self.body, art);
         self.defining_symbols.pop();
         if self.left_out_since(art_start) {

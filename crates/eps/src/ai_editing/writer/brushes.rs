@@ -23,7 +23,7 @@ use super::{Writer, Xy};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't stretch their art along the path from left to right at 100% unflipped without overlap, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
+pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't run their art from left to right, that overlap or whose width follows the pen, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
 
 /// Most brushes written (the reader's limit).
 const MAX_BRUSHES: usize = 4096;
@@ -145,22 +145,71 @@ fn scatter_params(s: &Scatter, art: &str) -> Option<String> {
     Some(format!("2 /{art}/ 5 0 0 0 / {}", nums6(&numbers)))
 }
 
-/// An Art brush's parameters, its art the section `art`: `None` for options the reader doesn't read
-/// (it reads an Art brush that stretches its art along the path from left to right at 100%,
-/// unflipped, without overlap, in Tints or keeping its colors).
-fn art_params(a: &ArtBrush, art: &str) -> Option<String> {
-    let plain = a.direction == Direction::LeftToRight
-        && matches!(a.scale, ArtScale::Stretch)
-        && a.width == 100.0
-        && a.width_mode.is_none()
-        && !a.flip_along
-        && !a.flip_across
-        && !a.overlap;
-    if !plain {
+/// An Art brush's settings as its parameters' numbers 2 to 15 give them and a brushed stroke's filter
+/// holds them ([`ART_SETTINGS`]): `None` for options the reader doesn't read (it reads an Art brush
+/// that runs its art from left to right without overlap, at a fixed width, in Tints or keeping its
+/// colors). The guides of Stretch Between Guides are the lengths of the art before the first and
+/// after the second, measured before the art is flipped along the path.
+fn art_settings(a: &ArtBrush) -> Option<[f64; 14]> {
+    if a.direction != Direction::LeftToRight || a.width_mode.is_some() || a.overlap {
         return None;
     }
-    let c = colorization_code(a.colorization)?;
-    let numbers = [1.0, c, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+    let length = a.art.geometric_bounds().map_or(0.0, |b| b.width());
+    let (proportional, segmented, before, after) = match a.scale {
+        ArtScale::Stretch => (0.0, 0.0, 0.0, 0.0),
+        ArtScale::Proportional => (1.0, 0.0, 0.0, 0.0),
+        ArtScale::BetweenGuides { start, end } if start < end => {
+            let (before, after) = (start * length, (1.0 - end) * length);
+            let (before, after) = if a.flip_along { (after, before) } else { (before, after) };
+            (0.0, 1.0, before, after)
+        }
+        ArtScale::BetweenGuides { .. } => return None,
+    };
+    let scaling = a.width / 100.0;
+    let flip = |on: bool| f64::from(u8::from(on));
+    Some([
+        colorization_code(a.colorization)?,
+        scaling,
+        0.0,
+        1.0,
+        flip(a.flip_along),
+        flip(a.flip_across),
+        proportional,
+        scaling,
+        scaling,
+        0.0,
+        segmented,
+        before,
+        after,
+        1.0,
+    ])
+}
+
+/// The entries of a brushed stroke's filter that hold an Art brush's settings, in the order of
+/// [`art_settings`], with how each is written.
+const ART_SETTINGS: [(&str, &str); 14] = [
+    ("Colorization", "Int"),
+    ("Scaling", "Real"),
+    ("Spacing", "Real"),
+    ("Adjustment", "Int"),
+    ("Counterclockwise", "Int"),
+    ("UpsideDown", "Int"),
+    ("Proportional", "Bool"),
+    ("MinScaling", "Real"),
+    ("MaxScaling", "Real"),
+    ("ScaleYDependsOn", "Int"),
+    ("Segmented", "Bool"),
+    ("StartSegmentLength", "Real"),
+    ("EndSegmentLength", "Real"),
+    ("FoldAdjustment", "Bool"),
+];
+
+/// An Art brush's parameters, its art the section `art`: `None` for options the reader doesn't read
+/// ([`art_settings`]).
+fn art_params(a: &ArtBrush, art: &str) -> Option<String> {
+    let settings = art_settings(a)?;
+    let mut numbers = vec![1.0];
+    numbers.extend(settings);
     Some(format!("2 / {art}/ / / / / 0 0/ 5 0 0 0 /  {}", nums6(&numbers)))
 }
 
@@ -373,7 +422,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             (self.block_start, self.block_end),
             // The art is the brush's own: not on `%_` lines, in a drawn look or in a symbol that
             // first uses the brush.
@@ -410,7 +459,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state,
             self.gs,
-            self.clip,
+            (self.clip, self.shown),
             (self.block_start, self.block_end),
             (self.hidden, self.in_look, self.in_symbol),
         ) = saved;
@@ -458,25 +507,10 @@ impl Writer<'_> {
                 d.push_str("0 /Int (AngleRelativeTo) ,\n");
                 "(Calligraphic Brush) /Title ,\n"
             }
-            BrushKind::Art(_) => {
+            BrushKind::Art(a) => {
                 d.push_str("15 /Int (Adobe Effect Expand Before Version) ,\n"); // brand-ok: the entry's name in the files
-                for (key, value, kind) in [
-                    ("StartSegmentLength", "0", "Real"),
-                    ("EndSegmentLength", "0", "Real"),
-                    ("Counterclockwise", "0", "Int"),
-                    ("MinScaling", "1", "Real"),
-                    ("MaxScaling", "1", "Real"),
-                    ("Colorization", "1", "Int"),
-                    ("Spacing", "0", "Real"),
-                    ("Adjustment", "1", "Int"),
-                    ("Proportional", "0", "Bool"),
-                    ("Segmented", "0", "Bool"),
-                    ("UpsideDown", "0", "Int"),
-                    ("FoldAdjustment", "1", "Bool"),
-                    ("ScaleYDependsOn", "0", "Int"),
-                    ("Scaling", "1", "Real"),
-                ] {
-                    let _ = writeln!(d, "{value} /{kind} ({key}) ,");
+                for ((key, kind), value) in ART_SETTINGS.iter().zip(art_settings(a)?) {
+                    let _ = writeln!(d, "{} /{kind} ({key}) ,", nums6(&[value]));
                 }
                 "(Art Brush) /Title ,\n"
             }

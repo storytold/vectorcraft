@@ -123,7 +123,8 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
         for (k, label) in rectangle_corners() {
             dim_label(ui, label);
             if let Some(v) = crate::widgets::num_field_named(ui, (id, "corner", k), Some(label), Some(lc.radius(k)), unit, width) {
-                app.run("object.setLiveShape", json!({"radius": v, "corners": [k]})).ok();
+                // A negative radius typed in rounds nothing: the command takes 0 or more.
+                app.run("object.setLiveShape", json!({"radius": v.max(0.0), "corners": [k]})).ok();
             }
             ui.end_row();
         }
@@ -133,7 +134,7 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
 /// [`corner_radius_row`]'s field, `width` wide.
 pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: impl std::hash::Hash + std::fmt::Debug, width: f32) {
     if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), app.session.general_unit(), width) {
-        app.run("object.setLiveShape", json!({"radius": r})).ok();
+        app.run("object.setLiveShape", json!({"radius": r.max(0.0)})).ok();
     }
 }
 

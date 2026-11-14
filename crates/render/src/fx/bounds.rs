@@ -69,12 +69,23 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
-    let g = effected_path(symbols.document(), n, &bp);
+    let (g, carry) = effected_path_carrying(symbols.document(), n, &bp);
+    // The raster effects reach as far as they are drawn: following only the Transform effects
+    // that moved the art ([`effects::Carry::hide_skipped`]).
+    let mut ran = std::borrow::Cow::Borrowed(n);
+    if carry.skipped() {
+        carry.hide_skipped(&mut ran.to_mut().appearance.effects);
+    }
     let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
-    for item in &n.appearance.items {
+    for (j, item) in n.appearance.items.iter().enumerate() {
         let fx = item_effects(item);
         if effects::has_geometry(fx) {
-            let ig = apply(fx, &g, &ctx.item(item));
+            let (ig, c) = apply_carrying(fx, &g, &ctx.item(item));
+            if c.skipped()
+                && let Some(it) = ran.to_mut().appearance.items.get_mut(j)
+            {
+                c.hide_skipped(it.effects_mut());
+            }
             if !ig.elements().is_empty() {
                 let b = ig.bounding_box();
                 r = Some(r.map_or(b, |r| r.union(b)));
@@ -82,7 +93,44 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         }
     }
     let s = n.appearance.outset();
-    r.map(|r| with_raster_reach(symbols, n, r.inflate(s, s)))
+    r.map(|r| with_raster_reach(symbols, &ran, r.inflate(s, s)))
+}
+
+/// `n` with the Transform effects its geometry passes leave out (past the budget) hidden, in its
+/// own list and in its fills' and strokes' ([`effects::Carry::hide_skipped`]): the effects its
+/// raster effects are drawn from. Borrowed when it has no Transform effect or no raster effect, is
+/// not a path or compound path, or its art is made by [`effects::reshape`] or a 3D effect.
+fn ran<'a>(doc: &Document, n: &'a Node) -> std::borrow::Cow<'a, Node> {
+    let transforms = |fx: &[Effect]| fx.iter().any(|e| e.visible && e.id == "distort.transform");
+    let mut out = std::borrow::Cow::Borrowed(n);
+    if (!transforms(&n.appearance.effects) && !n.appearance.items.iter().any(|i| transforms(item_effects(i))))
+        || (effects::raster_effects(&n.appearance.effects).is_empty()
+            && n.appearance.items.iter().all(|i| effects::raster_effects(item_effects(i)).is_empty()))
+        || effects::has_painted_effects(n)
+        || effects::has_revolve(n)
+        || effects::has_solid(n)
+    {
+        return out;
+    }
+    let Some(bp) = node_bezpath(n) else { return out };
+    let ctx = GeomContext { doc: Some(doc), ..GeomContext::of(n) };
+    let (g, carry) = apply_carrying(&n.appearance.effects, &bp, &ctx);
+    if carry.skipped() {
+        carry.hide_skipped(&mut out.to_mut().appearance.effects);
+    }
+    for (j, item) in n.appearance.items.iter().enumerate() {
+        let fx = item_effects(item);
+        if !transforms(fx) || g.elements().is_empty() {
+            continue;
+        }
+        let (_, c) = apply_carrying(fx, &g, &ctx.item(item));
+        if c.skipped()
+            && let Some(it) = out.to_mut().appearance.items.get_mut(j)
+        {
+            c.hide_skipped(it.effects_mut());
+        }
+    }
+    out
 }
 
 /// `r`, the art of `n` with its strokes, grown by how far the raster effects of `n`'s fills and
@@ -176,13 +224,37 @@ fn paints(item: &AppearanceItem) -> bool {
 /// [`Node::visual_bounds_with`] measures them, without the reach of `n`'s own raster effects
 /// (symbol instances measured by their art from `symbols`): what Rasterize makes its image over.
 pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    drawn_bounds_ran(symbols, n, None)
+}
+
+/// [`drawn_bounds`], with `ran`, [`ran`] of `n`, when the caller has it.
+fn drawn_bounds_ran(symbols: &SymbolBoxes, n: &Node, ran: Option<&Node>) -> Option<Rect> {
     // A 3D effect's art holds its fills' and strokes' raster effects, measured with it.
     if let Some(b) = three_d_bounds(symbols, n) {
         return b;
     }
     let b = art_bounds(symbols, n)?;
-    let items = n.appearance.items.iter().filter(|i| paints(i) && !effects::raster_effects(item_effects(i)).is_empty());
-    Some(items.map(|i| spread(symbols, &item_raster(n, i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
+    let mut items =
+        n.appearance.items.iter().enumerate().filter(|(_, i)| paints(i) && !effects::raster_effects(item_effects(i)).is_empty()).peekable();
+    if items.peek().is_none() {
+        return Some(b);
+    }
+    let own;
+    let ran = match ran {
+        Some(r) => r,
+        None => {
+            own = self::ran(symbols.document(), n);
+            &*own
+        }
+    };
+    Some(
+        items
+            .map(|(j, i)| {
+                let r = ran.appearance.items.get(j).unwrap_or(i);
+                spread(symbols, &item_raster(ran, r), item_bounds(symbols.document(), n, i).unwrap_or(b))
+            })
+            .fold(b, |acc, r| acc.union(r)),
+    )
 }
 
 /// The bounds of what `item`, a fill or stroke of the path or compound path `n`, paints: the path
@@ -284,7 +356,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
             let b = match &reshaped {
-                Some(r) if matches!(n.kind, NodeKind::SymbolInstance { .. }) && effects::has_item_geometry(n) => instance_piece_bounds(symbols, r),
+                Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
                     r.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, painted_reach(symbols, c)))
                 }
@@ -307,9 +379,16 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     }
 }
 
+/// Is `n` a symbol instance whose active fill or stroke has geometry or raster effects that the
+/// fills and strokes of its art take ([`effects::has_item_geometry`],
+/// [`effects::has_instance_row_raster`])?
+fn has_instance_row_effects(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::SymbolInstance { .. }) && (effects::has_item_geometry(n) || effects::has_instance_row_raster(n))
+}
+
 /// The bounds of `art`, the art [`effects::reshape`] made of a symbol instance whose active fill or
-/// stroke has geometry effects ([`effects::has_item_geometry`]): its paths measured with the
-/// geometry effects of their fills and strokes ([`visual_bounds`]), the symbol instances in it that
+/// stroke has geometry or raster effects ([`has_instance_row_effects`]): its paths measured with the
+/// effects of their fills and strokes, shadows and glows included ([`visual_bounds`]), the symbol instances in it that
 /// took those effects by their own reshaped art in turn, its groups and layers with their own fills
 /// and strokes by the art those paint ([`effects::evaluate_container`]), its clip groups by their
 /// clipping paths and other objects as [`Node::visual_bounds_with`] measures them. Hidden objects are left out.
@@ -337,7 +416,7 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
             g.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, pieces_within(symbols, c, depth, budget)))
         }
         NodeKind::Path { .. } | NodeKind::Compound { .. } if has_fx(art) => visual_bounds(symbols, art),
-        NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && effects::has_item_geometry(art) => {
+        NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && has_instance_row_effects(art) => {
             let doc = symbols.document();
             let reshaped = doc.symbols.iter().find(|s| s.name == *symbol).and_then(|s| {
                 let count = s.art.count() as u64;
@@ -363,7 +442,9 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
     }
-    drawn_bounds(symbols, n).map(|b| spread(symbols, &n.appearance.effects, b))
+    let ran = ran(symbols.document(), n);
+    let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
+    Some(spread(symbols, &ran.appearance.effects, b))
 }
 
 /// The outline the renderer clips `n`'s Feather, Inner Glow and Rasterize with Create Clipping
@@ -542,7 +623,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let art = effects::evaluate_container(Some(symbols.document()), n);
             let art = art.as_ref().unwrap_or(n);
             let b = if art.clips() {
-                art.visual_bounds_with(symbols)
+                art.visual_bounds_with(symbols).map(|b| with_clip_region(symbols, art, b))
             } else {
                 art.children()?.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, member(c)))
             }?;
@@ -565,7 +646,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
             let b = match &reshaped {
-                Some(r) if matches!(n.kind, NodeKind::SymbolInstance { .. }) && effects::has_item_geometry(n) => instance_piece_bounds(symbols, r),
+                Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
                     r.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, inner(c)))
                 }
@@ -590,11 +671,29 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let b = match &n.kind {
                 NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
-                _ => b,
+                _ => with_clip_region(symbols, n, b),
             };
             let a = live_content_reach(symbols, n);
             Some(b.inflate(a, a))
         }
+    }
+}
+
+/// `b`, the visual bounds of `n`, grown to the region a clip group's or clipping layer's clipping
+/// path clips to when geometry effects in it move or grow that region ([`effects::clip_outline`])
+/// past its plain shape, and to where its stroke paints along it. Other objects keep `b`.
+fn with_clip_region(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
+    match &n.kind {
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => match children.first() {
+            Some(c) if effects::needs_bake(c) => {
+                let s = c.appearance.outset();
+                let region = effects::clip_outline(c).map(|(bp, _)| bp.bounding_box().inflate(s, s));
+                let painted = if has_fx(c) { visual_bounds(symbols, c) } else { None };
+                vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(Some(b), region), painted).unwrap_or(b)
+            }
+            _ => b,
+        },
+        _ => b,
     }
 }
 

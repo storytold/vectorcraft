@@ -66,6 +66,69 @@ fn stop_reach_matches_scanning_the_stops() {
     }
 }
 
+/// A gradient's stops color what draws where they color a stretch that draws, for stops in any
+/// order: the sampler mixes stop `k` with stop `k + 1` above every offset of the stops before it,
+/// so an out-of-order stop's pair can have no width.
+#[test]
+fn drawn_stops_follow_the_sampled_stretches() {
+    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
+    let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
+    // In order: the clear stop next to the opaque one, not the one after it.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![true, true, false]);
+    // Out of order: the pair (0.8, 0.3) has no width, so the clear stop at 0.3 mixes only with
+    // the clear stop at 0.8 before it, and the pair (0.3, 1.0) is sampled above 0.8.
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 0.0), stop(1.0, 1.0)]).drawn_stops(), vec![false, false, true, true]);
+    // An opaque stop out of order: the pairs (0, 0.8) and (0.7, 1) cover every offset, so the
+    // pairs next to the stop at 0.3 have no width and it colors nothing.
+    let out_of_order = |o: f32| g(vec![stop(0.0, 0.0), stop(0.8, o), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
+    assert_eq!(out_of_order(0.0).drawn_stops(), vec![false; 5]);
+    // With the stop at 0.8 opaque, the pairs next to it with width are drawn.
+    assert_eq!(out_of_order(1.0).drawn_stops(), vec![true, true, false, false, false]);
+    // The last stop colors the offsets above every stop's, even when it is out of order.
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(0.6, 0.0), stop(0.5, 1.0)]).drawn_stops(), vec![false, false, true]);
+    // The first stop colors the offsets up to its own.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.0, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![true, false, false]);
+    // One stop, every stop clear, and no stops at all.
+    assert_eq!(g(vec![stop(0.5, 1.0)]).drawn_stops(), vec![true]);
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(1.0, 0.0)]).drawn_stops(), vec![false, false]);
+    assert!(g(vec![]).drawn_stops().is_empty());
+    // A freeform gradient draws from its points: its stops count while any is above opacity 0.
+    let mut free = g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]);
+    free.kind = GradientKind::Freeform;
+    assert_eq!(free.drawn_stops(), vec![true, true, true]);
+    free.stops.iter_mut().for_each(|s| s.opacity = 0.0);
+    assert_eq!(free.drawn_stops(), vec![false; 3]);
+}
+
+/// Taken as opaque, every stop that colors a stretch of positive width counts, and the first and
+/// last stops, whatever their opacity; an out-of-order stop whose pairs have no width does not.
+#[test]
+fn reached_stops_leave_out_only_stops_without_width() {
+    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
+    let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
+    // Clear stops in order color their stretches once opaque.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]).reached_stops(), vec![true; 3]);
+    assert_eq!(g(vec![stop(0.0, 0.0), stop(1.0, 0.0)]).reached_stops(), vec![true, true]);
+    // The stop at 0.3 sits inside the stretch the stops at 0 and 0.8 cover.
+    let out_of_order = g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
+    assert_eq!(out_of_order.reached_stops(), vec![true, true, false, true, true]);
+    // A stop at the offset of the stop before it: its pair has no width, the next one does.
+    assert_eq!(g(vec![stop(0.0, 1.0), stop(0.0, 1.0), stop(1.0, 1.0)]).reached_stops(), vec![true, true, true]);
+    assert_eq!(
+        g(vec![stop(0.0, 1.0), stop(0.6, 1.0), stop(0.6, 1.0), stop(0.2, 1.0), stop(1.0, 1.0)]).reached_stops(),
+        vec![true, true, false, true, true]
+    );
+    assert!(g(vec![]).reached_stops().is_empty());
+    // Every pair the sampler picks between the ends has both its stops counted.
+    let stops: Vec<GradientStop> = [0.1, 0.4, 0.4, 0.2, 0.9, 0.5].iter().map(|&o| stop(o, 1.0)).collect();
+    let g = g(stops);
+    let (reached, reach) = (g.reached_stops(), StopReach::new(&g.stops));
+    for t in (5..=95).map(|k| k as f32 / 100.0).filter(|&t| t > 0.1 && t <= 0.9) {
+        let k = reach.0.partition_point(|r| *r < t);
+        assert!(reached[k] && reached[k + 1], "pair {k} at {t}: {reached:?}");
+    }
+}
+
 /// Repeated offsets turn off the direct midpoint mix, and the midpoints still come out as
 /// `sample` gives them, with work that stays near linear in the stops (thousands of stops at one
 /// offset used to scan them all for each midpoint).
@@ -511,6 +574,283 @@ fn perceptual_gradients_draw_as_pixels() {
         radial.kind = GradientKind::Radial;
         radial.dither = true;
         assert!(GradientPaint::new(radial).draws_as_pixels(fill));
+    }
+}
+
+fn two_stops(a: Color, b: Color, method: GradientMethod) -> Gradient {
+    let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)]);
+    g.method = method;
+    g
+}
+
+/// The hue methods mix around the hue wheel in one direction: Hue Counterclockwise raises the
+/// hue angle from each stop to the next and Hue Clockwise lowers it, by the fixed-direction rules
+/// of <https://www.w3.org/TR/css-color-4/#hue-interpolation> (the angles below are that
+/// section's own examples), with saturation and brightness changing evenly.
+#[test]
+fn hue_methods_turn_one_way_around_the_wheel() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let rising = two_stops(red, blue, GradientMethod::HueCounterclockwise);
+    assert_eq!(rising.sample(0.0).0.to_hex(), "#ff0000");
+    assert_eq!(rising.sample(0.25).0.to_hex(), "#ffff00", "60°");
+    assert_eq!(rising.sample(0.5).0.to_hex(), "#00ff00", "120°");
+    assert_eq!(rising.sample(1.0).0.to_hex(), "#0000ff");
+    let falling = two_stops(red, blue, GradientMethod::HueClockwise);
+    assert_eq!(falling.sample(0.0).0.to_hex(), "#ff0000");
+    assert_eq!(falling.sample(0.5).0.to_hex(), "#ff00ff", "300°");
+    assert_eq!(falling.sample(1.0).0.to_hex(), "#0000ff");
+    assert_eq!(two_stops(red, blue, GradientMethod::Classic).sample(0.5).0.to_rgb(), [0.5, 0.0, 0.5], "classic: the RGB mix");
+    // 30° to 190° and to 230°: halfway is 110° and 130° rising, 290° and 310° falling.
+    for (to, up, down) in [(190.0, 110.0, 290.0), (230.0, 130.0, 310.0)] {
+        let (a, b) = (Color::from_hsb(30.0, 0.5, 0.8), Color::from_hsb(to, 0.9, 0.4));
+        for (method, want) in [(GradientMethod::HueCounterclockwise, up), (GradientMethod::HueClockwise, down)] {
+            let [h, s, v] = method.mix(&a, &b, 0.5).to_hsb();
+            assert!((h - want).abs() < 0.05, "{method:?} to {to}: hue {h}, not {want}");
+            assert!((s - 0.7).abs() < 1e-3 && (v - 0.6).abs() < 1e-3, "{method:?}: saturation {s}, brightness {v}");
+        }
+    }
+    // The other way round, each method takes the arc the other took.
+    let back = two_stops(blue, red, GradientMethod::HueClockwise);
+    assert_eq!(back.sample(0.5).0.to_hex(), "#00ff00");
+    // A position that is not a number gives the first color.
+    assert_eq!(hue_mix(&red, &blue, f32::NAN, true).to_hex(), "#ff0000");
+}
+
+/// A color without a hue does not turn the wheel: a gray takes the hue of the stop it mixes
+/// with, black its saturation too, two grays mix as grays, and two stops of one hue keep that
+/// hue, whichever way the method turns.
+#[test]
+fn hue_methods_keep_the_hue_where_a_stop_has_none() {
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let close = |c: Color, want: [f32; 3], what: &str| {
+        let got = c.to_rgb();
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3), "{what}: {got:?}, not {want:?}");
+    };
+    let green = Color::rgb(0.0, 1.0, 0.0);
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        close(method.mix(&Color::WHITE, &green, 0.5), [0.5, 1.0, 0.5], "white to green: a light green");
+        close(method.mix(&green, &Color::WHITE, 0.5), [0.5, 1.0, 0.5], "green to white: a light green");
+        close(method.mix(&Color::rgb(0.5, 0.5, 0.5), &green, 0.5), [0.375, 0.75, 0.375], "gray to green");
+        close(method.mix(&Color::BLACK, &green, 0.5), [0.0, 0.5, 0.0], "black to green: a dark green, not a gray green");
+        close(method.mix(&green, &Color::BLACK, 0.25), [0.0, 0.75, 0.0], "green to black");
+        close(method.mix(&Color::BLACK, &Color::WHITE, 0.5), [0.5, 0.5, 0.5], "black to white: gray");
+        close(method.mix(&Color::BLACK, &Color::BLACK, 0.5), [0.0, 0.0, 0.0], "black to black");
+        let dark = Color::rgb(0.5, 0.0, 0.0);
+        close(method.mix(&red, &dark, 0.5), [0.75, 0.0, 0.0], "one hue: a red between the two");
+        close(method.mix(&red, &red, 0.5), [1.0, 0.0, 0.0], "one color stays");
+        // One hue with saturation and brightness both changing: the hue stays, and the color is
+        // the even mix of saturation and brightness, which is not Classic's RGB mix.
+        let pink = Color::rgb(1.0, 0.8, 0.8);
+        close(method.mix(&dark, &pink, 0.5), [0.75, 0.3, 0.3], "dark red to pink");
+        assert!((Color::lerp(&dark, &pink, 0.5).to_rgb()[1] - 0.4).abs() < 1e-3, "classic differs");
+        // A color whose RGB numbers are under half a color level apart has no hue of its own: a
+        // near gray leaning blue takes green's hue rather than turning from blue.
+        let near_gray = Color::rgb(0.5, 0.5, 0.5 + 0.3 / 255.0);
+        let [h, _, _] = method.mix(&near_gray, &green, 0.5).to_hsb();
+        assert!((h - 120.0).abs() < 0.5, "{method:?}: near gray to green passes hue {h}");
+        // One a whole color level apart has its hue (240°) and turns from it.
+        let bluish = Color::rgb(128.0 / 255.0, 128.0 / 255.0, 129.0 / 255.0);
+        let [h, _, _] = method.mix(&bluish, &green, 0.5).to_hsb();
+        let want = if method == GradientMethod::HueClockwise { 180.0 } else { 0.0 };
+        assert!(((h - want + 180.0).rem_euclid(360.0) - 180.0).abs() < 0.5, "{method:?}: bluish gray to green passes hue {h}, not {want}");
+    }
+}
+
+/// Hues that differ only by rounding are one hue: a color and a tint or shade of it, whose
+/// computed hue angles differ in their last digits, mix without turning the wheel, with either
+/// method, and a stop added to a ramp leaves the ramp's colors as they were. Hues a whole color
+/// level apart still turn.
+#[test]
+fn hue_methods_take_hues_within_half_a_color_level_as_one() {
+    let level = |n: u8| f32::from(n) / 255.0;
+    let rgb8 = |r: u8, g: u8, b: u8| Color::rgb(level(r), level(g), level(b));
+    let methods = [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise];
+    // Colors against their 50% tint toward white and a shade at 40% brightness. At least one
+    // pair's computed hues differ, or the test checks nothing.
+    let colors = [rgb8(60, 253, 230), rgb8(241, 194, 107), rgb8(68, 32, 130), rgb8(13, 200, 77), rgb8(250, 3, 201), rgb8(90, 91, 200)];
+    let mut uneven = 0;
+    for c in colors {
+        let [h, s, v] = c.to_hsb();
+        let tint = Color::lerp(&c, &Color::WHITE, 0.5);
+        let shade = Color::from_hsb(h, s, v * 0.4);
+        for other in [tint, shade] {
+            let [h1, _, _] = other.to_hsb();
+            assert!((h1 - h).abs() < 0.01, "{c:?} and {other:?} are one hue: {h} and {h1}");
+            uneven += usize::from(h1 != h);
+            for method in methods {
+                for (a, b) in [(c, other), (other, c)] {
+                    for k in 0..=20 {
+                        let [hm, _, _] = method.mix(&a, &b, k as f32 / 20.0).to_hsb();
+                        let off = (hm - h + 180.0).rem_euclid(360.0) - 180.0;
+                        assert!(off.abs() < 0.5, "{method:?} {a:?} → {b:?} at {k}/20: hue {hm}, not {h}");
+                    }
+                }
+            }
+        }
+    }
+    assert!(uneven > 0, "no pair's hues differ by rounding");
+    // Across 0°: 359.99° and 0.01° are one hue too.
+    for method in methods {
+        let [h, _, _] = method.mix(&Color::from_hsb(359.99, 1.0, 1.0), &Color::from_hsb(0.01, 1.0, 1.0), 0.5).to_hsb();
+        assert!(!(1.0..=359.0).contains(&h), "{method:?} across 0°: {h}");
+    }
+    // A stop added to a ramp samples the ramp's color there, and the ramp keeps its colors:
+    // white to red, a color to its tint, and a turn from red to blue.
+    let ramps = [
+        (Color::WHITE, rgb8(255, 0, 0)),
+        (rgb8(60, 253, 230), Color::lerp(&rgb8(60, 253, 230), &Color::WHITE, 0.5)),
+        (rgb8(255, 0, 0), rgb8(0, 0, 255)),
+    ];
+    for method in methods {
+        for (a, b) in ramps {
+            let g = two_stops(a, b, method);
+            for at in [0.21, 0.5, 0.83] {
+                let (stops, i) = insert_stop(&g, at);
+                assert_eq!((stops.len(), i), (3, 1));
+                let with = Gradient { stops, ..g.clone() };
+                for k in 0..=200 {
+                    let t = k as f32 / 200.0;
+                    let (was, now) = (g.sample(t).0.to_rgb(), with.sample(t).0.to_rgb());
+                    let off = was.iter().zip(now).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max);
+                    assert!(off < 1.0 / 255.0, "{method:?} {a:?} → {b:?}, a stop at {at}: {was:?} became {now:?} at {t}");
+                }
+            }
+        }
+    }
+    // One color level of hue is a hue of its own: red to a red one level toward yellow turns
+    // nearly the whole wheel one way and stays put the other.
+    let (red, next) = (rgb8(255, 0, 0), rgb8(255, 1, 0));
+    let [h, _, _] = GradientMethod::HueClockwise.mix(&red, &next, 0.5).to_hsb();
+    assert!((h - 180.0).abs() < 1.0, "the long way: {h}");
+    let [h, _, _] = GradientMethod::HueCounterclockwise.mix(&red, &next, 0.5).to_hsb();
+    assert!(h < 1.0, "the short way: {h}");
+}
+
+/// Renderers mix linearly between stops: a hue segment becomes stops on its way around the
+/// wheel, close enough that the linear ramp between them stays within half a color level of it,
+/// through the midpoint and with the opacity changing evenly.
+#[test]
+fn hue_segments_expand_into_stops_on_the_curve() {
+    let pairs = [
+        (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0)),
+        (Color::rgb(1.0, 0.0, 0.0), Color::rgb(1.0, 0.02, 0.0)),
+        (Color::from_hsb(30.0, 0.5, 0.8), Color::from_hsb(190.0, 0.9, 0.4)),
+        (Color::cmyk(0.0, 0.9, 0.9, 0.0), Color::WHITE),
+        (Color::BLACK, Color::rgb(0.0, 1.0, 0.0)),
+    ];
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        for (a, b) in pairs {
+            let mut g = two_stops(a, b, method);
+            g.stops[0].midpoint = 0.3;
+            g.stops[1].opacity = 0.5;
+            let ex: Vec<_> = g.expanded().collect();
+            assert!((3..=600).contains(&ex.len()), "{method:?} {a:?} → {b:?}: {} stops", ex.len());
+            assert!(ex.windows(2).all(|w| w[0].0 < w[1].0), "in order");
+            assert!(ex.iter().any(|s| s.3 == Some(0.3) && (s.0 - 0.3).abs() < 1e-6), "a stop stands for the midpoint");
+            let ramp = Ramp::new(&g, &Color::to_rgb);
+            for k in 0..=4000 {
+                let t = k as f32 / 4000.0;
+                let (c, o) = g.sample(t);
+                let [r, gr, bl] = c.to_rgb();
+                let off = [r, gr, bl, o].iter().zip(ramp.at(t)).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max);
+                assert!(off < 0.5 / 255.0, "{method:?} {a:?} → {b:?} at {t}: {off}");
+            }
+            assert_eq!(g.sample_keep_model(0.4), g.sample(0.4), "one mix");
+        }
+    }
+}
+
+/// Reversing a gradient gives the same ramp the other way round: a hue method turns the other
+/// way with the stops, so every color keeps its place mirrored, and reversing twice gives the
+/// gradient back. Classic and Perceptual keep their method. A backward span and the curve as a
+/// Classic gradient hold the same colors.
+#[test]
+fn reversing_a_hue_gradient_keeps_its_colors_mirrored() {
+    let near = |a: Color, b: Color, what: &str| {
+        assert!(a.to_rgb().iter().zip(b.to_rgb()).all(|(x, y)| (x - y).abs() < 1.0 / 255.0), "{what}: {a:?} vs {b:?}");
+    };
+    for (method, other) in
+        [(GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise), (GradientMethod::HueCounterclockwise, GradientMethod::HueClockwise)]
+    {
+        let mut g = Gradient::new(
+            GradientKind::Linear,
+            vec![
+                GradientStop { midpoint: 0.3, ..GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)) },
+                GradientStop { opacity: 0.5, ..GradientStop::new(0.6, Color::rgb(0.0, 0.0, 1.0)) },
+                GradientStop::new(1.0, Color::rgb(0.9, 0.8, 0.1)),
+            ],
+        );
+        g.method = method;
+        let mut back = g.clone();
+        back.reverse();
+        assert_eq!(back.method, other);
+        let (span, curve) = (g.span(1.0, 0.0), g.as_classic_curve());
+        assert!(span.method.is_classic() && curve.method.is_classic());
+        assert!(curve.stops.len() > g.stops.len() && curve.stops.iter().all(|s| s.swatch.is_none() && s.midpoint == 0.5));
+        for k in 0..=400 {
+            let t = k as f32 / 400.0;
+            let (want, opacity) = g.sample(1.0 - t);
+            near(want, back.sample(t).0, &format!("{method:?} reversed at {t}"));
+            assert!((opacity - back.sample(t).1).abs() < 1e-4, "{method:?} opacity at {t}");
+            near(want, span.sample(t).0, &format!("{method:?} backward span at {t}"));
+            near(g.sample(t).0, curve.sample(t).0, &format!("{method:?} curve at {t}"));
+        }
+        back.reverse();
+        assert_eq!(back.method, method);
+        assert_eq!(back.stops.len(), g.stops.len());
+    }
+    for method in [GradientMethod::Classic, GradientMethod::Perceptual] {
+        assert_eq!(method.mirrored(), method);
+        let mut g = blue_yellow(method);
+        g.reverse();
+        assert_eq!(g.method, method);
+    }
+}
+
+/// The hue methods are written by name, read back, and parsed from their param names; their
+/// gradients draw as pixels in SVG and PDF, and are not mixes of the stops' inks.
+#[test]
+fn hue_methods_save_parse_and_draw_as_pixels() {
+    for (method, name, id) in [
+        (GradientMethod::HueClockwise, "HueClockwise", "hue-clockwise"),
+        (GradientMethod::HueCounterclockwise, "HueCounterclockwise", "hue-counterclockwise"),
+    ] {
+        let g = two_stops(Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::cmyk(1.0, 1.0, 0.0, 0.0), method);
+        let v = serde_json::to_value(&g).unwrap();
+        assert_eq!(v["method"], name);
+        assert_eq!(serde_json::from_value::<Gradient>(v).unwrap(), g);
+        assert_eq!(method.id(), id);
+        for written in [id.to_string(), id.to_uppercase(), id.replace('-', " "), id.replace('-', "_"), name.to_string(), method.label().to_string()] {
+            assert_eq!(GradientMethod::parse(&written), Some(method), "{written}");
+        }
+        assert!(method.is_hue() && !method.is_classic());
+        let paint = GradientPaint::new(g.clone());
+        assert!(paint.draws_as_pixels(true) && paint.draws_as_pixels(false));
+        assert!(g.ink_mixes().is_none(), "not mixes of the stops' inks");
+        assert!(
+            paint.ink_pixels(Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(0.0, 0.0, 10.0, 10.0), 4, 4, true).is_none(),
+            "an RGB image, not an ink image"
+        );
+    }
+    assert!(!GradientMethod::Perceptual.is_hue() && !GradientMethod::Classic.is_hue());
+    for (id, method) in [("classic", GradientMethod::Classic), ("perceptual", GradientMethod::Perceptual)] {
+        assert_eq!(method.id(), id);
+        assert_eq!(GradientMethod::parse(id), Some(method));
+    }
+    for bad in [
+        "hue",
+        "clockwise",
+        "hue-",
+        "",
+        "hue clockwise wise",
+        "c-l-a-s-s-i-c",
+        "per ceptual",
+        "hue--clockwise",
+        "hue-clock_wise",
+        " classic",
+        "hue- clockwise",
+    ] {
+        assert_eq!(GradientMethod::parse(bad), None, "{bad}");
     }
 }
 

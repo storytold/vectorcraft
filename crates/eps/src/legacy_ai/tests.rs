@@ -198,6 +198,46 @@ fn many_repeats_are_written_within_the_stops_the_reader_reads() {
     assert_eq!(stops, Some(written), "every stop written is read");
 }
 
+/// The format's gradients mix their stops' colors directly: a gradient mixed around the hue wheel
+/// is written with the colors on its way around the wheel as stops, no more than the reader
+/// reads, with a warning, and opens with the colors it had.
+#[test]
+fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::GradientMethod;
+    for (method, middle) in [(GradientMethod::HueCounterclockwise, [0.0, 1.0, 0.0]), (GradientMethod::HueClockwise, [1.0, 0.0, 1.0])] {
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let g = GradientPaint::new(Gradient { method, ..Gradient::new(GradientKind::Linear, stops) });
+        let want = g.gradient.clone();
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == HUE_STOPS), "{method:?}: {:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes).into_owned();
+        let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+        let written = def.matches(" %_Bs\n").count();
+        // The two ends and each sixth of the wheel between them, where the way turns in RGB.
+        assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        let read = crate::import(&out.bytes).unwrap().document;
+        let mut back = None;
+        read.walk(|n| {
+            if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+                back = Some(g.gradient.clone());
+            }
+        });
+        let back = back.unwrap();
+        assert!(back.method.is_classic(), "{method:?}");
+        let mid = back.sample(0.5).0.to_rgb();
+        assert!(mid.iter().zip(middle).all(|(a, b)| (a - b).abs() < 0.03), "{method:?}: the middle is {mid:?}");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "{method:?} at {t}: {a:?} vs {b:?}");
+        }
+    }
+}
+
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
 /// (percent) to five decimals, so its runs keep their places hundreds of runs out.
 #[test]
@@ -616,6 +656,47 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert_eq!(above.len(), 1);
     let rgb = above[0].appearance.fill_paint().color().map(|c| c.to_rgb()).unwrap();
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
+}
+
+/// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
+/// image) are written as the image whole once, then each as the part of it that its triangle shows,
+/// and the file draws as the document does ([`write`] runs it).
+#[test]
+fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
+    let mut doc = Document::new(200.0, 160.0);
+    let mut png = vec![];
+    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let im = ImageObject {
+        key,
+        width: 64,
+        height: 64,
+        xf: Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let photo = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+    let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+    let warped = vectorcraft_doc::live::mesh_warp_image(&photo, &im, &bend, 10, false, false);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 200);
+    let digits = |lines: &Vec<&str>| {
+        lines.iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).map(str::len).sum::<usize>()
+    };
+    let whole = 64 * 64 * 3 * 2;
+    assert_eq!(digits(&images[0]), whole, "the first piece holds the whole image");
+    // Each piece holds its cell (two triangles share one) and 2 pixels more around it.
+    let total: usize = images.iter().map(digits).sum();
+    assert!(total < 10 * whole, "{total} digits of samples for an image of {whole}");
 }
 
 /// An image whose data is empty is left out with the note for empty or too large images, and an
@@ -1454,12 +1535,12 @@ fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(false), start: 0.25, end: None }));
 }
 
-/// Kerning other than Auto or 0, optical kerning, Optical Margin Alignment, System Layout,
-/// fractional widths off and an area type frame with a second subpath are not held by a legacy
-/// `.ai` text object: type with any of them is written as text, with the warning that they are
-/// left out.
+/// Optical kerning, Optical Margin Alignment, System Layout, fractional widths off and an area
+/// type frame with a second subpath are not held by a legacy `.ai` text object: type with any of
+/// them is written as text, with the warning that they are left out. Manual kerning is held
+/// (`Tk`), with no warning.
 #[test]
-fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
+fn optical_kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     use vectorcraft_doc::{TextKind, TextObject};
     let warned = |edit: &dyn Fn(&mut TextObject)| {
         let mut doc = typed();
@@ -1473,7 +1554,8 @@ fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     };
     assert!(!warned(&|_| {}));
     assert!(!warned(&|t| t.runs[0].style.kerning = Some(0.0)));
-    assert!(warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning_before = 50.0));
     assert!(warned(&|t| t.runs[0].style.optical_kerning = true));
     assert!(warned(&|t| t.optical_margin = true));
     assert!(warned(&|t| t.system_layout = true));
@@ -1484,6 +1566,67 @@ fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     };
     assert!(!warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0)]) }));
     assert!(warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0), square(120.0)]) }));
+}
+
+/// Manual kerning is written as `0 value Tk` after each character that has it, the space before a
+/// paragraph's first character as `Tk` before it, and a soft hyphen as a discretionary hyphen
+/// (`T+`, §15.4.6.1 and §15.4.10.1); each reads back on the same characters.
+#[test]
+fn manual_kerning_and_soft_hyphens_are_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let kerned = CharStyle { kerning: Some(-80.0), ..plain.clone() };
+    let before = CharStyle { kerning_before: 40.0, ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", kerned.clone());
+    for (text, st) in [("A co\u{ad}op\n", &plain), ("W", &before), ("ord", &plain), ("d\u{ad}", &kerned)] {
+        t.runs.push(TextRun::new(text, st.clone()));
+    }
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 -80 Tk\n(V) Tx\n0 -80 Tk\n"), "{text}");
+    assert!(text.contains("(A co) Tx\nT+\n(op\\r) Tx\n"), "{text}");
+    assert!(text.contains("0 40 Tk\n(W) Tx\n"), "{text}");
+    // A soft hyphen with manual kerning keeps it too.
+    assert!(text.contains("(d) Tx\n0 -80 Tk\nT+\n0 -80 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>, f64)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning, r.style.kerning_before)).collect();
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        runs,
+        [
+            (s("AV"), Some(-80.0), 0.0),
+            (s("A co\u{ad}op\n"), None, 0.0),
+            (s("W"), None, 40.0),
+            (s("ord"), None, 0.0),
+            (s("d\u{ad}"), Some(-80.0), 0.0)
+        ]
+    );
+}
+
+/// Manual kerning of 0 is written as `0 0 Tk` and reads back as manual kerning, not as the
+/// automatic kerning of a pair with no `Tk`.
+#[test]
+fn manual_kerning_of_zero_is_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let zero = CharStyle { kerning: Some(0.0), ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", zero);
+    t.runs.push(TextRun::new("To", plain));
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 0 Tk\n(V) Tx\n0 0 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("AV".to_string(), Some(0.0)), ("To".to_string(), None)]);
 }
 
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with
@@ -1964,4 +2107,18 @@ fn colr_glyphs_of_outlined_type_are_vector_art() {
     let text = String::from_utf8(write(&doc).bytes).unwrap();
     assert!(rasters(&text).is_empty(), "no images: {text}");
     assert!(text.contains("1 0 0 Xa"), "the red layer: {text}");
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = shape(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None);
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let mut n = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 30.0)) });
+    n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    assert!(text.contains("0 0 1 Xa") && !text.contains("1 0 0 Xa"), "{text}");
 }

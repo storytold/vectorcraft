@@ -21,6 +21,7 @@ pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_MIX: &str =
     "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const GRADIENT_HUE: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256), in the editing data for other apps";
 pub(in crate::ai_editing) const CONIC: &str =
     "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
 pub(in crate::ai_editing) const STOP_LINKS: &str =
@@ -56,6 +57,19 @@ fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
 }
 
+/// `g` as the data holds its colors: one mixed around the hue wheel (the data's gradients mix
+/// their stops' colors directly) as a classic gradient of the stops on its curve
+/// ([`Gradient::as_classic_curve`]), no more than the `.ai` reader reads when it pads
+/// ([`GRADIENT_HUE`]); others as they are.
+fn hue_as_stops(g: &Gradient) -> std::borrow::Cow<'_, Gradient> {
+    use std::borrow::Cow;
+    if !g.method.is_hue() {
+        return Cow::Borrowed(g);
+    }
+    let curve = g.as_classic_curve();
+    Cow::Owned(if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() })
+}
+
 /// Is a gradient of `kind` written as a radial one: a radial gradient, or a diamond (the ellipse
 /// through its square's corners, [`DIAMOND`])?
 fn written_radial(kind: GradientKind) -> bool {
@@ -86,9 +100,11 @@ impl Writer<'_> {
     pub(in crate::ai_editing) fn reserve_swatch_gradients(&mut self) {
         let doc = self.doc;
         for sw in doc.swatches_iter() {
-            // As `swatch_paint` writes it: the stops of one that repeats or reflects repeated.
+            // As `swatch_paint` writes it: one mixed around the hue wheel as the stops on its curve,
+            // and the stops of one that repeats or reflects repeated.
             if let Paint::Gradient(g) = &sw.paint
-                && let gradient = g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
+                && let stops = hue_as_stops(&g.gradient)
+                && let gradient = stops.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
                 && writable_gradient(&gradient)
                 && !self.gradients.iter().any(|d| d.name == sw.name)
             {
@@ -149,6 +165,10 @@ impl Writer<'_> {
         // The data has no spread: a gradient that repeats or reflects is written with its stops
         // repeated over `area` (a conic one, written linear, around its turn).
         let mut g: GradientPaint = (**g).clone();
+        if g.gradient.method.is_hue() {
+            self.warn(GRADIENT_HUE);
+            g.gradient = hue_as_stops(&g.gradient).into_owned();
+        }
         if g.gradient.is_spread() {
             self.warn(SPREAD);
             match g.gradient.padded_within(&geom, area, crate::import::MAX_GRADIENT_STOPS) {
@@ -461,7 +481,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             self.block_end,
         );
         // `Bg` places a gradient in a pattern's tile as on the canvas, mirrored top to bottom: its
@@ -485,7 +505,7 @@ impl Writer<'_> {
         self.hidden -= 1;
         self.nest -= 1;
         let art;
-        (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
+        (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, (self.clip, self.shown), self.block_end) = saved;
         let art = std::mem::replace(&mut self.body, art);
         self.defining.pop();
         if self.left_out_since(before) {
@@ -557,13 +577,17 @@ impl Writer<'_> {
     /// be written.
     pub(super) fn swatch_paint(&mut self, s: &mut String, sw: &vectorcraft_color::swatch::Swatch) -> bool {
         // A swatch has no placement: one that repeats or reflects holds its stops repeated along
-        // its vector.
-        let unrolled = match &sw.paint {
-            Paint::Gradient(g) => Some(g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)),
+        // its vector, and one mixed around the hue wheel the stops on its curve.
+        let stops = match &sw.paint {
+            Paint::Gradient(g) => Some(hue_as_stops(&g.gradient)),
             _ => None,
         };
+        let unrolled = stops.as_deref().map(|g| g.unrolled_within(crate::import::MAX_GRADIENT_STOPS));
         match &sw.paint {
             Paint::Gradient(g) if unrolled.as_deref().is_some_and(writable_gradient) => {
+                if g.gradient.method.is_hue() {
+                    self.warn(GRADIENT_HUE);
+                }
                 if g.gradient.is_spread() {
                     self.warn(SPREAD);
                 }

@@ -55,6 +55,8 @@ pub enum WheelOwner {
     Control,
     /// The Character popover attached to this Control bar link.
     ControlPopover(egui::Id),
+    /// The Contextual Task Bar's type controls.
+    TaskBar,
 }
 
 impl WheelOwner {
@@ -67,6 +69,12 @@ impl WheelOwner {
             Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::TaskBar => {
+                return app.ui.task_bar
+                    && app.ui.screen_mode < 3
+                    && crate::canvas::task_bar_shows_type(app)
+                    && crate::canvas::task_bar_shows_fonts(ctx);
             }
             Self::Character => "character",
             Self::Properties => {
@@ -106,12 +114,24 @@ pub struct MenuLook<'a> {
     pub wheel: bool,
     /// Its owner, so a field hidden before the next layout cannot capture wheel input.
     pub wheel_owner: Option<WheelOwner>,
+    /// The name screen readers give the closed field when no label stands beside it.
+    pub name: Option<&'a str>,
 }
 
 impl Default for MenuLook<'static> {
     /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel.
     fn default() -> Self {
-        Self { samples: true, on_white: false, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
+        Self {
+            samples: true,
+            on_white: false,
+            english_names: true,
+            row: ROW,
+            favorites: &[],
+            recent: &[],
+            wheel: false,
+            wheel_owner: None,
+            name: None,
+        }
     }
 }
 
@@ -131,6 +151,7 @@ impl<'a> MenuLook<'a> {
             recent: app.recent_fonts(),
             wheel: false,
             wheel_owner: None,
+            name: None,
         }
     }
 }
@@ -382,7 +403,7 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field_named(ui, &id, look.name, current, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| {
                 // Wider than a narrow field, so the filters keep their rows and long names show.
@@ -1621,18 +1642,20 @@ pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Optio
 }
 
 /// Waits for the samples rendering on this thread's behalf and keeps them, so the next frame
-/// draws them.
+/// draws them. Returns `false` when no sample was rendering.
 #[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) fn wait_for_samples(ctx: &egui::Context) {
+pub(crate) fn wait_for_samples(ctx: &egui::Context) -> bool {
     SAMPLES.with(|s| {
         let mut s = s.borrow_mut();
         let pending: Vec<_> = s.pending.drain().collect();
+        let waited = !pending.is_empty();
         for (key, rx) in pending {
             let tex =
                 rx.recv().ok().flatten().map(|img| ctx.load_texture(format!("font-sample-{}-{}", key.0, key.3), img, egui::TextureOptions::LINEAR));
             s.ready.insert(key, tex);
         }
-    });
+        waited
+    })
 }
 
 // ---------- applying a pick ----------
@@ -1668,7 +1691,7 @@ pub(crate) fn end_stale_preview(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// What the font menus preview on and apply to: the Type tool's selected range while it edits
-/// text (the whole text when nothing is selected), else the selected text objects.
+/// text (the whole text when nothing is selected), else every frame of each selected story.
 pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPick) {
     let previewing = crate::panels::pstate::<bool>(ctx, PREVIEWING);
     match pick {
@@ -1768,7 +1791,11 @@ fn font_command(app: &VectorcraftApp, family: &str, style: Option<&str>) -> (&'s
             }
             ("text.setRangeStyle", p)
         }
-        None => ("text.setStyle", p),
+        None => {
+            // With the Selection tool: every frame of each selected story.
+            crate::panels::character::target_selected_stories(app, &mut p);
+            ("text.setStyle", p)
+        }
     }
 }
 

@@ -162,15 +162,26 @@ fn active_stroke(n: &Node) -> Option<&vectorcraft_doc::StrokeLayer> {
     n.appearance.stroke().filter(|s| s.visible && s.opacity > 0.0)
 }
 
-/// The visible geometry effects in `fx`, in order.
-fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
-    fx.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect()
+/// Is `n` a symbol instance whose active fill or stroke has a visible raster effect (a shadow, glow,
+/// blur, feather or other painted effect, [`crate::is_raster`])? Its art takes that effect on each
+/// fill or stroke in it that paints ([`add_instance_row_effects`]), and draws it there.
+pub fn has_instance_row_raster(n: &Node) -> bool {
+    let raster = |fx: &[Effect]| fx.iter().any(|e| e.visible && crate::is_raster(&e.id));
+    matches!(n.kind, NodeKind::SymbolInstance { .. })
+        && (active_fill(n).is_some_and(|f| raster(&f.effects)) || active_stroke(n).is_some_and(|s| raster(&s.effects)))
 }
 
-/// `art`, the art symbol instance `n` places, with the visible geometry effects of `n`'s active
-/// fill added after the effects of every fill in it that paints, and those of its active stroke
-/// after the effects of every stroke in it that paints ([`active_fill`], [`active_stroke`]). Each
-/// fill or stroke keeps its paint, and the others keep their shapes. Live objects in it that are
+/// The visible geometry and raster effects in `fx`, in order: those a symbol instance's active fill
+/// or stroke passes on to its art.
+fn row_effects_of(fx: &[Effect]) -> Vec<Effect> {
+    fx.iter().filter(|e| e.visible && (is_geometry(&e.id) || crate::is_raster(&e.id))).cloned().collect()
+}
+
+/// `art`, the art symbol instance `n` places, with the visible geometry and raster effects of
+/// `n`'s active fill added after the effects of every fill in it that paints, and those of its
+/// active stroke after the effects of every stroke in it that paints ([`active_fill`],
+/// [`active_stroke`]): a Drop Shadow on the instance's fill shadows each filled shape in the art.
+/// Each fill or stroke keeps its paint, and the others keep their shapes. Live objects in it that are
 /// reached are evaluated first (with the symbols of `doc`), so the effects reshape what they draw.
 /// Clip groups' clipping paths, guides and the art of opacity masks keep their shapes. A symbol
 /// instance in the art takes the effects on its own active fill or stroke, or on a new fill or
@@ -180,8 +191,8 @@ fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
 /// instance in the art takes them.
 fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
-    let fill = active_fill(n).map_or(vec![], |f| geometry_of(&f.effects));
-    let stroke = active_stroke(n).map_or(vec![], |s| geometry_of(&s.effects));
+    let fill = active_fill(n).map_or(vec![], |f| row_effects_of(&f.effects));
+    let stroke = active_stroke(n).map_or(vec![], |s| row_effects_of(&s.effects));
     if !fill.is_empty() || !stroke.is_empty() {
         add_row_effects(doc, symbol, art, &fill, &stroke);
     }
@@ -526,8 +537,8 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
 /// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), as
 /// the art its members draw when the instance has geometry effects of its own
-/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry effects of the
-/// instance's active fill and stroke ([`add_instance_row_effects`]).
+/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry and raster
+/// effects of the instance's active fill and stroke ([`add_instance_row_effects`]).
 /// `None` for other kinds (images, paths, containers), and for an instance whose art placed
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
@@ -678,18 +689,28 @@ fn instances_as_art(doc: Option<&Document>, n: &mut Node, outline: OutlineHook, 
     }
 }
 
+/// Type `t` in a clip group's clipping path as its outlines ([`outline_text`]) with its
+/// visibility, or with geometry effects as a path of the region they give it, which is what
+/// [`crate::clip_outline`] clips by.
+pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
+    if let Some(p) = crate::clip::with_clip_effects_applied(t) {
+        return Some(p);
+    }
+    let o = outline_text(t)?;
+    Some(Node { visible: t.visible, ..o })
+}
+
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its plain outlines ([`outline_text`]) with its visibility, which is what
-/// [`crate::clip_outline`] clips by. The swatches and patterns that live-effect plug-ins painting
-/// their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
+/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
         let clipping = clipping || (clips && i == 0);
         let art = match &c.kind {
-            NodeKind::Text(_) if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+            NodeKind::Text(_) if clipping => clipping_text_outline(c),
             NodeKind::Text(_) => as_art(doc, c, None),
             _ => None,
         };
@@ -709,12 +730,14 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
 /// reshaped with it, and keep their effects from their first Convert to Shape or Outline Object
 /// on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
 /// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
-/// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
-/// or has no art (a symbol instance without `symbol_art`). A path with [`has_transform_art`] is
-/// always reshaped. The fills and strokes in the art whose own Transform effects reach their
-/// appearance become objects of their own ([`transform_items`]).
+/// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts
+/// or a symbol instance whose active fill or stroke has a raster effect
+/// ([`has_instance_row_raster`]), or has no art (a symbol instance without `symbol_art`). A path
+/// with [`has_transform_art`] is always reshaped. The fills and strokes in the art whose own
+/// Transform effects reach their appearance become objects of their own ([`transform_items`]).
 pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if !has_transform_art(n) && ((geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n)) {
+    let own = !geometry_effects(n).is_empty() || n.projection().is_some() || has_item_geometry(n) || has_instance_row_raster(n);
+    if !has_transform_art(n) && (!own || !needs_outline(n)) {
         return None;
     }
     as_art(doc, n, symbol_art)
@@ -895,9 +918,16 @@ pub(crate) fn own_effects_art(doc: Option<&Document>, n: &Node) -> Option<Node> 
         return None;
     }
     let mut art = one_piece(n);
-    reshape_leaves(&mut art, &fx, &n.appearance.effects, doc);
+    let carry = reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
     transform_items(&mut art, doc);
-    Some(dressed(art, n))
+    let mut art = dressed(art, n);
+    // The raster effects before a Transform effect the path did not take stay as the path does.
+    if carry.skipped() {
+        let mut ran = n.appearance.effects.clone();
+        carry.hide_skipped(&mut ran);
+        art.appearance.effects = crate::raster::without_geometry(&ran);
+    }
+    Some(art)
 }
 
 /// Map every path under `art` (and its gradients), and every path in the art of the linked opacity
@@ -997,7 +1027,8 @@ fn hoist_copies(art: &mut Node) {
 /// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them. A live-effect
 /// plug-in that paints what it returns makes each path a group of its pieces ([`paint_leaf`]),
 /// whose swatches and patterns must be in `doc` (without one, pieces that name one are refused).
-/// Returns how gradients that paint the art as a whole follow the effects. A deferred live-effect
+/// Returns how gradients that paint the art as a whole follow the effects, and the Transform
+/// effects that nothing in the art took past the budget ([`crate::Carry::skipped`]). A deferred live-effect
 /// plug-in is listed by its index in `owner`, the effect list `fx` was taken from, or in `fx` when
 /// `owner` does not hold it. The art of the linked opacity masks of the objects in `art` (not of
 /// `art` itself) takes each effect as the paths it masks do ([`Step::reshape_masks`]), with the
@@ -1053,6 +1084,16 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
             used = cost;
             continue;
         }
+        // A Transform effect that moves the art once and that nothing in it took (past the budget)
+        // is left out ([`crate::Carry::hide_skipped`]), listed by its index in `owner`.
+        if ran.kept
+            && !ran.took
+            && e.id == "distort.transform"
+            && !crate::raster::holds_back(e)
+            && let Some(i) = owner.iter().position(|x| std::ptr::eq(x, *e))
+        {
+            whole.skip(i);
+        }
         if let Some(carry) = ran.whole {
             whole.push(carry);
         }
@@ -1084,6 +1125,8 @@ struct Step<'a> {
 struct Ran {
     /// A path in the art kept its shape (past the budget).
     kept: bool,
+    /// A path, image or symbol instance in the art took the effect.
+    took: bool,
     /// The linked opacity mask of an object in the art stayed as it was while the paths it masks
     /// took the effect, or could have ([`Step::reshape_masks`]).
     masks: bool,
@@ -1123,7 +1166,7 @@ impl Step<'_> {
         depth: usize,
     ) -> Ran {
         let (e, params, bounds, seed) = (self.e, self.params, self.bounds, self.seed);
-        let stayed = Ran { kept: false, masks: true, short: false, whole: None };
+        let stayed = Ran { kept: false, took: false, masks: true, short: false, whole: None };
         if let Some(plugin) = painted_plugin(e) {
             if own || has_linked_mask(art, false) {
                 return stayed;
@@ -1137,7 +1180,7 @@ impl Step<'_> {
                     *used = used.minus(before).plus(made);
                 }
             });
-            return Ran { kept: false, masks: false, short: false, whole: None };
+            return Ran { kept: false, took: true, masks: false, short: false, whole: None };
         }
         // A Warp effect that bends images ([`mark_warped_images`]) bends an image's pixels, not the
         // art of its linked mask.
@@ -1190,7 +1233,7 @@ impl Step<'_> {
         // ([`transform_placed`]): a mask's art that holds one can't take another effect as the art
         // it masks does.
         if own && transform.is_none() && (is_placed(art) || placed_count(art) > 0) {
-            return Ran { kept: false, masks: true, short: false, whole: None };
+            return Ran { kept: false, took: false, masks: true, short: false, whole: None };
         }
         // Art of several objects is copied whole, so the copies don't interleave member by member.
         // The copies of its members carry their linked masks, moved with them.
@@ -1200,7 +1243,7 @@ impl Step<'_> {
         {
             if !own {
                 *used = copy_art(art, m, copies, copy_scaling(options), max);
-                return Ran { kept: false, masks: false, short: false, whole: None };
+                return Ran { kept: false, took: true, masks: false, short: false, whole: None };
             }
             // A mask's art: its copies keep to what the rest of the art leaves of `max`, and the
             // linked mask of the art itself takes them too. That mask's art stays in `used`, as
@@ -1212,7 +1255,7 @@ impl Step<'_> {
             let short = art.children().is_some_and(|c| c.iter().filter(|c| !c.is_guide()).count() <= copies);
             let none = HashSet::new();
             let masks = self.reshape_own_mask(art, &Skip { moved: &none, kept: &none }, max, used, depth);
-            return Ran { kept: false, masks, short, whole: None };
+            return Ran { kept: false, took: true, masks, short, whole: None };
         }
         // A shortfall in the copies matters for the objects a linked mask above them covers, which
         // the mask would take a different number of copies than, and anywhere in a mask's art.
@@ -1223,6 +1266,7 @@ impl Step<'_> {
         }
         let counts = |id: NodeId| watch && (own || covered.contains(&id));
         let mut short = false;
+        let mut took = false;
         for_each_leaf(art, &mut |leaf| {
             let at = leaf_at;
             leaf_at += 1;
@@ -1247,6 +1291,7 @@ impl Step<'_> {
                 if options.reach_appearance() {
                     let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, raster_map.is_some(), None);
                     *used = used.minus(before).plus(made);
+                    took |= moved;
                     if moved {
                         // With Transform Objects off the path stays, and its mask takes the
                         // effect's stroke and pattern changes as its own art.
@@ -1263,6 +1308,7 @@ impl Step<'_> {
                     let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
                     let made = copy_leaf(leaf, &path, m, copies, scaling, room, None);
                     *used = used.minus(before).plus(made);
+                    took = true;
                     moved_ids.insert(leaf.id);
                     short |= counts(leaf.id) && copied(leaf) <= copies;
                     return;
@@ -1274,6 +1320,7 @@ impl Step<'_> {
                 kept_leaves.insert(at);
                 return;
             };
+            took = true;
             // A Transform effect's copies of a path are subpaths of it, each with the path's anchors.
             if counts(leaf.id)
                 && let Some((_, copies, _, _)) = transform
@@ -1315,6 +1362,8 @@ impl Step<'_> {
                 *art = Node::group(id, vec![Arc::new(one)]);
             }
             let placed = if watch { masked_placed(art, own) } else { 0 };
+            // Images and symbol instances take the effect whatever the budget.
+            took = took || placed_count(art) > 0;
             // Scale Strokes & Effects leaves the raster effects that follow the effect to
             // [`follow_art`].
             let mut scaling = copy_scaling(options);
@@ -1348,7 +1397,7 @@ impl Step<'_> {
         }
         let drawn = warped.as_deref().map_or_else(|| art.geometric_bounds(), |w| w.bounds(art));
         let whole = (follows && !held).then(|| crate::Carry::of(&e.id, params, bounds, Some(bounds), drawn, seed));
-        Ran { kept: !kept_ids.is_empty(), masks, short, whole }
+        Ran { kept: !kept_ids.is_empty(), took, masks, short, whole }
     }
 
     /// Run the effect over the art of the linked opacity mask of `n` (with `own`) and of each path,
@@ -2074,9 +2123,14 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         // effects before this one back from every Transform effect ([`crate::raster::followed`]).
         let held_later = fx.get(at + 1..).unwrap_or_default().iter().any(crate::raster::holds_back);
         // The effects before the Transform effect that it keeps, each raster effect following the
-        // geometry effects before it ([`crate::raster::without_geometry`]) unless held back.
+        // geometry effects before it that moved the geometry ([`crate::raster::without_geometry`],
+        // [`crate::Carry::hide_skipped`]) unless held back.
+        let mut ran = std::borrow::Cow::Borrowed(before);
+        if carry.skipped() {
+            carry.hide_skipped(ran.to_mut());
+        }
         let kept_before: Vec<Effect> =
-            if held_later { before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect() } else { crate::without_geometry(before) };
+            if held_later { before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect() } else { crate::without_geometry(&ran) };
         if let Some(plugin) = painted_plugin(&fx[at]) {
             let mut it = item.clone();
             let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
@@ -2490,7 +2544,10 @@ fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index)
         carry.apply(&mut leaf.appearance);
     }
     set_geometry(leaf, out, rule);
-    follow_piece(leaf, was, at.from, e);
+    // A Transform effect left out (past the budget) leaves the path and its raster effects as they were.
+    if !carry.skipped() {
+        follow_piece(leaf, was, at.from, e);
+    }
     Some(made)
 }
 

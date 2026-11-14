@@ -574,6 +574,10 @@ pub struct UiState {
     #[serde(skip)]
     pub touch_drawing_tool: Option<String>,
     pub status: String,
+    /// How many times [`crate::VectorcraftApp::status`] has set `status`, so that work finishing
+    /// later can tell whether the line it started with is still the latest one. Not saved.
+    #[serde(skip)]
+    pub status_sets: u64,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
@@ -618,14 +622,24 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
+    /// The Actions panel shows its actions as buttons (panel menu › Button Mode,
+    /// [`crate::panels::actions::button_mode`]) instead of its list; kept with the UI preferences,
+    /// and off in preferences saved without it.
+    #[serde(default)]
+    pub action_button_mode: bool,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
-    /// The id of the action New Action made for the recording in progress
-    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
-    /// adds a new action, as after Begin Recording.
+    /// The id of the action the recording in progress records into, the one New Action made or the
+    /// one selected when Begin Recording started it ([`crate::panels::actions::Action::id`]): Stop
+    /// gives it the recorded steps. None when Stop adds a new action, as after Begin Recording with
+    /// no action selected.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// Where in the action [`UiState::recording_into`] names Stop puts the recorded steps: before
+    /// the step at this index, or None after its last step.
+    #[serde(skip)]
+    pub recording_at: Option<usize>,
     /// The length of the action set file that Stop Playing/Recording would leave without the steps
     /// recorded so far, once measured; None until then, and again after an app command, which may
     /// change the sets.
@@ -1153,6 +1167,7 @@ impl Default for UiState {
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             touch_drawing_tool: None,
             status: String::new(),
+            status_sets: 0,
             replace_font_warning: None,
             status_notes: None,
             palette_open: false,
@@ -1166,8 +1181,10 @@ impl Default for UiState {
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
             action_sets_selected: vec![],
+            action_button_mode: false,
             recording: None,
             recording_into: None,
+            recording_at: None,
             recording_base: None,
             recording_tail: None,
             recording_checked: None,

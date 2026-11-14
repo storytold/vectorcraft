@@ -780,6 +780,41 @@ fn insert_aki_fields_show_with_the_east_asian_options() {
     assert!(left(&app).iter().all(|v| *v == 1000.0), "{:?}", left(&app));
 }
 
+/// Tsume is a field of the panel with the East Asian options only, and shows the selected
+/// characters' value, blank where they differ. A value typed past 100 sets 100.
+#[test]
+fn tsume_field_shows_with_the_east_asian_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"tsume": 37.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("→A←") && !text.contains("37.5"), "{text}");
+    app.session.prefs.show_east_asian_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("→A←") && text.contains("37.5"), "{text}");
+    // The characters differ: the field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 12, "tsume": 62.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("37.5") && !text.contains("62.5"), "{text}");
+    app.run("text.setFormat", json!({"tsume": 62.5})).unwrap();
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "62.5%").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("150".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let tsume = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.tsume).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(tsume(&app).iter().all(|v| *v == 100.0), "{:?}", tsume(&app));
+}
+
 /// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
 /// which shows the selected type's reference and sets the one picked (one undo step); Hide
 /// Font Height Options hides it again.
@@ -994,6 +1029,43 @@ fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_
     let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
     super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
+/// Warichu and Warichu Settings… are in the panel menu with the East Asian options: Warichu marks
+/// the selected characters and takes the mark off again, one undo step each way, and Warichu
+/// Settings… opens the dialog on them.
+#[test]
+fn warichu_menu_items_show_with_east_asian_options_toggle_and_open_the_settings() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "abcd"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu);
+    assert!(!painted(&mut app).contains("Warichu"));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.warichu),
+        _ => panic!("text"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    let find = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+        texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1
+    };
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(painted(&mut app).contains("✓ Warichu"));
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+    let at = find(&ctx, &mut app, "Warichu Settings…");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::warichu::KIND));
 }
 
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
@@ -1407,6 +1479,7 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.tcy_left_right != d.tcy_left_right,
             s.aki_left != d.aki_left,
             s.aki_right != d.aki_right,
+            s.tsume != d.tsume,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
@@ -1421,16 +1494,16 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
-                "akiLeft": 250, "akiRight": 500, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "akiLeft": 250, "akiRight": 500, "tsume": 50, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 24]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 25]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 24]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 25]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);
@@ -1703,4 +1776,142 @@ fn story_changes_take_in_locked_and_hidden_frames() {
     for id in [a, b, c] {
         assert_eq!(story_sizes(&app, id).iter().filter(|s| (**s - 9.0).abs() > 1e-9).count(), 0, "frame {id} takes the size");
     }
+}
+
+/// [`three_frame_story`] with its second frame locked and its third hidden, a type object of its own
+/// below it, and the first frame selected with the Selection tool → the app, the frames and the
+/// other type object.
+fn story_selected_in_its_first_frame() -> (VectorcraftApp, [u64; 3], u64) {
+    let (mut app, a, b, c) = three_frame_story(60);
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(text_editing(&app), None);
+    (app, [a, b, c], other)
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// With the Selection tool, a selected frame of a threaded story stands for the whole story: the
+/// panel's changes reach its locked and hidden frames, each in one undo step, and leave other type
+/// alone.
+#[test]
+fn selection_tool_changes_reach_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    assert_eq!(selected_stories(&app), frames.map(NodeId).to_vec());
+
+    let steps = undo_steps(&app);
+    style(&mut app, json!({"size": 9}));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 9.0).abs() < 1e-9), "frame {id} takes the size");
+    }
+    assert!(story_sizes(&app, other).iter().all(|s| (*s - 12.0).abs() < 1e-9), "other type keeps its size");
+    app.run("edit.undo", json!({})).unwrap();
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 12.0).abs() < 1e-9), "undo gives frame {id} its size back");
+    }
+
+    format(&mut app, json!({"underline": true}));
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| r.style.underline), "frame {id} is underlined");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| !r.style.underline));
+
+    // Tate-chu-yoko Settings and Warichu Settings set their values through `run_format`.
+    run_format(&mut app, json!({"tcyUpDown": 2})).unwrap();
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| (r.style.tcy_up_down - 2.0).abs() < 1e-9), "frame {id} takes Up/Down");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| r.style.tcy_up_down.abs() < 1e-9));
+}
+
+/// With the Selection tool the anti-aliasing method goes to every frame of the selected story.
+#[test]
+fn selection_tool_anti_aliasing_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    for id in frames {
+        assert_eq!(story_frame(&app, id).anti_alias, TypeAntiAlias::Strong, "frame {id}");
+    }
+    assert_eq!(story_frame(&app, other).anti_alias, TypeAntiAlias::Sharp);
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+}
+
+/// With the Selection tool a Variable Font slider sets the axis on every frame of the selected
+/// story, in one undo step.
+#[test]
+fn selection_tool_font_axes_reach_every_frame_of_the_story() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let (mut app, frames, _) = story_selected_in_its_first_frame();
+    app.run("text.setStyle", json!({"ids": frames, "font": TWO_AXIS_FAMILY})).unwrap();
+    app.run("select.set", json!({"ids": [frames[0]]})).unwrap();
+    let steps = undo_steps(&app);
+    axes_cmd(&mut app, json!({"wght": 700}), widgets::Live::Released);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        let t = story_frame(&app, id);
+        assert!(t.runs.iter().all(|r| r.style.font_axes.get("wght") == Some(&700.0)), "frame {id}: {:?}", t.runs[0].style.font_axes);
+    }
+}
+
+/// With the Selection tool a font family picked in the font menu, and its preview, go to every
+/// frame of the selected story, in one undo step.
+#[test]
+fn selection_tool_font_family_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    let family = |app: &VectorcraftApp, id: u64| story_frame(app, id).runs.iter().map(|r| r.style.font_family.clone()).collect::<Vec<_>>();
+    let before = family(&app, other);
+    let ctx = egui::Context::default();
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Preview("Source Serif 4".into(), None));
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "the preview shows on frame {id}");
+    }
+    let steps = undo_steps(&app);
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Chosen("Source Serif 4".into(), None));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "frame {id} takes the family");
+    }
+    assert_eq!(family(&app, other), before, "other type keeps its family");
+}
+
+/// The fields show a value only when every frame of the selected story has it: a hidden frame that
+/// differs leaves them blank.
+#[test]
+fn selection_tool_fields_read_every_frame_of_the_story() {
+    let (mut app, [a, b, c], _) = story_selected_in_its_first_frame();
+    assert_eq!(shared(&app, |s| s.size), Some(12.0));
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Sharp));
+    app.run("text.setStyle", json!({"ids": [c], "size": 20})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "antiAlias": TypeAntiAlias::Crisp.id()})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(shared(&app, |s| s.size), None, "the hidden frame's size differs");
+    assert_eq!(shared_anti_alias(&app), None, "the locked frame's anti-aliasing differs");
+}
+
+/// Two frames of one story, or a frame in a selected group, count once; an unthreaded type
+/// object is a story of its own.
+#[test]
+fn selected_stories_list_each_frame_once() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    app.run("object.unlockAll", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b, a]})).unwrap();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec(), "thread order, each once");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    let mut listed = selected_stories(&app);
+    listed.sort_by_key(|id| id.0);
+    let mut expected = [a, b, c, other].map(NodeId).to_vec();
+    expected.sort_by_key(|id| id.0);
+    assert_eq!(listed, expected);
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
 }

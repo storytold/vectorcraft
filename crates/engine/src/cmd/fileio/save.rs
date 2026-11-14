@@ -95,14 +95,18 @@ pub struct SavePlan {
     /// The `modified` param (as `date_param` reads it): the File Info date a Save or Save As to a file
     /// stamps; `None`: the time it is written.
     pub modified: Option<Option<i64>>,
-    /// Warnings about the params themselves: each native option (`compress`, `version`,
-    /// `preview`, `precision`) given beside the path, and each key of `options`, that the format
-    /// doesn't read, naming the file the save writes.
+    /// Warnings about the params themselves: each option a save format takes given beside the
+    /// path, and each key of `options`, that the file the save writes doesn't read
+    /// ([`file_reads`]), naming that file.
     pub notes: Vec<String>,
     /// The file the document was read from and what reading it left out, when the save needs
     /// `acknowledgeLoss` to write over it and was not given it: every file the save writes is
     /// checked against it before the first is written.
     pub lossy_source: Option<(String, Vec<String>)>,
+    /// The `.ai` options the file doesn't read, with the values the document remembers from its
+    /// last `.ai` save: not in `options`, they go back into the remembered options once the file
+    /// is the document's own.
+    pub kept: Map<String, Value>,
 }
 
 impl SavePlan {
@@ -279,7 +283,8 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         }
     }
     // None given: the ones the document was last saved with in this format.
-    let mut options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
+    let from_memory = given.is_empty() && format.id == st.format;
+    let mut options = if from_memory { remembered_save_options(st) } else { given };
     // Remember the effective choice, including the encoder's default, so another document's
     // later save cannot change what this one writes. Invalid non-null values still reach validation.
     if matches!(format.id, "vectorcraft" | "template") {
@@ -311,20 +316,53 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
         super::check_not_lossy_overwrite(st, path, p, cmd).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })?;
     }
-    let written = written_as(cmd, format, &Value::Object(options.clone()));
-    let top = NATIVE_OPTIONS.iter().filter(|k| p.get(**k).is_some_and(|v| !v.is_null())).map(|k| k.to_string());
+    let chosen = Value::Object(options.clone());
+    let written = written_as(cmd, format, &chosen);
+    let legacy = legacy_file(cmd, format, &chosen);
+    // Beside the path, a key some save format takes; in `options`, any key.
+    let top = p.as_object().into_iter().flatten().filter(|(k, v)| !v.is_null() && save_listed(k)).map(|(k, _)| k.to_string());
     let nested = p.get("options").and_then(Value::as_object).into_iter().flatten().filter(|(_, v)| !v.is_null()).map(|(k, _)| k);
     let notes = top
-        .filter(|k| !reads_option(format, k))
-        .chain(nested.filter(|k| !reads_option(format, k)).map(|k| format!("options.{k}")))
-        .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
+        .filter(|k| !file_reads(format, legacy, k))
+        .chain(nested.filter(|k| !file_reads(format, legacy, k)).map(|k| format!("options.{k}")))
+        .map(|k| unused_option_note(&k, &written))
         .collect();
+    // When the document's own file is a `.ai`, the `.ai` options this file doesn't read and the
+    // request doesn't give keep their remembered values ([`SavePlan::kept`]), so that Save Options
+    // still shows them (it sends only the ones the file reads). They are neither written nor sent
+    // again.
+    let mut kept = Map::new();
+    if format.id == "ai" && format.id == st.format {
+        let last = remembered_save_options(st);
+        for o in format.options.iter().filter(|o| !file_reads(format, legacy, o.name)) {
+            let value = if from_memory {
+                options.remove(o.name)
+            } else if options.contains_key(o.name) {
+                None
+            } else {
+                last.get(o.name).cloned()
+            };
+            if let Some(v) = value {
+                kept.insert(o.name.to_string(), v);
+            }
+        }
+    }
     let lossy_source = super::lossy_source(st, p);
-    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes, lossy_source })
+    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes, lossy_source, kept })
 }
 
 /// The native save options, which a save also takes beside the path.
 const NATIVE_OPTIONS: [&str; 4] = ["compress", "version", "preview", "precision"];
+
+/// Does some save format (or template format) take option `key`?
+fn save_listed(key: &str) -> bool {
+    NATIVE_OPTIONS.contains(&key)
+        || super::FORMATS
+            .iter()
+            .filter(|f| SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id))
+            .flat_map(|f| f.options)
+            .any(|o| o.name == key)
+}
 
 /// The first option `p` gives both beside the path and in `options` with different values, as
 /// `(key, top-level value, options value)`. For an SVG save (`svg`), an SVG option's value on
@@ -465,6 +503,32 @@ fn range_text(picked: &[usize]) -> String {
 /// settings (`createLayers`…) and presets. A save drops each option its format doesn't read.
 pub fn reads_option(f: &Format, key: &str) -> bool {
     f.options.iter().any(|o| o.name == key) || (is_pdf(f) && (super::pdf::OPTIONS.iter().any(|o| o.name == key) || super::pdf::is_setting(key)))
+}
+
+/// Does the file a save or an export writes in `f` read option `key`, `legacy` when it is a legacy
+/// `.ai` file ([`super::legacy_ai::wanted`])? As [`reads_option`], except for `.ai` and `.ait`
+/// files: a legacy file reads its own options only ([`super::legacy_ai::reads`]), and the others
+/// don't read the legacy file's options or `preserveEditing`, which is on for them whatever is
+/// given.
+pub fn file_reads(f: &Format, legacy: bool, key: &str) -> bool {
+    match (f.id, key) {
+        ("ai", _) if legacy => super::legacy_ai::reads(key),
+        ("ai" | "ait", "preserveEditing") => false,
+        ("ai" | "ait", _) if super::legacy_ai::LEGACY_ONLY.contains(&key) => false,
+        _ => reads_option(f, key),
+    }
+}
+
+/// Is a save or an export of `cmd` in `f` with options `p` to write a legacy `.ai` file? An
+/// unknown version is not one (the save or export refuses it).
+pub(super) fn legacy_file(cmd: &str, f: &Format, p: &Value) -> bool {
+    f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false)
+}
+
+/// The note a save or an export gives for option `key`, as the request names it, which the file it
+/// writes (`written`, see [`written_as`]) doesn't read.
+pub(super) fn unused_option_note(key: &str, written: &Format) -> String {
+    format!("`{key}` was not used: {} files don't read it", written.label)
 }
 
 /// Formats that carry the whole native document: they lose nothing, and record links relative to
@@ -636,7 +700,7 @@ fn without_pdf(f: &Format) -> Format {
 /// `f` named, in its errors and notes, as the file a save with options `p` writes: a version 7
 /// `.ai` as the legacy `.ai`, and a `.ai` or `.ait` with `pdfCompatible: false` as one saved
 /// without PDF content.
-fn written_as(cmd: &str, f: &Format, p: &Value) -> Format {
+pub(super) fn written_as(cmd: &str, f: &Format, p: &Value) -> Format {
     if f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false) {
         super::legacy_ai::named(f)
     } else if matches!(f.id, "ai" | "ait") && !bool_or(p, "pdfCompatible", true) {
@@ -816,6 +880,7 @@ pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<Save
 
 fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i64>) -> Result<SaveJob> {
     let cmd = plan.mode.command();
+    super::check_linked_scripts(cmd, plan.format.id, st)?;
     let mut own = doc_to_save(st, plan.format);
     // The file the document is saved as (else its own) titles it if New's name is all it has.
     let file = plan.path.as_deref().filter(|_| plan.retargets()).or(st.path.as_deref());
@@ -1030,6 +1095,7 @@ impl SaveJob {
             st.path = Some(path);
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;
+            st.save_options.extend(self.plan.kept);
             // A later save rounds only when it gives `precision` too.
             st.save_options.remove("precision");
             st.save_artboards = self.snapshot.artboards.iter().map(|a| a.id).collect();
@@ -1232,7 +1298,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings say when the format doesn't read compress, version, preview or precision given flat, or a key given in options), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file and EPS (below): a .ai file is a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS takes the options of document.exportEps: by default one file whose bounding box fits the visible art (the first artboard when no art shows), carrying the whole editable document; useArtboards: true (also when artboard, artboards or range names artboards; file.formatOptions then reports it true) makes the chosen artboard the page, drawn with its background color (without Use Artboards, only the first artboard's page when no art shows has its color), and with two or more chosen the file at the path is the central file of the visible art (again the first artboard when none shows) and each artboard is also written to <name>_<artboard>.eps beside it, holding that artboard; selectedOnly is refused; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. Under automation read roots, a reply leaves out the document's own file outside them when no path is given (files and linked then name the files by their file names), and a suggested folder outside them. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused. A terminal filesystem permission/read-only refusal returns READ_ONLY_LOCATION: followed by the reason; recovery-copy failures keep their original error. Non-UI callers never open a save panel",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai|eps (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), …the SVG and PDF options given flat instead (an option given flat or in svg and in options with different values is an error), compress?: bool (native, also in options: gzip; default: the useCompression preference; warnings name an option given flat or in options that the file doesn't read: a legacy .ai reads only its own options, and other .ai files don't read outlineText, hiddenObjects, transparentImages or preserveEditing), version?: 4 (3, 2 or 1: for older VectorCraft versions; 1 and 2 are never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), precision?: 0..9 (native: round path anchors and handles to this many decimal places, a smaller file; colors, transforms and type stay exact; default: exact, and a later save without it writes exactly again), separateArtboards?: false (native and .ai: also save each artboard of `range` to <name>-<artboard>.<ext> beside the file, holding that artboard and the art touching it; the result's files lists every file written), range?: \"1-3, 5\"|\"all\" (default; with separateArtboards), includeLinked?: false (keep linked files' own pixels, not just their previews; they stay linked), embedProfiles?: true (carry the ICC profiles loaded from files that the document is tagged with; opening the file installs them where missing), pdfCompatible?: true (native: also carry a PDF of every artboard; false omits it) | true for .ai (false: blank pages, only the native document; a .ai file's compress, default true, is its compression.compressText), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, files?: [path…] (the file and its artboards' files), linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file and EPS (below): a .ai file is a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly, on the active artboard (the app's, else the one the document opened on; with editingData: false, the first); separateArtboards writes more files, one per artboard. EPS takes the options of document.exportEps: by default one file whose bounding box fits the visible art (the first artboard when no art shows), carrying the whole editable document; useArtboards: true (also when artboard, artboards or range names artboards; file.formatOptions then reports it true) makes the chosen artboard the page, drawn with its background color (without Use Artboards, only the first artboard's page when no art shows has its color), and with two or more chosen the file at the path is the central file of the visible art (again the first artboard when none shows) and each artboard is also written to <name>_<artboard>.eps beside it, holding that artboard; selectedOnly is refused; its PostScript appearance flattens transparency, as EPS requires. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF/EPS saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified. Under automation read roots, a reply leaves out the document's own file outside them when no path is given (files and linked then name the files by their file names), and a suggested folder outside them; an svg or svgz save (a document whose own format is SVG or SVGZ included) is refused, before any file is written, while the document links a JavaScript file outside them (svgInteractivity; a URL is not checked), also by file.saveAs and file.saveCopy. A key that no save format takes, beside the path or in options, and an unknown key inside a PDF option's object or svg, are refused. A terminal filesystem permission/read-only refusal returns READ_ONLY_LOCATION: followed by the reason; recovery-copy failures keep their original error. Non-UI callers never open a save panel",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

@@ -8,6 +8,7 @@
 //! ([`vectorcraft_ui_egui::picks::PickAnswer`]); the app gives the name that type's extension.
 //! rfd shows the dialog when the portal can't (no session bus, no file chooser), with zenity as its
 //! own fallback. PhotoCraft's `portal_save.rs` (storytold/photocraft#6151) makes the same call.
+//! rfd also shows the dialog when the portal leaves the bus before it answers.
 //!
 //! The dialog's parent is the window: `x11:<window id>` on X11, and on Wayland (Linux) a handle
 //! from the compositor's xdg-foreign protocol, as rfd names it (its `window_identifier`).
@@ -183,37 +184,18 @@ pub fn pick(pick: &FilePick, window: Option<&winit::window::Window>) -> Option<V
 fn save_file(conn: &zbus::blocking::Connection, request: &SaveRequest) -> Result<Option<Saved>, String> {
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use zbus::blocking::{MessageIterator, Proxy};
-    use zbus::zvariant::OwnedObjectPath;
+    use zbus::blocking::Proxy;
 
     const DESKTOP: &str = "org.freedesktop.portal.Desktop";
-    const REQUEST: &str = "org.freedesktop.portal.Request";
     static NEXT: AtomicU32 = AtomicU32::new(0);
     let token = format!("vectorcraft_save_{}_{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
-    // Listen before asking, on every request path: a portal older than version 0.9 ignores
-    // `handle_token` and answers on the request path it returns, and its answer can come before
-    // the call's reply. The stream keeps every `Response` from the time it is made.
-    let rule = zbus::MatchRule::builder()
-        .msg_type(zbus::message::Type::Signal)
-        .sender(DESKTOP)
-        .and_then(|b| b.interface(REQUEST))
-        .and_then(|b| b.member("Response"))
-        .map_err(|e| e.to_string())?
-        .build();
-    let responses = MessageIterator::for_match_rule(rule, conn, None).map_err(|e| e.to_string())?;
+    // Made before the call: a portal can send its answer before the call returns, and a portal
+    // that leaves the bus while its dialog is open ends the wait.
+    let responses = crate::portal_request::Responses::new(conn)?;
     let chooser = Proxy::new(conn, DESKTOP, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser").map_err(|e| e.to_string())?;
     // The title is empty, as rfd sends it for a save.
     let call = chooser.call_method("SaveFile", &(request.parent.as_str(), "", options(request, &token))).map_err(|e| e.to_string())?;
-    let handle: OwnedObjectPath = call.body().deserialize().map_err(|e| e.to_string())?;
-    // The answer is the `Response` on the path returned, from the connection that returned it.
-    let portal = call.header().sender().map(|s| s.as_str().to_string());
-    let reply = responses
-        .filter_map(Result::ok)
-        .find(|m| {
-            let header = m.header();
-            header.path().map(|p| p.as_str()) == Some(handle.as_str()) && header.sender().map(|s| s.as_str()) == portal.as_deref()
-        })
-        .ok_or("the save dialog closed without an answer")?;
+    let reply = responses.wait(&call)?;
     let (code, results): (u32, HashMap<String, OwnedValue>) = reply.body().deserialize().map_err(|e| e.to_string())?;
     answer(code, &results)
 }
@@ -260,7 +242,7 @@ fn parent(window: &winit::window::Window) -> (String, Option<()>) {
 /// (<https://wayland.app/protocols/xdg-foreign-unstable-v2>), made as rfd's `window_identifier`
 /// makes it.
 #[cfg(target_os = "linux")]
-mod wayland {
+pub(crate) mod wayland {
     use wayland_client::globals::{GlobalListContents, registry_queue_init};
     use wayland_client::protocol::wl_registry::{self, WlRegistry};
     use wayland_client::protocol::wl_surface::WlSurface;
@@ -326,9 +308,10 @@ mod wayland {
         }
     }
 
-    /// `window`'s Wayland connection and surface, from its raw handles.
+    /// `window`'s Wayland connection and surface, from its raw handles. The caller holds `window`
+    /// while it uses them (`quit_windows` unmaps the main window's surface through them).
     #[allow(unsafe_code)]
-    fn surface(window: &winit::window::Window) -> Option<(Connection, WlSurface)> {
+    pub(crate) fn surface(window: &winit::window::Window) -> Option<(Connection, WlSurface)> {
         use wayland_backend::sys::client::{Backend, ObjectId};
         use winit::raw_window_handle::{HasDisplayHandle as _, HasWindowHandle as _, RawDisplayHandle, RawWindowHandle};
         let (RawWindowHandle::Wayland(w), RawDisplayHandle::Wayland(d)) =
@@ -337,8 +320,8 @@ mod wayland {
             return None;
         };
         // SAFETY: the display is winit's open `wl_display`, which outlives `window` (the caller
-        // holds it until the export is dropped); a backend made from a foreign display does not
-        // close it when dropped.
+        // holds it while it uses the connection, and the export holds it until it is dropped); a
+        // backend made from a foreign display does not close it when dropped.
         let backend = unsafe { Backend::from_foreign_display(d.display.as_ptr().cast()) };
         let conn = Connection::from_backend(backend);
         // SAFETY: the pointer is the window's live `wl_surface` proxy on that display.
@@ -495,26 +478,22 @@ mod tests {
         Old,
         /// As `Old`, with the `Response` sent before the reply that names its path.
         OldEarly,
+        /// As `Current`, but it leaves the bus 300 ms after its reply without a `Response`, as a
+        /// portal that exits while its dialog is open.
+        Exits,
+        /// Leaves the bus right after its reply, without a `Response`.
+        ExitsAtOnce,
+        /// Sends its `Response` right after its reply, then leaves the bus.
+        AnswersAndExits,
     }
 
     /// A session bus of its own (`dbus-daemon`) with a mock `org.freedesktop.portal.FileChooser`
     /// that answers `SaveFile` from `script` as `portal` says, as PhotoCraft's portal tests run it.
     /// `None` when there is no `dbus-daemon` to run.
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
-    fn mock_portal(script: Script, portal: Portal) -> Option<(zbus::blocking::Connection, Seen, std::process::Child)> {
-        use std::io::BufRead as _;
-
+    fn mock_portal(script: Script, portal: Portal) -> Option<(zbus::blocking::Connection, Seen, crate::portal_request::test_bus::Daemon)> {
         use zbus::zvariant::OwnedObjectPath;
-        let spawning = crate::spawning();
-        let daemon = std::process::Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address=1"])
-            .stdout(std::process::Stdio::piped())
-            .spawn();
-        drop(spawning);
-        let mut daemon = daemon.ok()?;
-        let mut address = String::new();
-        std::io::BufReader::new(daemon.stdout.take()?).read_line(&mut address).ok()?;
-        let address = address.trim().to_string();
+        let (daemon, address) = crate::portal_request::test_bus::private_bus()?;
         let server =
             zbus::blocking::connection::Builder::address(address.as_str()).ok()?.name("org.freedesktop.portal.Desktop").ok()?.build().ok()?;
         let seen = Seen::default();
@@ -539,8 +518,8 @@ mod tests {
                 });
                 let Some(sender) = header.sender().map(|s| s.as_str().trim_start_matches(':').replace('.', "_")) else { break };
                 let token = match portal {
-                    Portal::Current => text("handle_token").unwrap_or_default(),
                     Portal::Old | Portal::OldEarly => format!("old{}", calls.unwrap_or_default()),
+                    Portal::Current | Portal::Exits | Portal::ExitsAtOnce | Portal::AnswersAndExits => text("handle_token").unwrap_or_default(),
                 };
                 let path = format!("/org/freedesktop/portal/desktop/request/{sender}/{token}");
                 let Ok(handle) = OwnedObjectPath::try_from(path.as_str()) else { break };
@@ -558,14 +537,22 @@ mod tests {
                 if server.reply(&header, &handle).is_err() {
                     break;
                 }
-                if portal == Portal::Old {
+                if matches!(portal, Portal::Old | Portal::Exits) {
                     // As a person answers the dialog: after the caller has the path returned.
                     std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                if matches!(portal, Portal::Exits | Portal::ExitsAtOnce) {
+                    break;
                 }
                 if portal != Portal::OldEarly && respond().is_err() {
                     break;
                 }
+                if portal == Portal::AnswersAndExits {
+                    break;
+                }
             }
+            // The portal leaves the bus: the bus sends `NameOwnerChanged` for its name.
+            let _ = server.close();
         });
         let client = zbus::blocking::connection::Builder::address(address.as_str()).ok()?.build().ok()?;
         Some((client, seen, daemon))
@@ -589,7 +576,7 @@ mod tests {
     #[test]
     fn the_portal_is_asked_on_the_first_file_type_and_answers_the_one_picked() {
         let script = vec![(0, Some(("file:///home/me/Art/poster", "PDF-compatible .ai"))), (1, None)];
-        let Some((conn, seen, mut daemon)) = mock_portal(script, Portal::Current) else {
+        let Some((conn, seen, _daemon)) = mock_portal(script, Portal::Current) else {
             eprintln!("no dbus-daemon: skipped");
             return;
         };
@@ -599,7 +586,6 @@ mod tests {
         assert_eq!(save_within(&conn, &request), Ok(None));
         let seen = seen.lock().map(|s| s.clone()).unwrap_or_default();
         assert_eq!(seen.first(), Some(&(Some("Untitled-1.vectorcraft".to_string()), Some(request.filters[0].0.clone()))));
-        let _ = daemon.kill();
     }
 
     /// A portal older than 0.9 answers on the request path it returns, and the answer is awaited
@@ -607,13 +593,12 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     #[test]
     fn the_answer_is_awaited_on_the_path_the_portal_returns() {
-        let Some((conn, _seen, mut daemon)) = mock_portal(vec![(0, Some(("file:///tmp/card", "SVG")))], Portal::Old) else {
+        let Some((conn, _seen, _daemon)) = mock_portal(vec![(0, Some(("file:///tmp/card", "SVG")))], Portal::Old) else {
             eprintln!("no dbus-daemon: skipped");
             return;
         };
         let request = request();
         assert_eq!(pick_answer(save_within(&conn, &request).unwrap(), &request), ["/tmp/card", "svg"]);
-        let _ = daemon.kill();
     }
 
     /// A portal older than 0.9 can answer before its reply names the request path: the answer is
@@ -622,14 +607,41 @@ mod tests {
     #[test]
     fn an_answer_that_comes_before_the_path_is_kept() {
         let script = vec![(0, Some(("file:///tmp/card", "SVG"))), (1, None)];
-        let Some((conn, _seen, mut daemon)) = mock_portal(script, Portal::OldEarly) else {
+        let Some((conn, _seen, _daemon)) = mock_portal(script, Portal::OldEarly) else {
             eprintln!("no dbus-daemon: skipped");
             return;
         };
         let request = request();
         assert_eq!(pick_answer(save_within(&conn, &request).unwrap(), &request), ["/tmp/card", "svg"]);
         assert_eq!(save_within(&conn, &request), Ok(None));
-        let _ = daemon.kill();
+    }
+
+    /// A portal that leaves the bus after its reply without answering, while its dialog is open or
+    /// at once, ends the wait with an error, and rfd shows the dialog.
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    #[test]
+    fn a_portal_that_exits_during_the_dialog_ends_the_wait() {
+        for portal in [Portal::Exits, Portal::ExitsAtOnce] {
+            let Some((conn, _seen, _daemon)) = mock_portal(vec![(0, Some(("file:///tmp/card", "SVG")))], portal) else {
+                eprintln!("no dbus-daemon: skipped");
+                return;
+            };
+            assert_eq!(save_within(&conn, &request()), Err("the desktop portal disappeared while waiting for its answer".to_string()));
+        }
+    }
+
+    /// A portal that answers and then leaves the bus: the save reads the answer. Whether the answer
+    /// or the bus's report comes first depends on timing here; `portal_request`'s
+    /// `a_queued_answer_wins_over_the_portal_leaving` queues both before the wait.
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    #[test]
+    fn an_answer_sent_just_before_the_portal_exits_is_kept() {
+        let Some((conn, _seen, _daemon)) = mock_portal(vec![(0, Some(("file:///tmp/card", "SVG")))], Portal::AnswersAndExits) else {
+            eprintln!("no dbus-daemon: skipped");
+            return;
+        };
+        let request = request();
+        assert_eq!(pick_answer(save_within(&conn, &request).unwrap(), &request), ["/tmp/card", "svg"]);
     }
 
     /// The labels go to the dialog in the interface's language, which is how the answer is matched.

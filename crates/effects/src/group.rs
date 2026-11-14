@@ -261,8 +261,17 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
             carry.apply(&mut m.appearance);
         }
         // So do the raster effects of its fills and strokes, by `n`'s Transform effects
-        // ([`crate::follow_items`]).
-        crate::raster::follow_items_of(&mut m, &n.appearance.effects);
+        // ([`crate::follow_items`]) that moved the outline.
+        let mut owner = std::borrow::Cow::Borrowed(n.appearance.effects.as_slice());
+        if carry.skipped() {
+            carry.hide_skipped(owner.to_mut());
+            if m.appearance.effects == n.appearance.effects {
+                let mut ap = (*m.appearance).clone();
+                ap.effects = owner.to_vec();
+                m.appearance = ap.into();
+            }
+        }
+        crate::raster::follow_items_of(&mut m, &owner);
     }
     without_geometry_effects(&mut m);
     m
@@ -652,8 +661,9 @@ pub fn has_container_appearance(n: &Node) -> bool {
 /// The regions a group's or layer's own fills and strokes paint, in document space, each with its
 /// fill rule: every visible member path and compound path, type as its glyph outlines and live
 /// objects evaluated; a compound shape as its area, with the symbol instances among its members
-/// as their symbols' art from `doc`; the members of a clip group or clipping layer without its
-/// clipping path. Images, other symbol instances and guides add nothing. A Repeat counts the
+/// as their symbols' art from `doc`; a clip group or clipping layer (`n` itself or one among its
+/// members) as the region its clipping path clips to ([`crate::clip::clip_outline`]), so members
+/// it hides add nothing. Images, other symbol instances and guides add nothing. A Repeat counts the
 /// Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
 pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRule)> {
     fn push(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
@@ -681,8 +691,14 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
-        let clip = usize::from(n.clips());
-        for c in n.children().into_iter().flatten().skip(clip) {
+        // A clip group shows its members only inside its clipping path: its outline is that
+        // region, not the clipped members' own shapes, which may reach far outside it (#7289).
+        if n.clips() {
+            let clip = n.children().and_then(|ch| ch.first());
+            out.extend(clip.and_then(|c| crate::clip::clip_outline(c)).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)));
+            return;
+        }
+        for c in n.children().into_iter().flatten() {
             push(doc, c, out);
         }
     }
@@ -829,9 +845,10 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every
 /// depth of its groups and layers, by the art it draws ([`evaluate_container`],
 /// [`crate::reshape::own_effects_art`]), so the geometry effects of `n` reshape what its members
-/// draw. A clip group's clipping path stays as it is, and so do images, symbol instances and the
-/// other objects that `own_effects_art` leaves alone, and a group or layer with a 3D effect with
-/// everything in it. Calls nested in one another, through the
+/// draw. A clip group's clipping path only takes the geometry effects in it into its geometry
+/// ([`crate::clip::with_clip_effects_applied`]). Images, symbol instances and the other objects
+/// that `own_effects_art` leaves alone stay as they are, and so does a group or layer with a 3D
+/// effect with everything in it. Calls nested in one another, through the
 /// groups and layers it walks and the art it evaluates (symbol art and Pathfinder members
 /// included), stop at [`vectorcraft_doc::depth::MAX_DEPTH`] deep, and together they replace at
 /// most [`crate::SYMBOL_ART_MAX_NODES`] members: past either limit, members stay as they are.
@@ -839,6 +856,13 @@ pub(crate) fn members_as_drawn(doc: Option<&Document>, n: &mut Node) {
     let Some(_frame) = DrawnFrame::enter() else { return };
     let clip = usize::from(n.clips());
     let Some(ch) = n.children_mut() else { return };
+    // The clipping path's own geometry effects shape it before the effects around it do.
+    if clip == 1
+        && let Some(first) = ch.first_mut()
+        && let Some(applied) = crate::clip::with_clip_effects_applied(first)
+    {
+        *first = Arc::new(applied);
+    }
     for c in ch.iter_mut().skip(clip).filter(|c| c.visible) {
         if !DrawnFrame::take_member() {
             return;

@@ -667,6 +667,16 @@ enum ClipTo {
     File(PathData),
     /// It goes into a new clip group of this path, inside the clip group that holds it.
     Nest(PathData),
+    /// Placement Options clip it to `placement` while its DCS file draws it through `file`: it is
+    /// clipped to `file` as [`ClipTo::File`] clips it, and the clip group holding it is clipped to
+    /// `placement` as [`ClipTo::Path`] clips an object. With no `file` (the new file lacks the
+    /// clipping path of the clip group holding it), that group stays as [`ClipTo::Off`] leaves it,
+    /// clipped to `placement`.
+    Both { file: Option<PathData>, placement: PathData },
+    /// Placement Options clip it to `placement` while its DCS file draws it through `file`, and the
+    /// clip group holding just it is not its old file's: that clip group's clipping path becomes
+    /// `placement`, and it goes into a new clip group of `file` inside it.
+    BothInside { file: PathData, placement: PathData },
     /// The clipping path of the clip group holding just it goes (a DCS file's clipping path that
     /// its new file lacks): the group stays as a plain group of it, with its id, name, visibility
     /// and transparency.
@@ -702,10 +712,10 @@ fn same_path(a: &PathData, b: &PathData) -> bool {
 }
 
 /// The clip an image placed with `old_xf` takes when it shows `img`, read from a file, placed with
-/// `new_xf`: Placement Options' clip `clip` when they clip it, else the clipping path a DCS file
-/// draws `img` through. When neither clips it, a clip group holding just it whose clipping path
-/// `held` is its old DCS file's (`old_clip`, in the old pixels, under the nonzero rule its clip
-/// groups get) goes.
+/// `new_xf`: Placement Options' clip `clip` when they clip it, and the clipping path a DCS file
+/// draws `img` through, the file's clip group inside the placement's. When neither clips it, a clip
+/// group holding just it whose clipping path `held` is its old DCS file's (`old_clip`, in the old
+/// pixels, under the nonzero rule its clip groups get) goes.
 fn clip_to(
     old_xf: Affine,
     old_clip: Option<&PathData>,
@@ -714,16 +724,22 @@ fn clip_to(
     new_xf: Affine,
     held: Option<(&PathData, FillRule)>,
 ) -> ClipTo {
-    if let Some(clip) = clip {
-        return ClipTo::Path(clip_shape(clip));
-    }
     // Whether the clip group holding just the image is the old DCS file's: a clipping path whose
     // fill rule was changed in the document is not.
     let file_held = match (old_clip, held) {
         (Some(old), Some((held, rule))) => rule == FillRule::NonZero && same_path(&old.transformed(old_xf), held),
         _ => false,
     };
-    match img.clip.as_ref().map(|path| path.transformed(new_xf)) {
+    let file = img.clip.as_ref().map(|path| path.transformed(new_xf));
+    if let Some(clip) = clip {
+        let placement = clip_shape(clip);
+        return match file {
+            Some(file) if held.is_some() && !file_held => ClipTo::BothInside { file, placement },
+            file if file.is_some() || file_held => ClipTo::Both { file, placement },
+            _ => ClipTo::Path(placement),
+        };
+    }
+    match file {
         // A clipping mask made in the document stays, with the file's clip group inside it.
         Some(path) if held.is_some() && !file_held => ClipTo::Nest(path),
         Some(path) => ClipTo::File(path),
@@ -752,7 +768,8 @@ impl Nested<'_> {
         let first = d.peek_next_id();
         self.next = first;
         for l in d.layers.iter_mut() {
-            self.update(l, false);
+            // Nothing is picked in the layers themselves, so no layer is clipped.
+            let _ = self.update(l, false);
         }
         for root in d.symbols.iter_mut().map(|s| &mut s.art).chain(d.graph_designs.iter_mut().map(|g| &mut g.art)) {
             self.root(root);
@@ -769,20 +786,30 @@ impl Nested<'_> {
     /// mask art).
     fn root(&mut self, n: &mut Arc<Node>) {
         if !(self.pick)(n) {
-            return self.update(n, true);
+            if let Some(placement) = self.update(n, true) {
+                *n = Arc::new(self.clip_group(Arc::clone(n), placement));
+            }
+            return;
         }
         let (new, clip) = (self.make)(n, None);
         let mut new = Arc::new(new);
-        self.update(&mut new, true);
+        let _ = self.update(&mut new, true);
         *n = match clip {
             ClipTo::Path(path) | ClipTo::File(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
+            ClipTo::Both { file, placement } => self.clip_both(new, file, placement),
+            ClipTo::BothInside { file, placement } => self.clip_both(new, Some(file), placement),
             ClipTo::Keep | ClipTo::Off => new,
         };
     }
 
     /// `n` (outside the layer tree when `nested`) with the picked objects under it remade; it stays
-    /// the same node when none is there, and only the nodes on the way to one are copied.
-    fn update(&mut self, n: &mut Arc<Node>, nested: bool) {
+    /// the same node when none is there, and only the nodes on the way to one are copied. The
+    /// result is Placement Options' clip that `n` itself, now the clip group of a DCS file's
+    /// clipping path holding a picked object (or the plain group [`ClipTo::Off`] leaves), takes:
+    /// the clipping path of the clip group holding just `n` becomes it, else `n` goes into a new
+    /// clip group of it.
+    #[must_use]
+    fn update(&mut self, n: &mut Arc<Node>, nested: bool) -> Option<PathData> {
         let mask = n.extras().mask.as_ref().and_then(|m| {
             let mut art = Arc::clone(&m.art);
             self.root(&mut art);
@@ -794,6 +821,8 @@ impl Nested<'_> {
         // The clipping path and object of a plain group holding just the object, which becomes a
         // clip group again.
         let mut reclipped = None;
+        // Placement Options' clip for `n` itself.
+        let mut around = None;
         if let Some(children) = n.children() {
             // A clip group holding just the object: its clipping path changes.
             let clip_path = match (&n.kind, &children[..]) {
@@ -804,9 +833,11 @@ impl Nested<'_> {
             for (i, c) in children.iter().enumerate() {
                 if !(nested && (self.pick)(c)) {
                     let mut new = Arc::clone(c);
-                    self.update(&mut new, nested);
-                    if !Arc::ptr_eq(&new, c) {
-                        slots.push((i, new));
+                    match (self.update(&mut new, nested), clip_path) {
+                        (None, _) if Arc::ptr_eq(&new, c) => {}
+                        (None, _) => slots.push((i, new)),
+                        (Some(placement), Some(path)) if i == 1 => slots.extend([(0, with_clip(path, placement)), (1, new)]),
+                        (Some(placement), _) => slots.push((i, Arc::new(self.clip_group(new, placement)))),
                     }
                     continue;
                 }
@@ -816,16 +847,10 @@ impl Nested<'_> {
                 });
                 let (new, clip) = (self.make)(c, held);
                 let mut new = Arc::new(new);
-                self.update(&mut new, true);
+                let _ = self.update(&mut new, true);
                 match (clip, clip_path) {
                     (ClipTo::Keep, _) => slots.push((i, new)),
-                    (ClipTo::Path(clip) | ClipTo::File(clip), Some(path)) if i == 1 => {
-                        let mut path = Node::clone(path);
-                        if let NodeKind::Path { path: p, .. } = &mut path.kind {
-                            *p = clip;
-                        }
-                        slots.extend([(0, Arc::new(path)), (1, new)]);
-                    }
+                    (ClipTo::Path(clip) | ClipTo::File(clip), Some(path)) if i == 1 => slots.extend([(0, with_clip(path, clip)), (1, new)]),
                     (ClipTo::File(clip), None) if plain => reclipped = Some((clip, new)),
                     (ClipTo::Path(clip) | ClipTo::File(clip) | ClipTo::Nest(clip), _) => {
                         let group = self.clip_group(new, clip);
@@ -833,11 +858,30 @@ impl Nested<'_> {
                     }
                     (ClipTo::Off, Some(_)) if i == 1 => declipped = Some(new),
                     (ClipTo::Off, _) => slots.push((i, new)),
+                    // The file's clip group stays `n`, and the placement's clip goes around it.
+                    (ClipTo::Both { file: Some(file), placement }, Some(path)) if i == 1 => {
+                        slots.extend([(0, with_clip(path, file)), (1, new)]);
+                        around = Some(placement);
+                    }
+                    (ClipTo::Both { file: Some(file), placement }, None) if plain => {
+                        reclipped = Some((file, new));
+                        around = Some(placement);
+                    }
+                    (ClipTo::Both { file: None, placement }, Some(_)) if i == 1 => {
+                        declipped = Some(new);
+                        around = Some(placement);
+                    }
+                    (ClipTo::BothInside { file, placement }, Some(path)) if i == 1 => {
+                        let group = self.clip_group(new, file);
+                        slots.extend([(0, with_clip(path, placement)), (1, Arc::new(group))]);
+                    }
+                    (ClipTo::Both { file, placement }, _) => slots.push((i, self.clip_both(new, file, placement))),
+                    (ClipTo::BothInside { file, placement }, _) => slots.push((i, self.clip_both(new, Some(file), placement))),
                 }
             }
         }
         if mask.is_none() && slots.is_empty() && declipped.is_none() && reclipped.is_none() {
-            return;
+            return None;
         }
         let reclipped = reclipped.map(|(clip, object)| (Arc::new(self.clipping_path(clip)), object));
         let n = Arc::make_mut(n);
@@ -849,14 +893,14 @@ impl Nested<'_> {
             if let NodeKind::Group { children, clip } = &mut n.kind {
                 (*children, *clip) = (vec![path, object], true);
             }
-            return;
+            return around;
         }
         // A clip group that stays as a plain group of just the object.
         if let Some(object) = declipped {
             if let NodeKind::Group { children, clip } = &mut n.kind {
                 (*children, *clip) = (vec![object], false);
             }
-            return;
+            return around;
         }
         if let Some(children) = n.children_mut() {
             for (i, c) in slots {
@@ -865,6 +909,17 @@ impl Nested<'_> {
                 }
             }
         }
+        around
+    }
+
+    /// A clip group of `placement` holding `object`, inside a clip group of `file` when there is a
+    /// `file` ([`ClipTo::Both`] for an object no clip group holds yet).
+    fn clip_both(&mut self, object: Arc<Node>, file: Option<PathData>, placement: PathData) -> Arc<Node> {
+        let object = match file {
+            Some(file) => Arc::new(self.clip_group(object, file)),
+            None => object,
+        };
+        Arc::new(self.clip_group(object, placement))
     }
 
     /// A clip group of `object` clipped to `clip`, as [`clip_image_to`] makes one in the layers.
@@ -1035,6 +1090,15 @@ fn clip_file_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     Ok(())
 }
 
+/// Clipping path `path` (a node) with its path changed to `clip`.
+fn with_clip(path: &Node, clip: PathData) -> Arc<Node> {
+    let mut path = Node::clone(path);
+    if let NodeKind::Path { path: p, .. } = &mut path.kind {
+        *p = clip;
+    }
+    Arc::new(path)
+}
+
 /// A clipping path `id` of `path`, unpainted.
 fn clipping_path(id: NodeId, path: PathData) -> Node {
     let none = vectorcraft_color::Paint::None;
@@ -1130,6 +1194,19 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         ClipTo::File(path) => clip_file_to(d, id, path),
         ClipTo::Nest(path) => new_clip_group(d, id, path),
         ClipTo::Off => unclip(d, id),
+        ClipTo::Both { file, placement } => {
+            match file {
+                Some(file) => clip_file_to(d, id, file)?,
+                None => unclip(d, id)?,
+            }
+            // The file's clip group (or the plain group left of it) takes the placement's clip.
+            let group = d.parent_of(id).ok_or(EngineError::NoNode(id))?;
+            clip_image_to(d, group, placement)
+        }
+        ClipTo::BothInside { file, placement } => {
+            clip_image_to(d, id, placement)?;
+            new_clip_group(d, id, file)
+        }
     })
 }
 
@@ -1171,6 +1248,19 @@ fn rows<'a>(gs: impl Iterator<Item = &'a Group>, doc_path: Option<&str>) -> Vec<
 /// relative path taken from the document's folder) lies inside them.
 pub(crate) fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
     crate::file_access::current().is_none() || fileio::document_path(path, doc_path).is_ok_and(|p| crate::file_access::check_read(&p).is_ok())
+}
+
+/// Is the linked JavaScript file `f` (of the document saved at `doc_path`) named by its file name
+/// alone in a reply to the caller asking now? Only a path [`path_shown`] does not allow; a URL is
+/// always shown as it is.
+pub(crate) fn script_hidden(f: &str, doc_path: Option<&str>) -> bool {
+    !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url))
+}
+
+/// The linked JavaScript file `f` of the open document `st` as a reply to the caller asking now
+/// may name it: as it is, or by its file name alone where [`script_hidden`] says so.
+pub fn shown_script<'a>(st: &crate::DocState, f: &'a str) -> Cow<'a, str> {
+    if script_hidden(f, LinkBase::of(st).doc) { Cow::Owned(LinkInfo::new(f).name().to_string()) } else { Cow::Borrowed(f) }
 }
 
 /// `row[key] = path` when [`path_shown`] says so; otherwise `row` has no `key`.
@@ -1556,8 +1646,7 @@ pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, base: LinkBase) -> Co
             }
         }
     }
-    let script_hidden = |f: &str| !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url));
-    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f)) {
+    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f, doc_path)) {
         *f = LinkInfo::new(f.as_str()).name().to_string();
     }
     Cow::Owned(d)

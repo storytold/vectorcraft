@@ -282,20 +282,24 @@ fn document_color_mode_converts_the_paints_a_graph_keeps() {
     for target in [series, label] {
         run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": [target.0]}));
     }
+    // A fill row on the label, which the graph keeps with the label's rows.
+    run(&mut s, "appearance.addFill", json!({"ids": [label.0]}));
     let kept = |s: &Session| -> Vec<Color> {
         let g = doc(s).node(id).unwrap().extras().graph.as_deref().unwrap().clone();
+        let rows = [&g.label_styles.values_rows, &g.label_styles.categories_rows, &g.label_styles.legend_rows];
+        let rows: Vec<Color> = rows.into_iter().flatten().filter_map(|r| r.paint.fill.as_ref()?.color()).collect();
         let labels = [g.label_styles.values, g.label_styles.categories, g.label_styles.legend];
         let labels = labels.into_iter().flatten().map(|st| st.fill.color().unwrap());
-        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).collect()
+        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).chain(rows).collect()
     };
     let before = kept(&s);
-    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 2]);
+    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 3]);
     let undo = s.doc().unwrap().history.undo.len();
 
     run(&mut s, "file.documentColorMode", json!({"mode": "cmyk"}));
     let cmyk = first_fill(doc(&s).node(red).unwrap());
     assert!(matches!(cmyk, Color::Cmyk { .. }), "{cmyk:?}");
-    assert_eq!(kept(&s), [cmyk; 2]);
+    assert_eq!(kept(&s), [cmyk; 3]);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     // Drawn again from new data, the series keeps the converted color.
     run(&mut s, "graph.setData", json!({"id": id.0, "rows": [[2, 3], [4, 5]]}));
@@ -1069,6 +1073,146 @@ fn deleting_a_global_swatch_unlinks_art_that_keeps_its_colour() {
     // unlink: false keeps the stale link.
     assert_eq!(run(&mut s, "swatch.delete", json!({"name": "Brand", "unlink": false}))["unlinked"], 0);
     assert_eq!(fill_of(&s, a), linked("#2a6fb0", "Brand"));
+}
+
+/// A session whose default fill and stroke for new art are linked to the global swatch `Brand`
+/// (`#2a6fb0`), in color group `G`, beside the global swatch `Other` (`#ff8800`).
+fn brand_defaults_session() -> Session {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2a6fb0", "global": true}));
+    run(&mut s, "swatch.newGroup", json!({"name": "G", "swatches": ["Brand"]}));
+    run(&mut s, "swatch.new", json!({"name": "Other", "color": "#ff8800", "global": true}));
+    run(&mut s, "select.set", json!({"ids": []}));
+    run(&mut s, "paint.setFill", json!({"swatch": "Brand"}));
+    run(&mut s, "paint.setStroke", json!({"swatch": "Brand"}));
+    assert_eq!(s.paint.fill, linked("#2a6fb0", "Brand"));
+    s
+}
+
+fn fill_and_stroke(s: &Session, id: NodeId) -> (Paint, Paint) {
+    let a = &doc(s).node(id).unwrap().appearance;
+    (a.fill_paint(), a.stroke_paint())
+}
+
+/// Run `steps` and then draw a rectangle, once one command at a time and once as one
+/// `command.batch`, and check that both leave the same default paints and give the rectangle drawn
+/// in the batch, and one drawn after it, the same fill and stroke. Returns the batch's rectangle's
+/// fill and stroke.
+fn batch_matches_steps(steps: &[(&str, Value)]) -> (Paint, Paint) {
+    let shape = ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+    let mut one_by_one = brand_defaults_session();
+    for (id, p) in steps {
+        run(&mut one_by_one, id, p.clone());
+    }
+    let single = rect(&mut one_by_one);
+    let mut batched = brand_defaults_session();
+    let commands: Vec<Value> = steps.iter().chain([&shape]).map(|(id, p)| json!({"command": id, "params": p})).collect();
+    let r = run(&mut batched, "command.batch", json!({ "commands": commands }));
+    let in_batch = NodeId(r["results"][steps.len()]["id"].as_u64().unwrap());
+    assert_eq!(batched.paint.fill, one_by_one.paint.fill, "the default fill after {steps:?}");
+    assert_eq!(batched.paint.stroke, one_by_one.paint.stroke, "the default stroke after {steps:?}");
+    let expected = fill_and_stroke(&one_by_one, single);
+    assert_eq!(fill_and_stroke(&batched, in_batch), expected, "art drawn in the batch after {steps:?}");
+    let later = rect(&mut batched);
+    assert_eq!(fill_and_stroke(&batched, later), expected, "art drawn after the batch after {steps:?}");
+    expected
+}
+
+#[test]
+fn swatch_steps_in_a_batch_change_the_new_art_paints_as_commands_do() {
+    let blue = Paint::solid(Color::from_hex("#2a6fb0").unwrap());
+    assert_eq!(batch_matches_steps(&[("swatch.delete", json!({"name": "Brand"}))]), (blue.clone(), blue));
+    let link = linked("#2a6fb0", "Brand");
+    assert_eq!(batch_matches_steps(&[("swatch.delete", json!({"name": "Brand", "unlink": false}))]), (link.clone(), link));
+    let signal = linked("#00ff00", "Signal");
+    let edit = ("swatch.edit", json!({"name": "Brand", "newName": "Signal", "color": "#00ff00"}));
+    assert_eq!(batch_matches_steps(&[edit]), (signal.clone(), signal));
+    let other = linked("#ff8800", "Other");
+    assert_eq!(batch_matches_steps(&[("swatch.merge", json!({"names": ["Other", "Brand"]}))]), (other.clone(), other));
+    let gray = linked("#ababab", "Brand");
+    assert_eq!(batch_matches_steps(&[("swatch.editGroup", json!({"group": "G", "colors": ["#ababab"]}))]), (gray.clone(), gray));
+}
+
+#[test]
+fn undo_and_redo_of_a_swatch_edit_put_back_the_new_art_paints() {
+    let edit = json!({"name": "Brand", "newName": "Signal", "color": "#00ff00"});
+    let delete = json!({"name": "Brand"});
+    for (id, p, fill) in
+        [("swatch.edit", &edit, linked("#00ff00", "Signal")), ("swatch.delete", &delete, Paint::solid(Color::from_hex("#2a6fb0").unwrap()))]
+    {
+        for batch in [false, true] {
+            let mut s = brand_defaults_session();
+            let before = s.paint.clone();
+            if batch {
+                run(&mut s, "command.batch", json!({"commands": [{"command": id, "params": p}]}));
+            } else {
+                run(&mut s, id, p.clone());
+            }
+            assert_eq!(s.paint.fill, fill, "{id}, batch: {batch}");
+            let after = s.paint.clone();
+            run(&mut s, "edit.undo", json!({}));
+            assert_eq!(s.paint, before, "Undo of {id}, batch: {batch}");
+            run(&mut s, "edit.redo", json!({}));
+            assert_eq!(s.paint, after, "Redo of {id}, batch: {batch}");
+        }
+    }
+}
+
+#[test]
+fn swatch_edits_reach_the_paints_of_the_new_art_template() {
+    let mut s = brand_defaults_session();
+    s.paint.appearance = Some(vectorcraft_doc::Appearance::basic(linked("#2a6fb0", "Brand"), linked("#2a6fb0", "Brand"), 1.0));
+    run(&mut s, "swatch.edit", json!({"name": "Brand", "newName": "Signal", "color": "#00ff00"}));
+    let template = |s: &Session| -> Vec<Paint> {
+        s.paint
+            .appearance
+            .iter()
+            .flat_map(|a| a.items.iter())
+            .map(|it| match it {
+                vectorcraft_doc::AppearanceItem::Fill(f) => f.paint.clone(),
+                vectorcraft_doc::AppearanceItem::Stroke(k) => k.paint.clone(),
+            })
+            .collect()
+    };
+    assert_eq!(template(&s), [linked("#00ff00", "Signal"), linked("#00ff00", "Signal")]);
+    run(&mut s, "swatch.delete", json!({"name": "Signal"}));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    assert_eq!(template(&s), [green.clone(), green]);
+}
+
+#[test]
+fn a_failed_batch_puts_back_the_new_art_paints_a_swatch_step_changed() {
+    let mut s = brand_defaults_session();
+    let before = s.paint.clone();
+    let steps = json!([
+        {"command": "swatch.edit", "params": {"name": "Brand", "newName": "Signal", "color": "#00ff00"}},
+        {"command": "no.such.command", "params": {}},
+    ]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert_eq!(s.paint, before);
+    assert_eq!(doc(&s).swatch("Brand").unwrap().paint.color(), Some(Color::from_hex("#2a6fb0").unwrap()));
+}
+
+#[test]
+fn canceling_a_swatch_options_preview_keeps_the_new_art_paints() {
+    let mut s = brand_defaults_session();
+    let before = s.paint.clone();
+    s.begin_interaction("Swatch Options").unwrap();
+    s.preview("swatch.edit", &json!({"name": "Brand", "newName": "Signal", "color": "#00ff00"})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint, before);
+    assert!(doc(&s).swatch("Signal").is_none());
+    // A previewed batch that is canceled puts them back too, and one that is accepted keeps them.
+    let steps = json!([{"command": "swatch.edit", "params": {"name": "Brand", "newName": "Signal", "color": "#00ff00"}}]);
+    s.begin_interaction("Batch Preview").unwrap();
+    s.preview("command.batch", &json!({ "commands": steps })).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint, before);
+    s.begin_interaction("Batch Preview").unwrap();
+    s.preview("command.batch", &json!({ "commands": steps })).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(s.paint.fill, linked("#00ff00", "Signal"));
+    assert_eq!(s.paint.stroke, linked("#00ff00", "Signal"));
 }
 
 #[test]

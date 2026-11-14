@@ -42,6 +42,7 @@ const SPOT_GRADIENTS_L2: &str =
     "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+const SPOT_GRADIENTS_HUE: &str = "gradients of spot colors mixed around the hue wheel are written in process colors";
 const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
 const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
 const SPREAD_CAPPED: &str =
@@ -91,6 +92,19 @@ struct ImageCode {
 }
 
 impl ImageCode {
+    /// A hash of everything that is written for the image: equal images have equal keys.
+    fn content_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.prelude, &self.dict, self.filter, self.op, &self.ascii).hash(&mut h);
+        h.finish()
+    }
+
+    /// Is everything written for `other` the same as for this image?
+    fn same_image(&self, other: &ImageCode) -> bool {
+        self.prelude == other.prelude && self.dict == other.dict && self.filter == other.filter && self.op == other.op && self.ascii == other.ascii
+    }
+
     /// The operators and data that draw the image where it is placed.
     fn push_inline(&self, s: &mut String) {
         s.push_str(&self.prelude);
@@ -252,6 +266,9 @@ pub(crate) struct Scene<'a> {
     images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
     colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
+    /// encoded the same as one already kept draws from it.
+    fields: HashMap<u64, Vec<usize>>,
     /// The encoded images.
     codes: Vec<ImageCode>,
     /// Where in `body` each placement of an encoded image goes (in order) and the index of its code.
@@ -280,6 +297,7 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            fields: HashMap::new(),
             codes: vec![],
             placements: vec![],
             pending: 0,
@@ -477,7 +495,7 @@ impl<'a> Scene<'a> {
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed) = (self.body.len(), self.placements.len());
+        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -510,7 +528,7 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     self.nest += 1;
                     self.node(&art, true);
@@ -535,6 +553,7 @@ impl<'a> Scene<'a> {
         if self.size() > self.max_body {
             self.body.truncate(was);
             self.unplace(placed);
+            self.forget_fields(codes);
             self.warn(TOO_LARGE);
         }
     }
@@ -912,18 +931,21 @@ impl<'a> Scene<'a> {
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
     /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
     /// print with its ink. An off-center midpoint is a stop
-    /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
-    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
-    /// it is then written in process colors.
+    /// with the inks halfway between its two stops. Stop opacity is left out, so the stops that
+    /// color a stretch ([`vectorcraft_color::Gradient::reached_stops`]) name the inks, a spot ink
+    /// only above a tint of 0 or with process plates; the others are written with no ink. `None` for a gradient without a
+    /// spot ink, and, with a warning, for one whose inks can't be kept or that is mixed by the
+    /// Perceptual method or around the hue wheel; it is then written in process colors.
     fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
         let doc = self.doc;
         let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot)).map(str::to_string)
         };
+        let reached = g.reached_stops();
         // The spot inks, collected up to one more than a DeviceN space can hold.
         let mut names: Vec<String> = vec![];
-        for s in &g.stops {
-            if let Some(n) = spot_of(s)
+        for (s, &r) in g.stops.iter().zip(&reached) {
+            if let Some(n) = spot_of(s).filter(|_| r && (s.tint > 0.0 || s.plates.is_some()))
                 && !names.contains(&n)
             {
                 names.push(n);
@@ -936,7 +958,7 @@ impl<'a> Scene<'a> {
             return None;
         }
         if !g.method.is_classic() {
-            self.warn(SPOT_GRADIENTS_PERCEPTUAL);
+            self.warn(if g.method.is_hue() { SPOT_GRADIENTS_HUE } else { SPOT_GRADIENTS_PERCEPTUAL });
             return None;
         }
         if names.len() > MAX_DEVICE_N {
@@ -952,9 +974,10 @@ impl<'a> Scene<'a> {
         };
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
         let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
-        for s in &g.stops {
+        for (s, &r) in g.stops.iter().zip(&reached) {
             let mut v = vec![0.0; 4 + names.len()];
             match spot_of(s) {
+                _ if !r => {}
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
@@ -1093,6 +1116,17 @@ impl<'a> Scene<'a> {
     /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
+        // One mixed around the hue wheel that reflects is repeated from its curve's stops, which
+        // keep no swatch links: the warning [`Self::ink_stops`] gives the others.
+        if g.gradient.method.is_hue() && g.gradient.is_spread() && g.gradient.spread == vectorcraft_color::GradientSpread::Reflect {
+            let doc = self.doc;
+            let spot = |s: &vectorcraft_color::GradientStop| {
+                (s.tint > 0.0 || s.plates.is_some()) && s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))
+            };
+            if g.gradient.stops.iter().zip(g.gradient.reached_stops()).any(|(s, r)| r && spot(s)) {
+                self.warn(SPOT_GRADIENTS_HUE);
+            }
+        }
         // A linear, radial or diamond gradient that repeats or reflects: PostScript's shadings
         // pad past their ends, so its stops are repeated as many times as the area needs.
         if let Some(padded) = g.gradient.padded_over(&geom, area) {
@@ -1355,6 +1389,14 @@ impl<'a> Scene<'a> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
+        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
+        if !invertible(place) {
+            return;
+        }
+        if self.size().saturating_add(64) > self.max_body {
+            self.warn(TOO_LARGE);
+            return;
+        }
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
@@ -1374,9 +1416,43 @@ impl<'a> Scene<'a> {
             let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
             self.encode_image(&rgba, w, h)
         };
-        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = image {
-            self.place_inline(&image, place);
+        let Some(image) = image else { return };
+        let key = image.content_key();
+        let found =
+            self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
+        let i = match found {
+            Some(i) => i,
+            None => {
+                // A field that can't be placed isn't kept.
+                if self.size().saturating_add(image.inline_len).saturating_add(64) > self.max_body {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let i = self.add_code(image);
+                self.fields.entry(key).or_default().push(i);
+                i
+            }
+        };
+        self.place_image(i, place);
+    }
+
+    /// Forget the field images after the first `n` codes that no placement draws any longer, last
+    /// first, up to the first code that is drawn or isn't a field image.
+    fn forget_fields(&mut self, n: usize) {
+        while self.codes.len() > n {
+            let i = self.codes.len() - 1;
+            let Some(code) = self.codes.get(i) else { break };
+            if code.uses > 0 {
+                break;
+            }
+            let key = code.content_key();
+            let Some(bucket) = self.fields.get_mut(&key) else { break };
+            let Some(at) = bucket.iter().position(|&j| j == i) else { break };
+            bucket.swap_remove(at);
+            if bucket.is_empty() {
+                self.fields.remove(&key);
+            }
+            self.codes.pop();
         }
     }
 
@@ -1583,21 +1659,6 @@ impl<'a> Scene<'a> {
         if let Some(code) = self.codes.get_mut(i) {
             code.uses += 1;
         }
-        self.line("Q");
-    }
-
-    /// Draw `code`, an image drawn nowhere else, on the unit square mapped by `place`.
-    fn place_inline(&mut self, code: &ImageCode, place: Affine) {
-        if !invertible(place) {
-            return;
-        }
-        if self.size().saturating_add(code.inline_len).saturating_add(64) > self.max_body {
-            self.warn(TOO_LARGE);
-            return;
-        }
-        self.line("q");
-        let _ = writeln!(self.body, "{} cm", ps::matrix(place));
-        code.push_inline(&mut self.body);
         self.line("Q");
     }
 

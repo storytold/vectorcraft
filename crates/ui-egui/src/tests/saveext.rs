@@ -378,6 +378,12 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
         let d = app.ui.dialog.clone().expect(cmd);
         assert_eq!((d.kind.as_str(), d.str("path")), (dialogs::confirm::REPLACE, path.to_string()), "{cmd}");
         dialogs::confirm(&mut app).unwrap();
+        // Export Selection without params continues in the format's options, whose OK writes it.
+        if cmd == "document.exportSelection" {
+            assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.str("path"))), Some(("pngOptions", path.to_string())), "{cmd}");
+            assert!(w.borrow().is_empty(), "{cmd}: nothing is written before the options' OK");
+            dialogs::confirm(&mut app).unwrap();
+        }
         assert_eq!(last(&w), path, "{cmd}");
     }
     // Export As: the question's OK picks the file again, and PNG Options follows.
@@ -390,6 +396,22 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(open(&app), Some(("pngOptions".to_string(), "/tmp/out.png".to_string())));
     assert!(w.borrow().is_empty());
+}
+
+/// Export As to a format without Use Artboards (a template holds the whole document) gives the
+/// export no artboard option, so an export that automation confirms gets no note that one was
+/// not used.
+#[test]
+fn export_as_a_template_is_given_no_artboard_option() {
+    for use_artboards in [false, true] {
+        let (mut app, w) = saving_app("/tmp/out");
+        app.ui.answering_control = true;
+        app.run("file.exportAs", json!({"format": "template", "useArtboards": use_artboards})).unwrap();
+        let r = dialogs::confirm(&mut app).unwrap();
+        assert_eq!(last(&w), "/tmp/out.vctemplate");
+        assert!(r["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+        assert!(!app.ui.status.contains("was not used"), "{}", app.ui.status);
+    }
 }
 
 #[test]
@@ -464,5 +486,8 @@ fn an_export_keeps_a_typed_extension_of_the_format_it_writes() {
     let (mut app, w) = saving_app("/tmp/sel.pdf");
     app.run("select.all", json!({})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
+    // Save PDF follows the save panel, and its OK writes the file.
+    assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.str("path"))), Some(("savePdf", "/tmp/sel.pdf".to_string())));
+    dialogs::confirm(&mut app).unwrap();
     assert_eq!(last(&w), "/tmp/sel.pdf", "Export Selection takes its format from the typed name");
 }

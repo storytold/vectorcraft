@@ -96,6 +96,8 @@
 	Blend Vertically	Bland lodret
 	Convert to CMYK	Konvertér til CMYK
 	Convert to Grayscale	Konvertér til gråtoner
+	Convert to Indexed Color	Konvertér til indekserede farver
+	Convert to Indexed Color…	Konvertér til indekserede farver…
 	Convert to RGB	Konvertér til RGB
 	Invert Colors	Invertér farver
 	Overprint Black…	Overprint sort…
@@ -192,6 +194,8 @@
 	Crop Image	Beskær billede
 	Image Tools	Billedværktøjer
 	Remove Background…	Fjern baggrund…
+	Draw (Pencil)	Tegn (blyant)
+	Place Image	Placér billede
 	Remove Background	Fjern baggrund
 	Background	Baggrund
 	Edge Color	Kantfarve
@@ -922,6 +926,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCrafts titellinje på alle skriveborde
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljøvariablen VECTORCRAFT_TITLEBAR vælger titellinjen, så længe den er angivet.
 	System Title Bar takes precedence over this option while it is on.	Systemtitellinje har forrang for denne indstilling, så længe den er slået til.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Så længe VectorCrafts titellinje på alle skriveborde er slået fra, tegner dette skrivebord vinduets titellinje, uanset om denne indstilling er slået til eller fra.
 	Exit	Afslut
 	Distort	Forvræng
 	Diffuse Glow…	Diffus glød…
@@ -1504,6 +1509,7 @@ lighting	Light	Lys
 	Proportional Metrics	Proportionale metrikker
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
+	Tsume	Tsume
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -1540,6 +1546,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Indstillinger for Warichu…
+	Warichu Settings	Indstillinger for Warichu
+	Lines:	Linjer:
+	Line Gap:	Linjeafstand:
 	Composite Fonts…	Sammensatte skrifttyper…
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
@@ -3132,6 +3143,29 @@ theme	Appearance	Udseende
 	Bristle Brush	Børstepensel
 	Pattern Brush	Mønsterpensel
 	missing from the Brushes panel	mangler i panelet Pensler
+	built in	indbygget
+	embedding not allowed	indlejring ikke tilladt
+	embedding for editing	indlejring til redigering
+	embedding for preview and print	indlejring til visning og udskrivning
+	embedding allowed	indlejring tilladt
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	erstattet: vist med {family} {style} ({detail})
+	missing: shown in {family} {style}	mangler: vist med {family} {style}
+	missing	mangler
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineær gradient
+	Radial gradient	Radial gradient
+	Conic gradient	Konisk gradient
+	Diamond gradient	Diamantgradient
+	Freeform gradient	Freeform-gradient
+@plural	{n} instance|{n} instances	{n} forekomst|{n} forekomster
+@plural	{n} row|{n} rows	{n} række|{n} rækker
+@plural	{n} column|{n} columns	{n} kolonne|{n} kolonner
 	Select art to make a scatter, art or pattern brush.	Markér grafik for at oprette en spredningspensel, grafikpensel eller mønsterpensel.
 	Brush Art	Penselgrafik
 	New Symbol	Nyt symbol
@@ -3606,6 +3640,11 @@ theme	Appearance	Udseende
 	Primary	Primær
 	Printing / Exporting	Udskrivning / eksport
 	Real-time Drawing and Editing	Tegning og redigering i realtid
+	Use Monitor Profile for Canvas	Brug skærmprofil til canvas
+	The canvas is drawn in sRGB.	Canvasset tegnes i sRGB.
+	Canvas display profile:	Canvassets skærmprofil:
+	The system matches the window to the display's colors.	Systemet tilpasser vinduet til skærmens farver.
+	No usable display profile was found: the canvas is drawn in sRGB.	Der blev ikke fundet nogen brugbar skærmprofil: canvasset tegnes i sRGB.
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
 	Export Preferences…	Eksportér præferencer…
@@ -4246,8 +4285,15 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunne ikke placere {name}: dokumentet, den blev sluppet på, var lukket
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunne ikke placere {name}: dokumentet, den blev placeret i, var lukket
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunne ikke placere {name}: dokumentet, den blev sluppet på, blev gendannet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunne ikke placere {name}: dokumentet, den blev placeret i, blev gendannet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunne ikke indsætte: dokumentet, der blev indsat i, blev gendannet
 @msg	Couldn't read {name}: {e}	Kunne ikke læse {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata for {title}: {e}. Kopierne gemmes i {folder}, standardmappen til gendannelse; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata for {title}: {e}. Kopierne gemmes i {folder}, mappen angivet i Præferencer; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata: {e}. Kopierne gemmes i {folder}, standardmappen til gendannelse; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunne ikke gemme gendannelsesdata: {e}. Kopierne gemmes i {folder}, mappen angivet i Præferencer; angiv Præferencer → Filhåndtering → Datagendannelse → Mappe (recoveryFolder) for at bruge en anden mappe
 @msg	Create Outlines: select text objects	Opret konturer: markér tekstobjekter
 @msg	Create from Guides: the document has no artboard	Opret ud fra hjælpelinjer: dokumentet har ingen tegneflade
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Opret ud fra hjælpelinjer: hjælpelinjerne danner mere end {MAX_PIECES} udsnit
@@ -4753,11 +4799,11 @@ imageTrace	Outline	Kontur
 @msg	unknown effect `{id}`	ukendt effekt `{id}`
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, diamant, freeform)
+@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
 @msg	unknown preference `{key}`	ukendt præference `{key}`
 @msg	Preferences imported.	Præferencerne er importeret.
@@ -4775,10 +4821,10 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be an object	`{key}` skal være et objekt
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` køres alene, ikke som et trin i en batch
 @msg	unknown preset (one of {_1})	ukendt forudindstilling (én af {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (høj, mellem, lav eller en gemt: se flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (high, medium, low eller en gemt: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ukendt forudindstilling `{name}` (se flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	ukendt forudindstilling `{name}` (se webExport.presets.list)
-@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (venstre|højre|top|bund)
+@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	ukendt værktøj `{tool}`
 @msg	unknown tool `{t}`	ukendt værktøj `{t}`
 @msg	unknown tool or command `{key}`	ukendt værktøj eller kommando `{key}`
@@ -4828,6 +4874,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kasserede {n} gendannet dokument|Kasserede {n} gendannede dokumenter
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Gendannede {n} dokument: gem det for at beholde det|Gendannede {n} dokumenter: gem dem for at beholde dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Åbnede med {n} note: {first}|Åbnede med {n} noter: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Åbnede med {n} note: {first}|{notice}. Åbnede med {n} noter: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Gemte {path} med {n} note: {first}|Gemte {path} med {n} noter: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Indlejrede {n} billede; {missing} mangler: link dem igen først|Indlejrede {n} billeder; {missing} mangler: link dem igen først
 @msgplural	Embedded {n} image|Embedded {n} images	Indlejrede {n} billede|Indlejrede {n} billeder
@@ -4903,6 +4950,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
+@msg	the Line Breaking setting of legacy type was left out	indstillingen for linjeskift i tekst i det gamle format blev udeladt
+@msg	the Japanese layout rules of legacy type were left out	de japanske layoutregler for tekst i det gamle format blev udeladt
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst, der skifter skriveretning inde i et tekstobjekt, åbnes i retningen for sit første tegn
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst brugt som maske i sammenkædede områder, ombrudt tekst eller en sammensat kurve beskærer ikke
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkede billeder uden forhåndsvisning i filen viser en pladsholder, indtil deres filer findes: link dem igen i Links-panelet
@@ -5177,6 +5226,8 @@ imageTrace	Outline	Kontur
 	Vivid	Intens
 	Spectrum	Spektrum
 	Perceptual	Perceptuel
+	Hue Clockwise	Farvetone med uret
+	Hue Counterclockwise	Farvetone mod uret
 	Relative Colorimetric	Relativ kolorimetrisk
 	Absolute Colorimetric	Absolut kolorimetrisk
 	Exact	Eksakt
@@ -5724,6 +5775,7 @@ swatch	Bright Violet	Kraftig violet
 @msg	no such color	ingen sådan farve
 @msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
 @msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	handlingen »{_1}« angiver mappeindstillingen {_2}; slet det trin for at gemme sættet
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
@@ -5991,7 +6043,7 @@ axis	Y Axis	Y-akse
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gælder for gradientfyld (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gælder for gradientfyld (paint.setFill)
 @msg	`dither` must be true or false	`dither` skal være true eller false
-@msg	`method` must be classic or perceptual	`method` skal være classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` skal være classic, perceptual, hue-clockwise eller hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installér »{name}«, som beder om et stort beregningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Hver kørsel kan tage op til {minutes} minutter og udføre {times} gange så meget arbejde, som andre plug-ins må. Den kører i baggrunden, og du kan annullere den.
@@ -6025,6 +6077,8 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Playback Options…	Afspilningsindstillinger…
+	Button Mode	Knaptilstand
+	No actions.	Ingen handlinger.
 	Insert Stop…	Indsæt stop…
 	Insert Stop	Indsæt stop
 	Record Stop	Optag stop
@@ -6032,6 +6086,7 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop
@@ -6192,6 +6247,22 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+	Notched Ribbon	Takket bånd
+	Double Line	Dobbelt linje
+	Wave	Bølge
+	Teardrop	Dråbe
+	Striped Ribbon	Stribet bånd
+	Fine Nib	Fin pen
+	Broad Nib	Bred pen
+	Chisel	Mejsel
+	Round Pen	Rund pen
+	Pressure Pen	Trykpen
+	Beads	Perler
+	Dash Dot	Streg-prik
+	Scallops	Bølgekant
+	Stars	Stjerner
+	Triangles	Trekanter
+	Sparkles	Gnister
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6295,6 +6366,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankerpunktinspektør
 	Add Points at Crossings	Tilføj punkter ved krydsninger
 	Split at Crossings	Opdel ved krydsninger
+	Trim at Crossings Tool	Værktøj til trimning ved krydsninger
+	Trim at Crossings	Trim ved krydsninger
 	Extend Path	Forlæng sti
 	Measure & Inspect	Mål og undersøg
 	Set Anchor	Angiv ankerpunkt
@@ -6823,3 +6896,9 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+	Banner Hems and Grommets…	Bannersømme og maljer…
+	Banner Hems and Grommets	Bannersømme og maljer
+	Hem	Søm
+	Grommets	Maljer
+	Grommet Inset	Maljernes afstand fra kanten
+	Diameter	Diameter
