@@ -205,6 +205,99 @@ pub struct CharStyle {
     /// default glyph otherwise. Saved only when set.
     #[serde(default, rename = "glyphAlternate", skip_serializing_if = "Option::is_none")]
     pub glyph_alternate: Option<GlyphChoice>,
+    /// The East Asian glyph form these characters are drawn in (Glyphs panel menu, with Show East
+    /// Asian Options): one OpenType feature of the font, such as JIS 78 forms (`jp78`), or the
+    /// font's default glyphs. The text keeps its characters. Saved only when set.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "glyphForm", skip_serializing_if = "crate::skip::is_default")]
+    pub glyph_form: GlyphForm,
+}
+
+/// The East Asian glyph form characters are drawn in ([`CharStyle::glyph_form`]): the font's
+/// default glyphs, or the glyphs one OpenType feature substitutes. One form at a time.
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist>
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GlyphForm {
+    /// The font's default glyphs.
+    #[default]
+    Default,
+    /// Traditional forms (`trad`).
+    Traditional,
+    /// Expert forms (`expt`).
+    Expert,
+    /// JIS 2004 forms (`jp04`).
+    Jis04,
+    /// JIS 90 forms (`jp90`).
+    Jis90,
+    /// JIS 78 forms (`jp78`).
+    Jis78,
+    /// JIS 83 forms (`jp83`).
+    Jis83,
+    /// Monospaced full-width forms (`fwid`).
+    FullWidth,
+    /// Monospaced half-width forms (`hwid`).
+    HalfWidth,
+    /// Monospaced third-width forms (`twid`).
+    ThirdWidth,
+    /// Monospaced quarter-width forms (`qwid`).
+    QuarterWidth,
+}
+
+impl GlyphForm {
+    /// Every form, in menu order, the default last.
+    pub const ALL: [GlyphForm; 11] = [
+        GlyphForm::Traditional,
+        GlyphForm::Expert,
+        GlyphForm::Jis04,
+        GlyphForm::Jis90,
+        GlyphForm::Jis78,
+        GlyphForm::Jis83,
+        GlyphForm::FullWidth,
+        GlyphForm::HalfWidth,
+        GlyphForm::ThirdWidth,
+        GlyphForm::QuarterWidth,
+        GlyphForm::Default,
+    ];
+
+    /// The name files and commands give this form (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            GlyphForm::Default => "default",
+            GlyphForm::Traditional => "traditional",
+            GlyphForm::Expert => "expert",
+            GlyphForm::Jis04 => "jis04",
+            GlyphForm::Jis90 => "jis90",
+            GlyphForm::Jis78 => "jis78",
+            GlyphForm::Jis83 => "jis83",
+            GlyphForm::FullWidth => "fullWidth",
+            GlyphForm::HalfWidth => "halfWidth",
+            GlyphForm::ThirdWidth => "thirdWidth",
+            GlyphForm::QuarterWidth => "quarterWidth",
+        }
+    }
+
+    /// The form [`GlyphForm::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<GlyphForm> {
+        GlyphForm::ALL.into_iter().find(|f| f.id() == id)
+    }
+
+    /// The OpenType feature that draws this form; `None` for the default glyphs.
+    pub fn feature(self) -> Option<&'static [u8; 4]> {
+        Some(match self {
+            GlyphForm::Default => return None,
+            GlyphForm::Traditional => b"trad",
+            GlyphForm::Expert => b"expt",
+            GlyphForm::Jis04 => b"jp04",
+            GlyphForm::Jis90 => b"jp90",
+            GlyphForm::Jis78 => b"jp78",
+            GlyphForm::Jis83 => b"jp83",
+            GlyphForm::FullWidth => b"fwid",
+            GlyphForm::HalfWidth => b"hwid",
+            GlyphForm::ThirdWidth => b"twid",
+            GlyphForm::QuarterWidth => b"qwid",
+        })
+    }
 }
 
 /// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
@@ -586,6 +679,7 @@ impl Default for CharStyle {
             no_break: false,
             language: None,
             glyph_alternate: None,
+            glyph_form: GlyphForm::Default,
         }
     }
 }

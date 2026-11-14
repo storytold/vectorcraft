@@ -265,25 +265,27 @@ fn gradient_expands(d: &Document, l: &Node) -> bool {
 
 /// Whether type `t` has a gradient fill that Fill expands once Object has outlined it: one of the
 /// paths `type.createOutlines` makes of its glyphs, ruby glyphs and underline and strikethrough
-/// bars, each painted as its run, has one ([`gradient_expands`] on that path's own box). Inline
-/// graphics and color glyphs become other art. Leaves the document as it is and stops at the
-/// first such path.
+/// bars, each painted as its run with its unplaced gradients fitted to the layout's bounds, has one
+/// ([`gradient_expands`] on that path). Inline graphics and color glyphs become other art. Leaves
+/// the document as it is and stops at the first such path.
 fn text_gradient_expands(d: &Document, t: &TextObject) -> bool {
     if !t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))) {
         return false;
     }
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let first = t.first_style();
     let expands = |run: usize, outline: &BezPath| {
-        let style = t.runs.get(run).map(|r| &r.style);
-        if !matches!(style.map_or_else(|| t.first_style().fill, |s| s.fill.clone()), Paint::Gradient(_)) {
+        let style = t.runs.get(run).map_or(&first, |r| &r.style);
+        if !matches!(style.fill, Paint::Gradient(_)) {
             return false;
         }
-        let path = PathData::from_bezpath(outline).transformed(t.xf);
+        let path = PathData::from_bezpath(outline);
         if path.is_empty() {
             return false;
         }
-        let appearance = style.map_or_else(|| t.first_style().appearance(), |s| s.appearance());
-        gradient_expands(d, &Node::path(NodeId(u64::MAX), path, appearance))
+        let mut piece = Node::path(NodeId(u64::MAX), path, Appearance::default());
+        vectorcraft_render::effects::paint_type_piece(&mut piece, style, lay.bounds, t.xf);
+        gradient_expands(d, &piece)
     };
     let inline = |gi: usize| lay.inlines.iter().find(|i| i.glyph == gi).is_some_and(|i| t.runs.get(i.run).is_some_and(|r| r.inline.is_some()));
     lay.glyphs.iter().enumerate().any(|(gi, g)| !inline(gi) && g.image.is_none() && g.colour.is_none() && expands(g.run, &g.outline))
