@@ -1730,6 +1730,9 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	Click to replace	Kliknutím nahradíte
+	Show all alternates in the Glyphs panel	Zobrazit všechny alternativy v panelu Glyfy
+	Show Character Alternates	Zobrazovat alternativy znaku
 	Select one character with the Type tool first.	Nejprve nástrojem Text vyberte jeden znak.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glyf písma {font}, ne písma, kterým je vybraný text nastaven ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} patří znaku {base} (U+{base_code}) {place}; váš výběr je {sel} (U+{code}).
@@ -6677,7 +6680,7 @@ axis	Y Axis	osa Y
 @plural	Result: {n}|Results: {n}	Výsledek: {n}|Výsledky: {n}|Výsledky: {n}
 @msg	select one object	vyberte jeden objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
 @msg	Global Edit is off	Globální úpravy nejsou zapnuté
 @msg	only an object of the Global Edit other than the one it started from can be left out	z globálních úprav lze vyřadit jen jiný objekt než ten, od kterého začaly
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
@@ -7586,6 +7589,9 @@ breakText	Glyphs	Glyfy
 	Open Tutorial Sample	Otevřít ukázku výukového kurzu
 	Finish Tutorial	Dokončit výukový kurz
 	Next Tutorial	Další výukový kurz
+	Show Learn Tab	Zobrazit kartu Výuky
+	Show Skill	Zobrazit dovednost
+	Back One Level	O úroveň zpět
 	Back to Skills	Zpět na dovednosti
 @msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
 @msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
