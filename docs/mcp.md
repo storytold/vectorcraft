@@ -5295,6 +5295,13 @@ keeps the segment's direction when the smoothed path there turns back by 90° or
 path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
 direction.
 
+`path.smoothRegion` keeps an anchor as a corner where the path turns by more than 57.5° (an angle inside the corner
+under 122.5°) at the anchor and also over `radius` and over twice `radius` on either side of it (on a closed path, no
+more than an eighth of its length), so a jag or a bump smaller than `radius` is still smoothed. The stretches on either side of a kept corner are smoothed and refitted on their
+own, and the corner keeps its place and the directions the path arrives and leaves along, on every call and at any
+`fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
+threshold is VectorCraft's own value.
+
 In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
 path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
 the Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
