@@ -878,10 +878,14 @@ leaves room for a legend label's stored indents, spacing and leading.
 
 When a graph is drawn again, its plot moves and scales with any move or scale of the graph made since it was last
 drawn. The graph saves the bounds of its art other than type as `placedArt` (and the bounds of all of its art as
-`placed`), and measures the move or scale on those. Changing the size, indents or spacing of the labels, moving a label
-on its own and `type.createOutlines` on labels do not move or scale the plot. A graph opened from a `.ai` file saves
-`placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is measured on
-`placed`.
+`placed`), and measures the move or scale on those. Changing the size or indents of the labels, moving a label on its
+own, `type.createOutlines` on labels and `object.path.outlineStroke` on the graph's strokes do not move or scale the
+plot. Outlined labels are no longer type: moving one of them on its own, like moving a swatch, an axis or a tick mark on
+its own, can move or scale the plot at the next redraw. When all of a graph's art other than type has been deleted, or
+the art measured has no width or no height, a redraw leaves the plot where it is and does not follow a move or scale of
+the graph. A graph opened from a `.ai` file
+saves `placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is
+measured on `placed`.
 
 The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
