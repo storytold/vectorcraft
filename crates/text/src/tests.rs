@@ -30,6 +30,7 @@ mod shape_plans;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;
+mod tsume;
 mod typo;
 mod variable;
 mod versions;
