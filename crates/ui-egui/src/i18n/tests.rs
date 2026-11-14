@@ -2584,11 +2584,17 @@ fn counted_status_messages_take_the_plural_form() {
     assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
-    let n = COUNTED_STATUS_MESSAGES.len();
-    let owned = |(one, other): (&str, &str)| (one.to_string(), other.to_string());
-    assert_eq!((copied_with_notes(false, 1, "a note"), copied_with_notes(false, 2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 3]));
-    assert_eq!((copied_with_notes(true, 1, "a note"), copied_with_notes(true, 2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 2]));
-    assert_eq!((traced_with_notes(1, "a note"), traced_with_notes(2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 1]));
+    // Each pair is found in the list by its text.
+    let listed = |got: (String, String), want: (&str, &str)| {
+        assert_eq!((got.0.as_str(), got.1.as_str()), want);
+        assert!(COUNTED_STATUS_MESSAGES.contains(&want), "{want:?} is not in COUNTED_STATUS_MESSAGES");
+    };
+    let copied = (copied_with_notes(false, 1, "a note"), copied_with_notes(false, 2, "a note"));
+    listed(copied, ("Copied with 1 note: a note", "Copied with 2 notes: a note"));
+    let cut = (copied_with_notes(true, 1, "a note"), copied_with_notes(true, 2, "a note"));
+    listed(cut, ("Cut with 1 note: a note", "Cut with 2 notes: a note"));
+    let traced = (traced_with_notes(1, "a note"), traced_with_notes(2, "a note"));
+    listed(traced, ("Traced with 1 note: a note", "Traced with 2 notes: a note"));
     // A note that holds placeholder text is not filled in again.
     assert_eq!(copied_with_notes(true, 3, "{n} {first}"), "Cut with 3 notes: {n} {first}");
     assert_eq!(message(de(), &traced_with_notes(2, "{n}")), "Mit 2 Hinweisen nachgezeichnet: {n}");
