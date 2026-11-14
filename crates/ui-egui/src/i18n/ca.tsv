@@ -1797,6 +1797,7 @@ digits	Malayalam	Malaiàlam
 	Format	Format
 	Format Options	Opcions de format
 	Format Settings	Configuració de format
+	Format Settings…	Configuració de format…
 	Format:	Format:
 	Formats:	Formats:
 	Fractional Widths	Amplades fraccionàries
@@ -2104,6 +2105,7 @@ digits	Malayalam	Malaiàlam
 	Import Library…	Importa biblioteca…
 	Import Matches	Importa coincidències
 	Import PDF	Importa PDF
+	Import PDF pages as links	Importa les pàgines del PDF com a enllaços
 	Import PDF Presets	Importa preajustos de PDF
 	Import Perspective Grid Presets	Importa preajustos de quadrícula de perspectiva
 	Import Print Presets	Importa preajustos d’impressió
@@ -4378,6 +4380,18 @@ digits	Malayalam	Malaiàlam
 	Smart Guides (View → Smart Guides)	Guies intel·ligents (Visualitza → Guies intel·ligents)
 	Smart Guides (⌘U)	Guies intel·ligents (⌘U)
 	Smart Punctuation…	Puntuació intel·ligent…
+	Smart Punctuation	Puntuació intel·ligent
+	ff, fi, ffi Ligatures	Lligadures ff, fi, ffi
+	ff, fl, ffl Ligatures	Lligadures ff, fl, ffl
+	Smart Quotes	Cometes intel·ligents
+	Smart Spaces	Espais intel·ligents
+	En, Em Dashes	Ratlles en i em
+	Ellipses	Punts suspensius
+	Expert Fractions	Fraccions expertes
+	Replace In	Reemplaça a
+	Selected Text Only	Només el text seleccionat
+	Entire Document	Tot el document
+	Report Results	Informa dels resultats
 	Smooth	Suavitza
 	Smooth Color	Color suau
 	Smooth Tool	Eina de suavitzat
@@ -4413,6 +4427,7 @@ digits	Malayalam	Malaiàlam
 	Sort by Luminance	Ordena per lluminositat
 	Sort by Name	Ordena per nom
 	Sort by Popularity	Ordena per popularitat
+	Sort by Size	Ordena per mida
 	Sort by Status	Ordena per estat
 	Sort Swatches	Ordena les mostres
 	Source code on GitHub	Codi font a GitHub
@@ -6338,6 +6353,7 @@ digits	Malayalam	Malaiàlam
 @msg	the spine has no segments	l’espina no té segments
 @msg	the stroke has no weight	el traç no té gruix
 @msg	the SVG's elements are nested more than {0} deep	els elements de l’SVG estan imbricats a més de {0} nivells de profunditat
+@msg	the SVG's styles expand to more than {0} MB	els estils de l’SVG s’expandeixen a més de {0} MB
 @msg	the target layer is locked or hidden	la capa de destinació està blocada o amagada
 @msg	the thumbnail image is malformed	la imatge de la miniatura està mal formada
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	l’objecte superior ha de ser un traçat, un traçat compost o un objecte de text per fer-lo servir com a màscara de retall
@@ -7497,6 +7513,9 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+	Nest Shapes…	Encaixa les formes…
+	Nest Shapes	Encaixa les formes
+	Roll	Rotlle
 # Status and error messages of image export, color profiles and libraries, 3D effects, path operations and scripts.
 @msg	3D effects require finite coordinates within 100 million points	Els efectes 3D requereixen coordenades finites dins de 100 milions de punts
 @msg	3D effects require one to ten lights	Els efectes 3D requereixen d’un a deu llums

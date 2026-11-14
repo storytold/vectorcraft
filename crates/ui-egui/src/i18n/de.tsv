@@ -1332,6 +1332,7 @@ file-filter	Templates	Vorlagen
 	Format	Format
 	Format Options	Formatoptionen
 	Format Settings	Formateinstellungen
+	Format Settings…	Formateinstellungen…
 	Format:	Format:
 	Formats:	Formate:
 	Fractional Widths	Gebrochene Breiten
@@ -1692,6 +1693,7 @@ file-filter	Templates	Vorlagen
 	Images:	Bilder:
 	Import Keyboard Shortcuts…	Tastaturbefehle importieren…
 	Import PDF	PDF importieren
+	Import PDF pages as links	PDF-Seiten als Verknüpfungen importieren
 	Import PDF Presets	PDF-Vorgaben importieren
 	Import Perspective Grid Presets	Vorgaben für Perspektivenraster importieren
 	Import Print Presets	Druckvorgaben importieren
@@ -3417,6 +3419,18 @@ effect	Points	Punkte
 	Smart Guides (View → Smart Guides)	Intelligente Hilfslinien (Ansicht → Intelligente Hilfslinien)
 	Smart Guides (⌘U)	Intelligente Hilfslinien (⌘U)
 	Smart Punctuation…	Typografische Satzzeichen…
+	Smart Punctuation	Typografische Satzzeichen
+	ff, fi, ffi Ligatures	Ligaturen ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturen ff, fl, ffl
+	Smart Quotes	Typografische Anführungszeichen
+	Smart Spaces	Intelligente Leerzeichen
+	En, Em Dashes	Halbgeviert- und Geviertstriche
+	Ellipses	Auslassungspunkte
+	Expert Fractions	Expertenbrüche
+	Replace In	Ersetzen in
+	Selected Text Only	Nur ausgewählter Text
+	Entire Document	Gesamtes Dokument
+	Report Results	Ergebnisse anzeigen
 	Smooth	Glatt
 	Corner	Ecke
 	Relative	Relativ
@@ -3447,6 +3461,7 @@ effect	Points	Punkte
 	Solid	Gefüllt
 	Sort by Kind	Nach Art sortieren
 	Sort by Name	Nach Name sortieren
+	Sort by Size	Nach Größe sortieren
 	Sort by Status	Nach Status sortieren
 	Source code on GitHub	Quellcode auf GitHub
 	Source Sans 3	Source Sans 3
@@ -8585,6 +8600,7 @@ breakText	Glyphs	Glyphen
 @msg	the RTF file is too large to place as type (at most {_1} MB)	die RTF-Datei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	das SVG wird zu mehr als {0} verschachtelten SVG-Bildern erweitert
 @msg	the SVG expands to more than {0} objects	das SVG wird zu mehr als {0} Objekten erweitert
+@msg	the SVG's styles expand to more than {0} MB	die Stile des SVG werden auf mehr als {0} MB erweitert
 @msg	the SVG has no drawable objects	das SVG hat keine zeichenbaren Objekte
 @msg	the SVGZ file unpacks to more than {_1} MB	die SVGZ-Datei wird auf mehr als {_1} MB entpackt
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	das Word-Dokument hat mehr als {MAX_PAGES} Seiten an Eigenschaften, zu viele zum Platzieren
@@ -9045,3 +9061,6 @@ breakText	Glyphs	Glyphen
 	Grommets	Ösen
 	Grommet Inset	Randabstand der Ösen
 	Diameter	Durchmesser
+	Nest Shapes…	Formen verschachteln…
+	Nest Shapes	Formen verschachteln
+	Roll	Rolle

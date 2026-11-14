@@ -1300,6 +1300,7 @@ font-technology	Variable	Variabla
 	Format	Format
 	Format Options	Formatalternativ
 	Format Settings	Formatinställningar
+	Format Settings…	Formatinställningar…
 	Format:	Format:
 	Formats:	Format:
 	Fractional Widths	Bråkdelsbredder
@@ -1646,6 +1647,7 @@ font-technology	Variable	Variabla
 	Images:	Bilder:
 	Import Keyboard Shortcuts…	Importera kortkommandon…
 	Import PDF	Importera PDF
+	Import PDF pages as links	Importera PDF-sidor som länkar
 	Import PDF Presets	Importera PDF-förinställningar
 	Import Perspective Grid Presets	Importera förinställningar för perspektivrutnät
 	Import Print Presets	Importera utskriftsförinställningar
@@ -3369,6 +3371,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Smarta stödlinjer (Visa → Smarta stödlinjer)
 	Smart Guides (⌘U)	Smarta stödlinjer (⌘U)
 	Smart Punctuation…	Smarta skiljetecken…
+	Smart Punctuation	Smarta skiljetecken
+	ff, fi, ffi Ligatures	Ligaturer ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturer ff, fl, ffl
+	Smart Quotes	Smarta citattecken
+	Smart Spaces	Smarta blanksteg
+	En, Em Dashes	Korta och långa tankstreck
+	Ellipses	Ellipser
+	Expert Fractions	Expertbråk
+	Replace In	Ersätt i
+	Selected Text Only	Endast markerad text
+	Entire Document	Hela dokumentet
+	Report Results	Rapportera resultat
 	Smooth	Mjuk
 	Corner	Hörn
 	Relative	Relativ
@@ -3399,6 +3413,7 @@ digits	Malayalam	Malayalam
 	Solid	Enfärgad
 	Sort by Kind	Sortera efter typ
 	Sort by Name	Sortera efter namn
+	Sort by Size	Sortera efter storlek
 	Sort by Status	Sortera efter status
 	Source code on GitHub	Källkod på GitHub
 	Source Sans 3	Source Sans 3
@@ -8656,6 +8671,7 @@ digits	Hindi	Hindi
 @msg	the subpath has no ends to extend (it is closed or a single point)	delbanan har inga ändar att förlänga (den är stängd eller en enkel punkt)
 @msg	the SVG expands to more than {0} nested SVG images	SVG-filen expanderar till fler än {0} kapslade SVG-bilder
 @msg	the SVG expands to more than {0} objects	SVG-filen expanderar till fler än {0} objekt
+@msg	the SVG's styles expand to more than {0} MB	SVG-filens stilar expanderar till mer än {0} MB
 @msg	the SVG has no drawable objects	SVG-filen har inga ritbara objekt
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ-filen packas upp till mer än {_1} MB
 @msg	the symbols are nested too deeply to expand their instances	symbolerna är kapslade för djupt för att deras instanser ska kunna expanderas
@@ -8991,6 +9007,9 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+	Nest Shapes…	Packa former…
+	Nest Shapes	Packa former
+	Roll	Rulle
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter
