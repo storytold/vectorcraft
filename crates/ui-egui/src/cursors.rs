@@ -677,18 +677,16 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(3.0, HALO));
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(1.2, INK));
         }
-        // The Pencil's crosshair with a short straight line where the closing ring goes.
+        // The Pencil's crosshair with a short level line where the closing ring goes.
         Cursor::PencilStraight => {
             crosshair(ink, p);
-            line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
+            line(ink, p + vec2(3.55, 8.5), p + vec2(13.45, 8.5));
         }
-        // The straight-line cursor's line leaving a filled square: the end point a line continues from.
+        // The Pencil's crosshair with a short line rising to the right where the closing ring goes:
+        // the stroke carries on from the path.
         Cursor::PencilContinue => {
             crosshair(ink, p);
-            // The square first, so its halo does not cover the line.
-            let end = p + vec2(5.0, 12.0);
-            poly(ink, [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)].map(|(x, y)| end + vec2(x, y)).to_vec(), INK, INK);
-            line(ink, end, p + vec2(12.0, 5.0));
+            line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
         }
         Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),

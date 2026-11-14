@@ -5178,6 +5178,47 @@ fn pencil_extend_closes_within_400_pt_at_any_fidelity() {
     }
 }
 
+/// `closed`, when given, decides whether a stroke continuing an open path closes it (the tools
+/// send it by Close Paths When Ends Are Within): false leaves it open even ending on the other end;
+/// true closes one ending 50 pt away with a straight segment back, the stroke's end kept, and one
+/// ending 2 pt away on the other end itself.
+#[test]
+fn pencil_extend_closes_as_closed_says() {
+    let mut s = session();
+    for (end, closed, ends_on_start) in [([0i32, 0], false, false), ([0, 50], true, false), ([0, 2], true, true)] {
+        let l = line(&mut s, 0.0, 0.0, 200.0, 0.0);
+        let points = json!([[200, 0], [200, 100], [100, 150], end]);
+        let p = json!({"points": points, "fidelity": 1.5, "closed": closed, "extend": {"id": l.0}, "keepSelected": false});
+        s.execute("path.freehand", &p).unwrap();
+        let pd = path(&s, l);
+        let sp = &pd.subpaths[0];
+        assert_eq!(sp.closed, closed, "ending at {end:?}");
+        if closed {
+            let stroke_end = Point::new(f64::from(end[0]), f64::from(end[1]));
+            let kept = sp.anchors.iter().any(|a| a.p.distance(stroke_end) < 1e-6);
+            assert_eq!(kept, !ends_on_start, "ending at {end:?}: {:?}", sp.anchors);
+            let on_start = sp.anchors.iter().filter(|a| a.p.distance(Point::new(0.0, 0.0)) < 1e-6).count();
+            assert_eq!((sp.anchors[0].p, on_start), (Point::new(0.0, 0.0), 1), "ending at {end:?}");
+        }
+    }
+}
+
+/// A continued path closed from away from its other end closes with a straight segment, even when
+/// that end carries a handle the open path didn't use.
+#[test]
+fn pencil_extend_closes_far_away_with_a_straight_segment() {
+    let mut s = session();
+    let anchors = json!([{"x": 0, "y": 0, "in": [-40, 30]}, {"x": 200, "y": 0}]);
+    let l = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let points = json!([[200, 0], [200, 100], [100, 150], [0, 50]]);
+    let p = json!({"points": points, "fidelity": 1.5, "closed": true, "extend": {"id": l.0}, "keepSelected": false});
+    s.execute("path.freehand", &p).unwrap();
+    let sp = path(&s, l).subpaths[0].clone();
+    assert!(sp.closed);
+    let (first, last) = (sp.anchors[0], sp.anchors[sp.anchors.len() - 1]);
+    assert_eq!((first.h_in, last.h_out), (first.p, last.p), "the closing segment has no handles: {:?}", sp.anchors);
+}
+
 /// At Fidelity 0.01 short, one-point and repeated-point strokes still draw or are refused, never
 /// crash, and what they draw has finite anchors.
 #[test]

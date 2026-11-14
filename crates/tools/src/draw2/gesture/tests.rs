@@ -793,7 +793,7 @@ fn pencil_shows_the_star_before_a_press_that_draws_a_new_path() {
         }
     }
     let mut t = GestureTool::new("pencil");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "over an end the stroke continues");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "over an end the stroke continues");
     assert_eq!(t.cursor(&cx, middle, Mods::default()), Cursor::Pencil, "over the path the stroke redraws");
     assert_eq!(t.cursor(&cx, away, Mods::default()), Cursor::PencilNew, "away from the path");
     // While a stroke is drawn, the Pencil's own cursor.
@@ -838,7 +838,7 @@ fn pencil_shift_line_continues_a_selected_path_from_its_end() {
 }
 
 /// Before a press over an end of a selected open path, the Pencil shows its continuation cursor
-/// exactly when the press would draw a straight line that continues the path; away from the
+/// exactly when the press continues the path, freehand or with a straight line; away from the
 /// ends, with nothing selected, with Edit Selected Paths off, once the press is down and with
 /// the Paintbrush, it does not.
 #[test]
@@ -859,12 +859,9 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let shift = Mods { shift: true, ..Default::default() };
     let alt = Mods { alt: true, ..Default::default() };
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
-    // The release's stroke: a straight line that continues the path.
-    let continues = |acts: &[Vec<Action>]| {
-        acts.last()
-            .and_then(|a| a.first())
-            .is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some() && v["points"].as_array().is_some_and(|q| q.len() == 2)))
-    };
+    // The release's stroke continues the path.
+    let continues =
+        |acts: &[Vec<Action>]| acts.last().and_then(|a| a.first()).is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some()));
     for alt_smooth in [false, true] {
         for m in [Mods::default(), shift, alt, shift_alt] {
             for (at, other_end) in [(Point::new(405.0, 303.0), (500.0, 296.0)), (Point::new(296.0, 302.0), (200.0, 310.0))] {
@@ -880,7 +877,7 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let end = Point::new(405.0, 303.0);
     assert_eq!(t.cursor(&cx, end, shift), Cursor::PencilContinue);
     assert_eq!(t.cursor(&cx, end, alt), Cursor::PencilContinue, "Alt alone continues at any angle");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "without Shift or Alt the stroke is freehand");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "a freehand stroke continues it too");
     assert_eq!(t.cursor(&cx, Point::new(350.0, 360.0), shift), Cursor::PencilStraight, "away from the ends");
     // While the line is drawn, the Pencil's own cursor.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, end.x, end.y).with_mods(shift));
@@ -895,6 +892,105 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
     assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
+}
+
+/// A Pencil stroke continuing a selected path shows the continuation cursor while a release would
+/// connect it to an open end of another path selected at the press, and the closing ring while a
+/// release would close the path because the stroke ends within Close Paths When Ends Are Within
+/// of the path's other end, a straight line too; the release does what the cursor showed.
+#[test]
+fn a_continued_stroke_shows_where_it_connects_or_closes() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, pts: &[(f64, f64)]| {
+        let id = d.alloc_id();
+        let mut els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(pts[0].0, pts[0].1))];
+        els.extend(pts[1..].iter().map(|&(x, y)| vectorcraft_geom::PathEl::LineTo(Point::new(x, y))));
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    let a = add(&mut d, &[(300.0, 300.0), (400.0, 300.0), (400.0, 400.0)]);
+    let b = add(&mut d, &[(500.0, 500.0), (600.0, 500.0)]);
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    let none = Mods::default();
+    let shift = Mods { shift: true, ..Default::default() };
+    // Runs a stroke from `pts[0]`, giving the cursor at its last point before the release and the
+    // release's `path.freehand` parameters.
+    let run = |t: &mut GestureTool, pts: &[(f64, f64)], m: Mods| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m));
+        for &(x, y) in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(m));
+        }
+        let (x, y) = pts[pts.len() - 1];
+        let shown = t.cursor(&cx, Point::new(x, y), m);
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(m));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        (shown, v.clone())
+    };
+    let mut t = GestureTool::new("pencil");
+    // To the other selected path's start: it connects, and doesn't close.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (450.0, 450.0), (498.0, 502.0)], none);
+    assert_eq!(shown, Cursor::PencilContinue, "near the other path's end");
+    assert_eq!(
+        (v["extend"].clone(), v["connect"].clone(), v["closed"].clone()),
+        (json!({"id": a.0, "end": "end"}), json!({"id": b.0, "end": "start"}), json!(false))
+    );
+    // Back near the path's own start (10 px from it): the ring, and the release closes it.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!(shown, Cursor::PencilClose, "near the path's other end");
+    assert_eq!((v["extend"].clone(), v["closed"].clone()), (json!({"id": a.0, "end": "end"}), json!(true)));
+    assert!(v.get("connect").is_none(), "{v}");
+    // Farther than Close Paths When Ends Are Within (15 px): no ring, and it stays open.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (290.0, 330.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "away from the other end");
+    // A straight line from the end to near the start: the ring, and it closes the path.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 350.0), (306.0, 306.0)], shift);
+    assert_eq!(shown, Cursor::PencilClose, "a straight line near the other end");
+    assert_eq!((v["points"].as_array().map(Vec::len), v["closed"].clone()), (Some(2), json!(true)));
+    // Close Paths When Ends Are Within off: neither ring nor close.
+    t.set_option("closeWithin", &json!(0.0));
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "at 0 px");
+}
+
+/// The continuation cursor tests where the release ends, after snapping, not the pointer: here
+/// Snap to Grid moves a stroke's end from 13 pt away from another selected path's end (outside Edit
+/// Selected Paths' 12 px) to 9 pt away, so the release connects, and the cursor says so.
+#[test]
+fn the_continuation_cursor_follows_the_snapped_release() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, a: (f64, f64), b: (f64, f64)| {
+        let id = d.alloc_id();
+        let els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(a.0, a.1)), vectorcraft_geom::PathEl::LineTo(Point::new(b.0, b.1))];
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    // On the 9 pt grid.
+    let a = add(&mut d, (306.0, 306.0), (405.0, 405.0));
+    let b = add(&mut d, (504.0, 504.0), (603.0, 504.0));
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    cx.snap_to_grid = true;
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 405.0, 405.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 460.0, 450.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 517.0, 504.0));
+    assert_eq!(t.cursor(&cx, Point::new(517.0, 504.0), Mods::default()), Cursor::PencilContinue);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 517.0, 504.0));
+    let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["connect"], json!({"id": b.0, "end": "start"}), "{v}");
 }
 
 /// #3846: Alt during a Shift line doesn't promise a close the release can't do, and with Alt
