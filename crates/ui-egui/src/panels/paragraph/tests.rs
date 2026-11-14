@@ -144,7 +144,7 @@ fn the_paragraph_menu_sets_each_of_the_four_composers() {
         let texts = items(&mut app);
         for (v, label) in labels {
             let row = if v == value { format!("✓ {label}") } else { format!("   {label}") };
-            assert!(texts.iter().any(|t| *t == row), "{value}: {row:?} in {texts:?}");
+            assert!(texts.contains(&row), "{value}: {row:?} in {texts:?}");
         }
     }
     // Choosing a row sets its composer: the row is a `text.setFormat {composer}` with the row's id.
