@@ -6512,7 +6512,7 @@ file's composite is drawn through clips the image (a clipping group, its path un
 clipping path kept as the same area), and `file.place` answers the image's id as
 `image`, since the Links commands take the image and not the group. `links.update` and `links.relink` clip the image
 by the file's clipping path again (a plain group holding just the image becomes its clipping group, a new clipping group holds it when no group does, and it goes inside a clipping mask made in the
-document, whose path is kept), unless Placement Options clip the image, the same way for the images in symbols, graph designs, patterns and opacity masks; when the new file has no
+document, whose path is kept), the same way for the images in symbols, graph designs, patterns and opacity masks. When Placement Options also clip the image, the file's clipping group goes inside a clipping group of the placement's clip (the clipping group holding just the file's one, or a clipping group holding just the image that is not the file's, takes that clip, else a new one does), and a later update or relink changes the same two groups; when the new file has no
 clipping path, a clipping group holding just the image whose path is the old file's clipping path loses that path and
 stays as a plain group of the image, with its id, name, visibility and transparency (one whose path was given the
 even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes
