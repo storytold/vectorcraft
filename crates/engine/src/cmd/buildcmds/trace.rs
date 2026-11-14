@@ -288,9 +288,10 @@ fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<V
 /// The most anchor points an Image Trace may make, a guard for memory: a trace past it is refused
 /// with advice instead (#525). A trace keeps about 90 bytes an anchor in the document (measured on
 /// code-drawn photos of 2000 × 2000 to 6000 × 4000 pixels), so 8,000,000 anchors are about
-/// 0.7 GB, with a peak of about 1 GB while tracing: a 4000 × 3000 photo at High Fidelity Photo
-/// makes about 1.9 million, and even at Paths 100, Noise 1 and every tone about 7.9 million. On the
-/// web, where a page has at most 4 GB of memory, the limit stays at 2,000,000.
+/// 0.7 GB, with a peak of about 1 GB while tracing: a 4000 × 3000 photo at Limited 64 colors,
+/// Paths 90, Corners 25 and Noise 4 makes about 1.9 million, and even at Paths 100, Noise 1 and
+/// every tone about 7.9 million. On the web, where a page has at most 4 GB of memory, the limit
+/// stays at 2,000,000.
 #[cfg(not(target_arch = "wasm32"))]
 pub const MAX_TRACE_ANCHORS: usize = 8_000_000;
 
@@ -1135,7 +1136,7 @@ mod trace_limit_tests {
         assert_eq!(w, ["Flat Logo traced the image at 946 × 710 pixels, averaged down from 16000 × 12000."]);
     }
 
-    // A 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million anchors, which must fit;
-    // the limit still guards memory (about 90 bytes an anchor). Checked when the tests build.
+    // A 4000 × 3000 photo at Limited 64 colors, Paths 90, Corners 25 and Noise 4 makes about
+    // 1.9 million anchors, which must fit; the limit still guards memory (about 90 bytes an anchor). Checked when the tests build.
     const _: () = assert!(MAX_TRACE_ANCHORS >= 2_000_000 && MAX_TRACE_ANCHORS <= 16_000_000);
 }

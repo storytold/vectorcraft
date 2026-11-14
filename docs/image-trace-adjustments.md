@@ -18,6 +18,13 @@ its current location. Opening the controls does not add a document undo step.
 | Create | Fills / Strokes | Creates filled areas, stroked lines, or both. |
 | Ignore Color | Color picker | Leaves out the selected color (white by default). |
 
+The built-in presets other than Auto Color and Flat Logo all use Paths 50, and so do their enhanced
+versions. Among those presets, Corners is 100 in Technical Drawing, 75 in Default, Black and White
+Logo, Line Art and Outline, and 50 in the other eight. Noise is 1 px in Technical Drawing, 5 in High Fidelity Photo, 10 in Low Fidelity Photo, 15 in 3 Colors,
+6 Colors, 16 Colors and Shades of Gray, 20 in Sketched Art, Line Art and Outline, 25 in Default and
+Black and White Logo, and 90 in Silhouettes (see
+[image-trace-quality.md](image-trace-quality.md#preset-paths-corners-and-noise)).
+
 Sliders apply on release, and their numeric fields can be edited directly. Each committed
 adjustment re-traces the selected object as one undo step and changes the preset to Custom.
 While dragging, the preset and Enhanced row stay in place until release so the
@@ -123,7 +130,8 @@ color is averaged down further: the factor doubles until at most 150,000 remain 
 most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps
-about 90 bytes an anchor; a 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million.
+about 90 bytes an anchor; a 4000 × 3000 photo at Limited 64 colors, Paths 90, Corners 25 and Noise 4
+makes about 1.9 million.
 **Tracing in the background.** On the desktop a trace runs on a thread of its own, so the window
 keeps answering while a photo or a large image is traced (#3098). Make, Make and Expand, the task
 bar's Image Trace and the panel's Trace and presets start it. The status bar says "Tracing the
