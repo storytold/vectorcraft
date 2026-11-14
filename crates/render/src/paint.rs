@@ -294,9 +294,7 @@ const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
 /// to twice the size it holds, are both allocated: three times that size at most. A copy of a
 /// stored row and the row given out come on top. `None` when a row given out doesn't fit memory.
 fn png_row_scratch(hdr: &craft_image_codecs::PngHeader) -> Option<u64> {
-    let out = u64::from(hdr.width)
-        .checked_mul(hdr.layout.channels() as u64)?
-        .checked_mul(hdr.sample.bytes() as u64)?;
+    let out = u64::from(hdr.width).checked_mul(hdr.layout.channels() as u64)?.checked_mul(hdr.sample.bytes() as u64)?;
     // A filter byte and the row's samples.
     let stored = 1u64.checked_add(out)?;
     let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
@@ -334,54 +332,46 @@ fn reduced_pixmap(bytes: &[u8], r: &Reduction) -> Result<vello_cpu::Pixmap, Unde
 fn shrunk(bytes: &[u8], r: &Reduction) -> Option<vello_cpu::Pixmap> {
     let mut shrink = Shrink::new(r.size, r.to);
     if r.rows {
-        use craft_image_codecs::{ChannelLayout, Limits, PngDecodeRows, SampleType};
+        use craft_image_codecs::{ChannelLayout, CodecError, Format, Limits, PngDecodeRows, SampleType};
         let mut dec = PngDecodeRows::new_streaming(bytes, &Limits::default()).ok()?;
         if !dec.streamable() {
             return None;
         }
         let hdr = dec.header();
-        dec.step_stream::<()>(1, &mut || true, &mut |_y, row| {
+        dec.step_stream::<CodecError>(1, &mut || true, &mut |_y, row| {
             match (hdr.layout, hdr.sample) {
                 (ChannelLayout::Gray, SampleType::U8) => shrink.row(row.iter().map(|&g| [g, g, g, 255])),
-                (ChannelLayout::GrayA, SampleType::U8) => {
-                    shrink.row(row.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a]))
-                }
-                (ChannelLayout::Rgb, SampleType::U8) => {
-                    shrink.row(row.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255]))
-                }
+                (ChannelLayout::GrayA, SampleType::U8) => shrink.row(row.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a])),
+                (ChannelLayout::Rgb, SampleType::U8) => shrink.row(row.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255])),
                 (ChannelLayout::Rgba, SampleType::U8) => shrink.row(row.as_chunks::<4>().0.iter().copied()),
                 (ChannelLayout::Gray, SampleType::U16) => shrink.row(row.as_chunks::<2>().0.iter().map(|&g| {
                     let v = (u16::from_ne_bytes(g) >> 8) as u8;
                     [v, v, v, 255]
                 })),
-                (ChannelLayout::GrayA, SampleType::U16) => {
-                    shrink.row(row.as_chunks::<4>().0.iter().map(|&[g0, g1, a0, a1]| {
-                        let g = (u16::from_ne_bytes([g0, g1]) >> 8) as u8;
-                        let a = (u16::from_ne_bytes([a0, a1]) >> 8) as u8;
-                        [g, g, g, a]
-                    }))
+                (ChannelLayout::GrayA, SampleType::U16) => shrink.row(row.as_chunks::<4>().0.iter().map(|&[g0, g1, a0, a1]| {
+                    let g = (u16::from_ne_bytes([g0, g1]) >> 8) as u8;
+                    let a = (u16::from_ne_bytes([a0, a1]) >> 8) as u8;
+                    [g, g, g, a]
+                })),
+                (ChannelLayout::Rgb, SampleType::U16) => shrink.row(row.as_chunks::<6>().0.iter().map(|&[r0, r1, g0, g1, b0, b1]| {
+                    [
+                        (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                        (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                        (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                        255,
+                    ]
+                })),
+                (ChannelLayout::Rgba, SampleType::U16) => shrink.row(row.as_chunks::<8>().0.iter().map(|&[r0, r1, g0, g1, b0, b1, a0, a1]| {
+                    [
+                        (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                        (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                        (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                        (u16::from_ne_bytes([a0, a1]) >> 8) as u8,
+                    ]
+                })),
+                _ => {
+                    return Err(CodecError::Unsupported { format: Format::Png, reason: "unsupported PNG channel layout".into() });
                 }
-                (ChannelLayout::Rgb, SampleType::U16) => {
-                    shrink.row(row.as_chunks::<6>().0.iter().map(|&[r0, r1, g0, g1, b0, b1]| {
-                        [
-                            (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
-                            (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
-                            (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
-                            255,
-                        ]
-                    }))
-                }
-                (ChannelLayout::Rgba, SampleType::U16) => {
-                    shrink.row(row.as_chunks::<8>().0.iter().map(|&[r0, r1, g0, g1, b0, b1, a0, a1]| {
-                        [
-                            (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
-                            (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
-                            (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
-                            (u16::from_ne_bytes([a0, a1]) >> 8) as u8,
-                        ]
-                    }))
-                }
-                _ => return Err(()),
             }
             Ok(())
         })
