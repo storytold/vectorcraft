@@ -8685,7 +8685,8 @@ JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3
 **None** applies no kinsoku. `hard` isn't saved. The name of a custom set of the document (`type.kinsokuSets.list`, any
 case) gives each paragraph a copy of that set, saved with the paragraph (`kinsoku_set` in `para`) beside Hard, so an
 older build reads the paragraph as Hard; a name the document has no set of fails the call and changes nothing.
-Paragraph styles carry the set. One undo step.
+Paragraph styles carry the set; `paraStyle.new` and `paraStyle.setAttrs` given `kinsoku_set` with `kinsoku` None or Soft,
+or with a blank or built-in set name, fail and change nothing. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}

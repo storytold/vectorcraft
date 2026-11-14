@@ -677,6 +677,17 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
                     para_ranges(&st, m, kept, &c)?;
                     sort_tabs(&mut st, m, kept);
+                    // A custom Kinsoku set goes with Hard and has a name a custom set can have: one
+                    // given beside None or Soft, or with a blank or built-in name, fails the call
+                    // instead of being dropped.
+                    if m.get("kinsoku_set").is_some_and(|v| !v.is_null()) && KINSOKU.iter().any(|k| kept.and_then(|kept| kept.get(*k)) != m.get(*k)) {
+                        if st.kinsoku != vectorcraft_doc::Kinsoku::Hard {
+                            return Err(bad(&c, "`kinsoku_set` goes with `kinsoku` Hard: give `kinsoku` as `hard` or leave it out"));
+                        }
+                        if st.kinsoku_set.is_none() {
+                            return Err(bad(&c, "`kinsoku_set` needs the name of one of the document's Kinsoku sets"));
+                        }
+                    }
                     // A custom Kinsoku set is one of the document's, by name (any case), as
                     // `text.setFormat` chooses it; one the style already holds stays.
                     if let Some(set) = &st.kinsoku_set

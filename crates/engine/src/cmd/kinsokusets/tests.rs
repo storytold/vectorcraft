@@ -186,6 +186,34 @@ fn a_styles_custom_set_is_one_of_the_documents() {
     assert!(s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"kinsoku_set": {"name": "Missing"}}})).is_err());
 }
 
+/// A custom set goes with Hard and has a name a custom set can have: a paragraph style call that
+/// gives one beside None or Soft, or with a blank or built-in name, fails and leaves the styles as
+/// they were, and one beside Hard is kept.
+#[test]
+fn a_styles_custom_set_given_beside_none_or_soft_fails_the_call() {
+    let mut s = session();
+    s.execute("type.kinsokuSets.set", &json!({"sets": [tight()]})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"kinsoku_set": tight_set(&s)}})).unwrap();
+    let styles = |s: &Session| s.doc().unwrap().doc.para_styles.clone();
+    let before = styles(&s);
+    for kinsoku in ["none", "soft"] {
+        let attrs = json!({"kinsoku": kinsoku, "kinsoku_set": tight_set(&s)});
+        assert!(s.execute("paraStyle.new", &json!({"name": "Other", "attrs": attrs})).is_err(), "new with {kinsoku}");
+        assert!(s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": attrs})).is_err(), "setAttrs with {kinsoku}");
+        assert_eq!(styles(&s), before, "{kinsoku}");
+    }
+    for name in ["", " ", "Hard", "soft"] {
+        let attrs = json!({"kinsoku_set": {"name": name}});
+        assert!(s.execute("paraStyle.new", &json!({"name": "Other", "attrs": attrs})).is_err(), "new named `{name}`");
+        assert!(s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": attrs})).is_err(), "setAttrs named `{name}`");
+        assert_eq!(styles(&s), before, "`{name}`");
+    }
+    let attrs = json!({"kinsoku": "hard", "kinsoku_set": tight_set(&s)});
+    s.execute("paraStyle.new", &json!({"name": "Other", "attrs": attrs})).unwrap();
+    let other = styles(&s).into_iter().find(|st| st.name == "Other").unwrap();
+    assert_eq!(other.attrs["kinsoku_set"], tight_set(&s));
+}
+
 /// Editing a set gives every paragraph and paragraph style using it the new characters, renaming it
 /// (`from`) the new name too, and deleting it sets them to Hard: each in one undo step, which undo
 /// takes back with the set. Paragraphs using no set, or another set, stay as they are.
