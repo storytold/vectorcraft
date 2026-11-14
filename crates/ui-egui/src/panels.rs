@@ -529,6 +529,21 @@ const DRAG_SCROLL_EDGE: f32 = 28.0;
 /// the list's edge.
 const DRAG_SCROLL_SPEED: (f32, f32) = (60.0, 280.0);
 
+/// The scrolling [`scroll_at_edges`] asks for, in points per second (positive shows earlier rows),
+/// with the pointer `depth` points below the top of a list view `view_height` points tall. Each
+/// band is [`DRAG_SCROLL_EDGE`] deep, or half the view in a view shorter than two bands, so the
+/// pointer is in one band at most and the middle of a short view scrolls neither way. A view with
+/// no height, or a value that isn't a number, gives 0.
+fn drag_scroll_speed(view_height: f32, depth: f32) -> f32 {
+    if !(view_height.is_finite() && view_height > 0.0) {
+        return 0.0;
+    }
+    let band = DRAG_SCROLL_EDGE.min(view_height / 2.0);
+    let (slow, more) = DRAG_SCROLL_SPEED;
+    let speed = |depth: f32| if (0.0..band).contains(&depth) { slow + more * (1.0 - depth / band) } else { 0.0 };
+    speed(depth) - speed(view_height - depth)
+}
+
 /// While something is dragged near the top or bottom edge of a scrolled list (`ui`: its contents),
 /// scroll that way, faster nearer the edge, and draw the next frame so a pointer held still keeps
 /// it scrolling. The pointer must be over the list's width. Each frame scrolls by the time it
@@ -540,9 +555,7 @@ pub(crate) fn scroll_at_edges(ui: &mut Ui) {
     if !view.x_range().contains(pos.x) {
         return;
     }
-    let (slow, more) = DRAG_SCROLL_SPEED;
-    let speed = |depth: f32| if (0.0..DRAG_SCROLL_EDGE).contains(&depth) { slow + more * (1.0 - depth / DRAG_SCROLL_EDGE) } else { 0.0 };
-    let per_second = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
+    let per_second = drag_scroll_speed(view.height(), pos.y - view.top());
     if per_second != 0.0 {
         let dt = ui.input(|i| i.stable_dt).min(0.1);
         ui.scroll_with_delta_animation(vec2(0.0, per_second * dt), egui::style::ScrollAnimation::none());
@@ -682,6 +695,29 @@ mod tests {
         assert_eq!(p["gradient"]["stops"][0]["midpoint"], json!(0.5));
         let tint = Paint::Solid { color: Color::gray(0.5), swatch: Some("Ink".into()), tint: 0.5 };
         assert_eq!(paint_params(&tint), json!({"swatch": "Ink", "tint": 50.0}), "a tint keeps its percentage");
+    }
+
+    #[test]
+    fn drag_scrolling_in_a_short_list_goes_toward_the_nearer_edge() {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        // A 40 pt view: each band is 20 pt deep, so the pointer is in one band at most.
+        for (depth, want) in [(5.0, 270.0), (15.0, 130.0), (20.0, 0.0), (25.0, -130.0), (35.0, -270.0)] {
+            let got = drag_scroll_speed(40.0, depth);
+            assert!(near(got, want), "40 pt view, pointer {depth} pt down: {got} pt/s, want {want}");
+        }
+        // Just outside a 20 pt view, the pointer does not scroll the list toward the far edge.
+        for depth in [-1.0, 21.0] {
+            assert_eq!(drag_scroll_speed(20.0, depth), 0.0, "20 pt view, pointer {depth} pt down");
+        }
+        // From 56 pt up, the bands stay 28 pt deep and the speeds are unchanged.
+        for (h, depth, want) in [(100.0, 5.0, 290.0), (100.0, 95.0, -290.0), (100.0, 50.0, 0.0), (56.0, 0.0, 340.0), (56.0, 27.0, 70.0)] {
+            let got = drag_scroll_speed(h, depth);
+            assert!(near(got, want), "{h} pt view, pointer {depth} pt down: {got} pt/s, want {want}");
+        }
+        for h in [0.0, -10.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(drag_scroll_speed(h, 5.0), 0.0, "view height {h}");
+        }
+        assert_eq!(drag_scroll_speed(40.0, f32::NAN), 0.0);
     }
 }
 #[cfg(test)]
