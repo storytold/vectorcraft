@@ -1,16 +1,21 @@
 //! Craft-fonts faces served beside the wasm (`fonts/<sha16>/…`, copied by
 //! `cargo xtask web-fonts`) instead of embedded: [`load_startup_fonts`] fetches the `startup`
-//! ones before the app starts, [`spawn_background_fonts`] the rest once it runs. The browser checks
-//! each file against its SHA-256 (Subresource Integrity). A face that fails is logged and skipped:
-//! the app runs without it. With `WEB_FONTS` empty (built without craft-fonts) both do nothing.
+//! ones before the app starts, [`spawn_background_fonts`] the `background` ones once it runs, and
+//! [`want_chars`] a `demand` face (Korean, Devanagari) when the interface language or the
+//! interface's own text needs its script. The browser checks each file against its SHA-256
+//! (Subresource Integrity). A face that fails is logged and skipped: the app runs without it. With
+//! `WEB_FONTS` empty (built without craft-fonts) these do nothing.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use vectorcraft_text::craft_fonts::demand_fonts;
 use vectorcraft_text::{FontDb, WEB_FONTS, WebFont};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen_futures::JsFuture;
+
+use crate::demand::Demand;
 
 /// Per startup face: the page shows its loading text meanwhile.
 const STARTUP_TIMEOUT_MS: i32 = 20_000;
@@ -22,12 +27,49 @@ const BACKGROUND_PARALLEL: usize = 4;
 thread_local! {
     /// The background fetch runs once per page, though a graphics restart creates the app again.
     static BACKGROUND_STARTED: Cell<bool> = const { Cell::new(false) };
+    /// The `demand` faces' fetches.
+    static DEMAND: RefCell<Demand> = RefCell::new(Demand::default());
+    /// The running app's context, asked for a frame when a `demand` face arrives (none before the
+    /// app starts: its first frame looks through the faces loaded by then).
+    static REPAINT: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+}
+
+/// Fetch, in the background, the `demand` faces for the scripts of `chars` that are not loaded or
+/// being fetched. Each one that arrives asks the app for a frame, and the interface draws those
+/// characters with it from then on. Set as the interface's missing-glyph handler
+/// (`vectorcraft_ui_egui::on_missing_glyphs`), and called with the interface language's name
+/// before the app starts.
+pub fn want_chars(chars: &[char]) {
+    let wanted = demand_fonts(WEB_FONTS, chars.iter().copied());
+    if !wanted.is_empty() {
+        fetch_demand(&wanted);
+    }
+}
+
+/// Fetch the `demand` faces `wanted` (indexes into `WEB_FONTS`) that [`Demand::start`] lets start.
+/// A face whose fetch fails is fetched again after the wait [`Demand::finished`] gives.
+fn fetch_demand(wanted: &[usize]) {
+    for i in DEMAND.with(|d| d.borrow_mut().start(wanted, vectorcraft_ui_egui::now_ms())) {
+        let Some(f) = WEB_FONTS.get(i) else { continue };
+        wasm_bindgen_futures::spawn_local(async move {
+            let ok = load(f, BACKGROUND_TIMEOUT_MS).await;
+            let retry = DEMAND.with(|d| d.borrow_mut().finished(i, ok, vectorcraft_ui_egui::now_ms()));
+            if ok && let Some(ctx) = REPAINT.with(|r| r.borrow().clone()) {
+                ctx.request_repaint();
+            }
+            if let Some(wait) = retry {
+                // A second longer, so a clock the browser coarsens still reads the wait as over.
+                crate::api::sleep(wait.saturating_add(1_000)).await;
+                fetch_demand(&[i]);
+            }
+        });
+    }
 }
 
 /// Fetch and register the `startup` faces (one after the other). Returns how many loaded.
 pub async fn load_startup_fonts() -> usize {
     let mut loaded = 0;
-    for f in WEB_FONTS.iter().filter(|f| f.startup) {
+    for f in WEB_FONTS.iter().filter(|f| f.startup && !f.demand) {
         if load(f, STARTUP_TIMEOUT_MS).await {
             loaded += 1;
         }
@@ -36,13 +78,14 @@ pub async fn load_startup_fonts() -> usize {
 }
 
 /// Fetch and register the `background` faces, [`BACKGROUND_PARALLEL`] at a time, asking `ctx` for
-/// a frame after each so the font menus and the canvas pick it up. Only the first call does
-/// anything.
+/// a frame after each so the font menus and the canvas pick it up. Only the first call fetches
+/// anything; each call makes `ctx` the context a `demand` face asks for a frame.
 pub fn spawn_background_fonts(ctx: egui::Context) {
+    REPAINT.with(|r| *r.borrow_mut() = Some(ctx.clone()));
     if BACKGROUND_STARTED.with(|s| s.replace(true)) {
         return;
     }
-    let queue: Rc<Vec<&'static WebFont>> = Rc::new(WEB_FONTS.iter().filter(|f| !f.startup).collect());
+    let queue: Rc<Vec<&'static WebFont>> = Rc::new(WEB_FONTS.iter().filter(|f| !f.startup && !f.demand).collect());
     let next = Rc::new(Cell::new(0usize));
     for _ in 0..BACKGROUND_PARALLEL.min(queue.len()) {
         let (queue, next, ctx) = (queue.clone(), next.clone(), ctx.clone());
