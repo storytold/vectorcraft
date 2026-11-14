@@ -1252,6 +1252,51 @@ fn placing_symbols_counts_nested_art_once() {
     assert!(is_instance(&short, 900), "the outer instance stays as it is");
 }
 
+/// While an instance's art bakes, the art's own objects are held in the budget: an instance
+/// nested in it whose art does not fit in what is left stays as it is, and the outer instance is
+/// placed around it.
+#[test]
+fn placing_symbols_holds_the_outer_art_while_it_bakes() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", Node::group(NodeId(803), vec![Arc::new(gradient_copies(800))]));
+    let mut art: Vec<Arc<Node>> = (0..5)
+        .map(|i| Arc::new(Node::path(NodeId(810 + i), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())))
+        .collect();
+    art.push(Arc::new(instance(802, "Inner", Affine::IDENTITY)));
+    let outer = Node::group(NodeId(801), art);
+    // The outer instance's group around its art, with the inner instance left as it is.
+    let around = 1 + outer.count_with_masks() as u64;
+    add_symbol(&mut d, "Outer", outer);
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let inner = all.node(NodeId(802)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(inner > 2 && inner <= around, "the inner art alone fits: {inner} <= {around}");
+    let out = bake(&d, Some((true, around, ALL))).unwrap();
+    assert!(!is_instance(&out, 900) && is_instance(&out, 802), "the outer instance is placed around the inner one");
+}
+
+/// Art baked for an instance and then left out, because it passes the budget, still counts: an
+/// instance after it whose art would fit in the budget alone stays as it is, and a budget with
+/// room for both places both.
+#[test]
+fn placing_symbols_counts_the_art_it_drops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(901, "Small", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(900, "Big", Affine::IDENTITY)).unwrap();
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    add_symbol(&mut d, "Small", moved_square(810));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let count = |id: u64| all.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (big, small) = (count(900), count(901));
+    assert!(small < big, "{small} < {big}");
+    let short = bake(&d, Some((true, big - 1, ALL))).unwrap();
+    assert!(is_instance(&short, 900), "the big art passes {}", big - 1);
+    assert!(is_instance(&short, 901), "the big art's {big} objects count, so the small art does not fit");
+    let both = bake(&d, Some((true, big + small, ALL))).unwrap();
+    assert!(!is_instance(&both, 900) && !is_instance(&both, 901));
+}
+
 /// Instances the export does not write are not placed and do not count against the budget: with
 /// room for one instance's baked art, hidden instances, an instance in a hidden group, one on a
 /// template layer, one on a layer that does not print and one on a hidden layer (when the export
@@ -1328,4 +1373,37 @@ fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
     let mut shallow = doc_with(instance(900, "E", Affine::IDENTITY));
     add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
     assert!(!is_instance(&bake_document_placing_symbols(&shallow, true, ALL).unwrap(), 900));
+}
+
+/// Art baked for an instance and then left out because it draws too deep still counts when the
+/// baked art of a later instance is checked: that art fits before its effects add copies, but
+/// not once they do.
+#[test]
+fn placing_symbols_counts_art_dropped_for_depth_against_later_baked_art() {
+    use vectorcraft_geom::Affine;
+    // The chain of placing_symbols_keeps_the_baked_art_within_the_drawn_depth, then F, whose
+    // square becomes a group of copies once baked.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    add_symbol(&mut d, "F", gradient_copies(6000));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, instance(901, "F", Affine::IDENTITY)).unwrap();
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    assert!(is_instance(&all, 4100) && !is_instance(&all, 900) && !is_instance(&all, 901));
+    let count = |d: &Document, id: u64| d.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (a, f) = (count(&all, 900), count(&all, 901));
+    // E's baked art, as placed where nothing above it draws deep.
+    let mut shallow = doc_with(instance(4100, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    let e = count(&bake(&shallow, Some((true, u64::MAX, ALL))).unwrap(), 4100);
+    assert!(f > 2, "F's copies are objects of their own: {f}");
+    let short = bake(&d, Some((true, a + e + f - 1, ALL))).unwrap();
+    assert!(!is_instance(&short, 900) && is_instance(&short, 4100), "A to D are placed, E is not");
+    assert!(is_instance(&short, 901), "E's dropped {e} objects count, so F's baked {f} do not fit");
+    let room = bake(&d, Some((true, a + e + f, ALL))).unwrap();
+    assert!(!is_instance(&room, 900) && !is_instance(&room, 901));
 }
