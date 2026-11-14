@@ -556,25 +556,32 @@ fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> 
 
 /// Caret for byte offset `byte`, as a (top, bottom) segment in text space. In horizontal type, a
 /// cluster drawn with several glyphs is measured whole ([`cluster_extent`]). Inside a ligature the
-/// caret stands at its caret stops ([`PositionedGlyph::carets`]).
+/// caret stands at its caret stops ([`PositionedGlyph::carets`]). Next to a character of a warichu
+/// block the caret spans the band of its block line, as its highlight does.
 pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let Some(line) = layout.lines.get(layout.line_of(byte)) else {
         return (Point::ZERO, Point::ZERO);
     };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    let (pos, angle) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+    let (pos, angle, glyph) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
         let g = &glyphs[i];
         let (origin, advance) = match cluster_extent(layout, glyphs, i) {
             Some((left, right)) => (Point::new(left, g.origin.y), right - left),
             None => (g.origin, g.advance),
         };
         let off = g.caret_offset(byte, advance);
-        (origin + dir(g.angle) * if g.rtl { advance - off } else { off }, g.angle)
+        (origin + dir(g.angle) * if g.rtl { advance - off } else { off }, g.angle, Some(g))
     } else if let Some(g) = glyphs.iter().max_by_key(|g| g.byte + g.len) {
-        (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle)
+        (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle, Some(g))
     } else {
-        (layout.physical_point(Point::new(line.x0, line.baseline)), if layout.vertical { std::f64::consts::FRAC_PI_2 } else { 0.0 })
+        (layout.physical_point(Point::new(line.x0, line.baseline)), if layout.vertical { std::f64::consts::FRAC_PI_2 } else { 0.0 }, None)
     };
+    if let Some((_, top, bottom)) =
+        glyph.filter(|g| g.warichu.is_some() && !layout.on_path).and_then(|g| block_band(&warichu_rows(layout, line), line, g))
+    {
+        let x = layout.logical_point(pos).x;
+        return (layout.physical_point(Point::new(x, top)), layout.physical_point(Point::new(x, bottom)));
+    }
     // Up vector in y-down space, rotated with the baseline.
     let d = dir(angle);
     let up = Vec2::new(d.y, -d.x);
@@ -786,6 +793,20 @@ fn warichu_rows(layout: &TextLayout, l: &LineInfo) -> Vec<(usize, f64, f64)> {
     rows
 }
 
+/// The band across line `l` (text space, from the top) of the block line that warichu glyph `g` is
+/// on, with that block line's index in its block: out to halfway to the block lines next to it,
+/// and to the line's top or bottom past the block's outer lines. `rows` are the line's
+/// [`warichu_rows`]. None for a glyph of no block.
+fn block_band(rows: &[(usize, f64, f64)], l: &LineInfo, g: &PositionedGlyph) -> Option<(usize, f64, f64)> {
+    let block = g.warichu?;
+    let lines = rows.get(rows.partition_point(|r| r.0 < block)..rows.partition_point(|r| r.0 <= block)).unwrap_or_default();
+    let row = lines.partition_point(|r| r.1 < g.warichu_line - 1e-9);
+    let own = lines.get(row).filter(|r| (r.1 - g.warichu_line).abs() < 1e-9)?;
+    let top = row.checked_sub(1).and_then(|k| lines.get(k)).map_or(l.baseline - l.ascent, |above| (above.2 + own.2) * 0.5);
+    let bottom = lines.get(row + 1).map_or(l.baseline + l.descent, |below| (below.2 + own.2) * 0.5);
+    Some((row, top, bottom))
+}
+
 /// A glyph of a warichu block line, for [`selection_quads`]: its block and block line, its extent
 /// along the line and its band across it (text space), and whether the selection covers it.
 struct BlockPiece {
@@ -829,11 +850,7 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         let mut pieces: Vec<BlockPiece> = Vec::new();
         for (i, g) in layout.glyphs.iter().enumerate().take(l.glyph_end).skip(l.glyph_start) {
             let Some(block) = g.warichu else { continue };
-            let lines = rows.get(rows.partition_point(|r| r.0 < block)..rows.partition_point(|r| r.0 <= block)).unwrap_or_default();
-            let row = lines.partition_point(|r| r.1 < g.warichu_line - 1e-9);
-            let Some(own) = lines.get(row).filter(|r| (r.1 - g.warichu_line).abs() < 1e-9) else { continue };
-            let top = row.checked_sub(1).and_then(|k| lines.get(k)).map_or(l.baseline - l.ascent, |above| (above.2 + own.2) * 0.5);
-            let bottom = lines.get(row + 1).map_or(l.baseline + l.descent, |below| (below.2 + own.2) * 0.5);
+            let Some((row, top, bottom)) = block_band(&rows, l, g) else { continue };
             let x = layout.logical_point(g.origin).x;
             let selected = selected(i, g);
             let (f0, f1) = if selected { covered(g) } else { (0.0, g.advance) };
