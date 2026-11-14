@@ -13,6 +13,7 @@
 mod calli;
 mod colorize;
 mod defaults;
+pub mod stored_art;
 pub mod track;
 mod warp;
 
@@ -351,7 +352,8 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ArtScale {
-    /// Keep the art's proportions (length follows the path; width scales with it).
+    /// Keep the art's proportions (length follows the path; width scales with it, times the
+    /// stroke weight and the brush width).
     Proportional,
     /// Stretch the art to the path length.
     #[default]
@@ -798,9 +800,15 @@ fn number_repeated_names(lib: &mut [Brush]) {
     }
 }
 
-/// Store `lib` as the document's brush library.
+/// Store `lib` as the document's brush library. When the art of a brush holds images or placed
+/// documents, each object in that art whose id is 0 or repeats another object's is given a new
+/// id ([`stored_art::StoredArt::persist_ids`]), so the Links panel lists it by the same id until it
+/// changes.
 pub fn store(doc: &mut Document, lib: &[Brush]) {
     doc.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap_or_default());
+    if lib.iter().any(|b| b.art().into_iter().any(stored_art::holds_files)) {
+        stored_art::StoredArt::persist_ids(doc);
+    }
 }
 
 /// Find a brush by name.

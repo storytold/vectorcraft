@@ -7,9 +7,124 @@ use vectorcraft_geom::{BezPath, FillRule, PathData};
 
 /// The clipping path `clip` of a clip group as one path and fill rule: compound paths keep their
 /// holes, even-odd paths their rule, text clips by its glyph outlines and a group by the union of
-/// its members. `None` when there is nothing to clip by (the clipped art is then hidden).
+/// its members. The live geometry effects of the clipping path (and of the members it clips by)
+/// reshape the region, as they reshape what it paints, and so do the geometry effects of a path's
+/// fills and strokes: the region is then the union of the paths they give, as an export bakes them.
+/// `None` when there is nothing to clip by (the clipped art is then hidden).
 pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
-    clip.clip_outline(Some(&outline_text), &unite)
+    match clip_effects_applied(clip, true) {
+        Some(m) => m.clip_outline(Some(&outline_text), &unite),
+        None => clip.clip_outline(Some(&outline_text), &unite),
+    }
+}
+
+/// `n`, the clipping path of a clip group, with the live geometry effects of everything it clips by
+/// applied, innermost first, and removed: a path or compound path with effects becomes a path of
+/// its reshaped geometry that keeps its fills, strokes and other effects (its gradients follow the
+/// effects, as an export bakes it), the paths of a compound path and the visible members of a group
+/// are reshaped by their own effects before the effects around them, a group's or layer's own
+/// effects reshape its members as an export evaluates them, and other objects with effects (type)
+/// become a path of their reshaped region. A path or compound path whose fills or strokes have
+/// geometry effects becomes a group of one path per fill and stroke, reshaped by the path's effects
+/// and then by that fill's or stroke's, as an export bakes it; [`clip_outline`] clips by their
+/// union. A clipping path that paints ([`Node::clip_paint`], which a group does not) keeps the
+/// geometry effects of its own fills and strokes live instead. `None` when nothing in it has a
+/// geometry effect. Effects on the clip group or around it then reshape the result, after its own.
+pub(crate) fn with_clip_effects_applied(n: &Node) -> Option<Node> {
+    let paint = n.clip_paint();
+    clip_effects_applied(n, paint.fill.is_none() && paint.stroke.is_none())
+}
+
+/// [`with_clip_effects_applied`]; with `items` unset (a clipping path that paints, and the paths of
+/// a compound path, which draw with the compound path's fills and strokes), the geometry effects of
+/// `n`'s own fills and strokes are left out.
+fn clip_effects_applied(n: &Node, items: bool) -> Option<Node> {
+    let mut m: Option<Node> = None;
+    let members: &[std::sync::Arc<Node>] = match &n.kind {
+        NodeKind::Group { children, clip: true } => children.get(..1).unwrap_or_default(),
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => children,
+        _ => &[],
+    };
+    // A group or layer clips by its visible members after its shaper; a compound path by all of
+    // its paths, and a nested clip group by its clipping path, shown or hidden
+    // ([`Node::clip_shapes`]).
+    let all = matches!(n.kind, NodeKind::Compound { .. } | NodeKind::Group { clip: true, .. });
+    let skip = usize::from(matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. }) && n.extras().shaper.is_some());
+    // The paths of a compound path draw with the compound path's fills and strokes, and stay paths.
+    let compound = matches!(n.kind, NodeKind::Compound { .. });
+    for (i, c) in members.iter().enumerate().skip(skip).filter(|(_, c)| all || c.visible) {
+        if let Some(r) = clip_effects_applied(c, items && !compound)
+            && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+        {
+            *slot = std::sync::Arc::new(r);
+        }
+    }
+    let items = items
+        && matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+        && n.appearance.items.iter().any(|i| crate::has_geometry(crate::bake::item_effects(i)));
+    if items && let Some((g, rule, ctx, mut p)) = crate::bake::leaf_base(m.as_ref().unwrap_or(n)) {
+        let children = n
+            .appearance
+            .items
+            .iter()
+            .zip(&p.appearance.items)
+            .map(|(item, carried)| {
+                let (ig, mut it) = crate::bake::apply_item(item, carried, &g, &ctx);
+                crate::bake::clear_item_effects(&mut it);
+                let mut piece = Node::path(n.id, ig, Appearance { items: vec![it], ..Default::default() });
+                if let NodeKind::Path { rule: r, .. } = &mut piece.kind {
+                    *r = rule;
+                }
+                std::sync::Arc::new(piece)
+            })
+            .collect();
+        // The path's transparency and raster effects stay on the group of its pieces.
+        p.appearance.items.clear();
+        p.kind = NodeKind::Group { children, clip: false };
+        return Some(p);
+    }
+    if !crate::has_geometry(&n.appearance.effects) {
+        return m;
+    }
+    let cur = m.as_ref().unwrap_or(n);
+    // A group's or layer's effects reshape each of its members (a clip group's its clipping
+    // path), as an export evaluates them; otherwise they reshape its region, below.
+    if matches!(cur.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+        && let Some(e) = crate::group::evaluate_container(None, cur)
+    {
+        return Some(e);
+    }
+    // A path or compound path, as an export bakes it.
+    if let Some((g, rule, _, mut p)) = crate::bake::leaf_base(cur) {
+        let clipping = match &cur.kind {
+            NodeKind::Path { clipping, .. } => *clipping,
+            NodeKind::Compound { children, .. } => children.iter().any(|c| matches!(c.kind, NodeKind::Path { clipping: true, .. })),
+            _ => false,
+        };
+        p.kind = Node::path(n.id, g, Appearance::default()).kind;
+        if let NodeKind::Path { rule: r, clipping: c, .. } = &mut p.kind {
+            (*r, *c) = (rule, clipping);
+        }
+        return Some(p);
+    }
+    // Type, as its painted outlines that its effects reshape as an export evaluates them.
+    if matches!(cur.kind, NodeKind::Text(_))
+        && let Some(mut o) = crate::outline_text(cur)
+    {
+        o.visible = n.visible;
+        o.appearance.effects = n.appearance.effects.clone();
+        if let Some(e) = crate::group::evaluate_container(None, &o) {
+            return Some(e);
+        }
+    }
+    let (bp, rule) = cur.clip_outline(Some(&outline_text), &unite)?;
+    let (g, _) = crate::bake::apply(&n.appearance.effects, &PathData::from_bezpath(&bp), &crate::GeomContext::of(n));
+    let mut p = Node::path(n.id, g, Appearance::default());
+    if let NodeKind::Path { rule: r, .. } = &mut p.kind {
+        *r = rule;
+    }
+    p.visible = n.visible;
+    Some(p)
 }
 
 /// The knockout shape of a piece of a mesh-warped image ([`Node::knockout_outline`]) painted opaque
