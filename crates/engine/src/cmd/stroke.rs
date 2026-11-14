@@ -512,7 +512,10 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "nothing to change"));
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
+    let ids = item.targets(s, p)?;
+    let new_art = no_targets(&ids, p);
+    // The art of a graph design in a series keeps the design's stroke.
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     let arrows_and_profile = |st: &mut StrokeLayer| {
         if let Some(sc) = scale {
             st.arrow_scale = sc;
@@ -526,7 +529,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // As stroke.set: with nothing selected, for the next object drawn.
-    if no_targets(&ids, p)
+    if new_art
         && (scale.is_some() || swap || flip.is_some())
         && let Some(st) = s.new_art_stroke_mut()
     {

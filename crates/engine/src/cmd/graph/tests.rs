@@ -493,6 +493,20 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
 
+/// With only the art of a graph design selected, `stroke.setAdvanced` and the stroke mode of `paint.editGradient` act
+/// as edits of a selection, not of the stroke the next object drawn takes.
+#[test]
+fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
+    let (mut s, _, _, art, _) = design_art();
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    let was = format!("{:?}", s.new_art_stroke());
+    s.execute("stroke.setAdvanced", &json!({"arrowScale": [200, 200], "swapArrows": true})).unwrap();
+    assert_eq!(format!("{:?}", s.new_art_stroke()), was, "stroke.setAdvanced");
+    let mode = s.new_art_stroke().gradient_mode;
+    s.execute("paint.editGradient", &json!({"kind": "linear", "stroke": true, "strokeMode": "along"})).unwrap();
+    assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
+}
+
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
 /// sets only theirs.
 #[test]
