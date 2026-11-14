@@ -10642,7 +10642,9 @@ topmost piece.
 ### Text tools
 
 The add-on's text tools act on the selected type (or `ids`), each as one undo step, and refuse with an error when there
-is nothing for them to do. The pieces they make are point type that keeps its characters' styles, each placed so the
+is nothing for them to do. From the selection they take only type that can be edited; the type that `ids` names, or
+that is inside a group or layer it names, is taken even when it, its group or its layer is locked or hidden (not type
+on a locked artboard). The objects they make from locked or hidden type are not selected. The pieces they make are point type that keeps its characters' styles, each placed so the
 glyph of its first character lands where it was drawn.
 
 - `addon.cleanup.breakText {by?, ids?}` turns each horizontal point or area type object into point type objects, one
