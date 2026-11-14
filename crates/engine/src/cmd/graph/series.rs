@@ -645,20 +645,31 @@ pub(crate) fn capture_label_anti_alias(doc: &mut Document, ids: &[NodeId], metho
 /// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
 /// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
 /// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
-/// they undo together. Returns whether a kept style changed.
+/// they undo together. A kind that keeps no style and that `change` leaves at the default style keeps none, unless
+/// `change` sets the legend fill. Returns whether a kept style changed.
 pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
     let mut changed = false;
     for (graph, role) in label_kinds(doc, ids) {
-        changed |= store_label_style(doc, graph, role, change);
+        changed |= store_label_style(doc, graph, role, change, true);
+    }
+    changed
+}
+
+/// [`capture_label_styles`], except that a kind that keeps no style keeps the default style when `change` leaves it
+/// unchanged, for a command that gives character attributes (a size equal to the labels' own, for example).
+pub(crate) fn capture_label_styles_given(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
+    let mut changed = false;
+    for (graph, role) in label_kinds(doc, ids) {
+        changed |= store_label_style(doc, graph, role, change, false);
     }
     changed
 }
 
 /// Apply `change` to the style graph `graph` keeps for its labels of kind `role` (or the default one). A `change` that
 /// sets the fill of legend labels marks it as set on them, so a black one stays black on dark pie wedges. Returns whether
-/// the kept style or that mark changed. A kind that keeps no style and that `change` leaves at the default style keeps
-/// none, unless `change` sets the legend fill.
-fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn Fn(&mut CharStyle)) -> bool {
+/// the kept style or that mark changed. With `unless_default`, a kind that keeps no style and that `change` leaves at
+/// the default style keeps none, unless `change` sets the legend fill.
+fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn Fn(&mut CharStyle), unless_default: bool) -> bool {
     let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { return false };
     let was = label_style(&spec.label_styles, role);
     let mut style = was.clone();
@@ -677,7 +688,7 @@ fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn
         Role::Category => &mut styles.categories,
         Role::Legend => &mut styles.legend,
     };
-    if slot.is_none() && style == was && !(sets_fill && !styles.legend_fill_set) {
+    if unless_default && slot.is_none() && style == was && !(sets_fill && !styles.legend_fill_set) {
         return false;
     }
     let mut changed = slot.as_ref() != Some(&style);
@@ -1099,13 +1110,19 @@ pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: 
     }
     let mut changed = capture_label_rows(doc, &changed_rows) | lines;
     for ((graph, role), (style, entries)) in &characters {
-        changed |= store_label_style(doc, *graph, *role, &|st| {
-            for i in entries {
-                if let Some(copy) = RUN_PAINT.get(*i) {
-                    copy(style, st);
+        changed |= store_label_style(
+            doc,
+            *graph,
+            *role,
+            &|st| {
+                for i in entries {
+                    if let Some(copy) = RUN_PAINT.get(*i) {
+                        copy(style, st);
+                    }
                 }
-            }
-        });
+            },
+            true,
+        );
     }
     changed
 }

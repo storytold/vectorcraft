@@ -1379,7 +1379,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = super::graph::capture_label_changes(&before, d, &ids, true);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The moved row stays the active one; the rows it passed shift by one.
@@ -1425,7 +1425,7 @@ fn move_items(s: &mut Session, p: &Value, ids: &[NodeId], to: usize) -> Result<V
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, ids));
-        let labels = super::graph::capture_label_rows(d, ids);
+        let labels = super::graph::capture_label_changes(&before, d, ids, true);
         Ok(count_changed(d, &before, ids) + usize::from(kept || painted || labels))
     })?;
     let m = idx.len();

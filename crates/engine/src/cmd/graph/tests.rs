@@ -6537,6 +6537,24 @@ fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
     }
 }
 
+/// A reorder that leaves an axis line's rows as they were keeps what its kind keeps from another line and is no edit.
+#[test]
+fn a_reorder_that_changes_nothing_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    let stroke = top_row(&s, lines[1].id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "from": stroke, "to": stroke})).unwrap();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "indices": [stroke], "to": stroke})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+}
+
 /// An opacity and a stroke weight given to a radar graph's ring are kept for its rings, and its spokes keep their own.
 #[test]
 fn transparency_and_stroke_weight_on_a_radar_ring_are_kept_for_its_rings() {
