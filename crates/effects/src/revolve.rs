@@ -371,7 +371,9 @@ fn group_shadow(id: NodeId, fx: &Effect, shapes: &[Profile], b: Rect, options: R
     Ok(crate::solids::shadow::scoped_art(id, &caster, settings, cast, crate::solids::has_masks(shapes)))
 }
 
-/// One object's surface of revolution about the axis of `b`, and each face's depth. `copies` counts
+/// One object's surface of revolution about the axis of `b`, and each face it draws ([`Drawn`]),
+/// back to front: by depth, and where two faces overlap, by their depths there
+/// ([`crate::solids::surface_order`]). `copies` counts
 /// the bytes of the paint copies of every surface and graphic of the object. Revolve (Classic) draws every face
 /// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
 /// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
@@ -389,7 +391,7 @@ fn surface(
     blend: vectorcraft_doc::color::BlendMode,
     expand: bool,
     copies: &mut Copies,
-) -> Option<(Vec<f64>, Node)> {
+) -> Option<(Vec<Drawn>, Node)> {
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
     if fx.id == CLASSIC_REVOLVE {
@@ -398,9 +400,12 @@ fn surface(
         if copies.surfaces > MAX_PAINT_COPIES {
             return None;
         }
-        let depths = facets.iter().map(|f| f.depth).collect();
+        let order = crate::solids::surface_order(facets.iter().map(|f| (f.contours.first().map_or(&[][..], Vec::as_slice), f.plane, f.depth)));
+        let facets = in_order(facets, &order);
+        let drawn =
+            facets.iter().map(|f| Drawn { depth: f.depth, points: f.contours.first().cloned().unwrap_or_default(), plane: f.plane }).collect();
         let p = merged_params(&fx.id, &fx.params);
-        return Some((depths, crate::solids::classic::surface(n, facets, &paint, opacity, blend, &p)));
+        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, opacity, blend, &p)));
     }
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
@@ -408,6 +413,8 @@ fn surface(
     if copies.surfaces > MAX_PAINT_COPIES {
         return None;
     }
+    let order = crate::solids::surface_order(faces.iter().map(|f| (f.points.as_slice(), f.plane, f.depth)));
+    let faces = in_order(faces, &order);
     let graphics = crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params));
     let shade = |face: &vectorcraft_three_d::Face, c: Color| graphic_paint(face, c, colored);
     // Graphics past the limits are left out, and the surface draws without them and their paints'
@@ -438,21 +445,28 @@ fn surface(
         && n.has_default_transparency())
     .then(|| vectorcraft_three_d::visible_faces(&faces).ok())
     .flatten();
-    let faces = visible.unwrap_or_else(|| {
-        faces
-            .into_iter()
-            .map(|f| vectorcraft_three_d::VisibleFace {
-                path: f.path(),
-                brightness: f.brightness,
-                depth: f.depth,
-                gradient: f.gradient,
-                illumination: f.illumination,
-                light_gradient: f.light_gradient,
-                rgb_gradient: f.rgb_gradient,
-            })
-            .collect()
-    });
-    let depths: Vec<f64> = faces.iter().map(|f: &vectorcraft_three_d::VisibleFace| f.depth).collect();
+    let (faces, keys): (Vec<vectorcraft_three_d::VisibleFace>, Vec<Drawn>) = match visible {
+        Some(visible) => {
+            let keys = visible.iter().map(|f| Drawn { depth: f.depth, points: vec![], plane: None }).collect();
+            (visible, keys)
+        }
+        None => {
+            let keys = faces.iter().map(|f| Drawn { depth: f.depth, points: f.points.clone(), plane: f.plane }).collect();
+            let faces = faces
+                .into_iter()
+                .map(|f| vectorcraft_three_d::VisibleFace {
+                    path: f.path(),
+                    brightness: f.brightness,
+                    depth: f.depth,
+                    gradient: f.gradient,
+                    illumination: f.illumination,
+                    light_gradient: f.light_gradient,
+                    rgb_gradient: f.rgb_gradient,
+                })
+                .collect();
+            (faces, keys)
+        }
+    };
     let children = faces
         .into_iter()
         .map(|face| {
@@ -518,7 +532,21 @@ fn surface(
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
-    Some((depths, group))
+    Some((keys, group))
+}
+
+/// A face [`surface`] draws: its depth and, for [`crate::solids::surface_order`], its polygon on the
+/// drawing and its plane (none for a face trimmed to the part of it that shows).
+struct Drawn {
+    depth: f64,
+    points: Vec<Point>,
+    plane: Option<vectorcraft_three_d::DepthPlane>,
+}
+
+/// `items` in `order`, a permutation of their indices.
+fn in_order<T>(items: Vec<T>, order: &[usize]) -> Vec<T> {
+    let mut slots: Vec<Option<T>> = items.into_iter().map(Some).collect();
+    order.iter().filter_map(|&k| slots.get_mut(k).and_then(Option::take)).collect()
 }
 
 /// A surface of one object about the bounds of `path`, built with options derived from `fx`.
@@ -941,14 +969,17 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     } else {
         let count = surfaces.len();
         let mut faces = vec![];
-        for (member, (depths, s, scopes)) in surfaces.into_iter().enumerate() {
+        for (member, (drawn, s, scopes)) in surfaces.into_iter().enumerate() {
             let (opacity, blend) = (s.opacity, s.blend);
             if let NodeKind::Group { children, .. } = s.kind {
-                faces.extend(depths.into_iter().zip(children).map(|(depth, face)| (depth, member, opacity, blend, scopes, face)));
+                faces.extend(drawn.into_iter().zip(children).map(|(drawn, face)| (drawn, member, opacity, blend, scopes, face)));
             }
         }
-        // A stable sort: faces at the same depth keep the members' order.
-        faces.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // A stable sort: faces at the same depth keep the members' order. Overlapping faces, of one
+        // member or of two, then go in the order of their depths where they overlap.
+        faces.sort_by(|a, b| a.0.depth.total_cmp(&b.0.depth));
+        let order = crate::solids::surface_order(faces.iter().map(|(d, ..)| (d.points.as_slice(), d.plane, d.depth)));
+        let faces = in_order(faces, &order);
         if opaque {
             vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(.., face)| face).collect()))]
         } else {

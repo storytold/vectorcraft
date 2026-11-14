@@ -1266,6 +1266,35 @@ fn draw_order(faces: &[Placed], sealed: bool) -> Vec<usize> {
     local_order(faces, order)
 }
 
+/// The order, back to front, of the faces of one or more Revolve surfaces `faces`, given back to
+/// front by depth: each face's polygon on the drawing, its plane and its depth. When two
+/// overlapping faces are drawn the wrong way round for their depths where they overlap, every pair
+/// of overlapping faces with a convex polygon and a plane goes in the order of its depths there,
+/// the face nearer the viewer after the other ([`local_order`]), and each step draws the face that
+/// comes first in the given order of those whose faces before are drawn, so a face without a plane
+/// or a convex polygon can also move. Otherwise the order given.
+pub(crate) fn surface_order<'a>(faces: impl IntoIterator<Item = (&'a [Point], Option<DepthPlane>, f64)>) -> Vec<usize> {
+    let placed: Vec<Placed> = faces
+        .into_iter()
+        .map(|(points, plane, depth)| {
+            let local = plane.is_some() && convex(points).is_some();
+            // Every face counts as one of a stroke's on one shape, so each overlapping pair is compared.
+            Placed {
+                depth,
+                side: true,
+                away: false,
+                bounds: polygon_bounds(points),
+                member: 0,
+                paints: Paints::Other,
+                outline: if local { points.to_vec() } else { vec![] },
+                plane: plane.filter(|_| local),
+            }
+        })
+        .collect();
+    let order = (0..placed.len()).collect();
+    local_order(&placed, order)
+}
+
 /// `shapes`, the members of group or layer `n`, reshaped by the visible geometry effects `before`
 /// its 3D effect, about the bounds of all of them.
 pub(crate) fn reshape_members(n: &Node, before: &[Effect], shapes: &mut [Profile]) {
@@ -2183,3 +2212,6 @@ mod tests_sources;
 
 #[cfg(test)]
 mod tests_shadow;
+
+#[cfg(test)]
+mod tests_revolve_order;
