@@ -2029,6 +2029,44 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// Spanish shows the image encoders', color profiles', swatch exchange files', Revolve's, DXF
+/// import's, the script engine's and the parameter checks' errors in Spanish, with their values,
+/// backticked names and accepted values kept as the English writes them.
+#[test]
+fn spanish_translates_encoder_profile_swatch_revolve_and_parameter_errors() {
+    let es = Lang::from_code("es").expect("registered");
+    for (english, spanish) in [
+        ("PNG encoding failed: 0 × 0 pixels is not a valid image size", "Error al codificar PNG: 0 × 0 píxeles no es un tamaño de imagen válido"),
+        (
+            "70000 × 10 pixels is too large for GIF (at most 65535 pixels a side): lower the resolution",
+            "70000 × 10 píxeles es demasiado grande para GIF (como máximo 65535 píxeles por lado): baja la resolución",
+        ),
+        ("profile colour space XYZ is not RGB, CMYK or Gray", "el espacio de color XYZ del perfil no es RGB, CMYK ni Gray"),
+        (
+            "color books in color space HSB aren't supported (only RGB, CMYK and Lab)",
+            "no se admiten libros de colores en el espacio de color HSB (solo RGB, CMYK y Lab)",
+        ),
+        (
+            "the swatch exchange file holds more than 65536 colors and groups",
+            "el archivo de intercambio de muestras contiene más de 65536 colores y grupos",
+        ),
+        (
+            "Revolve surface is too complex; reduce Segments or simplify the profile",
+            "La superficie de Revolución es demasiado compleja; reduce Segmentos o simplifica el perfil",
+        ),
+        ("regular expression too large", "expresión regular demasiado grande"),
+        ("this binary DXF file is damaged or cut short", "este archivo DXF binario está dañado o truncado"),
+        (
+            "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList",
+            "`view` es smallThumb, mediumThumb, largeThumb, smallList o largeList",
+        ),
+        ("give `fill` or `stroke`, not both", "indica `fill` o `stroke`, no ambos"),
+        ("stop 2: oops", "parada 2: oops"),
+    ] {
+        assert_eq!(message(es, english), spanish);
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(
