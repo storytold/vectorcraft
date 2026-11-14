@@ -762,11 +762,17 @@ impl Disk {
         if moved || std::fs::symlink_metadata(&real).is_ok_and(|m| m.file_type().is_symlink()) {
             return Err(ACCESS_DENIED);
         }
-        // The file stays changed until its bytes are written, so the run's end tries it again.
-        std::fs::write(&real, &file.bytes).map_err(|_| WRITE_FAILED)?;
-        file.dirty = false;
+        // The file stays changed until its bytes are written, so the run's end tries it again. Once
+        // it is opened its old bytes are gone, so a write that then fails names it in the report too.
+        let mut out = std::fs::File::create(&real).map_err(|_| WRITE_FAILED)?;
+        let written = std::io::Write::write_all(&mut out, &file.bytes).is_ok();
+        #[cfg(test)]
+        let written = written && !FLUSH_WRITE_FAILS.with(std::cell::Cell::get);
+        if written {
+            file.dirty = false;
+        }
         self.wrote(&real);
-        Ok(())
+        if written { Ok(()) } else { Err(WRITE_FAILED) }
     }
 
     /// Writes every open file that has changed: at the end of the run. → the files that could not
@@ -2357,6 +2363,8 @@ pub(crate) type CopyHook = Box<dyn FnOnce(&Path, &Path)>;
 #[cfg(test)]
 thread_local! {
     pub(crate) static BEFORE_COPY_READ: std::cell::RefCell<Option<CopyHook>> = const { std::cell::RefCell::new(None) };
+    /// Tests: while set, the bytes `flush` writes fail after the file was opened for them.
+    pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]

@@ -515,6 +515,23 @@ fn script_files_write_in_the_temporary_and_data_folders() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A file whose bytes fail to be written after it was opened for them has lost its old bytes, so the
+/// failed run names it among the files that stay written.
+#[test]
+fn script_file_whose_write_fails_partway_is_named_as_written() {
+    let base = folder("flushfails");
+    let mut s = with_data(&base);
+    let r = run_in(&mut s, &base, "var f = new File(Folder.userData.fsName + '/f.txt'); f.open('w'); f.write('old'); f.close(); vc.log(f.fsName);")
+        .unwrap();
+    let path = r["log"][0].as_str().unwrap().to_string();
+    crate::script::files::FLUSH_WRITE_FAILS.with(|f| f.set(true));
+    let r = run_in(&mut s, &base, "var f = new File(Folder.userData.fsName + '/f.txt'); f.open('e'); f.write('new'); f.close();");
+    crate::script::files::FLUSH_WRITE_FAILS.with(|f| f.set(false));
+    let e = format!("{}", r.unwrap_err());
+    assert!(e.split("these files stay written:").nth(1).is_some_and(|w| w.contains(&path)), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `copy` reads its source under the rules for reading: a source that a link to a file outside the
 /// script's places replaced after it was looked up is refused, and nothing is copied.
 #[cfg(unix)]
