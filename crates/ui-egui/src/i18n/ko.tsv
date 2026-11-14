@@ -7092,6 +7092,125 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+
+# Messages of the 3D effects, image export, color profiles, swatch exchange files, color books, DXF import,
+# path operations, libraries, scripts and zip files.
+@msg	3D effects require finite coordinates within 100 million points	3D 효과에는 1억 포인트 이내의 유한한 좌표가 필요합니다
+@msg	3D effects require one to ten lights	3D 효과에는 광원이 1개에서 10개까지 필요합니다
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP 비트 심도 {_1}: 픽셀당 1, 4, 8, 16, 24 또는 32비트여야 합니다
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP 인코딩 실패: {width} × {height}픽셀이 형식이나 픽셀 버퍼에 맞지 않습니다
+@msg	GIF encoding failed: the palette image is malformed	GIF 인코딩 실패: 팔레트 이미지의 형식이 잘못되었습니다
+@msg	GIF encoding failed: {e}	GIF 인코딩 실패: {e}
+@msg	JPEG colour profile: {e}	JPEG 색상 프로파일: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	JPEG encoding failed: {e}	JPEG 인코딩 실패: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	PNG encoding failed: the palette image is malformed	PNG 인코딩 실패: 팔레트 이미지의 형식이 잘못되었습니다
+@msg	PNG encoding failed: {e}	PNG 인코딩 실패: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG 인코딩 실패: {width} × {height}픽셀은 올바른 이미지 크기가 아닙니다
+@msg	PSD colour profile: {e}	PSD 색상 프로파일: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	Revolve profile contains invalid coordinates	회전체 프로파일에 잘못된 좌표가 있습니다
+@msg	Revolve profile is too complex	회전체 프로파일이 너무 복잡합니다
+@msg	Revolve projection is not finite	회전체 투영이 유한하지 않습니다
+@msg	Revolve requires finite profile coordinates within 100 million points	회전체에는 1억 포인트 이내의 유한한 프로파일 좌표가 필요합니다
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	회전체 표면이 너무 복잡합니다. 세그먼트를 줄이거나 프로파일을 단순화하십시오
+@msg	Revolve surface is too complex; simplify the profile	회전체 표면이 너무 복잡합니다. 프로파일을 단순화하십시오
+@msg	Revolve visibility cannot split the projected boundary	회전체 가시성 계산에서 투영된 경계를 분할할 수 없습니다
+@msg	Revolve visibility creates too many fragments	회전체 가시성 계산에서 조각이 너무 많이 생깁니다
+@msg	Revolve visibility creates too many vector anchors	회전체 가시성 계산에서 벡터 고정점이 너무 많이 생깁니다
+@msg	Revolve visibility exceeds its geometry work limit	회전체 가시성 계산이 기하 연산 한도를 넘습니다
+@msg	Revolve visibility exceeds its spatial index limit	회전체 가시성 계산이 공간 인덱스 한도를 넘습니다
+@msg	Revolve visibility has too many boundary crossings	회전체 가시성 계산에 경계 교차가 너무 많습니다
+@msg	Revolve visibility has too many input anchors	회전체 가시성 계산의 입력 고정점이 너무 많습니다
+@msg	Revolve visibility requires convex cap sectors	회전체 가시성 계산에는 볼록한 캡 부채꼴이 필요합니다
+@msg	Revolve visibility requires finite projected faces	회전체 가시성 계산에는 유한한 투영 면이 필요합니다
+@msg	SVG options: {e}	SVG 옵션: {e}
+@msg	Save for Web settings: {e}	웹용 저장 설정: {e}
+@msg	TIFF colour profile: {e}	TIFF 색상 프로파일: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	TIFF encoding failed: {e}	TIFF 인코딩 실패: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa 비트 심도 {_1}: 픽셀당 16, 24 또는 32비트여야 합니다
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	The 3D projection is not finite	3D 투영이 유한하지 않습니다
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D 그림자가 너무 복잡합니다. 그림자를 끄거나 아트를 단순화하십시오
+@msg	The shape contains invalid coordinates	모양에 잘못된 좌표가 있습니다
+@msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
+@msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`는 smallThumb, mediumThumb, largeThumb, smallList 또는 largeList여야 합니다
+@msg	a line can't run from a point to itself	선은 한 점에서 같은 점으로 이어질 수 없습니다
+@msg	a line needs at least two points	선에는 점이 두 개 이상 필요합니다
+@msg	a number cannot be read	숫자를 읽을 수 없습니다
+@msg	a swatch exchange block is too long	견본 교환 블록이 너무 깁니다
+@msg	a swatch exchange name is too long	견본 교환 이름이 너무 깁니다
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} 이미지를 {width} × {height}픽셀로 크기 조정할 수 없습니다
+@msg	a {width} × {height} image is too large	{width} × {height} 이미지가 너무 큽니다
+@msg	a {width} × {height} image: {e}	{width} × {height} 이미지: {e}
+@msg	an image could not be written: {e}	이미지를 기록할 수 없습니다: {e}
+@msg	an image that couldn't be read was left out	읽을 수 없는 이미지를 제외했습니다
+@msg	can't open “{name}”: {e}	“{name}”을(를) 열 수 없습니다: {e}
+@msg	cannot align zip entries to {align} bytes	zip 항목을 {align}바이트 단위로 정렬할 수 없습니다
+@msg	cannot open the automation {kind} root `{_1}`: {e}	자동화 {kind} 루트 `{_1}`을(를) 열 수 없습니다: {e}
+@msg	cannot read profile: {0}	프로파일을 읽을 수 없습니다: {0}
+@msg	color book version {version} isn't supported (only 1)	색상 견본집 버전 {version}은(는) 지원되지 않습니다(1만 지원)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	색상 공간이 {other}인 색상 견본집은 지원되지 않습니다(RGB, CMYK, Lab만 지원)
+@msg	file name too long to zip: {_1}	파일 이름이 너무 길어 zip에 넣을 수 없습니다: {_1}
+@msg	file name too long to zip: {name}	파일 이름이 너무 길어 zip에 넣을 수 없습니다: {name}
+@msg	freeform line {i}: {e}	자유형 선 {i}: {e}
+@msg	freeform point {i}: {e}	자유형 점 {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}`와 `{other}` 중 하나만 지정하세요
+@msg	grayscale profiles can't be working spaces yet	그레이스케일 프로파일은 아직 작업 공간으로 사용할 수 없습니다
+@msg	input contains NaN or infinite coordinates	입력에 NaN 또는 무한대 좌표가 있습니다
+@msg	input path could not be closed	입력 패스를 닫을 수 없습니다
+@msg	invalid ICC profile: {0}	잘못된 ICC 프로파일: {0}
+@msg	invalid scale {scale}	잘못된 비율 {scale}
+@msg	its localized names take more than {_1} KB	지역화된 이름이 {_1} KB를 넘습니다
+@msg	its objects are nested too deep ({e})	개체가 너무 깊이 중첩되어 있습니다({e})
+@msg	its tag table lists the `{_1}` tag more than once	태그 표에 `{_1}` 태그가 두 번 이상 나열되어 있습니다
+@msg	not a graphic style library: {e}	그래픽 스타일 라이브러리가 아닙니다: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	견본 라이브러리가 아닙니다(.vcswatches 또는 .gpl)
+@msg	not a swatch library (format `{_1}`)	견본 라이브러리가 아닙니다(형식 `{_1}`)
+@msg	not a swatch library: {e}	견본 라이브러리가 아닙니다: {e}
+@msg	not an action set file ({e})	액션 세트 파일이 아닙니다({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	프로파일의 색상 공간 {other}은(는) RGB, CMYK 또는 Gray가 아닙니다
+@msg	regular expression too large	정규식이 너무 큽니다
+@msg	script file is not UTF-8 text: {value}	스크립트 파일이 UTF-8 텍스트가 아닙니다: {value}
+@msg	stop {i}: {e}	정지점 {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	견본 교환 버전 {major}.{minor}은(는) 지원되지 않습니다(1.x만 지원)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	색상 견본집의 색상이 {ASE_MAX_ENTRIES}개를 넘습니다
+@msg	the color book is cut short	색상 견본집이 중간에 잘려 있습니다
+@msg	the color book's names take more than {_1} MB	색상 견본집의 이름이 {_1} MB를 넘습니다
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	이미지가 {w} × {h}픽셀이 됩니다. 래스터 내보내기는 한 변에 {MAX_RASTER_SIDE}픽셀, {_1}메가픽셀로 제한됩니다. 비율이나 해상도를 낮추세요
+@msg	the optimised image can't be read back: {e}	최적화된 이미지를 다시 읽을 수 없습니다: {e}
+@msg	the pixel buffer doesn't match the image size	픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	the preview: {e}	미리 보기: {e}
+@msg	the request may not read the New Document profiles folder	이 요청은 새 문서 프로파일 폴더를 읽을 수 없습니다
+@msg	the shapes are too degenerate to combine	모양이 너무 퇴화되어 결합할 수 없습니다
+@msg	the shapes cross themselves and each other too often to combine	모양이 자기 자신 및 서로와 너무 자주 교차하여 결합할 수 없습니다
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	견본 교환 파일의 색상과 그룹이 {ASE_MAX_ENTRIES}개를 넘습니다
+@msg	the swatch exchange file is cut short	견본 교환 파일이 중간에 잘려 있습니다
+@msg	the {_1} plate can't be read: {e}	{_1} 분판을 읽을 수 없습니다: {e}
+@msg	this binary DXF file is damaged or cut short	이 바이너리 DXF 파일이 손상되었거나 중간에 잘려 있습니다
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	DWG 도면은 읽을 수 없습니다. CAD 앱에서 DXF로 저장한 후 여세요
+@msg	too many classes	문자 클래스가 너무 많습니다
+@msg	too many groups	그룹이 너무 많습니다
+@msg	too many layers for PSD (at most 32767)	PSD에 비해 레이어가 너무 많습니다(최대 32767개)
+@msg	too many swatch exchange blocks	견본 교환 블록이 너무 많습니다
+@msg	unknown colour profile: {0}	알 수 없는 색상 프로파일: {0}
+@msg	{_1} clashes with a built-in profile name	{_1}이(가) 기본 제공 프로파일 이름과 겹칩니다
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2}픽셀은 GIF에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB와 주고받을 수 있는 변환이 없습니다
+@msg	{name} is not a CMYK profile	{name}은(는) CMYK 프로파일이 아닙니다
+@msg	{name} is not an RGB profile	{name}은(는) RGB 프로파일이 아닙니다
+@msg	{path}: could not be read	{path}: 읽을 수 없습니다
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height}픽셀은 JPEG에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height}픽셀은 Targa에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h}픽셀은 PSD에 비해 너무 큽니다(한 변 최대 {MAX_SIDE}픽셀). 해상도를 낮추세요
+
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	엄격 모드 함수에서는 'caller', 'callee', 'arguments'를 사용할 수 없습니다
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	프로파일 하나에는 회전체 효과를 하나만 쓸 수 있습니다. 기존 효과의 옵션을 편집하세요.
