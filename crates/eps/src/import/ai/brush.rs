@@ -57,6 +57,7 @@
 //! at None so the art keeps its own colors.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use kurbo::Affine;
 use vectorcraft_brush::{ArtBrush, ArtScale, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
@@ -473,6 +474,30 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
     Ok(BrushDraft { name: name.to_string(), kind })
 }
 
+/// Turn `art` over (y for -y) with the art of all its opacity masks, those that don't move with
+/// their objects too: the art changes the space it is in, and no object moves over its mask.
+pub(crate) fn turn_over(art: &mut Node) {
+    art.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+    turn_unlinked_masks(art);
+}
+
+/// Turn over the art of the opacity masks in `n` that a transform of `n` leaves in place (the masks
+/// that don't move with their objects), in members and in other masks' art too.
+fn turn_unlinked_masks(n: &mut Node) {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        let linked = m.linked;
+        let art = Arc::make_mut(&mut m.art);
+        if linked {
+            turn_unlinked_masks(art);
+        } else {
+            turn_over(art);
+        }
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        turn_unlinked_masks(Arc::make_mut(c));
+    }
+}
+
 /// The brushes of `drafts`, their art from the sections `art` (by name), in the brush manager's
 /// `order` (brushes it doesn't list after those it does, in the order of their objects), each
 /// kept within its ranges → the brushes and how many were left out: those whose art isn't read,
@@ -552,7 +577,7 @@ pub(super) fn finish_brushes_within(
             DraftKind::Art { mut brush, art: name, settings } => copy(&name).map(|mut a| {
                 // The side of the section with y up draws on the right of the path, and a brush
                 // draws art's y (down here) on the left of the path.
-                a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+                turn_over(&mut a);
                 if let ArtScale::BetweenGuides { start, end } = &mut brush.scale {
                     // Guides that leave no art between them stretch the whole art.
                     let length = a.geometric_bounds().map_or(0.0, |b| b.width());

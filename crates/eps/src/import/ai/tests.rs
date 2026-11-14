@@ -6358,6 +6358,30 @@ fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
     assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
+/// An Art brush's art is turned over with the art of its opacity mask, whether the mask moves with
+/// its object or not: the mask's art stays over the part of the object it is over in the section.
+#[test]
+fn an_art_brushs_opacity_mask_art_turns_over_with_its_object() {
+    let mut read = vec![];
+    for linked in [true, false] {
+        let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 40.0, 3.0)).lines().map(|l| format!("%_{l}\n")).collect();
+        let options = format!("%_1 /Bool (Clipping) ,\n%_{} /Bool (Linked) ,\n", u8::from(linked));
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n{options}%_; (AI9_Mask) ,\n%_;\n");
+        let section = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n{mask}%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 40.0, 8.0));
+        let shape = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{section}{}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON), layer(&shape)));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("art: {:?}", r.warnings) };
+        let m = brush.art.extras().mask.as_deref().unwrap_or_else(|| panic!("the mask is read: {:#?}", brush.art));
+        assert_eq!(m.linked, linked);
+        let (object, over) = (brush.art.geometric_bounds().unwrap(), m.art.geometric_bounds().unwrap());
+        assert!((object.height() - 8.0).abs() < 1e-6 && (over.height() - 3.0).abs() < 1e-6, "linked {linked}: {over:?} over {object:?}");
+        assert!(over.y0 > object.y0 - 1e-6 && over.y1 < object.y1 + 1e-6, "linked {linked}: {over:?} over {object:?}");
+        read.push((object, over));
+    }
+    assert_eq!(read[0], read[1], "a mask is in the same place whether it moves with its object or not");
+}
+
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
 /// art styles still style the layers' objects read after the definition.
 #[test]
