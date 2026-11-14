@@ -852,7 +852,7 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
     // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
     // full decoded byte count can exceed the allowance even though drawing it at native size is
     // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
-    let png_streams_at_size = samples_over && format == Some(image::ImageFormat::Png) && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    let png_streams_at_size = samples_over && format == image::ImageFormat::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
     (rgba_over || (samples_over && !png_streams_at_size)).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
