@@ -8737,8 +8737,8 @@ of the character before it and by at most a tenth of that em; a line that cannot
 tab, pushes out instead. **Push Out First** pushes in
 the same way only when pushing out would leave the line more than an em, of the character before the break, short of
 its measure. **Push Out Only** (the default: new type and documents from before the setting) moves the
-character before a prohibited line start to the next line with it. With Burasagari on, an overflowing comma or full
-stop may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
+character before a prohibited line start to the next line with it. With Burasagari on, overflowing hanging punctuation
+of the Kinsoku Set may hang outside the margin first, leaving the preceding character on the line. With Kinsoku Set None the setting
 does nothing. When Push In First or Push Out First is selected and a paragraph contains a prohibited line-start or
 line-end character, the whole paragraph is broken line by line, as the Single-line Composer breaks it, even if no line
 ends up pushing a character in. The setting is saved
@@ -8795,9 +8795,11 @@ help page: https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-an
 ## Hanging punctuation (burasagari)
 
 `text.setFormat {burasagari: "none"|"standard"|"forced"}` sets the Paragraph panel menu's Burasagari (None / Regular /
-Force) of the selected type (or `ids`): an East Asian comma or full stop ending an area type line (、。，．, half-width
-､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
-measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
+Force) of the selected type (or `ids`): hanging punctuation ending an area type line hangs outside the frame, Regular
+only when it doesn't fit, Force always (the rest of the line then fills the measure). With the Kinsoku Sets None, Hard
+and Soft, the hanging punctuation is the East Asian comma and full stop (、。，．, half-width ､｡), and closing brackets and
+Latin punctuation don't hang. A custom Kinsoku Set hangs the characters in its `hanging` category instead (Kinsoku Shori
+Settings), closing brackets and Latin punctuation included. Point type, right-to-left and hyphenated lines are left as
 they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
 `text.create`) takes `standard`; documents from before it and imported text keep `none`, except legacy `.ai` type
 with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved. One undo step.

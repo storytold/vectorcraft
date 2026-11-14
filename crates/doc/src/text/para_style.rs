@@ -229,8 +229,8 @@ pub struct ParaStyle {
     /// How leading is measured (Paragraph panel menu): from baseline to baseline, or from the top
     /// of one line's ideographic em box to the next.
     pub leading_model: LeadingModel,
-    /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
-    /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
+    /// Hanging punctuation (Paragraph panel menu › Burasagari): the Kinsoku Set's hanging
+    /// punctuation ending a line may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
     /// it and imported text keep [`Burasagari::None`], except legacy `.ai` type with binding
     /// punctuation on, which opens with [`Burasagari::Forced`].
     pub burasagari: Burasagari,
@@ -598,19 +598,21 @@ pub enum KinsokuShoriType {
     PushOutOnly,
 }
 
-/// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)
-/// stands outside the line's measure, in the space its punctuation spacing gives it (half width
-/// with Line-end Punctuation Half Width). Closing brackets and Latin punctuation don't hang. Shown
-/// as None / Regular / Force.
+/// Hanging punctuation (burasagari): hanging punctuation ending a line stands outside the line's
+/// measure, in the space its punctuation spacing gives it (half width with Line-end Punctuation
+/// Half Width). With the built-in Kinsoku Sets that is an East Asian comma or full stop
+/// (、。，．､｡), and closing brackets and Latin punctuation don't hang; a custom Kinsoku Set hangs
+/// the characters in its hanging category. Shown as None / Regular / Force.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Burasagari {
     /// A comma or full stop that doesn't fit goes to the next line with the character before it.
     #[default]
     None,
-    /// A comma or full stop that doesn't fit hangs outside the line; one that fits stays inside.
+    /// Hanging punctuation that doesn't fit hangs outside the line; punctuation that fits stays
+    /// inside.
     Standard,
-    /// A comma or full stop ending a line always hangs, and the rest of the line fills the measure.
+    /// Hanging punctuation ending a line always hangs, and the rest of the line fills the measure.
     Forced,
 }
 
