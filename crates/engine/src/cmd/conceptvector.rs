@@ -28,13 +28,15 @@ pub const KEEP_JOBS: usize = 4;
 pub const GAP: f64 = 24.0;
 
 /// A job's variations, or that it was canceled.
+#[derive(Clone)]
 enum Outcome {
-    Done(Vec<Variation>),
+    Done(Arc<Vec<Variation>>),
     Canceled,
 }
 
 /// What `conceptVector.generate` made, and what it was made of.
-struct Job {
+#[derive(Clone)]
+pub(crate) struct Job {
     id: u64,
     /// The document ([`crate::DocState::uid`]) and the object (an image or an Image Trace object).
     doc: u64,
@@ -77,6 +79,16 @@ impl Session {
             Outcome::Done(v) => Some((v.as_slice(), (j.image.width, j.image.height))),
             Outcome::Canceled => None,
         }
+    }
+
+    /// The jobs, for a batch to put back when a step fails. Job numbers are not reused.
+    pub(crate) fn concept_jobs_snapshot(&self) -> VecDeque<Job> {
+        self.concept.jobs.clone()
+    }
+
+    /// Puts back the jobs that [`Self::concept_jobs_snapshot`] took.
+    pub(crate) fn restore_concept_jobs(&mut self, jobs: VecDeque<Job>) {
+        self.concept.jobs = jobs;
     }
 
     /// Drops the jobs of document `doc` (its `uid`), when it closes.
@@ -259,7 +271,7 @@ impl ConceptRun {
             image: self.image,
             bytes: self.request.image,
             provider: self.provider_id.to_string(),
-            outcome: Outcome::Done(variations),
+            outcome: Outcome::Done(Arc::new(variations)),
         };
         let out = job_json(&s.concept.registry, &job);
         s.concept.jobs.push_back(job);

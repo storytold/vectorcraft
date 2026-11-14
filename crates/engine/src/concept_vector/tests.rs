@@ -887,10 +887,10 @@ fn closing_a_document_drops_its_jobs() {
     assert!(s.concept_variations(second).is_some(), "the open document's job is kept");
 }
 
-/// A batch that closes a document and then fails brings the document back with its jobs; one that
-/// succeeds drops them.
+/// A batch that fails leaves the jobs as they were: one that closed a document brings it back with
+/// its jobs, and a cancel in it is undone. A batch that succeeds drops a closed document's jobs.
 #[test]
-fn a_batch_close_drops_the_jobs_only_when_the_batch_succeeds() {
+fn a_failed_batch_leaves_the_jobs_as_they_were() {
     let (mut s, img) = doc_with(&art());
     let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
     let close = json!({"command": "file.close", "params": {"index": 0}});
@@ -901,9 +901,13 @@ fn a_batch_close_drops_the_jobs_only_when_the_batch_succeeds() {
     // A job command after the close, in the same batch, does not drop the job either.
     let results = json!({"command": "conceptVector.results", "params": {"job": job}});
     new_doc_with(&mut s, &art());
-    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), results, bad]})).is_err());
+    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), results, bad.clone()]})).is_err());
     assert_eq!(s.documents().len(), 2, "the document is back");
     assert!(s.concept_variations(job).is_some(), "the restored document's job is kept after a job command");
+    // A cancel in a batch that fails is undone with it.
+    let cancel = json!({"command": "conceptVector.cancel", "params": {"job": job}});
+    assert!(s.execute("command.batch", &json!({"commands": [cancel, bad.clone()]})).is_err());
+    assert!(s.concept_variations(job).is_some(), "the job is not canceled");
     s.execute("command.batch", &json!({"commands": [close]})).unwrap();
     assert!(s.concept_variations(job).is_none(), "the job goes with the batch that closed its document");
 }

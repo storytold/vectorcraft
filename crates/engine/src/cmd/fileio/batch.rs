@@ -14,13 +14,15 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     // The active artboard the app passes, for the steps that act on it.
     let artboard = p.get("artboard").and_then(Value::as_u64);
     // What an error rolls back besides the documents: session-level state a step may change
-    // (paint defaults, drawing mode, clipboard, the Untitled-N count, a begun undo group).
+    // (paint defaults, drawing mode, clipboard, the Untitled-N count, a begun undo group, the
+    // Concept to Vector jobs).
     // A drag or typing still in progress is a step of its own, as before Undo: the batch's steps
     // would otherwise run inside it and take its baseline as theirs (#1697).
     if s.active().is_some() && !s.previewing {
         super::super::edit::settle_interaction(s)?;
     }
     let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
+    let concept_jobs = s.concept_jobs_snapshot();
     // The documents as they are now, whole: what a failed step brings back. Their art, history,
     // file, format and saved state share their data with the open ones until a step changes them.
     let start = s.docs.clone();
@@ -45,6 +47,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
             s.sync_front_profiles();
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
             s.pending_paint = None;
+            s.restore_concept_jobs(concept_jobs);
             return Err(e);
         }
     };
