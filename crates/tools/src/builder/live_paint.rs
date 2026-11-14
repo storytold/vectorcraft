@@ -1,10 +1,11 @@
 use super::cache::RegionCache;
-use super::lookup::{is_live_paint, live_paint_at, live_paint_at_where, visible_edge_near, visible_face_at};
+use super::lookup::{is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where, node_outline, visible_edge_near, visible_face_at};
 use super::map::{HIGHLIGHT_RED, sorted_roots};
 use super::{
     Action, Arc, BezPath, CLICK_TOL_PX, Cursor, Document, EDGE_NAME, FACE_NAME, FillRule, Mods, Node, NodeId, Overlay, Point, PointerEvent,
     PointerKind, Rect, Tool, ToolContext, ToolKey, Value, color_swatches, json, json_ids, path_contains, pick_swatch, plain, swatch_chips,
 };
+use vectorcraft_color::Paint;
 
 // ---------- Live Paint Bucket ----------
 
@@ -172,6 +173,17 @@ enum LpPaint {
 /// highlighted. The cursor is a filled bucket where a click fills a face, a brush where it paints
 /// an edge and an empty bucket where it paints nothing; with Alt it is the Eyedropper.
 ///
+/// A double-click on a face fills it and the faces reached from it across edges that draw no
+/// stroke (`scope: "connected"`); on an edge it paints the edges joined to it that have its stroke.
+/// A triple-click on a face fills every face of the group with the face's fill, and on an edge it
+/// paints every edge of the group with the edge's stroke (`scope: "samePaint"`). Each click of a
+/// double-click or triple-click paints as it arrives, as its own undo step, and the paint compared
+/// is the one the face or edge had before the first of its clicks that painted it. A first click
+/// that made the Live Paint group counts when the face it filled is the clicked face. Shift and the
+/// options choose a face or an edge as for a click; with Alt or Cmd/Ctrl held a double-click or
+/// triple-click paints nothing. With Space held for the view tools, a click, double-click or triple-click paints
+/// nothing and no face or edge is highlighted.
+///
 /// The Left and Right arrow keys without Shift, Alt or Cmd/Ctrl set the active paint (the fill,
 /// or the stroke when the Stroke proxy is in front) to the color swatch before or after it in the
 /// Swatches panel, wrapping around; from a color that is no swatch, Right picks the first swatch
@@ -182,10 +194,13 @@ enum LpPaint {
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
-    /// Where the pointer last moved, and whether Shift and Alt were held.
-    at: Option<(Point, bool, bool)>,
+    /// Where the pointer last moved, and the modifiers held there.
+    at: Option<(Point, Mods)>,
     /// The fill command and polyline previewed from the press's snapshot.
     fill_drag: Option<(Value, Vec<Vec<Point>>)>,
+    /// The last [`LP_PRESSES`] presses, oldest first: the face or edge each one painted, with its
+    /// paint before that press, or None for a press that painted no face or edge.
+    presses: Vec<Option<LpPress>>,
     fills: bool,
     strokes: bool,
     highlight: bool,
@@ -198,6 +213,36 @@ pub struct LivePaintBucketTool {
     picked: [Option<usize>; 2],
 }
 
+/// The face or edge a Live Paint Bucket press paints.
+#[derive(Clone, Debug, PartialEq)]
+struct LpPress {
+    /// The face or edge; None for the face of the Live Paint group the press makes.
+    part: Option<NodeId>,
+    /// Where the press was.
+    at: Point,
+    /// Its fill (a face) or stroke paint (an edge) before the press.
+    before: Paint,
+}
+
+/// The fill of the face under `p` in the Live Paint group that `roots` make: the fill of the
+/// front-most of their paths whose closed subpaths hold `p`, else none. Open subpaths bound no face.
+fn made_face_fill(doc: &Document, roots: &[NodeId], p: Point) -> Paint {
+    let mut leaves = vec![];
+    for n in roots.iter().filter_map(|id| doc.node(*id)) {
+        leaf_shapes(n, &mut leaves);
+    }
+    let holds = |l: &Node| {
+        node_outline(l).is_some_and(|(path, rule)| {
+            let closed = vectorcraft_geom::PathData::new(path.subpaths.into_iter().filter(|sp| sp.closed && sp.anchors.len() >= 2).collect());
+            !closed.is_empty() && path_contains(&closed, rule, p)
+        })
+    };
+    leaves.iter().rev().find(|l| holds(l)).map_or(Paint::None, |l| l.appearance.fill_paint())
+}
+
+/// How many presses the Live Paint Bucket keeps: the three of a triple-click.
+const LP_PRESSES: usize = 3;
+
 /// Maximum points in one Live Paint fill path chunk.
 pub const LP_FILL_CHUNK_POINTS: usize = 4096;
 
@@ -208,6 +253,7 @@ impl Default for LivePaintBucketTool {
             hover: LpHover::None,
             at: None,
             fill_drag: None,
+            presses: Vec::new(),
             fills: true,
             strokes: false,
             highlight: true,
@@ -272,14 +318,77 @@ impl LivePaintBucketTool {
         }
     }
 
-    /// The highlight at `p` for a pointer with Shift and Alt held as given: none with Alt or with
-    /// Highlight off, else the face or edge a click there paints. With Highlight off the selection's
-    /// map is still made, for the cursor ([`Self::paints_at`]).
-    fn hover_at(&mut self, cx: &ToolContext, p: Point, shift: bool, alt: bool) -> LpHover {
-        if alt {
+    /// Note a press: what it paints, None when it paints no face or edge.
+    fn note_press(&mut self, press: Option<LpPress>) {
+        if self.presses.len() == LP_PRESSES {
+            self.presses.remove(0);
+        }
+        self.presses.push(press);
+    }
+
+    /// Note a press at `at` that paints face or edge (`edge`) `n`.
+    fn note_part(&mut self, n: &Node, edge: bool, at: Point) {
+        let before = if edge { n.appearance.stroke_paint() } else { n.appearance.fill_paint() };
+        self.note_press(Some(LpPress { part: Some(n.id), at, before }));
+    }
+
+    /// The paint `part` had before the first press of a click sequence of `clicks` presses that
+    /// painted `part` (the sequence's first press counts when it made the group `part` is in and
+    /// the face it filled there is `part`); `now` when the last press did not paint it.
+    fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
+        let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
+        let made_part = |q: &LpPress| live_paint_at(cx.doc, q.at).and_then(|g| visible_face_at(cx.doc.node(g)?, q.at)).is_some_and(|f| f.id == part);
+        let on_part =
+            |(i, q): (usize, &Option<LpPress>)| q.as_ref().is_some_and(|q| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q)));
+        if !run.last().is_some_and(|q| on_part((run.len() - 1, q))) {
+            return now;
+        }
+        match run.iter().enumerate().find(|&iq| on_part(iq)) {
+            Some((_, Some(first))) => first.before.clone(),
+            _ => now,
+        }
+    }
+
+    /// What a double-click (`scope` "connected", 2 `clicks`) or a triple-click ("samePaint", 3) at
+    /// `p` runs: the command a click there runs, with `scope`, and the paint it compares as `match`.
+    fn multi_click(&self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
+        // With Alt held, with Space held for the view tools, or with Cmd/Ctrl held (its presses went
+        // to the selection tool Cmd lends), a double-click or triple-click paints nothing.
+        if mods.alt || mods.space || mods.cmd {
+            return vec![];
+        }
+        let point = json!([p.x, p.y]);
+        let paint = self.paints(mods.shift);
+        if matches!(paint, LpPaint::Strokes | LpPaint::Both)
+            && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
+        {
+            let mut v = json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0), "scope": scope });
+            if let Ok(like) = serde_json::to_value(self.before(cx, e.id, clicks, e.appearance.stroke_paint())) {
+                v["match"] = like;
+            }
+            return vec![Action::Exec("livePaint.strokeEdge".into(), v)];
+        }
+        if !matches!(paint, LpPaint::Fills | LpPaint::Both) {
+            return vec![];
+        }
+        let Some((g, f)) = live_paint_at(cx.doc, p).and_then(|g| Some((g, visible_face_at(cx.doc.node(g)?, p)?))) else { return vec![] };
+        let mut v = json!({ "group": g.0, "point": point, "scope": scope });
+        if scope == "samePaint"
+            && let Ok(like) = serde_json::to_value(self.before(cx, f.id, clicks, f.appearance.fill_paint()))
+        {
+            v["match"] = like;
+        }
+        vec![Action::Exec("livePaint.fill".into(), v)]
+    }
+
+    /// The highlight at `p` for a pointer with the modifiers `mods`: none with Alt, with Space held
+    /// for the view tools or with Highlight off, else the face or edge a click there paints. With
+    /// Highlight off the selection's map is still made, for the cursor ([`Self::paints_at`]).
+    fn hover_at(&mut self, cx: &ToolContext, p: Point, mods: Mods) -> LpHover {
+        if mods.alt || mods.space {
             return LpHover::None;
         }
-        let target = self.target_at(cx, p, shift);
+        let target = self.target_at(cx, p, mods.shift);
         if self.highlight { target } else { LpHover::None }
     }
 
@@ -354,13 +463,19 @@ impl Tool for LivePaintBucketTool {
         }
         match ev.kind {
             PointerKind::Move => {
-                self.at = Some((p, ev.mods.shift, ev.mods.alt));
-                self.hover = self.hover_at(cx, p, ev.mods.shift, ev.mods.alt);
+                self.at = Some((p, ev.mods));
+                self.hover = self.hover_at(cx, p, ev.mods);
                 vec![]
             }
             PointerKind::Down => {
                 self.hover = LpHover::None;
+                // With Space held for the view tools, a press paints nothing.
+                if ev.mods.space {
+                    self.note_press(None);
+                    return vec![];
+                }
                 if ev.mods.alt {
+                    self.note_press(None);
                     if ev.mods.shift {
                         return crate::xform::eyedropper::sample_color_at(cx, p).map_or_else(Vec::new, |color| {
                             vec![Action::Exec("paint.sampleColor".into(), json!({ "color": crate::params::color_json(&color), "ids": [] }))]
@@ -385,34 +500,47 @@ impl Tool for LivePaintBucketTool {
                 let point = json!([p.x, p.y]);
                 let paint = self.paints(ev.mods.shift);
                 if matches!(paint, LpPaint::Strokes | LpPaint::Both)
-                    && let Some((g, Some(_))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
+                    && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
                 {
+                    self.note_part(e, true, p);
                     return vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }))];
                 }
                 if !matches!(paint, LpPaint::Fills | LpPaint::Both) {
+                    self.note_press(None);
                     return vec![];
                 }
                 if let Some(g) = live_paint_at(cx.doc, p) {
+                    match cx.doc.node(g).and_then(|n| visible_face_at(n, p)) {
+                        Some(f) => self.note_part(f, false, p),
+                        None => self.note_press(None),
+                    }
                     return self.begin_fill(json!({ "group": g.0, "point": point }), p);
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
+                    self.note_press(Some(LpPress { part: None, at: p, before: made_face_fill(cx.doc, &roots, p) }));
                     return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
+                self.note_press(None);
                 vec![]
             }
             PointerKind::Drag => self.drag_fill(p),
             PointerKind::Up => {
                 // The swatch preview shows again at the release point.
-                self.at = Some((p, ev.mods.shift, ev.mods.alt));
+                self.at = Some((p, ev.mods));
                 let mut acts = self.drag_fill(p);
                 if self.fill_drag.take().is_some() {
                     acts.push(Action::Commit);
                 }
                 acts
             }
-            _ => vec![],
+            PointerKind::DoubleClick => self.multi_click(cx, p, ev.mods, "connected", 2),
+            PointerKind::TripleClick => self.multi_click(cx, p, ev.mods, "samePaint", 3),
         }
+    }
+
+    fn history_moved(&mut self) {
+        self.presses.clear();
     }
 
     /// Escape during a fill drag cancels it. Left and Right pick the color swatch before or after
@@ -453,6 +581,7 @@ impl Tool for LivePaintBucketTool {
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.presses.clear();
         if self.fill_drag.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
@@ -467,7 +596,8 @@ impl Tool for LivePaintBucketTool {
         // No chips during a fill drag, or while Alt makes the tool sample with the eyedropper.
         if self.preview
             && !self.busy()
-            && let Some((at, _, false)) = self.at
+            && let Some((at, mods)) = self.at
+            && !mods.alt
         {
             out.extend(swatch_chips(cx, at, Self::active_paint(cx), self.picked[Self::picked_slot(cx)], true));
         }
@@ -518,8 +648,8 @@ impl Tool for LivePaintBucketTool {
         // of a Live Paint group the hover takes no map.
         loop {
             self.cache.settle(wait);
-            if let Some((p, shift, alt)) = self.at {
-                self.hover = self.hover_at(cx, p, shift, alt);
+            if let Some((p, mods)) = self.at {
+                self.hover = self.hover_at(cx, p, mods);
             }
             if !wait || !self.cache.waiting() {
                 break;

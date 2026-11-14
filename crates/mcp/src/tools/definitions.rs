@@ -205,7 +205,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": obj(json!({
-                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick"]},
+                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick", "tripleclick"]},
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),

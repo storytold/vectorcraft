@@ -9,7 +9,7 @@
 //! - `ui.menu.list`: flattened menu tree
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
-//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
+//! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick|tripleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
 //!   drive the active tool through the same path as the mouse, after the synthetic input sent
 //!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
@@ -1842,7 +1842,7 @@ fn rotate_view_pointer(
         PointerKind::Up => {
             app.control_rotate_press = None;
         }
-        PointerKind::Move | PointerKind::DoubleClick => {}
+        PointerKind::Move | PointerKind::DoubleClick | PointerKind::TripleClick => {}
     }
     Ok(())
 }
@@ -1910,6 +1910,7 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
                     "up" => PointerKind::Up,
                     "move" => PointerKind::Move,
                     "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+                    "tripleclick" => PointerKind::TripleClick,
                     other => return Err(format!("unknown pointer kind `{other}`")),
                 };
                 PointerEvent::json_check(e)?;
