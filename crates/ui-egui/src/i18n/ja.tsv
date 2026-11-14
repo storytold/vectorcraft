@@ -463,6 +463,18 @@ digits	Malayalam	マラヤーラム数字
 	Title Case	単語の先頭のみ大文字
 	Sentence case	文頭のみ大文字
 	Smart Punctuation…	欧文用字形の自動置換…
+	Smart Punctuation	欧文用字形の自動置換
+	ff, fi, ffi Ligatures	ff、fi、ffi 合字
+	ff, fl, ffl Ligatures	ff、fl、ffl 合字
+	Smart Quotes	スマート引用符
+	Smart Spaces	スマートスペース
+	En, Em Dashes	EN ダッシュと EM ダッシュ
+	Ellipses	省略記号
+	Expert Fractions	エキスパート分数
+	Replace In	置換範囲
+	Selected Text Only	選択したテキストのみ
+	Entire Document	ドキュメント全体
+	Report Results	結果を表示
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Dynamic Text	ダイナミックテキスト
