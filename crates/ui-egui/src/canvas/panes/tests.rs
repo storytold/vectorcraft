@@ -125,6 +125,11 @@ fn tiled_documents_fit_their_panes_at_every_ui_scaling() {
         let ctx = egui::Context::default();
         ctx.set_zoom_factor(ui_zoom);
         let size = vec2(1200.0, 800.0) / ui_zoom;
+        // The UI zoom takes effect in the next pass, which egui sizes from the screen it had before
+        // (10,000 pixels a side in a new context) instead of the one it is given. Spend that pass
+        // on nothing, so that no canvas frame is rendered at that size.
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)), ..Default::default() }, |_| {});
+        out.textures_delta.clear();
         frame_in(&mut app, &ctx, vec![], size);
         app.run("window.arrange.tile", json!({})).unwrap();
         frame_in(&mut app, &ctx, vec![], size);

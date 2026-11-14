@@ -1195,7 +1195,12 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
     finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
     let person = crate::control::inspect(&app, &ctx);
-    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    // The report names the included file by its whole path, as the script host resolved it. The two
+    // are compared as files, since a resolved path is written differently on each system: macOS keeps
+    // the temporary folder behind `/var`, a link to `/private/var`, and on Windows
+    // `std::fs::canonicalize` gives the path a `\\?\` prefix that the report leaves off.
+    let reported = person["scriptReport"]["file"].as_str().unwrap();
+    assert_eq!(std::fs::canonicalize(reported).unwrap(), std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap(), "{person}");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
     assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");
