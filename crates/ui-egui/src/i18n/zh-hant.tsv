@@ -7542,8 +7542,6 @@ breakText	Glyphs	字符
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的參數 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	未知的參數 `{within}settings.{format}`；{why}
-@msg	unknown parameter `{within}{key}`; {why}	未知的參數 `{within}{key}`；{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	未知的縮減 `{reduction}` (selective、perceptual、adaptive、web、gray、blackWhite、uniform 或 document)
 @msg	unmatched ')'	不成對的 ')'
 @msg	unterminated character class	字元類別未結束
@@ -8961,7 +8959,6 @@ breakText	Glyphs	字符
 @msg	{label} must be a number from 1 to 10000	{label} 必須是 1 到 10000 之間的數字
 @msg	{name} `{s}`: {ids}	{name} `{s}`：{ids}
 @msg	{name} is built in and can't be deleted	{name} 是內建項目，無法刪除
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} 必須是 {lo}–{hi}{unit} (收到 {v})
 @msg	{name}: CRC or size mismatch	{name}：CRC 或大小不相符
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}：只能讀取此 Affinity 檔案的內嵌預視；請使用「檔案 › 開啟」查看它及其警告，或在置入前先從 Affinity 匯出 SVG 或 PDF
 @msg	{name}: {e}	{name}：{e}

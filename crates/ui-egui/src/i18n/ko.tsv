@@ -8766,8 +8766,6 @@ breakText	Glyphs	글리프
 @msg	unknown panel	알 수 없는 패널
 @msg	unknown panel `{panel}`	알 수 없는 패널 `{panel}`
 @msg	unknown parameter `{key}`	알 수 없는 매개변수 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	알 수 없는 매개변수 `{within}settings.{format}`: {why}
-@msg	unknown parameter `{within}{key}`; {why}	알 수 없는 매개변수 `{within}{key}`: {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	알 수 없는 pieLegend `{v}`(none, standard 또는 wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	알 수 없는 piePosition `{v}`(even, ratio 또는 stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	알 수 없는 pieSort `{v}`(none, all 또는 first)
@@ -8896,7 +8894,6 @@ breakText	Glyphs	글리프
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}은(는) 기본 제공 항목이라 삭제할 수 없습니다
 @msg	{name} must be a number	{name}은(는) 숫자여야 합니다
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}은(는) {lo}–{hi}{unit}여야 합니다({v} 입력됨)
 @msg	{name}: CRC or size mismatch	{name}: CRC 또는 크기가 일치하지 않습니다
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: 이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다. 경고와 함께 보려면 파일 › 열기를 사용하거나, 가져오기 전에 Affinity에서 SVG 또는 PDF로 내보내세요
 @msg	{name}: {e}	{name}: {e}

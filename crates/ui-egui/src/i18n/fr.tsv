@@ -9143,8 +9143,6 @@ breakText	Glyphs	Glyphes
 @msg	unknown panel	panneau inconnu
 @msg	unknown panel `{panel}`	panneau inconnu `{panel}`
 @msg	unknown parameter `{key}`	paramètre inconnu `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	paramètre inconnu `{within}settings.{format}` ; {why}
-@msg	unknown parameter `{within}{key}`; {why}	paramètre inconnu `{within}{key}` ; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	pieLegend inconnu `{v}` (none, standard ou wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	piePosition inconnu `{v}` (even, ratio ou stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	pieSort inconnu `{v}` (none, all ou first)
@@ -9271,7 +9269,6 @@ breakText	Glyphs	Glyphes
 @msg	{label} must be a number from 1 to 10000	{label} doit être un nombre compris entre 1 et 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}` : {ids}
 @msg	{name} is built in and can't be deleted	{name} est intégré et ne peut pas être supprimé
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} doit être compris entre {lo} et {hi}{unit} (reçu : {v})
 @msg	{name}: CRC or size mismatch	{name} : CRC ou taille incohérents
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name} : seul l’aperçu incorporé de ce fichier Affinity a pu être lu ; utilisez Fichier › Ouvrir pour l’afficher avec son avertissement, ou exportez en SVG ou PDF depuis Affinity avant de l’importer
 @msg	{name}: {e}	{name} : {e}

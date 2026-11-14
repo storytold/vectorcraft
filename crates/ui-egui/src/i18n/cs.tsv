@@ -9166,8 +9166,6 @@ breakText	Glyphs	Glyfy
 @msg	unknown panel	neznámý panel
 @msg	unknown panel `{panel}`	neznámý panel `{panel}`
 @msg	unknown parameter `{key}`	neznámý parametr `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	neznámý parametr `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	neznámý parametr `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	neznámé pieLegend `{v}` (none, standard nebo wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	neznámé piePosition `{v}` (even, ratio nebo stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	neznámé pieSort `{v}` (none, all nebo first)
@@ -9295,7 +9293,6 @@ breakText	Glyphs	Glyfy
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} je vestavěné a nelze ho odstranit
 @msg	{name} must be a number	{name} musí být číslo
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} musí být {lo}–{hi}{unit} (zadáno {v})
 @msg	{name}: CRC or size mismatch	{name}: nesouhlasí CRC nebo velikost
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: z tohoto souboru Affinity šlo přečíst jen vložený náhled; pomocí Soubor › Otevřít ho zobrazíte s varováním, nebo před umístěním exportujte SVG či PDF z Affinity
 @msg	{name}: {e}	{name}: {e}
