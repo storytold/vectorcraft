@@ -4,8 +4,10 @@
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
 //! Options, Text Export Options, DXF Options, EPS Options, and Save PDF),
 //! else the file is written. DWG is listed, greyed out, with what to use instead. The formats of
-//! installed exporter plug-ins come after the built-in ones: they write the whole document, and one
-//! with parameters asks for them before writing (`plugin::open_export`).
+//! installed exporter plug-ins come after the built-in ones: they write the whole document (from
+//! Export Selection, the selection), and one with parameters asks for them before writing
+//! (`plugin::open_export`). Export Selection ([`export_selection`]) takes the same route after its
+//! save panel, and every format then writes the selection alone, cropped to it.
 
 use std::sync::LazyLock;
 
@@ -144,10 +146,50 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.ui.dialog = None;
     let path = io::export_path(app, None, f)?;
     let range = if all { "all".to_string() } else { range };
-    let r = options_or_write(app, f, plugin, path, use_artboards, all, range);
+    let r = options_or_write(app, f, plugin, path, Pages { use_artboards, all, range, selection: false });
     // The options follow the save panel: the Enter that closed it isn't theirs (as in Save As).
     super::opened_by_panel(app);
     r
+}
+
+/// The options dialogs' field that is true when Export Selection opened them: OK then writes the
+/// selection alone ([`exported`]). Not remembered with the dialog's options.
+pub(super) const SELECTION_FIELD: &str = "__selection";
+
+/// `params` of an options dialog `d` for [`io::export`]: with [`io::EXPORT_SELECTION`] when
+/// Export Selection opened `d`.
+pub(super) fn exported(d: &Dialog, mut params: Value) -> Value {
+    if d.bool(SELECTION_FIELD)
+        && let Some(o) = params.as_object_mut()
+    {
+        o.insert(io::EXPORT_SELECTION.into(), json!(true));
+    }
+    params
+}
+
+/// File › Export Selection (`document.exportSelection` without params): the save panel picks the
+/// file and its format, then the format's options dialog follows as in Export As, else the file is
+/// written. Each route writes the selected objects alone, cropped to them. Nothing selected to
+/// export stops before the save panel.
+pub fn export_selection(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let st = app.session.active().ok_or("no document")?;
+    fileio::selection_doc(st, "document.exportSelection", false).map_err(|e| e.to_string())?;
+    let path = io::selection_path(app)?;
+    let f = fileio::writable_format(None, Some(&path))?;
+    let plugin = vectorcraft_plugins::export::by_format(f.id);
+    let pages = Pages { use_artboards: false, all: true, range: String::new(), selection: true };
+    let r = options_or_write(app, f, plugin, path, pages);
+    super::opened_by_panel(app);
+    r
+}
+
+/// What an export writes: with `use_artboards` the artboards (`all`, else the 1-based `range`),
+/// else the bounds of the visible art, or with `selection` the selection alone.
+struct Pages {
+    use_artboards: bool,
+    all: bool,
+    range: String,
+    selection: bool,
 }
 
 /// After the save panel picked `path`: the options dialog of format `f` (or of its exporter
@@ -157,11 +199,10 @@ fn options_or_write(
     f: &'static Format,
     plugin: Option<std::sync::Arc<vectorcraft_plugins::Plugin>>,
     path: String,
-    use_artboards: bool,
-    all: bool,
-    range: String,
+    pages: Pages,
 ) -> Result<Value, String> {
-    match f.id {
+    let Pages { use_artboards, all, range, selection } = pages;
+    let r = match f.id {
         "svg" | "svgz" => {
             svg_options::open(app, svg_options::Mode::Export, Some(&path));
             if let Some(o) = app.ui.dialog.as_mut() {
@@ -169,24 +210,33 @@ fn options_or_write(
             }
             Ok(Value::Null)
         }
-        // Save PDF writes the artboards as pages, or one page of the art's bounds.
+        // Save PDF writes the artboards as pages, or one page of the art's bounds or the selection.
         "pdf" if use_artboards => save_pdf::open(app, &json!({ "path": path, "range": (!all).then_some(range) })),
         "pdf" => save_pdf::open(app, &json!({ "path": path, "useArtboards": false })),
         "txt" => {
             text_export::open(app, &path);
+            if let Some(o) = app.ui.dialog.as_mut().filter(|_| selection) {
+                o.fields.insert("selectionOnly".into(), json!(true));
+            }
             Ok(Value::Null)
         }
         _ => {
             let mut params = json!({ "format": f.id, "path": path });
             // A format that holds the whole document (a template) has no Use Artboards: the
             // export is not given the option, which its warnings would name as not used.
-            if plugin.is_some() || f.options.iter().any(|o| o.name == "useArtboards") {
+            if !selection && (plugin.is_some() || f.options.iter().any(|o| o.name == "useArtboards")) {
                 params["useArtboards"] = json!(use_artboards);
                 if use_artboards {
                     params["range"] = json!(range);
                 }
             }
-            if let Some(plugin) = plugin.filter(|p| !p.manifest().params.is_empty()) {
+            let plugin = plugin.filter(|p| !p.manifest().params.is_empty());
+            let dialog = plugin.is_none() && (f.raster || matches!(f.id, "dxf" | "eps"));
+            if selection {
+                // An options dialog keeps the mark as a field of its own, which OK hands on.
+                params[if dialog { SELECTION_FIELD } else { io::EXPORT_SELECTION }] = json!(true);
+            }
+            if let Some(plugin) = plugin {
                 plugin::open_export(app, &plugin, params);
                 return Ok(Value::Null);
             }
@@ -202,7 +252,12 @@ fn options_or_write(
                 eps_options::open(app, &params);
                 return Ok(Value::Null);
             }
-            io::export(app, Some(f.id), Some(path), &params)
+            return io::export(app, Some(f.id), Some(path), &params);
         }
+    };
+    // Export Selection's mark on the options dialog that opened.
+    if let Some(o) = app.ui.dialog.as_mut().filter(|_| selection) {
+        o.fields.insert(SELECTION_FIELD.into(), json!(true));
     }
+    r
 }
