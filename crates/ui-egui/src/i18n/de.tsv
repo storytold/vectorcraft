@@ -550,6 +550,11 @@ font-technology	Variable	Variabel
 	Saturation and brightness	Sättigung und Helligkeit
 	Color field	Farbauswahlfeld
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Kreisansicht
+	Box View	Quadratansicht
+	Box Channel	Kanal des Quadrats
+	Color box	Farbquadrat
+	Color Wheel Options	Optionen für den Farbkreis
 	Color Type:	Farbart:
 	Color:	Farbe:
 	Colorize	Einfärben
@@ -4420,6 +4425,8 @@ theme	Appearance	Erscheinungsbild
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` ist größer als `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	geben Sie mindestens einen der Parameter `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors` an
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` muss grayscale, rgb, hsb, cmyk oder websafe sein
+@msg	`view` must be wheel or box	`view` muss wheel oder box sein
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` muss hue, saturation, brightness, red, green oder blue sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen

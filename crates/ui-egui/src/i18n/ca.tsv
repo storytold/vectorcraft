@@ -819,6 +819,11 @@ antiAlias	Sharp	Nítid
 	Saturation and brightness	Saturació i lluentor
 	Color field	Camp de color
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Visualització de roda
+	Box View	Visualització de quadre
+	Box Channel	Canal del quadre
+	Color box	Quadre de color
+	Color Wheel Options	Opcions de la roda de colors
 	Color Type:	Tipus de color:
 	Color wheel	Roda de color
 	Color:	Color:
@@ -5265,6 +5270,8 @@ digits	Malayalam	Malaiàlam
 @msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
 @msg	`focal` applies to radial gradients	`focal` s’aplica als degradats radials
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
+@msg	`view` must be wheel or box	`view` ha de ser wheel o box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte

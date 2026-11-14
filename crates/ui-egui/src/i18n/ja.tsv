@@ -763,6 +763,11 @@ digits	Malayalam	マラヤーラム数字
 	Saturation and brightness	彩度と明るさ
 	Color field	カラーフィールド
 	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
+	Wheel View	ホイール表示
+	Box View	ボックス表示
+	Box Channel	ボックスのチャンネル
+	Color box	カラーボックス
+	Color Wheel Options	カラーホイールオプション
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -5009,6 +5014,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	No saved views (View → New View…)	保存した表示はありません (表示 → 新規表示…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
+@msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください

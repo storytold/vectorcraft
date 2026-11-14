@@ -1321,6 +1321,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} switch the Color panel's R, G and B between percent and 0 to 255, as a double-click right of an RGB field does (ui.colorPanel {rgbPercent}); the color does not change, and the choice is kept with the preferences; a parameter is an error and changes nothing → true when they show in percent",
     ),
     (
+        "ui.colorWheel",
+        "Color Wheel Options",
+        "",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); keys left out keep their values, params that are not an object, another key or a value off the list are an error and change nothing, both are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel}",
+    ),
+    (
         "ui.savePdfDialog",
         "Save PDF Dialog",
         "",

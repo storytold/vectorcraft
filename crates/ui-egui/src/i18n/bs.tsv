@@ -735,6 +735,11 @@
 	Saturation and brightness	Zasićenje i svjetlina
 	Color field	Polje boje
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Prikaz kotača
+	Box View	Prikaz kvadrata
+	Box Channel	Kanal kvadrata
+	Color box	Kvadrat boje
+	Color Wheel Options	Opcije kotača boja
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja
@@ -4644,6 +4649,8 @@ imageTrace	Outline	Obris
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` je veće od `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	navedite barem jedno od `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` mora biti grayscale, rgb, hsb, cmyk ili websafe
+@msg	`view` must be wheel or box	`view` mora biti wheel ili box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` mora biti hue, saturation, brightness, red, green ili blue
 @msg	`{k}` must be [x, y]	`{k}` mora biti [x, y]
 @msg	`{name}` has no options	`{name}` nema opcija
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je ugrađeni radni prostor; odaberite drugi naziv

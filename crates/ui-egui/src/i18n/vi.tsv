@@ -659,6 +659,11 @@ font-technology	Variable	Biến thiên
 	Saturation and brightness	Độ bão hòa và độ sáng
 	Color field	Vùng chọn màu
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Hiển thị bánh xe
+	Box View	Hiển thị hộp
+	Box Channel	Kênh của hộp
+	Color box	Hộp màu
+	Color Wheel Options	Tùy chọn bánh xe màu
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -4582,6 +4587,8 @@ theme	Appearance	Giao diện
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
+@msg	`view` must be wheel or box	`view` phải là wheel hoặc box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác

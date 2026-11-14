@@ -566,6 +566,11 @@ font-technology	Variable	Варіативні
 	Saturation and brightness	Насиченість і яскравість
 	Color field	Колірне поле
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Вигляд «Коло»
+	Box View	Вигляд «Квадрат»
+	Box Channel	Канал квадрата
+	Color box	Колірний квадрат
+	Color Wheel Options	Параметри колірного кола
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
@@ -4533,6 +4538,8 @@ axis	Both	Обидві
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` більше за `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажіть принаймні один із параметрів `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
+@msg	`view` must be wheel or box	`view` має бути wheel або box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я

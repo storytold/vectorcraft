@@ -693,6 +693,11 @@
 	Saturation and brightness	Mætning og lysstyrke
 	Color field	Farvefelt
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Hjulvisning
+	Box View	Kvadratvisning
+	Box Channel	Kvadratets kanal
+	Color box	Farvekvadrat
+	Color Wheel Options	Indstillinger for farvehjul
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning
@@ -5633,6 +5638,8 @@ mark-style	Japanese	Japansk
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunne ikke læses: variabelpanelet viser det ikke
 @msg	a variable of unknown kind can't be bound to objects	en variabel af ukendt type kan ikke bindes til objekter
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` skal være grayscale, rgb, hsb, cmyk eller websafe
+@msg	`view` must be wheel or box	`view` skal være wheel eller box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler

@@ -573,6 +573,11 @@ font-technology	Variable	Variables
 	Saturation and brightness	Saturation et luminosité
 	Color field	Champ de couleur
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Affichage roue
+	Box View	Affichage carré
+	Box Channel	Couche du carré
+	Color box	Carré de couleur
+	Color Wheel Options	Options de la roue chromatique
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -4486,6 +4491,8 @@ axis	Both	Les deux
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` est supérieur à `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	indiquez au moins l’un des paramètres `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` doit valoir grayscale, rgb, hsb, cmyk ou websafe
+@msg	`view` must be wheel or box	`view` doit valoir wheel ou box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` doit valoir hue, saturation, brightness, red, green ou blue
 @msg	`{k}` must be [x, y]	`{k}` doit être [x, y]
 @msg	`{name}` has no options	`{name}` n’a pas d’options
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` est un espace de travail intégré ; choisissez un autre nom

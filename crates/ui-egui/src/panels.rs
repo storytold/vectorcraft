@@ -238,6 +238,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
         "attributes" => attributes::menu(app, ui),
         svg_interactivity::ID => svg_interactivity::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        color_wheel::ID => color_wheel::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
         asset_export::ID => asset_export::menu(app, ui),
@@ -694,6 +695,8 @@ mod tests_blend;
 mod tests_brush_libraries;
 #[cfg(test)]
 mod tests_color_wheel;
+#[cfg(test)]
+mod tests_color_wheel_box;
 #[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]

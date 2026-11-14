@@ -24,7 +24,7 @@ pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod color_balance;
 pub mod color_guide_options;
-mod color_picker;
+pub(crate) mod color_picker;
 mod command;
 pub mod composite_fonts;
 pub mod confirm;

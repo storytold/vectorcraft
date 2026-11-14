@@ -559,6 +559,11 @@ font-technology	Variable	Variabla
 	Saturation and brightness	Mättnad och ljusstyrka
 	Color field	Färgfält
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Hjulvy
+	Box View	Rutvy
+	Box Channel	Rutans kanal
+	Color box	Färgruta
+	Color Wheel Options	Alternativ för färghjulet
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -6092,6 +6097,8 @@ theme	Appearance	Utseende
 @msg	Unknown dimension option {k}	Okänt måttalternativ {k}
 @msg	Unknown dimension orientation	Okänd måttriktning
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` måste vara grayscale, rgb, hsb, cmyk eller websafe
+@msg	`view` must be wheel or box	`view` måste vara wheel eller box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` måste vara hue, saturation, brightness, red, green eller blue
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp

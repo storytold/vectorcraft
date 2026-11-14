@@ -693,6 +693,11 @@
 	Saturation and brightness	Saturasi dan kecerahan
 	Color field	Kolom warna
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Tampilan roda
+	Box View	Tampilan kotak
+	Box Channel	Saluran kotak
+	Color box	Kotak warna
+	Color Wheel Options	Opsi roda warna
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -5633,6 +5638,8 @@ mark-style	Japanese	Jepang
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
 @msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
+@msg	`view` must be wheel or box	`view` harus wheel atau box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar

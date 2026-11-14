@@ -748,6 +748,11 @@ font-technology	Variable	Változó
 	Saturation and brightness	Telítettség és fényesség
 	Color field	Színmező
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Körnézet
+	Box View	Négyzetnézet
+	Box Channel	Négyzet csatornája
+	Color box	Színnégyzet
+	Color Wheel Options	Színkör beállításai
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -4922,6 +4927,8 @@ imageTrace	Outline	Körvonal
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` nagyobb, mint `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	adj meg legalább egyet ezek közül: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`: grayscale, rgb, hsb, cmyk vagy websafe kell
+@msg	`view` must be wheel or box	`view`: wheel vagy box kell
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`: hue, saturation, brightness, red, green vagy blue kell
 @msg	`{k}` must be [x, y]	`{k}`: [x, y] kell
 @msg	`{name}` has no options	ennek nincsenek beállításai: `{name}`
 @msg	`{name}` is a built-in workspace; choose another name	beépített munkaterület: `{name}`; válassz másik nevet

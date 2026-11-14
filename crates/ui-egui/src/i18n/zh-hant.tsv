@@ -535,6 +535,11 @@ font-technology	Variable	可變
 	Saturation and brightness	飽和度和亮度
 	Color field	顏色區域
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
+	Wheel View	色輪檢視
+	Box View	方塊檢視
+	Box Channel	方塊色版
+	Color box	顏色方塊
+	Color Wheel Options	色輪選項
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色
@@ -2406,6 +2411,8 @@ file-filter	Templates	範本
 @msg	No saved views (View → New View…)	沒有已儲存的檢視 (檢視 → 新增檢視…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必須是選單項目會開啟對話框的指令 (請參閱 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必須是 grayscale、rgb、hsb、cmyk 或 websafe
+@msg	`view` must be wheel or box	`view` 必須是 wheel 或 box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false

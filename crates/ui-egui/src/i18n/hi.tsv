@@ -943,6 +943,11 @@ antiAlias	Sharp	शार्प
 	Saturation and brightness	सैचुरेशन और ब्राइटनेस
 	Color field	कलर फ़ील्ड
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	व्हील व्यू
+	Box View	बॉक्स व्यू
+	Box Channel	बॉक्स चैनल
+	Color box	कलर बॉक्स
+	Color Wheel Options	कलर व्हील ऑप्शन्स
 	Color Type:	रंग का प्रकार:
 	Color wheel	कलर व्हील
 	Color:	रंग:
@@ -6157,6 +6162,8 @@ antiAlias	Sharp	शार्प
 @msg	`mode` must be "handles", "straight" or "smooth"	`mode` को "handles", "straight" या "smooth" होना चाहिए
 @msg	`mode` must be "straight", "bezier" or "arc"	`mode` को "straight", "bezier" या "arc" होना चाहिए
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` को grayscale, rgb, hsb, cmyk या websafe होना चाहिए
+@msg	`view` must be wheel or box	`view` को wheel या box होना चाहिए
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है
