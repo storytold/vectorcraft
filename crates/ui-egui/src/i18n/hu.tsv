@@ -1241,6 +1241,15 @@ font-technology	Variable	Változó
 	DXF Info	DXF-adatok
 	DXF Options	DXF-beállítások
 	DXF Options Dialog	DXF-beállítások párbeszédablak
+	HP-GL Options	HP-GL-beállítások
+	HP-GL Options Dialog	HP-GL-beállítások párbeszédablak
+	Curve Tolerance:	Görbék tűréshatára:
+	Origin:	Origó:
+	Pens:	Tollak:
+	One Pen per Color	Színenként egy toll
+	Pen Table	Tolltáblázat
+	Draw the Nearest Path Next	A legközelebbi útvonal rajzolása következőként
+	Draw Inner Paths First	A belső útvonalak rajzolása először
 	e.g. 1-3, 5	pl. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Minden oldal egyetlen képként nyomtatódik, a dokumentum raszteres effektusainak felbontásával.
 	Earth Tones	Földszínek

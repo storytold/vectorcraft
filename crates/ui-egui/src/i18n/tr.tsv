@@ -940,6 +940,15 @@ font-technology	Variable	Değişken
 	DXF Info	DXF Bilgisi
 	DXF Options	DXF Seçenekleri
 	DXF Options Dialog	DXF Seçenekleri İletişim Kutusu
+	HP-GL Options	HP-GL Seçenekleri
+	HP-GL Options Dialog	HP-GL Seçenekleri İletişim Kutusu
+	Curve Tolerance:	Eğri Toleransı:
+	Origin:	Başlangıç Noktası:
+	Pens:	Kalemler:
+	One Pen per Color	Her Renk İçin Bir Kalem
+	Pen Table	Kalem Tablosu
+	Draw the Nearest Path Next	Sonra En Yakın Yolu Çiz
+	Draw Inner Paths First	Önce İç Yolları Çiz
 	e.g. 1-3, 5	örneğin 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Her sayfa, belgenin tarama efektleri çözünürlüğünde tek bir görüntü olarak yazdırılır.
 	Earth Tones	Toprak Tonları

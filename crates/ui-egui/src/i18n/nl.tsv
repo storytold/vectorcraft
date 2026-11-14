@@ -1510,6 +1510,15 @@ lighting	Light	Licht
 	Document Raster Effects Settings Dialog	Dialoogvenster rastereffectinstellingen van document
 	Drop Shadow	Slagschaduw
 	DXF Options Dialog	Dialoogvenster DXF-opties
+	HP-GL Options	HP-GL-opties
+	HP-GL Options Dialog	Dialoogvenster HP-GL-opties
+	Curve Tolerance:	Curvetolerantie:
+	Origin:	Oorsprong:
+	Pens:	Pennen:
+	One Pen per Color	Eén pen per kleur
+	Pen Table	Pennentabel
+	Draw the Nearest Path Next	Het dichtstbijzijnde pad als volgende tekenen
+	Draw Inner Paths First	Binnenste paden eerst tekenen
 	Edit Toolbar	Werkbalk bewerken
 	Edit Views	Weergaven bewerken
 	Effect…	Effect…

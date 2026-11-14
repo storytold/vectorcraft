@@ -948,6 +948,15 @@ font-technology	Variable	Variabel
 	DXF Info	DXF-Informationen
 	DXF Options	DXF-Optionen
 	DXF Options Dialog	Dialogfeld „DXF-Optionen“
+	HP-GL Options	HP-GL-Optionen
+	HP-GL Options Dialog	Dialogfeld „HP-GL-Optionen“
+	Curve Tolerance:	Kurventoleranz:
+	Origin:	Ursprung:
+	Pens:	Stifte:
+	One Pen per Color	Ein Stift pro Farbe
+	Pen Table	Stifttabelle
+	Draw the Nearest Path Next	Nächstgelegenen Pfad als Nächstes zeichnen
+	Draw Inner Paths First	Innere Pfade zuerst zeichnen
 	e.g. 1-3, 5	z. B. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Jede Seite wird als ein Bild gedruckt, in der Rastereffektauflösung des Dokuments.
 	Earth Tones	Erdtöne

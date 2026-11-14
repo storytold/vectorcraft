@@ -1595,6 +1595,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
     ),
     (
+        "ui.hpglOptionsDialog",
+        "HP-GL Options Dialog",
+        "",
+        "{path?, useArtboards?, range?, hpglVersion?, curveTolerance?, origin?, pens?, sortPaths?, insideFirst?} open HP-GL Options (dialog `hpglOptions`: fields = these document.export options over the ones used last; pens null is One Pen per Color); OK checks them, remembers them and writes path (else asks). Export As… → HP-GL opens it too",
+    ),
+    (
         "file.saveForWeb",
         "Save for Web (Legacy)…",
         "Cmd+Alt+Shift+S",

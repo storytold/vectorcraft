@@ -6,6 +6,7 @@ use serde_json::Value;
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
 use vectorcraft_cad::hpgl::{HpglOptions, Origin, Version};
 use vectorcraft_doc::Document;
+use vectorcraft_geom::Rect;
 
 use super::super::{Result, bad, number_or, switch_or, text_param};
 use super::{ArtboardPick, Encoded, FormatOption};
@@ -92,10 +93,57 @@ fn hex(v: &Value) -> Option<[u8; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?])
 }
 
-/// Encode `doc` as HP-GL: a plot of the chosen artboard (default the first), or with
-/// `use_artboards` one plot per chosen artboard (default all), with one pen numbering for them all.
-pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> Result<Encoded> {
-    let opts = parse(p)?;
+/// Check the HP-GL options and the artboard choice in `p` for an export of `doc`, as the export
+/// reads them, without exporting (dialogs keep themselves open on an error).
+pub fn check(doc: &Document, p: &Value) -> std::result::Result<(), String> {
+    let run = || -> Result<()> {
+        parse(p)?;
+        let f = super::format("hpgl").ok_or_else(|| bad(C, "no HP-GL format"))?;
+        // The export refuses `rect` for HP-GL.
+        super::encode::page_rect(f, p)?;
+        with_plotted(doc, p, |_, _| Ok(()))
+    };
+    run().map_err(|e| e.to_string())
+}
+
+/// The pen table an export of `doc` with the options and artboard choice in `p`, and no `pens`,
+/// uses: pen 1's color first, as `#rrggbb` colors. Empty when the options or the artboard choice
+/// are refused, or nothing is plotted.
+pub fn automatic_pens(doc: &Document, p: &Value) -> Vec<String> {
+    let run = || -> Result<Vec<[u8; 3]>> {
+        let mut q = p.clone();
+        if let Some(o) = q.as_object_mut() {
+            o.remove("pens");
+        }
+        // The order the paths are drawn in doesn't change which pen a color gets.
+        let opts = HpglOptions { sort: false, inside_first: false, ..parse(&q)? };
+        with_plotted(doc, &q, |doc, regions| {
+            let plots = vectorcraft_cad::hpgl::export_regions(doc, &opts, &regions).map_err(|e| bad(C, e))?;
+            Ok(plots.first().map(|o| o.pens.clone()).unwrap_or_default())
+        })
+    };
+    run().unwrap_or_default().iter().map(|[r, g, b]| format!("#{r:02x}{g:02x}{b:02x}")).collect()
+}
+
+/// Run `f` on the document an export of `doc` with `p` plots and the regions of its plots: with
+/// `useArtboards: false`, a copy of `doc` whose one artboard is the bounds of the visible art.
+/// Like the export, it leaves out an opacity-mask or symbol editing layer.
+fn with_plotted<T>(doc: &Document, p: &Value, f: impl FnOnce(&Document, Vec<Rect>) -> Result<T>) -> Result<T> {
+    let doc = &*doc.without_edit_modes();
+    let use_artboards = super::encode::use_artboards(C, p)?;
+    if use_artboards == Some(false)
+        && let Some((art, q)) = super::encode::art_page(C, doc, p)?
+    {
+        let (_, regions) = boards(&art, &q, None)?;
+        return f(&art, regions);
+    }
+    let (_, regions) = boards(doc, p, use_artboards)?;
+    f(doc, regions)
+}
+
+/// The artboards a plot of `doc` covers and their regions: the chosen artboard (default the
+/// first), or with `use_artboards` each chosen one (default all).
+fn boards(doc: &Document, p: &Value, use_artboards: Option<bool>) -> Result<(Vec<usize>, Vec<Rect>)> {
     let f = super::format("hpgl").ok_or_else(|| bad(C, "no HP-GL format"))?;
     let pick: ArtboardPick = super::encode::options(f, p)?;
     let n = doc.artboards.len();
@@ -103,10 +151,25 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
         Some(true) => pick.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect()),
         _ => vec![pick.one(n).map_err(|e| bad(C, e))?],
     };
+    if boards.is_empty() {
+        return Err(bad(C, "the document has no artboard"));
+    }
     let regions = boards
         .iter()
         .map(|&b| doc.artboards.get(b).map(|a| a.rect).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))))
         .collect::<Result<Vec<_>>>()?;
+    // The writer's own region check, so a dialog's check refuses what the writer refuses.
+    for r in &regions {
+        vectorcraft_cad::hpgl::write::check_region(*r).map_err(|e| bad(C, e))?;
+    }
+    Ok((boards, regions))
+}
+
+/// Encode `doc` as HP-GL: a plot of the chosen artboard (default the first), or with
+/// `use_artboards` one plot per chosen artboard (default all), with one pen numbering for them all.
+pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> Result<Encoded> {
+    let opts = parse(p)?;
+    let (boards, regions) = boards(doc, p, use_artboards)?;
     let plots = vectorcraft_cad::hpgl::export_regions(doc, &opts, &regions).map_err(|e| bad(C, e))?;
     let mut enc = Encoded::default();
     for (b, out) in boards.into_iter().zip(plots) {
@@ -117,9 +180,6 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
             }
         }
         enc.add_setting_notes(out.setting_notes);
-    }
-    if enc.files.is_empty() {
-        return Err(bad(C, "the document has no artboard"));
     }
     let regions: Vec<vectorcraft_geom::Rect> = enc.files.iter().filter_map(|(b, _)| b.and_then(|b| doc.artboards.get(b))).map(|a| a.rect).collect();
     enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));

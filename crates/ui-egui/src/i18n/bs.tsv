@@ -1051,6 +1051,15 @@ lighting	Light	Svjetlo
 	Document Raster Effects Settings Dialog	Dijalog postavki rasterskih efekata dokumenta
 	Drop Shadow	Sjena
 	DXF Options Dialog	Dijalog DXF opcija
+	HP-GL Options	HP-GL opcije
+	HP-GL Options Dialog	Dijalog HP-GL opcija
+	Curve Tolerance:	Tolerancija krivulja:
+	Origin:	Ishodište:
+	Pens:	Pera:
+	One Pen per Color	Jedno pero po boji
+	Pen Table	Tabela pera
+	Draw the Nearest Path Next	Sljedeću crtaj najbližu putanju
+	Draw Inner Paths First	Prvo crtaj unutrašnje putanje
 	Edit Toolbar	Uredi traku s alatima
 	Edit Views	Uredi poglede
 	Effect…	Efekat…

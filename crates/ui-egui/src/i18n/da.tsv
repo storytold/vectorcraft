@@ -992,6 +992,15 @@ lighting	Light	Lys
 	Document Raster Effects Settings Dialog	Dialogboks til indstillinger for rasteriseringseffekter i dokumentet
 	Drop Shadow	Slagskygge
 	DXF Options Dialog	Dialogboks til DXF-indstillinger
+	HP-GL Options	HP-GL-indstillinger
+	HP-GL Options Dialog	Dialogboks til HP-GL-indstillinger
+	Curve Tolerance:	Kurvetolerance:
+	Origin:	Origo:
+	Pens:	Penne:
+	One Pen per Color	Én pen pr. farve
+	Pen Table	Pennetabel
+	Draw the Nearest Path Next	Tegn den nærmeste sti som den næste
+	Draw Inner Paths First	Tegn indre stier først
 	Edit Toolbar	Redigér værktøjslinjen
 	Edit Views	Redigér visninger
 	Effect…	Effekt…

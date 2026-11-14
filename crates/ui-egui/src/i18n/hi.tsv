@@ -1549,6 +1549,15 @@ antiAlias	Sharp	शार्प
 	DXF Info	DXF जानकारी
 	DXF Options	DXF ऑप्शन्स
 	DXF Options Dialog	DXF ऑप्शन्स डायलॉग
+	HP-GL Options	HP-GL ऑप्शन्स
+	HP-GL Options Dialog	HP-GL ऑप्शन्स डायलॉग
+	Curve Tolerance:	कर्व टॉलरेंस:
+	Origin:	ओरिजिन:
+	Pens:	पेन:
+	One Pen per Color	हर रंग के लिए एक पेन
+	Pen Table	पेन टेबल
+	Draw the Nearest Path Next	अगला सबसे नज़दीकी पाथ ड्रॉ करें
+	Draw Inner Paths First	पहले अंदर के पाथ ड्रॉ करें
 	Dynamic Symbol	डायनामिक सिंबल
 	e.g. 1-3, 5	उदाहरण के लिए 1-3, 5
 	Each Design Represents:	प्रत्येक डिजाइन का प्रतिनिधित्व करता है:

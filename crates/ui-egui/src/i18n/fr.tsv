@@ -964,6 +964,15 @@ font-technology	Variable	Variables
 	DXF Info	Informations DXF
 	DXF Options	Options DXF
 	DXF Options Dialog	Boîte de dialogue Options DXF
+	HP-GL Options	Options HP-GL
+	HP-GL Options Dialog	Boîte de dialogue Options HP-GL
+	Curve Tolerance:	Tolérance des courbes :
+	Origin:	Origine :
+	Pens:	Plumes :
+	One Pen per Color	Une plume par couleur
+	Pen Table	Table des plumes
+	Draw the Nearest Path Next	Tracer ensuite le tracé le plus proche
+	Draw Inner Paths First	Tracer d’abord les tracés intérieurs
 	e.g. 1-3, 5	p. ex. 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	Chaque page s’imprime comme une seule image, à la résolution des effets de pixellisation du document.
 	Earth Tones	Tons terre

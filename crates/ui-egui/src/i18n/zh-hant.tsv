@@ -932,6 +932,15 @@ font-technology	Variable	可變
 	DXF Info	DXF 資訊
 	DXF Options	DXF 選項
 	DXF Options Dialog	DXF 選項對話框
+	HP-GL Options	HP-GL 選項
+	HP-GL Options Dialog	HP-GL 選項對話框
+	Curve Tolerance:	曲線容許度：
+	Origin:	原點：
+	Pens:	筆：
+	One Pen per Color	每種顏色一支筆
+	Pen Table	筆表
+	Draw the Nearest Path Next	接著繪製最近的路徑
+	Draw Inner Paths First	先繪製內部路徑
 	e.g. 1-3, 5	例如 1-3, 5
 	Each page prints as one image, at the document's raster effects resolution.	每頁會以文件的點陣效果解析度列印為單一影像。
 	Earth Tones	大地色系

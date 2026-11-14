@@ -992,6 +992,15 @@ lighting	Light	Cahaya
 	Document Raster Effects Settings Dialog	Dialog pengaturan efek raster dokumen
 	Drop Shadow	Bayangan jatuh
 	DXF Options Dialog	Dialog opsi DXF
+	HP-GL Options	Opsi HP-GL
+	HP-GL Options Dialog	Dialog opsi HP-GL
+	Curve Tolerance:	Toleransi kurva:
+	Origin:	Titik asal:
+	Pens:	Pena:
+	One Pen per Color	Satu pena per warna
+	Pen Table	Tabel pena
+	Draw the Nearest Path Next	Gambar jalur terdekat berikutnya
+	Draw Inner Paths First	Gambar jalur bagian dalam lebih dulu
 	Edit Toolbar	Edit bilah alat
 	Edit Views	Edit tampilan
 	Effect…	Efek…

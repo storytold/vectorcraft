@@ -41,7 +41,7 @@ mod load;
 mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod heifread;
-mod hpgl;
+pub mod hpgl;
 mod jp2read;
 mod metafile;
 mod naming;

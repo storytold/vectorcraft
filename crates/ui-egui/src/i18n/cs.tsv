@@ -1075,6 +1075,15 @@ lighting	Light	Světlo
 	Document Raster Effects Settings Dialog	Dialogové okno Nastavení rastrových efektů dokumentu
 	Drop Shadow	Vržený stín
 	DXF Options Dialog	Dialogové okno Možnosti DXF
+	HP-GL Options	Možnosti HP-GL
+	HP-GL Options Dialog	Dialogové okno Možnosti HP-GL
+	Curve Tolerance:	Tolerance křivek:
+	Origin:	Počátek:
+	Pens:	Pera:
+	One Pen per Color	Jedno pero pro každou barvu
+	Pen Table	Tabulka per
+	Draw the Nearest Path Next	Jako další kreslit nejbližší cestu
+	Draw Inner Paths First	Nejdřív kreslit vnitřní cesty
 	Edit Toolbar	Upravit panel nástrojů
 	Edit Views	Upravit zobrazení
 	Effect…	Efekt…
