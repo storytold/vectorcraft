@@ -785,9 +785,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
 /// (Save Document gives the file back when the document has no file yet; File › Save takes a key
 /// instead), the undo group's begin and end, and the commands that need a point, a value or a name
-/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush). New Symbol is left out
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush). New Symbol is left out
 /// because the Symbols panel runs it through the Symbol Options dialog.
-const NEEDS_A_PARAM: [&str; 74] = [
+const NEEDS_A_PARAM: [&str; 75] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -817,6 +817,7 @@ const NEEDS_A_PARAM: [&str; 74] = [
     "assets.export3D",
     "assets.settings.set",
     "attributes.set",
+    "brush.freehand",
     "brush.move",
     "css.export",
     "dimension.create",
