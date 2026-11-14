@@ -719,7 +719,8 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
 /// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
-/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// dialog replaced opens again, else the questions about the next restored document's linked files
+/// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
@@ -727,6 +728,7 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
     safe_mode::reopen(app);
+    crate::recovery::ask_next(app);
     missing_fonts::open_next(app);
 }
 

@@ -1699,10 +1699,9 @@ fn warichu_is_a_character_attribute_set_saved_and_exported() {
     assert!(["warichu", "warichuLines", "warichuGap", "warichuScale", "warichuAlign"].iter().all(|k| saved.get(*k).is_none()), "{saved}");
     let plain_svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
     let plain_pdf = vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
-    let text_ops = |pdf: &[u8]| {
-        let s = String::from_utf8_lossy(pdf);
-        s.contains("Tj") || s.contains("TJ")
-    };
+    // Only text objects count: the file ID in the trailer and the XMP is base64 that changes each
+    // second and now and then spells `Tj` or `TJ`.
+    let text_ops = |pdf: &[u8]| String::from_utf8_lossy(pdf).lines().any(|l| l.starts_with("BT ") && (l.contains("Tj") || l.contains("TJ")));
     assert!(plain_svg.contains("<text") && text_ops(&plain_pdf));
 
     // text.setFormat with the values the characters already have changes nothing and records no
