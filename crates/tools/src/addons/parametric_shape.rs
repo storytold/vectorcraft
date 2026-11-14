@@ -4,7 +4,9 @@
 //! dragging, ←/→ its second value or corner radius. A click selects a parametric shape and shows
 //! its handles (centre, size, rotation, corner radius and one of the kind's own), whose drags run
 //! `addon.pathtools.shape.set`; a double-click on the canvas places one with the last settings.
-//! Each gesture is one undo step.
+//! Each gesture is one undo step. A new shape's center (from a press or a double-click) and the
+//! point dragged out from it snap as a drawing tool's points do ([`DrawSnap`]), hovering before
+//! the press too.
 //!
 //! A parametric shape is an ordinary path that keeps its numbers in one entry of its object data
 //! ([`KEY`]) with a fingerprint of the outline they drew. Moved, turned or scaled by any tool it
@@ -17,6 +19,7 @@ use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 use vectorcraft_pathops::addons::pathtools::shapes::fingerprint;
 pub use vectorcraft_pathops::addons::pathtools::shapes::{MAX_COUNT, MAX_SIZE, MIN_COUNT, MIN_SIZE, ParametricShape, ShapeKind};
 
+use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The tool's id.
@@ -209,7 +212,7 @@ fn angle(c: Point, p: Point, shift: bool) -> f64 {
 #[derive(Clone, Debug, PartialEq)]
 enum Drag {
     /// Drawing a shape out from its centre.
-    Create { center: Point },
+    Create { center: Point, from: Point },
     /// Dragging a handle of shape `id`, which was `shape` when the drag began at `from`.
     Edit { id: NodeId, shape: ParametricShape, grip: Grip, from: Point },
 }
@@ -221,11 +224,18 @@ pub struct ParametricShapeTool {
     drag: Option<Drag>,
     /// Where the pointer last was during the drag, and the keys held.
     last: (Point, Mods),
+    /// Smart Guides for a new shape's center and the point dragged out from it.
+    snap: DrawSnap,
 }
 
 impl Default for ParametricShapeTool {
     fn default() -> Self {
-        Self { next: ParametricShape::new(ShapeKind::Polygon, Point::ZERO, 100.0, 100.0), drag: None, last: (Point::ZERO, Mods::default()) }
+        Self {
+            next: ParametricShape::new(ShapeKind::Polygon, Point::ZERO, 100.0, 100.0),
+            drag: None,
+            last: (Point::ZERO, Mods::default()),
+            snap: DrawSnap::default(),
+        }
     }
 }
 
@@ -247,7 +257,7 @@ impl ParametricShapeTool {
     fn shaped(&self, drag: &Drag, p: Point, mods: Mods) -> (&'static str, ParametricShape, Option<NodeId>) {
         let fit = |v: f64| v.clamp(MIN_SIZE, MAX_SIZE);
         match *drag {
-            Drag::Create { center } => {
+            Drag::Create { center, .. } => {
                 let r = center.distance(p);
                 let aspect = self.next.width / self.next.height;
                 let s = ParametricShape {
@@ -288,6 +298,18 @@ impl ParametricShapeTool {
         }
         Some(Action::Preview(cmd.into(), p))
     }
+
+    /// Show the Smart Guides of a new shape's center at `p`, the pointer hovering; none over a
+    /// handle of the selected shape or over a parametric shape, where a press does not draw.
+    fn hover(&mut self, cx: &ToolContext, p: Point) {
+        let tol = cx.point_tol();
+        let on_grip = selected(cx).is_some_and(|(_, s)| grips(cx, &s).iter().any(|(_, at)| at.distance(p) <= tol));
+        if on_grip || shape_at(cx, p).is_some() {
+            self.snap.clear();
+        } else {
+            self.snap.hover(cx, p, &[], None);
+        }
+    }
 }
 
 impl Tool for ParametricShapeTool {
@@ -300,6 +322,9 @@ impl Tool for ParametricShapeTool {
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        if ev.kind == PointerKind::Move && self.drag.is_none() {
+            self.hover(cx, ev.pos);
+        }
         match ev.kind {
             PointerKind::Move | PointerKind::TripleClick => vec![],
             PointerKind::Down => {
@@ -309,15 +334,17 @@ impl Tool for ParametricShapeTool {
                     near.min_by(|a, b| a.1.distance(ev.pos).total_cmp(&b.1.distance(ev.pos))).map(|(g, _)| (id, s, g))
                 });
                 if let Some((id, shape, grip)) = grip {
+                    self.snap.clear();
                     self.drag = Some(Drag::Edit { id, shape, grip, from: ev.pos });
                     self.last = (ev.pos, ev.mods);
                     return vec![Action::Begin(EDIT.into())];
                 }
                 if let Some(id) = shape_at(cx, ev.pos) {
+                    self.snap.clear();
                     return if cx.selection.objects == [id] { vec![] } else { vec![Action::Exec("select.set".into(), json!({ "ids": [id.0] }))] };
                 }
-                let (center, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
-                self.drag = Some(Drag::Create { center });
+                let center = self.snap.press(cx, ev.pos, &[], None);
+                self.drag = Some(Drag::Create { center, from: ev.pos });
                 self.last = (center, ev.mods);
                 vec![Action::Begin(CREATE.into())]
             }
@@ -325,15 +352,19 @@ impl Tool for ParametricShapeTool {
                 if self.drag.is_none() {
                     return vec![];
                 }
-                self.last = (ev.pos, ev.mods);
+                // The point a new shape is dragged out to snaps; a handle's drag does not.
+                let pos = if matches!(self.drag, Some(Drag::Create { .. })) { self.snap.drag(cx, ev.pos, None) } else { ev.pos };
+                self.last = (pos, ev.mods);
                 let Some(preview) = self.preview() else { return vec![] };
                 if ev.kind == PointerKind::Drag {
                     return vec![preview];
                 }
+                self.snap.clear();
                 let Some(drag) = self.drag.take() else { return vec![] };
                 match drag {
-                    // A click draws nothing (a double-click places a shape).
-                    Drag::Create { center } if center.distance(ev.pos) <= cx.tol(2.0) => vec![Action::Cancel],
+                    // A click draws nothing (a double-click places a shape), even when its center
+                    // snapped a few pixels from where it was pressed.
+                    Drag::Create { from, .. } if from.distance(ev.pos) <= cx.tol(2.0) => vec![Action::Cancel],
                     Drag::Create { .. } => {
                         if let Action::Preview(_, p) = &preview
                             && let Ok(s) = apply(self.next, p)
@@ -350,7 +381,8 @@ impl Tool for ParametricShapeTool {
                 if self.drag.is_some() || shape_at(cx, ev.pos).is_some() {
                     return vec![];
                 }
-                let s = ParametricShape { center: ev.pos, ..self.next };
+                let s = ParametricShape { center: self.snap.press(cx, ev.pos, &[], None), ..self.next };
+                self.snap.clear();
                 vec![Action::Exec("addon.pathtools.shape.create".into(), to_json(&s))]
             }
         }
@@ -358,6 +390,7 @@ impl Tool for ParametricShapeTool {
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.drag.take().is_some() {
+            self.snap.clear();
             return vec![Action::Cancel];
         }
         if !matches!(self.drag, Some(Drag::Create { .. })) {
@@ -385,13 +418,16 @@ impl Tool for ParametricShapeTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        if let Some(Drag::Create { center }) = &self.drag {
-            let (_, s, _) = self.shaped(&Drag::Create { center: *center }, self.last.0, self.last.1);
+        if let Some(drag @ Drag::Create { .. }) = &self.drag {
+            let (_, s, _) = self.shaped(drag, self.last.0, self.last.1);
             let text = format!("{}\nAngle: {:.1}°", cx.size_label(s.width, s.height), s.rotation);
-            return vec![Overlay::Measure { p: self.last.0 + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text }];
+            let mut out = self.snap.guides().to_vec();
+            out.push(Overlay::Measure { p: self.last.0 + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text });
+            return out;
         }
-        let Some((_, s)) = selected(cx) else { return vec![] };
-        // The shape's box, then its handles.
+        // The hovering pointer's Smart Guides, then the selected shape's box and handles.
+        let mut out = self.snap.guides().to_vec();
+        let Some((_, s)) = selected(cx) else { return out };
         let (rx, ry) = (s.width / 2.0, s.height / 2.0);
         let mut bp = BezPath::new();
         let f: Affine = s.frame();
@@ -400,7 +436,7 @@ impl Tool for ParametricShapeTool {
             if i == 0 { bp.move_to(*p) } else { bp.line_to(*p) }
         }
         bp.close_path();
-        let mut out = vec![Overlay::Path { path: bp, color: BLUE, width: 1.0, dashed: true }];
+        out.push(Overlay::Path { path: bp, color: BLUE, width: 1.0, dashed: true });
         for (grip, p) in grips(cx, &s) {
             if grip == Grip::Rotate {
                 out.push(Overlay::Line { a: f * Point::new(0.0, -ry), b: p, color: BLUE, dashed: false });
@@ -416,6 +452,11 @@ impl Tool for ParametricShapeTool {
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::ParametricShape
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.snap.clear();
+        vec![]
     }
 
     /// The next shape's numbers (its size and rotation are a double-click's).

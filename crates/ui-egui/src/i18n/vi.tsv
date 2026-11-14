@@ -806,6 +806,8 @@ font-technology	Variable	Biến thiên
 	Crop Image	Cắt xén ảnh
 	Image Tools	Công cụ hình ảnh
 	Remove Background…	Xóa nền…
+	Draw (Pencil)	Vẽ (Bút chì)
+	Place Image	Đặt hình ảnh
 	Remove Background	Xóa nền
 	Background	Nền
 	Edge Color	Màu cạnh
@@ -3011,6 +3013,7 @@ mark-style	Japanese	Kiểu Nhật
 	Proportional Metrics	Số liệu theo tỷ lệ
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
+	Tsume	Tsume
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định
@@ -4036,6 +4039,7 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Khi Thanh tiêu đề VectorCraft trên mọi màn hình nền đang tắt, màn hình nền này vẽ thanh tiêu đề của cửa sổ dù tùy chọn này bật hay tắt.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -4573,6 +4577,7 @@ theme	Appearance	Giao diện
 @msg	`select` must be true or false	`select` phải là true hoặc false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` và `maxAnchors` phải là số nguyên
 @msg	`{key}` must be a number not below 0	`{key}` phải là một số không nhỏ hơn 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` phải là bốn số không nhỏ hơn 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` phải là [x, y, width, height]: bốn số hữu hạn, chiều rộng và chiều cao không âm
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5996,8 +6001,8 @@ axis	Y Axis	Trục Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in xuất khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	tối đa {MAX_UNGROUPED} tham số nằm ngoài nhóm: hãy đặt `group` cho các tham số còn lại
 @msg	can't encode the input	không thể mã hóa dữ liệu đầu vào
-@msg	expected {"dataBase64"}	cần có {"dataBase64"}
-@msg	expected {"objects"}	cần có {"objects"}
+@msg	expected {{"dataBase64": "…"}}	cần có {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	cần có {{"objects": [...]}}
 @msg	export `{name}`: {e}	export `{name}` của mô-đun: {e}
 @msg	extension {e} is listed twice	phần mở rộng {e} được liệt kê hai lần
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	phần mở rộng {e}: dùng 1-16 chữ thường và chữ số, không có dấu chấm
@@ -6061,11 +6066,11 @@ axis	Y Axis	Trục Y
 @msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {"id"} hoặc như khi được nhận
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
 @msg	a string	một chuỗi
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	nét phải có dạng {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	hiệu ứng phải có dạng {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	nét phải có dạng {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	hiệu ứng phải có dạng {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
 @msg	an effect on a stroke returns only `strokes`	hiệu ứng trên nét chỉ trả về `strokes`
 @msg	an object must be a JSON object	đối tượng phải là một đối tượng JSON
@@ -6207,6 +6212,8 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Button Mode	Chế độ nút
+	No actions.	Không có hành động.
 	Insert Stop…	Chèn điểm dừng…
 	Insert Stop	Chèn điểm dừng
 	Record Stop	Ghi điểm dừng
