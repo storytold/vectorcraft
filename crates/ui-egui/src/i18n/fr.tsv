@@ -4369,7 +4369,7 @@ axis	Both	Les deux
 @msg	is longer than 16 KiB	dépasse 16 Kio
 @msg	is a prompt's answer, whose `value` must be a string or null	est la réponse d'un prompt, dont `value` doit être une chaîne ou null
 @msg	must have `kind` alert, confirm or prompt	doit avoir `kind` alert, confirm ou prompt
-@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
