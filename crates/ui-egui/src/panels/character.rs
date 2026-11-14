@@ -1229,20 +1229,40 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
 }
 
 /// The Control bar's type controls while type is selected or edited: the Character link (the
-/// Character panel in a popover), the font family and style menus and the Font Size combo.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((s, _)) = text_style(app) else { return };
-    let link = ui
-        .link(egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline())
-        .on_hover_text(tl!("Character options"));
+/// Character panel in a popover), the font family and style menus and the Font Size combo. They
+/// show whole, with `reserve` left after them, or not at all: it returns false when type is selected
+/// or edited and the row has no room for them.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
+    let Some((s, _)) = text_style(app) else { return true };
+    if ui.available_width() < control_bar_width(ui) + reserve {
+        return false;
+    }
+    let link = ui.link(control_bar_link_text(ui)).on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
         show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
-    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
-    size_field(app, ui, "cb-font-size", 96.0);
+    let [family, style, size] = CONTROL_BAR_WIDTHS;
+    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (family, style));
+    size_field(app, ui, "cb-font-size", size);
     ui.add_space(4.0);
     crate::chrome::group_separator(ui);
+    true
+}
+
+/// The Control bar's widths of the font family menu, the font style dropdown and the Font Size combo.
+const CONTROL_BAR_WIDTHS: [f32; 3] = [150.0, 96.0, 96.0];
+
+/// The text of the Control bar's Character link, as [`control_bar`] draws it.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The room [`control_bar`]'s link, menus and Font Size combo take in the Control bar's row, with
+/// the spacing after each.
+fn control_bar_width(ui: &Ui) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    widgets::text_width(ui, control_bar_link_text(ui)) + CONTROL_BAR_WIDTHS.iter().sum::<f32>() + 4.0 * spacing
 }
 
 /// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
