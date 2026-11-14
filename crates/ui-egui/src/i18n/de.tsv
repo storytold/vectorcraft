@@ -5219,6 +5219,7 @@ theme	Appearance	Erscheinungsbild
 	VectorCraft Title Bar on Every Desktop	VectorCraft-Titelleiste auf jedem Desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Solange die Umgebungsvariable VECTORCRAFT_TITLEBAR gesetzt ist, bestimmt sie die Titelleiste.
 	System Title Bar takes precedence over this option while it is on.	Solange Systemtitelleiste eingeschaltet ist, hat sie Vorrang vor dieser Option.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Solange VectorCraft-Titelleiste auf jedem Desktop ausgeschaltet ist, zeichnet dieser Desktop die Titelleiste des Fensters, ob diese Option ein- oder ausgeschaltet ist.
 # Brush Options: Scatter, Art and Pattern brushes.
 	Scatter Brush Options	Optionen für Spezialpinsel
 	Art Brush Options	Optionen für Bildpinsel
@@ -6204,6 +6205,8 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Playback Options…	Wiedergabeoptionen…
+	Button Mode	Schaltflächenmodus
+	No actions.	Keine Aktionen.
 	Insert Stop…	Stopp einfügen…
 	Insert Stop	Stopp einfügen
 	Record Stop	Stopp aufzeichnen

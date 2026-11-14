@@ -94,7 +94,7 @@ pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, documents_dialog_folder, export_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, documents_dialog_folder, export_folder, file_reads,
     leave_out_unreadable_save_paths, reads_option as save_reads_option, remembered_save_options, save_filters, save_format, save_job, save_plan,
     save_with, stamp_save_dates, template_filters, templates_dialog_folder, templates_folder,
 };
