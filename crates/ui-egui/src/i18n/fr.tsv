@@ -2658,6 +2658,7 @@ font-technology	Variable	Variables
 	Proportional Metrics	Métrique proportionnelle
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
+	Tsume	Tsume
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
@@ -6388,8 +6389,8 @@ axis	Y Axis	Axe Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’exportation déclare de 1 à {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	{MAX_UNGROUPED} paramètres au plus hors des groupes : donnez un `group` aux autres
 @msg	can't encode the input	impossible d’encoder l’entrée
-@msg	expected {"dataBase64"}	attendu : {"dataBase64"}
-@msg	expected {"objects"}	attendu : {"objects"}
+@msg	expected {{"dataBase64": "…"}}	attendu : {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	attendu : {{"objects": [...]}}
 @msg	export `{name}`: {e}	export du module `{name}` : {e}
 @msg	extension {e} is listed twice	l’extension {e} figure deux fois
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extension {e} : utilisez 1-16 lettres minuscules et chiffres, sans le point
@@ -6453,11 +6454,11 @@ axis	Y Axis	Axe Y
 @msg	a painted live effect returns only `objects`	un effet dynamique de peinture renvoie seulement `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	une pièce d’un effet dynamique de peinture a seulement `path`, `fillRule`, `fills` et `strokes`
 @msg	a read-only object was left out	un objet en lecture seule a été omis
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {"id"} seul ou tel qu’il a été fourni
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {{"id": …}} seul ou tel qu’il a été fourni
 @msg	a string	une chaîne
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un contour a seulement `paint`, `width`, `join`, `cap` et `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un contour doit être {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un effet doit être {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un contour doit être {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un effet doit être {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effet sur un fond renvoie seulement `fills`
 @msg	an effect on a stroke returns only `strokes`	un effet sur un contour renvoie seulement `strokes`
 @msg	an object must be a JSON object	un objet doit être un objet JSON
@@ -7567,7 +7568,7 @@ breakText	Glyphs	Glyphes
 @msg	`alignOn` must be a string	`alignOn` doit être une chaîne
 @msg	`align` is start, center or end	`align` vaut start, center ou end
 @msg	`align` must be a string	`align` doit être une chaîne
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
@@ -7631,7 +7632,7 @@ breakText	Glyphs	Glyphes
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` doit être compris entre {lo} et {hi} pt
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` doit contenir de 1 à 1000 chemins de fichiers de police trouvés par la dernière recherche text.findFontFiles
 @msg	`focal` and `radius` cannot be used together	`focal` et `radius` ne peuvent pas être utilisés ensemble
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [subpath, anchor]
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` désigne [{si}, {ai}], qui n’est pas un point d’ancrage du tracé
 @msg	`folder` must be an absolute folder path	`folder` doit être le chemin absolu d’un dossier
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` doit être un objet de balises d’axe et de valeurs, comme {"wght"}
