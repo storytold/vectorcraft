@@ -47,7 +47,7 @@ use series::default_series_color;
 pub(crate) use series::{
     LabelTextChange, capture_label_anti_alias, capture_label_object_opacity, capture_label_paragraphs, capture_label_rows, capture_label_styles,
     capture_label_text, capture_series_object_opacity, capture_series_opacity, capture_series_top_paints, label_object_opacity_differs,
-    paint_targets, series_group_marks, series_group_marks_where, series_marks_in, series_object_opacity_differs, shown_paint,
+    paint_targets, series_group_marks, series_group_marks_where, series_groups_among, series_marks_in, series_object_opacity_differs, shown_paint,
 };
 
 #[cfg(test)]

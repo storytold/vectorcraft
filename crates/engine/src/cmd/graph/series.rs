@@ -336,16 +336,16 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
     settle_series_paints(doc, before)
 }
 
-/// Copy the object opacity and blend mode of generated series art just edited (`edited`) into that series' object opacity
-/// and blend mode: a path directly in a series group sets the paths' values, and the series group itself sets the
-/// group's. Called inside the same document edit, so both undo together. Returns whether a series' kept object opacity or
-/// blend mode changed.
+/// Copy the object transparency of generated series art just edited (`edited`) into what that series keeps: a path
+/// directly in a series group sets the paths' object opacity and blend mode, and the series group itself sets the
+/// group's opacity, blend mode, isolation, knockout and knockout shape. Called inside the same document edit, so both undo
+/// together. Returns whether what a series keeps changed.
 pub(crate) fn capture_series_object_opacity(doc: &mut Document, edited: &[NodeId]) -> bool {
     let mut before = SeriesPaintsBefore::new();
-    for (graph, index, group, (opacity, blend)) in object_opacity_captures(doc, edited) {
+    for (graph, index, group, look) in object_opacity_captures(doc, edited) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         // A fully opaque Normal object on a series the graph keeps nothing for leaves the graph as it is.
-        if opacity.is_none() && blend.is_none() && spec.series_paints.len() <= index {
+        if look == ObjectOpacity::default() && spec.series_paints.len() <= index {
             continue;
         }
         before.entry(graph).or_insert_with(|| spec.series_paints.clone());
@@ -355,9 +355,10 @@ pub(crate) fn capture_series_object_opacity(doc: &mut Document, edited: &[NodeId
         }
         let Some(slot) = spec.series_paints.get_mut(index) else { continue };
         if group {
-            (slot.group_opacity, slot.group_blend) = (opacity, blend);
+            (slot.group_opacity, slot.group_blend) = (look.opacity, look.blend);
+            (slot.group_isolate, slot.group_knockout, slot.group_knockout_shape) = (look.isolate, look.knockout, look.knockout_shape);
         } else {
-            (slot.opacity, slot.blend) = (opacity, blend);
+            (slot.opacity, slot.blend) = (look.opacity, look.blend);
         }
     }
     settle_series_paints(doc, before)
@@ -370,19 +371,45 @@ pub(crate) fn series_object_opacity_differs(doc: &Document, edited: &[NodeId]) -
     let stored = |graph: NodeId, index: usize, group: bool| {
         let spec = doc.node(graph).and_then(|n| n.extras().graph.as_deref());
         let slot = spec.and_then(|g| g.series_paints.get(index));
-        slot.map_or((None, None), |slot| if group { (slot.group_opacity, slot.group_blend) } else { (slot.opacity, slot.blend) })
+        slot.map_or_else(ObjectOpacity::default, |slot| {
+            if group {
+                ObjectOpacity {
+                    opacity: slot.group_opacity,
+                    blend: slot.group_blend,
+                    isolate: slot.group_isolate,
+                    knockout: slot.group_knockout,
+                    knockout_shape: slot.group_knockout_shape,
+                }
+            } else {
+                ObjectOpacity { opacity: slot.opacity, blend: slot.blend, ..ObjectOpacity::default() }
+            }
+        })
     };
-    for (graph, index, group, pair) in object_opacity_captures(doc, edited) {
-        after.insert((graph, index, group), pair);
+    for (graph, index, group, look) in object_opacity_captures(doc, edited) {
+        after.insert((graph, index, group), look);
     }
-    after.into_iter().any(|((graph, index, group), pair)| stored(graph, index, group) != pair)
+    after.into_iter().any(|((graph, index, group), look)| stored(graph, index, group) != look)
 }
 
-/// An object opacity and blend mode, None for 100% and Normal.
-type ObjectOpacity = (Option<f32>, Option<BlendMode>);
+/// The series groups among `ids`, for an edit that changes only what a group's transparency has beyond its opacity and
+/// blend mode (isolation, knockout and knockout shape), which the graph keeps for series groups alone.
+pub(crate) fn series_groups_among(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    ids.iter().copied().filter(|id| doc.node(*id).is_some_and(|n| n.extras().series_index.is_some())).collect()
+}
 
-/// The graph, series, whether it is the series group itself (`true`) or a path directly in it, and the object opacity and
-/// blend mode of each of `edited` that is one of those, in order.
+/// An object's transparency as a graph keeps it: the object opacity and blend mode (None for 100% and Normal), and for a
+/// series group its isolation, knockout (None for neutral) and knockout shape. Paths keep the first two only.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct ObjectOpacity {
+    opacity: Option<f32>,
+    blend: Option<BlendMode>,
+    isolate: bool,
+    knockout: Option<vectorcraft_doc::Knockout>,
+    knockout_shape: bool,
+}
+
+/// The graph, series, whether it is the series group itself (`true`) or a path directly in it, and the object
+/// transparency of each of `edited` that is one of those, in order.
 fn object_opacity_captures(doc: &Document, edited: &[NodeId]) -> Vec<(NodeId, usize, bool, ObjectOpacity)> {
     if edited.is_empty() {
         return Vec::new();
@@ -398,18 +425,27 @@ fn object_opacity_captures(doc: &Document, edited: &[NodeId]) -> Vec<(NodeId, us
             let group = r.group == *id;
             // Only the series group and the paths the graph draws again, not the copy of a graph design.
             let node = doc.node(*id).filter(|n| group || (doc.parent_of(*id) == Some(r.group) && matches!(n.kind, NodeKind::Path { .. })))?;
-            let opacity = (node.opacity < 1.0).then_some(node.opacity);
-            Some((r.graph, r.index, group, (opacity, (node.blend != BlendMode::Normal).then_some(node.blend))))
+            let mut look = ObjectOpacity {
+                opacity: (node.opacity < 1.0).then_some(node.opacity),
+                blend: (node.blend != BlendMode::Normal).then_some(node.blend),
+                ..ObjectOpacity::default()
+            };
+            if group {
+                look.isolate = node.isolate;
+                look.knockout = (node.knockout != vectorcraft_doc::Knockout::Neutral).then_some(node.knockout);
+                look.knockout_shape = node.knockout_shape;
+            }
+            Some((r.graph, r.index, group, look))
         })
         .collect()
 }
 
-/// Series `i`'s group (`group`) with the object opacity and blend mode the graph keeps for it. An opacity read from a file
-/// is held to 0..1, and one that is not a number is left out.
+/// Series `i`'s group (`group`) with the object opacity, blend mode, isolation, knockout and knockout shape the graph
+/// keeps for it. An opacity read from a file is held to 0..1, and one that is not a number is left out.
 pub(super) fn with_series_group_opacity(g: &GraphSpec, i: usize, mut group: Arc<Node>) -> Arc<Node> {
     let Some(slot) = g.series_paints.get(i) else { return group };
     let opacity = slot.group_opacity.filter(|o| o.is_finite()).map(|o| o.clamp(0.0, 1.0));
-    if opacity.is_none() && slot.group_blend.is_none() {
+    if opacity.is_none() && slot.group_blend.is_none() && !slot.group_isolate && slot.group_knockout.is_none() && !slot.group_knockout_shape {
         return group;
     }
     let n = Arc::make_mut(&mut group);
@@ -419,6 +455,11 @@ pub(super) fn with_series_group_opacity(g: &GraphSpec, i: usize, mut group: Arc<
     if let Some(b) = slot.group_blend {
         n.blend = b;
     }
+    if let Some(k) = slot.group_knockout {
+        n.knockout = k;
+    }
+    n.isolate |= slot.group_isolate;
+    n.knockout_shape |= slot.group_knockout_shape;
     group
 }
 

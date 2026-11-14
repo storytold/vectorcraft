@@ -795,7 +795,8 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
 }
 
 /// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
-/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+/// series, and the transparency a series group among them took, for the graph's next redraw. The edited member is left to
+/// the edit's own command.
 fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
     let mut taken = vec![];
     for id in edited {
@@ -804,6 +805,8 @@ fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
         }
     }
     super::appearance::capture_series_changes(before, d, &taken);
+    let groups = super::graph::series_groups_among(d, &taken);
+    super::graph::capture_series_object_opacity(d, &groups);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
