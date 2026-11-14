@@ -171,14 +171,20 @@ mod tests {
         app.run("file.save", json!({"path": "/out/b.vectorcraft"})).unwrap();
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/b.vectorcraft", &None));
 
-        // A PDF export of a knockout group and of type in a font that isn't installed.
+        // A PDF export of a knockout group whose soft masks would draw a brushed stroke, and of type
+        // in a font that isn't installed.
         app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let lower = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let upper = app.run("shape.rectangle", json!({"x": 25, "y": 15, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("brush.apply", json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+        app.run("object.setProps", json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+        app.run("select.set", json!({"ids": [lower, upper]})).unwrap();
         app.run("object.group", json!({})).unwrap();
         app.run("transparency.set", json!({"knockout": "on"})).unwrap();
         let r = export(&mut app, Some("pdf"), Some("/out/c.pdf".into()), &json!({})).unwrap();
         let notes = notes_of(&r);
         assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes.iter().any(|n| n.contains("brushed strokes")), "{r}");
         assert_eq!(app.ui.status, exported_with_notes("/out/c.pdf", notes.len(), &notes[0]));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
