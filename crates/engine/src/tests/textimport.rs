@@ -68,6 +68,49 @@ fn type_placed_on_an_artboard_edge_takes_that_artboards_frame() {
     }
 }
 
+/// `text` as UTF-16 without a byte-order mark, little-endian when `le` is set.
+fn utf16(text: &str, le: bool) -> Vec<u8> {
+    text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() }).collect()
+}
+
+/// Unicode text in UTF-16 without a byte-order mark is read as UTF-16 when at least half of its
+/// two-byte units hold a NUL byte, in the byte order that reads a line break, or for one line, the
+/// order its NUL bytes give. Other bytes keep today's reading.
+#[test]
+fn utf16_without_a_byte_order_mark_places_by_its_nul_bytes_and_line_breaks() {
+    let mut s = session();
+    for le in [true, false] {
+        let r = place_text(&mut s, &utf16("Hello, 世界 café!\r\nSecond line", le), json!({}));
+        assert_eq!(placed(&s, &r).0, "Hello, 世界 café!\nSecond line", "little-endian: {le}");
+        let r = place_text(&mut s, &utf16("One line, 世界", le), json!({}));
+        assert_eq!(placed(&s, &r).0, "One line, 世界", "little-endian: {le}");
+    }
+    // One line with NUL bytes in both places (U+4E00 ends in a zero byte) takes the order more of
+    // its units give, and a tie is little-endian.
+    let r = place_text(&mut s, &utf16("一AB", false), json!({}));
+    assert_eq!(placed(&s, &r).0, "一AB");
+    let r = place_text(&mut s, &utf16("一A", true), json!({}));
+    assert_eq!(placed(&s, &r).0, "一A");
+    // Not read as UTF-16, so read as UTF-8 or else Windows-1252 with NUL bytes dropped: an odd
+    // length, an unpaired surrogate, a NUL character, and line breaks in both byte orders (U+0A00).
+    let r = place_text(&mut s, b"A\0B", json!({}));
+    assert_eq!(placed(&s, &r).0, "AB");
+    let r = place_text(&mut s, b"\0a\0b\xd8\0", json!({}));
+    assert_eq!(placed(&s, &r).0, "abØ");
+    let r = place_text(&mut s, b"\0\0\xc3\xa9", json!({}));
+    assert_eq!(placed(&s, &r).0, "é");
+    let r = place_text(&mut s, &utf16("A\u{0A00}\nB", true), json!({}));
+    assert_eq!(placed(&s, &r).0, "A\n\nB");
+    // Fewer than half of the two-byte units hold a NUL byte: UTF-8, and Windows-1252.
+    let r = place_text(&mut s, "Fünf\0 Zeilen!".as_bytes(), json!({}));
+    assert_eq!(placed(&s, &r).0, "Fünf Zeilen!");
+    let r = place_text(&mut s, b"caf\xe9\0x", json!({}));
+    assert_eq!(placed(&s, &r).0, "caféx");
+    // ANSI reads each byte as a character of the 8-bit set; NUL and other control bytes are dropped.
+    let r = place_text(&mut s, &utf16("Hi, 世界", true), json!({"text": {"characterSet": "ansi"}}));
+    assert_eq!(placed(&s, &r).0, "Hi, NLu");
+}
+
 #[test]
 fn text_files_report_and_queue_with_their_options() {
     let mut s = session();

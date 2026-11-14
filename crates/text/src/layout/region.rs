@@ -120,7 +120,8 @@ fn near_segment_in_band(a: Point, b: Point, top: f64, bottom: f64, r: f64) -> Op
 }
 
 /// [`band_intervals`] less every x at which some point of the band `top..bottom` is closer than
-/// `inset` to an edge of `polys` (holes included), measured from the edge itself.
+/// `inset` to an edge of `polys` (holes included), measured from the edge itself. A stretch of an
+/// edge that contours meet along bounds no part of the shape, so the inset does not apply beside it.
 fn band_inset_intervals(polys: &[Vec<Point>], top: f64, bottom: f64, inset: f64) -> Vec<(f64, f64)> {
     let iv = band_intervals(polys, top, bottom);
     if inset <= 0.0 || iv.is_empty() {
@@ -130,8 +131,66 @@ fn band_inset_intervals(polys: &[Vec<Point>], top: f64, bottom: f64, inset: f64)
         return vec![];
     }
     let (top, bottom) = (top.min(bottom), top.max(bottom));
-    let near = polys.iter().flat_map(|p| (0..p.len()).filter_map(move |i| near_segment_in_band(p[i], p[(i + 1) % p.len()], top, bottom, inset)));
+    let edges = boundary_segments(polys, |lo, hi| hi > top - inset && lo < bottom + inset);
+    let near = edges.into_iter().filter_map(|(a, b)| near_segment_in_band(a, b, top, bottom, inset));
     subtract_intervals(&iv, &union_intervals(near.collect()))
+}
+
+/// The stretches of the edges of `polys` that bound the shape (even-odd), among the edges whose y
+/// range `lo..hi` `keep` accepts. Edges that lie exactly along one line and overlap there (contours
+/// that meet along an edge, however each one divides it) count by parity, as in
+/// [`slant_boundaries`]: a stretch that an even number of them cover has the shape on both sides
+/// and is left out. Edges of no length are left out. At most [`MAX_EDGE_PAIRS`] pairs are compared;
+/// edges left unpaired count whole.
+fn boundary_segments(polys: &[Vec<Point>], keep: impl Fn(f64, f64) -> bool) -> Vec<(Point, Point)> {
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let mut edges: Vec<(Point, Point)> = polys
+        .iter()
+        .flat_map(|p| (0..p.len()).map(move |i| (p[i], p[(i + 1) % p.len()])))
+        .filter(|&(a, b)| a != b && keep(a.y.min(b.y), a.y.max(b.y)))
+        .collect();
+    // Edges along one line overlap in x, so only edges whose x ranges overlap are compared.
+    edges.sort_by(|u, v| u.0.x.min(u.1.x).total_cmp(&v.0.x.min(v.1.x)));
+    let mut parent: Vec<usize> = (0..edges.len()).collect();
+    let mut pairs = 0;
+    'edges: for (i, &(p, q)) in edges.iter().enumerate() {
+        // The x ranges of edges along one line can differ by rounding, as in `slant_boundaries`.
+        let scale = p.x.abs().max(p.y.abs()).max(q.x.abs()).max(q.y.abs()).max(1.0);
+        let x1 = p.x.max(q.x) + 4.0 * f64::EPSILON * scale;
+        for (j, &(r, s)) in edges.iter().enumerate().skip(i + 1).take_while(|(_, o)| o.0.x.min(o.1.x) <= x1) {
+            pairs += 1;
+            if pairs > MAX_EDGE_PAIRS {
+                break 'edges;
+            }
+            if on_line_exactly(p, q, r) && on_line_exactly(p, q, s) {
+                let (a, b) = (root(&mut parent, i), root(&mut parent, j));
+                parent[a] = b;
+            }
+        }
+    }
+    let mut groups: Vec<(usize, usize)> = (0..edges.len()).map(|i| (root(&mut parent, i), i)).collect();
+    groups.sort_unstable();
+    let mut out = Vec::new();
+    for run in groups.chunk_by(|a, b| a.0 == b.0) {
+        if let [(_, i)] = run {
+            out.push(edges[*i]);
+            continue;
+        }
+        // The stretches an odd number of the edges cover: pairs of their ends, sorted along the
+        // line by whichever coordinate changes more along it.
+        let (p, q) = edges[run[0].1];
+        let by_x = (q.x - p.x).abs() >= (q.y - p.y).abs();
+        let mut ends: Vec<Point> = run.iter().flat_map(|&(_, i)| [edges[i].0, edges[i].1]).collect();
+        ends.sort_by(|a, b| if by_x { a.x.total_cmp(&b.x) } else { a.y.total_cmp(&b.y) });
+        out.extend(ends.as_chunks::<2>().0.iter().filter(|c| c[0] != c[1]).map(|c| (c[0], c[1])));
+    }
+    out
 }
 
 /// Union of sorted-or-not intervals.
@@ -327,7 +386,7 @@ fn slant_boundaries(slants: &mut [Slant]) -> (Vec<(f64, f64)>, bool, Vec<Line>) 
 }
 
 /// The most pieces a line's band is cut into to keep it inside an Invert Wrap shape grown by its
-/// offset.
+/// offset, when [`grown_band`] gives up, or out of a wrap shape shrunk by its offset.
 const INVERT_WRAP_PIECES: f64 = 64.0;
 
 /// The edges of `polys` that reach into the band `top..bottom` (`top <= bottom`), leaving out those
@@ -500,6 +559,9 @@ fn eroded_cover(polys: &[Vec<Point>], top: f64, bottom: f64, d: f64) -> Vec<(f64
             cuts.dedup();
         }
     }
+    // A stretch of an edge that contours meet along bounds no part of the shape, so the shape is
+    // not shrunk beside it.
+    let edges = boundary_segments(polys, |lo, hi| hi > top - r && lo < bottom + r);
     let mut out = Vec::new();
     // A band of no height keeps its two equal cuts: one piece of no height, measured at its y.
     for w in cuts.windows(2) {
@@ -510,17 +572,305 @@ fn eroded_cover(polys: &[Vec<Point>], top: f64, bottom: f64, d: f64) -> Vec<(f64
         }
         // The points closer than `d` to an edge make a convex shape, so a vertical line within
         // the piece lies in it when both its ends do.
-        let near = polys.iter().flat_map(|p| {
-            (0..p.len()).filter_map(move |i| {
-                let (s, t) = (p[i], p[(i + 1) % p.len()]);
-                let (u, v) = (near_segment(s, t, a, r)?, near_segment(s, t, b, r)?);
-                let (x, y) = (u.0.max(v.0), u.1.min(v.1));
-                (y > x).then_some((x, y))
-            })
+        let near = edges.iter().filter_map(|&(s, t)| {
+            let (u, v) = (near_segment(s, t, a, r)?, near_segment(s, t, b, r)?);
+            let (x, y) = (u.0.max(v.0), u.1.min(v.1));
+            (y > x).then_some((x, y))
         });
         out.extend(subtract_intervals(&cover, &union_intervals(near.collect())));
     }
     union_intervals(out)
+}
+
+/// The most steps [`grown_band`] takes for one band and one wrap shape: edges, pairs of edges and
+/// pairs of grown pieces looked at, and pieces looked at for each x it tests.
+const MAX_INVERT_WRAP_WORK: usize = 1 << 20;
+
+#[cfg(test)]
+thread_local! {
+    /// How many steps [`grown_band`] took on this thread.
+    static GROWN_BAND_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Adds `n` to `work`; false when that passes [`MAX_INVERT_WRAP_WORK`].
+fn spend(work: &mut usize, n: usize) -> bool {
+    *work = work.saturating_add(n);
+    #[cfg(test)]
+    GROWN_BAND_WORK.set(GROWN_BAND_WORK.get().saturating_add(n));
+    *work <= MAX_INVERT_WRAP_WORK
+}
+
+/// The x of the edge `p`–`q` (not horizontal) at `y`: the x of its end at that end's height.
+fn edge_x(p: Point, q: Point, y: f64) -> f64 {
+    if y == p.y {
+        p.x
+    } else if y == q.y {
+        q.x
+    } else {
+        line_x(p, q, y)
+    }
+}
+
+/// A trapezoid with a horizontal top and bottom: its top and bottom heights, then the x of its left
+/// edge at each of them, then the x of its right edge at each of them.
+type Trapezoid = (f64, f64, f64, f64, f64, f64);
+
+/// The shape `polys` (even-odd) between the heights `y0..y1` (`y0 < y1`) as trapezoids with
+/// horizontal tops and bottoms, cut at each anchor's height and wherever two edges cross, whose union
+/// (each trapezoid with its outline) is the shape with its outline there. Edges that lie along one
+/// another give trapezoids that touch, and contours that cancel each other give none. `None` when
+/// [`MAX_INVERT_WRAP_WORK`] runs out.
+fn trapezoids(polys: &[Vec<Point>], y0: f64, y1: f64, work: &mut usize) -> Option<Vec<Trapezoid>> {
+    let mut edges: Vec<(Point, Point)> = polys
+        .iter()
+        .flat_map(|p| (0..p.len()).map(move |i| (p[i], p[(i + 1) % p.len()])))
+        .filter(|(a, b)| a.y != b.y && a.y.max(b.y) > y0 && a.y.min(b.y) < y1)
+        .map(|(a, b)| if a.y < b.y { (a, b) } else { (b, a) })
+        .collect();
+    if !spend(work, edges.len()) {
+        return None;
+    }
+    edges.sort_by(|u, v| u.0.y.total_cmp(&v.0.y));
+    let mut ys: Vec<f64> = edges.iter().flat_map(|(p, q)| [p.y, q.y]).filter(|&y| y > y0 && y < y1).chain([y0, y1]).collect();
+    ys.sort_by(f64::total_cmp);
+    ys.dedup();
+    let mut out = Vec::new();
+    let (mut next, mut active) = (0, Vec::new());
+    for w in ys.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        // The edges that span the slab `a..b`: every anchor's height is a cut, so an edge that
+        // starts at or above `a` and ends below it reaches `b`.
+        while let Some(&e) = edges.get(next).filter(|e| e.0.y <= a) {
+            active.push(e);
+            next += 1;
+        }
+        active.retain(|e: &(Point, Point)| e.1.y >= b);
+        if !spend(work, active.len()) {
+            return None;
+        }
+        // The heights within the slab at which two edges cross: their order left to right differs
+        // at its top and bottom.
+        let mut cuts = vec![a, b];
+        let ends: Vec<(f64, f64)> = active.iter().map(|&(p, q)| (edge_x(p, q, a), edge_x(p, q, b))).collect();
+        let mut order: Vec<usize> = (0..ends.len()).collect();
+        order.sort_by(|&i, &j| ends[i].0.total_cmp(&ends[j].0).then(ends[i].1.total_cmp(&ends[j].1)));
+        if order.windows(2).any(|w| ends[w[0]].1 > ends[w[1]].1) {
+            if !spend(work, ends.len() * ends.len()) {
+                return None;
+            }
+            for (i, &(sa, sb)) in ends.iter().enumerate() {
+                for &(ta, tb) in &ends[i + 1..] {
+                    let (da, db) = (sa - ta, sb - tb);
+                    if da * db < 0.0 {
+                        let y = a + (b - a) * (da / (da - db));
+                        if y > a && y < b {
+                            cuts.push(y);
+                        }
+                    }
+                }
+            }
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup();
+        }
+        for c in cuts.windows(2) {
+            let (c, d) = (c[0], c[1]);
+            // No two edges cross within `c..d`, so their order at its middle holds throughout, and
+            // the shape (even-odd) lies between the first and second, the third and fourth, and so on.
+            let mid = (c + d) * 0.5;
+            let mut xs: Vec<(f64, f64, f64)> = active.iter().map(|&(p, q)| (line_x(p, q, mid), edge_x(p, q, c), edge_x(p, q, d))).collect();
+            if !spend(work, xs.len()) {
+                return None;
+            }
+            xs.sort_by(|u, v| u.0.total_cmp(&v.0));
+            for pair in xs.as_chunks::<2>().0 {
+                let ((_, l0, l1), (_, r0, r1)) = (pair[0], pair[1]);
+                if r0 > l0 || r1 > l1 {
+                    out.push((c, d, l0, l1, r0, r1));
+                }
+            }
+        }
+    }
+    Some(out)
+}
+
+/// A convex polygon as its lower and upper outlines (the least and the greatest y at each x), each
+/// left to right from its least x to its greatest, with its x range and y range.
+struct Convex {
+    lower: Vec<Point>,
+    upper: Vec<Point>,
+    xs: (f64, f64),
+    ys: (f64, f64),
+}
+
+impl Convex {
+    /// The convex hull of `pts`.
+    fn hull(mut pts: Vec<Point>) -> Convex {
+        let cross = |o: Point, a: Point, b: Point| (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        let chain = |pts: &[Point], turns: fn(f64) -> bool| {
+            let mut out: Vec<Point> = Vec::with_capacity(pts.len());
+            for &p in pts {
+                while let [.., o, a] = out[..] {
+                    if turns(cross(o, a, p)) {
+                        break;
+                    }
+                    out.pop();
+                }
+                out.push(p);
+            }
+            // The points at the greatest x after the first are on the other outline.
+            while let [.., a, b] = out[..] {
+                if a.x != b.x {
+                    break;
+                }
+                out.pop();
+            }
+            out
+        };
+        pts.sort_by(|p, q| p.x.total_cmp(&q.x).then(p.y.total_cmp(&q.y)));
+        let lower = chain(&pts, |c| c > 0.0);
+        pts.sort_by(|p, q| p.x.total_cmp(&q.x).then(q.y.total_cmp(&p.y)));
+        let upper = chain(&pts, |c| c < 0.0);
+        let xs = (lower.first().map_or(f64::NAN, |p| p.x), lower.last().map_or(f64::NAN, |p| p.x));
+        let ys = (lower.iter().fold(f64::INFINITY, |m, p| m.min(p.y)), upper.iter().fold(f64::NEG_INFINITY, |m, p| m.max(p.y)));
+        Convex { lower, upper, xs, ys }
+    }
+
+    /// The y range of the polygon at `x`, within its x range.
+    fn at(&self, x: f64) -> (f64, f64) {
+        (chain_y(&self.lower, x), chain_y(&self.upper, x))
+    }
+}
+
+/// The y of the outline `chain` (left to right, no two points at one x) at `x`, within its x range.
+fn chain_y(chain: &[Point], x: f64) -> f64 {
+    let i = chain.partition_point(|p| p.x < x);
+    match (i.checked_sub(1).and_then(|h| chain.get(h)), chain.get(i)) {
+        (Some(p), Some(q)) => p.y + (x - p.x) / (q.x - p.x) * (q.y - p.y),
+        (None, Some(q)) => q.y,
+        (Some(p), None) => p.y,
+        (None, None) => f64::NAN,
+    }
+}
+
+/// The x at which some segment of `a` and some segment of `b` (outlines left to right) are at the
+/// same y, strictly between the ends of the x range they share.
+fn chain_crossings(a: &[Point], b: &[Point], out: &mut Vec<f64>, work: &mut usize) -> bool {
+    for s in a.windows(2) {
+        let first = b.partition_point(|q| q.x <= s[0].x).saturating_sub(1);
+        for t in b[first..].windows(2).take_while(|t| t[0].x < s[1].x) {
+            if !spend(work, 1) {
+                return false;
+            }
+            let (x0, x1) = (s[0].x.max(t[0].x), s[1].x.min(t[1].x));
+            if x1 <= x0 {
+                continue;
+            }
+            let (d0, d1) = (chain_y(s, x0) - chain_y(t, x0), chain_y(s, x1) - chain_y(t, x1));
+            if d0 * d1 < 0.0 {
+                out.push(x0 + (x1 - x0) * (d0 / (d0 - d1)));
+            }
+        }
+    }
+    true
+}
+
+/// The x within `lo..hi` at which the shape `polys` (even-odd) grown by `off` (> 0) across and
+/// along holds every height of the band `top..bottom` (`top <= bottom`): the x whose vertical line
+/// across the band has each of its points within `off`, across and along, of the shape or its
+/// outline. The shape from `off` above the band to `off` below it, and on to the nearest anchors
+/// past those heights, is cut into [`trapezoids`]; each
+/// grown by `off` is a convex polygon, and the line at an x lies in their union when the y ranges
+/// they give at that x join up across the band. Those ranges change only at the polygons' corners
+/// and where their outlines cross each other or the band's top or bottom, so the line is tested
+/// once between each two of those x. `None` when that takes more than [`MAX_INVERT_WRAP_WORK`]
+/// steps.
+fn grown_band(polys: &[Vec<Point>], off: f64, top: f64, bottom: f64, (lo, hi): (f64, f64)) -> Option<Vec<(f64, f64)>> {
+    let mut work = 0;
+    // The trapezoids reach on to the nearest anchor past `off` above and below the band, so that
+    // the shape's outline exactly `off` from the band counts.
+    let (y0, y1) = (top - off, bottom + off);
+    let ys = || polys.iter().flatten().map(|p| p.y);
+    let below = ys().filter(|&y| y < y0).fold(f64::NEG_INFINITY, f64::max);
+    let above = ys().filter(|&y| y > y1).fold(f64::INFINITY, f64::min);
+    let traps = trapezoids(polys, if below.is_finite() { below } else { y0 }, if above.is_finite() { above } else { y1 }, &mut work)?;
+    let mut grown: Vec<Convex> = traps
+        .into_iter()
+        .filter(|&(_, _, l0, l1, r0, r1)| l0.min(l1) - off < hi && r0.max(r1) + off > lo)
+        .map(|(y0, y1, l0, l1, r0, r1)| {
+            let corners = [(l0, y0), (r0, y0), (l1, y1), (r1, y1)];
+            let pts = corners
+                .into_iter()
+                .flat_map(|(x, y)| [(-off, -off), (off, -off), (-off, off), (off, off)].map(|(dx, dy)| Point::new(x + dx, y + dy)));
+            Convex::hull(pts.collect())
+        })
+        .collect();
+    grown.sort_by(|p, q| p.xs.0.total_cmp(&q.xs.0));
+    // The x at which the line's place among the polygons can change.
+    let mut xs = vec![lo, hi];
+    for (j, p) in grown.iter().enumerate() {
+        xs.extend(p.lower.iter().chain(&p.upper).map(|v| v.x));
+        for chain in [&p.lower, &p.upper] {
+            for s in chain.windows(2) {
+                for y in [top, bottom] {
+                    let (d0, d1) = (s[0].y - y, s[1].y - y);
+                    if d0 * d1 < 0.0 {
+                        xs.push(s[0].x + (s[1].x - s[0].x) * (d0 / (d0 - d1)));
+                    }
+                }
+            }
+        }
+        let ((_, x1), (y0, y1)) = (p.xs, p.ys);
+        for q in grown[j + 1..].iter().take_while(|q| q.xs.0 < x1) {
+            if !spend(&mut work, 1) {
+                return None;
+            }
+            let (v0, v1) = q.ys;
+            if v0 <= y1
+                && y0 <= v1
+                && !(chain_crossings(&p.upper, &q.lower, &mut xs, &mut work) && chain_crossings(&q.upper, &p.lower, &mut xs, &mut work))
+            {
+                return None;
+            }
+        }
+    }
+    xs.retain(|&x| x >= lo && x <= hi);
+    xs.sort_by(f64::total_cmp);
+    xs.dedup();
+    // Test the line between each two of those x, walking left to right with the polygons whose x
+    // range holds it.
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    let (mut next, mut active, mut ranges): (usize, Vec<&Convex>, Vec<(f64, f64)>) = (0, Vec::new(), Vec::new());
+    for w in xs.windows(2) {
+        let x = (w[0] + w[1]) * 0.5;
+        while let Some(p) = grown.get(next).filter(|p| p.xs.0 <= x) {
+            active.push(p);
+            next += 1;
+        }
+        active.retain(|p| p.xs.1 >= x);
+        if !spend(&mut work, active.len()) {
+            return None;
+        }
+        ranges.clear();
+        ranges.extend(active.iter().map(|p| p.at(x)));
+        ranges.sort_by(|u, v| u.0.total_cmp(&v.0));
+        // The line is held from the band's top to `reach`, up to the first range that starts past
+        // it; a band of no height is held when a range reaches it.
+        let (mut reach, mut met) = (top, false);
+        for &(a, b) in &ranges {
+            if a > reach {
+                break;
+            }
+            reach = reach.max(b);
+            met |= b >= top;
+        }
+        if met && reach >= bottom {
+            match out.last_mut() {
+                Some(l) if l.1 >= w[0] => l.1 = w[1],
+                _ => out.push((w[0], w[1])),
+            }
+        }
+    }
+    Some(out)
 }
 
 impl Region {
@@ -595,10 +945,20 @@ impl Region {
                 } else {
                     subtract_intervals(&iv, &pad(eroded_cover(polys, top, bottom, -off)))
                 }
+            } else if let Some(held) = (*invert && *off > 0.0)
+                .then(|| iv.first().zip(iv.last()).and_then(|(f, l)| grown_band(polys, *off, top, bottom, (f.0 - inset, l.1 + inset))))
+                .flatten()
+            {
+                // The x at which the shape grown by the offset holds the whole band.
+                intersect_intervals(&iv, &shrink(held))
             } else if *invert {
-                // The band is cut into pieces. Each height of a piece `y0..y1` is within the offset
-                // of some height from `y0` plus the offset to `y1` less the offset, so an x the
-                // shape holds at all of those heights is inside the grown shape over the piece. In
+                // With no offset, or when measuring the grown shape exactly takes more than
+                // [`MAX_INVERT_WRAP_WORK`] steps, the band is cut into pieces, which can leave a line
+                // shorter than the grown shape allows, never longer.
+                //
+                // Each height of a piece `y0..y1` is within the offset of some height from `y0`
+                // plus the offset to `y1` less the offset, so an x the shape holds at all of those
+                // heights is inside the grown shape over the piece. In
                 // a piece less than twice the offset tall, each height of the piece is within the
                 // offset of every height from `y1` less the offset to `y0` plus the offset, so an x
                 // the shape holds at any of them is. Text within the offset of such an x, for every
@@ -1090,6 +1450,36 @@ fn inset_keeps_text_clear_of_a_hole_s_sloped_edges() {
     assert_spans(&spans[0], &[(5.0, 36.0 - clear), (64.0 + clear, 95.0)]);
 }
 
+/// The inset is not kept beside an edge two contours share, vertical, horizontal or slanted with an
+/// extra anchor on one side, and is still kept beside the part of an edge only one contour covers.
+#[cfg(test)]
+#[test]
+fn inset_is_not_kept_beside_an_edge_two_contours_share() {
+    let opts = LayoutOptions { inset: 5.0, ..LayoutOptions::default() };
+    let side = closed(&[&[(0.0, 0.0), (50.0, 0.0), (50.0, 100.0), (0.0, 100.0)], &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)]]);
+    assert_spans(&cell_spans(&side, &opts, &[], 40.0, 44.0)[0], &[(5.0, 95.0)]);
+    let seam = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (0.0, 100.0)]]);
+    assert_spans(&cell_spans(&seam, &opts, &[], 46.0, 54.0)[0], &[(5.0, 95.0)]);
+    let slanted =
+        closed(&[&[(0.0, 0.0), (40.0, 0.0), (50.0, 50.0), (60.0, 100.0), (0.0, 100.0)], &[(40.0, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0, 100.0)]]);
+    assert_spans(&cell_spans(&slanted, &opts, &[], 40.0, 44.0)[0], &[(5.0, 95.0)]);
+    // The lower contour covers only the left half of the upper one's bottom edge: the right half
+    // and the corner where they meet still keep the inset.
+    let step = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)]]);
+    assert_spans(&cell_spans(&step, &opts, &[], 46.0, 48.0)[0], &[(5.0, 50.0 - 21f64.sqrt())]);
+}
+
+/// A negative wrap offset does not shrink a wrap object beside an edge two of its contours share,
+/// with or without Invert Wrap.
+#[cfg(test)]
+#[test]
+fn negative_wrap_offset_does_not_shrink_beside_an_edge_two_contours_share() {
+    let left: &[(f64, f64)] = &[(40.0, 40.0), (50.0, 40.0), (50.0, 60.0), (40.0, 60.0)];
+    let right: &[(f64, f64)] = &[(50.0, 40.0), (60.0, 40.0), (60.0, 60.0), (50.0, 60.0)];
+    assert_spans(&wrap_spans(&[left, right], -5.0, false, 44.0, 50.0), &[(0.0, 45.0), (55.0, 100.0)]);
+    assert_spans(&wrap_spans(&[left, right], -5.0, true, 46.0, 54.0), &[(45.0, 55.0)]);
+}
+
 /// In a frame of columns, the inset is kept once from a column's inner edge and once from the
 /// frame's sloped edge.
 #[cfg(test)]
@@ -1166,8 +1556,8 @@ fn intersecting_intervals_looks_at_each_interval_once() {
 }
 
 /// A line in area type with an Invert Wrap comb of 500 teeth and an offset keeps a span inside
-/// each tooth, left to right, through every piece of its band, and intersecting the spans with each
-/// piece looks at each span once.
+/// each tooth, left to right, and measuring the grown comb takes a few dozen steps for each tooth,
+/// not one for each pair of teeth.
 #[cfg(test)]
 #[test]
 fn a_line_inside_an_invert_wrap_comb_keeps_a_span_in_each_tooth() {
@@ -1179,11 +1569,92 @@ fn a_line_inside_an_invert_wrap_comb_keeps_a_span_in_each_tooth() {
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 0.25, invert: true } };
     let cells = Region::cells(&frame, &LayoutOptions::default(), &[wrap]);
     INTERSECT_PAIRS.set(0);
+    GROWN_BAND_WORK.set(0);
     let got = cells[0].spans(40.0, 60.0);
     let want: Vec<(f64, f64)> = (0..500).map(|k| f64::from(k) * 2.0).map(|x| ((x - 0.25).max(0.0), x + 1.25)).collect();
     assert_spans(&got, &want);
-    // At most 64 pieces, each looking at no more than the spans so far and the tooth spans.
-    assert!(INTERSECT_PAIRS.get() <= 64 * (500 + 500), "{} pairs", INTERSECT_PAIRS.get());
+    // The line's one span is intersected once with the 500 spans the grown comb holds.
+    assert!(INTERSECT_PAIRS.get() <= 1 + 500, "{} pairs", INTERSECT_PAIRS.get());
+    assert!(GROWN_BAND_WORK.get() <= 40 * 500, "{} steps", GROWN_BAND_WORK.get());
+}
+
+/// The spans of a 120 pt wide, 100 pt tall frame over the band `top..bottom` with one Invert Wrap
+/// object through `contour` and `offset`.
+#[cfg(test)]
+fn invert_wrap_spans(contour: &[(f64, f64)], offset: f64, top: f64, bottom: f64) -> Vec<(f64, f64)> {
+    let frame = Rect::new(0.0, 0.0, 120.0, 100.0).to_path(0.1);
+    let path = PathData::from_bezpath(&closed(&[contour]));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset, invert: true } };
+    Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(top, bottom)
+}
+
+/// The 100 pt square whose right edge steps in to x = 80 from `y0` to `y1`, with 79 more anchors
+/// along its left edge, which leave its shape as it is.
+#[cfg(test)]
+fn notched_square(y0: f64, y1: f64) -> Vec<(f64, f64)> {
+    let mut contour = vec![(0.0, 0.0), (100.0, 0.0), (100.0, y0), (80.0, y0), (80.0, y1), (100.0, y1), (100.0, 100.0), (0.0, 100.0)];
+    contour.extend((1..80).rev().map(|i| (0.0, 1.25 * f64::from(i))));
+    contour
+}
+
+/// With Invert Wrap and an offset, a line beside a notch the offset fills reaches as far as the
+/// grown shape does at every height of its band, however tall the band and however many anchors
+/// the shape has: a notch 0.5625 pt tall with an offset of 1, and one 0.4 pt tall with an offset
+/// of 0.25 over a band of 100 pt.
+#[cfg(test)]
+#[test]
+fn invert_wrap_with_an_offset_lets_a_line_beside_a_notch_reach_the_grown_shape() {
+    assert_spans(&invert_wrap_spans(&notched_square(50.5, 51.0625), 1.0, 0.0, 100.0), &[(0.0, 101.0)]);
+    assert_spans(&invert_wrap_spans(&notched_square(50.6, 51.0), 0.25, 0.0, 100.0), &[(0.0, 100.25)]);
+    // A band of no height in the notch, and one in a notch the offset does not fill.
+    assert_spans(&invert_wrap_spans(&notched_square(50.5, 51.0625), 1.0, 50.7, 50.7), &[(0.0, 101.0)]);
+    assert_spans(&invert_wrap_spans(&notched_square(50.0, 53.0), 1.0, 0.0, 100.0), &[(0.0, 81.0)]);
+    assert_spans(&invert_wrap_spans(&notched_square(50.0, 53.0), 1.0, 51.5, 51.5), &[(0.0, 81.0)]);
+}
+
+/// With Invert Wrap and an offset, a line beside a notch with sloped sides reaches as far as the
+/// grown shape does at the notch's tip: 1 pt above and below the tip, each side is 8 pt from it.
+#[cfg(test)]
+#[test]
+fn invert_wrap_with_an_offset_lets_a_line_beside_a_sloped_notch_reach_the_grown_shape() {
+    let notch = [(0.0, 0.0), (100.0, 0.0), (100.0, 45.15), (60.0, 50.15), (100.0, 55.15), (100.0, 100.0), (0.0, 100.0)];
+    assert_spans(&invert_wrap_spans(&notch, 1.0, 40.0, 60.0), &[(0.0, 69.0)]);
+    assert_spans(&invert_wrap_spans(&notch, 5.0, 40.0, 60.0), &[(0.0, 105.0)]);
+}
+
+/// With Invert Wrap and an offset, a band of no height exactly the offset past a wrap shape's
+/// bottom edge or its tip still holds a line as wide as the grown edge or tip.
+#[cfg(test)]
+#[test]
+fn invert_wrap_with_an_offset_holds_a_band_exactly_the_offset_past_the_shape() {
+    let bar = [(20.0, 0.0), (60.0, 0.0), (60.0, 10.0), (20.0, 10.0)];
+    assert_spans(&invert_wrap_spans(&bar, 1.0, 11.0, 11.0), &[(19.0, 61.0)]);
+    assert!(invert_wrap_spans(&bar, 1.0, 11.5, 11.5).is_empty());
+    let tip = [(20.0, 0.0), (80.0, 0.0), (50.0, 10.0)];
+    assert_spans(&invert_wrap_spans(&tip, 1.0, 11.0, 11.0), &[(49.0, 51.0)]);
+    let tip = [(20.0, 20.0), (50.0, 10.0), (80.0, 20.0)];
+    assert_spans(&invert_wrap_spans(&tip, 1.0, 9.0, 9.0), &[(49.0, 51.0)]);
+}
+
+/// A wrap shape whose edges cross one another tens of thousands of times takes no more than
+/// [`MAX_INVERT_WRAP_WORK`] steps to measure exactly; it is then cut into pieces, and the line
+/// still stays inside the shape grown by the offset. An offset that is not a number is 0.
+#[cfg(test)]
+#[test]
+fn invert_wrap_with_an_offset_bounds_its_work_on_a_tangled_shape() {
+    let star: Vec<Point> = (0..301)
+        .map(|k| f64::from(k * 150) * std::f64::consts::TAU / 301.0)
+        .map(|a| Point::new(50.0 + 45.0 * a.cos(), 50.0 + 45.0 * a.sin()))
+        .collect();
+    GROWN_BAND_WORK.set(0);
+    assert!(grown_band(std::slice::from_ref(&star), 1.0, 10.0, 90.0, (0.0, 120.0)).is_none());
+    assert!(GROWN_BAND_WORK.get() <= 2 * MAX_INVERT_WRAP_WORK, "{} steps", GROWN_BAND_WORK.get());
+    let contour: Vec<(f64, f64)> = star.iter().map(|p| (p.x, p.y)).collect();
+    let spans = invert_wrap_spans(&contour, 1.0, 10.0, 90.0);
+    assert!(spans.iter().all(|&(a, b)| a >= 4.0 && b <= 96.0), "{spans:?}");
+    let square = [(40.0, 40.0), (60.0, 40.0), (60.0, 60.0), (40.0, 60.0)];
+    assert_spans(&invert_wrap_spans(&square, f64::NAN, 45.0, 55.0), &invert_wrap_spans(&square, 0.0, 45.0, 55.0));
+    assert_spans(&invert_wrap_spans(&square, 0.0, 45.0, 55.0), &[(40.0, 60.0)]);
 }
 
 /// Along the line, text keeps the inset beside a wrap object, around it and, with Invert Wrap,
