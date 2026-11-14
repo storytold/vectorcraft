@@ -29,7 +29,7 @@ pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
 const RECHECK: f64 = 2.0;
 const SHOW: [(&str, &str); 4] = [("all", "Show All"), ("missing", "Show Missing"), ("modified", "Show Modified"), ("embedded", "Show Embedded")];
-const SORT: [(&str, &str); 3] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status")];
+const SORT: [(&str, &str); 4] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status"), ("size", "Sort by Size")];
 const THUMBS: [(f32, &str); 4] = [(0.0, "No Thumbnails"), (18.0, "Small Thumbnails"), (28.0, "Medium Thumbnails"), (44.0, "Large Thumbnails")];
 
 /// The panel's options (flyout).
@@ -92,28 +92,29 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
     let mut c: Cache = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
+        let same_doc = c.key == key;
         c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         (c.key, c.at) = (key, now);
         // One pass over the stored art for the rows outside the layer tree and the objects whose
-        // opacity masks hold them, not one per frame.
-        let mut want: std::collections::HashSet<u64> = c.list["links"]
+        // opacity masks hold them, not one per frame. An object in the layer tree is looked up by
+        // its index when drawn.
+        let doc = app.session.active().map(|st| &st.doc);
+        let want: std::collections::HashSet<u64> = c.list["links"]
             .as_array()
             .into_iter()
             .flatten()
             .filter(|r| nested_row(r))
             .flat_map(|r| [r["id"].as_u64(), r["owner"]["maskOf"].as_u64()])
             .flatten()
+            .filter(|id| doc.is_some_and(|d| d.node(NodeId(*id)).is_none()))
             .collect();
-        c.nested.clear();
-        if !want.is_empty()
-            && let Some(st) = app.session.active()
-        {
-            st.doc.visit_stored_arcs(|n, place| {
-                if !place.in_layers() && want.remove(&n.id.0) {
-                    c.nested.push((n.id.0, std::sync::Arc::clone(n)));
-                }
-            });
-            c.nested.sort_by_key(|(id, _)| *id);
+        // The same revision keeps the objects collected for it, so their thumbnails are not drawn
+        // again each time the files are looked at.
+        if !(same_doc && want.iter().all(|id| c.nested_node(*id).is_some())) {
+            c.nested = match doc {
+                Some(d) if !want.is_empty() => stored_objects(d, want),
+                _ => vec![],
+            };
         }
     }
     let want = first.filter(|_| o.info);
@@ -124,6 +125,44 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
     // Files change on disk without a frame of ours: look again later.
     ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
     Some(c)
+}
+
+/// The objects of `doc` outside the layer tree whose ids are in `want`, sorted by id. The art of
+/// the stored brushes is set on `doc` only while a command uses it ([`Document::mounted_art`]), so
+/// when an id is not found otherwise that art is set on a copy of `doc`, which gives its objects
+/// the ids `links.list` reports for them.
+///
+/// [`Document::mounted_art`]: vectorcraft_doc::Document::mounted_art
+pub(super) fn stored_objects(
+    doc: &vectorcraft_doc::Document,
+    mut want: std::collections::HashSet<u64>,
+) -> Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)> {
+    let mut out = vec![];
+    collect_stored(doc, &mut want, &mut out);
+    if !want.is_empty() && doc.mounted_art.is_empty() {
+        let art = vectorcraft_brush::stored_art::StoredArt::read(doc);
+        if !art.is_empty() {
+            let mut d = doc.clone();
+            art.mount(&mut d);
+            collect_stored(&d, &mut want, &mut out);
+        }
+    }
+    out.sort_by_key(|(id, _)| *id);
+    out
+}
+
+/// Adds the objects of `d` outside the layer tree whose ids are in `want` to `out`, taking their
+/// ids out of `want`.
+fn collect_stored(
+    d: &vectorcraft_doc::Document,
+    want: &mut std::collections::HashSet<u64>,
+    out: &mut Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)>,
+) {
+    d.visit_stored_arcs(|n, place| {
+        if !place.in_layers() && want.remove(&n.id.0) {
+            out.push((n.id.0, std::sync::Arc::clone(n)));
+        }
+    });
 }
 
 /// The ids of the selected image objects and placed documents.

@@ -1187,6 +1187,32 @@ fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
     }
 }
 
+/// A live instance inside a stained instance's art, whose definition has no room left, is left out
+/// without upsetting the art around it: with room for any number of objects the export finishes,
+/// within that room.
+#[test]
+fn a_definition_without_room_inside_drawn_art_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    let inner = instance(&mut doc, "Leaf", Affine::translate((5.0, 5.0)));
+    let side = square(&mut doc, Rect::new(20.0, 0.0, 30.0, 10.0), Color::gray(0.5));
+    let art = group(&mut doc, vec![inner, side], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Branch".into(), art: Arc::new(art) });
+    let mut stained = instance(&mut doc, "Branch", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    add_rect(&mut doc, Rect::new(150.0, 10.0, 160.0, 20.0));
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
 /// A symbol definition without room for its group, asked for by an instance in art drawn for an
 /// object (a stained instance's art), is left out and leaves the writing of that art as it was.
 #[test]
@@ -4163,6 +4189,57 @@ fn standard_vertical_roman_alignment_comes_back() {
     }
     assert_eq!(export_ai_editing(&both, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
     assert_eq!(flags(&texts(&read_back(&both))[0])[2], (false, true));
+}
+
+/// Insert Aki Left and Right come back on each run, in vertical and horizontal type: a run with
+/// either writes it as key 49 or 50 in 1/1000 em, a run without writes neither, and nothing is
+/// reported. Each object lays out as it did. A run that also has an attribute the text document
+/// leaves out is still reported.
+#[test]
+fn insert_aki_comes_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(14.0, Color::BLACK);
+    let left = CharStyle { aki_left: 250.0, ..plain.clone() };
+    let both = CharStyle { aki_left: 125.5, aki_right: 500.0, ..plain.clone() };
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut down = TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "", plain.clone());
+    down.runs = vec![TextRun::new("AB", left.clone()), TextRun::new("CD", plain.clone()), TextRun::new("EF", both.clone())];
+    down.vertical = true;
+    let mut across = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "", plain.clone());
+    across.runs = vec![TextRun::new("GH", both.clone()), TextRun::new("IJ", plain.clone())];
+    for t in [down, across] {
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let texts = |d: &Document| -> Vec<TextObject> {
+        d.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+    };
+    let aki = |t: &TextObject| t.runs.iter().map(|r| (r.style.aki_left, r.style.aki_right)).collect::<Vec<_>>();
+    let (written, read) = (texts(&doc), texts(&back));
+    assert_eq!(read.iter().map(aki).collect::<Vec<_>>(), [vec![(250.0, 0.0), (0.0, 0.0), (125.5, 500.0)], vec![(125.5, 500.0), (0.0, 0.0)]]);
+    let origins = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (r3(g.origin.x), r3(g.origin.y))).collect::<Vec<_>>()
+    };
+    for (w, r) in written.iter().zip(&read) {
+        assert_eq!(origins(r), origins(w), "vertical={}", w.vertical);
+    }
+    let decoded = text_document(&program(&doc));
+    for (key, count) in [("/49 250.0", 1), ("/49 125.5", 2), ("/50 500.0", 2)] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    assert_eq!(decoded.matches("/49 ").count() + decoded.matches("/50 ").count(), 5, "{decoded}");
+    // Underline is still left out, and reported.
+    let mut lossy = doc.clone();
+    let id = lossy.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = lossy.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.underline = true;
+    }
+    assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
 }
 
 /// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero
@@ -10168,6 +10245,119 @@ fn envelopes_past_the_readers_checks_are_written_as_their_art() {
     assert!(!notes.iter().any(|n| n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
 }
 
+/// A document of `envelopes` envelopes and `images` embedded images with one Warp, the images first
+/// when `images_first`, saved and opened again: the live envelopes, the images with their Warp live
+/// and all the objects it opens with, the save's warnings and the open's notes.
+fn envelopes_and_warped_images(envelopes: usize, images: usize, images_first: bool) -> (usize, usize, usize, Vec<String>, Vec<String>) {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let add_images = |doc: &mut Document| {
+        for _ in 0..images {
+            let photo = warped_photo(doc, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+            doc.insert(Some(layer), usize::MAX, photo).unwrap();
+        }
+    };
+    if images_first {
+        add_images(&mut doc);
+    }
+    for _ in 0..envelopes {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    if !images_first {
+        add_images(&mut doc);
+    }
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    let live = a.iter().filter(|n| matches!(n.kind, NodeKind::Envelope { .. })).count();
+    let warped = a.iter().filter(|n| matches!(n.kind, NodeKind::Image(_)) && n.appearance.effects.iter().any(|e| e.id == "warp.arc")).count();
+    (live, warped, a.len(), warnings, notes)
+}
+
+/// Images with a Warp take the reader's checks as envelopes do: past them, an image is written as
+/// its drawn look, with a warning, and the file opens with every object written live still live.
+#[test]
+fn warped_images_past_the_readers_checks_are_written_as_their_drawn_look() {
+    // GUARDS: images with a Warp were written live past the checks the envelopes left, and the
+    // file opened with the last one as its drawn look and no warning on saving.
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let (live, warped, all, warnings, notes) = envelopes_and_warped_images(limit - 1, 2, false);
+    assert_eq!((live, warped, all), (limit - 1, 1, limit + 1), "{warnings:?} {notes:?}");
+    assert!(warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(!notes.iter().any(|n| n.contains("drawn look") || n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
+}
+
+/// An image with a Warp whose pixels can't be read is written as its gray outline, which the reader
+/// doesn't check: it leaves its check to the objects after it.
+#[test]
+fn a_warped_image_written_as_its_outline_takes_no_check() {
+    // GUARDS: an image written as its gray outline took a check, and the image after it lost its Warp.
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for _ in 0..limit - 1 {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
+    let mut broken = image_node(&mut doc, ImageBlob::png(b"not a png".to_vec()), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    broken.appearance = Appearance { effects: vec![arc()], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, broken).unwrap();
+    let photo = warped_photo(&mut doc, vec![arc()]);
+    doc.insert(Some(layer), usize::MAX, photo).unwrap();
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    let warped = a.iter().filter(|n| matches!(n.kind, NodeKind::Image(_)) && n.appearance.effects.iter().any(|e| e.id == "warp.arc")).count();
+    assert_eq!(warped, 1, "{notes:?}");
+}
+
+/// Past the reader's checks, an image with a Warp whose pixels can't be read is still written as its
+/// gray outline, with the warning for its pixels and not the one for the checks.
+#[test]
+fn an_unreadable_warped_image_past_the_checks_is_warned_about_its_pixels() {
+    // GUARDS: an image whose pixels can't be read was warned about as past the checks.
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for _ in 0..limit {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    let mut broken = image_node(&mut doc, ImageBlob::png(b"not a png".to_vec()), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    broken.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, broken).unwrap();
+    let (_, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+}
+
+/// Envelopes after images with a Warp get the checks the images left: past them, an envelope is
+/// written as its art, with a warning.
+#[test]
+fn envelopes_get_the_checks_warped_images_left() {
+    // GUARDS: envelopes were written live past the checks the images with a Warp before them left.
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let (live, warped, all, warnings, notes) = envelopes_and_warped_images(limit - 1, 2, true);
+    assert_eq!((live, warped, all), (limit - 2, 2, limit + 1), "{warnings:?} {notes:?}");
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    assert!(!notes.iter().any(|n| n.contains("drawn look") || n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
+}
+
 /// Every Envelope Options switch and the ends of Fidelity come back as saved.
 #[test]
 fn envelope_options_and_fidelity_are_read_back() {
@@ -10693,6 +10883,27 @@ fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
         doc.insert(Some(layer), usize::MAX, outer).unwrap();
         let text = program(&doc);
         assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{text}");
+        same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
+    }
+
+    // The outer clipping object ends at x = 100 and the clipping path's fill starts at x = 101: the
+    // fill is cut away and writes nothing, and its 4 pt stroke, which reaches x = 99, keeps the
+    // options, whether or not the fill's lock state is written before it.
+    for locked in [false, true] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(101.0, 20.0, 150.0, 80.0)));
+        cutter.appearance = Appearance::basic(solid(Color::gray(0.5)), solid(Color::BLACK), 4.0).into();
+        cutter.locked = locked;
+        let cutter = wrapped(cutter, 5.0, true);
+        let member = square(&mut doc, Rect::new(110.0, 30.0, 140.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
+        let inner = group(&mut doc, vec![cutter, member], true);
+        let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+        let frame = group(&mut doc, vec![frame], false);
+        let outer = group(&mut doc, vec![frame, inner], true);
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let text = program(&doc);
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "locked {locked}: {text}");
         same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
     }
 }

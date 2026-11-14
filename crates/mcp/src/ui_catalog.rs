@@ -1252,7 +1252,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.svgFilterDialog",
         "Apply SVG Filter…",
         "",
-        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's defaults (the document's filter of a default's name in its place) and then the document's other filters; OK runs svgFilter.apply with selected, and with index and item for the applied effect; New and Edit open the code, Save runs svgFilter.define (replace: the filter edited, a default included), Delete runs svgFilter.delete (off for a default the document holds no copy of) and Import… svgFilter.import with a picked SVG file",
     ),
     (
         "ui.importSvgFilter",

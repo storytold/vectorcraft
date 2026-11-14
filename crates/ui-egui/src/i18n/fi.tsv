@@ -425,6 +425,18 @@
 	Title Case	Otsikon kirjainkoko
 	Sentence case	Virkkeen kirjainkoko
 	Smart Punctuation…	Älykäs välimerkitys…
+	Smart Punctuation	Älykäs välimerkitys
+	ff, fi, ffi Ligatures	Ligatuurit ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatuurit ff, fl, ffl
+	Smart Quotes	Älykkäät lainausmerkit
+	Smart Spaces	Älykkäät välilyönnit
+	En, Em Dashes	Lyhyet ja pitkät ajatusviivat
+	Ellipses	Kolme pistettä
+	Expert Fractions	Erikoismurtoluvut
+	Replace In	Korvaa kohteessa
+	Selected Text Only	Vain valittu teksti
+	Entire Document	Koko asiakirja
+	Report Results	Näytä tulokset
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
 	Dynamic Text	Dynaaminen teksti
@@ -2241,6 +2253,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-merkintä {i} tarvitsee path- ja ids-arvot (objektitunnukset, joita millään muulla merkinnällä ei ole)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder ottaa path-arvon: muita puuttuvia linkkejä haetaan tämän tiedoston kansiosta
 	Show Missing	Näytä puuttuvat
+	Sort by Size	Lajittele koon mukaan
 	Sort by Status	Lajittele tilan mukaan
 	Clear Overrides	Tyhjennä ohitukset
 	Create New {kind} Style	Luo uusi tyyli: {kind}
@@ -2491,6 +2504,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Vie resurssi
 	Export to:	Vie kohteeseen:
 	Format Settings	Muotoasetukset
+	Format Settings…	Muotoasetukset…
 	Formats:	Muodot:
 	Full Document	Koko asiakirja
 	Include Bleed	Sisällytä leikkuuvara
@@ -2580,6 +2594,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	esim. 1-3, 5
 	First Page	Ensimmäinen sivu
 	Import PDF	Tuo PDF
+	Import PDF pages as links	Tuo PDF-sivut linkkeinä
 	Last Page	Viimeinen sivu
 	Next Page	Seuraava sivu
 	of {count}	/ {count}
@@ -5066,6 +5081,7 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
+@msg	the SVG's styles expand to more than {0} MB	SVG-tiedoston tyylit laajenevat yli {0} megatavuksi
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}
 @msg	select (or target) objects whose appearance isn't basic	valitse (tai kohdista) objektit, joiden ulkoasu ei ole perusulkoasu
@@ -7550,6 +7566,9 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+	Nest Shapes…	Sijoittele muodot…
+	Nest Shapes	Sijoittele muodot
+	Roll	Rulla
 
 # Messages of the effects, 3D, image and PDF export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-tehosteet vaativat äärelliset koordinaatit 100 miljoonan pisteen rajoissa
