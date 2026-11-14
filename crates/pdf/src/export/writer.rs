@@ -271,7 +271,8 @@ impl Writer {
             PdfError::from(e)
         })?;
         if self.cmyk {
-            cmyk_blending(&mut bytes, self.out.tagged);
+            let profile = self.out.tagged.then(|| vectorcraft_color::cms::icc_bytes(self.out.cmyk_profile()).ok()).flatten();
+            cmyk_blending(&mut bytes, self.out.tagged, profile.as_deref(), self.out.standard != Standard::PdfA2b);
         }
         let lab = !self.lab_spots.is_empty() && !self.out.standard.cmyk_only();
         let bytes = if lab { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) } else { bytes };
@@ -285,12 +286,21 @@ impl Writer {
 /// its blending space (DeviceRGB, or sRGB when colours are `tagged`), so the group dictionaries
 /// are rewritten in place to DeviceCMYK (or the CMYK profile's space), keeping their length so the
 /// cross-reference offsets stay valid. Luminosity masks' groups keep RGB: mask luminance is that
-/// of screen colours, as on screen.
-fn cmyk_blending(pdf: &mut [u8], tagged: bool) {
+/// of screen colours, as on screen. Tagged groups blend in the space of CMYK profile `profile`
+/// (the one that tags CMYK colours) when the file has one. When its only CMYK spaces are of other
+/// profiles (images' own), they blend in DeviceCMYK where `device` allows it, else they keep RGB;
+/// without `profile`, they blend in the first CMYK space.
+fn cmyk_blending(pdf: &mut [u8], tagged: bool, profile: Option<&[u8]>, device: bool) {
     let masks = luminosity_mask_groups(pdf);
     let mut spaces = vec![("/CS/DeviceRGB".to_string(), "/CS/DeviceCMYK".to_string())];
     if tagged {
-        spaces.extend(icc_spaces(pdf));
+        let own = profile.and_then(|icc| crate::output::tagging_stream(pdf, &crate::patch::Xref::read(pdf)?, icc));
+        let without = match (profile, device) {
+            (None, _) => Without::FirstCmyk,
+            (Some(_), true) => Without::DeviceCmyk,
+            (Some(_), false) => Without::Rgb,
+        };
+        spaces.extend(icc_spaces(pdf, own, without));
     }
     let mut from = 0;
     while let Some(at) = find(pdf, b"/Group<<", from).map(|i| i + b"/Group".len()) {
@@ -303,11 +313,22 @@ fn cmyk_blending(pdf: &mut [u8], tagged: bool) {
     }
 }
 
+/// What tagged groups blend in when the file holds no space of the document's CMYK profile.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Without {
+    /// The first ICC-based CMYK space of the file.
+    FirstCmyk,
+    DeviceCmyk,
+    /// The RGB space they have.
+    Rgb,
+}
+
 /// The ICC-based RGB colour spaces of `pdf`, each with the ICC-based CMYK one to blend in instead,
-/// as group `/CS` entries (`/CS 3 0 R`); none without a CMYK one.
-fn icc_spaces(pdf: &[u8]) -> Vec<(String, String)> {
+/// as group `/CS` entries (`/CS 3 0 R`): the one whose profile is stream `own`, else as `without`
+/// says; none without a CMYK one.
+fn icc_spaces(pdf: &[u8], own: Option<u32>, without: Without) -> Vec<(String, String)> {
     const ICC: &[u8] = b"[/ICCBased ";
-    let (mut rgb, mut cmyk) = (vec![], None);
+    let (mut rgb, mut cmyk, mut own_cmyk) = (vec![], None, None);
     let mut from = 0;
     while let Some(at) = find(pdf, ICC, from) {
         from = at + ICC.len();
@@ -319,11 +340,19 @@ fn icc_spaces(pdf: &[u8]) -> Vec<(String, String)> {
         let Some(head) = find(pdf, format!("\n{stream} 0 obj").as_bytes(), 0) else { continue };
         let dict = pdf.get(head..find(pdf, b"stream", head).unwrap_or(pdf.len())).unwrap_or_default();
         if find(dict, b"/N 4", 0).is_some() {
+            if own == Some(stream) {
+                own_cmyk.get_or_insert(format!("/CS {array} 0 R"));
+            }
             cmyk.get_or_insert(format!("/CS {array} 0 R"));
         } else if find(dict, b"/N 3", 0).is_some() {
             rgb.push(format!("/CS {array} 0 R"));
         }
     }
+    let cmyk = own_cmyk.or_else(|| match without {
+        Without::FirstCmyk => cmyk,
+        Without::DeviceCmyk => cmyk.map(|_| "/CS/DeviceCMYK".to_string()),
+        Without::Rgb => None,
+    });
     let Some(cmyk) = cmyk else { return vec![] };
     rgb.into_iter().map(|r| (r, cmyk.clone())).collect()
 }
@@ -384,4 +413,28 @@ pub(super) fn date_time(t: i64) -> krilla::metadata::DateTime {
         .second(second as u8)
         .utc_offset_hour(0)
         .utc_offset_minute(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Without, icc_spaces};
+
+    /// Objects 1 to 3: an RGB ICC-based space (profile 4), then two CMYK ones (profiles 5, 6).
+    const SPACES: &[u8] = b"%PDF-1.7\n1 0 obj\n[/ICCBased 4 0 R]\nendobj\n2 0 obj\n[/ICCBased 5 0 R]\nendobj\n3 0 obj\n[/ICCBased 6 0 R]\nendobj\n\
+        4 0 obj\n<</N 3/Length 0>>stream\n\nendstream\nendobj\n5 0 obj\n<</N 4/Length 0>>stream\n\nendstream\nendobj\n\
+        6 0 obj\n<</N 4/Length 0>>stream\n\nendstream\nendobj\n";
+
+    #[test]
+    fn groups_blend_in_the_documents_cmyk_space_else_device_cmyk() {
+        let rgb = "/CS 1 0 R".to_string();
+        // The space of the document's profile, wherever it is.
+        for without in [Without::FirstCmyk, Without::DeviceCmyk, Without::Rgb] {
+            assert_eq!(icc_spaces(SPACES, Some(6), without), [(rgb.clone(), "/CS 3 0 R".to_string())], "{without:?}");
+        }
+        // Without it, DeviceCMYK, or RGB where DeviceCMYK isn't allowed, rather than another
+        // profile's space; the first CMYK space when the document's profile isn't known.
+        assert_eq!(icc_spaces(SPACES, None, Without::DeviceCmyk), [(rgb.clone(), "/CS/DeviceCMYK".to_string())]);
+        assert_eq!(icc_spaces(SPACES, None, Without::Rgb), []);
+        assert_eq!(icc_spaces(SPACES, None, Without::FirstCmyk), [(rgb, "/CS 2 0 R".to_string())]);
+    }
 }

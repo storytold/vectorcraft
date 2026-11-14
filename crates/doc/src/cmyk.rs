@@ -386,6 +386,21 @@ impl ImageBlob {
         if bytes.starts_with(&[0xFF, 0xD8]) { jpeg_inks(bytes) } else { tiff_inks(bytes) }
     }
 
+    /// The CMYK ICC profile a CMYK image carries: a four-component JPEG's `ICC_PROFILE` APP2
+    /// segments put together, or a CMYK TIFF's tag 34675. `None` for other images, and for a
+    /// profile that isn't one of CMYK colors. Reads only the file's headers and tags.
+    pub fn cmyk_icc_profile(&self) -> Option<Vec<u8>> {
+        let bytes = self.bytes.as_slice();
+        if jpeg_components(bytes) == Some(4) {
+            return cmyk_icc(jpeg_icc(bytes));
+        }
+        let (kind, mut d) = tiff(bytes)?;
+        if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
+            return None;
+        }
+        cmyk_icc(tiff_icc(&mut d))
+    }
+
     /// The ink amounts around pixel (`x`, `y`) of a CMYK image, in the pixel space of an image
     /// object of `object` (width, height) pixels: the average of the `size` × `size` pixels centered
     /// on it, clipped to the image, as C, M, Y and K bytes. `None` outside the image and for images
