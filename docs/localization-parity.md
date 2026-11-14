@@ -20,23 +20,26 @@ English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
 (`bflatastic`), with community contributors adding or correcting (German by `dwetscher`, Japanese and Traditional
-Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker; the other catalog headers ask for one.
+Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded as reviewed by native speakers; the contributor approved all 387 later Gujarati additions on 2026-11-14.
+
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## The twelve key languages
 
 | Language | Code | UI strings translated | Dialogs / tooltips / messages | Script support | Native review | Status | To `full` (h) |
 |---|---|---|---|---|---|---|---|
 | English | `en` | source, 100% | all | Latin | — | full | — |
-| Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all (3,439 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 40 missing messages for it) | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
+| Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all (3,554 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 55 missing messages for it, which open #7116, #7211, #7330, #7378 and #7405 translate) | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
 | Spanish | `es` | 4,009 / 4,020 (99.7%) | all (3,430 `@msg` and 48 `@msgplural` rows, counted 2026-11-13; the untranslated report lists 50 missing messages for it) | Latin | no | full | — (review) |
 | Hindi | `hi` | 8,782 rows (2026-11-13): 3,014 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; 2026-11-13 wording pass on messages and longer labels, with a glossary-term test; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
+| Gujarati | `gu` | 4,673 rows (2026-11-14): original 4,286 unchanged; all 387 additions contributor-reviewed and approved | menus and dialogs; status/error messages partial | installed Gujarati fonts on desktop; optional `Gujr` craft-fonts fallback; no Gujarati face in the pinned CI/release fonts or web startup list | original catalog reviewed by a native speaker; all 387 later additions approved by the contributor, with 11 wording corrections | contributor-reviewed catalog | remaining messages and a bundled Gujarati web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
-| French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
+| French | `fr` | 9,166 rows, 3,436 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 178 missing messages for it | all | Latin | no | full | — (review) |
 | Portuguese | `pt-br` | 9,260 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 39 missing messages for it; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
 | Indonesian | `id` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one plural form | dialogs and tooltips all; 750 message rows (French has 796) | Latin | no | full | — (review) |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (3,433 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 48 missing messages for it) | Latin | contributor-written, not reviewed | full | — (review) |
-| Korean | `ko` | 4,870 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | all | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
+| Korean | `ko` | 4,870 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | all (3,438 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 39 missing messages for it) | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
 | Vietnamese | `vi` | 4,886 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form; 4,046 plain + 18 `@plural` + 28 contextual + 794 `@msg` | all | Latin with Vietnamese diacritics (stacked marks attach in precomposed, decomposed and keyboard forms, #4491; glyph tests pass) | contributor is a Vietnamese speaker; AI-assisted draft, further native review welcome | full | — (review) |
 
 **Historical 12-language score: ~82%** (equal weights: 100 + 85 + 100 + 0 + 0 + 100 + 100 + 100 + 100 + 98 + 100 + 100, over 12).
@@ -49,7 +52,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 
 | Language | Code | Translated | Status |
 |---|---|---|---|
-| Traditional Chinese (Taiwan) | `zh-hant` | 4,892 rows, 790 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted (80% overall) | partial |
+| Traditional Chinese (Taiwan) | `zh-hant` | 8,820 rows, 3,438 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it; menus, `tl!` literals and messages were complete when counted on 2026-10-21 (80% overall) | partial |
 | Italian | `it` | 8,757 rows, 3,422 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it | full |
 | Dutch | `nl` | 7,299 rows, 1,609 of them `@msg` and 47 `@msgplural` (counted 2026-11-13 on `main` at `9a1a158a3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for German; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
@@ -58,7 +61,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Hungarian | `hu` | 5,253 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | full |
 | Polish | `pl` | 9,044 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 46 missing messages for it, and 47 menu strings, 26 `tl!` literals, 11 undo labels and 45 swatch names; one/few/many plurals | full; native review pending |
 | Finnish | `fi` | 5,318 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals, 797 `@msg` rows | full; AI-assisted, native proofreading pending |
-| Czech | `cs` | 5,240 catalog entries, including 795 `@msg` rows (counted 2026-10-21); menus, literals and messages complete when counted | catalog complete; render-site gaps reduced; native review pending |
+| Czech | `cs` | 9,155 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it | catalog complete; render-site gaps reduced; native review pending |
 | Bosnian | `bs` | 5,841 rows (counted 2026-10-30): menus, `tl!` literals and messages complete when counted; one/few/other plurals | full; AI-assisted, native review pending |
 | Swedish | `sv` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
@@ -97,6 +100,9 @@ font for the web build.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
+| 2026-11-12 | minor | Gujarati (`gu`): reviewed by a native speaker; zero/one singular plurals (CLDR); Gujarati craft-fonts faces join the UI fonts; strings added on main since branching translated (4,286 rows) |
+| 2026-11-11 | minor | Gujarati (`gu`): 4,235-row machine-assisted interface catalog, one/other plurals, desktop Gujarati font fallback and a glyph-coverage filter; status and error messages not yet translated; native review pending |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-10-30 | minor | Bosnian (`bs`, Latin, Ijekavian): complete catalog of 5,841 rows, every `bs-*` locale, one/few/other plurals; AI-assisted, not yet native-reviewed |
 | 2026-10-29 | minor | Vietnamese text: letters with two marks (Ể, Ứ, Ự) attach in precomposed, decomposed and keyboard forms, and a font lacking the marks falls back for the whole letter (#4491); scores unchanged |
