@@ -313,7 +313,7 @@ mod tests {
         }
         let rgba = Image::from_u8(4, 4, ChannelLayout::Rgba, rgba_bytes).unwrap();
         let luma_a = Image::from_u8(4, 4, ChannelLayout::GrayA, luma_a_bytes).unwrap();
-        let rgba16 = Image::new(4, 4, ChannelLayout::Rgba, SampleType::U16, rgba16_bytes).unwrap();
+        let rgba16 = Image::from_raw(4, 4, ChannelLayout::Rgba, SampleType::U16, rgba16_bytes).unwrap();
         for (name, img) in [("rgba", rgba), ("gray and alpha", luma_a), ("16 bits", rgba16)] {
             let got = decode_alpha(&encoded(&img, Format::Png)).unwrap();
             assert_eq!(got, Some((4, 4, want.clone())), "{name}");

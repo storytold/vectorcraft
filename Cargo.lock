@@ -6908,7 +6908,6 @@ dependencies = [
  "image",
  "jpeg-encoder",
  "log",
- "png 0.18.1",
  "proptest",
  "serde_json",
  "unicode-general-category",
@@ -7032,7 +7031,7 @@ dependencies = [
 name = "vectorcraft-trace"
 version = "0.24.1"
 dependencies = [
- "image",
+ "craft-image-codecs",
  "kurbo 0.13.1",
  "serde",
  "serde_json",
