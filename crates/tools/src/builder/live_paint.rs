@@ -403,6 +403,8 @@ impl Tool for LivePaintBucketTool {
             }
             PointerKind::Drag => self.drag_fill(p),
             PointerKind::Up => {
+                // The swatch preview shows again at the release point.
+                self.at = Some((p, ev.mods.shift, ev.mods.alt));
                 let mut acts = self.drag_fill(p);
                 if self.fill_drag.take().is_some() {
                     acts.push(Action::Commit);
@@ -673,7 +675,7 @@ pub(super) fn lp_rgb_color(v: &Value) -> bool {
 /// value it cannot read.
 pub fn check_live_paint_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
     let switches: &[&str] = match tool {
-        "livePaintBucket" => &["paintFills", "paintStrokes", "highlight"],
+        "livePaintBucket" => &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"],
         "livePaintSelection" => &["selectFills", "selectStrokes"],
         _ => return Ok(()),
     };

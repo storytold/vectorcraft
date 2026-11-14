@@ -3294,9 +3294,10 @@ fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
     let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
     let widths = [json!("wide"), json!(null), json!(true)];
     let switches = [json!("true"), json!(null), json!(1)];
-    for (tool, keys) in
-        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
-    {
+    for (tool, keys) in [
+        ("livePaintBucket", &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"][..]),
+        ("livePaintSelection", &["selectFills", "selectStrokes"][..]),
+    ] {
         let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
         bad.extend(colors.iter().map(|v| ("color", v.clone())));
         bad.extend(widths.iter().map(|v| ("width", v.clone())));

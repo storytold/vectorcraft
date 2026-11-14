@@ -1087,6 +1087,27 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(id, "livePaint.strokeEdge");
 }
 
+/// After a fill drag, the cursor swatch preview shows at the release point, not where the pointer
+/// last moved before the press.
+#[test]
+fn bucket_swatch_preview_follows_the_release_point() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let chip_x = |t: &LivePaintBucketTool| {
+        t.overlays(&cx).iter().find_map(|o| if let Overlay::Swatch { p, selected: true, .. } = o { Some(p.x) } else { None })
+    };
+    t.pointer(&cx, &ev(PointerKind::Move, 25.0, 25.0));
+    assert_eq!(chip_x(&t), Some(25.0));
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 25.0));
+    assert_eq!(chip_x(&t), None, "no chips during the drag");
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    assert_eq!(chip_x(&t), Some(75.0));
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();
