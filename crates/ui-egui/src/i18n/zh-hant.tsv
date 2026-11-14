@@ -2120,6 +2120,7 @@ file-filter	Templates	範本
 @msg	objects can't be nested more than 32 deep	物件的巢狀層級不能超過 32 層
 @msg	the SVG's elements are nested more than {0} deep	SVG 的元素巢狀超過 {0} 層
 @msg	unknown command `{0}`	未知的指令 `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	「{action}」的步驟 {step} 執行未知的指令 `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	未知的指令 `{0}`；您是指 `{1}` 嗎？
 @msg	`{what}` closes nothing	`{what}` 沒有可結束的內容
 @msg	`{what}` closes something it didn't open	`{what}` 結束了並非由它開始的內容
@@ -2458,6 +2459,7 @@ file-filter	Templates	範本
 @msg	no action set to save	沒有要儲存的動作組
 @msg	the action set file can't be read in full	無法完整讀取動作組檔案
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	已載入「{name}」：保留了 {n} 個含未知指令的步驟；第一個：「{action}」，步驟 {step}，`{command}`
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：參考將大於 {MAX_BYTES} 位元組
@@ -7117,6 +7119,12 @@ breakText	Glyphs	字符
 @msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	請先完成 `{id}` (請參閱 learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最後一個教學課程
+	Reset progress	重設進度
+	Mark Tutorial Step	標記教學課程步驟
+	Reset Learn Progress	重設學習進度
+@msg	missing `step` (see learn.show)	未提供 `step` (請參閱 learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` 必須是 0 到 {last} 之間的步驟編號
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` 已完成 (請參閱 learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果
@@ -7146,6 +7154,122 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D 效果需要位於 1 億點以內的有限座標
+@msg	3D effects require one to ten lights	3D 效果需要 1 到 10 個光源
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP 色彩深度 {_1}：須為每像素 1、4、8、16、24 或 32 位元
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP 編碼失敗：{width} × {height} 像素不符合格式或像素緩衝區
+@msg	GIF encoding failed: the palette image is malformed	GIF 編碼失敗：調色盤影像格式錯誤
+@msg	GIF encoding failed: {e}	GIF 編碼失敗：{e}
+@msg	JPEG colour profile: {e}	JPEG 色彩描述檔：{e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG 編碼失敗：像素緩衝區與影像尺寸不符
+@msg	JPEG encoding failed: {e}	JPEG 編碼失敗：{e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG 編碼失敗：像素緩衝區與影像尺寸不符
+@msg	PNG encoding failed: the palette image is malformed	PNG 編碼失敗：調色盤影像格式錯誤
+@msg	PNG encoding failed: {e}	PNG 編碼失敗：{e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG 編碼失敗：{width} × {height} 像素不是有效的影像尺寸
+@msg	PSD colour profile: {e}	PSD 色彩描述檔：{e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD 編碼失敗：像素緩衝區與影像尺寸不符
+@msg	Revolve profile contains invalid coordinates	迴轉的輪廓包含無效的座標
+@msg	Revolve profile is too complex	迴轉的輪廓過於複雜
+@msg	Revolve projection is not finite	迴轉的投影不是有限值
+@msg	Revolve requires finite profile coordinates within 100 million points	迴轉需要位於 1 億點以內的有限輪廓座標
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	迴轉曲面過於複雜；請減少「分段數」或簡化輪廓
+@msg	Revolve surface is too complex; simplify the profile	迴轉曲面過於複雜；請簡化輪廓
+@msg	Revolve visibility cannot split the projected boundary	迴轉的可見性計算無法分割投影邊界
+@msg	Revolve visibility creates too many fragments	迴轉的可見性計算產生過多片段
+@msg	Revolve visibility creates too many vector anchors	迴轉的可見性計算產生過多向量錨點
+@msg	Revolve visibility exceeds its geometry work limit	迴轉的可見性計算超出幾何運算量上限
+@msg	Revolve visibility exceeds its spatial index limit	迴轉的可見性計算超出空間索引上限
+@msg	Revolve visibility has too many boundary crossings	迴轉的可見性計算有過多邊界交叉
+@msg	Revolve visibility has too many input anchors	迴轉的可見性計算有過多輸入錨點
+@msg	Revolve visibility requires convex cap sectors	迴轉的可見性計算需要凸形的端蓋扇區
+@msg	Revolve visibility requires finite projected faces	迴轉的可見性計算需要有限的投影面
+@msg	SVG options: {e}	SVG 選項：{e}
+@msg	Save for Web settings: {e}	儲存為網頁用設定：{e}
+@msg	TIFF colour profile: {e}	TIFF 色彩描述檔：{e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF 編碼失敗：像素緩衝區與影像尺寸不符
+@msg	TIFF encoding failed: {e}	TIFF 編碼失敗：{e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa 色彩深度 {_1}：須為每像素 16、24 或 32 位元
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa 編碼失敗：像素緩衝區與影像尺寸不符
+@msg	The 3D projection is not finite	3D 投影不是有限值
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D 陰影過於複雜；請關閉「陰影」或簡化圖稿
+@msg	The shape contains invalid coordinates	形狀包含無效的座標
+@msg	Too many Revolve faces for visibility evaluation	迴轉的面過多，無法計算可見性
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 從色票交換檔案最多讀取 {ASE_MAX_ENTRIES} 個顏色和群組，而此資料庫有 {entries} 個
+@msg	WebP encoding failed: {e}	WebP 編碼失敗：{e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必須是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList
+@msg	a line can't run from a point to itself	線條不能從一個點連到同一個點
+@msg	a line needs at least two points	線條至少需要兩個點
+@msg	a number cannot be read	無法讀取數字
+@msg	a swatch exchange block is too long	色票交換區塊過長
+@msg	a swatch exchange name is too long	色票交換名稱過長
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} 的影像無法調整為 {width} × {height} 像素
+@msg	a {width} × {height} image is too large	{width} × {height} 的影像過大
+@msg	a {width} × {height} image: {e}	{width} × {height} 的影像：{e}
+@msg	an image could not be written: {e}	無法寫入影像：{e}
+@msg	an image that couldn't be read was left out	已略過無法讀取的影像
+@msg	can't open “{name}”: {e}	無法開啟「{name}」：{e}
+@msg	cannot align zip entries to {align} bytes	無法將 ZIP 項目對齊至 {align} 位元組
+@msg	cannot open the automation {kind} root `{_1}`: {e}	無法開啟自動化 {kind} 根目錄 `{_1}`：{e}
+@msg	cannot read profile: {0}	無法讀取描述檔：{0}
+@msg	color book version {version} isn't supported (only 1)	不支援色票簿版本 {version} (僅支援 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	不支援色彩空間為 {other} 的色票簿 (僅支援 RGB、CMYK 和 Lab)
+@msg	file name too long to zip: {_1}	檔案名稱過長，無法壓縮為 ZIP：{_1}
+@msg	file name too long to zip: {name}	檔案名稱過長，無法壓縮為 ZIP：{name}
+@msg	freeform line {i}: {e}	任意形狀線條 {i}：{e}
+@msg	freeform point {i}: {e}	任意形狀點 {i}：{e}
+@msg	give `{key}` or `{other}`, not both	請提供 `{key}` 或 `{other}`，不能同時提供兩者
+@msg	grayscale profiles can't be working spaces yet	灰階描述檔目前還不能作為工作空間
+@msg	input contains NaN or infinite coordinates	輸入包含 NaN 或無限大的座標
+@msg	input path could not be closed	無法封閉輸入路徑
+@msg	invalid ICC profile: {0}	無效的 ICC 描述檔：{0}
+@msg	invalid scale {scale}	無效的縮放比例 {scale}
+@msg	its localized names take more than {_1} KB	其本地化名稱超過 {_1} KB
+@msg	its objects are nested too deep ({e})	其物件巢狀層級過深 ({e})
+@msg	its tag table lists the `{_1}` tag more than once	其標記表多次列出 `{_1}` 標記
+@msg	not a graphic style library: {e}	不是繪圖樣式資料庫：{e}
+@msg	not a swatch library (.vcswatches or .gpl)	不是色票資料庫 (.vcswatches 或 .gpl)
+@msg	not a swatch library (format `{_1}`)	不是色票資料庫 (格式為 `{_1}`)
+@msg	not a swatch library: {e}	不是色票資料庫：{e}
+@msg	not an action set file ({e})	不是動作組檔案 ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	描述檔的色彩空間 {other} 不是 RGB、CMYK 或灰階
+@msg	regular expression too large	規則運算式過大
+@msg	script file is not UTF-8 text: {value}	指令碼檔案不是 UTF-8 文字：{value}
+@msg	stop {i}: {e}	色標 {i}：{e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	不支援色票交換版本 {major}.{minor} (僅支援 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	色票簿包含超過 {ASE_MAX_ENTRIES} 個顏色
+@msg	the color book is cut short	色票簿不完整
+@msg	the color book's names take more than {_1} MB	色票簿的名稱超過 {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	影像會是 {w} × {h} 像素；點陣圖匯出的上限為每邊 {MAX_RASTER_SIDE} 像素及 {_1} 百萬像素：請降低縮放比例或解析度
+@msg	the optimised image can't be read back: {e}	無法讀回最佳化後的影像：{e}
+@msg	the pixel buffer doesn't match the image size	像素緩衝區與影像尺寸不符
+@msg	the preview: {e}	預覽：{e}
+@msg	the request may not read the New Document profiles folder	此要求不得讀取新增文件描述檔資料夾
+@msg	the shapes are too degenerate to combine	形狀過度退化，無法合併
+@msg	the shapes cross themselves and each other too often to combine	形狀自身及彼此之間交叉過多，無法合併
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	色票交換檔案包含超過 {ASE_MAX_ENTRIES} 個顏色和群組
+@msg	the swatch exchange file is cut short	色票交換檔案不完整
+@msg	the {_1} plate can't be read: {e}	無法讀取 {_1} 色版：{e}
+@msg	this binary DXF file is damaged or cut short	此二進位 DXF 檔案已損毀或不完整
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	這是 DWG 圖面，無法讀取：請在 CAD 應用程式中將其儲存為 DXF，再開啟該檔案
+@msg	too many classes	字元類別過多
+@msg	too many groups	群組過多
+@msg	too many layers for PSD (at most 32767)	PSD 的圖層過多 (最多 32767 個)
+@msg	too many swatch exchange blocks	色票交換區塊過多
+@msg	unknown colour profile: {0}	未知的色彩描述檔：{0}
+@msg	{_1} clashes with a built-in profile name	{_1} 與內建描述檔名稱衝突
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} 像素對 GIF 來說過大 (每邊最多 65535 像素)：請降低解析度
+@msg	{_1}: no usable transform to/from sRGB	{_1}：沒有可與 sRGB 互相轉換的可用轉換
+@msg	{name} is not a CMYK profile	{name} 不是 CMYK 描述檔
+@msg	{name} is not an RGB profile	{name} 不是 RGB 描述檔
+@msg	{path}: could not be read	{path}：無法讀取
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素對 JPEG 來說過大 (每邊最多 65535 像素)：請降低解析度
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素對 Targa 來說過大 (每邊最多 65535 像素)：請降低解析度
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素對 PSD 來說過大 (每邊最多 {MAX_SIDE} 像素)：請降低解析度
 
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	嚴格模式的函式不能使用 'caller'、'callee' 和 'arguments'

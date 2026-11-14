@@ -666,7 +666,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "learn.list",
         "List Tutorials",
         "",
-        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+        "{} the Learn panel's skills in the order its Skills tab lists them, with the progress its rings, counts and check marks show: {skills: [{id, title, done: number of its tutorials finished, total: number of its tutorials, tutorials: [{id, title, steps: number of steps, finished: bool, completedSteps: [zero-based indexes of the steps marked done, every step once finished]}]}]}",
     ),
     (
         "learn.skills",
@@ -693,16 +693,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
     ),
     (
+        "learn.markStep",
+        "Mark Tutorial Step",
+        "",
+        "{tutorial: id (see learn.list), step: zero-based step number, complete?: bool} mark a step of a tutorial whose sample learn.openSample opened as done (true, omitted or null) or not done (false), as the check box before the step does; marking does not finish the tutorial; a missing, non-string or unknown id, a missing step or one the tutorial does not have, a complete that is not true or false, a tutorial whose sample was not opened, or a finished tutorial is an error and changes nothing; the preferences keep the marks; returns {tutorial, step, complete}",
+    ),
+    (
         "learn.finish",
         "Finish Tutorial",
         "",
-        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, with all its steps done, as its Finish tutorial button does; finishing it again keeps one entry, and needs no sample after a restart; a missing, non-string or unknown id, or a tutorial not finished whose sample was not opened, is an error and changes nothing; the preferences keep the tutorials finished; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
     ),
     (
         "learn.next",
         "Next Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
+    ),
+    (
+        "learn.resetProgress",
+        "Reset Learn Progress",
+        "",
+        "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
@@ -1264,7 +1276,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth, the canvas context menu's Smooth… and the Contextual Task Bar's Smooth open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",
