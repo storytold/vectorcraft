@@ -9,7 +9,8 @@
 //! `learn.skills` shows the list of skills, `learn.skill` opens one skill, `learn.show` opens one
 //! tutorial, `learn.back` goes up one level, `learn.locateTool` shows where a tool is,
 //! `learn.openSample`, `learn.finish` and `learn.next` run the three practice controls, and
-//! `window.learn` shows or hides the panel.
+//! `window.learn` shows or hides the panel. The Home screen's Learn section shows the same card
+//! ([`guide_card`]) and the tutorials, which open the panel.
 
 pub mod catalog;
 pub mod locate;
@@ -78,8 +79,16 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, tl!("Get started"));
     ui.add_space(4.0);
+    guide_card(app, ui, ui.scope_id().with("quick-skill-guide"), t.panel_darker);
+}
+
+/// The Quick skill guide card, filled with `fill`, as one button with the id `id`: a click, or Enter
+/// or Space while it has the keyboard focus, shows the panel's list of skills (`learn.skills`). The
+/// For you tab and the Home screen's Learn section show it.
+pub(crate) fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui, id: egui::Id, fill: egui::Color32) {
+    let t = Tokens::get(ui.ctx());
     let card = egui::Frame::NONE
-        .fill(t.panel_darker)
+        .fill(fill)
         .stroke(Stroke::new(1.0, t.border))
         .corner_radius(egui::CornerRadius::same(t.radius))
         .inner_margin(egui::Margin::same(10))
@@ -96,8 +105,12 @@ fn for_you(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .color(t.text_dim),
             ));
         });
-    let resp = ui.interact(card.response.rect, ui.scope_id().with("quick-skill-guide"), Sense::click());
+    let resp = ui.interact(card.response.rect, id, Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Quick skill guide")));
+    if resp.has_focus() {
+        ui.painter().rect_stroke(resp.rect, egui::CornerRadius::same(t.radius), Stroke::new(1.0, t.selection), egui::StrokeKind::Inside);
+    }
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
     if resp.clicked()
         && let Err(e) = app.run("learn.skills", json!({}))
     {
