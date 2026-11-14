@@ -7600,6 +7600,12 @@ font-script	Japanese	იაპონური
 @msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`angle` must be from -180 to 180 degrees	`angle` უნდა იყოს -180-დან 180 გრადუსამდე
+@msg	`roundness` must be from 0 to 100%	`roundness` უნდა იყოს 0-დან 100%-მდე
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` უნდა იყოს 0.01-დან 100 pt-მდე
+@msg	style must be "pencil" or "brush"	style უნდა იყოს "pencil" ან "brush"
+@msg	extend end must be "start" or "end"	extend-ის ბოლო უნდა იყოს "start" ან "end"
+@msg	connect end must be "start" or "end"	connect-ის ბოლო უნდა იყოს "start" ან "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
 	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
 	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები

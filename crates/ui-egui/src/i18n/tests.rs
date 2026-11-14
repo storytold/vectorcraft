@@ -2415,6 +2415,63 @@ fn three_d_refusals_translate_with_their_values() {
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
 }
 
+/// The Blob Brush's range refusals (`path.blob` `angle`, `roundness` and `fidelity`) show in every
+/// complete-message language with the key and the range numbers as given; the error the command
+/// returns stays English.
+#[test]
+fn blob_brush_range_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let refusals = [
+        (json!({"angle": 200}), "`angle`", ["-180", "180"]),
+        (json!({"roundness": 101}), "`roundness`", ["0", "100"]),
+        (json!({"fidelity": 0}), "`fidelity`", ["0.01", "100"]),
+    ];
+    for (extra, key, numbers) in &refusals {
+        let mut p = json!({"points": [[10, 10], [60, 10]]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let e = s.execute("path.blob", &p).unwrap_err().to_string();
+        assert!(e.starts_with("invalid parameters for `path.blob`: ") && e.contains(key) && e.contains(" must be from "), "{e}");
+        assert_eq!(message(Lang::EN, &e), e);
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be from ") && shown.contains("`path.blob`") && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(
+        message(de(), &s.execute("path.blob", &json!({"points": [[10, 10], [60, 10]], "angle": -181})).unwrap_err().to_string()),
+        "ungültige Parameter für `path.blob`: `angle` muss zwischen -180 und 180 Grad liegen"
+    );
+}
+
+/// `path.freehand`'s refusals of an unknown `style`, `extend` end or `connect` end show in every
+/// complete-message language with the key and the accepted values as given.
+#[test]
+fn freehand_choice_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let a = s.execute("path.create", &json!({"d": "M10 10 L20 10"})).unwrap()["id"].clone();
+    let b = s.execute("path.create", &json!({"d": "M10 50 L20 50"})).unwrap()["id"].clone();
+    let points = json!([[20, 10], [30, 30], [20, 50]]);
+    let refusals = [
+        (json!({"points": points, "style": "ink"}), ["style", "\"pencil\"", "\"brush\""]),
+        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), ["extend", "\"start\"", "\"end\""]),
+        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), ["connect", "\"start\"", "\"end\""]),
+    ];
+    for (p, words) in &refusals {
+        let e = s.execute("path.freehand", p).unwrap_err().to_string();
+        assert!(e.starts_with("invalid parameters for `path.freehand`: ") && e.contains(" must be "), "{e}");
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`"), "{code}: {e} -> {shown}");
+            assert!(words.iter().all(|w| shown.contains(w)), "{code}: {e} -> {shown}");
+        }
+    }
+}
+
 /// A value a message quotes is a name and is shown as written, even when a catalog row translates
 /// the same text: a symbol called Rotate stays Rotate while the effect's name is translated.
 #[test]

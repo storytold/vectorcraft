@@ -7097,6 +7097,12 @@ breakText	Glyphs	Glyph
 @msg	No bridge of this width fits across the selected art	Không có cầu nối nào rộng như vậy vừa với hình vẽ đã chọn
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` phải từ -180 đến 180 độ
+@msg	`roundness` must be from 0 to 100%	`roundness` phải từ 0 đến 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` phải từ 0.01 đến 100 pt
+@msg	style must be "pencil" or "brush"	style phải là "pencil" hoặc "brush"
+@msg	extend end must be "start" or "end"	đầu extend phải là "start" hoặc "end"
+@msg	connect end must be "start" or "end"	đầu connect phải là "start" hoặc "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Khung và đường bóc phần thừa…
 	Weed Box and Lines	Khung và đường bóc phần thừa

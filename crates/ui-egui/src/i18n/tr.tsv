@@ -7442,6 +7442,12 @@ breakText	Glyphs	Glifler
 @msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 ile 180 derece arasında olmalıdır
+@msg	`roundness` must be from 0 to 100%	`roundness` %0 ile %100 arasında olmalıdır
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 0.01 ile 100 pt arasında olmalıdır
+@msg	style must be "pencil" or "brush"	style "pencil" veya "brush" olmalıdır
+@msg	extend end must be "start" or "end"	extend ucu "start" veya "end" olmalıdır
+@msg	connect end must be "start" or "end"	connect ucu "start" veya "end" olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
 	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
 	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri

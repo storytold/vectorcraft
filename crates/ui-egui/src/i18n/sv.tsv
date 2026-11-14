@@ -7775,7 +7775,6 @@ digits	Hindi	Hindi
 @msg	anchor `{key}` must be [x, y]	ankarpunktens `{key}` måste vara [x, y]
 @msg	anchor `{key}` must be a number	ankarpunktens `{key}` måste vara ett tal
 @msg	anchor `smooth` must be true or false	ankarpunktens `smooth` måste vara true eller false
-@msg	angle and roundness must be finite	vinkel och rundhet måste vara ändliga
 @msg	angles must be a list as long as pins (degrees or null)	angles måste vara en lista lika lång som pins (grader eller null)
 @msg	appearance must be flat|center|edge	appearance måste vara flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply är "fill" eller "stroke", inte `{other}`
@@ -8924,6 +8923,11 @@ digits	Hindi	Hindi
 @msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` måste vara från -180 till 180 grader
+@msg	`roundness` must be from 0 to 100%	`roundness` måste vara från 0 till 100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` måste vara från 0.01 till 100 pt
+@msg	style must be "pencil" or "brush"	style måste vara "pencil" eller "brush"
+@msg	extend end must be "start" or "end"	extend end måste vara "start" eller "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rensningsram och rensningslinjer…
 	Weed Box and Lines	Rensningsram och rensningslinjer

@@ -7470,6 +7470,12 @@ breakText	Glyphs	Glifák
 @msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`angle` must be from -180 to 180 degrees	Az `angle` értéke -180 és 180 fok között lehet
+@msg	`roundness` must be from 0 to 100%	A `roundness` értéke 0 és 100% között lehet
+@msg	`fidelity` must be from 0.01 to 100 pt	A `fidelity` értéke 0.01 és 100 pt között lehet
+@msg	style must be "pencil" or "brush"	A style értéke "pencil" vagy "brush" lehet
+@msg	extend end must be "start" or "end"	Az extend vége "start" vagy "end" lehet
+@msg	connect end must be "start" or "end"	A connect vége "start" vagy "end" lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
 	Weed Box and Lines…	Gyomláló keret és vonalak…
 	Weed Box and Lines	Gyomláló keret és vonalak

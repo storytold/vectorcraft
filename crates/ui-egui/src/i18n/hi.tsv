@@ -6392,7 +6392,6 @@ antiAlias	Sharp	शार्प
 @msg	anchor `{key}` must be a number	एंकर `{key}` को एक नंबर होना चाहिए
 @msg	anchor `smooth` must be true or false	एंकर का `smooth` true या false होना चाहिए
 @msg	anchor must name a registered panel	anchor किसी पंजीकृत पैनल का नाम होना चाहिए
-@msg	angle and roundness must be finite	कोण और गोलाई परिमित होना चाहिए
 @msg	angles must be a list as long as pins (degrees or null)	angles पिन जितनी लंबी सूची होनी चाहिए (डिग्री या null)
 @msg	Angles require two straight segments	कोणों को दो सीधे खंडों की आवश्यकता होती है
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art या type
@@ -6575,7 +6574,7 @@ antiAlias	Sharp	शार्प
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
-@msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
+@msg	connect end must be "start" or "end"	connect अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect के लिए बढ़ाए गए पाथ के अलावा कोई दूसरा पाथ चाहिए
 @msg	connect needs id	connect के लिए id चाहिए
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है
@@ -8877,6 +8876,11 @@ theme	Appearance	अपीयरेंस
 @msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 0 to 100%	`roundness` 0 से 100% तक होना चाहिए
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 0.01 से 100 pt तक होना चाहिए
+@msg	style must be "pencil" or "brush"	style "pencil" या "brush" होना चाहिए
+@msg	extend end must be "start" or "end"	extend अंत "start" या "end" होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
 	Weed Box and Lines	वीड बॉक्स और लाइनें

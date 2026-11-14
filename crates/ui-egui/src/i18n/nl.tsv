@@ -527,6 +527,12 @@
 @msg	No bridge of this width fits across the selected art	Geen brug van deze breedte past over de geselecteerde illustratie
 @msg	Some islands could not be joined to the area around the art	Sommige eilanden konden niet worden verbonden met het gebied rond de illustratie
 @msg	`width` must be from {lo} to {hi} pt	`width` moet van {lo} tot {hi} pt zijn
+@msg	`angle` must be from -180 to 180 degrees	`angle` moet van -180 tot 180 graden zijn
+@msg	`roundness` must be from 0 to 100%	`roundness` moet van 0 tot 100% zijn
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` moet van 0.01 tot 100 pt zijn
+@msg	style must be "pencil" or "brush"	style moet "pencil" of "brush" zijn
+@msg	extend end must be "start" or "end"	het einde van extend moet "start" of "end" zijn
+@msg	connect end must be "start" or "end"	het einde van connect moet "start" of "end" zijn
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` moet een geheel getal van 1 tot {MAX_BRIDGES_PER_ISLAND} zijn
 
 	File	Bestand
