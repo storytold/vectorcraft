@@ -35,6 +35,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(results) => {
             s.notify_text_tool("batch.end");
             s.batch_steps = Some(grouped);
+            s.prune_concept_jobs();
             results
         }
         Err(e) => {

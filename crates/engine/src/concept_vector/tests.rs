@@ -32,29 +32,33 @@ fn art() -> Raster {
 /// A document with `r` placed at (100, 100), scaled ×2, and selected.
 fn doc_with(r: &Raster) -> (Session, NodeId) {
     let mut s = Session::new();
+    let id = new_doc_with(&mut s, r);
+    (s, id)
+}
+
+/// A new document in `s` holding `r` as a selected image.
+fn new_doc_with(s: &mut Session, r: &Raster) -> NodeId {
     s.execute("file.new", &json!({"width": 2000, "height": 1000})).unwrap();
     let png = r.encode_png();
     let (w, h) = (r.width, r.height);
-    let id = s
-        .edit("img", |d, sel| {
-            d.images.insert("img1".into(), ImageBlob::new("image/png", png));
-            let id = d.alloc_id();
-            let l = d.default_layer();
-            let image = ImageObject {
-                key: "img1".into(),
-                width: w,
-                height: h,
-                xf: Affine::translate((100.0, 100.0)) * Affine::scale(2.0),
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            };
-            d.insert(l, 0, Node::new(id, NodeKind::Image(Box::new(image))))?;
-            sel.set([id]);
-            Ok(id)
-        })
-        .unwrap();
-    (s, id)
+    s.edit("img", |d, sel| {
+        d.images.insert("img1".into(), ImageBlob::new("image/png", png));
+        let id = d.alloc_id();
+        let l = d.default_layer();
+        let image = ImageObject {
+            key: "img1".into(),
+            width: w,
+            height: h,
+            xf: Affine::translate((100.0, 100.0)) * Affine::scale(2.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(l, 0, Node::new(id, NodeKind::Image(Box::new(image))))?;
+        sel.set([id]);
+        Ok(id)
+    })
+    .unwrap()
 }
 
 fn all_styles() -> Vec<&'static str> {
@@ -851,6 +855,34 @@ fn a_run_finished_after_its_document_closed_keeps_nothing() {
     s.execute("file.close", &json!({"index": 0})).unwrap();
     assert!(run.finish(&mut s, made).is_none());
     assert!(s.execute("conceptVector.results", &json!({"job": 1})).is_err(), "no job kept");
+}
+
+/// Closing a document drops its jobs at once, a background tab's too, and keeps the others'.
+#[test]
+fn closing_a_document_drops_its_jobs() {
+    let (mut s, img) = doc_with(&art());
+    let job = |s: &mut Session, id: u64| generate(s, json!({"provider": ID, "styles": ["outline"], "id": id})).unwrap()["job"].as_u64().unwrap();
+    let first = job(&mut s, img.0);
+    let other = new_doc_with(&mut s, &art());
+    let second = job(&mut s, other.0);
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(s.concept_variations(first).is_none(), "the closed document's job is dropped");
+    assert!(s.concept_variations(second).is_some(), "the open document's job is kept");
+}
+
+/// A batch that closes a document and then fails brings the document back with its jobs; one that
+/// succeeds drops them.
+#[test]
+fn a_batch_close_drops_the_jobs_only_when_the_batch_succeeds() {
+    let (mut s, img) = doc_with(&art());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let close = json!({"command": "file.close", "params": {"index": 0}});
+    let bad = json!({"command": "no.suchCommand", "params": {}});
+    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), bad]})).is_err());
+    assert_eq!(s.documents().len(), 1, "the document is back");
+    assert!(s.concept_variations(job).is_some(), "the restored document's job is kept");
+    s.execute("command.batch", &json!({"commands": [close]})).unwrap();
+    assert!(s.concept_variations(job).is_none(), "the job goes with the batch that closed its document");
 }
 
 #[test]

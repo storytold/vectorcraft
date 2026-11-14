@@ -79,8 +79,13 @@ impl Session {
         }
     }
 
+    /// Drops the jobs of document `doc` (its `uid`), when it closes.
+    pub(crate) fn forget_concept_jobs(&mut self, doc: u64) {
+        self.concept.jobs.retain(|j| j.doc != doc);
+    }
+
     /// Drops the jobs whose document is closed.
-    fn prune_concept_jobs(&mut self) {
+    pub(crate) fn prune_concept_jobs(&mut self) {
         let open: Vec<u64> = self.documents().iter().map(|d| d.uid).collect();
         self.concept.jobs.retain(|j| open.contains(&j.doc));
     }
