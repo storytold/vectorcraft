@@ -352,7 +352,7 @@ font-technology	Variable	Променливи
 	Built-in presets are read-only: New… starts an editable copy.	Вградените предварителни настройки са само за четене: „Ново…“ създава редактируемо копие.
 	Built-in presets don't change: New makes a copy you can edit.	Вградените предварителни настройки не се променят: „Ново“ създава копие за редактиране.
 	Built-in presets don't change: New… starts an editable copy.	Вградените предварителни настройки не се променят: „Ново…“ създава редактируемо копие.
-	Bulge…	Издуване…
+	Bulge…	Изпъкване…
 	Bullet	Булет
 	Bullets	Булети
 	Bullets and Numbering	Булети и номериране
@@ -1142,7 +1142,7 @@ font-technology	Variable	Променливи
 	Extrude & Bevel…	Избутване и фасетка…
 	3D (Classic)	3D (класически)
 	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
-	Revolve (Classic)…	Завъртане (класическо)…
+	Revolve (Classic)…	Завъртане около ос (класическо)…
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
@@ -1421,7 +1421,7 @@ font-technology	Variable	Променливи
 	Guides & Grid	Водачи и мрежа
 	H Spacing:	Хоризонтално разстояние:
 	H:	Х:
-	Hair Space	Тънък интервал
+	Hair Space	Най-тънък интервал
 	Hand Tool	Инструмент „Ръка“
 	Hand-Drawn	Ръчно рисувани
 	Painted and Sketched	Рисувани и скицирани
@@ -2905,7 +2905,7 @@ digits	Malayalam	Малаялам
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Отварянето му пропусна това, което VectorCraft все още не може да прочете ({what}), така че замяната му го губи завинаги. Запазете под друго име, за да го запазите.
 	“{name}” already exists. Replace it?	„{name}“ вече съществува. Да бъде ли заменен?
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Името в панела за запазване беше „{typed}“, а VectorCraft добави разширението на типа файл. Замяната на файла презаписва съдържанието му.
-	Revolve…	Завъртане…
+	Revolve…	Завъртане около ос…
 	RGB Color	RGB цвят
 	Right	Вдясно
 	Right Grid:	Дясна мрежа:
@@ -3714,7 +3714,7 @@ digits	Malayalam	Малаялам
 	Reverse Traps	Обратни застъпвания
 	Precision	Точност
 	Remove Redundant Points	Премахване на излишните точки
-	Trim	Изрязване
+	Trim	Подрязване
 	Trim mark weight:	Дебелина на маркировките за изрязване:
 	Trim marks	Маркировки за изрязване
 	Trim View	Изглед на изрязване
@@ -5037,7 +5037,7 @@ effect	Soft	Меко
 	On Both Sides	От двете страни
 	Short	Кратко
 	Full Width	Пълна ширина
-	Distort	Изкривяване
+	Distort	Деформиране
 	Diffuse Glow…	Дифузно светещ…
 	Glass…	Стъкло…
 	Ocean Ripple…	Океански вълнички…
@@ -5636,8 +5636,8 @@ lighting	Light	Светлина
 	x Height	Височина на x
 	▾ Default Actions	▾ Действия по подразбиране
 	⚠ {chord} was already used by {names} — it has been removed there.	Внимание: Комбинацията {chord} вече се използва от {names} — премахната е там.
-@id	file.close	file.close
-@id	pathfinder.add	pathfinder.add
+@id	file.close	Затваряне
+@id	pathfinder.add	Обединяване
 @msg	give corners of the path: anchors between two straight sides	дай ъглите на пътя: опорни точки между две прави страни
 @msg	this kind of brush has no options dialog yet	този вид четка засега няма диалогов прозорец с настройки
 @plural	{n} PR|{n} PRs	{n} PR|{n} PR-а

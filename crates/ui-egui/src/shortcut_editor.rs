@@ -2680,6 +2680,26 @@ mod tests {
         assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
     }
 
+    /// No two entries of Keyboard Shortcuts have the same name in any UI language: each catalog
+    /// translates two different English names two different ways.
+    #[test]
+    fn no_two_entries_have_the_same_name_in_any_language() {
+        let all = entries();
+        let mut shared = vec![];
+        let previous = crate::i18n::current();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+            for e in all.iter() {
+                by_name.entry(shown_name(e)).or_default().push(e.key.as_str());
+            }
+            shared.extend(by_name.into_iter().filter(|(_, keys)| keys.len() > 1).map(|(name, keys)| (lang.code(), name, keys)));
+        }
+        crate::i18n::set_current(previous);
+        shared.sort();
+        assert!(shared.is_empty(), "{} names: {shared:#?}", shared.len());
+    }
+
     /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose
     /// name is one of those names with the id stays apart from it. A filter with that name in
     /// another menu, or with a label that differs by its "…", shows no id.

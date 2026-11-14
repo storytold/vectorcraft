@@ -8000,6 +8000,25 @@ antiAlias	Sharp	शार्प
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	give one <filter> element	एक <filter> एलिमेंट दें
+@msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> SVG फ़िल्टर का एलिमेंट नहीं है
+@msg	an SVG filter has no event attributes such as {_1}	SVG फ़िल्टर में {_1} जैसे इवेंट एट्रिब्यूट नहीं होते
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG फ़िल्टर की इमेज PNG, JPEG, GIF या WebP data: URL होती हैं
+@msg	the SVG filter isn't valid XML: {e}	SVG फ़िल्टर मान्य XML नहीं है: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence का numOctaves अधिकतम {MAX_OCTAVES} होता है
+@msg	{what} is at most {max}	{what} अधिकतम {max} होता है
+@msg	feConvolveMatrix's order	feConvolveMatrix का order
+@msg	feMorphology's radius	feMorphology का radius
+@msg	a blur's stdDeviation	ब्लर का stdDeviation
+@msg	the SVG filter has no primitives	SVG फ़िल्टर में कोई प्रिमिटिव नहीं है
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG फ़िल्टर में अधिकतम {MAX_PRIMITIVES} प्रिमिटिव होते हैं
+@msg	the SVG filter is too large once its attributes are written out	एट्रिब्यूट लिखे जाने के बाद SVG फ़िल्टर बहुत बड़ा हो जाता है
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG फ़िल्टर की इमेज में कुल मिलाकर अधिकतम {MAX_IMAGE_PIXELS} पिक्सेल होते हैं
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG फ़िल्टर बनाया नहीं जा सकता: उसके प्रिमिटिव और उनके इनपुट जाँचें
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG फ़िल्टर के एलिमेंट अधिकतम {MAX_DEPTH} स्तर तक नेस्ट होते हैं
+@msg	an SVG filter is at most {_1} KB	SVG फ़िल्टर अधिकतम {_1} KB का होता है
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
 @msg	bevel must be none or one of {_1}	bevel को none या {_1} में से एक होना चाहिए

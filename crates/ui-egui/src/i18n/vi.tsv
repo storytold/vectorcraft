@@ -293,7 +293,7 @@ font-technology	Variable	Biến thiên
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
-	Attributes	Thuộc tính
+	Attributes	Đặc tính
 	Author Title:	Chức danh tác giả:
 	Author:	Tác giả:
 	Auto	Tự động
@@ -420,7 +420,7 @@ font-technology	Variable	Biến thiên
 	Built-in presets are read-only: New… starts an editable copy.	Thiết lập sẵn tích hợp ở chế độ chỉ đọc: Mới… tạo một bản sao có thể chỉnh sửa.
 	Built-in presets don't change: New makes a copy you can edit.	Thiết lập sẵn tích hợp không thay đổi: Mới tạo bản sao để chỉnh sửa.
 	Built-in presets don't change: New… starts an editable copy.	Thiết lập sẵn tích hợp không thay đổi: Mới… tạo một bản sao có thể chỉnh sửa.
-	Bulge…	Phình…
+	Bulge…	Lồi…
 	Bullet	Dấu đầu dòng
 	Bullets	Dấu đầu dòng
 	Bullets and Numbering	Dấu đầu dòng và đánh số
@@ -2345,7 +2345,7 @@ digits	Hindi	Hindi
 	Medium Thumbnail View	Chế độ hình thu nhỏ vừa
 	Medium Thumbnails	Hình thu nhỏ vừa
 	Menu Dialog	Hộp thoại menu
-	Merge	Hợp nhất
+	Merge	Gộp
 	Merge colors into one row	Hợp nhất màu vào một hàng
 	Merge Graphic Styles	Hợp nhất kiểu đồ họa
 	Merge Graphic Styles…	Hợp nhất kiểu đồ họa…
@@ -4232,7 +4232,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reverse Traps	Đảo chiều chồng màu
 	Precision	Độ chính xác
 	Remove Redundant Points	Xóa điểm thừa
-	Trim	Cắt xén
+	Trim	Cắt tỉa
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Cắt bỏ hình học bị che khi Mở rộng diện mạo. Xem trước trực tiếp giữ toàn bộ bề mặt. Sơn trong suốt và bề mặt vượt quá giới hạn hiển thị giữ nguyên tất cả các mặt.
 	Trim mark weight:	Độ dày dấu cắt:
 	Trim marks	Dấu cắt
@@ -5375,6 +5375,25 @@ theme	Appearance	Giao diện
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	give one <filter> element	hãy chỉ định một phần tử <filter>
+@msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> không phải là phần tử của bộ lọc SVG
+@msg	an SVG filter has no event attributes such as {_1}	bộ lọc SVG không có thuộc tính sự kiện như {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	hình ảnh của bộ lọc SVG là URL data: dạng PNG, JPEG, GIF hoặc WebP
+@msg	the SVG filter isn't valid XML: {e}	bộ lọc SVG không phải là XML hợp lệ: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves của feTurbulence tối đa là {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} tối đa là {max}
+@msg	feConvolveMatrix's order	order của feConvolveMatrix
+@msg	feMorphology's radius	radius của feMorphology
+@msg	a blur's stdDeviation	stdDeviation của hiệu ứng làm mờ
+@msg	the SVG filter has no primitives	bộ lọc SVG không có thành phần cơ sở nào
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bộ lọc SVG có tối đa {MAX_PRIMITIVES} thành phần cơ sở
+@msg	the SVG filter is too large once its attributes are written out	bộ lọc SVG quá lớn sau khi ghi ra các thuộc tính của nó
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	hình ảnh của bộ lọc SVG có tổng cộng tối đa {MAX_IMAGE_PIXELS} điểm ảnh
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	không thể vẽ bộ lọc SVG: hãy kiểm tra các thành phần cơ sở và đầu vào của chúng
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	các phần tử của bộ lọc SVG lồng nhau tối đa {MAX_DEPTH} cấp
+@msg	an SVG filter is at most {_1} KB	bộ lọc SVG có kích thước tối đa {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
 @msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}

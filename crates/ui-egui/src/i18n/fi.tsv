@@ -298,7 +298,7 @@
 	Move Plane to Match Object	Siirrä taso objektin mukaan
 	Edit Text	Muokkaa tekstiä
 	Live Paint	Elävä maalaus
-	Merge	Yhdistä
+	Merge	Sulauta
 	Gap Options…	Aukkojen asetukset…
 	Gap Options	Aukkojen asetukset
 	Gap Detection	Aukkojen tunnistus
@@ -5873,6 +5873,25 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	give one <filter> element	anna yksi <filter>-elementti
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ei ole SVG-suotimen elementti
+@msg	an SVG filter has no event attributes such as {_1}	SVG-suotimessa ei ole tapahtumamääritteitä, kuten {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG-suotimen kuvat ovat PNG-, JPEG-, GIF- tai WebP-muotoisia data:-URL-osoitteita
+@msg	the SVG filter isn't valid XML: {e}	SVG-suodin ei ole kelvollista XML:ää: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulencen numOctaves on enintään {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} on enintään {max}
+@msg	feConvolveMatrix's order	feConvolveMatrixin order
+@msg	feMorphology's radius	feMorphologyn radius
+@msg	a blur's stdDeviation	sumennuksen stdDeviation
+@msg	the SVG filter has no primitives	SVG-suotimessa ei ole primitiivejä
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG-suotimessa on enintään {MAX_PRIMITIVES} primitiiviä
+@msg	the SVG filter is too large once its attributes are written out	SVG-suodin on liian suuri, kun sen määritteet kirjoitetaan auki
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG-suotimen kuvissa on yhteensä enintään {MAX_IMAGE_PIXELS} pikseliä
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-suodinta ei voi piirtää: tarkista sen primitiivit ja niiden syötteet
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG-suotimen elementit ovat sisäkkäin enintään {MAX_DEPTH} tason syvyydellä
+@msg	an SVG filter is at most {_1} KB	SVG-suodin on enintään {_1} kt
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
 @msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}

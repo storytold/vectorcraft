@@ -295,7 +295,7 @@ font-technology	Variable	Варіативні
 	Background Contents	Вміст фону
 	Background:	Фон:
 	Backspace	Backspace
-	Bar Graph Tool	Інструмент «Гістограма»
+	Bar Graph Tool	Інструмент «Лінійчата діаграма»
 	Baseline	Базова лінія
 	Baseline Shift	Зміщення базової лінії
 	Basic Latin	Основна латиниця
@@ -1921,7 +1921,7 @@ file-filter	Templates	Шаблони
 	Line Cut	Розрізання ліній
 	Line Cut Tool	Інструмент «Розрізання ліній»
 	Line Endings:	Закінчення ліній:
-	Line Graph Tool	Інструмент «Лінійчаста діаграма»
+	Line Graph Tool	Інструмент «Графік»
 	Line Segment	Відрізок
 	Line Segment Tool	Інструмент «Відрізок»
 	Line Segment Tool Options	Параметри інструменту «Відрізок»
@@ -2586,7 +2586,7 @@ diagnostics	ui	інтерфейс
 	Perspective Grid Settings	Параметри сітки перспективи
 	Perspective Grid Tool	Інструмент «Сітка перспективи»
 	Perspective Plane Options…	Параметри площини перспективи…
-	Perspective Selection Tool	Інструмент "Виділення в перспективі"
+	Perspective Selection Tool	Інструмент «Виділення в перспективі»
 	Phone 390×844	Телефон 390×844
 	Picas	Піки
 	Pie Graph Tool	Інструмент «Кругова діаграма»
@@ -3557,8 +3557,8 @@ effect	Points	Точки
 	Spread:	Розворот:
 	Square	Квадрат
 	Squeeze…	Стиснення…
-	Stacked Bar Graph Tool	Інструмент "Гістограма з накопиченням"
-	Stacked Column Graph Tool	Інструмент "Гістограма з накопиченням"
+	Stacked Bar Graph Tool	Інструмент «Лінійчата діаграма з накопиченням»
+	Stacked Column Graph Tool	Інструмент «Гістограма з накопиченням»
 	Stair Step	Ступінчастий
 	Standard Ligatures	Стандартні лігатури
 	Standard Vertical Roman Alignment	Стандартне римське вертикальне вирівнювання
@@ -4078,7 +4078,7 @@ effect	Points	Точки
 	Zoom In	Збільшити
 	Zoom Out	Зменшити
 	Zoom to Selection	Масштаб виділення
-	Zoom Tool	Інструмент «Масштаб»
+	Zoom Tool	Інструмент «Лупа»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
 	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручувати по горизонталі колесом із Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
@@ -5588,6 +5588,24 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-ефект на заливці або обведенні групи нічого не малює
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
+@msg	the <filter> element needs an id, the filter's name	елементу <filter> потрібен id, назва фільтра
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id фільтра SVG містить не більше {MAX_NAME} символів
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> не є елементом фільтра SVG
+@msg	an SVG filter has no event attributes such as {_1}	фільтр SVG не має атрибутів подій, таких як {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	зображення фільтра SVG задаються URL data: у форматі PNG, JPEG, GIF або WebP
+@msg	the SVG filter isn't valid XML: {e}	фільтр SVG не є коректним XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves у feTurbulence не більше {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}: не більше {max}
+@msg	feConvolveMatrix's order	order у feConvolveMatrix
+@msg	feMorphology's radius	radius у feMorphology
+@msg	a blur's stdDeviation	stdDeviation розмиття
+@msg	the SVG filter has no primitives	фільтр SVG не має примітивів
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	фільтр SVG має не більше {MAX_PRIMITIVES} примітивів
+@msg	the SVG filter is too large once its attributes are written out	фільтр SVG стає завеликим після запису його атрибутів
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	зображення фільтра SVG містять загалом не більше {MAX_IMAGE_PIXELS} пікселів
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	не вдається намалювати фільтр SVG: перевірте його примітиви та їхні входи
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	елементи фільтра SVG вкладаються не глибше {MAX_DEPTH} рівнів
+@msg	an SVG filter is at most {_1} KB	розмір фільтра SVG не більше {_1} КБ
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
 @msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}

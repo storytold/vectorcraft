@@ -299,7 +299,7 @@ font-technology	Variable	Вариативные
 	Background Contents	Содержимое фона
 	Background:	Фон:
 	Backspace	Backspace
-	Bar Graph Tool	Инструмент «Гистограмма»
+	Bar Graph Tool	Инструмент «Линейчатая диаграмма»
 	Baseline	Базовая линия
 	Baseline Shift	Смещение базовой линии
 	Basic Latin	Основная латиница
@@ -1916,7 +1916,7 @@ file-filter	Templates	Шаблоны
 	Line Cut	Разрезание линий
 	Line Cut Tool	Инструмент «Разрезание линий»
 	Line Endings:	Окончания линий:
-	Line Graph Tool	Инструмент «Линейчатая диаграмма»
+	Line Graph Tool	Инструмент «График»
 	Line Segment	Отрезок
 	Line Segment Tool	Инструмент «Отрезок»
 	Line Segment Tool Options	Параметры инструмента «Отрезок»
@@ -2034,7 +2034,7 @@ file-filter	Templates	Шаблоны
 	Medium Thumbnail View	Средние миниатюры
 	Medium Thumbnails	Средние миниатюры
 	Menu Dialog	Диалоговое окно меню
-	Merge	Объединить
+	Merge	Слить
 	Merge colors into one row	Объединить цвета в одну строку
 	Merge Graphic Styles	Объединить графические стили
 	Merge Graphic Styles…	Объединить графические стили…
@@ -3550,7 +3550,7 @@ digits	Malayalam	Малаялам
 	Spread:	Разворот:
 	Square	Квадрат
 	Squeeze…	Сжатие…
-	Stacked Bar Graph Tool	Инструмент «Гистограмма с накоплением»
+	Stacked Bar Graph Tool	Инструмент «Линейчатая диаграмма с накоплением»
 	Stacked Column Graph Tool	Инструмент «Гистограмма с накоплением»
 	Stair Step	Ступенчатый
 	Standard Ligatures	Стандартные лигатуры
@@ -4070,7 +4070,7 @@ digits	Malayalam	Малаялам
 	Zoom In	Увеличить
 	Zoom Out	Уменьшить
 	Zoom to Selection	Масштаб по выделению
-	Zoom Tool	Инструмент «Масштаб»
+	Zoom Tool	Инструмент «Лупа»
 	Zoom with Mouse Wheel	Масштабировать колесом мыши
 	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручивать по горизонтали колесом с Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
@@ -5593,6 +5593,25 @@ lighting	Light	Свет
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-эффект на заливке или обводке группы ничего не рисует
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-эффект на заливке или обводке группы не рисует ничего для экспорта
 @msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
+@msg	give one <filter> element	укажите один элемент <filter>
+@msg	the <filter> element needs an id, the filter's name	элементу <filter> нужен id, имя фильтра
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id фильтра SVG содержит не более {MAX_NAME} символов
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> не является элементом фильтра SVG
+@msg	an SVG filter has no event attributes such as {_1}	у фильтра SVG нет атрибутов событий, таких как {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	изображения фильтра SVG задаются URL data: в формате PNG, JPEG, GIF или WebP
+@msg	the SVG filter isn't valid XML: {e}	фильтр SVG не является допустимым XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves у feTurbulence не больше {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}: не больше {max}
+@msg	feConvolveMatrix's order	order у feConvolveMatrix
+@msg	feMorphology's radius	radius у feMorphology
+@msg	a blur's stdDeviation	stdDeviation размытия
+@msg	the SVG filter has no primitives	у фильтра SVG нет примитивов
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	у фильтра SVG не более {MAX_PRIMITIVES} примитивов
+@msg	the SVG filter is too large once its attributes are written out	фильтр SVG становится слишком большим после записи его атрибутов
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	изображения фильтра SVG содержат в сумме не более {MAX_IMAGE_PIXELS} пикселей
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	не удается нарисовать фильтр SVG: проверьте его примитивы и их входы
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	элементы фильтра SVG вкладываются не глубже {MAX_DEPTH} уровней
+@msg	an SVG filter is at most {_1} KB	размер фильтра SVG не более {_1} КБ
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
 @msg	its 3D effect builds no solid	его 3D-эффект не строит тела
 @msg	bevel must be none or one of {_1}	bevel должен быть none или одним из: {_1}

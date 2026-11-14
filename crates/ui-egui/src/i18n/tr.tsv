@@ -71,7 +71,7 @@
 	3D and Materials	3D ve Malzemeler
 	Plane	Düzlem
 	Extrude	Ekstrüzyon
-	Revolve	Döndür
+	Revolve	Eksen Etrafında Döndür
 	Inflate	Şişir
 	Select objects, then pick an object type to give them a 3D effect.	Nesneleri seçin, ardından onlara 3D efekti vermek için bir nesne türü seçin.
 	3D Ribbon	3D Şerit
@@ -1147,8 +1147,8 @@ font-technology	Variable	Değişken
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
 	3D (Classic)	3D (Klasik)
 	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
-	Revolve (Classic)…	Döndür (Klasik)…
-	Rotate (Classic)…	Çevir (Klasik)…
+	Revolve (Classic)…	Eksen Etrafında Döndür (Klasik)…
+	Rotate (Classic)…	Döndür (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
 	No Shading	Gölgeleme Yok
@@ -2761,7 +2761,7 @@ digits	Malayalam	Malayalam
 	Revert to the saved version of “{name}”?	“{name}”nin kayıtlı sürümüne dönülsün mü?
 	Replace “{name}”, the file this document was opened from?	Bu belgenin açıldığı dosya olan "{name}" değiştirilsin mi?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Bunu açmak, VectorCraft'ın henüz okuyamadığı şeyi ({what}) dışarıda bıraktı, bu nedenle onu değiştirmek onu tamamen kaybeder. Saklamak için başka bir adla kaydedin.
-	Revolve…	Döndür…
+	Revolve…	Eksen Etrafında Döndür…
 	RGB Color	RGB Rengi
 	Right	Sağ
 	Right Grid:	Sağ Izgara:
@@ -3588,7 +3588,7 @@ digits	Malayalam	Malayalam
 	Reverse Traps	Tuzakları Tersine Çevir
 	Precision	Hassasiyet
 	Remove Redundant Points	Gereksiz Noktaları Kaldır
-	Trim	Kırpma
+	Trim	Budama
 	Trim mark weight:	Trim işareti ağırlığı:
 	Trim marks	Kırpma işaretleri
 	Trim View	Görünümü Kırp
@@ -5209,25 +5209,44 @@ lighting	Light	Işık
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	Extrude & Bevel	Ekstrüzyon ve Eğim
-@msg	Revolve	Döndür
+@msg	Revolve	Eksen Etrafında Döndür
 @msg	Inflate	Şişir
 @msg	Rotate	Döndür
 @msg	Extrude & Bevel (Classic)	Ekstrüzyon ve Eğim (Klasik)
-@msg	Revolve (Classic)	Döndür (Klasik)
-@msg	Rotate (Classic)	Çevir (Klasik)
+@msg	Revolve (Classic)	Eksen Etrafında Döndür (Klasik)
+@msg	Rotate (Classic)	Döndür (Klasik)
 @msg	This effect	Bu efekt
 @msg	clipping paths	kırpma yolları
 @msg	other objects	diğer nesneler
 @msg	{label} requires a group holding a shape with at least two anchors	{label}, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a group holding a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
+@msg	Revolve requires a group holding a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
+@msg	Revolve requires a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	Bir gruptaki {label}; yollar, bileşik yollar, metin, gruplar, kırpma grupları, karışımlar ve sembol örnekleri gerektirir: önce şunları serbest bırak veya genişlet: {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	Bir gruptaki {label} en fazla {MAX_MEMBERS} nesne alır
 @msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Bir grup veya katmandaki 3 boyutlu efekt, dolgusuna veya konturuna değil, grubun kendisine uygulanır
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
-@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
+@msg	give one <filter> element	bir <filter> öğesi ver
+@msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
+@msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir
+@msg	an SVG filter has no event attributes such as {_1}	bir SVG filtresinde {_1} gibi olay öznitelikleri olmaz
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	bir SVG filtresinin görüntüleri PNG, JPEG, GIF veya WebP data: URL'leridir
+@msg	the SVG filter isn't valid XML: {e}	SVG filtresi geçerli bir XML değil: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence için numOctaves en fazla {MAX_OCTAVES} olur
+@msg	{what} is at most {max}	{what} en fazla {max} olur
+@msg	feConvolveMatrix's order	feConvolveMatrix için order
+@msg	feMorphology's radius	feMorphology için radius
+@msg	a blur's stdDeviation	bir bulanıklaştırmanın stdDeviation değeri
+@msg	the SVG filter has no primitives	SVG filtresinde temel öğe yok
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bir SVG filtresinde en fazla {MAX_PRIMITIVES} temel öğe olur
+@msg	the SVG filter is too large once its attributes are written out	SVG filtresi, öznitelikleri yazıldığında çok büyük oluyor
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	bir SVG filtresinin görüntüleri toplamda en fazla {MAX_IMAGE_PIXELS} pikseldir
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG filtresi çizilemiyor: temel öğelerini ve bunların girdilerini denetle
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	bir SVG filtresinin öğeleri en fazla {MAX_DEPTH} düzey iç içe geçer
+@msg	an SVG filter is at most {_1} KB	bir SVG filtresi en fazla {_1} KB olur
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Eksen Etrafında Döndür, Şişir veya Döndür)
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
 @msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor
@@ -5235,9 +5254,9 @@ lighting	Light	Işık
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık
 @msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} en fazla {MAX_MEMBERS} nesne alır
 @msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}, {MAX_DEPTH} düzeyden daha derin iç içe geçmiş resimden katı oluşturamaz
-@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
-@msg	Revolve edge must be left or right	Döndür: edge, left veya right olmalıdır
-@msg	Revolve cap must be a boolean	Döndür: cap bir boole değeri olmalıdır
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Eksen Etrafında Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
+@msg	Revolve edge must be left or right	Eksen Etrafında Döndür: edge, left veya right olmalıdır
+@msg	Revolve cap must be a boolean	Eksen Etrafında Döndür: cap bir boole değeri olmalıdır
 @msg	the revolved object has no fill or stroke	döndürülen nesnenin dolgusu veya konturu yok
 @msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor, #rrggbb biçiminde opak bir RGB rengi olmalıdır
 @msg	lights must contain one to ten lights	lights bir ile on arasında ışık içermelidir
@@ -5255,8 +5274,8 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
-@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Eksen Etrafında Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
@@ -5681,7 +5700,7 @@ lighting	Light	Işık
 	▾ Default Actions	▾ Varsayılan Eylemler
 	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} zaten {names} tarafından kullanılmıştı — oradan kaldırıldı.
 @id	file.close	Kapat
-@id	pathfinder.add	Birleştir
+@id	pathfinder.add	Birleşim
 @msg	give corners of the path: anchors between two straight sides	yolun köşelerini verin: iki düz kenar arasındaki çapalar
 @msg	this kind of brush has no options dialog yet	bu tür bir fırçanın henüz seçenekler iletişim kutusu yok
 @plural	{n} PR|{n} PRs	{n} PR

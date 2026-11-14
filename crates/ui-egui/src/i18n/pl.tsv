@@ -5823,6 +5823,24 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing	efekt 3D na wypełnieniu lub obrysie grupy niczego nie rysuje
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
+@msg	the <filter> element needs an id, the filter's name	element <filter> wymaga id, czyli nazwy filtra
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filtra SVG ma najwyżej {MAX_NAME} znaków
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> nie jest elementem filtra SVG
+@msg	an SVG filter has no event attributes such as {_1}	filtr SVG nie ma atrybutów zdarzeń, takich jak {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	obrazy filtra SVG to adresy data: PNG, JPEG, GIF lub WebP
+@msg	the SVG filter isn't valid XML: {e}	filtr SVG nie jest poprawnym XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves elementu feTurbulence wynosi najwyżej {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} wynosi najwyżej {max}
+@msg	feConvolveMatrix's order	order elementu feConvolveMatrix
+@msg	feMorphology's radius	radius elementu feMorphology
+@msg	a blur's stdDeviation	stdDeviation rozmycia
+@msg	the SVG filter has no primitives	filtr SVG nie ma prymitywów
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filtr SVG ma najwyżej {MAX_PRIMITIVES} prymitywów
+@msg	the SVG filter is too large once its attributes are written out	filtr SVG jest zbyt duży po zapisaniu jego atrybutów
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	obrazy filtra SVG mają łącznie najwyżej {MAX_IMAGE_PIXELS} pikseli
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	nie można narysować filtra SVG: sprawdź jego prymitywy i ich wejścia
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	elementy filtra SVG zagnieżdżają się najwyżej na {MAX_DEPTH} poziomów
+@msg	an SVG filter is at most {_1} KB	filtr SVG ma najwyżej {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
 @msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
