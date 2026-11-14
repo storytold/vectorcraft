@@ -201,6 +201,8 @@
 	Crop Image	Izreži sliku
 	Image Tools	Alati za slike
 	Remove Background…	Ukloni pozadinu…
+	Draw (Pencil)	Crtaj (olovka)
+	Place Image	Postavi sliku
 	Remove Background	Ukloni pozadinu
 	Background	Pozadina
 	Edge Color	Boja ruba
@@ -982,6 +984,7 @@
 	VectorCraft Title Bar on Every Desktop	Naslovna traka VectorCrafta na svakoj radnoj površini
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dok je varijabla okruženja VECTORCRAFT_TITLEBAR postavljena, ona bira naslovnu traku.
 	System Title Bar takes precedence over this option while it is on.	Dok je uključena, Sistemska naslovna traka ima prednost pred ovom opcijom.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Dok je Naslovna traka VectorCrafta na svakoj radnoj površini isključena, ova radna površina crta naslovnu traku prozora bez obzira na to je li ova opcija uključena.
 	Exit	Izlaz
 	Distort	Izobliči
 	Diffuse Glow…	Difuzni sjaj…
@@ -3356,6 +3359,29 @@ theme	Appearance	Izgled
 	Bristle Brush	Četkica s čekinjama
 	Pattern Brush	Četkica uzorka
 	missing from the Brushes panel	nedostaje u panelu Četkice
+	built in	ugrađen
+	embedding not allowed	ugrađivanje nije dozvoljeno
+	embedding for editing	ugrađivanje za uređivanje
+	embedding for preview and print	ugrađivanje za pregled i štampu
+	embedding allowed	ugrađivanje dozvoljeno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
+	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
+	missing	nedostaje
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearni gradijent
+	Radial gradient	Radijalni gradijent
+	Conic gradient	Konusni gradijent
+	Diamond gradient	Rombni gradijent
+	Freeform gradient	Gradijent slobodnog oblika
+@plural	{n} instance|{n} instances	{n} instanca|{n} instance|{n} instanci
+@plural	{n} row|{n} rows	{n} red|{n} reda|{n} redova
+@plural	{n} column|{n} columns	{n} kolona|{n} kolone|{n} kolona
 	Select art to make a scatter, art or pattern brush.	Odaberite crtež da napravite raspršenu, umjetničku četkicu ili četkicu uzorka.
 	Brush Art	Crtež četkice
 	New Symbol	Novi simbol
@@ -5236,6 +5262,8 @@ imageTrace	Outline	Obris
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ugrađena slika od {_1} × {_2} piksela smanjena je na {_3} × {_4} piksela kako bi se zadržali slojevi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	the Line Breaking setting of legacy type was left out	postavka prijeloma redova teksta u starom formatu je izostavljena
+@msg	the Japanese layout rules of legacy type were left out	japanska pravila rasporeda teksta u starom formatu su izostavljena
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
@@ -5867,6 +5895,7 @@ mark-style	Japanese	Japanski
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
 @msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	akcija „{_1}” postavlja postavku foldera {_2}; izbrišite taj korak da biste sačuvali skup
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -6073,6 +6102,8 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Playback Options…	Opcije reprodukcije…
+	Button Mode	Način dugmadi
+	No actions.	Nema akcija.
 	Insert Stop…	Umetni zaustavljanje…
 	Insert Stop	Umetni zaustavljanje
 	Record Stop	Snimi zaustavljanje

@@ -685,6 +685,8 @@ font-technology	Variable	Değişken
 	Crop Image	Resmi Kırp
 	Image Tools	Resim Araçları
 	Remove Background…	Arka Planı Kaldır…
+	Draw (Pencil)	Çiz (Kurşun Kalem)
+	Place Image	Resim Yerleştir
 	Remove Background	Arka Planı Kaldır
 	Background	Arka Plan
 	Edge Color	Kenar Rengi
@@ -4159,6 +4161,7 @@ axis	Both	Her İkisi
 @msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
+@msg	select a path	bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
@@ -4245,6 +4248,7 @@ axis	Both	Her İkisi
 @msg	`select` must be true or false	`select` true veya false olmalıdır
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` ve `maxAnchors` tam sayı olmalıdır
 @msg	`{key}` must be a number not below 0	`{key}` 0'dan küçük olmayan bir sayı olmalıdır
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 0'dan küçük olmayan dört sayı olmalıdır: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` [x, y, width, height] olmalıdır: dört sonlu sayı, genişlik ve yükseklik negatif olmamalı
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}`, `{max_key}` değerinden büyük
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	şunlardan en az birini verin: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4701,11 +4705,11 @@ axis	Both	Her İkisi
 @msg	unknown effect `{id}`	bilinmeyen etki `{id}`
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
-@msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, elmas, serbest biçimli)
+@msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (preserve, simulate veya discard)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
 @msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
@@ -4724,11 +4728,11 @@ axis	Both	Her İkisi
 @msg	`{key}` must be an object	`{key}` bir nesne olmalıdır
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` tek başına çalışır, toplu iş adımı olarak değil
 @msg	unknown preset (one of {_1})	bilinmeyen ön ayar ({_1}'den biri)
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (yüksek, orta, düşük veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (high, medium, low veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	bilinmeyen ön ayar `{name}` (bkz. webExport.presets.list)
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	bilinmeyen ön ayar `{name}`: yerleşik ya da kayıtlı bir ön ayar değil (bkz. imageTrace.presets)
-@msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (sol|sağ|üst|alt)
+@msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	bilinmeyen araç `{tool}`
 @msg	unknown tool `{t}`	bilinmeyen araç `{t}`
 @msg	unknown tool or command `{key}`	bilinmeyen araç veya komut `{key}`
@@ -4857,6 +4861,8 @@ axis	Both	Her İkisi
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	the Line Breaking setting of legacy type was left out	eski biçimdeki metnin satır kesme ayarı atlandı
+@msg	the Japanese layout rules of legacy type were left out	eski biçimdeki metnin Japonca dizgi kuralları atlandı
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
@@ -5035,6 +5041,7 @@ effect	Soft	Yumuşak
 	VectorCraft Title Bar on Every Desktop	Her Masaüstünde VectorCraft Başlık Çubuğu
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
 	System Title Bar takes precedence over this option while it is on.	Sistem Başlık Çubuğu açık olduğu sürece bu seçeneğe göre önceliklidir.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Her Masaüstünde VectorCraft Başlık Çubuğu kapalı olduğu sürece, bu seçenek açık da olsa kapalı da olsa pencerenin başlık çubuğunu bu masaüstü çizer.
 	Value Axis	Değer Ekseni
 	On Left Side	Sol Tarafta
 	On Right Side	Sağ Tarafta
@@ -5825,6 +5832,7 @@ theme	Appearance	Görünüm
 @msg	no such color	öyle bir renk yok
 @msg	{_1} cannot be used on Windows	{_1} Windows'ta kullanılamaz
 @msg	more than one action is named “{_1}”	birden fazla eylemin adı “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	“{_1}” eylemi {_2} klasör tercihini ayarlıyor; seti kaydetmek için o adımı silin
 @msg	no symbol named `{n}`	`{n}` adında bir sembol yok
 	Artboard Options: edit with the Artboard tool	Çalışma Yüzeyi Seçenekleri: Çalışma Yüzeyi aracıyla düzenleme
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	bu henüz açılamayan bir PostScript dosyasıdır (eski bir formatta kaydedilmiş veya PDF uyumluluğu olmayan bir .ai veya bir EPS dosyası): PDF, PDF uyumlu .ai veya SVG olarak kaydedin
@@ -6137,6 +6145,29 @@ theme	Appearance	Görünüm
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
 	missing from the Brushes panel	Fırçalar panelinde yok
+	built in	yerleşik
+	embedding not allowed	gömmeye izin verilmiyor
+	embedding for editing	düzenleme için gömme
+	embedding for preview and print	önizleme ve yazdırma için gömme
+	embedding allowed	gömmeye izin veriliyor
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
+	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
+	missing	eksik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Doğrusal degrade
+	Radial gradient	Radyal degrade
+	Conic gradient	Konik degrade
+	Diamond gradient	Elmas degrade
+	Freeform gradient	Serbest biçimli degrade
+@plural	{n} instance|{n} instances	{n} örnek
+@plural	{n} row|{n} rows	{n} satır
+@plural	{n} column|{n} columns	{n} sütun
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.
@@ -6529,6 +6560,8 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Playback Options…	Oynatma Seçenekleri…
+	Button Mode	Düğme Modu
+	No actions.	Eylem yok.
 	Insert Stop…	Durak Ekle…
 	Insert Stop	Durak Ekle
 	Record Stop	Durak Kaydet
