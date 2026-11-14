@@ -363,6 +363,14 @@ pub struct SeriesPaint {
     /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend: Option<vectorcraft_color::BlendMode>,
+    /// A gradient in [`Self::fill`] is placed relative to the unit box (0, 0)–(1, 1), and each mark takes it on its own
+    /// geometric bounds. False: the gradient is in document coordinates, and every mark takes it unchanged.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub fill_unit_box: bool,
+    /// A gradient in [`Self::stroke`] is placed relative to the unit box, as [`Self::fill_unit_box`], and each mark takes
+    /// it on its stroke's box (the geometric bounds grown by half the weight).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub stroke_unit_box: bool,
 }
 
 /// The object rows one kind of graph label keeps ([`LabelStyles::values_rows`]): the paint, weight, opacity and blend mode
