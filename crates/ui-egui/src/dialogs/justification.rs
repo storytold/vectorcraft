@@ -9,8 +9,10 @@
 //! Fields: `wordMin`, `wordDesired`, `wordMax` (0..1000), `letterMin`, `letterDesired`,
 //! `letterMax` (-100..500), `glyphMin`, `glyphDesired`, `glyphMax` (50..200), `autoLeading`
 //! (0..500), `singleWord` (`fullJustify`, `alignLeft`, `alignCenter`, `alignRight`) and `preview`,
-//! with `__initial` (the values it opened with), `__targets` (the type and range it acts on) and,
-//! after Select All in threaded text, `__story` (the edited frame, whose story it acts on).
+//! with `__initial` (the values it opened with), `__targets` (the type and range it acts on; with
+//! the Selection tool, every frame of each story selected when the dialog opened, locked and hidden
+//! frames included) and, after Select All in threaded text, `__story` (the edited frame, whose
+//! story it acts on).
 //!
 //! Behaviour reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/adjust-word-and-letterspacing-in-justified-text.html>.
@@ -95,6 +97,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         targets = json!({"ids": [id.0], "start": a, "end": b});
         // After Select All in threaded text: every paragraph of every frame ([`params`]).
         story = crate::panels::character::text_story(app).map(|_| id.0);
+    } else {
+        // With the Selection tool: every frame of each selected story.
+        crate::panels::character::target_selected_stories(app, &mut targets);
     }
     let mut values = Map::new();
     for (_, prefix, _) in ROWS {
@@ -421,6 +426,74 @@ mod tests {
         for i in 0..t.paragraph_count() {
             assert_eq!(t.para_at(i).justification.auto_leading, 140.0, "paragraph {i}");
         }
+    }
+
+    /// A threaded story of three frames, its second frame locked and its third hidden, a type object
+    /// of its own, and the first frame selected with the Selection tool → the app, the frames and
+    /// the other type object.
+    fn story_selected_in_its_first_frame() -> (VectorcraftApp, [u64; 3], u64) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        app.run("object.hide", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        (app, [a, b, c], other)
+    }
+
+    /// Every paragraph's Auto Leading in `id`.
+    fn auto_leadings(app: &VectorcraftApp, id: u64) -> Vec<f64> {
+        match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).justification.auto_leading).collect(),
+            _ => panic!("not text"),
+        }
+    }
+
+    /// With the Selection tool a selected frame of threaded text stands for its whole story: the
+    /// dialog opens blank where a locked or hidden frame differs, previews on every frame, Cancel
+    /// restores them, and OK changes every frame of the story as it was when the dialog opened, in
+    /// one undo step, leaving other type and a selection made later alone.
+    #[test]
+    fn selection_tool_justification_reaches_every_frame_of_the_story() {
+        let (mut app, frames, other) = story_selected_in_its_first_frame();
+        let [a, _, c] = frames;
+        for id in frames {
+            assert!(!auto_leadings(&app, id).is_empty(), "frame {id} holds text");
+        }
+        app.run("text.setFormat", json!({"ids": [c], "autoLeading": 150})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run("ui.justification", json!({})).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("autoLeading"), "the hidden frame differs");
+        set(&mut app, "autoLeading", json!(200));
+        set(&mut app, "preview", json!(true));
+        frame(&mut app);
+        for id in frames {
+            assert!(auto_leadings(&app, id).iter().all(|l| *l == 200.0), "the preview shows on frame {id}");
+        }
+        super::super::cancel(&mut app);
+        assert!(auto_leadings(&app, a).iter().all(|l| *l == 120.0));
+        assert!(auto_leadings(&app, c).iter().all(|l| *l == 150.0), "Cancel restores the hidden frame");
+
+        app.run("ui.justification", json!({})).unwrap();
+        // A selection made while the dialog is open does not change what it acts on.
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        set(&mut app, "autoLeading", json!(140));
+        let undo = app.session.active().unwrap().history.undo.len();
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+        for id in frames {
+            assert!(auto_leadings(&app, id).iter().all(|l| *l == 140.0), "frame {id} takes the change");
+        }
+        assert!(auto_leadings(&app, other).iter().all(|l| *l == 120.0), "other type keeps its paragraphs");
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(auto_leadings(&app, c).iter().all(|l| *l == 150.0), "undo restores the hidden frame");
     }
 
     /// When paragraphs in scope disagree, only shared justification values are filled in.

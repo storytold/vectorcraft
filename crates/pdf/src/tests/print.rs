@@ -452,6 +452,29 @@ fn a_symbol_instances_brush_art_keeps_its_artboard_printed() {
 }
 
 #[test]
+fn symbol_art_effects_print_where_they_draw() {
+    // A red square and the symbol's blue square, each moved 100 pt right by a Transform effect,
+    // print at the same distance from the page's left edge.
+    let moved = |mut n: Node| {
+        n.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+        n
+    };
+    let mut d = doc(200.0, 100.0, &[]);
+    let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
+    let red = Node::path(id, shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0));
+    d.insert(Some(layer), 0, moved(red)).unwrap();
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::basic(rgb(0.0, 0.0, 1.0), Paint::None, 0.0));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved(art)) });
+    let id = d.alloc_id();
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Moved".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let p = pages(&job(&d, json!({})).bytes);
+    assert_eq!(p.len(), 1);
+    let left = |c: [u8; 3]| p[0].1.iter().find(|(_, paint)| rgb8(paint) == c).map(|(r, _)| r.x0);
+    let (red, blue) = (left([255, 0, 0]), left([0, 0, 255]));
+    assert!(red.zip(blue).is_some_and(|(r, b)| (r - b).abs() < 0.05), "{p:?}");
+}
+
+#[test]
 fn copies_collate_and_reverse() {
     let mut d =
         doc(100.0, 100.0, &[(Rect::new(10.0, 10.0, 20.0, 20.0), rgb(1.0, 0.0, 0.0)), (Rect::new(210.0, 10.0, 220.0, 20.0), rgb(0.0, 0.0, 1.0))]);
