@@ -536,6 +536,103 @@ fn the_task_bar_follows_the_active_document() {
     assert!(!locked(&app, rect), "the button doesn't lock the shape");
 }
 
+/// A blank canvas, a new document with a selection tool in use, offers Draw (Pencil) and Place
+/// Image centered under the active artboard (under the canvas's center when the artboard is out of
+/// view), with the handle and More Options but none of a selection's actions or its Fill, Stroke,
+/// Recolor Artwork and Lock. Other tools, artwork in the document and a selection each leave the
+/// blank canvas actions out; ruler guides do not count as artwork.
+#[test]
+fn a_blank_canvas_offers_draw_and_place_image() {
+    let mut app = app();
+    let board = app.session.active().unwrap().doc.artboards[0].rect;
+    // The artboard at 50% in the middle of the window, after the first frame fits it in.
+    bar(&mut app);
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (board.center(), 0.5);
+    for tool in ["selection", "directSelection", "groupSelection"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (ctx, texts) = bar_texts(&mut app);
+        assert!(at(&texts, "Draw (Pencil)").x < at(&texts, "Place Image").x, "{tool}: {texts:?}");
+        let shown = canvas::task_bar_rect(&ctx).unwrap();
+        let xf = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let bottom = xf.quad(board).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+        let middle = xf.to_screen(board.center()).x;
+        assert!(shown.top() > bottom && (shown.center().x - middle).abs() < 2.0, "{tool}: {shown:?} centered under {board:?}");
+        assert!(app.canvas_rect.unwrap().contains_rect(shown), "{tool}: {shown:?} on the canvas");
+    }
+    // The artboard out of view: under the canvas's center.
+    app.view_mut().unwrap().center = board.center() + vectorcraft_geom::Vec2::new(5000.0, 5000.0);
+    let (ctx, _) = bar(&mut app);
+    let (shown, middle) = (canvas::task_bar_rect(&ctx).unwrap(), app.canvas_rect.unwrap().center());
+    assert!((shown.center().x - middle.x).abs() < 2.0 && shown.top() > middle.y && shown.top() < middle.y + 60.0, "{shown:?} under {middle:?}");
+    app.view_mut().unwrap().center = board.center();
+
+    let tree = crate::widgets::accessibility_tests::tree(|ui| canvas::show(&mut app, ui));
+    for label in ["Draw (Pencil)", "Place Image", "More Options"] {
+        assert_eq!(crate::widgets::accessibility_tests::named(&tree, label).role(), egui::accesskit::Role::Button, "{label}");
+    }
+    let named = |label: &str| tree.iter().any(|n| n.label().is_some_and(|l| l.starts_with(label)));
+    for label in ["Fill", "Stroke", "Recolor Artwork", "Lock", "Duplicate"] {
+        assert!(!named(label), "{label} is left out");
+    }
+
+    for tool in ["pen", "rectangle", "type", "artboard"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (_, texts) = bar_texts(&mut app);
+        assert!(!has(&texts, "Draw (Pencil)") && !has(&texts, "Place Image"), "{tool}: {texts:?}");
+    }
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Draw (Pencil)"), "{texts:?}");
+    select(&mut app, &[]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "artwork with nothing selected: no bar");
+    select(&mut app, &[rect]);
+    app.run("edit.clear", json!({})).unwrap();
+    app.run("guide.add", json!({"pos": 50})).unwrap();
+    assert!(has(&bar_texts(&mut app).1, "Draw (Pencil)"), "a ruler guide is not artwork");
+}
+
+/// Draw (Pencil) switches to the Pencil tool. Place Image picks files for the Place dialog;
+/// canceling the pick leaves the document as it was.
+#[test]
+fn the_blank_canvas_bar_draws_with_the_pencil_and_places_an_image() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    click(&mut app, "Draw (Pencil)");
+    assert_eq!(app.session.tool_id(), "pencil");
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    click(&mut app, "Place Image");
+    assert!(app.ui.dialog.is_none(), "canceled: no Place dialog");
+    assert!(app.session.active().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "nothing placed");
+
+    let path = std::env::temp_dir().join("vectorcraft-task-bar-place.png").to_string_lossy().into_owned();
+    let picked = path.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    click(&mut app, "Place Image");
+    let d = app.ui.dialog.take().expect("the Place dialog");
+    assert_eq!((d.kind.as_str(), &d.fields["files"]), (crate::dialogs::place::KIND, &json!([{ "path": path }])));
+}
+
+/// On a canvas too narrow for one row, the blank canvas bar's actions wrap onto a second row and the
+/// bar stays whole on the canvas.
+#[test]
+fn the_blank_canvas_bar_wraps_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(240.0, 400.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} on {canvas:?}");
+    let (draw, place) = (at(&texts, "Draw (Pencil)"), at(&texts, "Place Image"));
+    assert!(place.y > draw.y + 20.0, "Place Image wraps under Draw (Pencil): {draw:?} {place:?}");
+}
+
 /// The Type tools whose bar shows the font and Fill controls.
 const TYPE_TOOLS: [&str; 6] = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
 
