@@ -4629,19 +4629,6 @@ imageTrace	Outline	Obrys
 @msg	$.evalFile requires a file path	$.evalFile vyžaduje cestu k souboru
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: časový limit musí být konečný počet milisekund, 0 nebo více
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: přijímá cestu k souboru a časový limit
-@msg	assignment to a constant binding	přiřazení do konstantní vazby
-@msg	invalid array length	neplatná délka pole
-@msg	array literal too long	literál pole je příliš dlouhý
-@msg	the value is not a function	hodnota není funkce
-@msg	apply was called on a value that is not a function	apply bylo voláno na hodnotě, která není funkcí
-@msg	the argument list is not an object	seznam argumentů není objekt
-@msg	too many arguments	příliš mnoho argumentů
-@msg	the value is not a constructor	hodnota není konstruktor
-@msg	cannot convert the object to a primitive value	objekt nelze převést na primitivní hodnotu
-@msg	cannot convert undefined or null to an object	undefined ani null nelze převést na objekt
-@msg	the right side of 'in' is not an object	pravá strana 'in' není objekt
-@msg	the right side of 'instanceof' is not a function	pravá strana 'instanceof' není funkce
-@msg	the function's prototype is not an object	prototyp funkce není objekt
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}

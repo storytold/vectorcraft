@@ -2529,19 +2529,6 @@ file-filter	Templates	範本
 @msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
-@msg	assignment to a constant binding	對常數繫結賦值
-@msg	invalid array length	陣列長度無效
-@msg	array literal too long	陣列常值過長
-@msg	the value is not a function	值不是函式
-@msg	apply was called on a value that is not a function	對不是函式的值呼叫了 apply
-@msg	the argument list is not an object	引數清單不是物件
-@msg	too many arguments	引數過多
-@msg	the value is not a constructor	值不是建構函式
-@msg	cannot convert the object to a primitive value	無法將物件轉換為基本值
-@msg	cannot convert undefined or null to an object	無法將 undefined 或 null 轉換為物件
-@msg	the right side of 'in' is not an object	'in' 的右側不是物件
-@msg	the right side of 'instanceof' is not a function	'instanceof' 的右側不是函式
-@msg	the function's prototype is not an object	函式的原型不是物件
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}

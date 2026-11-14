@@ -4307,19 +4307,6 @@ axis	Both	Les deux
 @msg	$.evalFile requires a file path	$.evalFile nécessite un chemin de fichier
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile : le délai doit être un nombre fini de millisecondes, 0 ou plus
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile : prend un chemin de fichier et un délai
-@msg	assignment to a constant binding	affectation à une liaison constante
-@msg	invalid array length	longueur de tableau non valide
-@msg	array literal too long	littéral de tableau trop long
-@msg	the value is not a function	la valeur n'est pas une fonction
-@msg	apply was called on a value that is not a function	apply a été appelé sur une valeur qui n'est pas une fonction
-@msg	the argument list is not an object	la liste d'arguments n'est pas un objet
-@msg	too many arguments	trop d'arguments
-@msg	the value is not a constructor	la valeur n'est pas un constructeur
-@msg	cannot convert the object to a primitive value	impossible de convertir l'objet en valeur primitive
-@msg	cannot convert undefined or null to an object	impossible de convertir undefined ou null en objet
-@msg	the right side of 'in' is not an object	le côté droit de 'in' n'est pas un objet
-@msg	the right side of 'instanceof' is not a function	le côté droit de 'instanceof' n'est pas une fonction
-@msg	the function's prototype is not an object	le prototype de la fonction n'est pas un objet
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}

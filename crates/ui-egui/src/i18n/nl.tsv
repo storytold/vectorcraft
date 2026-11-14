@@ -91,19 +91,6 @@
 @msg	$.evalFile requires a file path	$.evalFile vereist een bestandspad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: de time-out moet een eindig aantal milliseconden zijn, 0 of meer
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: verwacht een bestandspad en een time-out
-@msg	assignment to a constant binding	toewijzing aan een constante binding
-@msg	invalid array length	ongeldige arraylengte
-@msg	array literal too long	de arrayliteral is te lang
-@msg	the value is not a function	de waarde is geen functie
-@msg	apply was called on a value that is not a function	apply is aangeroepen op een waarde die geen functie is
-@msg	the argument list is not an object	de argumentenlijst is geen object
-@msg	too many arguments	te veel argumenten
-@msg	the value is not a constructor	de waarde is geen constructor
-@msg	cannot convert the object to a primitive value	het object kan niet worden omgezet in een primitieve waarde
-@msg	cannot convert undefined or null to an object	undefined of null kan niet worden omgezet in een object
-@msg	the right side of 'in' is not an object	de rechterkant van 'in' is geen object
-@msg	the right side of 'instanceof' is not a function	de rechterkant van 'instanceof' is geen functie
-@msg	the function's prototype is not an object	het prototype van de functie is geen object
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}

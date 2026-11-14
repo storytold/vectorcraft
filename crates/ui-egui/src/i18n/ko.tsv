@@ -5062,19 +5062,6 @@ theme	Appearance	외관
 @msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
-@msg	assignment to a constant binding	상수 바인딩에 대입했습니다
-@msg	invalid array length	배열 길이가 잘못되었습니다
-@msg	array literal too long	배열 리터럴이 너무 깁니다
-@msg	the value is not a function	값이 함수가 아닙니다
-@msg	apply was called on a value that is not a function	함수가 아닌 값에 apply가 호출되었습니다
-@msg	the argument list is not an object	인수 목록이 객체가 아닙니다
-@msg	too many arguments	인수가 너무 많습니다
-@msg	the value is not a constructor	값이 생성자가 아닙니다
-@msg	cannot convert the object to a primitive value	객체를 원시 값으로 변환할 수 없습니다
-@msg	cannot convert undefined or null to an object	undefined 또는 null을 객체로 변환할 수 없습니다
-@msg	the right side of 'in' is not an object	'in'의 오른쪽이 객체가 아닙니다
-@msg	the right side of 'instanceof' is not a function	'instanceof'의 오른쪽이 함수가 아닙니다
-@msg	the function's prototype is not an object	함수의 프로토타입이 객체가 아닙니다
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}
