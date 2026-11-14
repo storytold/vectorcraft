@@ -42,13 +42,14 @@
 //! Behavior: <https://helpx.adobe.com/illustrator/using/objects-on-path.html>,
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rearrange-and-edit-objects-on-a-path.html>.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vectorcraft_doc::blend::Spine;
 use vectorcraft_doc::objects_on_path::{
-    CENTER, Member, ObjectsOnPath, attachable_path, is_objects_on_path, layout, nth_length, path_length, stop, stops,
+    CENTER, Measured, Member, ObjectsOnPath, attachable, attachable_path, is_objects_on_path, layout, nth_length,
 };
 use vectorcraft_doc::{Document, Node, NodeId, Selection};
-use vectorcraft_geom::{BezPath, Point, Vec2};
+use vectorcraft_geom::{BezPath, PathData, Point, Vec2};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -85,14 +86,20 @@ pub const MEMBER_RADIUS_PX: f32 = 4.5;
 /// How near (screen px) the pointer must be to hit a Select/Move widget.
 const MEMBER_HIT_PX: f64 = 6.0;
 
-/// The Objects on Path group the widgets show for at `zoom` (screen px per document point), with
-/// its record, its children and its path: only when the selection is that one editable group, on
-/// a path with length, and no anchors are Direct-Selected.
-fn one_group<'a>(
-    doc: &'a Document,
-    selection: &Selection,
-    zoom: f64,
-) -> Option<(NodeId, &'a ObjectsOnPath, &'a [std::sync::Arc<vectorcraft_doc::Node>], &'a vectorcraft_geom::PathData)> {
+/// An Objects on Path group the widgets show for, with its record, its children, its path and the
+/// path measured: one flattening serves every widget of the group.
+struct Group<'a> {
+    id: NodeId,
+    rec: &'a ObjectsOnPath,
+    children: &'a [Arc<Node>],
+    path: &'a PathData,
+    measured: Arc<Measured>,
+}
+
+/// The Objects on Path group the widgets show for at `zoom` (screen px per document point): only
+/// when the selection is that one editable group, on a path with length, and no anchors are
+/// Direct-Selected.
+fn one_group<'a>(doc: &'a Document, selection: &Selection, zoom: f64) -> Option<Group<'a>> {
     if !selection.anchors.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
         return None;
     }
@@ -103,8 +110,39 @@ fn one_group<'a>(
     let n = doc.node(*group)?;
     let rec = n.extras().objects_on_path.as_deref()?;
     let children = n.children()?;
-    let path = attachable_path(children.iter().find(|c| c.id == rec.path)?)?;
-    Some((*group, rec, children.as_slice(), path))
+    let (path, measured) = attachable(children.iter().find(|c| c.id == rec.path)?)?;
+    Some(Group { id: *group, rec, children: children.as_slice(), path, measured: Arc::new(measured) })
+}
+
+/// The path of an Objects on Path group as measured when a widget drag began, kept for the drag:
+/// the previews change the group's record and its objects, not its path.
+#[derive(Clone, Debug)]
+struct Kept {
+    group: NodeId,
+    path: PathData,
+    measured: Arc<Measured>,
+}
+
+impl Kept {
+    fn of(g: &Group) -> Self {
+        Self { group: g.id, path: g.path.clone(), measured: Arc::clone(&g.measured) }
+    }
+
+    /// The group's path in `doc` measured: the kept measurement while the path is as it was, else
+    /// the path measured again and kept. `None` when the group no longer has a path with length.
+    fn now(&mut self, doc: &Document) -> Option<Arc<Measured>> {
+        let n = doc.node(self.group)?;
+        let rec = n.extras().objects_on_path.as_deref()?;
+        let node = n.children()?.iter().find(|c| c.id == rec.path)?;
+        if let vectorcraft_doc::NodeKind::Path { path, guide: false, .. } = &node.kind
+            && *path == self.path
+        {
+            return Some(Arc::clone(&self.measured));
+        }
+        let (path, measured) = attachable(node)?;
+        *self = Self { group: self.group, path: path.clone(), measured: Arc::new(measured) };
+        Some(Arc::clone(&self.measured))
+    }
 }
 
 /// The direction the top of the object `m` faces: the -y direction of the frame it is drawn in
@@ -148,22 +186,27 @@ impl RotateAllWidget {
     /// selection is one editable Objects on Path group with at least one object on a path with
     /// length, and no anchors are Direct-Selected.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
-        let (group, rec, children, path) = one_group(doc, selection, zoom)?;
-        let first = rec.members.first()?;
-        let (pivot, _) = stop(path, rec.members.len(), rec.spacing, rec.start, 0)?;
-        let at = beside(doc, children, first, pivot, top(first), ROTATE_ALL_OFFSET_PX / zoom)?;
-        Some(Self { group, pivot, at, rotate: rec.rotate })
+        Self::in_group(doc, &one_group(doc, selection, zoom)?, zoom)
     }
 
-    /// The widget of `cx` when `p` is within reach of it.
-    fn at_point(cx: &ToolContext, p: Point) -> Option<Self> {
-        Self::of(cx.doc, cx.selection, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(ROTATE_ALL_HIT_PX))
+    /// The widget of the group `g`.
+    fn in_group(doc: &Document, g: &Group, zoom: f64) -> Option<Self> {
+        let rec = g.rec;
+        let first = rec.members.first()?;
+        let (pivot, _) = g.measured.stop(rec.members.len(), rec.spacing, rec.start, 0)?;
+        let at = beside(doc, g.children, first, pivot, top(first), ROTATE_ALL_OFFSET_PX / zoom)?;
+        Some(Self { group: g.id, pivot, at, rotate: rec.rotate })
+    }
+
+    /// The widget of the group `g` of `cx` when `p` is within reach of it.
+    fn at_point(cx: &ToolContext, g: &Group, p: Point) -> Option<Self> {
+        Self::in_group(cx.doc, g, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(ROTATE_ALL_HIT_PX))
     }
 }
 
 /// Is `p` over the Rotate All widget?
 pub fn over_rotate_all(cx: &ToolContext, p: Point) -> bool {
-    RotateAllWidget::at_point(cx, p).is_some()
+    one_group(cx.doc, cx.selection, cx.zoom).and_then(|g| RotateAllWidget::at_point(cx, &g, p)).is_some()
 }
 
 /// Dragging the Rotate All widget: the group's Rotate follows the angle the pointer turns about
@@ -191,7 +234,12 @@ impl RotateAllDrag {
 
     /// Start a drag when the press `ev` is on the Rotate All widget.
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
-        let widget = RotateAllWidget::at_point(cx, ev.pos)?;
+        Self::hit_in(cx, &one_group(cx.doc, cx.selection, cx.zoom)?, ev)
+    }
+
+    /// [`RotateAllDrag::hit`] on the group `g` of `cx`.
+    fn hit_in(cx: &ToolContext, g: &Group, ev: &PointerEvent) -> Option<Self> {
+        let widget = RotateAllWidget::at_point(cx, g, ev.pos)?;
         let d = ev.pos - widget.pivot;
         let last = d.y.atan2(d.x);
         let last = if last.is_finite() { last } else { 0.0 };
@@ -272,17 +320,22 @@ impl SpaceWidget {
     /// length, and no anchors are Direct-Selected. It sits beyond the last object's bounds, ahead
     /// along the path's direction there.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
-        let (group, rec, children, path) = one_group(doc, selection, zoom)?;
+        Self::in_group(doc, &one_group(doc, selection, zoom)?, zoom)
+    }
+
+    /// The widget of the group `g`.
+    fn in_group(doc: &Document, g: &Group, zoom: f64) -> Option<Self> {
+        let (group, rec) = (g.id, g.rec);
         let count = rec.members.len();
         if count < 2 {
             return None;
         }
-        let (len, closed) = path_length(path)?;
+        let (len, closed) = (g.measured.length(), g.measured.closed());
         let (start, gap) = layout(len, closed, count, rec.spacing, rec.start);
-        let (last, angle) = stop(path, count, rec.spacing, rec.start, count - 1)?;
+        let (last, angle) = g.measured.stop(count, rec.spacing, rec.start, count - 1)?;
         let dir = Vec2::new(angle.cos(), angle.sin());
         let m = rec.members.last()?;
-        let b = children.iter().find(|c| c.id == m.id)?.geometric_bounds_with(&doc.symbol_boxes())?;
+        let b = g.children.iter().find(|c| c.id == m.id)?.geometric_bounds_with(&doc.symbol_boxes())?;
         let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
         let reach = corners.iter().map(|c| (*c - last).dot(dir)).fold(0.0, f64::max);
         let at = last + dir * (reach + SPACE_OFFSET_PX / zoom);
@@ -291,29 +344,26 @@ impl SpaceWidget {
         finite.then_some(Self { group, last, last_length, at, dir, len, closed, count, start, gap, saved: (rec.spacing, rec.start) })
     }
 
-    /// The widget of `cx` when `p` is within reach of it.
-    fn at_point(cx: &ToolContext, p: Point) -> Option<Self> {
-        Self::of(cx.doc, cx.selection, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(SPACE_HIT_PX))
+    /// The widget of the group `g` of `cx` when `p` is within reach of it.
+    fn at_point(cx: &ToolContext, g: &Group, p: Point) -> Option<Self> {
+        Self::in_group(cx.doc, g, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(SPACE_HIT_PX))
     }
 }
 
 /// Is `p` over the Space widget?
 pub fn over_space(cx: &ToolContext, p: Point) -> bool {
-    SpaceWidget::at_point(cx, p).is_some()
+    one_group(cx.doc, cx.selection, cx.zoom).and_then(|g| SpaceWidget::at_point(cx, &g, p)).is_some()
 }
 
-/// The distance along the path of the Objects on Path group of `w` in `doc` to the point nearest
-/// `p` ([`Spine::nearest`]: past the ends of an open path, along the lines of its end segments),
-/// staying near `from` when the pointer is following the path from there. The line from the last
-/// object's attachment point through the widget counts as the path too, as far as the pointer is
-/// ahead of that object along it, so a widget beyond a corner measures from where it is. The flag
-/// says whether the point is on that line, where the distance runs on past the end of a closed path
-/// instead of round it.
-fn length_near(doc: &Document, w: &SpaceWidget, p: Point, from: Option<f64>) -> Option<(f64, bool)> {
-    let n = doc.node(w.group)?;
-    let rec = n.extras().objects_on_path.as_deref()?;
-    let path = attachable_path(n.children()?.iter().find(|c| c.id == rec.path)?)?;
-    let spine = Spine::new(path)?;
+/// The distance along the path of the Objects on Path group of `w`, `measured`, to the point nearest
+/// `p` ([`vectorcraft_doc::blend::Spine::nearest`]: past the ends of an open path, along the lines
+/// of its end segments), staying near `from` when the pointer is following the path from there. The
+/// line from the last object's attachment point through the widget counts as the path too, as far
+/// as the pointer is ahead of that object along it, so a widget beyond a corner measures from where
+/// it is. The flag says whether the point is on that line, where the distance runs on past the end
+/// of a closed path instead of round it.
+fn length_near(measured: &Measured, w: &SpaceWidget, p: Point, from: Option<f64>) -> Option<(f64, bool)> {
+    let spine = measured.spine();
     let bias = |s: f64| from.filter(|f| f.is_finite()).map_or(0.0, |f| spine.apart(s, f) / 2.0);
     let ahead = (p - w.last).dot(w.dir);
     let line = (ahead >= 0.0).then(|| {
@@ -334,6 +384,8 @@ fn length_near(doc: &Document, w: &SpaceWidget, p: Point, from: Option<f64>) -> 
 #[derive(Clone, Debug)]
 pub struct SpaceDrag {
     widget: SpaceWidget,
+    /// The group's path, measured.
+    path: Kept,
     start: Point,
     began: bool,
     /// The distance along the path to the point nearest the pointer at the last drag (points).
@@ -353,17 +405,23 @@ impl SpaceDrag {
 
     /// Start a drag when the press `ev` is on the Space widget.
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
-        let widget = SpaceWidget::at_point(cx, ev.pos)?;
-        let (last, _) = length_near(cx.doc, &widget, ev.pos, None)?;
-        Some(Self { widget, start: ev.pos, began: false, last, along: 0.0, gap: widget.gap, at: ev.pos })
+        Self::hit_in(cx, &one_group(cx.doc, cx.selection, cx.zoom)?, ev)
+    }
+
+    /// [`SpaceDrag::hit`] on the group `g` of `cx`.
+    fn hit_in(cx: &ToolContext, g: &Group, ev: &PointerEvent) -> Option<Self> {
+        let widget = SpaceWidget::at_point(cx, g, ev.pos)?;
+        let (last, _) = length_near(&g.measured, &widget, ev.pos, None)?;
+        Some(Self { widget, path: Kept::of(g), start: ev.pos, began: false, last, along: 0.0, gap: widget.gap, at: ev.pos })
     }
 
     /// The pointer moved to `p` from `self.at`: add the distance it moved along the path. On the
     /// line through the widget, from a point ahead of the last object, that is how far it moved
     /// along the line; otherwise it takes the shorter way round a closed path.
     fn follow(&mut self, doc: &Document, p: Point) {
+        let Some(measured) = self.path.now(doc) else { return };
         let w = &self.widget;
-        let Some((t, on_line)) = length_near(doc, w, p, Some(self.last)) else { return };
+        let Some((t, on_line)) = length_near(&measured, w, p, Some(self.last)) else { return };
         let before = (self.at - w.last).dot(w.dir);
         let step = if on_line && before >= 0.0 {
             (p - w.last).dot(w.dir) - before
@@ -469,10 +527,15 @@ impl MoveAllWidget {
     /// the distance from the first object to the last is shorter than the path. It sits beyond the
     /// first object's bounds, on the side its bottom faces.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
-        let (group, rec, children, path) = one_group(doc, selection, zoom)?;
+        Self::in_group(doc, &one_group(doc, selection, zoom)?, zoom)
+    }
+
+    /// The widget of the group `g`.
+    fn in_group(doc: &Document, g: &Group, zoom: f64) -> Option<Self> {
+        let (group, rec, children) = (g.id, g.rec, g.children);
         let count = rec.members.len();
         let first = rec.members.first()?;
-        let (len, closed) = path_length(path)?;
+        let (len, closed) = (g.measured.length(), g.measured.closed());
         let (start, gap) = layout(len, closed, count, rec.spacing, rec.start);
         let most = if closed { len } else { len - gap * count.saturating_sub(1) as f64 };
         if !closed && (!most.is_finite() || most <= 1e-9) {
@@ -481,21 +544,21 @@ impl MoveAllWidget {
         // On an open path, Auto and a Space value the path is too short for draw the objects apart
         // by what is left of the path after the start, so another start would change the distance.
         let keeps = closed || count < 2 || rec.spacing.is_some_and(|g| (g - gap).abs() < 1e-9);
-        let (at_first, _) = stop(path, count, rec.spacing, rec.start, 0)?;
+        let (at_first, _) = g.measured.stop(count, rec.spacing, rec.start, 0)?;
         let at = beside(doc, children, first, at_first, -top(first), MOVE_ALL_OFFSET_PX / zoom)?;
         let finite = [len, start, most, rec.start].iter().all(|v| v.is_finite());
         finite.then_some(Self { group, first: at_first, at, len, closed, start, most, gap: (!keeps).then_some(gap), saved: rec.start })
     }
 
-    /// The widget of `cx` when `p` is within reach of it.
-    fn at_point(cx: &ToolContext, p: Point) -> Option<Self> {
-        Self::of(cx.doc, cx.selection, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(MOVE_ALL_HIT_PX))
+    /// The widget of the group `g` of `cx` when `p` is within reach of it.
+    fn at_point(cx: &ToolContext, g: &Group, p: Point) -> Option<Self> {
+        Self::in_group(cx.doc, g, cx.zoom).filter(|w| w.at.distance(p) <= cx.tol(MOVE_ALL_HIT_PX))
     }
 }
 
 /// Is `p` over the Move All widget?
 pub fn over_move_all(cx: &ToolContext, p: Point) -> bool {
-    MoveAllWidget::at_point(cx, p).is_some()
+    one_group(cx.doc, cx.selection, cx.zoom).and_then(|g| MoveAllWidget::at_point(cx, &g, p)).is_some()
 }
 
 /// Dragging the Move All widget: the distance the pointer moves along the path moves every object
@@ -504,6 +567,8 @@ pub fn over_move_all(cx: &ToolContext, p: Point) -> bool {
 #[derive(Clone, Debug)]
 pub struct MoveAllDrag {
     widget: MoveAllWidget,
+    /// The group's path, measured.
+    path: Kept,
     start: Point,
     began: bool,
     /// The distance along the path to the point nearest the pointer at the last drag (points).
@@ -521,9 +586,14 @@ impl MoveAllDrag {
 
     /// Start a drag when the press `ev` is on the Move All widget.
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
-        let widget = MoveAllWidget::at_point(cx, ev.pos)?;
-        let (_, last) = group_spine(cx.doc, widget.group)?.nearest(ev.pos, Some(widget.start))?;
-        last.is_finite().then_some(Self { widget, start: ev.pos, began: false, last, to: widget.start, at: ev.pos })
+        Self::hit_in(cx, &one_group(cx.doc, cx.selection, cx.zoom)?, ev)
+    }
+
+    /// [`MoveAllDrag::hit`] on the group `g` of `cx`.
+    fn hit_in(cx: &ToolContext, g: &Group, ev: &PointerEvent) -> Option<Self> {
+        let widget = MoveAllWidget::at_point(cx, g, ev.pos)?;
+        let (_, last) = g.measured.spine().nearest(ev.pos, Some(widget.start))?;
+        last.is_finite().then_some(Self { widget, path: Kept::of(g), start: ev.pos, began: false, last, to: widget.start, at: ev.pos })
     }
 
     /// The pointer moved to `p`: move the first object as far along the path as the point nearest
@@ -531,8 +601,8 @@ impl MoveAllDrag {
     /// the first anchor and [`MoveAllWidget::most`], so moving back from beyond an end moves the
     /// objects back at once.
     fn follow(&mut self, doc: &Document, p: Point) {
+        let Some((_, t)) = self.path.now(doc).and_then(|m| m.spine().nearest(p, Some(self.last))) else { return };
         let w = &self.widget;
-        let Some((_, t)) = group_spine(doc, w.group).and_then(|s| s.nearest(p, Some(self.last))) else { return };
         let step = if w.closed { (t - self.last + w.len / 2.0).rem_euclid(w.len) - w.len / 2.0 } else { t - self.last };
         if !t.is_finite() || !step.is_finite() {
             return;
@@ -604,8 +674,13 @@ impl MemberWidget {
     /// its order along the path that is neither hidden nor locked: only when the selection is one
     /// editable Objects on Path group on a path with length, and no anchors are Direct-Selected.
     pub fn all(doc: &Document, selection: &Selection, zoom: f64) -> Vec<Self> {
-        let Some((group, rec, _, path)) = one_group(doc, selection, zoom) else { return vec![] };
-        let Some(at) = stops(path, rec.members.len(), rec.spacing, rec.start) else { return vec![] };
+        one_group(doc, selection, zoom).map(|g| Self::in_group(doc, selection, &g)).unwrap_or_default()
+    }
+
+    /// The widgets of the group `g`, the selection.
+    fn in_group(doc: &Document, selection: &Selection, g: &Group) -> Vec<Self> {
+        let (group, rec) = (g.id, g.rec);
+        let at = g.measured.stops(rec.members.len(), rec.spacing, rec.start);
         let editable = doc.editable();
         rec.members
             .iter()
@@ -616,17 +691,16 @@ impl MemberWidget {
             .collect()
     }
 
-    /// The widget of `cx` nearest `p`, when `p` is within reach of it; of widgets as near, the
-    /// chosen one, else the first along the path.
-    fn at_point(cx: &ToolContext, p: Point) -> Option<Self> {
+    /// The widget of the group `g` of `cx` nearest `p`, when `p` is within reach of it; of widgets
+    /// as near, the chosen one, else the first along the path.
+    fn at_point(cx: &ToolContext, g: &Group, p: Point) -> Option<Self> {
         let reach = cx.tol(MEMBER_HIT_PX);
         // Every attachment point lies on the path: a pointer beyond reach of its bounds is over none.
-        let (_, _, _, path) = one_group(cx.doc, cx.selection, cx.zoom)?;
-        if !path.control_bounds()?.inflate(reach, reach).contains(p) {
+        if !g.path.control_bounds()?.inflate(reach, reach).contains(p) {
             return None;
         }
         let mut best: Option<(f64, Self)> = None;
-        for w in Self::all(cx.doc, cx.selection, cx.zoom) {
+        for w in Self::in_group(cx.doc, cx.selection, g) {
             let d = w.at.distance(p);
             let nearer = best.is_none_or(|(b, bw)| d < b - 1e-9 || (d <= b + 1e-9 && w.chosen && !bw.chosen));
             if d <= reach && nearer {
@@ -639,15 +713,85 @@ impl MemberWidget {
 
 /// Is `p` over a Select/Move widget?
 pub fn over_member(cx: &ToolContext, p: Point) -> bool {
-    MemberWidget::at_point(cx, p).is_some()
+    one_group(cx.doc, cx.selection, cx.zoom).and_then(|g| MemberWidget::at_point(cx, &g, p)).is_some()
 }
 
 /// The highlight of the Select/Move widget under `p`, if any: a ring around it.
 pub fn member_hover(cx: &ToolContext, p: Point) -> Option<Overlay> {
-    let w = MemberWidget::at_point(cx, p)?;
+    let w = MemberWidget::at_point(cx, &one_group(cx.doc, cx.selection, cx.zoom)?, p)?;
     let r = cx.tol(f64::from(MEMBER_RADIUS_PX) + 2.0);
     let ring = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(w.at.x - r, w.at.y - r, w.at.x + r, w.at.y + r));
     Some(Overlay::Path { path: ring.to_bezpath(), color: HIGHLIGHT, width: 1.5, dashed: false })
+}
+
+/// The widgets of the selection at `zoom` (screen px per document point), each as its own `of` or
+/// `all` gives it, from one measurement of the group's path: for drawing them together.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Widgets {
+    pub members: Vec<MemberWidget>,
+    pub rotate_all: Option<RotateAllWidget>,
+    pub space: Option<SpaceWidget>,
+    pub move_all: Option<MoveAllWidget>,
+}
+
+impl Widgets {
+    pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Self {
+        let Some(g) = one_group(doc, selection, zoom) else { return Self::default() };
+        Self {
+            members: MemberWidget::in_group(doc, selection, &g),
+            rotate_all: RotateAllWidget::in_group(doc, &g, zoom),
+            space: SpaceWidget::in_group(doc, &g, zoom),
+            move_all: MoveAllWidget::in_group(doc, &g, zoom),
+        }
+    }
+}
+
+/// A widget of a selected Objects on Path group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WidgetKind {
+    RotateAll,
+    Space,
+    MoveAll,
+    Member,
+}
+
+/// The widget `p` is over, of the Rotate All, Space, Move All and Select/Move widgets in that
+/// order, from one measurement of the group's path: as [`over_rotate_all`], [`over_space`],
+/// [`over_move_all`] and [`over_member`] answer in turn.
+pub fn widget_at(cx: &ToolContext, p: Point) -> Option<WidgetKind> {
+    let g = one_group(cx.doc, cx.selection, cx.zoom)?;
+    if RotateAllWidget::at_point(cx, &g, p).is_some() {
+        Some(WidgetKind::RotateAll)
+    } else if SpaceWidget::at_point(cx, &g, p).is_some() {
+        Some(WidgetKind::Space)
+    } else if MoveAllWidget::at_point(cx, &g, p).is_some() {
+        Some(WidgetKind::MoveAll)
+    } else {
+        MemberWidget::at_point(cx, &g, p).map(|_| WidgetKind::Member)
+    }
+}
+
+/// A drag of a widget of a selected Objects on Path group.
+#[derive(Clone, Debug)]
+pub enum WidgetDrag {
+    RotateAll(RotateAllDrag),
+    Space(SpaceDrag),
+    MoveAll(MoveAllDrag),
+    Member(MemberDrag),
+}
+
+impl WidgetDrag {
+    /// The drag the press `ev` starts, of the Rotate All, Space, Move All and Select/Move widgets
+    /// in that order, from one measurement of the group's path: as [`RotateAllDrag::hit`],
+    /// [`SpaceDrag::hit`], [`MoveAllDrag::hit`] and [`MemberDrag::hit`] answer in turn.
+    pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
+        let g = one_group(cx.doc, cx.selection, cx.zoom)?;
+        RotateAllDrag::hit_in(cx, &g, ev)
+            .map(Self::RotateAll)
+            .or_else(|| SpaceDrag::hit_in(cx, &g, ev).map(Self::Space))
+            .or_else(|| MoveAllDrag::hit_in(cx, &g, ev).map(Self::MoveAll))
+            .or_else(|| MemberDrag::hit_in(cx, &g, ev).map(Self::Member))
+    }
 }
 
 /// Dragging a Select/Move widget: the object goes to the place along the path nearest the
@@ -661,6 +805,8 @@ pub fn member_hover(cx: &ToolContext, p: Point) -> Option<Overlay> {
 #[derive(Clone, Debug)]
 pub struct MemberDrag {
     widget: MemberWidget,
+    /// The group's path, measured.
+    path: Kept,
     /// The objects in their order along the path when the press began.
     order: Vec<NodeId>,
     /// The distance along the path to each place (points), in that order.
@@ -687,10 +833,14 @@ impl MemberDrag {
 
     /// Start a drag when the press `ev` is on a Select/Move widget.
     pub fn hit(cx: &ToolContext, ev: &PointerEvent) -> Option<Self> {
-        let widget = MemberWidget::at_point(cx, ev.pos)?;
-        let n = cx.doc.node(widget.group)?;
-        let rec = n.extras().objects_on_path.as_deref()?;
-        let (len, closed) = path_length(attachable_path(n.children()?.iter().find(|c| c.id == rec.path)?)?)?;
+        Self::hit_in(cx, &one_group(cx.doc, cx.selection, cx.zoom)?, ev)
+    }
+
+    /// [`MemberDrag::hit`] on the group `g` of `cx`.
+    fn hit_in(cx: &ToolContext, g: &Group, ev: &PointerEvent) -> Option<Self> {
+        let widget = MemberWidget::at_point(cx, g, ev.pos)?;
+        let rec = g.rec;
+        let (len, closed) = (g.measured.length(), g.measured.closed());
         let count = rec.members.len();
         let (s0, gap) = layout(len, closed, count, rec.spacing, rec.start);
         let places: Vec<f64> = (0..count).map(|i| nth_length(len, closed, s0, gap, i)).collect();
@@ -698,7 +848,7 @@ impl MemberDrag {
         let editable = cx.doc.editable();
         let open = rec.members.iter().map(|m| editable(m.id)).collect();
         let order = rec.members.iter().map(|m| m.id).collect();
-        Some(Self { widget, order, places, open, len, closed, start: ev.pos, began: false, last, target: widget.index })
+        Some(Self { widget, path: Kept::of(g), order, places, open, len, closed, start: ev.pos, began: false, last, target: widget.index })
     }
 
     /// How far apart along the path the distances `a` and `b` are: the shorter way round a closed
@@ -733,8 +883,8 @@ impl MemberDrag {
             self.began = true;
             out.push(Action::Begin("Move Object on Path".into()));
         }
-        let w = &self.widget;
-        let Some(spine) = group_spine(cx.doc, w.group) else { return out };
+        let Some(measured) = self.path.now(cx.doc) else { return out };
+        let (w, spine) = (&self.widget, measured.spine());
         let Some((near, t)) = spine.nearest(p, None) else { return out };
         // Where the path passes as near the pointer more than once, the point nearest along the path
         // to where the drag was counts.
@@ -767,13 +917,6 @@ impl MemberDrag {
     }
 }
 
-/// The path of the Objects on Path group `g` of `doc`, to measure along.
-fn group_spine(doc: &Document, g: NodeId) -> Option<Spine> {
-    let n = doc.node(g)?;
-    let rec = n.extras().objects_on_path.as_deref()?;
-    Spine::new(attachable_path(n.children()?.iter().find(|c| c.id == rec.path)?)?)
-}
-
 /// The path a click at `p` attaches the selected objects to: the path object hit there, when it can
 /// take objects, is in no Objects on Path group, is not a clipping path or part of a compound path,
 /// blend, envelope, repeat or Intertwine group ([`vectorcraft_doc::objects_on_path::held`]), and
@@ -781,14 +924,13 @@ fn group_spine(doc: &Document, g: NodeId) -> Option<Spine> {
 pub fn target(cx: &ToolContext, p: Point) -> Option<(NodeId, BezPath)> {
     let h = vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options())?;
     let n = cx.doc.node(h.leaf)?;
-    let path = attachable_path(n)?;
     if h.ancestry.iter().filter(|a| **a != h.leaf).any(|a| cx.doc.node(*a).is_some_and(is_objects_on_path)) {
         return None;
     }
-    if vectorcraft_doc::objects_on_path::held(cx.doc, h.leaf).is_some() {
+    if vectorcraft_doc::objects_on_path::held(cx.doc, h.leaf).is_some() || !cx.selection.objects.iter().any(|id| *id != h.leaf) {
         return None;
     }
-    cx.selection.objects.iter().any(|id| *id != h.leaf).then(|| (h.leaf, path.to_bezpath()))
+    attachable_path(n).map(|path| (h.leaf, path.to_bezpath()))
 }
 
 pub struct ObjectsOnPathTool {
@@ -856,28 +998,17 @@ impl Tool for ObjectsOnPathTool {
         self.pointer = (ev.kind == PointerKind::Move).then_some(p);
         match ev.kind {
             PointerKind::Move => {
-                let widget = over_rotate_all(cx, p) || over_space(cx, p) || over_move_all(cx, p) || over_member(cx, p);
-                self.hover = if widget { None } else { target(cx, p) };
+                self.hover = if widget_at(cx, p).is_some() { None } else { target(cx, p) };
                 vec![]
             }
             PointerKind::Down => {
-                if let Some(d) = RotateAllDrag::hit(cx, ev) {
-                    self.rotating = Some(d);
-                    self.hover = None;
-                    return vec![];
-                }
-                if let Some(d) = SpaceDrag::hit(cx, ev) {
-                    self.spacing = Some(d);
-                    self.hover = None;
-                    return vec![];
-                }
-                if let Some(d) = MoveAllDrag::hit(cx, ev) {
-                    self.moving = Some(d);
-                    self.hover = None;
-                    return vec![];
-                }
-                if let Some(d) = MemberDrag::hit(cx, ev) {
-                    self.member = Some(d);
+                if let Some(d) = WidgetDrag::hit(cx, ev) {
+                    match d {
+                        WidgetDrag::RotateAll(d) => self.rotating = Some(d),
+                        WidgetDrag::Space(d) => self.spacing = Some(d),
+                        WidgetDrag::MoveAll(d) => self.moving = Some(d),
+                        WidgetDrag::Member(d) => self.member = Some(d),
+                    }
                     self.hover = None;
                     return vec![];
                 }
@@ -917,17 +1048,21 @@ impl Tool for ObjectsOnPathTool {
         if self.member.is_some() {
             return Cursor::Move;
         }
-        let idle = self.spacing.is_none() && self.moving.is_none();
-        if self.rotating.is_some() || (idle && over_rotate_all(cx, p)) {
-            Cursor::Rotate
-        } else if self.spacing.is_some() || (self.moving.is_none() && over_space(cx, p)) {
-            Cursor::ArrowHollow
-        } else if self.moving.is_some() || over_move_all(cx, p) || over_member(cx, p) {
-            Cursor::Move
-        } else if target(cx, p).is_some() {
-            Cursor::ObjectsOnPath
-        } else {
-            Cursor::Arrow
+        if self.rotating.is_some() {
+            return Cursor::Rotate;
+        }
+        if self.spacing.is_some() {
+            return Cursor::ArrowHollow;
+        }
+        if self.moving.is_some() {
+            return Cursor::Move;
+        }
+        match widget_at(cx, p) {
+            Some(WidgetKind::RotateAll) => Cursor::Rotate,
+            Some(WidgetKind::Space) => Cursor::ArrowHollow,
+            Some(WidgetKind::MoveAll | WidgetKind::Member) => Cursor::Move,
+            None if target(cx, p).is_some() => Cursor::ObjectsOnPath,
+            None => Cursor::Arrow,
         }
     }
 
@@ -1405,7 +1540,10 @@ mod tests {
             gap: 100.0,
             saved: (None, 0.0),
         };
-        let moved = |along| SpaceDrag { widget: w, start: Point::ZERO, began: true, last: 0.0, along, gap: w.gap, at: Point::ZERO };
+        let line = shapes::line(Point::ZERO, Point::new(400.0, 0.0));
+        let path = Kept { group: NodeId(1), measured: Arc::new(Measured::new(&line).unwrap()), path: line };
+        let moved =
+            |along| SpaceDrag { widget: w, path: path.clone(), start: Point::ZERO, began: true, last: 0.0, along, gap: w.gap, at: Point::ZERO };
         assert_eq!(moved(30.0).spacing_at(false), (100.0, 0.0), "a quarter of the way round at most");
         assert_eq!(moved(-60.0).spacing_at(false), (80.0, 0.0));
         assert_eq!(moved(-60.0).spacing_at(true), (60.0, 310.0), "the span of 180 centered on the first anchor");
@@ -1957,5 +2095,169 @@ mod tests {
         let mut t = ObjectsOnPathTool::default();
         t.pointer(&c, &ev(PointerKind::Down, 0.0, 300.0));
         assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 0.0, 300.0)), vec![choose(ids[2])], "the chosen one");
+    }
+
+    /// What `f` returns, and how many times it flattened a path.
+    fn flattenings<T>(f: impl FnOnce() -> T) -> (T, usize) {
+        let before = vectorcraft_doc::blend::spines_built();
+        let out = f();
+        (out, vectorcraft_doc::blend::spines_built() - before)
+    }
+
+    /// Space 100 from 50 on the line from (0, 300) to (400, 300): the objects attach at (50, 300)
+    /// and (150, 300). The Rotate All widget is at (50, 274), the Move All widget at (50, 326) and
+    /// the Space widget at (176, 300).
+    #[test]
+    fn each_widget_lookup_flattens_the_path_once() {
+        let (d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        // Points to 1/1,000 pt, as the path is measured along its flattening.
+        let close = |a: Point, b: Point| a.distance(b) < 1e-3;
+        let (w, n) = flattenings(|| RotateAllWidget::of(&d, &sel, 1.0));
+        assert_eq!(n, 1, "Rotate All");
+        let w = w.unwrap();
+        assert!(w.group == g && w.rotate == 0.0, "{w:?}");
+        assert!(close(w.pivot, Point::new(50.0, 300.0)) && close(w.at, Point::new(50.0, 274.0)), "{w:?}");
+        let (w, n) = flattenings(|| SpaceWidget::of(&d, &sel, 1.0));
+        assert_eq!(n, 1, "Space");
+        let w = w.unwrap();
+        assert!(close(w.last, Point::new(150.0, 300.0)) && close(w.at, Point::new(176.0, 300.0)), "{w:?}");
+        assert!((w.last_length - 150.0).abs() < 1e-3 && (w.len - 400.0).abs() < 1e-3 && !w.closed && w.count == 2, "{w:?}");
+        assert!((w.start - 50.0).abs() < 1e-3 && (w.gap - 100.0).abs() < 1e-3 && w.saved == (Some(100.0), 50.0), "{w:?}");
+        let (w, n) = flattenings(|| MoveAllWidget::of(&d, &sel, 1.0));
+        assert_eq!(n, 1, "Move All");
+        let w = w.unwrap();
+        assert!(close(w.first, Point::new(50.0, 300.0)) && close(w.at, Point::new(50.0, 326.0)), "{w:?}");
+        assert!((w.len - 400.0).abs() < 1e-3 && (w.start - 50.0).abs() < 1e-3 && (w.most - 300.0).abs() < 1e-3, "{w:?}");
+        assert!(w.gap.is_none() && w.saved == 50.0 && !w.closed, "{w:?}");
+        let (ws, n) = flattenings(|| MemberWidget::all(&d, &sel, 1.0));
+        assert_eq!(n, 1, "Select/Move");
+        assert_eq!(ws.iter().map(|w| w.index).collect::<Vec<_>>(), [0, 1]);
+        assert!(close(ws[0].at, Point::new(50.0, 300.0)) && close(ws[1].at, Point::new(150.0, 300.0)), "{ws:?}");
+        // Each hit test, over its widget.
+        type Over = fn(&ToolContext, Point) -> bool;
+        let hits: [(&str, Over, Point); 4] = [
+            ("Rotate All", over_rotate_all, Point::new(50.0, 274.0)),
+            ("Space", over_space, Point::new(176.0, 300.0)),
+            ("Move All", over_move_all, Point::new(50.0, 326.0)),
+            ("Select/Move", over_member, Point::new(150.0, 300.0)),
+        ];
+        for (what, over, p) in hits {
+            assert_eq!(flattenings(|| over(&c, p)), (true, 1), "{what}");
+        }
+        assert_eq!(flattenings(|| member_hover(&c, Point::new(150.0, 300.0)).is_some()), (true, 1));
+        // A group of one object has no Space widget, and its objects no room to move on an open
+        // path: one flattening finds that.
+        let (d1, sel1) = single_doc();
+        assert_eq!(flattenings(|| SpaceWidget::of(&d1, &sel1, 1.0)), (None, 1));
+        let (d2, _, sel2) = group_doc(0.0);
+        assert_eq!(flattenings(|| MoveAllWidget::of(&d2, &sel2, 1.0)), (None, 1));
+        // Nothing flattens for a selection the widgets do not show for.
+        assert_eq!(flattenings(|| Widgets::of(&d, &Selection::default(), 1.0)), (Widgets::default(), 0));
+    }
+
+    /// All four kinds of widget come from one flattening, as each one's own lookup gives it; and the
+    /// widget under the pointer, in the order a press takes them, from one flattening too.
+    #[test]
+    fn the_widgets_of_a_group_share_one_flattening() {
+        let (d, _, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let (all, n) = flattenings(|| Widgets::of(&d, &sel, 1.0));
+        assert_eq!(n, 1);
+        assert_eq!(all.members, MemberWidget::all(&d, &sel, 1.0));
+        assert_eq!(all.rotate_all, RotateAllWidget::of(&d, &sel, 1.0));
+        assert_eq!(all.space, SpaceWidget::of(&d, &sel, 1.0));
+        assert_eq!(all.move_all, MoveAllWidget::of(&d, &sel, 1.0));
+        assert!(all.rotate_all.is_some() && all.space.is_some() && all.move_all.is_some() && all.members.len() == 2);
+        let cases = [
+            (Point::new(50.0, 274.0), Some(WidgetKind::RotateAll)),
+            (Point::new(176.0, 300.0), Some(WidgetKind::Space)),
+            (Point::new(50.0, 326.0), Some(WidgetKind::MoveAll)),
+            (Point::new(150.0, 300.0), Some(WidgetKind::Member)),
+            // On the path between the objects: over none of them, after every one is tested.
+            (Point::new(250.0, 300.0), None),
+        ];
+        for (p, kind) in cases {
+            assert_eq!(flattenings(|| widget_at(&c, p)), (kind, 1), "{p:?}");
+        }
+        // A pointer move and the cursor of each tool look once.
+        for t in [Box::new(crate::select::SelectionTool::default()) as Box<dyn Tool>, Box::new(ObjectsOnPathTool::default())] {
+            for (p, cursor) in [(Point::new(50.0, 274.0), Cursor::Rotate), (Point::new(176.0, 300.0), Cursor::ArrowHollow)] {
+                assert_eq!(flattenings(|| t.cursor(&c, p, Mods::default())), (cursor, 1), "{}", t.id());
+            }
+        }
+        let mut t = ObjectsOnPathTool::default();
+        assert_eq!(flattenings(|| t.pointer(&c, &ev(PointerKind::Move, 250.0, 300.0))), (vec![], 1));
+    }
+
+    /// A press on each widget measures the path once, and the drag that follows measures it no more
+    /// while the path stays as it was.
+    #[test]
+    fn a_widget_drag_flattens_the_path_once() {
+        let (d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let presses = [
+            ("Rotate All", Point::new(50.0, 274.0), Point::new(24.0, 300.0)),
+            ("Space", Point::new(176.0, 300.0), Point::new(226.0, 300.0)),
+            ("Move All", Point::new(50.0, 326.0), Point::new(100.0, 326.0)),
+            ("Select/Move", Point::new(150.0, 300.0), Point::new(40.0, 300.0)),
+        ];
+        let tools: [Box<dyn Fn() -> Box<dyn Tool>>; 2] =
+            [Box::new(|| Box::new(crate::select::SelectionTool::default())), Box::new(|| Box::new(ObjectsOnPathTool::default()))];
+        for new in &tools {
+            for (what, at, to) in presses {
+                let mut t = new();
+                assert_eq!(flattenings(|| t.pointer(&c, &ev(PointerKind::Down, at.x, at.y))), (vec![], 1), "{what} {}", t.id());
+                assert!(t.busy(), "{what} {}", t.id());
+                let (acts, n) = flattenings(|| t.pointer(&c, &ev(PointerKind::Drag, to.x, to.y)));
+                assert_eq!(n, 0, "{what} {}", t.id());
+                assert!(matches!(acts.last(), Some(Action::Preview(..))), "{what} {}: {acts:?}", t.id());
+                let (acts, n) = flattenings(|| t.pointer(&c, &ev(PointerKind::Drag, to.x + 1.0, to.y)));
+                assert_eq!(n, 0, "{what} {}: {acts:?}", t.id());
+            }
+        }
+        // The drags as each one's own press starts it.
+        type Hit = fn(&ToolContext, &PointerEvent) -> bool;
+        let checks: [(&str, Hit, Point); 4] = [
+            ("Rotate All", |c, e| RotateAllDrag::hit(c, e).is_some(), Point::new(50.0, 274.0)),
+            ("Space", |c, e| SpaceDrag::hit(c, e).is_some(), Point::new(176.0, 300.0)),
+            ("Move All", |c, e| MoveAllDrag::hit(c, e).is_some(), Point::new(50.0, 326.0)),
+            ("Select/Move", |c, e| MemberDrag::hit(c, e).is_some(), Point::new(150.0, 300.0)),
+        ];
+        for (what, hit, p) in checks {
+            assert_eq!(flattenings(|| hit(&c, &ev(PointerKind::Down, p.x, p.y))), (true, 1), "{what}");
+        }
+        // The Move All drag moves the objects by what the pointer moves along the path: 50 pt.
+        let mut d = MoveAllDrag::hit(&c, &ev(PointerKind::Down, 50.0, 326.0)).unwrap();
+        let acts = d.drag(&c, Point::new(100.0, 326.0));
+        assert!(matches!(acts.last(), Some(Action::Preview(_, p)) if p["ids"] == json!([g.0])), "{acts:?}");
+        assert_eq!(moved(&acts), Some((100.0, None)), "{acts:?}");
+    }
+
+    /// A drag whose group's path changes while it goes on measures the new path, once.
+    #[test]
+    fn a_widget_drag_follows_a_path_that_changed() {
+        let (d, g, sel) = spaced_doc(Some(100.0), 50.0);
+        let paint = paint();
+        let c = cx(&d, &sel, &paint);
+        let mut drag = MoveAllDrag::hit(&c, &ev(PointerKind::Down, 50.0, 326.0)).unwrap();
+        // The path now runs from (100, 300) to (500, 300): the pointer at (200, 326) is 100 pt along
+        // it, 50 pt on from where the press was.
+        let mut longer = d.clone();
+        let line = longer.node(g).and_then(|n| n.children()).unwrap()[0].id;
+        if let Some(NodeKind::Path { path, .. }) = longer.node_mut(line).map(|n| &mut n.kind) {
+            *path = shapes::line(Point::new(100.0, 300.0), Point::new(500.0, 300.0));
+        }
+        let c = cx(&longer, &sel, &paint);
+        let (acts, n) = flattenings(|| drag.drag(&c, Point::new(200.0, 326.0)));
+        assert_eq!(n, 1);
+        assert!(matches!(acts.last(), Some(Action::Preview(_, p)) if p["ids"] == json!([g.0])), "{acts:?}");
+        assert_eq!(moved(&acts), Some((100.0, None)), "{acts:?}");
+        let (acts, n) = flattenings(|| drag.drag(&c, Point::new(300.0, 326.0)));
+        assert_eq!(n, 0);
+        assert_eq!(moved(&acts), Some((200.0, None)), "{acts:?}");
     }
 }
