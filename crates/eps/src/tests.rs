@@ -1264,6 +1264,104 @@ fn the_page_limit_counts_a_repeated_images_samples_once() {
     assert!(page.body.len() + page.setup.len() <= inline + 1000 + 400, "{}", page.body.len());
 }
 
+/// A freeform gradient of `points` (x, y and color).
+fn freeform(points: &[(f64, f64, Color)]) -> Paint {
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: points.iter().map(|&(x, y, c)| FreeformPoint::new(Point::new(x, y), c)).collect(), ..Default::default() });
+    Paint::Gradient(Box::new(g))
+}
+
+/// A square at (`x`, `y`) of side `side`, filled with a freeform gradient of `a` and `b` at a
+/// fifth and four fifths of its width.
+fn freeform_square(d: &mut Document, x: f64, y: f64, side: f64, a: Color, b: Color) -> Node {
+    let mid = y + side / 2.0;
+    let paint = freeform(&[(x + side / 5.0, mid, a), (x + side * 0.8, mid, b)]);
+    path(d, shapes::rectangle(Rect::new(x, y, x + side, y + side)), paint, Paint::None, 0.0)
+}
+
+/// A freeform gradient on a shape and on a moved copy of it is sampled the same for both: its
+/// image's samples are written once, at both levels, in RGB and in CMYK.
+#[test]
+fn a_freeform_gradients_image_drawn_twice_writes_its_samples_once() {
+    let rgb = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let cmyk = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    for (a, b) in [rgb, cmyk] {
+        let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b)]);
+        let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b), freeform_square(d, 64.0, 64.0, 64.0, a, b)]);
+        for level in Level::ALL {
+            let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+            let one_ps = text(&one);
+            assert!(!one_ps.contains("VCim"), "a field drawn once is written where it is drawn: {one_ps}");
+            let out = export(&twice, &EpsOptions { level, ..opts(&twice) }, None, None).unwrap();
+            let ps = text(&out);
+            checked_page(&ps);
+            assert_eq!(reuses(&ps, 0, level), 2, "{ps}");
+            assert!(!ps.contains("VCim1"), "{ps}");
+            let body = &ps[ps.find("%%EndSetup").unwrap()..];
+            assert!(!body.contains("currentfile") && !body.contains("~>"), "no samples in the page: {ps}");
+            assert_eq!(reused_samples(&ps, level), inline_samples(&one_ps, level), "{level:?}");
+            assert_eq!(out.warnings, one.warnings);
+        }
+    }
+}
+
+/// Fields sampled differently are each written where they are drawn: different gradients, and one
+/// gradient on shapes of different sizes.
+#[test]
+fn freeform_gradients_sampled_differently_dont_share_an_image() {
+    let (red, blue, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+    let colors = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, green)]);
+    let sizes = doc_with(|d| {
+        let paint = freeform(&[(20.0, 50.0, red), (80.0, 50.0, blue)]);
+        vec![
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), paint.clone(), Paint::None, 0.0),
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 100.0)), paint, Paint::None, 0.0),
+        ]
+    });
+    for d in [colors, sizes] {
+        for level in Level::ALL {
+            let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+            assert!(!ps.contains("VCim"), "{ps}");
+            assert_eq!(ps.matches("} exec\n").count(), 2, "{ps}");
+        }
+    }
+}
+
+/// A field's second placement that passes the page limit is left out, and the first is written
+/// where it is drawn. A field taken back with the shape that passed the limit leaves nothing in the
+/// setup.
+#[test]
+fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let o = opts(&single);
+    let inline = crate::scene::Scene::new(&single, &o).run().body;
+    let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let page = crate::scene::Scene::new(&twice, &o).with_max_body(inline.len() + 50).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert!(page.body.starts_with(&inline), "{}", page.body);
+    assert_eq!(page.body.matches("} exec\n").count(), 1, "{}", page.body);
+    assert!(!page.setup.contains("VCim"), "{}", page.setup);
+    // A many-sided shape whose stroke passes the limit after its fill's field was placed.
+    let big = |d: &mut Document, stroke: Paint| {
+        let paint = freeform(&[(60.0, 100.0, Color::rgb(0.0, 1.0, 0.0)), (140.0, 100.0, red)]);
+        path(d, shapes::polygon(Point::new(100.0, 100.0), 90.0, 2000, 0.0), paint, stroke, 1.0)
+    };
+    let filled = doc_with(|d| vec![big(d, Paint::None)]);
+    let stroked = doc_with(|d| vec![big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)))]);
+    let fill = crate::scene::Scene::new(&filled, &o).run().body.len();
+    let both = crate::scene::Scene::new(&stroked, &o).run().body.len();
+    assert!(both > fill + 20_000, "{fill} {both}");
+    let d = doc_with(|d| {
+        let s = big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)));
+        vec![s, freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]
+    });
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(fill + (both - fill) / 2).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert_eq!(reuses(&page.body, 0, Level::Three), 2, "{}", page.body);
+    assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
