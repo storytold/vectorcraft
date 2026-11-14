@@ -292,7 +292,10 @@
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
-@msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel skal være none, en af {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kræver {BEVEL_PROFILE}, facettens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} skal være en streng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} skal være 2 til {most} punkter [x, y], hver andel mellem 0 og 1, fra [0, 0] (dækfladens kant) til [1, 1] (sidevæggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan ikke danne et legeme af forekomsten af symbolet "{symbol}": symbolets grafik er ikke tilgængelig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: beskæringskurven er for kompleks til at skære grafikken med
