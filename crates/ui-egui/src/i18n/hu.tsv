@@ -5125,6 +5125,44 @@ imageTrace	Outline	Körvonal
 @msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	assignment to a constant binding	értékadás konstans kötésnek
+@msg	invalid array length	érvénytelen tömbhossz
+@msg	array literal too long	a tömbliterál túl hosszú
+@msg	the value is not a function	az érték nem függvény
+@msg	apply was called on a value that is not a function	az apply olyan értéken lett meghívva, amely nem függvény
+@msg	the argument list is not an object	az argumentumlista nem objektum
+@msg	too many arguments	túl sok argumentum
+@msg	the value is not a constructor	az érték nem konstruktor
+@msg	cannot convert the object to a primitive value	az objektum nem alakítható primitív értékké
+@msg	cannot convert undefined or null to an object	az undefined és a null nem alakítható objektummá
+@msg	the right side of 'in' is not an object	az 'in' jobb oldala nem objektum
+@msg	the right side of 'instanceof' is not a function	az 'instanceof' jobb oldala nem függvény
+@msg	the function's prototype is not an object	a függvény prototípusa nem objektum
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} nincs definiálva
+@msg	cannot read property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem olvasható
+@msg	cannot set property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem állítható be
+@msg	cannot read a property of {base}	a(z) {base} tulajdonsága nem olvasható
+@msg	cannot set a property of {base}	a(z) {base} tulajdonsága nem állítható be
+@msg	cannot define property '{key}': {why}	a(z) '{key}' tulajdonság nem definiálható: {why}
+@msg	cannot assign to property '{key}': {why}	a(z) '{key}' tulajdonságnak nem adható érték: {why}
+@msg	cannot delete property '{key}'	a(z) '{key}' tulajdonság nem törölhető
+@msg	cannot declare function {name}	a(z) {name} függvény nem deklarálható
+@msg	invalid assignment target	érvénytelen értékadási cél
+@msg	the array's length is read-only	a tömb hossza csak olvasható
+@msg	the property cannot be redefined	a tulajdonság nem definiálható újra
+@msg	the object is not extensible	az objektum nem bővíthető
+@msg	the length cannot be redefined	a hossz nem definiálható újra
+@msg	it is read-only	csak olvasható
+@msg	an element cannot be deleted	elem nem törölhető
+@msg	it has only a getter	csak gettere van
+@msg	the value is a primitive	az érték primitív
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: {e} (thrown)	{name}: {e} (kivétel)

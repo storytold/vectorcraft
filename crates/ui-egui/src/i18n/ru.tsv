@@ -4352,6 +4352,44 @@ axis	Both	Оба
 @msg	$.evalFile requires a file path	$.evalFile требует путь к файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут должен быть конечным числом миллисекунд, 0 или больше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: принимает путь к файлу и тайм-аут
+@msg	assignment to a constant binding	присваивание константной привязке
+@msg	invalid array length	недопустимая длина массива
+@msg	array literal too long	литерал массива слишком длинный
+@msg	the value is not a function	значение не является функцией
+@msg	apply was called on a value that is not a function	apply вызван для значения, которое не является функцией
+@msg	the argument list is not an object	список аргументов не является объектом
+@msg	too many arguments	слишком много аргументов
+@msg	the value is not a constructor	значение не является конструктором
+@msg	cannot convert the object to a primitive value	невозможно преобразовать объект в примитивное значение
+@msg	cannot convert undefined or null to an object	невозможно преобразовать undefined или null в объект
+@msg	the right side of 'in' is not an object	правая часть 'in' не является объектом
+@msg	the right side of 'instanceof' is not a function	правая часть 'instanceof' не является функцией
+@msg	the function's prototype is not an object	прототип функции не является объектом
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} не определено
+@msg	cannot read property '{key}' of {base}	невозможно прочитать свойство '{key}' у {base}
+@msg	cannot set property '{key}' of {base}	невозможно задать свойство '{key}' у {base}
+@msg	cannot read a property of {base}	невозможно прочитать свойство у {base}
+@msg	cannot set a property of {base}	невозможно задать свойство у {base}
+@msg	cannot define property '{key}': {why}	невозможно определить свойство '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	невозможно присвоить значение свойству '{key}': {why}
+@msg	cannot delete property '{key}'	невозможно удалить свойство '{key}'
+@msg	cannot declare function {name}	невозможно объявить функцию {name}
+@msg	invalid assignment target	недопустимая цель присваивания
+@msg	the array's length is read-only	длина массива доступна только для чтения
+@msg	the property cannot be redefined	свойство нельзя переопределить
+@msg	the object is not extensible	объект нерасширяем
+@msg	the length cannot be redefined	длину нельзя переопределить
+@msg	it is read-only	оно доступно только для чтения
+@msg	an element cannot be deleted	элемент нельзя удалить
+@msg	it has only a getter	у него есть только геттер
+@msg	the value is a primitive	значение примитивное
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: строка {line}, столбец {column} в {file}: {e} (исключение)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: строка {line}, столбец {column}: {e} (исключение)
 @msg	{name}: {e} (thrown)	{name}: {e} (исключение)

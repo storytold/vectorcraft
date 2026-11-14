@@ -4539,6 +4539,44 @@ imageTrace	Outline	Ääriviiva
 @msg	$.evalFile requires a file path	$.evalFile vaatii tiedostopolun
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: aikakatkaisun on oltava äärellinen määrä millisekunteja, 0 tai enemmän
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: ottaa tiedostopolun ja aikakatkaisun
+@msg	assignment to a constant binding	sijoitus vakiosidontaan
+@msg	invalid array length	virheellinen taulukon pituus
+@msg	array literal too long	taulukkoliteraali on liian pitkä
+@msg	the value is not a function	arvo ei ole funktio
+@msg	apply was called on a value that is not a function	apply kutsuttiin arvolle, joka ei ole funktio
+@msg	the argument list is not an object	argumenttiluettelo ei ole objekti
+@msg	too many arguments	liikaa argumentteja
+@msg	the value is not a constructor	arvo ei ole konstruktori
+@msg	cannot convert the object to a primitive value	objektia ei voi muuntaa primitiiviarvoksi
+@msg	cannot convert undefined or null to an object	arvoja undefined tai null ei voi muuntaa objektiksi
+@msg	the right side of 'in' is not an object	operaattorin 'in' oikea puoli ei ole objekti
+@msg	the right side of 'instanceof' is not a function	operaattorin 'instanceof' oikea puoli ei ole funktio
+@msg	the function's prototype is not an object	funktion prototyyppi ei ole objekti
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} ei ole määritelty
+@msg	cannot read property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi lukea
+@msg	cannot set property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi asettaa
+@msg	cannot read a property of {base}	arvon {base} ominaisuutta ei voi lukea
+@msg	cannot set a property of {base}	arvon {base} ominaisuutta ei voi asettaa
+@msg	cannot define property '{key}': {why}	ominaisuutta '{key}' ei voi määrittää: {why}
+@msg	cannot assign to property '{key}': {why}	ominaisuuteen '{key}' ei voi sijoittaa: {why}
+@msg	cannot delete property '{key}'	ominaisuutta '{key}' ei voi poistaa
+@msg	cannot declare function {name}	funktiota {name} ei voi esitellä
+@msg	invalid assignment target	virheellinen sijoituksen kohde
+@msg	the array's length is read-only	taulukon pituus on vain luku
+@msg	the property cannot be redefined	ominaisuutta ei voi määrittää uudelleen
+@msg	the object is not extensible	objektia ei voi laajentaa
+@msg	the length cannot be redefined	pituutta ei voi määrittää uudelleen
+@msg	it is read-only	se on vain luku
+@msg	an element cannot be deleted	alkiota ei voi poistaa
+@msg	it has only a getter	sillä on vain getter
+@msg	the value is a primitive	arvo on primitiivi
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: {e} (thrown)	{name}: {e} (heitetty)

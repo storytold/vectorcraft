@@ -4367,6 +4367,31 @@ axis	Both	Entrambi
 @msg	$.evalFile requires a file path	$.evalFile richiede un percorso di file
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: il timeout deve essere un numero finito di millisecondi, 0 o più
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: accetta un percorso di file e un timeout
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} non è definito
+@msg	cannot read property '{key}' of {base}	impossibile leggere la proprietà '{key}' di {base}
+@msg	cannot set property '{key}' of {base}	impossibile impostare la proprietà '{key}' di {base}
+@msg	cannot read a property of {base}	impossibile leggere una proprietà di {base}
+@msg	cannot set a property of {base}	impossibile impostare una proprietà di {base}
+@msg	cannot define property '{key}': {why}	impossibile definire la proprietà '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	impossibile assegnare alla proprietà '{key}': {why}
+@msg	cannot delete property '{key}'	impossibile eliminare la proprietà '{key}'
+@msg	cannot declare function {name}	impossibile dichiarare la funzione {name}
+@msg	invalid assignment target	destinazione di assegnazione non valida
+@msg	the array's length is read-only	la lunghezza dell'array è di sola lettura
+@msg	the property cannot be redefined	la proprietà non può essere ridefinita
+@msg	the object is not extensible	l'oggetto non è estensibile
+@msg	the length cannot be redefined	la lunghezza non può essere ridefinita
+@msg	it is read-only	è di sola lettura
+@msg	an element cannot be deleted	un elemento non può essere eliminato
+@msg	it has only a getter	ha solo un getter
+@msg	the value is a primitive	il valore è primitivo
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: riga {line}, colonna {column} di {file}: {e} (generato)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: riga {line}, colonna {column}: {e} (generato)
 @msg	{name}: {e} (thrown)	{name}: {e} (generato)

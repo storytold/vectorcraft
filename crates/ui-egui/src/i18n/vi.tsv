@@ -4779,6 +4779,44 @@ theme	Appearance	Giao diện
 @msg	$.evalFile requires a file path	$.evalFile cần đường dẫn tệp
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: thời gian chờ phải là một số mili giây hữu hạn, từ 0 trở lên
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nhận một đường dẫn tệp và một thời gian chờ
+@msg	assignment to a constant binding	gán cho một ràng buộc hằng
+@msg	invalid array length	độ dài mảng không hợp lệ
+@msg	array literal too long	literal mảng quá dài
+@msg	the value is not a function	giá trị không phải là hàm
+@msg	apply was called on a value that is not a function	apply được gọi trên một giá trị không phải là hàm
+@msg	the argument list is not an object	danh sách đối số không phải là đối tượng
+@msg	too many arguments	quá nhiều đối số
+@msg	the value is not a constructor	giá trị không phải là hàm tạo
+@msg	cannot convert the object to a primitive value	không thể chuyển đối tượng thành giá trị nguyên thủy
+@msg	cannot convert undefined or null to an object	không thể chuyển undefined hoặc null thành đối tượng
+@msg	the right side of 'in' is not an object	vế phải của 'in' không phải là đối tượng
+@msg	the right side of 'instanceof' is not a function	vế phải của 'instanceof' không phải là hàm
+@msg	the function's prototype is not an object	nguyên mẫu của hàm không phải là đối tượng
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} chưa được định nghĩa
+@msg	cannot read property '{key}' of {base}	không thể đọc thuộc tính '{key}' của {base}
+@msg	cannot set property '{key}' of {base}	không thể đặt thuộc tính '{key}' của {base}
+@msg	cannot read a property of {base}	không thể đọc thuộc tính của {base}
+@msg	cannot set a property of {base}	không thể đặt thuộc tính của {base}
+@msg	cannot define property '{key}': {why}	không thể định nghĩa thuộc tính '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	không thể gán cho thuộc tính '{key}': {why}
+@msg	cannot delete property '{key}'	không thể xóa thuộc tính '{key}'
+@msg	cannot declare function {name}	không thể khai báo hàm {name}
+@msg	invalid assignment target	đích gán không hợp lệ
+@msg	the array's length is read-only	độ dài của mảng là chỉ đọc
+@msg	the property cannot be redefined	không thể định nghĩa lại thuộc tính
+@msg	the object is not extensible	đối tượng không thể mở rộng
+@msg	the length cannot be redefined	không thể định nghĩa lại độ dài
+@msg	it is read-only	nó là chỉ đọc
+@msg	an element cannot be deleted	không thể xóa một phần tử
+@msg	it has only a getter	nó chỉ có getter
+@msg	the value is a primitive	giá trị là kiểu nguyên thủy
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: dòng {line}, cột {column} của {file}: {e} (đã ném)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: dòng {line}, cột {column}: {e} (đã ném)
 @msg	{name}: {e} (thrown)	{name}: {e} (đã ném)

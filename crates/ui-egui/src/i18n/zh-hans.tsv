@@ -4809,6 +4809,31 @@ imageTrace	Outline	轮廓
 @msg	$.evalFile requires a file path	$.evalFile 需要文件路径
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：超时必须是 0 或更大的有限毫秒数
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一个文件路径和一个超时值
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} 未定义
+@msg	cannot read property '{key}' of {base}	无法读取 {base} 的属性 '{key}'
+@msg	cannot set property '{key}' of {base}	无法设置 {base} 的属性 '{key}'
+@msg	cannot read a property of {base}	无法读取 {base} 的属性
+@msg	cannot set a property of {base}	无法设置 {base} 的属性
+@msg	cannot define property '{key}': {why}	无法定义属性 '{key}'：{why}
+@msg	cannot assign to property '{key}': {why}	无法为属性 '{key}' 赋值：{why}
+@msg	cannot delete property '{key}'	无法删除属性 '{key}'
+@msg	cannot declare function {name}	无法声明函数 {name}
+@msg	invalid assignment target	赋值目标无效
+@msg	the array's length is read-only	数组的长度是只读的
+@msg	the property cannot be redefined	属性无法重新定义
+@msg	the object is not extensible	对象不可扩展
+@msg	the length cannot be redefined	长度无法重新定义
+@msg	it is read-only	它是只读的
+@msg	an element cannot be deleted	无法删除元素
+@msg	it has only a getter	它只有 getter
+@msg	the value is a primitive	该值是原始值
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（抛出）
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 列：{e}（抛出）
 @msg	{name}: {e} (thrown)	{name}：{e}（抛出）

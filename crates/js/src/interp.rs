@@ -310,6 +310,10 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
 
+/// The most units of a computed property name an error about a property of `null` or `undefined`
+/// names; a longer name is left out of the message.
+const NAMED_KEY_UNITS: usize = 256;
+
 #[cfg(test)]
 thread_local! {
     /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
@@ -1077,8 +1081,8 @@ impl Interp {
     }
 
     fn not_defined(&mut self, name: &[u16]) -> Abrupt {
-        let message = format!("{} is not defined", String::from_utf16_lossy(name));
-        self.throw(ErrorType::Reference, &message)
+        let name = String::from_utf16_lossy(name);
+        self.throw(ErrorType::Reference, &format!("{name} is not defined"))
     }
 
     fn get_var(&mut self, name: &Key) -> JsResult<(Value, Value)> {
@@ -1332,12 +1336,9 @@ impl Interp {
             Value::Number(_) => Ok(self.intrinsics.number_proto),
             Value::Bool(_) => Ok(self.intrinsics.boolean_proto),
             Value::Undefined | Value::Null => {
-                let message = format!(
-                    "cannot read property '{}' of {}",
-                    String::from_utf16_lossy(k),
-                    if matches!(v, Value::Null) { "null" } else { "undefined" }
-                );
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(k);
+                let base = if matches!(v, Value::Null) { "null" } else { "undefined" };
+                Err(self.type_error(&format!("cannot read property '{key}' of {base}")))
             }
         }
     }
@@ -1434,8 +1435,8 @@ impl Interp {
 
     fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
         if throw {
-            let message = format!("cannot define property '{}': {why}", String::from_utf16_lossy(k));
-            return Err(self.type_error(&message));
+            let key = String::from_utf16_lossy(k);
+            return Err(self.type_error(&format!("cannot define property '{key}': {why}")));
         }
         Ok(false)
     }
@@ -1588,8 +1589,8 @@ impl Interp {
 
     fn reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
         if throw {
-            let message = format!("cannot assign to property '{}': {why}", String::from_utf16_lossy(k));
-            return Err(self.type_error(&message));
+            let key = String::from_utf16_lossy(k);
+            return Err(self.type_error(&format!("cannot assign to property '{key}': {why}")));
         }
         Ok(())
     }
@@ -1684,8 +1685,8 @@ impl Interp {
                 Ok(true)
             }
             Some(_) if throw => {
-                let message = format!("cannot delete property '{}'", String::from_utf16_lossy(k));
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(k);
+                Err(self.type_error(&format!("cannot delete property '{key}'")))
             }
             Some(_) => Ok(false),
         }
@@ -1703,12 +1704,9 @@ impl Interp {
                 self.put(*o, k, v, throw)
             }
             Value::Undefined | Value::Null => {
-                let message = format!(
-                    "cannot set property '{}' of {}",
-                    String::from_utf16_lossy(&k),
-                    if matches!(base, Value::Null) { "null" } else { "undefined" }
-                );
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(&k);
+                let base = if matches!(base, Value::Null) { "null" } else { "undefined" };
+                Err(self.type_error(&format!("cannot set property '{key}' of {base}")))
             }
             _ => {
                 let proto = self.primitive_proto(base, &k)?;
@@ -1742,16 +1740,30 @@ impl Interp {
         self.replace(2, v)
     }
 
-    fn check_coercible(&mut self, base: &Value, k: &[u16]) -> JsResult<()> {
-        if base.is_nullish() {
-            self.primitive_proto(base, k)?;
+    /// Throws when `base` is `null` or `undefined`, naming the property `k` when it is a primitive
+    /// of at most [`NAMED_KEY_UNITS`] units, which converts without running script code, and the
+    /// access as a read, or as a write when `set`.
+    fn check_coercible(&mut self, base: &Value, k: Option<&Value>, set: bool) -> JsResult<()> {
+        if !base.is_nullish() {
+            return Ok(());
         }
-        Ok(())
+        let key = match k {
+            Some(Value::String(s)) if s.len() > NAMED_KEY_UNITS => None,
+            Some(Value::Object(_)) | None => None,
+            Some(k) => Some(self.to_str(k)?.to_rust_string()),
+        };
+        let base = if matches!(base, Value::Null) { "null" } else { "undefined" };
+        Err(match (key, set) {
+            (Some(key), false) => self.type_error(&format!("cannot read property '{key}' of {base}")),
+            (Some(key), true) => self.type_error(&format!("cannot set property '{key}' of {base}")),
+            (None, false) => self.type_error(&format!("cannot read a property of {base}")),
+            (None, true) => self.type_error(&format!("cannot set a property of {base}")),
+        })
     }
 
     fn op_check_object(&mut self) -> JsResult<()> {
         let base = self.peek(0)?;
-        self.check_coercible(&base, &[])
+        self.check_coercible(&base, None, true)
     }
 
     fn op_to_key(&mut self) -> JsResult<()> {
@@ -1760,7 +1772,7 @@ impl Interp {
         if self.is_xml_access(&base, &k) {
             return Ok(());
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), true)?;
         let name = self.to_key(&k)?;
         self.replace(1, Value::String(Str::from_rc(name)))
     }
@@ -1778,7 +1790,7 @@ impl Interp {
             let v = self.xml_get(&base, &k)?;
             return self.replace(2, v);
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), false)?;
         let name = self.to_key(&k)?;
         let v = self.get_value(&base, &name)?;
         self.replace(2, v)?;
@@ -1818,7 +1830,7 @@ impl Interp {
             let r = self.xml_delete(&base, &k)?;
             return self.replace(2, Value::Bool(r));
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), false)?;
         let name = self.to_key(&k)?;
         let o = self.to_object(&base)?;
         let strict = self.strict();
@@ -1851,7 +1863,7 @@ impl Interp {
             self.xml_put(&base, &k, &Value::Number(new))?;
             return self.replace(2, Value::Number(if prefix { new } else { old }));
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), false)?;
         let name = self.to_key(&k)?;
         let r = self.inc_property(&base, name, prefix, dec)?;
         self.replace(2, r)
@@ -2575,8 +2587,8 @@ impl Interp {
                                 self.put(object, name.clone(), v, true)
                             }
                             Some(_) => {
-                                let message = format!("cannot declare function {}", String::from_utf16_lossy(name));
-                                Err(self.type_error(&message))
+                                let name = String::from_utf16_lossy(name);
+                                Err(self.type_error(&format!("cannot declare function {name}")))
                             }
                         }
                     }

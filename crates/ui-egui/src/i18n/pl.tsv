@@ -4449,6 +4449,31 @@ imageTrace	Outline	Kontur
 @msg	$.evalFile requires a file path	$.evalFile wymaga ścieżki pliku
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: limit czasu musi być skończoną liczbą milisekund, 0 lub więcej
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: przyjmuje ścieżkę pliku i limit czasu
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} nie jest zdefiniowane
+@msg	cannot read property '{key}' of {base}	nie można odczytać właściwości '{key}' wartości {base}
+@msg	cannot set property '{key}' of {base}	nie można ustawić właściwości '{key}' wartości {base}
+@msg	cannot read a property of {base}	nie można odczytać właściwości wartości {base}
+@msg	cannot set a property of {base}	nie można ustawić właściwości wartości {base}
+@msg	cannot define property '{key}': {why}	nie można zdefiniować właściwości '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	nie można przypisać do właściwości '{key}': {why}
+@msg	cannot delete property '{key}'	nie można usunąć właściwości '{key}'
+@msg	cannot declare function {name}	nie można zadeklarować funkcji {name}
+@msg	invalid assignment target	nieprawidłowy cel przypisania
+@msg	the array's length is read-only	długość tablicy jest tylko do odczytu
+@msg	the property cannot be redefined	właściwości nie można zdefiniować ponownie
+@msg	the object is not extensible	obiektu nie można rozszerzać
+@msg	the length cannot be redefined	długości nie można zdefiniować ponownie
+@msg	it is read-only	jest tylko do odczytu
+@msg	an element cannot be deleted	elementu nie można usunąć
+@msg	it has only a getter	ma tylko getter
+@msg	the value is a primitive	wartość jest prymitywna
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: wiersz {line}, kolumna {column} w {file}: {e} (zgłoszony wyjątek)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: wiersz {line}, kolumna {column}: {e} (zgłoszony wyjątek)
 @msg	{name}: {e} (thrown)	{name}: {e} (zgłoszony wyjątek)

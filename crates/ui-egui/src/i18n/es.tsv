@@ -4315,6 +4315,44 @@ axis	Both	Ambos
 @msg	$.evalFile requires a file path	$.evalFile requiere una ruta de archivo
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el tiempo de espera debe ser un número finito de milisegundos, 0 o más
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: recibe una ruta de archivo y un tiempo de espera
+@msg	assignment to a constant binding	asignación a un enlace constante
+@msg	invalid array length	longitud de array no válida
+@msg	array literal too long	el literal de array es demasiado largo
+@msg	the value is not a function	el valor no es una función
+@msg	apply was called on a value that is not a function	se llamó a apply sobre un valor que no es una función
+@msg	the argument list is not an object	la lista de argumentos no es un objeto
+@msg	too many arguments	demasiados argumentos
+@msg	the value is not a constructor	el valor no es un constructor
+@msg	cannot convert the object to a primitive value	no se puede convertir el objeto en un valor primitivo
+@msg	cannot convert undefined or null to an object	no se puede convertir undefined ni null en un objeto
+@msg	the right side of 'in' is not an object	el lado derecho de 'in' no es un objeto
+@msg	the right side of 'instanceof' is not a function	el lado derecho de 'instanceof' no es una función
+@msg	the function's prototype is not an object	el prototipo de la función no es un objeto
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} no está definido
+@msg	cannot read property '{key}' of {base}	no se puede leer la propiedad '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	no se puede establecer la propiedad '{key}' de {base}
+@msg	cannot read a property of {base}	no se puede leer una propiedad de {base}
+@msg	cannot set a property of {base}	no se puede establecer una propiedad de {base}
+@msg	cannot define property '{key}': {why}	no se puede definir la propiedad '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	no se puede asignar a la propiedad '{key}': {why}
+@msg	cannot delete property '{key}'	no se puede eliminar la propiedad '{key}'
+@msg	cannot declare function {name}	no se puede declarar la función {name}
+@msg	invalid assignment target	destino de asignación no válido
+@msg	the array's length is read-only	la longitud del array es de solo lectura
+@msg	the property cannot be redefined	la propiedad no se puede redefinir
+@msg	the object is not extensible	el objeto no es extensible
+@msg	the length cannot be redefined	la longitud no se puede redefinir
+@msg	it is read-only	es de solo lectura
+@msg	an element cannot be deleted	no se puede eliminar un elemento
+@msg	it has only a getter	solo tiene un getter
+@msg	the value is a primitive	el valor es primitivo
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línea {line}, columna {column} de {file}: {e} (lanzado)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línea {line}, columna {column}: {e} (lanzado)
 @msg	{name}: {e} (thrown)	{name}: {e} (lanzado)

@@ -4351,6 +4351,31 @@ axis	Both	Обидві
 @msg	$.evalFile requires a file path	$.evalFile потребує шляху до файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут має бути скінченним числом мілісекунд, 0 або більше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: приймає шлях до файлу і тайм-аут
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} не визначено
+@msg	cannot read property '{key}' of {base}	неможливо прочитати властивість '{key}' у {base}
+@msg	cannot set property '{key}' of {base}	неможливо встановити властивість '{key}' у {base}
+@msg	cannot read a property of {base}	неможливо прочитати властивість у {base}
+@msg	cannot set a property of {base}	неможливо встановити властивість у {base}
+@msg	cannot define property '{key}': {why}	неможливо визначити властивість '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	неможливо присвоїти значення властивості '{key}': {why}
+@msg	cannot delete property '{key}'	неможливо видалити властивість '{key}'
+@msg	cannot declare function {name}	неможливо оголосити функцію {name}
+@msg	invalid assignment target	недійсна ціль присвоєння
+@msg	the array's length is read-only	довжина масиву доступна лише для читання
+@msg	the property cannot be redefined	властивість не можна перевизначити
+@msg	the object is not extensible	об'єкт не можна розширювати
+@msg	the length cannot be redefined	довжину не можна перевизначити
+@msg	it is read-only	вона доступна лише для читання
+@msg	an element cannot be deleted	елемент не можна видалити
+@msg	it has only a getter	вона має лише гетер
+@msg	the value is a primitive	значення примітивне
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: рядок {line}, стовпець {column} у {file}: {e} (виняток)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: рядок {line}, стовпець {column}: {e} (виняток)
 @msg	{name}: {e} (thrown)	{name}: {e} (виняток)

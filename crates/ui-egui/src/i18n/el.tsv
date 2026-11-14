@@ -2385,6 +2385,44 @@ axis	Both	Και τα δύο
 @msg	$.evalFile requires a file path	Το $.evalFile απαιτεί διαδρομή αρχείου
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: το χρονικό όριο πρέπει να είναι πεπερασμένος αριθμός χιλιοστών του δευτερολέπτου, 0 ή περισσότερο
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: δέχεται μια διαδρομή αρχείου και ένα χρονικό όριο
+@msg	assignment to a constant binding	ανάθεση σε σταθερή δέσμευση
+@msg	invalid array length	μη έγκυρο μήκος πίνακα
+@msg	array literal too long	η κυριολεκτική τιμή πίνακα είναι πολύ μεγάλη
+@msg	the value is not a function	η τιμή δεν είναι συνάρτηση
+@msg	apply was called on a value that is not a function	η apply κλήθηκε σε τιμή που δεν είναι συνάρτηση
+@msg	the argument list is not an object	η λίστα ορισμάτων δεν είναι αντικείμενο
+@msg	too many arguments	πάρα πολλά ορίσματα
+@msg	the value is not a constructor	η τιμή δεν είναι κατασκευαστής
+@msg	cannot convert the object to a primitive value	το αντικείμενο δεν μπορεί να μετατραπεί σε πρωτογενή τιμή
+@msg	cannot convert undefined or null to an object	το undefined ή το null δεν μπορεί να μετατραπεί σε αντικείμενο
+@msg	the right side of 'in' is not an object	η δεξιά πλευρά του 'in' δεν είναι αντικείμενο
+@msg	the right side of 'instanceof' is not a function	η δεξιά πλευρά του 'instanceof' δεν είναι συνάρτηση
+@msg	the function's prototype is not an object	το πρωτότυπο της συνάρτησης δεν είναι αντικείμενο
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	το {name} δεν έχει οριστεί
+@msg	cannot read property '{key}' of {base}	δεν είναι δυνατή η ανάγνωση της ιδιότητας '{key}' του {base}
+@msg	cannot set property '{key}' of {base}	δεν είναι δυνατός ο ορισμός της ιδιότητας '{key}' του {base}
+@msg	cannot read a property of {base}	δεν είναι δυνατή η ανάγνωση ιδιότητας του {base}
+@msg	cannot set a property of {base}	δεν είναι δυνατός ο ορισμός ιδιότητας του {base}
+@msg	cannot define property '{key}': {why}	δεν είναι δυνατός ο καθορισμός της ιδιότητας '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	δεν είναι δυνατή η ανάθεση στην ιδιότητα '{key}': {why}
+@msg	cannot delete property '{key}'	δεν είναι δυνατή η διαγραφή της ιδιότητας '{key}'
+@msg	cannot declare function {name}	δεν είναι δυνατή η δήλωση της συνάρτησης {name}
+@msg	invalid assignment target	μη έγκυρος στόχος ανάθεσης
+@msg	the array's length is read-only	το μήκος του πίνακα είναι μόνο για ανάγνωση
+@msg	the property cannot be redefined	η ιδιότητα δεν μπορεί να οριστεί ξανά
+@msg	the object is not extensible	το αντικείμενο δεν είναι επεκτάσιμο
+@msg	the length cannot be redefined	το μήκος δεν μπορεί να οριστεί ξανά
+@msg	it is read-only	είναι μόνο για ανάγνωση
+@msg	an element cannot be deleted	ένα στοιχείο δεν μπορεί να διαγραφεί
+@msg	it has only a getter	έχει μόνο getter
+@msg	the value is a primitive	η τιμή είναι πρωτογενής
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (εξαίρεση)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column}: {e} (εξαίρεση)
 @msg	{name}: {e} (thrown)	{name}: {e} (εξαίρεση)

@@ -659,8 +659,8 @@ const MESSAGE_DEPTH: usize = 5;
 
 /// Translate a status or error message for display (see the module docs). Unknown messages, and
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
-/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”` or backticks, such as a
-/// symbol's name), stay as they are. A part that starts with `{` or `[` is translated only
+/// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
+/// symbol's or a script property's name), stay as they are. A part that starts with `{` or `[` is translated only
 /// when it is a whole message with an exact entry, such as `[x, y] (two numbers)`.
 pub fn message(lang: Lang, s: &str) -> String {
     message_at(lang, s, MESSAGE_DEPTH)
@@ -671,7 +671,7 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
     let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
     let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
     let Some(template) = forms.get(form) else { return s.to_string() };
-    let quoted = |v: &str| [('"', '"'), ('“', '”'), ('`', '`')].iter().any(|(a, b)| s.contains(&format!("{a}{v}{b}")));
+    let quoted = |v: &str| [('"', '"'), ('“', '”'), ('\'', '\''), ('`', '`')].iter().any(|(a, b)| s.contains(&format!("{a}{v}{b}")));
     let nested = |v: &str| {
         if depth <= 1 || quoted(v) {
             v.to_string()

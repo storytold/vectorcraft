@@ -6628,6 +6628,44 @@ antiAlias	Sharp	शार्प
 @msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पाथ आवश्यक है
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: टाइमआउट मिलीसेकंड की एक सीमित संख्या होनी चाहिए, 0 या अधिक
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पाथ और एक टाइमआउट लेता है
+@msg	assignment to a constant binding	स्थिर बाइंडिंग को मान दिया गया
+@msg	invalid array length	ऐरे की लंबाई अमान्य है
+@msg	array literal too long	ऐरे लिटरल बहुत लंबा है
+@msg	the value is not a function	मान कोई फ़ंक्शन नहीं है
+@msg	apply was called on a value that is not a function	apply को ऐसे मान पर कॉल किया गया जो फ़ंक्शन नहीं है
+@msg	the argument list is not an object	आर्गुमेंट सूची कोई ऑब्जेक्ट नहीं है
+@msg	too many arguments	बहुत अधिक आर्गुमेंट
+@msg	the value is not a constructor	मान कोई कंस्ट्रक्टर नहीं है
+@msg	cannot convert the object to a primitive value	ऑब्जेक्ट को प्रिमिटिव मान में नहीं बदला जा सकता
+@msg	cannot convert undefined or null to an object	undefined या null को ऑब्जेक्ट में नहीं बदला जा सकता
+@msg	the right side of 'in' is not an object	'in' का दायाँ पक्ष कोई ऑब्जेक्ट नहीं है
+@msg	the right side of 'instanceof' is not a function	'instanceof' का दायाँ पक्ष कोई फ़ंक्शन नहीं है
+@msg	the function's prototype is not an object	फ़ंक्शन का प्रोटोटाइप कोई ऑब्जेक्ट नहीं है
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} परिभाषित नहीं है
+@msg	cannot read property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' पढ़ी नहीं जा सकती
+@msg	cannot set property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' सेट नहीं की जा सकती
+@msg	cannot read a property of {base}	{base} की कोई प्रॉपर्टी पढ़ी नहीं जा सकती
+@msg	cannot set a property of {base}	{base} की कोई प्रॉपर्टी सेट नहीं की जा सकती
+@msg	cannot define property '{key}': {why}	प्रॉपर्टी '{key}' परिभाषित नहीं की जा सकती: {why}
+@msg	cannot assign to property '{key}': {why}	प्रॉपर्टी '{key}' को मान नहीं दिया जा सकता: {why}
+@msg	cannot delete property '{key}'	प्रॉपर्टी '{key}' हटाई नहीं जा सकती
+@msg	cannot declare function {name}	फ़ंक्शन {name} घोषित नहीं किया जा सकता
+@msg	invalid assignment target	मान देने का लक्ष्य अमान्य है
+@msg	the array's length is read-only	ऐरे की लंबाई केवल-पठन है
+@msg	the property cannot be redefined	प्रॉपर्टी को फिर से परिभाषित नहीं किया जा सकता
+@msg	the object is not extensible	ऑब्जेक्ट विस्तार योग्य नहीं है
+@msg	the length cannot be redefined	लंबाई को फिर से परिभाषित नहीं किया जा सकता
+@msg	it is read-only	यह केवल-पठन है
+@msg	an element cannot be deleted	कोई तत्व हटाया नहीं जा सकता
+@msg	it has only a getter	इसमें केवल getter है
+@msg	the value is a primitive	मान प्रिमिटिव है
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: {e} (thrown)	{name}: {e} (थ्रो किया गया)
