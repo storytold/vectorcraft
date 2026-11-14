@@ -5771,6 +5771,7 @@ swatch	Bright Violet	Kraftig violet
 @msg	no such color	ingen sådan farve
 @msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
 @msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	handlingen »{_1}« angiver mappeindstillingen {_2}; slet det trin for at gemme sættet
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
