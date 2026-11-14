@@ -56,25 +56,39 @@ const PT_PER_PX: f64 = 72.0 / 96.0;
 /// Points a millimetre.
 const PT_PER_MM: f64 = 72.0 / 25.4;
 
-/// WMF records that draw and that `craft_metafile` plays: lines, shapes, text, PATBLT and bitmaps.
-const WMF_DRAWS: [u16; 16] =
-    [0x0213, 0x0324, 0x0325, 0x0418, 0x041B, 0x0521, 0x0538, 0x061C, 0x061D, 0x0817, 0x081A, 0x0830, 0x0940, 0x0A32, 0x0B41, 0x0F43];
+/// WMF records that draw lines and shapes, which `craft_metafile` plays only when the mix mode
+/// lets them draw.
+const WMF_SHAPES: [u16; 10] = [0x0213, 0x0324, 0x0325, 0x0418, 0x041B, 0x0538, 0x061C, 0x0817, 0x081A, 0x0830];
+/// WMF records that draw text and bitmaps, which `craft_metafile` plays whatever the mix mode.
+const WMF_DRAWS: [u16; 5] = [0x0521, 0x0940, 0x0A32, 0x0B41, 0x0F43];
+/// SETROP2 mix modes under which `craft_metafile` draws no lines, shapes or brush fills: R2_XORPEN
+/// and R2_NOP.
+const WMF_MIX_SKIPS: [u16; 2] = [7, 11];
+/// The mix mode a WMF starts in (R2_COPYPEN).
+const WMF_MIX_START: u16 = 13;
+/// PATBLT raster operations `craft_metafile` draws: PATCOPY (with the brush, as the mix mode
+/// allows), BLACKNESS and WHITENESS.
+const PATCOPY: u32 = 0x00F0_0021;
+const BLACKNESS: u32 = 0x0000_0042;
+const WHITENESS: u32 = 0x00FF_0062;
 
 /// Does a WMF draw in a metric map mode (MM_LOMETRIC to MM_TWIPS)? `craft_metafile` plays those
 /// at 96 pixels an inch, whatever the window. The mode that more drawing records are played in
-/// decides; a file that draws nothing goes by its last mode. `start` is where the standard header
-/// begins.
+/// decides, counting only records the reader draws (not lines and shapes under R2_NOP or
+/// R2_XORPEN, nor a PATBLT it does not fill); a file that draws nothing goes by its last mode.
+/// `start` is where the standard header begins.
 fn wmf_metric(bytes: &[u8], start: usize) -> bool {
     let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
     let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
     let Some(words) = start.checked_add(2).and_then(u16_at) else { return false };
     let mut at = start.saturating_add(usize::from(words) * 2);
     let mut mode = 1;
+    let mut mix = WMF_MIX_START;
     let metric = |mode: u16| (2..=6).contains(&mode);
     // Drawing records played in a metric mode, and in any other.
     let (mut in_metric, mut in_other) = (0usize, 0usize);
-    // The modes SAVEDC kept, which RESTOREDC brings back as the reader does.
-    let mut saved: Vec<u16> = Vec::new();
+    // The map and mix modes SAVEDC kept, which RESTOREDC brings back as the reader does.
+    let mut saved: Vec<(u16, u16)> = Vec::new();
     // The records as the reader walks them: it stops at the end record, a record shorter than its
     // header, one that runs past the file and a SAVEDC past its 1,024 levels.
     while let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) {
@@ -86,12 +100,14 @@ fn wmf_metric(bytes: &[u8], start: usize) -> bool {
         match function {
             // SETMAPMODE, when the record holds its mode.
             0x0103 if size >= 8 => mode = u16_at(at + 6).unwrap_or(mode),
+            // SETROP2, when the record holds its mix mode.
+            0x0104 if size >= 8 => mix = u16_at(at + 6).unwrap_or(mix),
             // SAVEDC.
             0x001E => {
                 if saved.len() >= SAVED_LEVELS {
                     break;
                 }
-                saved.push(mode);
+                saved.push((mode, mix));
             }
             // RESTOREDC: a negative count pops that many levels, a positive one goes back to that
             // level. One that names no saved level changes nothing.
@@ -99,20 +115,31 @@ fn wmf_metric(bytes: &[u8], start: usize) -> bool {
                 let n = u16_at(at + 6).map_or(0, |v| i32::from(i16::from_le_bytes(v.to_le_bytes())));
                 let level = if n < 0 { saved.len().checked_sub(n.unsigned_abs() as usize) } else { (n as usize).checked_sub(1) };
                 if let Some(level) = level
-                    && let Some(m) = saved.get(level).copied()
+                    && let Some((m, x)) = saved.get(level).copied()
                 {
                     mode = m;
+                    mix = x;
                     saved.truncate(level);
                 }
             }
-            f if WMF_DRAWS.contains(&f) => {
-                if metric(mode) {
+            f => {
+                let draws = match f {
+                    _ if WMF_DRAWS.contains(&f) => true,
+                    _ if WMF_SHAPES.contains(&f) => !WMF_MIX_SKIPS.contains(&mix),
+                    // PATBLT: its raster operation, when the record holds one.
+                    0x061D => match u32_at(at + 6).filter(|_| size >= 10) {
+                        Some(PATCOPY) => !WMF_MIX_SKIPS.contains(&mix),
+                        Some(rop) => rop == BLACKNESS || rop == WHITENESS,
+                        None => false,
+                    },
+                    _ => false,
+                };
+                if draws && metric(mode) {
                     in_metric += 1;
-                } else {
+                } else if draws {
                     in_other += 1;
                 }
             }
-            _ => {}
         }
         at = next;
     }
@@ -401,6 +428,14 @@ impl Mapper {
                 if let (None, Some((c, w))) = (fill, stroke)
                     && !segs.iter().any(|s| matches!(s, Seg::Close))
                 {
+                    // A stroke that reaches too far is left out here, before it joins the strokes
+                    // waiting, so they are still added.
+                    let half = f64::from(w) * self.k;
+                    let half = if half > 0.0 && half.is_finite() { half / 2.0 } else { HAIRLINE / 2.0 };
+                    if !sane(bp.bounding_box().inflate(half, half)) {
+                        self.flush();
+                        return self.warn(FAR_AWAY);
+                    }
                     let pen = Pen { color: c, width: w, line, even_odd, chain: chain.iter().map(|c| c.id).collect() };
                     let start = bp.elements().first().and_then(|e| match e {
                         PathEl::MoveTo(p) => Some(*p),

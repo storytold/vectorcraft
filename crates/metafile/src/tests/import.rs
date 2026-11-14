@@ -410,6 +410,57 @@ fn wmf_that_draws_in_a_metric_map_mode_and_restores_is_read_at_96_pixels_an_inch
 }
 
 #[test]
+fn wmf_records_the_mix_mode_keeps_from_drawing_do_not_set_its_scale() {
+    // A rectangle of 1440 units in MM_TEXT; then SAVEDC, MM_TWIPS, a mix mode and two records that
+    // draw nothing under it, and RESTOREDC.
+    let rect = (0x041B, le16(&[1440, 1440, 0, 0]));
+    let patblt = |rop: u32| (0x061D, [rop.to_le_bytes().to_vec(), le16(&[100, 100, 0, 0])].concat());
+    let cases = [
+        // R2_NOP and R2_XORPEN: rectangles draw nothing.
+        (11i16, [rect.clone(), rect.clone()]),
+        (7, [rect.clone(), rect.clone()]),
+        // R2_NOP: PATBLT with PATCOPY fills nothing.
+        (11, [patblt(0x00F0_0021), patblt(0x00F0_0021)]),
+        // R2_COPYPEN: PATBLT with DSTINVERT is not drawn.
+        (13, [patblt(0x0055_0009), patblt(0x0055_0009)]),
+    ];
+    for (mix, hidden) in cases {
+        let mut records = vec![(0x020B, le16(&[0, 0])), (0x020C, le16(&[1440, 1440])), rect.clone()];
+        records.extend([(0x001E, Vec::new()), (0x0103, le16(&[6])), (0x0104, le16(&[mix]))]);
+        records.extend(hidden);
+        records.push((0x0127, le16(&[-1])));
+        let plain = hand_wmf(1440, 1440, &records)[22..].to_vec();
+        let back = import(&plain).unwrap();
+        let p = paths(&back.document);
+        assert_eq!(p.len(), 1, "mix {mix}: {p:?}");
+        let b = p[0].geometric_bounds().unwrap();
+        assert!((b.width() - 72.0).abs() < 1e-4 && (b.height() - 72.0).abs() < 1e-4, "mix {mix}: {b:?}");
+    }
+    // R2_NOP, then SAVEDC, R2_COPYPEN and RESTOREDC bring R2_NOP back: the MM_TWIPS rectangle after
+    // them draws nothing.
+    let mut records = vec![(0x020B, le16(&[0, 0])), (0x020C, le16(&[1440, 1440])), rect.clone(), (0x0104, le16(&[11]))];
+    records.extend([(0x001E, Vec::new()), (0x0104, le16(&[13])), (0x0127, le16(&[-1])), (0x0103, le16(&[6])), rect]);
+    let back = import(&hand_wmf(1440, 1440, &records)[22..]).unwrap();
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1, "{p:?}");
+    let b = p[0].geometric_bounds().unwrap();
+    assert!((b.width() - 72.0).abs() < 1e-4 && (b.height() - 72.0).abs() < 1e-4, "restored: {b:?}");
+}
+
+#[test]
+fn a_stroke_that_reaches_too_far_leaves_the_strokes_before_it() {
+    // The black pen draws from (0, 500) to (100, 500), then on to a point far outside the picture.
+    let records = vec![(37, le(&[0x8000_0007u32 as i32])), (27, le(&[0, 500])), (54, le(&[100, 500])), (54, le(&[100_000_000, 500]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1, "{p:?}");
+    let mm = 72.0 / 25.4;
+    let b = p[0].geometric_bounds().unwrap();
+    assert!((b.x0).abs() < 0.01 && (b.x1 - mm).abs() < 0.01 && (b.y0 - 5.0 * mm).abs() < 0.01, "{b:?}");
+    assert!(back.warnings.iter().any(|w| w.contains("far outside")), "{:?}", back.warnings);
+}
+
+#[test]
 fn damaged_files_fail_or_import_partly() {
     let good = emf(&sample()).bytes;
     for cut in [0, 8, 50, 107, 108, 120, good.len() / 2, good.len() - 4] {
