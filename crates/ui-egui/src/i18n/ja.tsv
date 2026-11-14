@@ -7111,6 +7111,19 @@ breakText	Glyphs	字形
 	Not Aligned to Pixel Grid	ピクセルグリッドに未整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
+@msg	side is left or right, not `{v}`	side は left または right です（`{v}` ではありません）
+@msg	order is a whole number from 0 to {others}, not `{v}`	order は 0 から {others} までの整数です（`{v}` ではありません）
+@msg	toolbar (a toolbar's name) must be a string	toolbar（ツールバーの名前）は文字列にしてください
+@msg	no toolbar named `{name}`	`{name}` という名前のツールバーが見つかりません
+@msg	toolbar name can't be empty	ツールバー名を空にすることはできません
+@msg	a toolbar name has at most {MAX_NAME} characters	ツールバー名は {MAX_NAME} 文字以内です
+@msg	there is already a toolbar named `{name}`	`{name}` という名前のツールバーはすでにあります
+@msg	there is already a toolbar named `{to}`	`{to}` という名前のツールバーはすでにあります
+@msg	a workspace keeps at most {MAX} toolbars	ワークスペースに置けるツールバーは {MAX} 個までです
+@msg	name (a toolbar's name) must be a string	name（ツールバーの名前）は文字列にしてください
+@msg	name (a toolbar's name) is required	name（ツールバーの名前）を指定してください
+@msg	to (the new name) is required	to（新しい名前）を指定してください
+@msg	name must be a toolbar's name	name はツールバーの名前にしてください
 	Ignore All	すべて無視
 	Add to Dictionary	辞書に追加
 	No Suggestions	候補なし

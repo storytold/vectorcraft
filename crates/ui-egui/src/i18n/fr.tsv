@@ -7410,6 +7410,19 @@ breakText	Glyphs	Glyphes
 	Not Aligned to Pixel Grid	Non aligné sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
 @msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`
+@msg	side is left or right, not `{v}`	side vaut left ou right, pas `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order est un nombre entier de 0 à {others}, pas `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (le nom d’une barre d’outils) doit être une chaîne de caractères
+@msg	no toolbar named `{name}`	aucune barre d’outils nommée `{name}`
+@msg	toolbar name can't be empty	le nom de la barre d’outils ne peut pas être vide
+@msg	a toolbar name has at most {MAX_NAME} characters	un nom de barre d’outils compte au plus {MAX_NAME} caractères
+@msg	there is already a toolbar named `{name}`	il existe déjà une barre d’outils nommée `{name}`
+@msg	there is already a toolbar named `{to}`	il existe déjà une barre d’outils nommée `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espace de travail contient au plus {MAX} barres d’outils
+@msg	name (a toolbar's name) must be a string	name (le nom d’une barre d’outils) doit être une chaîne de caractères
+@msg	name (a toolbar's name) is required	name (le nom d’une barre d’outils) est requis
+@msg	to (the new name) is required	to (le nouveau nom) est requis
+@msg	name must be a toolbar's name	name doit être le nom d’une barre d’outils
 	Ignore All	Tout ignorer
 	Add to Dictionary	Ajouter au dictionnaire
 	No Suggestions	Aucune suggestion

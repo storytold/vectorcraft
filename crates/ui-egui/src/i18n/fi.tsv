@@ -7450,6 +7450,19 @@ breakText	Glyphs	Merkit
 	Not Aligned to Pixel Grid	Ei tasattu pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
+@msg	side is left or right, not `{v}`	side on left tai right, ei `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order on kokonaisluku, vähintään 0 ja enintään {others}, ei `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar-arvon (työkalurivin nimi) on oltava merkkijono
+@msg	no toolbar named `{name}`	ei työkaluriviä nimeltä `{name}`
+@msg	toolbar name can't be empty	työkalurivin nimi ei voi olla tyhjä
+@msg	a toolbar name has at most {MAX_NAME} characters	työkalurivin nimessä on enintään {MAX_NAME} merkkiä
+@msg	there is already a toolbar named `{name}`	työkalurivi nimeltä `{name}` on jo olemassa
+@msg	there is already a toolbar named `{to}`	työkalurivi nimeltä `{to}` on jo olemassa
+@msg	a workspace keeps at most {MAX} toolbars	työtilassa on enintään {MAX} työkaluriviä
+@msg	name (a toolbar's name) must be a string	name-arvon (työkalurivin nimi) on oltava merkkijono
+@msg	name (a toolbar's name) is required	name (työkalurivin nimi) vaaditaan
+@msg	to (the new name) is required	to (uusi nimi) vaaditaan
+@msg	name must be a toolbar's name	name-arvon on oltava työkalurivin nimi
 	Ignore All	Ohita kaikki
 	Add to Dictionary	Lisää sanastoon
 	No Suggestions	Ei ehdotuksia

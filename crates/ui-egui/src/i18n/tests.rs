@@ -3282,6 +3282,98 @@ fn wrongly_shaped_plugin_commands_errors_are_translated() {
     }
 }
 
+/// The errors of the custom toolbar commands (Window › Toolbars, New Toolbar and Manage Toolbars,
+/// `window.toolbar.dock` and `window.toolbar.float`) have an `@msg` row in every complete-message
+/// catalog, and the status bar shows each one in the interface language with the toolbar's name,
+/// the key and the values given kept; the error the command returns stays English.
+#[test]
+fn custom_toolbar_command_errors_are_translated() {
+    use serde_json::json;
+    let scanned = message_literals();
+    let templates = [
+        "toolbar (a toolbar's name) must be a string",
+        "no toolbar named `{name}`",
+        "toolbar name can't be empty",
+        "a toolbar name has at most {MAX_NAME} characters",
+        "there is already a toolbar named `{name}`",
+        "there is already a toolbar named `{to}`",
+        "a workspace keeps at most {MAX} toolbars",
+        "name (a toolbar's name) must be a string",
+        "name (a toolbar's name) is required",
+        "to (the new name) is required",
+        "name must be a toolbar's name",
+        "side is left or right, not `{s}`",
+        "side is left or right, not `{v}`",
+        "order is a whole number from 0 to {others}, not `{v}`",
+        "no dialog open",
+        "`{key}` must be true or false",
+        "x and y must both be numbers",
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "the scan lists {template}");
+    }
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        missing.extend(templates.iter().filter(|t| !rows.contains(*t)).map(|t| format!("{code}: {t}")));
+    }
+    assert!(missing.is_empty(), "{} toolbar errors have no @msg row:\n{}", missing.len(), missing.join("\n"));
+
+    let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    for name in ["Mine", "Pens"] {
+        app.run("window.toolbar.new", json!({ "name": name })).unwrap();
+    }
+    app.run("window.toolbar.dock", json!({"name": "Pens", "side": "left"})).unwrap();
+    let cases = [
+        ("window.toolbar.new", json!({"name": 5}), "name (a toolbar's name) must be a string", vec![]),
+        ("window.toolbar.new", json!({"name": "  "}), "toolbar name can't be empty", vec![]),
+        ("window.toolbar.new", json!({"name": "x".repeat(201)}), "a toolbar name has at most 200 characters", vec!["200"]),
+        ("window.toolbar.new", json!({"name": "Mine"}), "there is already a toolbar named `Mine`", vec!["`Mine`"]),
+        ("window.toolbar.rename", json!({"name": "Mine", "to": "Pens"}), "there is already a toolbar named `Pens`", vec!["`Pens`"]),
+        ("window.toolbar.rename", json!({"name": "Mine"}), "to (the new name) is required", vec![]),
+        ("window.toolbar.custom", json!({}), "name (a toolbar's name) is required", vec![]),
+        ("window.toolbar.custom", json!({"name": "Nope"}), "no toolbar named `Nope`", vec!["`Nope`"]),
+        ("window.toolbar.custom", json!({"name": "Mine", "show": "yes"}), "`show` must be true or false", vec!["`show`"]),
+        ("window.toolbar.duplicate", json!({"name": 3}), "name must be a toolbar's name", vec![]),
+        ("toolbar.addTool", json!({"tool": "pen", "toolbar": 5}), "toolbar (a toolbar's name) must be a string", vec![]),
+        ("window.toolbar.dock", json!({"name": "Mine", "side": "up"}), "side is left or right, not `up`", vec!["`up`"]),
+        ("window.toolbar.dock", json!({"name": "Mine", "side": 3}), "side is left or right, not `3`", vec!["`3`"]),
+        (
+            "window.toolbar.dock",
+            json!({"name": "Mine", "side": "left", "order": 9}),
+            "order is a whole number from 0 to 1, not `9`",
+            vec!["1", "`9`"],
+        ),
+        ("window.toolbar.float", json!({"name": "Mine", "x": "a", "y": 1}), "x and y must both be numbers", vec![]),
+    ];
+    let mut errors: Vec<(String, Vec<&str>)> = vec![];
+    for (id, params, want, kept) in cases {
+        let e = app.run(id, params.clone()).unwrap_err();
+        assert_eq!(e, want, "{id} {params}");
+        errors.push((e, kept));
+    }
+    // New Toolbar's OK with no dialog open, and a workspace that holds as many toolbars as it keeps.
+    errors.push((crate::custom_toolbars::confirm(&mut app).unwrap_err(), vec![]));
+    for i in app.ui.custom_toolbars.len()..crate::custom_toolbars::MAX {
+        app.run("window.toolbar.new", json!({ "name": format!("T{i}") })).unwrap();
+    }
+    for (id, params) in [("window.toolbar.new", json!({"name": "Extra"})), ("window.toolbar.duplicate", json!({"name": "Mine"}))] {
+        let e = app.run(id, params).unwrap_err();
+        assert_eq!(e, "a workspace keeps at most 64 toolbars", "{id}");
+        errors.push((e, vec!["64"]));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, kept) in &errors {
+            let shown = message(lang, e);
+            assert_ne!(shown, *e, "{code}: shown in English");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {e} -> {shown}");
+        }
+    }
+}
+
 /// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
 /// doesn't read, are translated in each language of [`COMPLETE_MESSAGES`], with the colors kept.
 #[test]

@@ -7452,6 +7452,19 @@ breakText	Glyphs	Glyphs
 	Align New Objects to Pixel Grid	Nieuwe objecten uitlijnen op pixelraster
 	Not Aligned to Pixel Grid	Niet uitgelijnd op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
+@msg	side is left or right, not `{v}`	side is left of right, niet `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order is een geheel getal van 0 tot en met {others}, niet `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (de naam van een werkbalk) moet een string zijn
+@msg	no toolbar named `{name}`	geen werkbalk met de naam `{name}`
+@msg	toolbar name can't be empty	de naam van een werkbalk mag niet leeg zijn
+@msg	a toolbar name has at most {MAX_NAME} characters	een werkbalknaam heeft hoogstens {MAX_NAME} tekens
+@msg	there is already a toolbar named `{name}`	er is al een werkbalk met de naam `{name}`
+@msg	there is already a toolbar named `{to}`	er is al een werkbalk met de naam `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	een werkruimte bevat hoogstens {MAX} werkbalken
+@msg	name (a toolbar's name) must be a string	name (de naam van een werkbalk) moet een string zijn
+@msg	name (a toolbar's name) is required	name (de naam van een werkbalk) is vereist
+@msg	to (the new name) is required	to (de nieuwe naam) is vereist
+@msg	name must be a toolbar's name	name moet de naam van een werkbalk zijn
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:
 # Script Console

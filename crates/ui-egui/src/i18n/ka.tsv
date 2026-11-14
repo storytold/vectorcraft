@@ -7524,6 +7524,19 @@ font-script	Japanese	იაპონური
 	Not Aligned to Pixel Grid	პიქსელურ ბადეზე გაუსწორებელი
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`
+@msg	side is left or right, not `{v}`	side არის left ან right და არა `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order არის მთელი რიცხვი 0-დან {others}-მდე და არა `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (ხელსაწყოთა ზოლის სახელი) სტრიქონი უნდა იყოს
+@msg	no toolbar named `{name}`	ხელსაწყოთა ზოლი სახელით `{name}` არ არის
+@msg	toolbar name can't be empty	ხელსაწყოთა ზოლის სახელი ცარიელი ვერ იქნება
+@msg	a toolbar name has at most {MAX_NAME} characters	ხელსაწყოთა ზოლის სახელში მაქსიმუმ {MAX_NAME} სიმბოლოა
+@msg	there is already a toolbar named `{name}`	ხელსაწყოთა ზოლი სახელით `{name}` უკვე არსებობს
+@msg	there is already a toolbar named `{to}`	ხელსაწყოთა ზოლი სახელით `{to}` უკვე არსებობს
+@msg	a workspace keeps at most {MAX} toolbars	სამუშაო სივრცე ინახავს მაქსიმუმ {MAX} ხელსაწყოთა ზოლს
+@msg	name (a toolbar's name) must be a string	name (ხელსაწყოთა ზოლის სახელი) სტრიქონი უნდა იყოს
+@msg	name (a toolbar's name) is required	name (ხელსაწყოთა ზოლის სახელი) აუცილებელია
+@msg	to (the new name) is required	to (ახალი სახელი) აუცილებელია
+@msg	name must be a toolbar's name	name ხელსაწყოთა ზოლის სახელი უნდა იყოს
 	Ignore All	ყველას იგნორირება
 	Add to Dictionary	ლექსიკონში დამატება
 	No Suggestions	შემოთავაზებები არ არის
