@@ -13,7 +13,9 @@ use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, aligned, appearance_targets, edit_targets, index_param, item_indices, item_target, item_target_at};
+use super::appearance::{
+    ItemTarget, aligned, aligned_targets, appearance_targets, edit_targets, editable, index_param, item_indices, item_target, item_target_at,
+};
 use super::expand::has_seeded;
 use super::rasterfx;
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, check_switches, cmd, fileio, has_doc, str_param, switch_or};
@@ -298,17 +300,22 @@ fn ids_json(ids: &[NodeId]) -> Value {
 /// edits its equal item, or its equal object-level effect, each target matched on its own whatever
 /// the other targets have; in a target without them, `item` and `index` stand for themselves.
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
-    let roots = edit_targets(s, p)?;
+    let aligned = aligned(p, cmd)?;
+    // Aligned items and effects are those of the first target's stack, a graph design's art too; that art is then left
+    // out.
+    let roots = if aligned || matches!(item, ItemTarget::Item { aligned: true, .. }) { aligned_targets(s, p)? } else { edit_targets(s, p)? };
     let d = &s.doc()?.doc;
     let per = item.per_target(s, &roots);
     let first = roots.first().and_then(|f| d.node(*f));
     // Whether `item` names an item in the stack it is a row of (else the edit is object-level there).
     let anchor = roots.get(item.anchor(s, &roots)).and_then(|a| d.node(*a));
     let anchor_level = anchor.map(|a| item.effects_item(&a.appearance, cmd)).transpose()?.flatten();
-    let aligned = aligned(p, cmd)?;
     let mut out = Vec::with_capacity(roots.len());
     for (id, item) in roots.iter().zip(per) {
         let (Some(item), Some(n)) = (item, d.node(*id)) else { continue };
+        if super::graph::is_design_art(d, *id) {
+            continue;
+        }
         let at = item.effects_item(&n.appearance, cmd)?;
         // An object-level effect this target shares with the first is where it is in this target.
         let index = match (first.filter(|_| aligned), at, anchor_level) {
@@ -453,8 +460,9 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        let targets = edit_targets(s, p)?;
-        for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
+        let all = aligned_targets(s, p)?;
+        let (targets, per) = editable(&s.doc()?.doc, &all, item.per_target(s, &all));
+        for (target, at) in targets.into_iter().zip(per) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
             // A new effect goes after the item's (or the object's) others.
@@ -473,6 +481,8 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    // The item each target's effect goes on: an aligned item given with a graph design's art first is the row equal to it.
+    let mapped = effect_targets(s, p, item, 0, C)?;
     let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", 0, |fx, _| {
         fx.push(effect.clone());
         true
@@ -480,7 +490,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     // The item the effect landed on in the object whose row the item is (the first selected object
     // for the active item, which applies where it fits), and the effect's index in that object.
     let first = ids.get(item.anchor(s, &ids)).and_then(|id| s.doc().ok()?.doc.node(*id));
-    let landed = first.and_then(|n| item.effects_item(&n.appearance, C).ok().flatten());
+    let landed = first.and_then(|n| mapped.iter().find(|t| t.0 == n.id)).and_then(|t| t.1);
     let index = first.and_then(|n| n.appearance.effects_at(landed)).map_or(0, |fx| fx.len().saturating_sub(1));
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": landed }))
 }
@@ -607,11 +617,13 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
     let copy = switch_or(p, "copy", false, C)?;
-    let roots = edit_targets(s, p)?;
-    // Where an aligned effect would go in each of several different stacks isn't one place.
-    if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
+    let all = aligned_targets(s, p)?;
+    // Where an aligned effect would go in each of several different stacks isn't one place, a graph design's art among
+    // them too.
+    if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &all) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
     }
+    let (roots, _) = editable(&s.doc()?.doc, &all, vec![(); all.len()]);
     // Where the effect landed in each object it moved in, in the order of `ids`.
     let mut landed = vec![];
     let ids = s.edit(if copy { "Duplicate Effect" } else { "Move Effect" }, |d, _| {

@@ -499,6 +499,66 @@ fn appearance_commands_edit_the_objects_given_with_a_graph_designs_art() {
     assert_eq!(rows(&s, mark).items.len(), mark_was.items.len() + 1);
 }
 
+/// Aligned rows and effects given with the art of a graph design in a series first are rows of that art's stack: each
+/// other object edits the row equal to it there, and the art is left as it was.
+#[test]
+fn aligned_rows_given_with_a_graph_designs_art_first_are_rows_of_its_stack() {
+    let (mut s, _, _, art, mark) = design_art();
+    let rows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    // The mark takes the art's stack, then a green copy of the art's fill below it, so the art's fill `f` is row f + 1 of
+    // the mark.
+    s.execute("appearance.transfer", &json!({"source": art.0, "target": mark.0, "copy": true})).unwrap();
+    let f = top_row(&s, art, true);
+    s.execute("appearance.duplicateItem", &json!({"ids": [mark.0], "index": f, "to": 0})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": 0, "color": "#00ff00"})).unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    assert_eq!(mark_was.items.get(f + 1), art_was.items.get(f));
+    assert_ne!(mark_was.items.first(), art_was.items.get(f));
+    let given = json!({"ids": [art.0, mark.0], "index": f, "aligned": true});
+
+    s.execute("appearance.removeItem", &given).unwrap();
+    let mut expected = mark_was.items.clone();
+    expected.remove(f + 1);
+    assert_eq!((rows(&s, art), rows(&s, mark).items.clone()), (art_was.clone(), expected));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    let mut recolor = given.clone();
+    recolor["color"] = json!("#ff00ff");
+    s.execute("appearance.setItem", &recolor).unwrap();
+    let now = rows(&s, mark);
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!((now.items.first(), now.items.get(f)), (mark_was.items.first(), mark_was.items.get(f)));
+    assert_ne!(now.items.get(f + 1), mark_was.items.get(f + 1));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    let r = s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0], "item": f, "aligned": true})).unwrap();
+    assert_eq!((r["item"].as_u64(), r["index"].as_u64()), (Some(f as u64 + 1), Some(0)));
+    let now = rows(&s, mark);
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(now.items.get(f + 1).map(|it| it.effects().len()), Some(1));
+    assert_eq!(now.items.iter().map(|it| it.effects().len()).sum::<usize>(), 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // The art's stack and the mark's differ, so their aligned rows and effects are not reordered together.
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, from) in [("appearance.moveItem", f), ("effect.move", 0)] {
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "from": from, "to": 0, "aligned": true})).unwrap_err().to_string();
+        assert!(e.contains("appearances differ"), "{cmd}: {e}");
+    }
+    // Aligned rows of the art and the mark are not copied to one place.
+    let e = s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": f, "to": 0, "aligned": true})).unwrap_err().to_string();
+    assert!(e.contains("not aligned rows"), "{e}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(rows(&s, mark), mark_was);
+
+    // Not aligned, an item the art does not have is the mark's own row.
+    let last = mark_was.items.len() - 1;
+    assert!(art_was.items.get(last).is_none());
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0], "item": last})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).items.get(last).map(|it| it.effects().len()), Some(1));
+}
+
 /// The paint commands leave the art of a graph design in a series out, a copy of the design given by id with an item
 /// included.
 #[test]

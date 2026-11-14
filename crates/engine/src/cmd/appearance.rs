@@ -440,6 +440,27 @@ pub(crate) fn without_design_art(d: &Document, mut ids: Vec<NodeId>, cmd: &str) 
     Ok(ids)
 }
 
+/// The [`appearance_targets`] with the art of graph designs drawn in graph series kept in their places, for finding the
+/// rows and effects an aligned edit names: those are rows of the first target's stack (or of the first selected
+/// object's), which can be such art. A command whose targets are all such art is refused, as [`edit_targets`] refuses
+/// it; [`editable`] then leaves the art out of the edit.
+pub(crate) fn aligned_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let ids = appearance_targets(s, p)?;
+    without_design_art(&s.doc()?.doc, ids.clone(), "appearance")?;
+    Ok(ids)
+}
+
+/// [`aligned_targets`] with a graph series group standing for the paths directly inside it, as [`row_targets`] has them.
+fn aligned_row_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let ids = aligned_targets(s, p)?;
+    Ok(rowless_series_marks(&s.doc()?.doc, &ids))
+}
+
+/// `ids` and `per` (an entry for each of them) without the art of graph designs drawn in graph series.
+pub(crate) fn editable<T>(d: &Document, ids: &[NodeId], per: Vec<T>) -> (Vec<NodeId>, Vec<T>) {
+    ids.iter().copied().zip(per).filter(|(id, _)| !super::graph::is_design_art(d, *id)).unzip()
+}
+
 /// `ids` with each graph series group that has no fill or stroke row of its own replaced by the paths directly inside
 /// it ([`super::graph::series_group_marks`]). A series group with rows, as a document saved earlier can hold, stays:
 /// the Appearance panel lists those rows and edits them by index.
@@ -521,6 +542,15 @@ fn require_whole_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId
 /// [`row_targets`] of `cmd`, which needs at least one.
 fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let ids = row_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad(cmd, "select objects or give ids"));
+    }
+    Ok(ids)
+}
+
+/// [`aligned_row_targets`] of `cmd`, which needs at least one.
+fn require_aligned_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    let ids = aligned_row_targets(s, p)?;
     if ids.is_empty() {
         return Err(bad(cmd, "select objects or give ids"));
     }
@@ -1023,15 +1053,13 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["weight", "opacity"], "appearance.setItem")?;
     check_switches(p, &["visible"], "appearance.setItem")?;
     let paint = paint_from(s, p)?;
-    let ids = row_targets(s, p)?;
-    if ids.is_empty() {
-        return Err(bad("appearance.setItem", "select objects or give ids"));
-    }
+    let all = require_aligned_targets(s, p, "appearance.setItem")?;
     let blend = str_param(p, "blend").and_then(BlendMode::parse);
     // When every object comes out as it was (for example, when none has item `index`), the document
     // and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &[idx], aligned(p, "appearance.setItem")?);
+    // Aligned rows are rows of the first target's stack, a graph design's art too; that art is then left out.
+    let (ids, per) = editable(&before, &all, items_per_target(&before, &all, &[idx], aligned(p, "appearance.setItem")?));
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
@@ -1114,11 +1142,11 @@ pub(super) fn item_indices(p: &Value, cmd: &str) -> Result<Vec<usize>> {
 /// `appearance.removeItem`: removes fill/stroke `index`, or every one of `indices`, from the selected objects in one undo step.
 fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = item_indices(p, "appearance.removeItem")?;
-    let ids = require_targets(s, p, "appearance.removeItem")?;
+    let all = require_aligned_targets(s, p, "appearance.removeItem")?;
     // When no object has an item at any of the indices, the document and its undo history stay as
     // they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p, "appearance.removeItem")?);
+    let (ids, per) = editable(&before, &all, items_per_target(&before, &all, &idx, aligned(p, "appearance.removeItem")?));
     super::overprint::edit_counted(s, "Remove Item", |d| {
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
@@ -1152,19 +1180,21 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     if contents.is_some() && to.is_none() {
         return Err(bad(C, "`contents` goes with `to`"));
     }
-    let ids = require_targets(s, p, C)?;
+    let all = require_aligned_targets(s, p, C)?;
+    let (ids, _) = editable(&s.doc()?.doc, &all, vec![(); all.len()]);
     // Where the first target's copy landed, and where it landed on the active row's object (the
     // first selected one, not always the first target): copies placed at `to` land at a different
     // index on stacks of other lengths.
     let mut first_at = None;
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     let mut active_at = None;
-    // Aligned rows of a mixed selection are copied right above themselves in each object.
-    if aligned(p, C)? && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
+    // Aligned rows of a mixed selection, a graph design's art among it too, are copied right above themselves in each
+    // object.
+    if aligned(p, C)? && to.is_some() && shared_stack(&s.doc()?.doc, &all).is_some() {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p, C)?);
+    let (_, per) = editable(&before, &all, items_per_target(&before, &all, &idx, aligned(p, C)?));
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
@@ -1277,11 +1307,13 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         return move_contents(s, &ids, to);
     }
-    let ids = require_targets(s, p, C)?;
-    // Where an aligned row would go in each of several different stacks isn't one place.
-    if aligned && appearances_differ(&s.doc()?.doc, &ids) {
+    let all = require_aligned_targets(s, p, C)?;
+    // Where an aligned row would go in each of several different stacks isn't one place, a graph design's art among
+    // them too.
+    if aligned && appearances_differ(&s.doc()?.doc, &all) {
         return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
     }
+    let (ids, _) = editable(&s.doc()?.doc, &all, vec![(); all.len()]);
     if p.get("indices").is_some() {
         if p.get("from").is_some() {
             return Err(bad(C, "give `from` or `indices`, not both"));

@@ -811,7 +811,10 @@ listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` co
 effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
 `item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
 in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
-are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
+are given, and a command whose objects are all design art is an error. With `aligned`, the rows and effects named are
+still those of the first target's stack, design art included: each other object edits the row or effect equal to it, and
+an `aligned` move is an error when the art's stack differs from the others, as `appearance.duplicateItem` with `aligned`
+and `to` is. `appearance.transfer` with design art as its
 `target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
 error. To change the art, edit the design with `graph.design`.
 
