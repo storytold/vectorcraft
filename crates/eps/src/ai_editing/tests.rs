@@ -9687,7 +9687,8 @@ fn an_envelope_is_written_in_the_order_the_reader_reads_it() {
 }
 
 /// Envelopes the reader would open in another shape, or not at all, are written as their distorted
-/// art with a warning, and open as that art: an envelope of type, one in a turned frame, a warp drawn
+/// art with a warning, and open as that art: an envelope of type with text wrap options, one of
+/// mirrored type (written as its outlines), one in a turned frame, a warp drawn
 /// without its style's net, a mesh the reader would lay out the other way round, a top object
 /// whose sides don't pair up, a Fidelity that isn't a whole number and bounds margins kept with
 /// Distort Appearance off. Other live objects keep their own warning.
@@ -9702,10 +9703,24 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         f(&mut doc.node_mut(id).unwrap().kind);
         doc
     };
-    let typed = change(&|k| {
+    let type_node = |id: u64| {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "Type", vectorcraft_doc::CharStyle::default());
+        Node::new(vectorcraft_doc::NodeId(id), NodeKind::Text(Box::new(t)))
+    };
+    let wrapped_type = change(&|k| {
         if let NodeKind::Envelope { content, .. } = k {
-            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "Type", vectorcraft_doc::CharStyle::default());
-            content.push(Arc::new(Node::new(vectorcraft_doc::NodeId(9_000), NodeKind::Text(Box::new(t)))));
+            let mut t = type_node(9_000);
+            t.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset: 6.0, invert: false });
+            content.push(Arc::new(t));
+        }
+    });
+    let mirrored_type = change(&|k| {
+        if let NodeKind::Envelope { content, .. } = k {
+            let mut t = type_node(9_001);
+            if let NodeKind::Text(t) = &mut t.kind {
+                t.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 50.0, 50.0]);
+            }
+            content.push(Arc::new(t));
         }
     });
     let turned = change(&|k| {
@@ -9749,7 +9764,8 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         }
     });
     let cases = [
-        ("type", typed),
+        ("type with text wrap options", wrapped_type),
+        ("mirrored type, written as its outlines", mirrored_type),
         ("turned", turned),
         ("old warp", old_warp),
         ("sideways mesh", sideways),
@@ -9772,6 +9788,171 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
 /// `points`, a grid of `rows + 1` rows of `cols + 1` points, as `cols + 1` rows of `rows + 1`.
 fn transpose(points: Vec<kurbo::Point>, rows: usize, cols: usize) -> Vec<kurbo::Point> {
     (0..=cols).flat_map(|c| (0..=rows).map(move |r| (r, c))).map(|(r, c)| points[r * (cols + 1) + c]).collect()
+}
+
+/// An envelope named `Bent` of `kind` ([`envelope_node`]) whose contents also hold point type
+/// "Type", 24 pt and blue, from (104, 62), with Edit Contents `editing`.
+fn typed_envelope_node(doc: &mut Document, kind: vectorcraft_doc::live::EnvelopeKind, editing: bool) -> Node {
+    let mut envelope = envelope_node(doc, kind, 50.0, editing, vectorcraft_doc::live::EnvelopeOptions::NEW);
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(104.0, 62.0), "Type", style(24.0, Color::rgb(0.0, 0.0, 1.0)));
+    let text = text_node(doc, t);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(text));
+    envelope
+}
+
+/// A 200 × 100 document of `envelope` alone.
+fn alone(envelope: Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    doc
+}
+
+/// `doc` written, then read back through its editing copy beside a page that draws as `doc` does,
+/// its live objects as their art: the objects on its first layer, the writer's warnings and the
+/// reader's notes.
+fn read_with_page(doc: &Document) -> (Vec<Arc<Node>>, Vec<String>, Vec<String>) {
+    let (p, warnings) = private_data(doc, &opts()).unwrap();
+    let mut page = doc.clone();
+    let ids: Vec<vectorcraft_doc::NodeId> = page.layers[0].children().into_iter().flatten().map(|n| n.id).collect();
+    for id in ids {
+        if let Some(n) = page.node_mut(id) {
+            *n = vectorcraft_effects::expand_live_deep(Some(doc), n);
+        }
+    }
+    let (read, notes, layers) = crate::layered_ai(&p.data, page, vec![], false, false, 1.0);
+    assert!(layers, "{notes:?}");
+    (read.layers[0].children().cloned().unwrap_or_default(), warnings, notes)
+}
+
+/// The type in `nodes` and their groups, with whether it shows.
+fn type_in(nodes: &[Arc<Node>]) -> Vec<(String, bool)> {
+    let mut out = vec![];
+    for n in nodes {
+        match &n.kind {
+            NodeKind::Text(t) => out.push((t.plain_text(), n.visible)),
+            NodeKind::Group { children, .. } => out.extend(type_in(children)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// An envelope whose contents hold type keeps the type as type: a warp, a mesh and a top object
+/// envelope, with Edit Contents off and on, open as the same live envelope with the type shown
+/// and editable in its contents beside the rest of them, no copy of the type left on the layer,
+/// and again when saved as they opened.
+#[test]
+fn an_envelope_of_type_is_read_back_live_with_its_type() {
+    for (name, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let mut doc = Document::new(200.0, 100.0);
+            let mut envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+            for round in ["saved", "saved again"] {
+                doc = alone(envelope);
+                let (top, warnings, notes) = read_with_page(&doc);
+                assert!(!warnings.iter().any(|w| w == writer::ENVELOPES || w == writer::TYPE), "{what}, {round}: {warnings:?}");
+                assert!(
+                    !notes.iter().any(|n| n == crate::import::ENVELOPE_TYPE_DRAWN || n == crate::import::ENVELOPE_DRAWN),
+                    "{what}, {round}: {notes:?}"
+                );
+                let [back] = top.as_slice() else { panic!("{what}, {round}: {top:#?} {notes:?}") };
+                let NodeKind::Envelope { content, kind: got, editing: e, fidelity, .. } = &back.kind else {
+                    panic!("{what}, {round}: {back:#?} {notes:?}")
+                };
+                assert_eq!((*e, *fidelity), (editing, 50.0), "{what}, {round}");
+                assert!(same_envelope_kind(&kind, got), "{what}, {round}: {got:?}");
+                assert_eq!(back.name.as_deref(), Some("Bent"), "{what}, {round}");
+                assert_eq!(type_in(content), [("Type".to_string(), true)], "{what}, {round}");
+                let colors: Vec<Option<Color>> =
+                    content.iter().filter(|c| !matches!(c.kind, NodeKind::Text(_))).map(|c| c.appearance.fill_paint().color()).collect();
+                assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}, {round}");
+                envelope = (**back).clone();
+            }
+        }
+    }
+}
+
+/// An envelope of type is written live with room for every object the reader reads of it, the
+/// copy of its type it reads in the envelope's dictionary included. Written as its art, it takes
+/// its type's story out of the text document with it: where its record doesn't fit within the
+/// object limit, and where other type in its contents is written as its outlines (mirrored type).
+/// The file then has no text document.
+#[test]
+fn an_envelope_of_type_written_as_its_art_leaves_no_story() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    for editing in [false, true] {
+        let mut doc = Document::new(200.0, 100.0);
+        let envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+        let doc = alone(envelope);
+        let program = export_ai_editing(&doc, &opts()).unwrap().program;
+        let all = String::from_utf8_lossy(&program).replace("\r\n", "\n");
+        assert!(all.contains("AIDeformOptionsKey") && all.contains("%AI11_BeginTextDocument"), "editing {editing}: {all}");
+        let read = crate::import::objects_read(&program).unwrap();
+        let out = export_within(&doc, &opts(), read).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "editing {editing}: {:?}", out.warnings);
+        let out = export_within(&doc, &opts(), read - 1).unwrap();
+        let short = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "editing {editing}: {:?}", out.warnings);
+        assert!(!short.contains("AIDeformOptionsKey") && !short.contains("%AI11_BeginTextDocument"), "editing {editing}: {short}");
+    }
+
+    let mut doc = Document::new(200.0, 100.0);
+    let mut envelope = typed_envelope_node(&mut doc, kind, false);
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 40.0), "Back", style(12.0, Color::BLACK));
+    t.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 50.0, 40.0]);
+    let mirrored = text_node(&mut doc, t);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(mirrored));
+    let out = export_ai_editing(&alone(envelope), &opts()).unwrap();
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert!(out.warnings.iter().any(|w| w == writer::ENVELOPES) && !out.warnings.iter().any(|w| w == writer::TYPE), "{:?}", out.warnings);
+    assert!(!text.contains("AIDeformOptionsKey") && !text.contains("%AI11_BeginTextDocument"), "{text}");
+}
+
+/// Type in an envelope that is a symbol's art, or a frame of a thread, keeps the envelope written
+/// as its art: the reader would open its type as drawn art.
+#[test]
+fn an_envelope_of_type_in_a_symbol_or_a_thread_is_written_as_its_art() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    use vectorcraft_doc::{TextKind, TextObject};
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut doc = Document::new(200.0, 100.0);
+    let art = typed_envelope_node(&mut doc, kind.clone(), false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+    let placed = instance(&mut doc, "Bent", Affine::translate((10.0, 5.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, placed).unwrap();
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let symbol = back.symbols.iter().find(|s| s.name == "Bent").unwrap_or_else(|| panic!("{:?} {notes:?}", back.symbols));
+    let mut live = 0;
+    symbol.art.walk(&mut |n| live += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(live, 0, "{notes:?}");
+
+    let mut doc = Document::new(200.0, 100.0);
+    let mut envelope = envelope_node(&mut doc, kind, 50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW);
+    let area = |r: Rect, s: &str| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, s, style(10.0, Color::BLACK));
+        (t.kind, t.xf) = (TextKind::Area { frame: shapes::rectangle(r) }, Affine::IDENTITY);
+        t
+    };
+    let first = text_node(&mut doc, area(Rect::new(50.0, 30.0, 150.0, 70.0), "One two three four"));
+    let second = text_node(&mut doc, area(Rect::new(10.0, 85.0, 190.0, 95.0), ""));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(first));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("AIDeformOptionsKey"), "{text}");
+    let warnings = export_ai_editing(&doc, &opts()).unwrap().warnings;
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
 }
 
 /// An envelope with its contents in an opacity mask's art is written as its art there, and an

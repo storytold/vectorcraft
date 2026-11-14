@@ -604,6 +604,15 @@ fn place_on(segments: &[[f64; 8]], f: f64) -> f64 {
     segments.len() as f64
 }
 
+/// Where the text document ended at some point ([`TextDoc::written`]).
+#[derive(Clone, Copy)]
+pub(in crate::ai_editing) struct TextMark {
+    at: (usize, usize, usize, usize, usize),
+    values: usize,
+    lost: bool,
+    planned: usize,
+}
+
 /// The text document being written.
 #[derive(Default)]
 pub(in crate::ai_editing) struct TextDoc {
@@ -995,6 +1004,24 @@ impl TextDoc {
             }
         }
         self.threaded.get(&id).copied()
+    }
+
+    /// Where the text document written so far ends, for [`Self::take_back`].
+    pub(in crate::ai_editing) fn written(&self) -> TextMark {
+        TextMark { at: self.mark(), values: self.doc_values, lost: self.lost, planned: self.planned.len() }
+    }
+
+    /// Take the frames, stories and fonts added since `m` out again, with what they counted. Where
+    /// a thread was planned since, its frames name its story, so nothing is taken out.
+    pub(in crate::ai_editing) fn take_back(&mut self, m: TextMark) {
+        if self.planned.len() != m.planned {
+            return;
+        }
+        let (frames, stories, bytes, text, fonts) = m.at;
+        self.frames.truncate(frames);
+        self.stories.truncate(stories);
+        self.fonts.truncate(fonts);
+        (self.doc_bytes, self.text_bytes, self.doc_values, self.lost) = (bytes, text, m.values, m.lost);
     }
 
     /// Whether a thread written since the last call has attributes the text document leaves out.

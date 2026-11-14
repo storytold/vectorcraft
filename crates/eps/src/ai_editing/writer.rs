@@ -204,6 +204,12 @@ pub(super) struct Writer<'a> {
     /// The `hidden` and `nest` values at which the objects of the opacity mask's art being written
     /// are written: objects there may be written with their art styles.
     mask_level: Option<(u32, u32)>,
+    /// The `hidden` and `nest` values at which the objects of the envelope contents being written
+    /// are written ([`Self::envelope`]): type there may be written as type. With them, whether the
+    /// contents are in the envelope's dictionary, where the reader reads a copy of each text object.
+    contents_level: Option<(u32, u32, bool)>,
+    /// How many text objects were written as their outlines ([`Self::text`]).
+    outlined: usize,
     /// The image just written was written as a placed file.
     placed: bool,
     /// The type just written was written as type, not as its outlines.
@@ -298,6 +304,8 @@ impl<'a> Writer<'a> {
             payloads: vec![],
             hidden: 0,
             mask_level: None,
+            contents_level: None,
+            outlined: 0,
             placed: false,
             typed: false,
             bound: vec![],
@@ -1284,9 +1292,10 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type `n`: a text object stub naming its story in the text document ([`texts`]) when the
-    /// text document can hold it, outside opacity masks, pattern tiles, symbols' art and art cut to
-    /// a clipping object; else its outlines ([`Self::outlined_text`]). A frame of threaded area type
-    /// names the story of its thread, which its first frame holds.
+    /// text document can hold it, on the layers or in an envelope's contents, outside opacity
+    /// masks, pattern tiles, symbols' art and art cut to a clipping object; else its outlines
+    /// ([`Self::outlined_text`]). A frame of threaded area type names the story of its thread,
+    /// which its first frame holds.
     fn text(&mut self, n: &Node, xy: Xy) {
         let NodeKind::Text(t) = &n.kind else { return };
         // Dynamic Text is written as the sizes its layout draws the type at.
@@ -1294,13 +1303,16 @@ impl<'a> Writer<'a> {
         let t = fitted.as_deref().unwrap_or(&**t);
         let doc = self.doc;
         let thread = doc.text_threads.iter().find(|th| th.contains(&n.id));
+        let contents = self.contents_level.filter(|(hidden, nest, _)| (*hidden, *nest) == (self.hidden, self.nest));
         // Type that can't be a stub is written as its outlines, which count their own objects.
-        if self.hidden > 0 || self.clip.is_some() || self.in_symbol || (thread.is_none() && !texts::holds(n, t)) {
+        if (self.hidden > 0 && contents.is_none()) || self.clip.is_some() || self.in_symbol || (thread.is_none() && !texts::holds(n, t)) {
+            self.outlined += 1;
             return self.outlined_text(n, xy);
         }
-        // The stub's objects ([`texts::stub_objects`], [`Self::take_objects`]); without room for
-        // them, the type is left out before its story goes into the text document.
-        let stub = texts::stub_objects(t);
+        // The stub's objects ([`texts::stub_objects`], [`Self::take_objects`]), and the copy the
+        // reader reads of it in an envelope's dictionary; without room for them, the type is left
+        // out before its story goes into the text document.
+        let stub = texts::stub_objects(t) + usize::from(contents.is_some_and(|(.., copied)| copied));
         if !self.take_objects(stub) {
             return;
         }
@@ -1314,6 +1326,7 @@ impl<'a> Writer<'a> {
         let Some(((story, frame), lost)) = placed else {
             // The text document can't hold it: the outlines count their own objects.
             self.objects -= stub;
+            self.outlined += 1;
             return self.outlined_text(n, xy);
         };
         self.typed = true;
