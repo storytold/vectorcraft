@@ -7507,6 +7507,12 @@ breakText	Glyphs	Merkit
 @msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	viimeistele ensin `{id}` (ks. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` on taitonsa viimeinen opetusohjelma
+	Reset progress	Palauta edistyminen
+	Mark Tutorial Step	Merkitse opetusohjelman vaihe
+	Reset Learn Progress	Palauta oppimisen edistyminen
+@msg	missing `step` (see learn.show)	`step` puuttuu (ks. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` on oltava vaiheen numero, vähintään 0 ja enintään {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` on viimeistelty (ks. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet

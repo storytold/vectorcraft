@@ -6918,6 +6918,12 @@ shape	Open	Otvoren
 @msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` je posljednji tutorijal u svojoj vještini
+	Reset progress	Vrati napredak na početno
+	Mark Tutorial Step	Označi korak tutorijala
+	Reset Learn Progress	Vrati napredak učenja na početno
+@msg	missing `step` (see learn.show)	nedostaje `step` (vidi learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` mora biti broj koraka od 0 do {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` je završen (vidi learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

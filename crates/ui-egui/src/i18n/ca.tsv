@@ -7453,6 +7453,12 @@ breakText	Glyphs	Glifs
 @msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` és l’últim tutorial de la seva habilitat
+	Reset progress	Restableix el progrés
+	Mark Tutorial Step	Marca el pas del tutorial
+	Reset Learn Progress	Restableix el progrés d’aprenentatge
+@msg	missing `step` (see learn.show)	falta `step` (vegeu learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` ha de ser un número de pas de 0 a {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` està acabat (vegeu learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats

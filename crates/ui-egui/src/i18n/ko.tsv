@@ -7063,6 +7063,12 @@ breakText	Glyphs	글리프
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
 @msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
 @msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
+	Reset progress	진행률 재설정
+	Mark Tutorial Step	튜토리얼 단계 표시
+	Reset Learn Progress	학습 진행률 재설정
+@msg	missing `step` (see learn.show)	`step`이 없습니다(learn.show 참조)
+@msg	`step` must be a step number from 0 to {last}	`step`은 0에서 {last} 사이의 단계 번호여야 합니다
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}`은(는) 완료되었습니다(learn.resetProgress 참조)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

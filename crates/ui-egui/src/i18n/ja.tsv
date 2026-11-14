@@ -7168,6 +7168,12 @@ breakText	Glyphs	字形
 @msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
 @msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)
 @msg	`{id}` is the last tutorial in its skill	`{id}` はこのスキルの最後のチュートリアルです
+	Reset progress	進行状況をリセット
+	Mark Tutorial Step	チュートリアルの手順をマーク
+	Reset Learn Progress	学習の進行状況をリセット
+@msg	missing `step` (see learn.show)	`step` が指定されていません (learn.show を参照)
+@msg	`step` must be a step number from 0 to {last}	`step` は 0 から {last} までの手順番号にしてください
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` は完了しています (learn.resetProgress を参照)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新

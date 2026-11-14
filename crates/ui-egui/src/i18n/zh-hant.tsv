@@ -7119,6 +7119,12 @@ breakText	Glyphs	字符
 @msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	請先完成 `{id}` (請參閱 learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最後一個教學課程
+	Reset progress	重設進度
+	Mark Tutorial Step	標記教學課程步驟
+	Reset Learn Progress	重設學習進度
+@msg	missing `step` (see learn.show)	未提供 `step` (請參閱 learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` 必須是 0 到 {last} 之間的步驟編號
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` 已完成 (請參閱 learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果

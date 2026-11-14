@@ -2910,14 +2910,18 @@ own layout rules.
 
 Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
-the Skills tab. The Skills tab lists VectorCraft's own skills, each with its number of tutorials and an empty progress
-ring. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and Back goes up one level.
+the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
+finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
+Back goes up one level.
 The tutorial text is English. `window.learn {show?}` shows the panel (`show: true`), hides it (`show: false`) or
 toggles it (`show` omitted or null), and answers whether it shows; Window › Learn and Explore tutorials run it.
 The panel counts as hidden while the dock is hidden or a full screen mode hides the panels. Showing it shows a hidden
 dock; in a full screen mode it makes Learn the front panel, which shows when the mode ends, and answers false. Any
-other value of `show` is an error and changes nothing. `learn.list {}` → `{skills: [{id, title, tutorials: [{id, title, steps}]}]}`, in the order the Skills tab
-lists them, where `steps` is the number of steps. `learn.skills {}` shows the panel on its Skills tab with the list of
+other value of `show` is an error and changes nothing. `learn.list {}` →
+`{skills: [{id, title, done, total, tutorials: [{id, title, steps, finished, completedSteps}]}]}`, in the order the
+Skills tab lists them, where `done` is the number of the skill's tutorials finished, `total` the number of its
+tutorials, `steps` the number of a tutorial's steps, `finished` whether it is finished, and `completedSteps` the
+zero-based indexes of its steps marked done (every step of a finished tutorial). `learn.skills {}` shows the panel on its Skills tab with the list of
 skills, with no skill and no tutorial open, as the Quick skill guide card and Back to skills do, and answers what
 `learn.list` answers. `learn.show {tutorial}` shows the panel on its Skills tab with that
 tutorial's steps → `{skill, tutorial, title, steps: [text]}`. A missing, non-string or unknown `tutorial` is an error
@@ -2927,17 +2931,32 @@ Under a tutorial's steps, View more opens the tutorial's practice sample, a smal
 art its steps work on, as a new untitled document that becomes the active one; Save asks where to save it. Once the
 sample is open, Finish tutorial marks the tutorial finished. A finished tutorial shows Next Up with the title of the
 next tutorial in the same skill, which Next Up shows without opening its sample. A skill's last tutorial, finished,
-says so and shows Back to skills instead; Next Up never moves to another skill. Which tutorials are finished is kept
-while the app runs, and the skill rings and counts do not show it yet. These are VectorCraft's own rules; the help
-page also plays a short video, which VectorCraft does not have. `learn.openSample {tutorial}` runs View more →
+says so and shows Back to skills instead; Next Up never moves to another skill. These are VectorCraft's own rules; the
+help page also plays a short video, which VectorCraft does not have. `learn.openSample {tutorial}` runs View more →
 `{tutorial, index, title}` of the new document, and moves the Learn view to that tutorial; each call opens another
 copy and leaves the open documents as they are. `learn.finish {tutorial}` runs Finish tutorial →
 `{tutorial, finished: true, next}`, where `next` is the next tutorial's id in the skill, or null after the skill's
-last one; the tutorial's sample must have been opened, and finishing it again keeps one entry. `learn.next {tutorial}`
+last one; the tutorial's sample must have been opened, and finishing it again keeps one entry, also after a restart
+without opening the sample again. `learn.next {tutorial}`
 runs Next Up on a finished tutorial and shows the panel on the next one → `{skill, tutorial, title}`; on a tutorial
 not finished, or a skill's last tutorial, it is an error. For all three, a missing, non-string or unknown `tutorial`
 is an error, and an error changes nothing. Behavior reference:
 [Quick skill guide](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/learn-skills-quick-skill-guide.html).
+
+Each step has a check box before its number that shows whether it is done, and a skill's ring fills as its tutorials
+are finished, as the help page describes; a finished tutorial has a check mark in its skill's list. A step is marked
+done by its check box, which can be changed once the tutorial's sample is open and until the tutorial is finished;
+marking every step does not finish the tutorial. Finish tutorial marks all its steps done, and a finished tutorial's
+steps stay marked. Reset progress under the list of skills, shown while there is progress, clears every tutorial
+finished and every step marked. The desktop app keeps the progress in its preferences, so it lasts to the next start;
+when two windows change it, the one that saves last keeps its progress. The web build keeps it while the page is open.
+Marking steps by hand, keeping the progress and Reset progress are VectorCraft's own rules.
+`learn.markStep {tutorial, step, complete?}` runs a step's check box → `{tutorial, step, complete}`: `step` is the
+zero-based step number, and `complete` marks the step done (`true`, omitted or null) or not done (`false`). A missing
+`step` or one the tutorial does not have, a `complete` that is not true or false, a tutorial whose sample was not
+opened, and a finished tutorial are errors. `learn.resetProgress {}` runs Reset progress and answers what `learn.list`
+answers; open documents, opened samples and the Learn view stay as they are. For both, a missing, non-string or
+unknown `tutorial` is an error, and an error changes nothing.
 
 The Home screen has a Learn section between Recent Files and the new-file presets, as
 [the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/homescreen-overview.html)
@@ -2950,9 +2969,11 @@ rules.
 ```json
 {"name":"invoke_menu","arguments":{"command":"learn.show","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.openSample","params":{"tutorial":"pen-paths"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.markStep","params":{"tutorial":"pen-paths","step":0}}}
 {"name":"invoke_menu","arguments":{"command":"learn.finish","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.next","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.skills","params":{}}}
+{"name":"invoke_menu","arguments":{"command":"learn.resetProgress","params":{}}}
 ```
 
 A step that names a tool shows the tool's name as a blue link. A click on it, or Enter or Space while it has the
