@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_doc::Kinsoku;
 use vectorcraft_doc::Mojikumi;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
@@ -105,6 +106,25 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     app.run("text.setFormat", json!({"id": id, "kinsoku": "hard", "mojikumi": "lineEndHalf"})).unwrap();
     assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
+}
+
+/// Kinsoku Set shows a custom set by its name, a blank when the paragraphs' sets differ, even when
+/// each has Hard under it; Bunri-Kinshi is available with a custom set.
+#[test]
+fn kinsoku_set_shows_a_custom_set_by_name() {
+    let (mut app, id) = editing_text("A\nB\n");
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Tight", "cannotStart": "」"}]})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "hard"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "kinsoku": "tight"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
+    assert_eq!(shared_kinsoku_name(&app), None);
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "Tight"})).unwrap();
+    assert_eq!(shared_kinsoku_name(&app).as_deref(), Some("Tight"));
+    assert!(bunri_kinshi_item(&app).0);
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "none"})).unwrap();
+    assert_eq!(shared_kinsoku_name(&app).as_deref(), Some("None"));
+    assert!(!bunri_kinshi_item(&app).0);
 }
 
 /// The Mojikumi Set menu lists None, the four other predefined sets and Line-end Punctuation Half

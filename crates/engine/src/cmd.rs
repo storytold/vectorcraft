@@ -46,6 +46,7 @@ pub mod importmatches;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
+pub mod kinsokusets;
 pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
@@ -332,6 +333,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(compositefonts::specs());
+        v.extend(kinsokusets::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(threads::specs());

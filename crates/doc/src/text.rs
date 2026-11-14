@@ -9,6 +9,7 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 mod area;
 mod char_style;
 mod composite;
+mod kinsoku_set;
 mod object;
 mod para_style;
 mod runs;
@@ -25,6 +26,8 @@ pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
     CompositeParts,
 };
+pub(crate) use kinsoku_set::read_sets as read_kinsoku_sets;
+pub use kinsoku_set::{KINSOKU_BUILT_IN, KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX, KinsokuSet};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
     Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,

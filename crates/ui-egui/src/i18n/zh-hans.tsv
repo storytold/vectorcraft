@@ -5436,6 +5436,15 @@ font-technology	Variable	可变
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 处理方式
+	Kinsoku Shori Settings…	Kinsoku 处理设置…
+	Kinsoku Shori Settings	Kinsoku 处理设置
+	Kinsoku Sets	Kinsoku 集列表
+	Kinsoku Set Base	Kinsoku 集基准
+	Based on:	基于：
+	Cannot Start Line	不能位于行首
+	Cannot End Line	不能位于行尾
+	Hanging Punctuation	悬挂标点
+	Inseparable Characters	不可分割字符
 	Push In First	先推入
 	Push Out First	先推出
 	Push Out Only	只推出

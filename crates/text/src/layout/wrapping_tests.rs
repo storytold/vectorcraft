@@ -1159,6 +1159,166 @@ fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
     assert_eq!(line(text, &pairs(text, true), 0, 46.5, Kinsoku::Hard, PushInFirst), 3);
 }
 
+/// A custom Kinsoku Shori set (Type › Kinsoku Shori Settings…) with these categories.
+fn custom_set(cannot_start: &str, cannot_end: &str, hanging: &str, inseparable: &[&str]) -> vectorcraft_doc::KinsokuSet {
+    let mut set = vectorcraft_doc::KinsokuSet {
+        name: "Custom".into(),
+        cannot_start: cannot_start.chars().collect(),
+        cannot_end: cannot_end.chars().collect(),
+        hanging: hanging.chars().collect(),
+        inseparable: inseparable.iter().map(|s| s.to_string()).collect(),
+    };
+    set.normalize();
+    set
+}
+
+/// New Set from Hard or Soft starts with their characters: a custom set made from either breaks
+/// every line where it does, in both composers, with every Kinsoku Shori Type and with and without
+/// Burasagari, and keeps the same inseparable pairs with Bunri-Kinshi. One made from None is empty.
+#[test]
+fn a_set_made_from_hard_or_soft_breaks_lines_as_they_do() {
+    use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
+    let texts = ["一二三四五六七八九十一二三四五」六", "あカッー々ャ「か」、。（雅）", "あい——う〳〵え……ｶｯｰ", "一二三四(五六)ab\u{201c}c\u{201d}。"];
+    for base in [Kinsoku::Hard, Kinsoku::Soft] {
+        let set = crate::shape::kinsoku_set_from(base, "From");
+        let custom = breaking::KinsokuRules::Custom(&set);
+        for text in texts {
+            let mut built_in = full_width(text);
+            crate::shape::keep_inseparable_pairs(text, &mut built_in);
+            let mut own = full_width(text);
+            crate::shape::keep_inseparable_sequences(text, &mut own, &set.inseparable);
+            let kept = |g: &[SGlyph]| g.iter().map(|g| g.keeps_next).collect::<Vec<_>>();
+            assert_eq!(kept(&built_in), kept(&own), "{base:?} {text}");
+            let ends = |c: Vec<Breakpoint>| c.iter().map(|b| b.end).collect::<Vec<_>>();
+            assert_eq!(ends(candidates(text, &built_in, None, base)), ends(candidates(text, &own, None, custom)), "{base:?} {text}");
+            for ty in [PushInFirst, PushOutFirst, PushOutOnly] {
+                for burasagari in [Burasagari::None, Burasagari::Standard] {
+                    for width in (15..=160).step_by(5).map(f64::from) {
+                        let at = |g: &[SGlyph], k: breaking::KinsokuRules<'_>| {
+                            break_line(text, g, 0, width, &[], 0.0, None, burasagari, k, ty, false, false, &[], None).0
+                        };
+                        assert_eq!(at(&built_in, base.into()), at(&own, custom), "{base:?} {ty:?} {burasagari:?} {width} {text}");
+                    }
+                }
+            }
+        }
+    }
+    let empty = crate::shape::kinsoku_set_from(Kinsoku::None, "Empty");
+    assert!(empty.cannot_start.is_empty() && empty.cannot_end.is_empty() && empty.hanging.is_empty() && empty.inseparable.is_empty());
+}
+
+/// A custom set keeps its own Cannot Start Line characters off a line's start and its Cannot End
+/// Line characters off its end, and lets every other character start or end one: here 四 never
+/// starts a line and 三 never ends one, while 」, which Hard keeps off a line's start, may start
+/// one with an empty set.
+#[test]
+fn a_custom_set_keeps_its_own_characters_off_line_ends() {
+    use KinsokuShoriType::PushOutOnly;
+    let end = |text: &str, width: f64, k: breaking::KinsokuRules<'_>| {
+        break_line(text, &full_width(text), 0, width, &[], 0.0, None, Burasagari::None, k, PushOutOnly, false, false, &[], None).0
+    };
+    let text = "一二三四五六";
+    let start = custom_set("四", "", "", &[]);
+    let finish = custom_set("", "三", "", &[]);
+    let empty = custom_set("", "", "", &[]);
+    assert_eq!(end(text, 35.0, Kinsoku::Hard.into()), 3);
+    assert_eq!(end(text, 35.0, breaking::KinsokuRules::Custom(&start)), 2, "四 does not start the next line");
+    assert_eq!(end(text, 35.0, breaking::KinsokuRules::Custom(&finish)), 2, "三 does not end the line");
+    let bracket = "一二三」四";
+    assert_eq!(end(bracket, 35.0, Kinsoku::Hard.into()), 2, "Hard keeps 」 off the next line's start");
+    assert_eq!(end(bracket, 35.0, breaking::KinsokuRules::Custom(&empty)), 3, "the empty set lets 」 start it");
+    let ends = candidates(text, &full_width(text), None, breaking::KinsokuRules::Custom(&start)).iter().map(|b| b.end).collect::<Vec<_>>();
+    assert_eq!(ends, [1, 2, 4, 5]);
+}
+
+/// With Burasagari, a custom set hangs its own Hanging Punctuation and not the comma and full stop
+/// the built-in sets hang: 、 hangs outside a full line with Hard and with a set that lists it; with
+/// a set that lists only ! it starts the next line, while ! hangs.
+#[test]
+fn a_custom_set_hangs_its_own_hanging_punctuation() {
+    use KinsokuShoriType::PushOutOnly;
+    let end = |text: &str, k: breaking::KinsokuRules<'_>| {
+        break_line(text, &full_width(text), 0, 30.0, &[], 0.0, None, Burasagari::Standard, k, PushOutOnly, false, false, &[], None).0
+    };
+    let comma = custom_set("", "", "、", &[]);
+    let bang = custom_set("", "", "!", &[]);
+    assert_eq!(end("一二三、四", Kinsoku::Hard.into()), 4);
+    assert_eq!(end("一二三、四", breaking::KinsokuRules::Custom(&comma)), 4, "、 hangs");
+    assert_eq!(end("一二三、四", breaking::KinsokuRules::Custom(&bang)), 3, "、 does not hang");
+    assert_eq!(end("一二三!四", breaking::KinsokuRules::Custom(&bang)), 4, "! hangs");
+    // A hanging character that starts an inseparable sequence kept with Bunri-Kinshi does not hang
+    // the rest of the sequence with it: the sequence goes to the next line.
+    let joined = custom_set("", "", "!", &["!あ"]);
+    let text = "一二三!あい";
+    let mut g = full_width(text);
+    crate::shape::keep_inseparable_sequences(text, &mut g, &joined.inseparable);
+    let rules = breaking::KinsokuRules::Custom(&joined);
+    assert_eq!(break_line(text, &g, 0, 30.0, &[], 0.0, None, Burasagari::Standard, rules, PushOutOnly, false, false, &[], None).0, 3);
+    // A hanging character drawn with two glyphs does not hang: the line's geometry hangs only one
+    // glyph, so the other would stay past the measure. 三 goes to the next line with it.
+    let text = "一二三、四";
+    let mut g = full_width(text);
+    g[3].adv = 5.0;
+    g.insert(3, g[3].clone());
+    assert_eq!(break_line(text, &g, 0, 30.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, PushOutOnly, false, false, &[], None).0, 2);
+    let g = full_width("、!");
+    assert!(breaking::hangs(&g[1], breaking::KinsokuRules::Custom(&bang)) && !breaking::hangs(&g[0], breaking::KinsokuRules::Custom(&bang)));
+}
+
+/// Bunri-Kinshi with a custom set: a line never breaks inside one of its inseparable sequences,
+/// which may be longer than a pair and may overlap, and the built-in pairs are kept only when the
+/// set lists them.
+#[test]
+fn a_custom_set_keeps_its_inseparable_sequences_on_one_line() {
+    let marked = |text: &str, sequences: &[&str]| {
+        let mut g = full_width(text);
+        crate::shape::keep_inseparable_sequences(text, &mut g, &sequences.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        g.iter().map(|g| g.keeps_next).collect::<Vec<_>>()
+    };
+    assert_eq!(marked("かあいうえ", &["あいう"]), [false, true, true, false, false]);
+    assert_eq!(marked("あいうえお", &["あい", "いう"]), [true, true, false, false, false], "overlapping sequences chain");
+    assert_eq!(marked("あ——い", &["あい"]), [false; 4], "the built-in pairs are not kept by a set without them");
+    assert_eq!(marked("", &["あい"]), Vec::<bool>::new());
+    assert_eq!(marked("あいうえお", &["あい", "あいうえ"]), [true, true, true, false, false], "the longer of two sequences that start alike");
+    assert_eq!(marked("あいう", &["あい", "あいか"]), [true, false, false], "the shorter where only it is found");
+    // A set at the category limit whose sequences all start with one character.
+    let many: Vec<String> = (0..2047u32).filter_map(|k| char::from_u32(0x4E00 + k)).map(|c| ['あ', c].iter().collect()).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).chain(["あい"]).collect();
+    assert_eq!(marked("あいあ一う", &many), [true, false, true, false, false]);
+    let text = "かあいうえ";
+    let set = custom_set("", "", "", &["あいう"]);
+    let mut g = full_width(text);
+    crate::shape::keep_inseparable_sequences(text, &mut g, &set.inseparable);
+    let ends = candidates(text, &g, None, breaking::KinsokuRules::Custom(&set)).iter().map(|b| b.end).collect::<Vec<_>>();
+    assert_eq!(ends, [1, 4]);
+}
+
+/// Bunri-Kinshi with a custom set compares at most 15 texts with the set's sequences for each
+/// character of a paragraph, however many sequences start with one character: 2048 sequences of
+/// 2 characters cost one lookup at each place, 256 of 16 characters cost 15, and a sequence longer
+/// than a set holds is not looked for.
+#[test]
+fn inseparable_sequences_cost_a_bounded_number_of_lookups() {
+    let lookups = |text: &str, sequences: &[String]| {
+        let mut g = full_width(text);
+        crate::shape::SEQUENCE_LOOKUPS.with(|n| n.set(0));
+        crate::shape::keep_inseparable_sequences(text, &mut g, sequences);
+        (crate::shape::SEQUENCE_LOOKUPS.with(std::cell::Cell::get), g.iter().filter(|g| g.keeps_next).count())
+    };
+    // A place n characters from the paragraph's end looks up min(n, 16) - 1 texts.
+    let cost = |chars: usize, longest: usize| (1..=chars).map(|n| n.min(longest) - 1).sum::<usize>();
+    let text = "あ".repeat(1000);
+    let pairs: Vec<String> = (0..2048u32).filter_map(|k| char::from_u32(0x4E00 + k)).map(|c| ['あ', c].iter().collect()).collect();
+    assert_eq!(lookups(&text, &pairs), (999, 0));
+    let long: Vec<String> = (0..256u32).filter_map(|k| char::from_u32(0x4E00 + k)).map(|c| format!("{}{c}", "あ".repeat(15))).collect();
+    assert_eq!(lookups(&text, &long), (cost(1000, 16), 0));
+    assert!(cost(1000, 16) <= 1000 * 15);
+    let mut found = long.clone();
+    found.push("あ".repeat(16));
+    assert_eq!(lookups(&"あ".repeat(16), &found), (cost(16, 16), 15));
+    assert_eq!(lookups(&"あ".repeat(17), &["あ".repeat(17)]), (cost(17, 16), 0), "17 characters are never found");
+}
+
 /// Justification adds no gap between two glyphs of one warichu block, whichever of them is drawn
 /// first: right to left, the block's first glyph (the one that starts it) is drawn after the
 /// others. Between glyphs of two blocks, the gap stays.

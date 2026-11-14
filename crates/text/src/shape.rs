@@ -409,6 +409,89 @@ pub(crate) fn keep_inseparable_pairs(text: &str, sg: &mut [SGlyph]) {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many texts [`keep_inseparable_sequences`] has compared with a set's sequences on this
+    /// thread.
+    pub(crate) static SEQUENCE_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Bunri-Kinshi with a custom Kinsoku Shori set: as [`keep_inseparable_pairs`], for the set's
+/// inseparable `sequences` (each [`vectorcraft_doc::text::KINSOKU_SEQUENCE`] characters): a line
+/// never breaks between two characters of one occurrence of a sequence in the paragraph's text.
+/// Occurrences may overlap. The text is read once; at each place that starts a sequence, only the
+/// text of each sequence length (at most [`vectorcraft_doc::text::KINSOKU_SEQUENCE`]'s end) is
+/// looked up, however many sequences share a first character: at most 15 lookups for each
+/// character of the paragraph. A sequence longer than a set can hold is never found.
+pub(crate) fn keep_inseparable_sequences(text: &str, sg: &mut [SGlyph], sequences: &[String]) {
+    let (Some(first), Some(last)) = (sg.iter().map(|g| g.byte).min(), sg.iter().map(|g| g.byte + g.len).max()) else { return };
+    let Some(longest) = sequences.iter().map(|s| s.chars().count()).max() else { return };
+    let longest = longest.min(*vectorcraft_doc::text::KINSOKU_SEQUENCE.end());
+    let known: std::collections::HashSet<&str> = sequences.iter().map(String::as_str).collect();
+    let starts: std::collections::HashSet<char> = sequences.iter().filter_map(|s| s.chars().next()).collect();
+    let Some(para) = text.get(first..last) else { return };
+    // The bytes (of `text`) where a character inside an occurrence starts, after its first.
+    let mut inside = std::collections::HashSet::new();
+    for (at, c) in para.char_indices() {
+        if !starts.contains(&c) {
+            continue;
+        }
+        let rest = &para[at..];
+        // Every sequence found here is the start of the longest one found here, so that one marks
+        // the characters of them all.
+        let mut found = None;
+        for end in rest.char_indices().take(longest).map(|(k, ch)| k + ch.len_utf8()).skip(1) {
+            #[cfg(test)]
+            SEQUENCE_LOOKUPS.with(|n| n.set(n.get() + 1));
+            if known.contains(&rest[..end]) {
+                found = Some(end);
+            }
+        }
+        if let Some(end) = found {
+            inside.extend(rest[..end].char_indices().skip(1).map(|(k, _)| first + at + k));
+        }
+    }
+    if inside.is_empty() {
+        return;
+    }
+    for k in 1..sg.len() {
+        let (a, b) = (&sg[k - 1], &sg[k]);
+        if a.byte == b.byte || a.inline.is_some() || b.inline.is_some() || a.byte + a.len != b.byte {
+            continue;
+        }
+        if inside.contains(&b.byte) {
+            sg[k - 1].keeps_next = true;
+        }
+    }
+}
+
+/// The characters, hanging punctuation and inseparable sequences of a built-in Kinsoku Set
+/// (`base`), as a custom set named `name` holds them: New Set's starting point. A set made from
+/// Hard or Soft breaks lines as that set does; one made from None is empty.
+pub fn kinsoku_set_from(base: vectorcraft_doc::Kinsoku, name: &str) -> vectorcraft_doc::KinsokuSet {
+    use vectorcraft_doc::Kinsoku;
+    let mut set = vectorcraft_doc::KinsokuSet { name: name.to_string(), ..Default::default() };
+    if base == Kinsoku::None {
+        return set;
+    }
+    // Every character the built-in sets name is in the Basic Multilingual Plane.
+    for c in (0..=0xFFFF_u32).filter_map(char::from_u32) {
+        if no_line_start(c) && !(base == Kinsoku::Soft && soft_line_start(c)) {
+            set.cannot_start.push(c);
+        }
+        if no_line_end(c) {
+            set.cannot_end.push(c);
+        }
+        if crate::layout::is_hanging_punctuation(c) {
+            set.hanging.push(c);
+        }
+    }
+    let pairs = [('\u{2014}', '\u{2014}'), ('\u{2026}', '\u{2026}'), ('\u{2025}', '\u{2025}'), ('\u{3033}', '\u{3035}'), ('\u{3034}', '\u{3035}')];
+    set.inseparable = pairs.iter().filter(|&&(a, b)| inseparable(a, b)).map(|&(a, b)| [a, b].iter().collect()).collect();
+    set.normalize();
+    set
+}
+
 /// Is `a` followed by `b` an inseparable pair that Bunri-Kinshi keeps on one line? VectorCraft's
 /// set is the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08): two
 /// em dashes, two horizontal ellipses, two two-dot leaders, and the upper half of a vertical kana

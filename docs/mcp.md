@@ -8682,10 +8682,46 @@ which Japanese characters may not start or end a line. **Hard** (the default; ne
 setting) keeps closing brackets, commas, full stops, middle dots, iteration marks, the prolonged sound mark ー and small
 kana off the line start, and opening brackets off the line end. **Soft** lets 々, ー and small kana start a line, as
 JLREQ's level 3 line-breaking rules do (https://www.w3.org/TR/jlreq/#addendum_a3); the rest of the set stays.
-**None** applies no kinsoku. `hard` isn't saved. One undo step.
+**None** applies no kinsoku. `hard` isn't saved. The name of a custom set of the document (`type.kinsokuSets.list`, any
+case) gives each paragraph a copy of that set, saved with the paragraph (`kinsoku_set` in `para`) beside Hard, so an
+older build reads the paragraph as Hard; a name the document has no set of fails the call and changes nothing.
+Paragraph styles carry the set. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"kinsoku":"soft"}}}
+```
+
+## Kinsoku Shori Settings
+
+`type.kinsokuSets.set {sets: [{name, from?, cannotStart?, cannotEnd?, hanging?, inseparable?}]}` (Type › Kinsoku Shori
+Settings…'s OK, shown with the East Asian options) replaces the active document's custom Kinsoku Shori sets as one undo
+step, and records none when nothing changes. `cannotStart` lists the characters that never start a line, `cannotEnd`
+those that never end one, and `hanging` the punctuation that Burasagari hangs outside a line's end, each as text, one
+character after another. `inseparable` lists sequences of 2 to 16 characters that a line never breaks inside while
+Bunri-Kinshi is on. Each category keeps each character once, sorted, and holds at most 4096 characters (a sequence
+counts each of its characters); a control or space character in a category fails the call. Names are trimmed, 1 to 128 characters, unique in any
+case and never None, Hard or Soft; a document holds at most 256 sets. These limits are VectorCraft's own. A set with
+the name of a set the document has (any case) and no `from` edits that set; `from` names the set it renames. Every
+paragraph and paragraph style using an edited set takes its new characters and name, and those using a set left out
+take Hard. An unknown key, a name used twice, a `from` the document has no set of and a sequence of one character fail
+the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
+
+`type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`), paragraph styles (`styles`) and graphs
+(`graphs`, in the paragraph attributes a graph keeps for its labels) use each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
+built-in or custom set starts with: Hard and Soft list the characters they keep off a line's start and end, the East
+Asian comma and full stop as hanging punctuation and the Bunri-Kinshi pairs; None lists nothing.
+
+Type › Kinsoku Shori Settings… opens a dialog on the document's sets: Kinsoku Set picks one, New adds a set based on
+the choice in Based on (Hard, Soft, None or a set of the dialog), Delete takes the one picked out, the four fields edit
+its categories (inseparable sequences separated by spaces), and Unicode with Add puts the character of a code point
+(`U+3001` or `3001`) into Cannot Start Line, Cannot End Line or Hanging Punctuation. Nothing changes until OK, which
+runs `type.kinsokuSets.set`; a refused set keeps the dialog open. The Paragraph panel's Kinsoku Set lists the custom
+sets after None, Hard and Soft, and its last entry opens the dialog. Importing and exporting sets is not available.
+The help page:
+https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html
+
+```json
+{"name":"run_command","arguments":{"command":"type.kinsokuSets.set","params":{"sets":[{"name":"Tight","cannotStart":"、。」ー","cannotEnd":"「（","hanging":"、。","inseparable":["——","……"]}]}}}
 ```
 
 ## Kinsoku Shori Type

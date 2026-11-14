@@ -1,24 +1,24 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{
-    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, drawn_after_tab, drawn_width, hangs, leader_outline, optical_hangs, optical_hangs_rtl,
-    optical_punct, optical_share, roman_share, squeeze_em, tab_advance, word_width,
+    KinsokuRules, Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, drawn_after_tab, drawn_width, hangs, leader_outline, optical_hangs,
+    optical_hangs_rtl, optical_punct, optical_share, roman_share, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
 use super::vertical::{
     EM_CENTER, MojikumiRules, align_shift, compress_punctuation, dot_quarter, glyph_em, halve_punctuation, punct_half, space_japanese_and_latin,
 };
 use super::{
-    Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, Kinsoku, KinsokuShoriType, LeadingModel, LineFit, LineInfo,
-    ListMarker, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line,
-    hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
+    Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, KinsokuShoriType, LeadingModel, LineFit, LineInfo, ListMarker,
+    ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line, hyphen_glyph,
+    is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
-use crate::shape::{keep_inseparable_pairs, keep_korean_words};
+use crate::shape::{keep_inseparable_pairs, keep_inseparable_sequences, keep_korean_words};
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
 fn pushes_in(para: &ParaStyle) -> bool {
-    para.kinsoku != Kinsoku::None && para.kinsoku_type != KinsokuShoriType::PushOutOnly
+    !KinsokuRules::of(para).is_none() && para.kinsoku_type != KinsokuShoriType::PushOutOnly
 }
 
 /// Paragraphs longer than this (glyphs) are always broken line by line.
@@ -50,9 +50,14 @@ fn compose_para(
     let composer = cx.opts.composer.unwrap_or(para.composer);
     // A paragraph whose commas or full stops may hang is composed line by line (as the Japanese
     // single-line composer does).
-    let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
+    let kinsoku = KinsokuRules::of(para);
+    let may_hang = para.burasagari != Burasagari::None && sg.iter().any(|g| hangs(g, kinsoku));
     // So is a paragraph that may push characters kinsoku keeps off a line's ends in onto a line.
-    let may_push_in = pushes_in(para) && sg.iter().any(|g| no_line_start(g.ch) || no_line_end(g.ch));
+    let kept_off_ends = |c: char| match kinsoku {
+        KinsokuRules::Custom(set) => set.cannot_start(c) || set.cannot_end(c),
+        KinsokuRules::BuiltIn(_) => no_line_start(c) || no_line_end(c),
+    };
+    let may_push_in = pushes_in(para) && sg.iter().any(|g| kept_off_ends(g.ch));
     // A tab's width depends on where it falls in its line, which the composer's fixed glyph widths
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
     // The tab of a list marker is on the first line, with the marker, and has a fixed width.
@@ -95,7 +100,7 @@ fn compose_para(
         // Only the first line's first word is known here. Later lines are placed as the composed
         // lines need: each fits its width, so its first word does too. It is measured as the line
         // loop measures it, with Mojikumi's narrower start and end.
-        let word = if first { word_width(sg, 0, line_end, para.kinsoku) - start_credit(0) } else { 0.0 };
+        let word = if first { word_width(sg, 0, line_end, kinsoku) - start_credit(0) } else { 0.0 };
         let Some((b, x0, x1, _)) = sim.place(m, ind_l, para.right_indent, word) else { break };
         let w = x1 - x0 - ind_l - para.right_indent;
         widths.push(w);
@@ -114,7 +119,7 @@ fn compose_para(
     let width = |k: usize| widths.get(k).copied().unwrap_or(last);
     // Lines from `uniform_from` on are interchangeable (same width).
     let uniform_from = widths.iter().rposition(|&w| (w - last).abs() > EPS).map_or(0, |k| k + 1);
-    let cands = candidates(cx.text, sg, para.hyphenate.then_some(&para.hyphenation), para.kinsoku);
+    let cands = candidates(cx.text, sg, para.hyphenate.then_some(&para.hyphenation), kinsoku);
     let justify_last = para.justify == Justify::JustifyAll;
     let hyphen_limit = usize::try_from(para.hyphenation.hyphen_limit).unwrap_or(usize::MAX);
     let params = |tolerance| Params { justify_last, ragged, tolerance, uniform_from, hyphen_limit };
@@ -250,8 +255,12 @@ fn prepare_paragraph<'a, 'text>(
         keep_korean_words(&mut sg);
     }
     // Bunri-Kinshi keeps inseparable pairs on one line, while kinsoku is on.
-    if para.bunri_kinshi && para.kinsoku != Kinsoku::None {
-        keep_inseparable_pairs(text, &mut sg);
+    // A custom set keeps its own inseparable sequences instead.
+    match KinsokuRules::of(para) {
+        _ if !para.bunri_kinshi => {}
+        KinsokuRules::Custom(set) => keep_inseparable_sequences(text, &mut sg, &set.inseparable),
+        rules if !rules.is_none() => keep_inseparable_pairs(text, &mut sg),
+        _ => {}
     }
     // Japanese composition (the paragraph's Mojikumi set): every punctuation mark set half width,
     // or consecutive punctuation sharing one half-em space…
@@ -412,7 +421,8 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
         glyph.lead += half;
     }
     // The line's first word, as narrow as the line sets it at both ends.
-    let word = word_width(sg, *i, line_end, para.kinsoku);
+    let kinsoku = KinsokuRules::of(para);
+    let word = word_width(sg, *i, line_end, kinsoku);
     // A composed line in a frame whose lines are not all as wide is placed at its own tallest
     // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
     let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
@@ -463,7 +473,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         ind_l,
                         hyphenate,
                         para.burasagari,
-                        para.kinsoku,
+                        kinsoku,
                         ty,
                         *hanging,
                         cx.vertical,
@@ -685,7 +695,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     let hang = (paragraph.regions.is_some() && !paragraph.rtl && hyphen.is_none() && trimmed > index + 1)
         .then(|| sg.get(trimmed - 1))
         .flatten()
-        .filter(|g| hangs(g))
+        .filter(|g| hangs(g, KinsokuRules::of(para)))
         .map(|g| g.adv - end_trim)
         .filter(|_| match para.burasagari {
             Burasagari::None => false,

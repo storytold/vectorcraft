@@ -2021,6 +2021,15 @@ digits	Malayalam	Malajalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-joukko
 	Kinsoku Shori Type	Kinsoku Shori -tyyppi
+	Kinsoku Shori Settings…	Kinsoku Shori -asetukset…
+	Kinsoku Shori Settings	Kinsoku Shori -asetukset
+	Kinsoku Sets	Kinsoku-joukot
+	Kinsoku Set Base	Kinsoku-joukon pohja
+	Based on:	Pohjana:
+	Cannot Start Line	Ei voi aloittaa riviä
+	Cannot End Line	Ei voi päättää riviä
+	Hanging Punctuation	Riippuvat välimerkit
+	Inseparable Characters	Erottamattomat merkit
 	Push In First	Ensin sisään
 	Push Out First	Ensin ulos
 	Push Out Only	Vain ulos

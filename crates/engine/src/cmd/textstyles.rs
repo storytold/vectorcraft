@@ -39,10 +39,34 @@ impl Kind {
     /// Attributes of style `name` (the Normal style is built in: empty unless redefined).
     fn attrs(self, d: &Document, name: &str) -> Option<Map<String, Value>> {
         match self.defs(d).iter().find(|s| s.name == name) {
-            Some(s) => Some(s.attrs.clone()),
+            Some(s) => {
+                let mut attrs = s.attrs.clone();
+                if self == Kind::Para {
+                    kinsoku_pair(&mut attrs);
+                }
+                Some(attrs)
+            }
             None if name == self.normal() => Some(Map::new()),
             None => None,
         }
+    }
+}
+
+/// The two keys of Kinsoku Set: a built-in set (`kinsoku`) and a custom set (`kinsoku_set`), which
+/// goes with Hard.
+const KINSOKU: [&str; 2] = ["kinsoku", "kinsoku_set"];
+
+/// Paragraph style attributes `attrs` with Kinsoku Set as one attribute: one that gives only
+/// `kinsoku` gets no custom set, and one that gives only `kinsoku_set` gets Hard beside it.
+fn kinsoku_pair(attrs: &mut Map<String, Value>) {
+    match (attrs.contains_key(KINSOKU[0]), attrs.contains_key(KINSOKU[1])) {
+        (true, false) => {
+            attrs.insert(KINSOKU[1].into(), Value::Null);
+        }
+        (false, true) => {
+            attrs.insert(KINSOKU[0].into(), json!(vectorcraft_doc::Kinsoku::Hard));
+        }
+        _ => {}
     }
 }
 
@@ -250,6 +274,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("leading_model", json!(v.leading_model)),
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
+        ("kinsoku_set", json!(v.kinsoku_set)),
         ("kinsoku_type", json!(v.kinsoku_type)),
         ("bunri_kinshi", json!(v.bunri_kinshi)),
         ("roman_hanging", json!(v.roman_hanging)),
@@ -321,6 +346,8 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     // Starts from every key `cur` writes, so values no style sets (a glyph choice) are kept.
     let Some(mut m) = to_map(cur) else { return cur.clone() };
     m.extend(attrs(cur));
+    let pair = |m: &Map<String, Value>| KINSOKU.map(|k| m.get(k).cloned());
+    let own = pair(&m);
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
@@ -332,6 +359,25 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
             && let Some(base_value) = base.get(k)
         {
             m.insert(k.clone(), base_value.clone());
+        }
+    }
+    // Kinsoku Set's two keys change together: a paragraph whose Kinsoku Set is not the old
+    // style's keeps its own.
+    let has = |m: &Map<String, Value>| KINSOKU.iter().any(|k| m.contains_key(*k));
+    if has(old) || has(new) {
+        let follows = !has(old) || pair(old) == own;
+        let to = if !follows {
+            own
+        } else if has(new) {
+            pair(new)
+        } else {
+            pair(base)
+        };
+        for (k, v) in KINSOKU.into_iter().zip(to) {
+            match v {
+                Some(v) => m.insert(k.to_string(), v),
+                None => m.remove(k),
+            };
         }
     }
     serde_json::from_value(Value::Object(m)).unwrap_or_else(|_| cur.clone())
@@ -355,16 +401,27 @@ fn font_change(before: &CharStyle, mut st: CharStyle, attrs: &Map<String, Value>
 /// Change text in layers, symbols, graph designs, pattern tiles, saved pattern tiles restored by
 /// Cancel, and brush art, including opacity masks in those trees.
 pub(crate) fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+    each_node_with_text_mut(d, &mut |n| match &mut n.kind {
+        NodeKind::Text(t) => f(t),
+        _ => Ok(()),
+    })
+}
+
+/// Change the nodes [`each_text_mut`] reaches: each type object and each node holding one, and each
+/// graph keeping paragraph attributes for its labels, with or without labels drawn.
+pub(crate) fn each_node_with_text_mut(d: &mut Document, f: &mut impl FnMut(&mut Node) -> Result<()>) -> Result<()> {
     fn has_text(n: &Node) -> bool {
         matches!(n.kind, NodeKind::Text(_))
+            || n.extras().graph.as_deref().is_some_and(|g| {
+                let l = &g.label_styles;
+                l.values_para.is_some() || l.categories_para.is_some() || l.legend_para.is_some()
+            })
             || n.extras().mask.as_ref().is_some_and(|mask| has_text(&mask.art))
             || n.children().is_some_and(|children| children.iter().any(|child| has_text(child)))
     }
 
-    fn visit(n: &mut Node, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
-        if let NodeKind::Text(t) = &mut n.kind {
-            f(t)?;
-        }
+    fn visit(n: &mut Node, f: &mut impl FnMut(&mut Node) -> Result<()>) -> Result<()> {
+        f(n)?;
         if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut())
             && has_text(&mask.art)
         {
@@ -620,10 +677,32 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
                     para_ranges(&st, m, kept, &c)?;
                     sort_tabs(&mut st, m, kept);
+                    // A custom Kinsoku set is one of the document's, by name (any case), as
+                    // `text.setFormat` chooses it; one the style already holds stays.
+                    if let Some(set) = &st.kinsoku_set
+                        && kept.and_then(|k| k.get("kinsoku_set")) != m.get("kinsoku_set")
+                    {
+                        let name = set.name.clone();
+                        let found = vectorcraft_doc::KinsokuSet::named(&d.kinsoku_sets, &name).cloned().map(std::sync::Arc::new);
+                        st.kinsoku_set =
+                            Some(found.ok_or_else(|| bad(&c, format!("`kinsoku_set`: the document has no Kinsoku set named `{name}`")))?);
+                    }
                     para_attrs(&st)
                 }
             };
-            Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
+            let mut out: Map<String, Value> = m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect();
+            // A paragraph style giving one key of Kinsoku Set keeps both, so applying it replaces a
+            // paragraph's custom set or built-in set.
+            if kind == Kind::Para {
+                for k in KINSOKU {
+                    if KINSOKU.iter().any(|g| m.contains_key(*g))
+                        && let Some(v) = full.get(k)
+                    {
+                        out.insert(k.into(), v.clone());
+                    }
+                }
+            }
+            Ok(Some(out))
         }
         Some(_) => Err(bad(&kind.cmd(verb), "attrs must be an object")),
     }

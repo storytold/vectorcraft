@@ -15,7 +15,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::breaking::{Metrics, Pen, word_width};
+use super::breaking::{KinsokuRules, Metrics, Pen, word_width};
 use super::flow::line_indents;
 use super::{ParaStyle, SGlyph};
 use crate::composer::{Exhausted, Measure};
@@ -276,7 +276,7 @@ fn past_end<'r>(p: &Para<'_>, start: &Start<'r>) -> Option<Placed<'r>> {
 /// frame's end ([`past_end`]) when no frame cell has room for it.
 fn place<'r>(p: &Para<'_>, start: &Start<'r>, m: Metrics) -> Result<Option<Placed<'r>>, Exhausted> {
     let (ind_l, ind_r) = line_indents(p.para, start.first, p.mirror);
-    let word = word_width(p.sg, start.pos, p.line_end, p.para.kinsoku) - (p.start_credit)(start.pos);
+    let word = word_width(p.sg, start.pos, p.line_end, KinsokuRules::of(p.para)) - (p.start_credit)(start.pos);
     let mut pen = start.pen.clone();
     loop {
         match pen.place(m, ind_l, ind_r, word) {

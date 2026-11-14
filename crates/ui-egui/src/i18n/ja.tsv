@@ -84,6 +84,15 @@ digits	Malayalam	マラヤーラム数字
 	YakumonoZenkaku	約物全角
 	Kinsoku Set	禁則処理
 	Kinsoku Shori Type	禁則調整方式
+	Kinsoku Shori Settings…	禁則処理設定…
+	Kinsoku Shori Settings	禁則処理設定
+	Kinsoku Sets	禁則処理セット
+	Kinsoku Set Base	禁則処理セットの基準
+	Based on:	基準:
+	Cannot Start Line	行頭禁則文字
+	Cannot End Line	行末禁則文字
+	Hanging Punctuation	ぶら下がり文字
+	Inseparable Characters	分離禁止文字
 	Push In First	追い込み優先
 	Push Out First	追い出し優先
 	Push Out Only	追い出しのみ

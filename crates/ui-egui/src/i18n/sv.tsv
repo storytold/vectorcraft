@@ -1998,6 +1998,15 @@ font-technology	Variable	Variabla
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-uppsättning
 	Kinsoku Shori Type	Kinsoku Shori-typ
+	Kinsoku Shori Settings…	Kinsoku Shori-inställningar…
+	Kinsoku Shori Settings	Kinsoku Shori-inställningar
+	Kinsoku Sets	Kinsoku-uppsättningar
+	Kinsoku Set Base	Grund för Kinsoku-uppsättning
+	Based on:	Baserad på:
+	Cannot Start Line	Kan inte inleda rad
+	Cannot End Line	Kan inte avsluta rad
+	Hanging Punctuation	Hängande skiljetecken
+	Inseparable Characters	Oskiljbara tecken
 	Push In First	Skjut in först
 	Push Out First	Skjut ut först
 	Push Out Only	Skjut endast ut

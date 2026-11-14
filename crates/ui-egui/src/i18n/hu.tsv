@@ -2263,6 +2263,15 @@ file-filter	Templates	Sablonok
 	Kind	Típus
 	Kinsoku Set	Kinsoku-készlet
 	Kinsoku Shori Type	Kinsoku Shori típusa
+	Kinsoku Shori Settings…	Kinsoku Shori beállításai…
+	Kinsoku Shori Settings	Kinsoku Shori beállításai
+	Kinsoku Sets	Kinsoku-készletek
+	Kinsoku Set Base	Kinsoku-készlet alapja
+	Based on:	Alapja:
+	Cannot Start Line	Nem kezdhet sort
+	Cannot End Line	Nem zárhat sort
+	Hanging Punctuation	Függő írásjelek
+	Inseparable Characters	Elválaszthatatlan karakterek
 	Kite	Deltoid
 	Knife	Kés
 	Knockout Group	Kiütő csoport

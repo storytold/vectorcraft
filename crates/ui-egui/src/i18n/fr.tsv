@@ -2051,6 +2051,15 @@ font-technology	Variable	Variables
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Jeu de kinsoku
 	Kinsoku Shori Type	Type de kinsoku shori
+	Kinsoku Shori Settings…	Paramètres de kinsoku shori…
+	Kinsoku Shori Settings	Paramètres de kinsoku shori
+	Kinsoku Sets	Jeux de kinsoku
+	Kinsoku Set Base	Base du jeu de kinsoku
+	Based on:	Basé sur :
+	Cannot Start Line	Ne peut pas commencer une ligne
+	Cannot End Line	Ne peut pas terminer une ligne
+	Hanging Punctuation	Ponctuation suspendue
+	Inseparable Characters	Caractères insécables
 	Push In First	D’abord vers l’intérieur
 	Push Out First	D’abord vers l’extérieur
 	Push Out Only	Vers l’extérieur uniquement

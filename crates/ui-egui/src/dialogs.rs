@@ -63,6 +63,7 @@ pub mod import_pdf;
 pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
+pub mod kinsoku_sets;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
@@ -370,6 +371,7 @@ registry! {
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
     WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
+    KinsokuSets: [kinsoku_sets::KIND] => kinsoku_sets::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
