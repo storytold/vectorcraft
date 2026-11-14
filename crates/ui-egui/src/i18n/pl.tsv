@@ -942,6 +942,7 @@
 	VectorCraft Title Bar on Every Desktop	Pasek tytułu VectorCraft na każdym pulpicie
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dopóki zmienna środowiskowa VECTORCRAFT_TITLEBAR jest ustawiona, to ona wybiera pasek tytułu.
 	System Title Bar takes precedence over this option while it is on.	Dopóki Systemowy pasek tytułu jest włączony, ma pierwszeństwo przed tą opcją.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Dopóki Pasek tytułu VectorCraft na każdym pulpicie jest wyłączony, ten pulpit rysuje pasek tytułu okna niezależnie od tego, czy ta opcja jest włączona.
 	Exit	Zakończ
 	Distort	Zniekształcenie
 	Diffuse Glow…	Rozproszony blask…
@@ -6457,6 +6458,8 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Playback Options…	Opcje odtwarzania…
+	Button Mode	Tryb przycisków
+	No actions.	Brak operacji.
 	Insert Stop…	Wstaw zatrzymanie…
 	Insert Stop	Wstaw zatrzymanie
 	Record Stop	Nagraj zatrzymanie
