@@ -6260,6 +6260,72 @@ fn pie_names_and_wedge_labels_keep_their_style() {
     assert_eq!(fills, ["#00ff00", "#00ff00"], "the kept fill, also on the dark wedge");
 }
 
+/// On a pie with Legends in Wedges, a black fill given to the white legend label on the dark wedge is kept for every
+/// legend label: the graph draws it black on the dark wedge again, also after a native save and open.
+#[test]
+fn a_black_fill_set_on_a_wedge_legend_label_stays_black_on_dark_wedges() {
+    let cases = [("paint.setFill", json!({"color": "#000000"})), ("text.setStyle", json!({"fill": "#000000"})), ("edit.colors.invert", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+        s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+        let legend_fill = |s: &Session, text: &str| {
+            let NodeKind::Text(t) = label_node(s, id, "Legend", text).kind else { panic!("{text} is not type") };
+            t.runs[0].style.fill.color().map(|c| c.to_hex()).unwrap_or_default()
+        };
+        assert_eq!(legend_fill(&s, "a"), "#ffffff", "white on the black wedge");
+        let mut p = params.clone();
+        p["ids"] = json!([text_id(&s, id, "Legend", "a").0]);
+        s.execute(cmd, &p).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!spec(&s, id).label_styles.legend_fill_set, "{cmd}: undone");
+        assert_eq!(legend_fill(&s, "a"), "#ffffff", "{cmd}: white again after the undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}: redone");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+        assert_eq!((legend_fill(&s, "a"), legend_fill(&s, "b")), ("#000000".into(), "#000000".into()), "{cmd}: black on both wedges");
+        let dir = vectorcraft_testkit::TempDir::new("graph-wedge-legend");
+        let path = dir.join("pie.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}: kept through save and open");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[2, 1]]})).unwrap();
+        assert_eq!(legend_fill(&s, "a"), "#000000", "{cmd}: still black after open");
+    });
+}
+
+/// A size given to the legend labels of a pie with Legends in Wedges keeps the default black fill with it. A color mode
+/// change leaves that fill black, so the legend label on the dark wedge is still drawn white. A legend fill that is not
+/// black, in a file saved without the mark, is marked as set by the change.
+#[test]
+fn a_color_mode_change_keeps_the_default_wedge_legend_fill() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 11})).unwrap();
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let styles = spec(&s, id).label_styles;
+    assert!(!styles.legend_fill_set && !styles.legend_fill_is_own(), "{styles:?}");
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()), Some("#ffffff".into()), "white on the black wedge");
+    let red = Paint::solid(vectorcraft_color::Color::from_hex("#ff0000").unwrap());
+    let styles = vectorcraft_doc::LabelStyles { legend: Some(vectorcraft_doc::CharStyle { fill: red, ..Default::default() }), ..Default::default() };
+    assert!(!styles.legend_fill_set && styles.legend_fill_is_own(), "{styles:?}");
+    s.edit("legacy", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().graph.as_deref_mut().unwrap().label_styles = styles;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("file.documentColorMode", &json!({"mode": "rgb"})).unwrap();
+    assert!(spec(&s, id).label_styles.legend_fill_set, "the converted red is still the labels' own");
+}
+
 #[test]
 fn labels_are_told_apart_by_where_they_come_not_by_their_text() {
     let mut s = Session::new();

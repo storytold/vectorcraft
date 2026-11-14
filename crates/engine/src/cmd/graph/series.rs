@@ -631,19 +631,33 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
     changed
 }
 
-/// Apply `change` to the style graph `graph` keeps for its labels of kind `role` (or the default one). Returns whether
-/// the kept style changed.
+/// Apply `change` to the style graph `graph` keeps for its labels of kind `role` (or the default one). A `change` that
+/// sets the fill of legend labels marks it as set on them, so a black one stays black on dark pie wedges. Returns whether
+/// the kept style or that mark changed.
 fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn Fn(&mut CharStyle)) -> bool {
     let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { return false };
     let mut style = label_style(&spec.label_styles, role);
+    // The kept fill can already be the one `change` sets (black, the default): `change` sets the fill when it gives one
+    // of two different fills something else.
+    let sets_fill = role == Role::Legend
+        && [Paint::None, Paint::solid(Color::BLACK)].into_iter().any(|fill| {
+            let mut probe = CharStyle { fill: fill.clone(), ..style.clone() };
+            change(&mut probe);
+            probe.fill != fill
+        });
     change(&mut style);
+    let styles = &mut spec.label_styles;
     let slot = match role {
-        Role::Value => &mut spec.label_styles.values,
-        Role::Category => &mut spec.label_styles.categories,
-        Role::Legend => &mut spec.label_styles.legend,
+        Role::Value => &mut styles.values,
+        Role::Category => &mut styles.categories,
+        Role::Legend => &mut styles.legend,
     };
-    let changed = slot.as_ref() != Some(&style);
+    let mut changed = slot.as_ref() != Some(&style);
     *slot = Some(style);
+    if sets_fill && !styles.legend_fill_set {
+        styles.legend_fill_set = true;
+        changed = true;
+    }
     changed
 }
 
@@ -872,12 +886,9 @@ fn run_paint_change(was: &Node, now: &Node, fill: bool) -> Option<(CharStyle, Ve
 }
 
 /// Does graph `g` pick the fill of its legend labels itself, white on a dark wedge and black on the others: a pie with
-/// Legends in Wedges whose legend labels keep no fill of their own?
+/// Legends in Wedges whose legend labels keep no fill of their own ([`vectorcraft_doc::LabelStyles::legend_fill_is_own`])?
 pub(super) fn picks_legend_fill(g: &GraphSpec) -> bool {
-    g.kind == GraphKind::Pie
-        && g.legend
-        && g.pie_legend_in_wedges
-        && !g.label_styles.legend.as_ref().is_some_and(|st| st.fill != Paint::solid(Color::BLACK))
+    g.kind == GraphKind::Pie && g.legend && g.pie_legend_in_wedges && !g.label_styles.legend_fill_is_own()
 }
 
 /// The graph labels among `roots` and inside them, for an edit that reaches graph labels without naming them.

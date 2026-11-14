@@ -206,11 +206,13 @@ impl Document {
 impl Document {
     /// Visit every paint held by the art (opacity masks included), symbol definitions, pattern
     /// tiles and graphic styles (fills, strokes and text runs), and the colour of every
-    /// gradient-mesh point as a solid paint.
+    /// gradient-mesh point as a solid paint. A graph's default black legend fill is left out.
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).chain(override_paints(m)).chain(graph_paints(m)).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
+                let default_legend = default_legend_fill(m);
+                graph_paints(m).enumerate().filter(|(i, _)| Some(*i) != default_legend).for_each(|(_, p)| f(p));
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -404,6 +406,18 @@ fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mu
         .chain(rows.flat_map(|r| [r.paint.fill.as_mut(), r.paint.stroke.as_mut()]).flatten())
 }
 
+/// The place in [`graph_paints`] of the legend fill graph `n` keeps when it is the default black and not the legend
+/// labels' own ([`crate::graph::LabelStyles::legend_fill_is_own`]).
+fn default_legend_fill(n: &Node) -> Option<usize> {
+    let g = n.extras().graph.as_deref()?;
+    let l = &g.label_styles;
+    if l.legend.is_none() || l.legend_fill_is_own() {
+        return None;
+    }
+    let series: usize = g.series_paints.iter().map(|s| usize::from(s.fill.is_some()) + usize::from(s.stroke.is_some())).sum();
+    Some(series + 2 * (usize::from(l.values.is_some()) + usize::from(l.categories.is_some())))
+}
+
 /// Mutable [`node_paints`], in the same order.
 pub fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     let runs = match &mut n.kind {
@@ -446,11 +460,16 @@ fn map_node(n: &Node, f: &mut PaintFn) -> Option<(Node, usize)> {
         }
     }
     // A graph's series and label paints, which its marks and labels take when it is drawn again.
-    let graph: Vec<(usize, Paint)> = graph_paints(n).enumerate().filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
+    // The default black legend fill, which is not the legend labels' own, stays black.
+    let default_legend = default_legend_fill(n);
+    let graph: Vec<(usize, Paint)> =
+        graph_paints(n).enumerate().filter(|(i, _)| Some(*i) != default_legend).filter_map(|(i, p)| f(p).map(|q| (i, q))).collect();
     if !graph.is_empty() {
         count += graph.len();
         let m = out.get_or_insert_with(|| n.clone());
         if let Some(spec) = m.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            // A legend fill of the labels' own stays theirs when the change makes it black.
+            spec.label_styles.mark_own_legend_fill();
             let mut graph = graph.into_iter().peekable();
             for (i, p) in graph_paints_mut(spec).enumerate() {
                 if graph.peek().is_some_and(|c| c.0 == i)
@@ -718,6 +737,53 @@ mod tests {
         let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
         assert_eq!(d.map_paints(&mut cleared), 5, "the fill and the graph's four");
         assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
+    }
+
+    #[test]
+    fn a_legend_fill_mapped_to_black_stays_the_labels_own() {
+        let (mut d, a, _) = doc();
+        let red = linked(Color::rgb(1.0, 0.0, 0.0), "Brand");
+        let spec = crate::graph::GraphSpec {
+            label_styles: crate::graph::LabelStyles { legend: Some(crate::CharStyle { fill: red, ..Default::default() }), ..Default::default() },
+            ..Default::default()
+        };
+        assert!(spec.label_styles.legend_fill_is_own() && !spec.label_styles.legend_fill_set, "not black, saved without the mark");
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        let mut to_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| {
+            s.as_deref() == Some("Brand") && {
+                *c = Color::BLACK;
+                *s = None;
+                true
+            }
+        };
+        assert_eq!(d.map_solid_paints(&mut to_black), 2, "the rectangle's fill and the legend fill");
+        let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+        assert_eq!(styles.legend.unwrap().fill, Paint::solid(Color::BLACK));
+        assert!(styles.legend_fill_set, "the black fill is still the labels' own");
+    }
+
+    #[test]
+    fn the_default_black_legend_fill_is_left_as_it_is() {
+        let (mut d, a, _) = doc();
+        let black = || crate::CharStyle { fill: Paint::solid(Color::BLACK), size: 11.0, ..Default::default() };
+        let spec = crate::graph::GraphSpec {
+            series_paints: vec![crate::SeriesPaint { fill: Some(Paint::solid(Color::BLACK)), ..Default::default() }],
+            label_styles: crate::graph::LabelStyles { values: Some(black()), legend: Some(black()), ..Default::default() },
+            ..Default::default()
+        };
+        let blacks = |d: &Document| {
+            let mut seen = 0;
+            d.visit_paints(&mut |p| seen += usize::from(*p == Paint::solid(Color::BLACK)));
+            seen
+        };
+        let before = blacks(&d);
+        d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
+        assert_eq!(blacks(&d) - before, 2, "the series fill and the value labels' fill are visited");
+        let mut link_black = |c: &mut Color, s: &mut Option<String>, _: &mut f32| *c == Color::BLACK && s.replace("Black".into()).is_none();
+        assert_eq!(d.map_solid_paints_in(&[a], &mut link_black), 2, "the series fill and the value labels' fill");
+        let styles = d.node(a).unwrap().extras().graph.clone().unwrap().label_styles;
+        assert_eq!(styles.legend.unwrap().fill, Paint::solid(Color::BLACK), "not linked");
+        assert_eq!(styles.values.unwrap().fill, linked(Color::BLACK, "Black"));
     }
 
     #[test]
