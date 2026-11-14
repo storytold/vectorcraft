@@ -5367,6 +5367,7 @@ axis	Both	Оба
 	VectorCraft Title Bar on Every Desktop	Строка заголовка VectorCraft на любом рабочем столе
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Пока переменная среды VECTORCRAFT_TITLEBAR задана, строку заголовка выбирает она.
 	System Title Bar takes precedence over this option while it is on.	Пока включена «Системная строка заголовка», она имеет приоритет над этим параметром.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Пока «Строка заголовка VectorCraft на любом рабочем столе» выключена, этот рабочий стол рисует строку заголовка окна независимо от того, включён ли этот параметр.
 	Value Axis	Ось значений
 	On Left Side	Слева
 	On Right Side	Справа
@@ -6219,6 +6220,8 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Button Mode	Режим кнопок
+	No actions.	Нет действий.
 	Insert Stop…	Вставить остановку…
 	Insert Stop	Вставить остановку
 	Record Stop	Записать остановку

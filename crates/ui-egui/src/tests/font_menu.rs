@@ -1040,6 +1040,22 @@ fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: Men
         assert!(frames < 1000, "the menu's samples are still rendering after {frames} frames");
         shapes = frame(vec![]);
     }
+    // egui places the menu by the size it had the frame before. When a name measured late (a face
+    // added for its script, a font found in the background) widens it on that frame, the menu sits
+    // where the narrower one fit until the next: draw until it stays put.
+    let filter_at = |shapes: &[egui::epaint::ClippedShape]| {
+        shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == crate::i18n::t("Any Kind") => Some(t.pos),
+            _ => None,
+        })
+    };
+    for _ in 0..100 {
+        let before = filter_at(&shapes);
+        shapes = frame(vec![]);
+        if filter_at(&shapes) == before && !crate::font_menu::wait_for_samples(&ctx) {
+            break;
+        }
+    }
     let mut texts = vec![];
     let mut samples = vec![];
     let mut tints = vec![];

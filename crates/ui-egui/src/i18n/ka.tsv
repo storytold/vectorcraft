@@ -890,6 +890,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
 	System Title Bar takes precedence over this option while it is on.	სანამ სისტემის სათაურის ზოლი ჩართულია, მას ამ პარამეტრზე უპირატესობა აქვს.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	სანამ VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე გამორთულია, ეს სამუშაო მაგიდა ფანჯრის სათაურის ზოლს ხატავს, ეს პარამეტრი ჩართულია თუ გამორთული.
 	Exit	გასვლა
 	Distort	დეფორმაცია
 	Diffuse Glow…	გაბნეული ნათება…
@@ -6559,6 +6560,8 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Button Mode	ღილაკების რეჟიმი
+	No actions.	მოქმედებები არ არის.
 	Insert Stop…	გაჩერების ჩასმა…
 	Insert Stop	გაჩერების ჩასმა
 	Record Stop	გაჩერების ჩაწერა

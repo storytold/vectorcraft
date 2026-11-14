@@ -572,6 +572,64 @@ fn a_malformed_required_number_is_not_reported_as_missing() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
 }
 
+/// A required whole number given as something other than a whole number of 0 or more (`"3"`, `2.5`,
+/// `-1`, `true`, `[]`, `{}`) is refused as the wrong type, naming its key, not as a missing integer; one
+/// left out or given as null is still missing. An optional one left out or null keeps its default.
+/// Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_required_integer_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let refused = |s: &mut Session, cmd: &str, p: &serde_json::Value, want: &str| match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg.as_str()), (cmd, want), "{p}"),
+        other => panic!("{cmd} {p}: {other:?}"),
+    };
+    let ends = json!({"sourceDocument": 1, "grab": [0, 0], "at": [0, 0], "ids": [1]});
+    let cases = [
+        ("appearance.setItem", json!({"index": 0}), "index", "missing integer `index`"),
+        ("path.removeAnchor", json!({"id": 1, "anchor": 0}), "anchor", "missing integer `anchor`"),
+        ("path.split", json!({"id": 1, "anchor": 0}), "anchor", "need `anchor` or `segment` + `t`"),
+        ("addon.pen.removePoint", json!({"anchor": 0}), "anchor", "missing integer `anchor`"),
+        ("edit.dropSelection", ends, "sourceDocument", "missing integer `sourceDocument`"),
+        ("document.activate", json!({"index": 0}), "index", "missing index"),
+        ("document.move", json!({"to": 0}), "to", "missing `to`: a non-negative integer"),
+    ];
+    let malformed = [json!("3"), json!(2.5), json!(-1), json!(true), json!([]), json!({})];
+    for (cmd, base, key, missing) in &cases {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            refused(&mut s, cmd, &p, missing);
+        }
+    }
+    // An optional `subpath` given as anything else is refused the same way; left out or null, it is
+    // subpath 0 and the command goes on to read `anchor`.
+    let base = json!({"id": 1, "anchor": "3"});
+    for v in &malformed {
+        refused(&mut s, "path.removeAnchor", &with(&base, "subpath", Some(v.clone())), "`subpath` must be a whole number");
+    }
+    for p in [with(&base, "subpath", None), with(&base, "subpath", Some(json!(null)))] {
+        refused(&mut s, "path.removeAnchor", &p, "`anchor` must be a whole number");
+    }
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // A whole JSON number is a whole number.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+}
+
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
 #[test]
 fn a_reference_to_an_unchecked_command_is_unchecked() {

@@ -373,11 +373,14 @@ fn main() -> std::process::ExitCode {
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
+    let mut forced_to_x11 = false;
+    #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
+                forced_to_x11 = true;
                 if pref != Some("x11") {
                     log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
                 } else {
@@ -393,6 +396,11 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(target_os = "linux"))]
+    let forced_to_x11 = false;
+    // Preferences › User Interface notes under System Title Bar when the desktop draws the frame
+    // with it on or off.
+    let desktop_keeps_frame = titlebar::desktop_keeps_frame(forced_to_x11);
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`). It also notes the
@@ -597,6 +605,7 @@ fn main() -> std::process::ExitCode {
                 app.custom_titlebar = custom_titlebar;
                 app.caption_layout = caption_layout;
                 app.desktop_frame = !custom_titlebar;
+                app.desktop_keeps_frame = desktop_keeps_frame;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
