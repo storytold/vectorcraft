@@ -10339,13 +10339,35 @@ fn a_brushed_path_with_samples_of_the_pen_keeps_its_drawn_look() {
     let a = art(&read_ok(&format!("{def}{style}{}", layer(&first))).doc);
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, brushed: {a:#?}");
-    // A brush whose modes are Fixed and Random, one whose pen modes vary by 0, and an Art brush
-    // don't follow the pen: the path comes in brushed.
+    // Each setting that follows the pen keeps the drawn look on its own, with the other two fixed:
+    // the diameter with the pressure or the tilt, the roundness with the bearing and the angle with
+    // the barrel's rotation.
+    let one_setting = [
+        ("the diameter with the pressure", "1 4 8 40 40 30 30 2 0 0 0", [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [2, 0, 0]),
+        ("the diameter with the tilt", "1 4 8 40 40 30 30 4 0 0 0", [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [4, 0, 0]),
+        ("the roundness with the bearing", "1 6 6 30 50 30 30 0 5 0 0", [(6.0, 0.0), (40.0, 10.0), (30.0, 0.0)], [0, 5, 0]),
+        ("the angle with the rotation", "1 6 6 40 40 -150 210 0 0 6 0", [(6.0, 0.0), (40.0, 0.0), (30.0, 180.0)], [0, 0, 6]),
+    ];
+    for (why, params, settings, codes) in one_setting {
+        let def = plugin_object(CALLIGRAPHIC, "Six D", params);
+        let style = brushed_style("Six D", 0.5, settings, codes, 0);
+        let r = read_ok(&format!("{def}{style}{}", layer(&path)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{why}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{why}: the drawn look, {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+    // A brush whose modes are Fixed and Random, one whose pen modes vary by 0, one whose only
+    // varying setting is Random beside a pen setting that varies by 0, and an Art brush don't
+    // follow the pen: the path comes in brushed.
     let fixed_def = plugin_object(CALLIGRAPHIC, "Six D", &SIX_D.replace(" 2 5 6 0", " 0 1 0 0"));
     let fixed = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [0, 1, 0], 0);
     let even_def = plugin_object(CALLIGRAPHIC, "Six D", "1 6 6 40 40 30 30 2 5 6 0");
     let even = brushed_style("Six D", 0.5, [(6.0, 0.0), (40.0, 0.0), (30.0, 0.0)], [2, 5, 6], 0);
-    for (why, def, style) in [("Fixed and Random", fixed_def, fixed), ("no variation", even_def, even)] {
+    let random_def = plugin_object(CALLIGRAPHIC, "Six D", "1 4 8 40 40 30 30 1 2 0 0");
+    let random = brushed_style("Six D", 0.5, [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [1, 2, 0], 0);
+    let cases = [("Fixed and Random", fixed_def, fixed), ("no variation", even_def, even), ("Random beside an even pen setting", random_def, random)];
+    for (why, def, style) in cases {
         let r = read_ok(&format!("{def}{style}{}", layer(&path)));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{why}: {a:#?}");
