@@ -7537,7 +7537,6 @@ breakText	Glyphs	Glyphes
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList
 @msg	a line can't run from a point to itself	une ligne ne peut pas relier un point à lui-même
 @msg	a line needs at least two points	une ligne nécessite au moins deux points
-@msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié se trouve hors des dossiers racines de lecture
 @msg	a number cannot be read	un nombre ne peut pas être lu
 @msg	a swatch exchange block is too long	un bloc du fichier d’échange de nuances est trop long
 @msg	a swatch exchange name is too long	un nom du fichier d’échange de nuances est trop long
@@ -7575,7 +7574,6 @@ breakText	Glyphs	Glyphes
 @msg	script file is not UTF-8 text: {value}	le fichier de script n’est pas du texte UTF-8 : {value}
 @msg	stop {i}: {e}	étape de dégradé {i} : {e}
 @msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	la version {major}.{minor} du fichier d’échange de nuances n’est pas prise en charge (seulement 1.x)
-@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception : modifiez la conception pour la changer
 @msg	the color book holds more than {ASE_MAX_ENTRIES} colors	le carnet de couleurs contient plus de {ASE_MAX_ENTRIES} couleurs
 @msg	the color book is cut short	le carnet de couleurs est tronqué
 @msg	the color book's names take more than {_1} MB	les noms du carnet de couleurs occupent plus de {_1} Mo
