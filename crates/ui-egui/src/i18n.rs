@@ -368,10 +368,7 @@ pub static LANGUAGES: [LangInfo; 29] = [
 
 impl LangInfo {
     fn available(&self) -> bool {
-        self.available_with_fonts(
-            cfg!(target_arch = "wasm32"),
-            cfg!(feature = "interface-fonts") && vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr")),
-        )
+        self.available_with_fonts(cfg!(target_arch = "wasm32"), vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr")))
     }
 
     fn available_with_fonts(&self, web: bool, gujarati_font: bool) -> bool {
