@@ -490,6 +490,43 @@ fn trace_and_style_prompt_steps_run_in_order() {
     assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
 }
 
+/// A window capture and an artboard preview scaled down keep the color of opaque pixels beside
+/// clear ones: the clear black beside them does not darken them.
+#[test]
+fn scaled_down_pictures_keep_the_color_beside_clear_pixels() {
+    struct Striped;
+    impl Backend for Striped {
+        fn call(&mut self, method: &str, _: Value) -> Result<Value, String> {
+            let mut png = std::io::Cursor::new(Vec::new());
+            image::RgbaImage::from_fn(64, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+                .write_to(&mut png, image::ImageFormat::Png)
+                .unwrap();
+            let png = vectorcraft_format::base64_encode(png.get_ref());
+            Ok(match method {
+                "document.inspect" => json!({"artboards": [{"width": 64, "height": 4}]}),
+                _ => json!({"pngBase64": png, "width": 64, "height": 4}),
+            })
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "test".into()
+        }
+    }
+
+    let mut s = Server::new(Box::new(Striped));
+    let shots = [("screenshot", json!({"window": true, "max_side": 16})), ("render_preview", json!({"max_side": 16}))];
+    for (id, (tool, args)) in (1..).zip(shots) {
+        let r = call(&mut s, id, tool, args);
+        let data =
+            r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap_or_else(|| panic!("{tool}: {r}"))["data"].as_str().unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().into_rgba8();
+        assert_eq!(img.dimensions(), (16, 1), "{tool}");
+        assert!(img.pixels().all(|p| p.0 == [200, 30, 30, 128]), "{tool}: {:?}", img.get_pixel(0, 0));
+    }
+}
+
 /// `screenshot` and `render_preview` with `traceViews: true` draw an Image Trace object in the
 /// view set with imageTrace.setView, as the app's window does; without it they draw the tracing
 /// result, as exports do. The image is a dark disc (r = 30 px) on blue, traced with Ignore White.

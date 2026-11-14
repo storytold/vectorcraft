@@ -4,6 +4,7 @@ use super::handlers::{
     select_ids, transform,
 };
 use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, json, writable_format};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
@@ -445,7 +446,7 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
     // The render was asked for at most 4096 a side.
     let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
-    let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
+    let img = if img.width() > max || img.height() > max { fitted(img, max, max, Resample::Average) } else { img };
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;
     Ok(image_result(out.get_ref(), json!({"width":img.width(),"height":img.height()})))
