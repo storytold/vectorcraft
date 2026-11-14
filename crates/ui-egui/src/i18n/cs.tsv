@@ -5992,7 +5992,6 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
-@msg	give one <filter> element	zadejte jeden prvek <filter>
 @msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
