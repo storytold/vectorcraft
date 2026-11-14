@@ -148,6 +148,9 @@ struct Tree<'a> {
     painted: Option<Rect>,
     /// It paints with the foreground colour (palette index 0xFFFF).
     foreground_used: bool,
+    /// A fill draws nothing (a radial gradient none of whose circles has a positive radius), so a
+    /// glyph with nothing else is colour art that draws nothing, not its outline.
+    drew_nothing: bool,
 }
 
 impl<'a> Tree<'a> {
@@ -166,6 +169,7 @@ impl<'a> Tree<'a> {
             too_large: false,
             painted: None,
             foreground_used: false,
+            drew_nothing: false,
         }
     }
 
@@ -254,7 +258,7 @@ impl<'a> Tree<'a> {
             self.close();
         }
         let root = self.groups.pop()?;
-        if root.children.is_empty() {
+        if root.children.is_empty() && !self.drew_nothing {
             return None;
         }
         Some(Arc::new(Node::group(NO_ID, root.children)))
@@ -308,22 +312,27 @@ impl<'a> Tree<'a> {
             }
             Brush::RadialGradient { c0, r0, c1, r1, color_stops, extend } => {
                 let spread = spread(*extend);
-                let (c0, c1, r0, r1) = (point(*c0), point(*c1), f64::from(*r0), f64::from(*r1));
+                let line = stops(color_stops, self);
+                // Without a stop, the others would repeat over a different interval.
+                if !spread.is_pad() && line.len() < color_stops.len() {
+                    self.unsupported.get_or_insert("a repeating or reflecting gradient with a stop missing from the palette");
+                    return None;
+                }
+                let Some((c0, r0, c1, r1, mut stops)) = non_negative_radii(point(*c0), f64::from(*r0), point(*c1), f64::from(*r1), line, *extend)
+                else {
+                    self.drew_nothing = true;
+                    return None;
+                };
                 let concentric = (c0 - c1).hypot() < 1e-6;
                 if (r0 > 1e-6 && !concentric) || r1 <= r0 || (c0 - c1).hypot() >= r1 {
                     self.unsupported.get_or_insert("a radial gradient from a circle");
                     return None;
                 }
-                let mut stops = stops(color_stops, self);
                 if stops.iter().any(|s| !(0.0..=1.0).contains(&s.offset)) {
                     self.unsupported.get_or_insert("a radial gradient with stops past its circles");
                     return None;
                 }
                 if !spread.is_pad() {
-                    if stops.len() < color_stops.len() {
-                        self.unsupported.get_or_insert("a repeating or reflecting gradient with a stop missing from the palette");
-                        return None;
-                    }
                     // A run of the stops is the whole way from the center to the circle: one that
                     // starts at a circle (a first stop past the center comes as one) repeats over
                     // less of it. The normalized ends can be a rounding error off 0 and 1.
@@ -381,6 +390,87 @@ fn normalized(mut stops: Vec<GradientStop>) -> Option<(Vec<GradientStop>, f32, f
         s.offset = if span > 0.0 { (s.offset - first) / span } else { 0.0 };
     }
     Some((stops, first, if span > 0.0 { last } else { first + 1.0 }))
+}
+
+/// A radial gradient's circles (`c0`, `r0`) and (`c1`, `r1`) and color line `stops` (0 and 1 at
+/// the circles) recast so that neither circle has a negative radius, as normalizing a color line
+/// to 0..1 can give. Circles of a negative radius are not drawn, only those on the side of the
+/// circle of radius 0 (the tip of the cone) where the radius is positive. With pad, the stops on
+/// the other side become one stop at the tip with the color there; with repeat and reflect, the
+/// circles move along by whole periods of the color line to the drawn side
+/// (https://learn.microsoft.com/en-us/typography/opentype/spec/colr, Radial gradients). `None`
+/// when no circle is drawn.
+fn non_negative_radii(
+    c0: Point,
+    r0: f64,
+    c1: Point,
+    r1: f64,
+    mut stops: Vec<GradientStop>,
+    extend: Extend,
+) -> Option<(Point, f64, Point, f64, Vec<GradientStop>)> {
+    if (r0 >= 0.0 && r1 >= 0.0) || stops.is_empty() {
+        return Some((c0, r0, c1, r1, stops));
+    }
+    if r0 == r1 {
+        return None;
+    }
+    stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    let tip = r0 / (r0 - r1);
+    let grows = r1 > r0;
+    let (from, to, stops) = match extend {
+        Extend::Repeat | Extend::Reflect => {
+            // A reflected color line repeats every 2: once forward, then back.
+            let (period, stops) = if extend == Extend::Reflect {
+                let forward = stops.iter().map(|s| GradientStop { offset: s.offset / 2.0, ..s.clone() });
+                let back = stops.iter().rev().map(|s| GradientStop { offset: 1.0 - s.offset / 2.0, ..s.clone() });
+                (2.0, forward.chain(back).collect())
+            } else {
+                (1.0, stops)
+            };
+            let from = if grows { (tip / period).ceil() * period } else { (tip / period).floor() * period - period };
+            (from, from + period, stops)
+        }
+        _ => {
+            // The color line runs from 0 to 1, and further where its stops do.
+            let first = stops.first().map_or(0.0, |s| f64::from(s.offset).min(0.0));
+            let last = stops.last().map_or(1.0, |s| f64::from(s.offset).max(1.0));
+            let (from, to) = match (grows, tip) {
+                (true, t) if t < last => (t, last),
+                (true, t) => (t, t + 1.0),
+                (false, t) if t > first => (first, t),
+                (false, t) => (t - 1.0, t),
+            };
+            let line = Gradient { stops, ..Gradient::default() };
+            // The color at `w`, as a stop at `offset` of the new line.
+            let at = |w: f64, offset: f32| {
+                let (color, opacity) = line.sample(w as f32);
+                GradientStop { opacity, ..GradientStop::new(offset, color) }
+            };
+            // Stops at the tip stay on the drawn side of its stop, so a sharp change of color there
+            // keeps the color on that side.
+            let mut kept: Vec<GradientStop> = line
+                .stops
+                .iter()
+                .filter(|s| (from - 1e-6..=to + 1e-6).contains(&f64::from(s.offset)))
+                .map(|s| GradientStop { offset: ((f64::from(s.offset) - from) / (to - from)).clamp(0.0, 1.0) as f32, ..s.clone() })
+                .collect();
+            if grows {
+                kept.insert(0, at(tip, 0.0));
+                if kept.last().is_none_or(|s| s.offset < 1.0) {
+                    kept.push(at(to, 1.0));
+                }
+            } else {
+                kept.push(at(tip, 1.0));
+                if kept.first().is_none_or(|s| s.offset > 0.0) {
+                    kept.insert(0, at(from, 0.0));
+                }
+            }
+            (from, to, kept)
+        }
+    };
+    let circle = |w: f64| (c0.lerp(c1, w), (r0 + w * (r1 - r0)).max(0.0));
+    let ((c0, r0), (c1, r1)) = (circle(from), circle(to));
+    Some((c0, r0, c1, r1, stops))
 }
 
 impl ColorPainter for Tree<'_> {
@@ -575,10 +665,24 @@ impl ColorPainter for Pixels<'_, '_> {
             Brush::LinearGradient { p0, p1, color_stops, extend: e } => {
                 peniko::Gradient::new_linear(point(p0), point(p1)).with_stops(stops(color_stops).as_slice()).with_extend(extend(e)).into()
             }
-            Brush::RadialGradient { c0, r0, c1, r1, color_stops, extend: e } => peniko::Gradient::new_two_point_radial(point(c0), r0, point(c1), r1)
-                .with_stops(stops(color_stops).as_slice())
-                .with_extend(extend(e))
-                .into(),
+            Brush::RadialGradient { c0, r0, c1, r1, color_stops, extend: e } => {
+                let line = color_stops
+                    .iter()
+                    .map(|s| {
+                        let (c, a) = colour(&self.palette, self.foreground, s.palette_index, s.alpha).unwrap_or((Color::BLACK, 0.0));
+                        GradientStop { opacity: a, ..GradientStop::new(s.offset, c) }
+                    })
+                    .collect();
+                let Some((c0, r0, c1, r1, line)) = non_negative_radii(point(c0), f64::from(r0), point(c1), f64::from(r1), line, e) else { return };
+                let stops: Vec<peniko::ColorStop> = line
+                    .iter()
+                    .map(|s| {
+                        let [r, g, b, a] = s.color.to_rgba8(s.opacity);
+                        peniko::ColorStop::from((s.offset, peniko::Color::from_rgba8(r, g, b, a)))
+                    })
+                    .collect();
+                peniko::Gradient::new_two_point_radial(c0, r0 as f32, c1, r1 as f32).with_stops(stops.as_slice()).with_extend(extend(e)).into()
+            }
             Brush::SweepGradient { c0, start_angle, end_angle, color_stops, extend: e } => {
                 peniko::Gradient::new_sweep(point(c0), start_angle.to_radians(), end_angle.to_radians())
                     .with_stops(stops(color_stops).as_slice())

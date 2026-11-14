@@ -1939,6 +1939,12 @@ pub fn colr_variable_font() -> Option<Vec<u8>> {
     with_colr(&variable_font()?, family_names(COLR_VARIABLE_FAMILY, &axis_names)?, &colr)
 }
 
+/// [`variable_font`] (one weight axis, 400 to 700) as `family` with `colr` and [`colr_font`]'s
+/// palette. `None` when it can't be built.
+pub fn colr_variable_font_with(family: &str, colr: &write_fonts::tables::colr::Colr) -> Option<Vec<u8>> {
+    with_colr(&variable_font()?, family_names(family, &[])?, colr)
+}
+
 /// A `name` table for Regular of `family`, with `more` records.
 fn family_names(family: &str, more: &[(u16, &str)]) -> Option<Vec<u8>> {
     let ps = family.replace(' ', "");

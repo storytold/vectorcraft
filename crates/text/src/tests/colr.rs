@@ -25,7 +25,7 @@ use vectorcraft_doc::color::{BlendMode, Color, GradientKind, Paint};
 use vectorcraft_doc::{Node, NodeKind};
 
 use crate::colr::{ColourContent, colour_glyph};
-use crate::test_fonts::{COLR_GREEN, COLR_RED};
+use crate::test_fonts::{COLR_BLUE, COLR_GREEN, COLR_RED};
 
 const FOREGROUND: Color = Color::Rgb { r: 0.25, g: 0.5, b: 0.75 };
 
@@ -356,6 +356,147 @@ fn a_radial_gradient_from_a_circle_around_its_centre_is_vector_art() {
     let Paint::Gradient(g) = fill(&children(&root)[0]) else { panic!("a gradient") };
     let offsets: Vec<f32> = g.gradient.stops.iter().map(|s| s.offset).collect();
     assert_eq!(offsets, [0.25, 1.0], "the stops start a quarter of the way out");
+}
+
+/// A padded radial gradient whose color line starts before 0 starts at the circle of radius 0:
+/// circles of a negative radius are not drawn, so the stops before that circle become one stop
+/// there with the color between them
+/// (https://learn.microsoft.com/en-us/typography/opentype/spec/colr, Radial gradients). With its
+/// centers apart, the gradient is focused on the tip of its cone; with its centers together, it
+/// is centered there with no stop below 0.
+#[test]
+fn a_radial_gradient_with_a_stop_before_0_starts_at_its_circle_of_radius_0() {
+    use vectorcraft_doc::color::{Gradient, GradientStop};
+    use write_fonts::tables::colr::{ColorLine, ColorStop, Extend};
+    use write_fonts::types::{F2Dot14, FWord, UfWord};
+    let one = F2Dot14::from_f32(1.0);
+    let half = F2Dot14::from_f32(0.5);
+    let line = ColorLine::new(Extend::Pad, 2, vec![ColorStop::new(F2Dot14::from_f32(-0.5), 0, half), ColorStop::new(one, 1, one)]);
+    let w = FWord::new;
+    // Half-opaque red at -0.5 and blue at 1: at 0, a third of the way from red to blue, in color
+    // and opacity.
+    let red = GradientStop { opacity: 0.5, ..GradientStop::new(0.0, rgb(COLR_RED)) };
+    let tip = Gradient { stops: vec![red, GradientStop::new(1.0, rgb(COLR_BLUE))], ..Gradient::default() }.sample(1.0 / 3.0);
+    assert!((tip.1 - 2.0 / 3.0).abs() < 1e-6, "{tip:?}");
+    for (family, c1_x, focal) in [("Colrtest Tip", 250, Some(300.0)), ("Colrtest Dot", 300, None)] {
+        let font = v1_font(family, COLOUR_CHAR, |o| {
+            ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(300), w(300), UfWord::new(0), w(c1_x), w(300), UfWord::new(400)), o)
+        });
+        let root = art(&font, COLOUR_CHAR);
+        let Paint::Gradient(g) = fill(&children(&root)[0]) else { panic!("{family}: a gradient") };
+        let offsets: Vec<f32> = g.gradient.stops.iter().map(|s| s.offset).collect();
+        assert_eq!(offsets, [0.0, 1.0], "{family}");
+        let first = &g.gradient.stops[0];
+        assert_eq!((first.color, first.opacity), tip, "{family}: the color at the circle of radius 0");
+        assert_eq!(g.gradient.stops[1].color, rgb(COLR_BLUE), "{family}");
+        let geom = g.geom.unwrap();
+        assert!((geom.start.x - f64::from(c1_x)).abs() < 1e-3 && (geom.start.y + 300.0).abs() < 1e-3, "{family}: {geom:?}");
+        assert!(((geom.end - geom.start).hypot() - 400.0).abs() < 1e-3, "{family}: {geom:?}");
+        assert_eq!(geom.focal.map(|f| ((f.x * 1e3).round() / 1e3, (f.y * 1e3).round() / 1e3)), focal.map(|x| (x, -300.0)), "{family}");
+    }
+}
+
+/// A sharp change of color at the circle of radius 0 of a gradient whose color line starts
+/// before 0 keeps the color beyond it: red up to 0, then green fading to blue.
+#[test]
+fn a_sharp_change_of_color_at_the_circle_of_radius_0_keeps_the_color_beyond_it() {
+    use write_fonts::tables::colr::{ColorLine, ColorStop, Extend};
+    use write_fonts::types::{F2Dot14, FWord, UfWord};
+    let (one, zero) = (F2Dot14::from_f32(1.0), F2Dot14::from_f32(0.0));
+    let stops = vec![
+        ColorStop::new(F2Dot14::from_f32(-1.0), 0, one),
+        ColorStop::new(zero, 0, one),
+        ColorStop::new(zero, 2, one),
+        ColorStop::new(one, 1, one),
+    ];
+    let line = ColorLine::new(Extend::Pad, 4, stops);
+    let w = FWord::new;
+    let font = v1_font("Colrtest Edge", COLOUR_CHAR, |o| {
+        ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(300), w(300), UfWord::new(0), w(250), w(300), UfWord::new(400)), o)
+    });
+    let root = art(&font, COLOUR_CHAR);
+    let Paint::Gradient(g) = fill(&children(&root)[0]) else { panic!("a gradient") };
+    let stops = &g.gradient.stops;
+    let colors: Vec<Color> = stops.iter().map(|s| s.color).collect();
+    assert_eq!(colors, [rgb(COLR_RED), rgb(COLR_RED), rgb(COLR_GREEN), rgb(COLR_BLUE)], "{stops:?}");
+    assert!(stops[..3].iter().all(|s| s.offset.abs() < 1e-5) && stops[3].offset == 1.0, "{stops:?}");
+}
+
+/// A glyph drawn into an image draws a radial gradient with a circle of a negative radius from the
+/// circle of radius 0, as vector art does: with pad, the color at the tip of the cone and the
+/// colors on its drawn side, not one solid color. A composite that keeps only its backdrop makes
+/// the glyph an image. Red runs to blue; the circles are around the `O`'s middle and larger than it.
+#[test]
+fn an_image_of_a_radial_gradient_with_a_stop_past_its_circle_of_radius_0_draws_from_that_circle() {
+    use write_fonts::tables::colr::{ColorLine, ColorStop, CompositeMode, Extend};
+    use write_fonts::types::{F2Dot14, FWord, UfWord};
+    let one = F2Dot14::from_f32(1.0);
+    let w = FWord::new;
+    type Check = fn([u8; 3]) -> bool;
+    // Red at -0.5 (a start circle of radius -250 once normalized): the colors run from a third of
+    // the way to blue at the tip to blue. Blue at 1.5 (an end circle of radius -250): they run
+    // from red at the outer circle, which lies outside the `O`, to two thirds of the way to blue
+    // at the tip. Either way every opaque pixel holds some blue.
+    let cases: [(&str, f32, f32, u16, u16, Check); 2] =
+        [("Colrtest Tip Image", -0.5, 1.0, 0, 500, |[r, _, b]| b > 20 && r < 240), ("Colrtest Rim Image", 0.0, 1.5, 500, 0, |[_, _, b]| b > 20)];
+    for (family, first, last, r0, r1, check) in cases {
+        let line =
+            ColorLine::new(Extend::Pad, 2, vec![ColorStop::new(F2Dot14::from_f32(first), 0, one), ColorStop::new(F2Dot14::from_f32(last), 1, one)]);
+        let font = v1_font(family, COLOUR_CHAR, |o| {
+            let radial = ColrPaint::radial_gradient(line.clone(), w(290), w(330), UfWord::new(r0), w(290), w(330), UfWord::new(r1));
+            ColrPaint::composite(ColrPaint::glyph(solid(2), o), CompositeMode::Dest, ColrPaint::glyph(radial, o))
+        });
+        let Some(ColourContent::Image(image)) = content(&font, COLOUR_CHAR) else { panic!("{family}: an image") };
+        let pixmap = vello_cpu::Pixmap::from_png(std::io::Cursor::new(image.blob.bytes.as_slice())).unwrap();
+        let pixels: Vec<[u8; 3]> = pixmap.take_unpremultiplied().into_iter().filter(|p| p.a == 255).map(|p| [p.r, p.g, p.b]).collect();
+        assert!(pixels.len() > 100, "{family}: the `O` is drawn");
+        let wrong: Vec<_> = pixels.iter().filter(|p| !check(**p)).take(5).collect();
+        assert!(wrong.is_empty(), "{family}: {wrong:?}");
+    }
+    // Repeat and reflect draw their bands, not one color.
+    for (family, extend) in [("Colrtest Repeat Image", Extend::Repeat), ("Colrtest Reflect Image", Extend::Reflect)] {
+        let line = ColorLine::new(extend, 2, vec![ColorStop::new(F2Dot14::from_f32(-0.5), 0, one), ColorStop::new(one, 1, one)]);
+        let font = v1_font(family, COLOUR_CHAR, |o| {
+            ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(290), w(330), UfWord::new(0), w(290), w(330), UfWord::new(100)), o)
+        });
+        let Some(ColourContent::Image(image)) = content(&font, COLOUR_CHAR) else { panic!("{family}: an image") };
+        let pixmap = vello_cpu::Pixmap::from_png(std::io::Cursor::new(image.blob.bytes.as_slice())).unwrap();
+        let colors: std::collections::HashSet<[u8; 3]> =
+            pixmap.take_unpremultiplied().into_iter().filter(|p| p.a == 255).map(|p| [p.r, p.g, p.b]).collect();
+        assert!(colors.len() > 10, "{family}: {colors:?}");
+    }
+}
+
+/// A radial gradient whose circles both have the same negative radius at a variable font's
+/// instance draws no circle, so a glyph painted with only that gradient is colour art that draws
+/// nothing, not its outline. The radii are 10 at the default weight and -10 at 700.
+#[test]
+fn a_radial_gradient_with_no_circle_drawn_leaves_the_glyph_empty() {
+    use write_fonts::tables::colr::{BaseGlyphList, BaseGlyphPaint, Colr, Extend, VarColorLine, VarColorStop};
+    use write_fonts::tables::variations::{ItemVariationData, ItemVariationStore, RegionAxisCoordinates, VariationRegion, VariationRegionList};
+    use write_fonts::types::{F2Dot14, FWord, GlyphId16, UfWord};
+    let bytes = colr_font(false).unwrap();
+    let read = skrifa::FontRef::new(&bytes).unwrap();
+    let gid = |ch| GlyphId16::new(u16::try_from(read.charmap().map(ch).unwrap().to_u32()).unwrap());
+    let (one, fixed) = (F2Dot14::from_f32(1.0), 0xFFFF_FFFF);
+    let line =
+        VarColorLine::new(Extend::Pad, 2, vec![VarColorStop::new(F2Dot14::from_f32(0.0), 0, one, fixed), VarColorStop::new(one, 1, one, fixed)]);
+    let w = FWord::new;
+    let radial = ColrPaint::var_radial_gradient(line, w(290), w(330), UfWord::new(10), w(290), w(330), UfWord::new(10), 0);
+    let mut colr = Colr::new(0, None, None, 0);
+    colr.base_glyph_list = Some(BaseGlyphList::new(1, vec![BaseGlyphPaint::new(gid(COLOUR_CHAR), ColrPaint::glyph(radial, gid('O')))])).into();
+    // One 16-bit delta for each of x0, y0, r0, x1, y1 and r1, at full weight.
+    let deltas: Vec<u8> = [0i16, 0, -20, 0, 0, -20].iter().flat_map(|d| d.to_be_bytes()).collect();
+    let region = VariationRegion::new(vec![RegionAxisCoordinates::new(F2Dot14::from_f32(0.0), one, one)]);
+    let data = ItemVariationData::new(6, 1, vec![0], deltas);
+    colr.item_variation_store = Some(ItemVariationStore::new(VariationRegionList::new(1, vec![region]), vec![Some(data)])).into();
+    let font = crate::test_fonts::colr_variable_font_with("Colrtest No Circle", &colr).unwrap();
+    let font = skrifa::FontRef::new(&font).unwrap();
+    let bold = font.axes().location([("wght", 700.0)]);
+    let Some(ColourContent::Art(root)) = colour_glyph(&font, (&bold).into(), 1000.0, u32::from(gid(COLOUR_CHAR).to_u16()), FOREGROUND).0 else {
+        panic!("colour art")
+    };
+    assert!(children(&root).is_empty(), "{:?}", children(&root).iter().map(|c| c.kind_label()).collect::<Vec<_>>());
 }
 
 /// A COLRv1 color line through `stops` (offset, palette index) that extends by `extend`.
