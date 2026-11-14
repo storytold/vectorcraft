@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md); on a graph label, the graph stores the label's object opacity and blend mode for every label of its kind, and with `item` its topmost visible fill and stroke rows too",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md); on a graph label, the graph stores the label's object opacity and blend mode for every label of its kind, and with `item` its topmost visible fill and stroke rows too",
             has_doc,
             transparency
         ),
@@ -1106,12 +1106,21 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Opacity and blend belong to the targeted fill/stroke; isolate/knockout/knockoutShape stay object-level.
     let item_ids = if editing_mask { ids } else { row_targets(s, p, C)? };
+    // The art of a graph design whose stack an explicit aligned item is a row of goes first: appearance.setItem leaves
+    // it as it is and matches the other objects' rows against it.
+    let of = if editing_mask || !explicit { None } else { super::appearance::design_reference(s, p, C)? };
     if explicit {
         let d = &s.doc()?.doc;
-        if !item_ids.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
+        // With such art, an object has the item when it has a row equal to the art's.
+        let found = match of {
+            Some(_) => super::appearance::rows_per_target(d, of, &item_ids, &[index], true).iter().any(|r| !r.is_empty()),
+            None => item_ids.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())),
+        };
+        if !found {
             return Err(bad(C, format!("no appearance item {index}")));
         }
     }
+    let item_ids = super::appearance::with_reference(of, &item_ids);
     let (opacity, blend) = (q.remove("opacity"), q.remove("blend"));
     if let Some(b) = &blend
         && b.as_str().and_then(BlendMode::parse).is_none()

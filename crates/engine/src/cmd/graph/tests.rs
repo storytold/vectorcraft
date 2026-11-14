@@ -667,6 +667,171 @@ fn appearance_commands_edit_the_objects_given_with_a_graph_designs_art() {
     assert_eq!(rows(&s, mark).items.len(), mark_was.items.len() + 1);
 }
 
+/// `design_art()` with the design's art painted with a red and a blue fill and series 1's first mark with a blue fill and
+/// a black stroke, so that row 1 of the art (its blue fill) is row 0 of the mark: the graph, the art and the mark.
+fn aligned_design_art() -> (Session, NodeId, NodeId, NodeId) {
+    let (mut s, id, _, art, mark) = design_art();
+    let (red, blue) = (Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)), Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    let mark_look = vectorcraft_doc::Appearance::basic(blue, Paint::solid(vectorcraft_color::Color::BLACK), 1.0);
+    let mut art_look = mark_look.clone();
+    art_look.items = vec![art_look.items[0].clone(), art_look.items[0].clone()];
+    *art_look.items[0].paint_mut() = red;
+    s.edit("Looks", |d, _| {
+        d.node_mut(art).unwrap().appearance = vectorcraft_doc::Shared::new(art_look.clone());
+        d.node_mut(mark).unwrap().appearance = vectorcraft_doc::Shared::new(mark_look.clone());
+        Ok(())
+    })
+    .unwrap();
+    (s, id, art, mark)
+}
+
+/// Aligned rows given with the art of a graph design in a series first are rows of that art's stack, which the commands
+/// leave as it is: each other object edits the row equal to the given one, never the row at the same index.
+#[test]
+fn aligned_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let green = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    let (mut s, _, art, mark) = aligned_design_art();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    s.execute("appearance.removeItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).items, mark_was.items[1..], "the mark loses its blue fill and keeps its stroke");
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("appearance.setItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!((rows(&s, mark).items[0].paint(), &rows(&s, mark).items[1]), (&green, &mark_was.items[1]));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    let fills: Vec<bool> = rows(&s, mark).items.iter().map(|it| it.is_fill()).collect();
+    assert_eq!(fills, [true, true, false], "the mark's blue fill is copied, not its stroke");
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 1, "aligned": true, "opacity": 40})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!((rows(&s, mark).items[0].opacity(), rows(&s, mark).items[1].opacity()), (0.4, 1.0));
+
+    // A row of the art past the end of the mark's stack.
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.edit("Rows", |d, _| {
+        let ap = &mut d.node_mut(art).unwrap().appearance;
+        let red = ap.items[0].clone();
+        ap.items.insert(0, red);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 2, "aligned": true, "opacity": 40})).unwrap();
+    assert_eq!((rows(&s, mark).items[0].opacity(), rows(&s, mark).items[1].opacity()), (0.4, 1.0));
+
+    // A row of the art (its red fill) that the mark has no equal of: transparency.set is an error, and appearance.setItem
+    // and appearance.removeItem leave the document as it is.
+    let mark_was = rows(&s, mark);
+    let e = s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 0, "aligned": true, "opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("no appearance item 0"), "{e}");
+    s.execute("appearance.setItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true, "color": "#00ff00"})).unwrap();
+    s.execute("appearance.removeItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, mark), mark_was);
+}
+
+/// Aligned effects given with the art of a graph design in a series first go on, and come off, the rows equal to the art's
+/// row in the other objects; an object without an equal row is left as it is.
+#[test]
+fn aligned_effects_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let effects = |s: &Session, id: NodeId| rows(s, id).items.iter().map(|it| it.effects().len()).collect::<Vec<_>>();
+    let (mut s, id, art, mark) = aligned_design_art();
+    // A second mark of series 1 with a green fill, which no row of the art equals, and the same black stroke.
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let other = series(&n, 1).children().unwrap()[1].id;
+    let mut other_look = rows(&s, mark);
+    *other_look.items[0].paint_mut() = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    s.edit("Look", |d, _| {
+        d.node_mut(other).unwrap().appearance = vectorcraft_doc::Shared::new(other_look.clone());
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, other_was) = (rows(&s, art), rows(&s, other));
+    let r = s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(effects(&s, mark), [1, 0], "the shadow goes on the mark's blue fill");
+    assert_eq!(rows(&s, other), other_was, "the other mark has no blue fill");
+    assert_eq!((&r["ids"], &r["item"], &r["index"]), (&json!([mark.0]), &json!(0), &json!(0)), "the reply names the mark's row");
+
+    // The art's blue fill with the same shadow as the mark's: removing it from the art's row takes it off the mark's.
+    s.edit("Shadow", |d, _| {
+        let row = d.node(mark).unwrap().appearance.items[0].clone();
+        d.node_mut(art).unwrap().appearance.items[1] = row;
+        Ok(())
+    })
+    .unwrap();
+    let art_was = rows(&s, art);
+    // The effect dialog reads the shadow from the art's row and passes the art on first.
+    let (target, fx) = s.appearance_effect_target(&json!({"ids": [art.0, mark.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((fx.len(), &target["ids"], &target["item"]), (1, &json!([art.0, mark.0]), &json!(1)));
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(effects(&s, mark), [0, 0]);
+
+    // An object-level effect of the art that the mark does not have: a new object-level effect still goes on the mark.
+    s.edit("Effect", |d, _| {
+        let shadow = d.node(art).unwrap().appearance.items[1].effects()[0].clone();
+        d.node_mut(art).unwrap().appearance.effects.push(shadow);
+        Ok(())
+    })
+    .unwrap();
+    let art_was = rows(&s, art);
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [art.0, mark.0], "item": null, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).effects.len(), 1);
+    // The art's object-level shadow is not the mark's roughen: the effect dialog reads the art's, and removing it leaves
+    // the mark as it is.
+    let (_, fx) = s.appearance_effect_target(&json!({"ids": [art.0, mark.0], "item": null, "aligned": true})).unwrap();
+    assert_eq!(fx.iter().map(|e| e.id.to_string()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 0, "aligned": true})).is_err());
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was));
+    // An object-level effect index past the end of the art's list names no effect of the mark either.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err());
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was, mark_was));
+}
+
+/// Aligned rows of a graph design's art and of another object whose stack differs are not one place in both stacks, so
+/// they are not reordered, and `to` is refused for their copies; with the same stacks, the copies go to `to`.
+#[test]
+fn aligned_rows_of_a_graph_designs_art_and_a_different_stack_are_not_moved() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("appearance.moveItem", &json!({"ids": [art.0, mark.0], "from": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+    assert!(s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [mark.0], "item": null})).unwrap();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.move", &json!({"ids": [art.0, mark.0], "from": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+
+    // The mark with the art's stack.
+    let (mut s, _, art, mark) = aligned_design_art();
+    let art_was = rows(&s, art);
+    s.edit("Look", |d, _| {
+        d.node_mut(mark).unwrap().appearance = vectorcraft_doc::Shared::new(art_was.clone());
+        Ok(())
+    })
+    .unwrap();
+    assert!(s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "indices": [1, 9], "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), art_was, "a row that does not exist is refused");
+    s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "to": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    let paints: Vec<_> = rows(&s, mark).items.iter().map(|it| it.paint().clone()).collect();
+    assert_eq!(paints, [art_was.items[1].paint().clone(), art_was.items[0].paint().clone(), art_was.items[1].paint().clone()]);
+}
+
 /// The paint commands leave the art of a graph design in a series out, a copy of the design given by id with an item
 /// included.
 #[test]

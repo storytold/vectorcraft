@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index: paint-order item index, ids?|id? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), tint?: 0..100, keepModel?: bool (both as paint.setFill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} edit one fill/stroke of each target object's own appearance stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index: paint-order item index, ids?|id? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), tint?: 0..100, keepModel?: bool (both as paint.setFill), aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} edit one fill/stroke of each target object's own appearance stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
             has_doc,
             set_item
         ),
@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Item",
             [],
             None,
-            "{index | indices: [..] (paint-order item indices), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} remove those fills/strokes from each target object's own stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index | indices: [..] (paint-order item indices), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} remove those fills/strokes from each target object's own stack. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
             has_doc,
             remove_item
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Item",
             ["Window", "Appearance"],
             None,
-            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (with several, of the lowest copy: they land together in their order; default: each right above its item; not with aligned rows of a mixed selection), contents?: count (with `to`: how many items paint below the Contents (Characters) row afterwards; default: it stays between the same items), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} copy fills/strokes with their effects, as Alt-dragging rows places them. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
+            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (with several, of the lowest copy: they land together in their order; default: each right above its item; not with aligned rows of a mixed selection), contents?: count (with `to`: how many items paint below the Contents (Characters) row afterwards; default: it stays between the same items), ids?|id?, target?, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md)} copy fills/strokes with their effects, as Alt-dragging rows places them. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind",
             has_doc,
             duplicate_item
         ),
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder Appearance Item",
             [],
             None,
-            "{from: paint-order item index | \"contents\", indices?: [..] (several items instead of from: they move as one block in their order, the lowest landing at `to`; a block landing next to the Contents row keeps its lowest item's side), to, contents?: count, ids?|id?, target?, aligned?: bool (refused when the targets' appearances differ)} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above. On a path directly in a graph series (a series group's id stands for those paths, except with from \"contents\", which moves the group's own row), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {index: where the item landed | contents: the row's slot}",
+            "{from: paint-order item index | \"contents\", indices?: [..] (several items instead of from: they move as one block in their order, the lowest landing at `to`; a block landing next to the Contents row keeps its lowest item's side), to, contents?: count, ids?|id?, target?, aligned?: bool (refused when the targets' appearances differ, or differ from that of a graph design's art given first)} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above. On a path directly in a graph series (a series group's id stands for those paths, except with from \"contents\", which moves the group's own row), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores that label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {index: where the item landed | contents: the row's slot}",
             has_doc,
             move_item
         ),
@@ -186,11 +186,18 @@ impl Session {
         let mut ids = drop_design_art(&self.active()?.doc, appearance_targets(self, params).ok()?);
         let item = item_target(self, params, "effect.apply").ok()?;
         let anchor = item.anchor(self, &ids);
-        let node = self.active()?.doc.node(*ids.get(anchor)?)?;
+        // Aligned effects given with a graph design's art first are effects of the art's stack, which stays first; the
+        // Appearance panel's active row is a row of the first selected object's.
+        let of = match item {
+            ItemTarget::Item { explicit: false, .. } => None,
+            _ => design_reference(self, params, "effect.apply").ok()?,
+        };
+        let own = *ids.get(anchor)?;
+        let node = self.active()?.doc.node(of.unwrap_or(own))?;
         let at = item.effects_item(&node.appearance, "effect.apply").ok()?;
         let effects = node.appearance.effects_at(at)?;
         ids.swap(0, anchor);
-        let ids: Vec<u64> = ids.into_iter().map(|id| id.0).collect();
+        let ids: Vec<u64> = with_reference(of, &ids).into_iter().map(|id| id.0).collect();
         let aligned = match item {
             ItemTarget::Item { aligned, .. } => aligned,
             ItemTarget::Top => aligned(params, "effect.apply").ok()?,
@@ -304,6 +311,21 @@ impl ItemTarget {
             .collect()
     }
 
+    /// [`ItemTarget::per_target`], with an explicit aligned item a row of the stack of `of` (see [`design_reference`]),
+    /// which is not among `ids`, when there is one: each target edits the item equal to it there, and a target without
+    /// an equal item is left out (`None`).
+    pub(crate) fn per_target_of(self, s: &Session, of: Option<NodeId>, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
+        let ItemTarget::Item { index, explicit: true, aligned: true } = self else { return self.per_target(s, ids) };
+        let Some(d) = s.active().map(|st| &st.doc) else { return self.per_target(s, ids) };
+        let Some(r) = of.and_then(|of| d.node(of)) else { return self.per_target(s, ids) };
+        ids.iter()
+            .map(|id| {
+                let index = SharedStack::of(&[&*r.appearance, &*d.node(*id)?.appearance]).item_in(index, 1)?;
+                Some(ItemTarget::Item { index, explicit: true, aligned: true })
+            })
+            .collect()
+    }
+
     /// Where among `ids` (the targets, in paint order) the object whose stack this item is a row of
     /// is: the first selected object (or the compound path holding it) for the active item, which
     /// need not paint first; the first target otherwise, or when that object is not among them.
@@ -385,6 +407,32 @@ pub(crate) fn items_per_target(d: &vectorcraft_doc::Document, ids: &[NodeId], id
             })
             .collect(),
         None => vec![idx.to_vec(); ids.len()],
+    }
+}
+
+/// The art of a graph design in a graph series whose stack the aligned rows of `p` (`aligned: true`) are rows of: the
+/// first of the [`appearance_targets`] when it is such art, which the edit leaves out ([`without_design_art`]). A
+/// command reads it after its own target checks.
+pub(crate) fn design_reference(s: &Session, p: &Value, cmd: &str) -> Result<Option<NodeId>> {
+    if !aligned(p, cmd)? {
+        return Ok(None);
+    }
+    let ids = appearance_targets(s, p)?;
+    let d = &s.doc()?.doc;
+    Ok(ids.first().copied().filter(|id| super::graph::is_design_art(d, *id)))
+}
+
+/// `ids` after `of` (see [`design_reference`]), when there is one.
+pub(crate) fn with_reference(of: Option<NodeId>, ids: &[NodeId]) -> Vec<NodeId> {
+    of.into_iter().chain(ids.iter().copied()).collect()
+}
+
+/// [`items_per_target`] of `ids`, with the aligned rows `idx` taken from the stack of `of` (see [`design_reference`])
+/// when there is one: a row a target has no equal of is left out of that target.
+pub(crate) fn rows_per_target(d: &Document, of: Option<NodeId>, ids: &[NodeId], idx: &[usize], aligned: bool) -> Vec<Vec<usize>> {
+    match of {
+        Some(of) => items_per_target(d, &with_reference(Some(of), ids), idx, true).into_iter().skip(1).collect(),
+        None => items_per_target(d, ids, idx, aligned),
     }
 }
 
@@ -1057,7 +1105,8 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When every object comes out as it was (for example, when none has item `index`), the document
     // and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &[idx], aligned(p, "appearance.setItem")?);
+    let of = design_reference(s, p, "appearance.setItem")?;
+    let per = rows_per_target(&before, of, &ids, &[idx], aligned(p, "appearance.setItem")?);
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
@@ -1144,7 +1193,8 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When no object has an item at any of the indices, the document and its undo history stay as
     // they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p, "appearance.removeItem")?);
+    let of = design_reference(s, p, "appearance.removeItem")?;
+    let per = rows_per_target(&before, of, &ids, &idx, aligned(p, "appearance.removeItem")?);
     super::overprint::edit_counted(s, "Remove Item", |d| {
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
@@ -1185,12 +1235,19 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     let mut first_at = None;
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     let mut active_at = None;
-    // Aligned rows of a mixed selection are copied right above themselves in each object.
-    if aligned(p, C)? && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
+    // Aligned rows of a mixed selection are copied right above themselves in each object. Rows of a graph design's art,
+    // which is left out, go to `to` in an object whose stack is the same as the art's.
+    let of = design_reference(s, p, C)?;
+    if aligned(p, C)?
+        && to.is_some()
+        && (shared_stack(&s.doc()?.doc, &ids).is_some() || (of.is_some() && appearances_differ(&s.doc()?.doc, &with_reference(of, &ids))))
+    {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p, C)?);
+    // With `to`, the art's stack is the same as the object's, so its rows are the object's, each of which must exist.
+    let per =
+        if to.is_some() { items_per_target(&before, &ids, &idx, aligned(p, C)?) } else { rows_per_target(&before, of, &ids, &idx, aligned(p, C)?) };
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
@@ -1305,7 +1362,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let ids = require_targets(s, p, C)?;
     // Where an aligned row would go in each of several different stacks isn't one place.
-    if aligned && appearances_differ(&s.doc()?.doc, &ids) {
+    if aligned && appearances_differ(&s.doc()?.doc, &with_reference(design_reference(s, p, C)?, &ids)) {
         return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
     }
     if p.get("indices").is_some() {

@@ -826,7 +826,15 @@ given), `threeD.mapGraphic`,
 `paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert` and `paint.complement` with an
 `item`, `stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
 `paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When the first selected object is design art, the commands
-do not use the Appearance panel's active row. To change the art, edit the design with `graph.design`.
+do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
+`aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
+`transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
+move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
+it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
+for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
+`appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
+art. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
