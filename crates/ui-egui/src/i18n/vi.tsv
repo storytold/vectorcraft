@@ -1959,6 +1959,7 @@ digits	Hindi	Hindi
 	Import Library	Nhập thư viện
 	Import Library…	Nhập thư viện…
 	Import PDF	Nhập PDF
+	Import PDF pages as links	Nhập các trang PDF dưới dạng liên kết
 	Import PDF Presets	Nhập thiết lập sẵn PDF
 	Import Perspective Grid Presets	Nhập thiết lập sẵn lưới phối cảnh
 	Import Print Presets	Nhập thiết lập sẵn in
@@ -3841,6 +3842,18 @@ mark-style	Japanese	Kiểu Nhật
 	Smart Guides (View → Smart Guides)	Đường căn thông minh (Hiển thị → Đường căn thông minh)
 	Smart Guides (⌘U)	Đường căn thông minh (⌘U)
 	Smart Punctuation…	Dấu câu thông minh…
+	Smart Punctuation	Dấu câu thông minh
+	ff, fi, ffi Ligatures	Chữ ghép ff, fi, ffi
+	ff, fl, ffl Ligatures	Chữ ghép ff, fl, ffl
+	Smart Quotes	Dấu ngoặc kép thông minh
+	Smart Spaces	Khoảng trắng thông minh
+	En, Em Dashes	Gạch ngang ngắn và dài
+	Ellipses	Dấu chấm lửng
+	Expert Fractions	Phân số chuyên dụng
+	Replace In	Thay thế trong
+	Selected Text Only	Chỉ văn bản đã chọn
+	Entire Document	Toàn bộ tài liệu
+	Report Results	Báo cáo kết quả
 	Smooth	Mượt
 	Smooth Color	Màu mượt
 	Smooth Tool	Công cụ Làm mượt
@@ -3863,6 +3876,7 @@ mark-style	Japanese	Kiểu Nhật
 	Sort	Sắp xếp
 	Sort by Kind	Sắp xếp theo loại
 	Sort by Name	Sắp xếp theo tên
+	Sort by Size	Sắp xếp theo kích thước
 	Sort by Status	Sắp xếp theo trạng thái
 	Source code on GitHub	Mã nguồn trên GitHub
 	Source Image	Ảnh nguồn
@@ -5263,6 +5277,7 @@ theme	Appearance	Giao diện
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
+@msg	the SVG's styles expand to more than {0} MB	các kiểu của SVG khi mở rộng chiếm hơn {0} MB
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Lưu ghi {_1}, không phải {_2}: dùng file.saveAsTemplate để ghi định dạng này
