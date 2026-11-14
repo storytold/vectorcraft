@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -1459,6 +1459,16 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.runs = vec![TextRun { text, style: CharStyle::default(), inline: None }];
         t.set_all_paras(Default::default());
         refresh_bounds(t);
+    }
+    // A graph keeps the names of its labels' character and paragraph styles for each redraw.
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        let l = &mut g.label_styles;
+        for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
+            st.style_name = None;
+        }
+        for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
+            pa.style_name = None;
+        }
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
