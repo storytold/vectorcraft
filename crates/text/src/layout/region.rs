@@ -206,6 +206,10 @@ type Slant = (Point, Point, (f64, f64), (f64, f64));
 /// The line through two points.
 type Line = (Point, Point);
 
+/// The x at which an edge crosses a height, and the line it was found along (`None` when it is
+/// the edge's end).
+type Crossing = (f64, Option<Line>);
+
 /// The x of the line through `p` and `q` (not horizontal) at `y`.
 fn line_x(p: Point, q: Point, y: f64) -> f64 {
     p.x + (y - p.y) / (q.y - p.y) * (q.x - p.x)
@@ -367,18 +371,34 @@ fn band_intervals(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f64)
     let (edges, _, mut xs) = band_boundaries(polys, top, bottom);
     // The edges of contours that meet along an edge cross the middle of the band at the same x,
     // since each is crossed on the line through the same two points: the intervals on either side
-    // join there (an edge that bounds the shape there is still subtracted). Intervals with any gap
+    // join there (an edge that bounds the shape there is still subtracted). Crossings of other edges
+    // that round to the same x join only when both lie exactly at that x. Intervals with any gap
     // between them stay apart.
-    xs.sort_by(f64::total_cmp);
-    let mut mid: Vec<(f64, f64)> = xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
-    mid.dedup_by(|next, prev| {
-        let seam = next.0 <= prev.1;
-        if seam {
-            prev.1 = prev.1.max(next.1);
+    let y = (top + bottom) * 0.5;
+    xs.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| line_order(a.1, b.1)));
+    let mut mid: Vec<(f64, f64)> = Vec::new();
+    let mut last: Option<Line> = None;
+    for &[(s, ks), (t, kt)] in xs.as_chunks::<2>().0 {
+        match mid.last_mut() {
+            Some(prev) if s <= prev.1 && ((ks.is_some() && last == ks) || (exactly_at(last, s, y) && exactly_at(ks, s, y))) => prev.1 = prev.1.max(t),
+            _ => mid.push((s, t)),
         }
-        seam
-    });
+        last = kt;
+    }
     subtract_intervals(&mid, &edges)
+}
+
+/// An order of the lines crossings of the band's middle were found along, which keeps crossings
+/// along one line next to each other; a crossing at an edge's end (`None`) comes first.
+fn line_order(a: Option<Line>, b: Option<Line>) -> std::cmp::Ordering {
+    let key = |l: Option<Line>| l.map_or([f64::NEG_INFINITY; 4], |(p, q)| [p.x, p.y, q.x, q.y]);
+    key(a).iter().zip(key(b)).fold(std::cmp::Ordering::Equal, |o, (u, v)| o.then(u.total_cmp(&v)))
+}
+
+/// Does a crossing of the height `y` at `x`, found along `line` (or at an edge's end when `None`),
+/// lie exactly at `x`?
+fn exactly_at(line: Option<Line>, x: f64, y: f64) -> bool {
+    line.is_none_or(|(p, q)| on_line_exactly(p, q, Point::new(x, y)))
 }
 
 /// The x at which `polys` (even-odd) is inside somewhere in the band `top..bottom`, sorted and
@@ -423,17 +443,19 @@ fn band_cover_closed(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f
 /// the band, stretches of edges that an even number of edges cover, and vertical edges. The flag is
 /// false when [`MAX_EDGE_PAIRS`] left edges unpaired, which can only add to the result. Last, the x
 /// at which the edges cross the middle of the band (even-odd, as [`poly_intervals`] finds them),
-/// unsorted, each found along the line [`slant_boundaries`] gives its edge.
-fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f64)>, bool, Vec<f64>) {
+/// unsorted, each found along the line [`slant_boundaries`] gives its edge, with that line (`None`
+/// for a crossing at an edge's end).
+fn band_boundaries(polys: &[Vec<Point>], top: f64, bottom: f64) -> (Vec<(f64, f64)>, bool, Vec<Crossing>) {
     let (mut flats, mut slants) = band_edges(polys, top, bottom);
     let (mut edges, paired, lines) = slant_boundaries(&mut slants);
     let y = (top + bottom) * 0.5;
-    let mut xs: Vec<f64> = slants.iter().zip(&lines).filter(|((p, q, ..), _)| p.y <= y && y < q.y).map(|(_, &(p, q))| line_x(p, q, y)).collect();
+    let mut xs: Vec<Crossing> =
+        slants.iter().zip(&lines).filter(|((p, q, ..), _)| p.y <= y && y < q.y).map(|(_, &(p, q))| (line_x(p, q, y), Some((p, q)))).collect();
     // When the middle is the band's bottom (a band of no height), the edges that start there cross
     // it but are not in the band: they cross it at their lower end.
     if y == bottom {
         let starts = polys.iter().flat_map(|poly| poly.iter().zip(poly.iter().cycle().skip(1)));
-        xs.extend(starts.filter(|(a, b)| a.y != b.y && a.y.min(b.y) == y).map(|(a, b)| if a.y < b.y { a.x } else { b.x }));
+        xs.extend(starts.filter(|(a, b)| a.y != b.y && a.y.min(b.y) == y).map(|(a, b)| (if a.y < b.y { a.x } else { b.x }, None)));
     }
     // The x covered by an odd number of the horizontal edges at one height: pairs of their
     // sorted ends.
@@ -1002,6 +1024,29 @@ fn shared_slanted_edge_still_joins_near_canvas_limit() {
     assert_ne!(line_x(Point::new(0.0, 0.0), Point::new(3.0, 7.0), y), line_x(Point::new(0.75, 1.75), Point::new(3.0, 7.0), y));
     let cells = Region::cells(&closed(&[left, right]), &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(top, bottom), &[(-100.0 + 3.0 * bottom / 7.0, 100.0 + 3.0 * top / 7.0)]);
+}
+
+/// A slanted edge and a vertical edge of two contours less than one unit in the last place apart
+/// near the edge of the canvas, whose crossings of the band's middle round to the same x, are not
+/// one edge: the line stops at the gap, drawn either way around.
+#[cfg(test)]
+#[test]
+fn contours_whose_crossings_round_together_stay_apart() {
+    let x = 3_999_000.0;
+    let u = 2f64.powi(-31);
+    assert_eq!((x + u).to_bits(), x.to_bits() + 1);
+    let left: &[(f64, f64)] = &[(x - 100.0, 0.0), (x, 0.0), (x + u, 10.0), (x - 100.0, 10.0)];
+    let right: &[(f64, f64)] = &[(x + u, 0.0), (x + 100.0, 0.0), (x + 100.0, 10.0), (x + u, 10.0)];
+    let mirror = |c: &[(f64, f64)]| -> Vec<(f64, f64)> { c.iter().map(|&(px, py)| (px, 10.0 - py)).collect() };
+    let (left_m, right_m) = (mirror(left), mirror(right));
+    for frame in [closed(&[left, right]), closed(&[&right_m, &left_m])] {
+        let cells = Region::cells(&frame, &LayoutOptions::default(), &[]);
+        for (top, bottom) in [(8.0, 9.0), (1.0, 2.0)] {
+            let spans = cells[0].spans(top, bottom);
+            assert_eq!(spans.len(), 2, "{top}..{bottom}: {spans:?}");
+            assert_spans(&spans, &[(x - 100.0, x + u), (x + u, x + 100.0)]);
+        }
+    }
 }
 
 /// Area type in two slanted contours four units in the last place apart near the edge of the canvas
