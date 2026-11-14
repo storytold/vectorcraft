@@ -308,21 +308,52 @@ impl<'a> Over<'a> {
     fn span(&self, b: &Board, y: f64, width: usize) -> Option<(usize, usize)> {
         let at = self.to_doc * Point::new(0.0, y);
         let [dx, dy, ..] = self.to_doc.as_coeffs();
-        // Where along the row the document point stays within the rectangle, axis by axis.
-        let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
+        // Where along the row the document point stays within the rectangle, axis by axis. The
+        // rectangle holds its minimum edge and not its maximum one, so a row that runs toward the
+        // minimum holds its end there and not its start: each bound keeps whether it is held.
+        let (mut lo, mut hi) = ((f64::NEG_INFINITY, true), (f64::INFINITY, true));
         for (start, slope, min, max) in [(at.x, dx, b.rect.x0, b.rect.x1), (at.y, dy, b.rect.y0, b.rect.y1)] {
             if slope == 0.0 {
                 if !(min <= start && start < max) {
                     return None;
                 }
-            } else {
-                let (t0, t1) = ((min - start) / slope, (max - start) / slope);
-                (lo, hi) = (lo.max(t0.min(t1)), hi.min(t0.max(t1)));
+                continue;
+            }
+            let (t0, t1) = ((min - start) / slope, (max - start) / slope);
+            let (from, to) = if slope > 0.0 { ((t0, true), (t1, false)) } else { ((t1, false), (t0, true)) };
+            // The tighter bound wins, and of two equal bounds the one not held.
+            if from.0 > lo.0 || (from.0 == lo.0 && !from.1) {
+                lo = from;
+            }
+            if to.0 < hi.0 || (to.0 == hi.0 && !to.1) {
+                hi = to;
             }
         }
-        // Pixel i's center is i + 0.5.
-        let (start, end) = ((lo - 0.5).ceil().max(0.0), (hi - 0.5).ceil().min(width as f64));
-        (start < end).then_some((start as usize, end as usize))
+        // Pixel i's center is i + 0.5: the first pixel whose center is past `lo` (or on it, when
+        // held), up to the first one past `hi` (or on it, when not held).
+        let start = if lo.1 { (lo.0 - 0.5).ceil() } else { (lo.0 - 0.5).floor() + 1.0 };
+        let end = if hi.1 { (hi.0 - 0.5).floor() + 1.0 } else { (hi.0 - 0.5).ceil() };
+        let clamp = |v: f64| v.clamp(0.0, width as f64) as usize;
+        let (mut start, mut end) = (clamp(start), clamp(end));
+        end = end.max(start);
+        // Rounding can put a bound a pixel away from where the rectangle's own test of each pixel's
+        // center puts it: move each end until the two agree.
+        let inside = |i: usize| b.rect.contains(self.to_doc * Point::new(i as f64 + 0.5, y));
+        for _ in 0..2 {
+            if start < end && !inside(start) {
+                start += 1;
+            } else if start > 0 && inside(start - 1) {
+                start -= 1;
+            }
+        }
+        for _ in 0..2 {
+            if end > start && !inside(end - 1) {
+                end -= 1;
+            } else if end < width && inside(end) {
+                end += 1;
+            }
+        }
+        (start < end).then_some((start, end))
     }
 
     /// `owner` becomes the artboard on top at each of the `width` pixels of the row whose centers
@@ -615,27 +646,35 @@ pub(crate) mod tests {
                 (Rect::new(x, y, x + 15.0, y + 20.0), if k % 2 == 0 { [255, 255, 255 - k] } else { [20 + k, 20, 30] })
             })
             .collect();
-        let b = Backdrop { everywhere: None, artboards: boards.clone(), grid: None };
-        let view = Affine::rotate(0.3) * Affine::scale(1.7) * Affine::translate((5.0, -3.0));
-        let (w, h) = (64, 48);
-        let mut px = row(w * h, half);
-        convert_over(Some(&t), &mut px, w as u32, view, Some((&b, 1.0)));
-        let to_doc = view.inverse();
-        let mut on_paper = 0;
-        for i in 0..w * h {
-            let p = to_doc * Point::new((i % w) as f64 + 0.5, (i / w) as f64 + 0.5);
-            let mut want = half.to_vec();
-            match boards.iter().rev().find(|(r, _)| r.contains(p)) {
-                Some(&(_, paper)) => {
-                    let one = Backdrop { everywhere: Some(paper), artboards: vec![], grid: None };
-                    convert_over(Some(&t), &mut want, 1, Affine::IDENTITY, Some((&one, 1.0)));
-                    on_paper += 1;
+        let check = |boards: &[(Rect, [u8; 3])], view: Affine, (w, h): (usize, usize)| {
+            let b = Backdrop { everywhere: None, artboards: boards.to_vec(), grid: None };
+            let mut px = row(w * h, half);
+            convert_over(Some(&t), &mut px, w as u32, view, Some((&b, 1.0)));
+            let to_doc = view.inverse();
+            let mut on_paper = 0;
+            for i in 0..w * h {
+                let p = to_doc * Point::new((i % w) as f64 + 0.5, (i / w) as f64 + 0.5);
+                let mut want = half.to_vec();
+                match boards.iter().rev().find(|(r, _)| r.contains(p)) {
+                    Some(&(_, paper)) => {
+                        let one = Backdrop { everywhere: Some(paper), artboards: vec![], grid: None };
+                        convert_over(Some(&t), &mut want, 1, Affine::IDENTITY, Some((&one, 1.0)));
+                        on_paper += 1;
+                    }
+                    None => t.apply_premultiplied(&mut want),
                 }
-                None => t.apply_premultiplied(&mut want),
+                assert_eq!(&px[i * 4..i * 4 + 4], &want[..], "pixel {i} at {p:?} through {view:?}");
             }
-            assert_eq!(&px[i * 4..i * 4 + 4], &want[..], "pixel {i} at {p:?}");
-        }
-        assert!(on_paper > 500 && on_paper < w * h, "{on_paper} pixels on the artboards");
+            assert!(on_paper > 100 && on_paper < w * h, "{on_paper} pixels on the artboards");
+        };
+        check(&boards, Affine::rotate(0.3) * Affine::scale(1.7) * Affine::translate((5.0, -3.0)), (64, 48));
+        // Rows that run backward across the artboards, with pixel centers on their edges: an edge
+        // at the minimum is on the artboard, one at the maximum is not.
+        check(&boards, Affine::new([-1.0, 0.0, 0.0, 1.0, 92.5, 0.0]), (96, 44));
+        check(&boards, Affine::new([-1.0, 0.0, 0.0, -1.0, 92.5, 40.5]), (96, 44));
+        // A sheared view where a computed bound falls on a pixel center that rounding puts just
+        // outside the artboard: the pixel's own center decides.
+        check(&[(Rect::new(-100.0, -2.0, 100.0, 100.0), [40, 40, 30])], Affine::new([3.0, 1.5, 0.1, 0.5, -0.3, 0.0]), (64, 48));
     }
 
     #[test]
