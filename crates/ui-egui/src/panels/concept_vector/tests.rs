@@ -12,8 +12,8 @@ use vectorcraft_engine::concept_vector::{Capabilities, Provider, ProviderError, 
 use vectorcraft_geom::{PathData, Point, SubPath};
 
 use super::{
-    ID, OPEN, PREVIEW_H, PREVIEW_POINTS, Work, art_rect, cancel, elements, finish, generate, insert, poll, preview, preview_width, show, show_job,
-    within_budget,
+    CANCEL, ID, OPEN, PREVIEW_H, PREVIEW_POINTS, Work, art_rect, cancel, elements, finish, generate, insert, poll, preview, preview_width, show,
+    show_job, within_budget,
 };
 use crate::tests_labels::painted_text;
 use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
@@ -202,6 +202,22 @@ fn generate_runs_off_the_ui_thread_and_cancel_drops_it() {
     cancel(&mut app);
     assert!(!app.concept_runs.busy() && app.concept_runs.shown.is_none());
     assert_eq!(undo_steps(&app), steps);
+}
+
+/// `ui.conceptVector.cancel` is the panel's Cancel: on while styles are being made, it stops them
+/// and says so, and nothing is kept or shown.
+#[test]
+fn the_cancel_command_stops_a_run_as_the_button_does() {
+    let mut app = app();
+    app.concept_runs.off_the_ui_thread = true;
+    assert!(!menus::enabled(&app, CANCEL));
+    generate(&mut app).unwrap();
+    assert!(menus::enabled(&app, CANCEL));
+    assert_eq!(app.run(CANCEL, json!({})).unwrap(), json!({"cancelled": 1}));
+    assert!(!app.concept_runs.busy() && !menus::enabled(&app, CANCEL));
+    assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
+    poll(&mut app);
+    assert!(app.concept_runs.shown.is_none());
 }
 
 fn one_path(points: &[Point], fill: Option<[u8; 3]>, stroke: Option<([u8; 3], f64)>) -> Variation {

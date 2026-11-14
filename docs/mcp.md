@@ -3511,7 +3511,7 @@ already walks Image Trace. Short agent entry points:
   ```
 
   In the app, `ui.conceptVector` opens the Concept to Vector panel, which runs the same commands; Generate runs off the
-  UI thread with a progress bar and Cancel.
+  UI thread with a progress bar and Cancel, and `ui.conceptVector.cancel` does what Cancel does.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most

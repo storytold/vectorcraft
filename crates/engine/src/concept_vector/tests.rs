@@ -571,6 +571,17 @@ fn an_image_is_scaled_down_within_the_pixel_limit_whatever_its_shape() {
     assert_eq!(offline::fit_within(Raster::from_fn(4, 4, |_, _| [1, 2, 3, 255]), 16).width, 4, "fits already");
 }
 
+/// A clear pixel scaled down with opaque ones takes away from the alpha, not from the color, and a
+/// box with nothing opaque in it is clear.
+#[test]
+fn an_image_scaled_down_keeps_the_color_of_its_opaque_pixels() {
+    let red_and_clear = Raster::from_fn(2, 2, |x, y| if (x, y) == (1, 1) { [0, 0, 0, 0] } else { [255, 0, 0, 255] });
+    assert_eq!(offline::fit_within(red_and_clear, 1).rgba, [255, 0, 0, 191]);
+    let half_clear = Raster::from_fn(2, 1, |x, _| if x == 0 { [0, 0, 255, 0] } else { [200, 100, 50, 128] });
+    assert_eq!(offline::fit_within(half_clear, 1).rgba, [200, 100, 50, 64]);
+    assert_eq!(offline::fit_within(Raster::from_fn(2, 2, |_, _| [9, 9, 9, 0]), 1).rgba, [0, 0, 0, 0]);
+}
+
 #[test]
 fn generate_and_results_change_nothing_in_the_document() {
     let (mut s, _) = doc_with(&art());
@@ -907,4 +918,115 @@ fn the_session_keeps_the_newest_jobs() {
     for j in &jobs[1..] {
         assert!(s.execute("conceptVector.results", &json!({"job": j})).is_ok());
     }
+}
+
+/// A list of styles or variations longer than any job can hold is refused by its length, before
+/// it is checked for repeats.
+#[test]
+fn a_long_list_of_styles_or_variations_is_refused() {
+    let (mut s, _) = doc_with(&art());
+    with_fake(&mut s, fake(squares));
+    let long: Vec<String> = (0..20_000).map(|i| format!("style{i}")).collect();
+    let e = generate(&mut s, json!({"provider": "test.fake", "styles": long})).unwrap_err().to_string();
+    assert!(e.contains("`styles` must list 1 to 8 different style ids"), "{e}");
+    let job = generate(&mut s, json!({"provider": "test.fake", "styles": ["s0"]})).unwrap()["job"].as_u64().unwrap();
+    let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": long})).unwrap_err().to_string();
+    assert!(e.contains(&format!("`variations` must list different style ids of job {job}")), "{e}");
+}
+
+/// Parts whose count of the styles made panics from its second call on.
+struct CountPanics {
+    calls: std::cell::Cell<usize>,
+}
+
+impl Parts for CountPanics {
+    fn step(&mut self) -> Result<Option<Vec<Variation>>, ProviderError> {
+        Ok(None)
+    }
+    fn styles_done(&self) -> usize {
+        self.calls.set(self.calls.get() + 1);
+        if self.calls.get() >= 2 {
+            panic!("count failed");
+        }
+        0
+    }
+}
+
+/// A provider with one style, `s0`, made in [`CountPanics`] parts.
+struct PanickyParts;
+
+impl Provider for PanickyParts {
+    fn id(&self) -> &'static str {
+        "test.panickyParts"
+    }
+    fn name(&self) -> &'static str {
+        "Panicky Parts"
+    }
+    fn capabilities(&self) -> Capabilities {
+        Capabilities { styles: vec![Style { id: "s0", label: "s0" }], ..fake(squares).capabilities() }
+    }
+    fn generate(&self, request: &Request, steps: Steps) -> Result<Vec<Variation>, ProviderError> {
+        squares(request, steps)
+    }
+    fn parts(&self, _: &Request) -> Option<Box<dyn Parts>> {
+        Some(Box::new(CountPanics { calls: std::cell::Cell::new(0) }))
+    }
+}
+
+/// A panic while a provider counts the styles its parts have made is an error of the part that
+/// asked, and the count kept from before it is what the run reports.
+#[test]
+fn a_panic_in_a_providers_count_of_styles_made_is_an_error() {
+    let (mut s, img) = doc_with(&art());
+    s.concept_providers_mut().register(Arc::new(PanickyParts)).unwrap();
+    let run = ConceptRun::prepare(&s, &json!({"provider": "test.panickyParts", "styles": ["s0"], "id": img.0})).unwrap();
+    let mut parts = PartRun::default();
+    assert!(matches!(run.run_part(&mut parts, &|_, _| true), Err(ProviderError::Internal(_))));
+    assert_eq!(parts.styles_done(), 0);
+}
+
+/// Square caps on a slanted line reach past its end by up to √2 times half the width on an axis:
+/// the row keeps its gap from the image, and between its members, past those corners.
+#[test]
+fn insert_keeps_the_gap_past_the_square_caps_of_slanted_lines() {
+    /// Two 45° lines 20 px wide with square caps: one from the image's top-left corner, one to its
+    /// right edge.
+    fn slants(r: &Request, _: Steps) -> Result<Vec<Variation>, ProviderError> {
+        let line = |a: Point, b: Point| VectorPath {
+            path: PathData::single(SubPath::polyline(&[a, b], false)),
+            fill: None,
+            stroke: Some(([0, 0, 0], 20.0)),
+            square_caps: true,
+        };
+        let paths = vec![line(Point::new(0.0, 0.0), Point::new(90.0, 90.0)), line(Point::new(30.0, 0.0), Point::new(120.0, 90.0))];
+        Ok(r.styles.iter().map(|st| Variation { style: st.clone(), paths: paths.clone(), warnings: vec![] }).collect())
+    }
+    let (mut s, img) = doc_with(&art());
+    with_fake(&mut s, fake(slants));
+    let job = generate(&mut s, json!({"provider": "test.fake", "styles": ["s0", "s1"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["s0", "s1"]})).unwrap();
+    // The image is scaled ×2, so the strokes are 40 pt wide and each cap's corner lies 20√2 pt
+    // past its line's end across; the image ends at x 340.
+    let reach = 20.0 * std::f64::consts::SQRT_2;
+    let d = &s.doc().unwrap().doc;
+    let lines = |i: usize| d.bounds_of(&[NodeId(r["ids"][i].as_u64().unwrap())], false).unwrap();
+    let (a, b) = (lines(0), lines(1));
+    assert!(a.x0 - reach >= 340.0 + GAP - 0.01, "{a:?}");
+    assert!(b.x0 - reach >= a.x1 + reach + GAP - 0.01, "{a:?} {b:?}");
+}
+
+/// A long run of objects, each too close to the next for the row to fit between: the row goes
+/// past the last one, and is not moved further.
+#[test]
+fn insert_moves_the_row_past_a_long_run_of_objects_in_its_way() {
+    let (mut s, img) = doc_with(&art());
+    let n = 400;
+    for k in 0..n {
+        s.execute("shape.rectangle", &json!({"x": 380.0 + 200.0 * f64::from(k), "y": 150, "width": 10, "height": 10})).unwrap();
+    }
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
+    let last = 380.0 + 200.0 * f64::from(n - 1) + 10.0;
+    assert!((placed.x0 - (last + GAP)).abs() <= 2.0, "{placed:?}");
 }

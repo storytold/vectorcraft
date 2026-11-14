@@ -149,9 +149,13 @@ impl ConceptRun {
             Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>().ok_or_else(styles_error)?,
             _ => return Err(styles_error()),
         };
+        // The count first: the scan for repeats takes time that grows with its square.
+        if styles.is_empty() || styles.len() > MAX_STYLES {
+            return Err(styles_error());
+        }
         let known = |id: &String| caps.styles.iter().any(|st| st.id == id);
         let unique = styles.iter().enumerate().all(|(i, id)| !styles.get(..i).unwrap_or_default().contains(id));
-        if styles.is_empty() || styles.len() > MAX_STYLES || !unique || !styles.iter().all(known) {
+        if !unique || !styles.iter().all(known) {
             return Err(styles_error());
         }
         let prompt = text_param(p, "prompt", C)?.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
@@ -208,10 +212,14 @@ impl ConceptRun {
             run.parts = Some(crate::guard::catch_panic(|| self.provider.parts(&self.request)).map_err(guard)?);
         }
         if let Some(Some(parts)) = &mut run.parts {
-            if !steps(parts.styles_done() as u64, self.style_count() as u64) {
+            run.done = crate::guard::catch_panic(|| parts.styles_done()).map_err(guard)?;
+            if !steps(run.done as u64, self.style_count() as u64) {
                 return Err(ProviderError::Canceled);
             }
-            let Some(made) = crate::guard::catch_panic(|| parts.step()).map_err(guard)?? else { return Ok(false) };
+            let Some(made) = crate::guard::catch_panic(|| parts.step()).map_err(guard)?? else {
+                run.done = crate::guard::catch_panic(|| parts.styles_done()).map_err(guard)?;
+                return Ok(false);
+            };
             cv::check_result(&self.request, &made)?;
             run.made = made;
             return Ok(true);
@@ -258,16 +266,15 @@ impl ConceptRun {
 pub struct PartRun {
     /// The provider's parts, once asked for (`None` inside: it makes one style at a time).
     parts: Option<Option<Box<dyn cv::Parts>>>,
+    /// The styles the provider's parts had made when last asked, inside the panic guard.
+    done: usize,
     made: Vec<Variation>,
 }
 
 impl PartRun {
     /// The styles made so far.
     pub fn styles_done(&self) -> usize {
-        match &self.parts {
-            Some(Some(parts)) if self.made.is_empty() => parts.styles_done(),
-            _ => self.made.len(),
-        }
+        if self.made.is_empty() { self.done } else { self.made.len() }
     }
 
     /// The variations made: all of them once [`ConceptRun::run_part`] has said so.
@@ -415,6 +422,10 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let (doc, source, image, bytes, picked, label_of) = {
         let j = s.concept.jobs.get(at).ok_or_else(|| no_job(C, job))?;
         let Outcome::Done(all) = &j.outcome else { return Err(bad(C, format!("job {job} has no results to insert: it was canceled"))) };
+        // The count first: the scan for repeats takes time that grows with its square.
+        if chosen.len() > all.len() {
+            return Err(list_error());
+        }
         let unique = chosen.iter().enumerate().all(|(i, id)| !chosen.get(..i).unwrap_or_default().contains(id));
         // In the provider's order, whatever order they were listed in.
         let picked: Vec<Variation> = all.iter().filter(|v| chosen.contains(&v.style)).cloned().collect();
@@ -454,14 +465,16 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let src = image_rect(&image).ok_or_else(stale)?;
     let unit = image.xf.determinant().abs().sqrt();
     // Each chosen variation's box over the image: the image's box and the variation's painted
-    // bounds, which may reach past it.
+    // bounds, which may reach past it. A square cap's corner lies half the width along the path
+    // and half across it from the end, so up to √2 times half the width past it on an axis.
     let boxes: Vec<Rect> = picked
         .iter()
         .map(|v| {
             v.paths
                 .iter()
                 .filter_map(|vp| {
-                    let half = vp.stroke.map_or(0.0, |(_, w)| w * unit / 2.0);
+                    let reach = if vp.square_caps { std::f64::consts::SQRT_2 } else { 1.0 };
+                    let half = vp.stroke.map_or(0.0, |(_, w)| w * unit / 2.0 * reach);
                     vp.path.transformed(image.xf).bounds().map(|b| b.inflate(half, half))
                 })
                 .fold(src, |a, b| a.union(b))
@@ -540,13 +553,26 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let top = boxes.iter().map(|b| b.y0).fold(src.y0, f64::min);
     let bottom = boxes.iter().map(|b| b.y1).fold(src.y1, f64::max);
     obstacles.retain(|o| o.y0 < bottom && top < o.y1);
+    // By their left edges. The row only moves right, so only the objects between the row's left
+    // and right edges are looked at: those it has passed are dropped, and the next ones join as
+    // the row reaches them.
+    obstacles.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+    let mut joined = 0;
+    let mut near: Vec<Rect> = vec![];
     let mut x0 = src.x1 + GAP;
     let mut placed = false;
     // Each move takes one box past one obstacle for good, as the row only moves right.
     for _ in 0..=obstacles.len() * boxes.len() {
+        let at = row(x0);
+        let left = at.iter().map(|r| r.x0).fold(f64::INFINITY, f64::min);
+        let right = at.iter().map(|r| r.x1).fold(f64::NEG_INFINITY, f64::max);
+        while let Some(o) = obstacles.get(joined).filter(|o| o.x0 < right) {
+            near.push(*o);
+            joined += 1;
+        }
+        near.retain(|o| o.x1 > left);
         // The first box in the way, moved past the rightmost object it meets.
-        let shift =
-            row(x0).iter().find_map(|r| obstacles.iter().filter(|o| meets(o, r)).map(|o| o.x1).reduce(f64::max).map(|right| right + GAP - r.x0));
+        let shift = at.iter().find_map(|r| near.iter().filter(|o| meets(o, r)).map(|o| o.x1).reduce(f64::max).map(|right| right + GAP - r.x0));
         match shift {
             None => {
                 placed = true;

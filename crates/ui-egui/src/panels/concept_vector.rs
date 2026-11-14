@@ -32,6 +32,9 @@ pub const ID: &str = "conceptVector";
 /// The UI command that opens the panel for the selected image.
 pub const OPEN: &str = "ui.conceptVector";
 
+/// The UI command of the panel's Cancel: it stops the styles being made.
+pub const CANCEL: &str = "ui.conceptVector.cancel";
+
 /// What the status bar says while styles are made.
 const LABEL: &str = "Making the Concept to Vector styles";
 
@@ -196,6 +199,17 @@ pub fn cancel(app: &mut VectorcraftApp) {
             app.ui.status.clear();
         }
     }
+}
+
+/// `ui.conceptVector.cancel`, the panel's Cancel: stops the styles being made, and says so in the
+/// status bar → `{cancelled: 0 or 1}`.
+pub fn cancel_run(app: &mut VectorcraftApp) -> Value {
+    if !app.concept_runs.busy() {
+        return json!({ "cancelled": 0 });
+    }
+    cancel(app);
+    app.status(vectorcraft_engine::EngineError::Cancelled.to_string());
+    json!({ "cancelled": 1 })
 }
 
 /// Each frame: makes the next part of a run made one part a frame, and keeps a finished run's
@@ -550,9 +564,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let (done, total) = (r.steps[0].load(Ordering::Relaxed), r.steps[1].load(Ordering::Relaxed));
         let frac = if total > 0 { done.min(total) as f32 / total as f32 } else { 0.0 };
         ui.add(egui::ProgressBar::new(frac).desired_height(6.0));
-        if widgets::flat_button(ui, "Cancel", 80.0).clicked() {
-            cancel(app);
-            app.status(vectorcraft_engine::EngineError::Cancelled.to_string());
+        if widgets::flat_button(ui, "Cancel", 80.0).clicked()
+            && let Err(e) = app.run(CANCEL, json!({}))
+        {
+            app.status(e);
         }
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
     } else {

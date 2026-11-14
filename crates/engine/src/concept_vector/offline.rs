@@ -113,16 +113,19 @@ pub(super) fn fit_within(img: tr::Raster, max: u64) -> tr::Raster {
         let (y0, y1) = (u64::from(y) * h / u64::from(nh), (u64::from(y + 1) * h / u64::from(nh)).max(u64::from(y) * h / u64::from(nh) + 1));
         for x in 0..nw {
             let (x0, x1) = (u64::from(x) * w / u64::from(nw), (u64::from(x + 1) * w / u64::from(nw)).max(u64::from(x) * w / u64::from(nw) + 1));
+            // Color weighted by alpha, so that a clear pixel does not darken the colors beside it;
+            // a box with nothing opaque in it is clear black.
             let mut sum = [0u64; 4];
             for sy in y0..y1.min(h) {
                 for sx in x0..x1.min(w) {
-                    for (s, v) in sum.iter_mut().zip(img.pixel(sx as u32, sy as u32)) {
-                        *s += u64::from(v);
-                    }
+                    let [r, g, b, a] = img.pixel(sx as u32, sy as u32).map(u64::from);
+                    sum = [sum[0] + r * a, sum[1] + g * a, sum[2] + b * a, sum[3] + a];
                 }
             }
             let n = ((y1.min(h) - y0) * (x1.min(w) - x0)).max(1);
-            rgba.extend(sum.map(|s| (s / n) as u8));
+            let alpha = sum[3];
+            let color = |s: u64| s.checked_div(alpha).map_or(0, |c| c.min(255) as u8);
+            rgba.extend([color(sum[0]), color(sum[1]), color(sum[2]), (alpha / n) as u8]);
         }
     }
     tr::Raster { width: nw, height: nh, rgba }
