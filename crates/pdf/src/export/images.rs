@@ -145,7 +145,8 @@ impl Exporter<'_> {
                 self.rgb_in_cmyk.images.insert(key.to_string());
             }
             let r = if cmyk_image {
-                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None)
+                let icc = out.cmyk_image_icc(blob);
+                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, icc.as_deref())
             } else {
                 crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles)
             };
@@ -192,7 +193,8 @@ impl Exporter<'_> {
         let doc = self.doc;
         let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
             let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
-            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha));
+            let icc = self.out.cmyk_image_icc(blob);
+            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), icc.as_deref());
             if let (Some(w), Some(_)) = (r.warning, &r.image) {
                 self.warn(w);
             }
@@ -314,10 +316,6 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(png)
 }
 
-/// Most pixels an image may have to be embedded: twice what the app reads (64 million), so every image
-/// it holds is still written.
-const MAX_EMBED_PIXELS: u64 = 1 << 27;
-
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
 /// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` allows it (not in
 /// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). Without `profiles`, an
@@ -328,7 +326,7 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
     let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
-    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_EMBED_PIXELS) {
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();

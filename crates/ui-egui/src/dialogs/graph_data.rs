@@ -32,6 +32,8 @@ const MAX_COLS: usize = MAX_GRAPH_SERIES + 1;
 const MIN_ROWS: usize = 8;
 const MIN_COLS: usize = 6;
 const MAX_CELL: usize = 256;
+/// The largest file Import Data reads, 1 MB (1,048,576 bytes), the same as Import Data Sets'.
+const MAX_IMPORT_BYTES: usize = 1 << 20;
 /// The Cell Style limits (Adjust column width and decimal digits).
 const MAX_DECIMALS: u64 = 10;
 const MAX_WIDTH: u64 = 20;
@@ -332,9 +334,16 @@ fn revert(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
 fn import(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt", "tsv", "csv"])], ..Default::default() };
     let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
-    // The button is off where files can't be read.
-    let Some(read) = app.services.read.as_ref() else { return Ok(()) };
-    let bytes = read(&path)?;
+    // One byte past the limit tells a larger file apart without reading all of it.
+    let bytes = match (&app.services.read_head, &app.services.read) {
+        (Some(read_head), _) => read_head(&path, MAX_IMPORT_BYTES + 1)?,
+        (None, Some(read)) => read(&path)?,
+        // The button is off where files can't be read.
+        (None, None) => return Ok(()),
+    };
+    if bytes.len() > MAX_IMPORT_BYTES {
+        return Err("the file is larger than 1 MB".into());
+    }
     replace_grid(d, grid_from_text(&decode(&bytes)));
     Ok(())
 }
@@ -525,6 +534,46 @@ mod tests {
         let p = data_from_grid(&grid);
         assert_eq!(p["rows"].as_array().unwrap().len(), MAX_ROWS - 1);
         assert_eq!(p["series"].as_array().unwrap().len(), MAX_COLS - 1);
+    }
+
+    /// Import Data reads a file no further than one byte past 1 MB where the host can read part of
+    /// a file: a larger file is refused with the sheet left as it was, and a file at the limit is
+    /// read. Where the host only reads whole files, a larger file is refused too.
+    #[test]
+    fn import_data_refuses_a_file_larger_than_its_limit() {
+        use std::{cell::RefCell, collections::HashMap, rc::Rc};
+        let (mut app, _) = app_with(",a\nQ1,1", "column");
+        open(&mut app).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let at_limit = [b"\tb\nQ2\t2\n".as_slice(), &vec![b' '; MAX_IMPORT_BYTES - 8]].concat();
+        let files: HashMap<String, Vec<u8>> =
+            [("/big.txt".to_string(), vec![b'1'; MAX_IMPORT_BYTES + 1]), ("/limit.txt".to_string(), at_limit)].into();
+        let files = Rc::new(files);
+        let picked = Rc::new(RefCell::new(String::new()));
+        let p = picked.clone();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(p.borrow().clone())));
+        app.services.read = Some(Box::new(|_: &str| Err("the whole file was read".to_string())));
+        let asked = Rc::new(RefCell::new(vec![]));
+        let (f, a) = (files.clone(), asked.clone());
+        app.services.read_head = Some(Box::new(move |path: &str, max: usize| {
+            a.borrow_mut().push(max);
+            Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
+        }));
+        let before = grid(&d);
+        *picked.borrow_mut() = "/big.txt".into();
+        assert_eq!(import(&mut app, &mut d), Err("the file is larger than 1 MB".to_string()));
+        assert_eq!(grid(&d), before, "the sheet is left as it was");
+        *picked.borrow_mut() = "/limit.txt".into();
+        import(&mut app, &mut d).unwrap();
+        assert_eq!((cell_at(&d, 0, 1), cell_at(&d, 1, 0)), ("b", "Q2"));
+        assert_eq!(*asked.borrow(), [MAX_IMPORT_BYTES + 1; 2], "each read stops one byte past the limit");
+        // A host that reads only whole files.
+        app.services.read_head = None;
+        let f = files.clone();
+        app.services.read = Some(Box::new(move |path: &str| Ok(f.get(path).ok_or("no such file")?.clone())));
+        *picked.borrow_mut() = "/big.txt".into();
+        assert_eq!(import(&mut app, &mut d), Err("the file is larger than 1 MB".to_string()));
+        assert_eq!(cell_at(&d, 0, 1), "b");
     }
 
     #[test]
