@@ -3608,6 +3608,10 @@ theme	Appearance	იერსახე
 	Add to Graphic Styles	გრაფიკულ სტილებში დამატება
 	Graphic Style Library	გრაფიკული სტილების ბიბლიოთეკა
 	Add Used Colors	გამოყენებული ფერების დამატება
+	Show Document Colors	დოკუმენტის ფერების ჩვენება
+	Document Colors	დოკუმენტის ფერები
+	Selection Colors	მონიშნულის ფერები
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ
 	Delete Swatch	ფერის ნიმუშის წაშლა
 	Duplicate Swatch	ფერის ნიმუშის დუბლირება
 	Merge Swatches	ფერის ნიმუშების შერწყმა

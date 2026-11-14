@@ -138,6 +138,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "color.gamutCheck",
     "color.harmony",
     "color.plates",
+    "color.used",
     "dataset.capture",
     "dataset.delete",
     "dataset.list",

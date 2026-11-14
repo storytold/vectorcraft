@@ -298,6 +298,16 @@ selects its row for the sliders and a drag moves the row without changing a colo
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
 
+`color.used {selection?, limit?}` lists the colors of the selection, or with nothing selected the colors of the art
+`select.all` takes, most used first, as `recolor.colors {}` counts them. Each entry adds `color`, the color in its own
+model as the paint commands take it, and `tint`, the percent of its global `swatch` it is, to three decimals. The
+swatch and tint come from the color's first linked use in paint order; a plain use goes before a gradient stop that
+mixes a spot ink with process inks, and a color only such stops link has no `swatch` here. `selection: false` reads
+the art `select.all` takes while something is selected, and the answer's `selection` says whether the colors are
+the selection's. `limit` keeps only the most used entries, and the answer's `uses` counts the uses of every color.
+The selection does not change. The Color Wheel panel's Show Document Colors row (`ui.colorWheel {documentColors:
+true}`) shows these colors.
+
 Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
 panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
 Clicking a swatch there runs `swatch.library.add {library, names: [name], apply}` (the active proxy, or the other

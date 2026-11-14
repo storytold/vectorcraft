@@ -113,6 +113,10 @@
 	Add to Selection	Zur Auswahl hinzufügen
 	Add to Swatches	Zu Farbfeldern hinzufügen
 	Add Used Colors	Verwendete Farben hinzufügen
+	Show Document Colors	Dokumentfarben einblenden
+	Document Colors	Dokumentfarben
+	Selection Colors	Farben der Auswahl
+@plural	Used {n} time|Used {n} times	{n}-mal verwendet|{n}-mal verwendet
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
 	Adjust Adjoining Width Points	Angrenzende Breitenpunkte anpassen

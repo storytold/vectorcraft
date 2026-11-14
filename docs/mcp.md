@@ -625,6 +625,10 @@ strip at its right) in place of the wheel, as the panel menu's Box View and Box 
 shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
 the preferences.
+`ui.colorWheel {"documentColors": true}` shows the Color Wheel panel's row of the colors the selection uses, or with
+nothing selected the colors of the art `select.all` takes, in the order `color.used {}` lists them. A click on a color
+applies it to the active proxy, keeping its link to a global swatch. The answer includes `documentColors`
+with the other settings, and the setting is kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

@@ -140,6 +140,10 @@
 	Add Selected Artwork as One Asset	Adicionar Arte Selecionada como Um Ativo
 	Add Spine Point	Adicionar Ponto de Coluna
 	Add Used Colors	Adicionar Cores Usadas
+	Show Document Colors	Mostrar Cores do Documento
+	Document Colors	Cores do Documento
+	Selection Colors	Cores da Seleção
+@plural	Used {n} time|Used {n} times	Usada {n} vez|Usada {n} vezes
 	Add to Graphic Styles	Adicionar aos Estilos Gráficos
 	Add to Profiles	Adicionar aos Perfis
 	Add to Profiles…	Adicionar aos Perfis…

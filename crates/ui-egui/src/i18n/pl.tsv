@@ -3911,6 +3911,10 @@ theme	Appearance	Wygląd
 	Add to Graphic Styles	Dodaj do stylów graficznych
 	Graphic Style Library	Biblioteka stylów graficznych
 	Add Used Colors	Dodaj użyte kolory
+	Show Document Colors	Pokaż kolory dokumentu
+	Document Colors	Kolory dokumentu
+	Selection Colors	Kolory zaznaczenia
+@plural	Used {n} time|Used {n} times	Użyty {n} raz|Użyty {n} razy|Użyty {n} razy
 	Delete Swatch	Usuń próbkę
 	Duplicate Swatch	Powiel próbkę
 	Merge Swatches	Scal próbki

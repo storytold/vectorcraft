@@ -11,8 +11,16 @@
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//!
+//! The panel menu's Show Document Colors adds a row under the wheel or the box with the colors
+//! of the selection, or with nothing selected of the art Select All takes, most used first
+//! (`color.used`). A click on one applies it as a pick does. The active proxy and a selected
+//! gradient stop keep its swatch link; a freeform point takes the color alone.
 
-use egui::{Ui, UiBuilder, vec2};
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+
+use egui::{Rect, Sense, Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms};
@@ -23,6 +31,7 @@ use super::color::{Target, apply, wheel_target};
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::color_picker::Channel;
+use crate::theme::Tokens;
 use crate::widgets::{self, FieldAxis, Live, SliderValue, menu_item};
 
 pub const ID: &str = "colorWheel";
@@ -67,6 +76,13 @@ pub struct Settings {
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
+    /// Show Document Colors: the row of the colors the art uses, under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub document_colors: bool,
+}
+
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(<Value as Deserialize>::deserialize(d)?.as_bool().unwrap_or_default())
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -90,11 +106,12 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?}`: show the wheel or the box, and pick the box's channel. Keys
+/// `ui.colorWheel {view?, channel?, documentColors?}`: show the wheel or the box, pick the box's
+/// channel, and show or hide the Show Document Colors row. Keys
 /// left out keep their values; params that are not an object, another key or a value off the list
 /// are an error and change nothing. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    const KEYS: [&str; 2] = ["view", "channel"];
+    const KEYS: [&str; 3] = ["view", "channel", "documentColors"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -112,6 +129,9 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     match p.get("channel") {
         None | Some(Value::Null) => {}
         Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
+    }
+    if let Some(on) = crate::menus::opt_bool(p, "documentColors")? {
+        set.document_colors = on;
     }
     app.ui.color_wheel = set;
     Ok(json!(app.ui.color_wheel))
@@ -134,6 +154,151 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+    ui.separator();
+    if menu_item(ui, tl!("Show Document Colors"), true, set.document_colors) {
+        command(app, &json!({ "documentColors": !set.document_colors })).ok();
+    }
+}
+
+/// Panel state: the Show Document Colors row's colors, with the [`UsedKey`] they were read for.
+const USED: &str = "color-wheel-used";
+/// The most chips the row asks `color.used` for.
+const MAX_CHIPS: usize = 128;
+/// Above this many color uses, an edit makes the row read the colors again at most once every
+/// [`LARGE_EVERY`] seconds; a change of document or selection still reads them at once.
+const LARGE_USES: u64 = 5_000;
+const LARGE_EVERY: f64 = 0.5;
+
+/// What the Show Document Colors row depends on: the document, its revision, and the number of
+/// selected objects with a hash of their ids.
+type UsedKey = Option<(u64, u64, usize, u64)>;
+
+/// The row's colors as last read, kept in the panel state behind an `Arc`, so a frame that reads
+/// them back copies no list.
+#[derive(Debug, PartialEq)]
+struct UsedCache {
+    key: UsedKey,
+    /// The frame time the colors were read at.
+    at: f64,
+    /// The uses of every color (`color.used`'s `uses`).
+    uses: u64,
+    /// Whether the colors are the selection's.
+    selected: bool,
+    colors: Vec<Used>,
+}
+
+/// A color of the row: the color, its hex value, how many times the art uses it, and the global
+/// swatch it is linked to with the tint (0..1) of that swatch it is.
+#[derive(Clone, Debug, PartialEq)]
+struct Used {
+    color: Color,
+    hex: String,
+    count: u64,
+    link: Option<(String, f32)>,
+}
+
+impl Used {
+    /// The paint the color applies and drags: linked to its swatch at its tint when it has one.
+    fn paint(&self) -> Paint {
+        match &self.link {
+            Some((name, tint)) => Paint::Solid { color: self.color, swatch: Some(name.clone()), tint: *tint },
+            None => Paint::solid(self.color),
+        }
+    }
+}
+
+/// The colors the row shows and whether they are the selection's, read with `color.used` once per
+/// document revision and selection and kept as they are while an interaction is in progress (a
+/// preview raises the revision on every frame of a drag). In art with more than [`LARGE_USES`]
+/// color uses, an edit reads them again only after [`LARGE_EVERY`] seconds.
+fn used_colors(app: &mut VectorcraftApp, ui: &Ui) -> Arc<UsedCache> {
+    let key: UsedKey = app.session.active().map(|d| {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        d.selection.objects.hash(&mut h);
+        (d.uid, d.revision, d.selection.objects.len(), h.finish())
+    });
+    let now = ui.input(|i| i.time);
+    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED) {
+        if cache.key == key || app.session.in_interaction() {
+            return cache;
+        }
+        let scope = |k: &UsedKey| k.map(|(doc, _, n, h)| (doc, n, h));
+        let wait = LARGE_EVERY - (now - cache.at);
+        if cache.uses > LARGE_USES && scope(&cache.key) == scope(&key) && wait > 0.0 {
+            ui.ctx().request_repaint_after_secs(wait as f32);
+            return cache;
+        }
+    }
+    let r = key.as_ref().and_then(|_| app.session.execute("color.used", &json!({ "limit": MAX_CHIPS })).ok());
+    let colors: Vec<Used> = r
+        .as_ref()
+        .and_then(|r| r["colors"].as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| {
+                    let color = serde_json::from_value::<Color>(c["color"].clone()).ok()?;
+                    let hex = c["hex"].as_str().map_or_else(|| color.to_hex(), str::to_string);
+                    let link = c["swatch"].as_str().zip(c["tint"].as_f64()).map(|(n, t)| (n.to_string(), (t / 100.0).clamp(0.0, 1.0) as f32));
+                    Some(Used { color, hex, count: c["count"].as_u64().unwrap_or(0), link })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let selected = r.as_ref().is_some_and(|r| r["selection"] == true);
+    let uses = r.as_ref().and_then(|r| r["uses"].as_u64()).unwrap_or(0);
+    let cache = Arc::new(UsedCache { key, at: now, uses, selected, colors });
+    set_pstate(ui.ctx(), USED, Some(Arc::clone(&cache)));
+    cache
+}
+
+/// The Show Document Colors row: a heading (Selection Colors or Document Colors) and the colors,
+/// most used first, as many as fit in one row. Returns the color clicked.
+fn document_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) -> Option<Used> {
+    let cache = used_colors(app, ui);
+    widgets::subheader(ui, if cache.selected { tl!("Selection Colors") } else { tl!("Document Colors") });
+    let t = Tokens::get(ui.ctx());
+    let width = ui.available_width();
+    // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge, as
+    // in the Recent Colors row.
+    let per_row = (((width - 21.0) / 19.0).floor().max(0.0) as usize + 1).max(1);
+    let (r, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
+    ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    let mut chosen = None;
+    for (i, u) in cache.colors.iter().take(per_row).enumerate() {
+        let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
+        let resp = ui.interact(cell, ui.scope_id().with(("document-color", i)), Sense::click_and_drag());
+        let paint = u.paint();
+        widgets::drag_source(ui, &resp, || widgets::PanelDrag::paint(paint.clone()));
+        widgets::swatch_tile(ui, cell, &paint, false, resp.hovered());
+        let tip = format!("{}\n{}", u.hex, crate::i18n::tn(u.count, "Used {n} time", "Used {n} times"));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
+        if resp.on_hover_text(&tip).clicked() {
+            chosen = Some(u.clone());
+        }
+    }
+    chosen
+}
+
+/// Apply a color of the Show Document Colors row as a pick does, to the inactive proxy when
+/// `behind`. A color linked to a swatch stays linked at its tint, except at a freeform gradient's
+/// point, which takes the color alone.
+fn apply_used(app: &mut VectorcraftApp, tgt: &Target, u: &Used, behind: bool) {
+    let Some((name, tint)) = &u.link else { return apply(app, tgt, u.color, Live::Released, behind) };
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } if !behind => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.set_color(u.color, Some((name.clone(), *tint)));
+            }
+            super::gradient::set_stops(app, &stops, None, Live::Released);
+        }
+        Target::Point { .. } if !behind => apply(app, tgt, u.color, Live::Released, behind),
+        _ => {
+            let mut p = super::paint_params(&u.paint());
+            p["focus"] = json!(!behind);
+            super::live_run(app, "Color", super::proxy_cmd(app, behind), p, Live::Released);
+        }
+    }
 }
 
 /// The display values of HSB `hsb` in `ch`'s space, from 0 to 1: hue, saturation and brightness,
@@ -344,8 +509,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
-    let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
+    if app.ui.color_wheel.document_colors
+        && let Some(u) = document_colors_row(app, ui)
+    {
+        apply_used(app, &tgt, &u, behind);
+        return;
+    }
+    let Some((hsb, phase)) = pick else { return };
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
     let c = stored(&cms, hsb, replaced(app, &tgt, behind).as_ref(), cmyk_doc);
     apply(app, &tgt, c, phase, behind);

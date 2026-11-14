@@ -88,6 +88,10 @@
 	Add to Selection	添加到选区
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
+	Show Document Colors	显示文档颜色
+	Document Colors	文档颜色
+	Selection Colors	所选对象的颜色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Additional Plug-ins Folder	附加增效工具文件夹
 	Additional Fonts Folder	附加字体文件夹
 	Adjust Adjoining Width Points	调整相邻宽度点

@@ -1046,6 +1046,10 @@ digits	Malayalam	マラヤーラム数字
 	Add Selected Artwork as One Asset	選択したアートワークを 1 つのアセットとして追加
 	Add Spine Point	スパインポイントを追加
 	Add Used Colors	使用中のカラーを追加
+	Show Document Colors	ドキュメントのカラーを表示
+	Document Colors	ドキュメントのカラー
+	Selection Colors	選択範囲のカラー
+@plural	Used {n} time|Used {n} times	{n} 回使用
 	Add to Graphic Styles	グラフィックスタイルに追加
 	Add to Profiles	プロファイルに追加
 	Add to Profiles…	プロファイルに追加…

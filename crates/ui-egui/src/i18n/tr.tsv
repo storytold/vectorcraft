@@ -123,6 +123,10 @@
 	Add to Selection	Seçime Ekle
 	Add to Swatches	Renk Örneklerine Ekle
 	Add Used Colors	Kullanılan Renkleri Ekle
+	Show Document Colors	Belge Renklerini Göster
+	Document Colors	Belge Renkleri
+	Selection Colors	Seçim Renkleri
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
 	Additional Plug-ins Folder	Ek Eklentiler Klasörü
 	Additional Fonts Folder	Ek Yazı Tipleri Klasörü
 	Adjust Adjoining Width Points	Bitişik Genişlik Noktalarını Ayarlayın

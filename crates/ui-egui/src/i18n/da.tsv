@@ -3769,6 +3769,10 @@ theme	Appearance	Udseende
 	Add to Graphic Styles	Føj til grafikstile
 	Graphic Style Library	Grafikstilbibliotek
 	Add Used Colors	Tilføj anvendte farver
+	Show Document Colors	Vis dokumentfarver
+	Document Colors	Dokumentfarver
+	Selection Colors	Markeringens farver
+@plural	Used {n} time|Used {n} times	Brugt {n} gang|Brugt {n} gange
 	Delete Swatch	Slet farveprøve
 	Duplicate Swatch	Duplikér farveprøve
 	Merge Swatches	Flet farveprøver

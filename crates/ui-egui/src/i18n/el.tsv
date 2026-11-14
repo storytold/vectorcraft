@@ -118,6 +118,10 @@
 	Add to Selection	Προσθήκη στην επιλογή
 	Add to Swatches	Προσθήκη στα δείγματα χρωμάτων
 	Add Used Colors	Προσθήκη των χρησιμοποιημένων χρωμάτων
+	Show Document Colors	Εμφάνιση χρωμάτων εγγράφου
+	Document Colors	Χρώματα εγγράφου
+	Selection Colors	Χρώματα επιλογής
+@plural	Used {n} time|Used {n} times	Χρησιμοποιείται {n} φορά|Χρησιμοποιείται {n} φορές
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
 	Adjust Adjoining Width Points	Ρύθμιση γειτονικών σημείων πλάτους

@@ -126,6 +126,10 @@
 	Add to Selection	Lägg till i markering
 	Add to Swatches	Lägg till i färgrutor
 	Add Used Colors	Lägg till använda färger
+	Show Document Colors	Visa dokumentfärger
+	Document Colors	Dokumentfärger
+	Selection Colors	Markeringens färger
+@plural	Used {n} time|Used {n} times	Används {n} gång|Används {n} gånger
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
