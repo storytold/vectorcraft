@@ -1173,6 +1173,42 @@ fn placing_symbols_keeps_dynamic_instances_changes() {
     assert!(fills.contains(&(10.0, 60.0, Paint::solid(Color::WHITE))), "{fills:?}");
 }
 
+/// An instance whose fill stains its symbol's art places the art in its stained colors, with the
+/// art's effects applied after the stain: a Transform moves the stained square and an Invert
+/// inverts the stained color.
+#[test]
+fn placing_symbols_keeps_the_instances_stain() {
+    use vectorcraft_geom::Affine;
+    let blue = Color::rgb8(30, 90, 220);
+    let mut inst = instance(900, "Mark", Affine::IDENTITY);
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    inst.appearance.items.retain(|i| i.is_fill());
+    if let AppearanceItem::Fill(f) = &mut inst.appearance.items[0] {
+        f.opacity = 0.5;
+    }
+    let square =
+        Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+    let stained = vectorcraft_doc::symbol_overrides::instance_art(&square, &inst).appearance.fill_paint().color().unwrap();
+    assert_ne!(stained.to_hex(), blue.to_hex());
+    let [r, g, b] = stained.to_rgb();
+    let inverted = Color::rgb(1.0 - r, 1.0 - g, 1.0 - b);
+    for (id, params, want) in [("distort.transform", json!({"moveH": 100.0}), stained), (crate::addons::color::INVERT, json!({}), inverted)] {
+        let mut art = square.clone();
+        art.appearance.effects.push(fx(id, params));
+        let mut d = doc_with(inst.clone());
+        add_symbol(&mut d, "Mark", art);
+        let out = bake_document_placing_symbols(&d, true).unwrap();
+        assert!(!is_instance(&out, 900), "{id}: the instance is placed");
+        let mut fills = vec![];
+        out.node(NodeId(900)).unwrap().walk(&mut |n| {
+            if n.path_data().is_some() {
+                fills.extend(n.appearance.fill_paint().color().map(|c| c.to_hex()));
+            }
+        });
+        assert_eq!(fills, [want.to_hex()], "{id}");
+    }
+}
+
 fn is_instance(d: &Document, id: u64) -> bool {
     d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
 }

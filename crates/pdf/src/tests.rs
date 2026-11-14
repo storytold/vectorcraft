@@ -356,6 +356,31 @@ fn a_stained_instance_keeps_its_stain() {
     }
 }
 
+/// A stained instance of a symbol whose art has a live effect is written in its stained colors,
+/// where the effect draws the art.
+#[test]
+fn a_stained_instance_keeps_its_stain_when_its_art_has_effects() {
+    let blue = Color::rgb8(30, 90, 220);
+    let square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), blue);
+    let half = stained_instance("Moved", Affine::IDENTITY, 0.5, true);
+    let want = vectorcraft_brush::instance_art(&square, &half).appearance.fill_paint().color().unwrap().to_hex();
+    assert_ne!(want, blue.to_hex(), "the stain changes the color");
+    let mut art = square;
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    let mut d = doc(200.0, 100.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    add(&mut d, half);
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
+    assert_eq!(leaf_fills(&out), [want]);
+}
+
 /// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
 /// objects, opacity-mask art included, as on the canvas: of two instances whose art placed through
 /// the guides holds about 9,009,000 objects each (a gradient square in all nine cells, each copy

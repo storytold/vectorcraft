@@ -210,8 +210,8 @@ fn holds_placed_symbol(n: &Node) -> bool {
 }
 
 /// Symbol instance `n`, while [`bake_document_placing_symbols`] bakes and its symbol is one it
-/// places, as the art it draws: the symbol's art with the instance's own appearance changes
-/// ([`vectorcraft_doc::symbol_overrides::dynamic_art`]), placed by the instance as the exporters
+/// places, as the art it draws: the symbol's art with the instance's own appearance changes and
+/// its stain ([`vectorcraft_doc::symbol_overrides::instance_art`]), placed by the instance as the exporters
 /// place it, in a group with the instance's id, name, visibility, transparency, opacity mask and
 /// raster effects. The art is placed before its effects are baked, as the canvas draws it, so an
 /// instance that scales its art does not scale what its effects do. `None` for other objects,
@@ -226,7 +226,7 @@ fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
         return None;
     }
     let sym = d.symbols.iter().find(|s| s.name == *symbol)?;
-    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+    let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
     let most = match d.symbol_slice_map(symbol, *xf) {
         Some(m) if clip => m.most_placed(&art, d),
         Some(m) => m.most_placed_unclipped(&art, d),
