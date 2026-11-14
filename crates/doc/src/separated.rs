@@ -181,9 +181,15 @@ impl Separated {
     /// prints; `None` when it can't be written.
     pub fn plate_png(&self, plate: &str, own: &dyn Fn(&str) -> bool, equivalent: &dyn Fn(&InkPlate) -> [f32; 4]) -> Option<ImageBlob> {
         let gray: Vec<u8> = self.coverage_as(plate, own, equivalent).into_iter().map(|v| 255 - v).collect();
-        let img = image::GrayImage::from_raw(self.width, self.height, gray)?;
-        let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Gray,
+            craft_image_codecs::SampleType::U8,
+            gray,
+        )
+        .ok()?;
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         Some(ImageBlob::png(png))
     }
 
@@ -258,34 +264,61 @@ impl ImageBlob {
     /// [`Self::separated_tiff`], noting `clip` too, the clipping path its file draws it through, in
     /// its pixel space ([`Self::separated_clip`]).
     pub fn separated_tiff_clipped(s: &Separated, ppi: Option<(f64, f64)>, files: &[PlateFile], clip: Option<&PathData>) -> Option<Self> {
-        use tiff::encoder::{Compression, Rational, TiffEncoder, colortype, compression::DeflateLevel};
-        use tiff::tags::{ResolutionUnit, Tag};
+        use craft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value, tags};
+        use flate2::{Compression, write::ZlibEncoder};
+        use std::io::Write as _;
         let ppi = ppi.filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0));
-        // Ten-thousandths of a pixel per inch.
-        let r = |v: f64| Rational { n: (v * 10_000.0).round() as u32, d: 10_000 };
-        let mut out = Cursor::new(Vec::new());
-        let mut enc = TiffEncoder::new(&mut out).ok()?.with_compression(Compression::Deflate(DeflateLevel::Balanced));
-        let mut img = enc.new_image::<colortype::CMYK8>(s.width, s.height).ok()?;
+        let deflate = |raw: &[u8]| -> Option<Vec<u8>> {
+            let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(raw).ok()?;
+            enc.finish().ok()
+        };
+        let mut ifds = Vec::with_capacity(1 + s.plates.len());
+        let mut comp_ifd = IfdBuilder::new();
+        comp_ifd
+            .set(tags::IMAGE_WIDTH, Value::Long(vec![s.width]))
+            .set(tags::IMAGE_LENGTH, Value::Long(vec![s.height]))
+            .set(tags::BITS_PER_SAMPLE, Value::Short(vec![8; 4]))
+            .set(tags::COMPRESSION, Value::Short(vec![8]))
+            .set(tags::PHOTOMETRIC, Value::Short(vec![5]))
+            .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![4]))
+            .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+            .set(tags::SAMPLE_FORMAT, Value::Short(vec![1; 4]))
+            .set_image(ImageData::Strips { rows_per_strip: s.height.max(1), strips: vec![deflate(&s.composite().data)?] });
         if let Some((x, y)) = ppi {
-            img.encoder().write_tag(Tag::XResolution, r(x)).ok()?;
-            img.encoder().write_tag(Tag::YResolution, r(y)).ok()?;
-            img.encoder().write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch).ok()?;
+            // Ten-thousandths of a pixel per inch.
+            let r = |v: f64| ((v * 10_000.0).round() as u32, 10_000);
+            comp_ifd
+                .set(tags::X_RESOLUTION, Value::Rational(vec![r(x)]))
+                .set(tags::Y_RESOLUTION, Value::Rational(vec![r(y)]))
+                .set(tags::RESOLUTION_UNIT, Value::Short(vec![2]));
         }
         // One line for the plate files, one for the clipping path.
         let lines: Vec<String> =
             [(!files.is_empty()).then(|| files_description(files)), clip.and_then(clip_description)].into_iter().flatten().collect();
         if !lines.is_empty() {
-            img.encoder().write_tag(Tag::ImageDescription, lines.join("\n").as_str()).ok()?;
+            comp_ifd.set(tags::IMAGE_DESCRIPTION, Value::Ascii(lines.join("\n")));
         }
-        img.write_data(&s.composite().data).ok()?;
+        ifds.push(comp_ifd);
         for p in &s.plates {
             // White is no ink, so a viewer that shows a plate shows it as it prints.
-            let mut img = enc.new_image::<colortype::Gray8>(s.width, s.height).ok()?;
-            img.encoder().write_tag(Tag::ImageDescription, description(p).as_str()).ok()?;
             let inverted: Vec<u8> = p.data.iter().map(|v| 255 - v).collect();
-            img.write_data(&inverted).ok()?;
+            let mut p_ifd = IfdBuilder::new();
+            p_ifd
+                .set(tags::IMAGE_WIDTH, Value::Long(vec![s.width]))
+                .set(tags::IMAGE_LENGTH, Value::Long(vec![s.height]))
+                .set(tags::BITS_PER_SAMPLE, Value::Short(vec![8]))
+                .set(tags::COMPRESSION, Value::Short(vec![8]))
+                .set(tags::PHOTOMETRIC, Value::Short(vec![1]))
+                .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![1]))
+                .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+                .set(tags::SAMPLE_FORMAT, Value::Short(vec![1]))
+                .set(tags::IMAGE_DESCRIPTION, Value::Ascii(description(p)))
+                .set_image(ImageData::Strips { rows_per_strip: s.height.max(1), strips: vec![deflate(&inverted)?] });
+            ifds.push(p_ifd);
         }
-        Some(Self::new("image/tiff", out.into_inner()))
+        let bytes = TiffWriter::new(ByteOrder::Little, false).write(&ifds).ok()?;
+        Some(Self::new("image/tiff", bytes))
     }
 
     /// Does the image hold plates ([`ImageBlob::separated_tiff`]), at most [`MAX_PLATES`] of them?
@@ -293,14 +326,13 @@ impl ImageBlob {
     /// CMYK image of its composite only, as [`Self::separated`] refuses it. Reads only the TIFF's
     /// directories, at most [`MAX_DIRECTORIES`].
     pub fn is_separated(&self) -> bool {
-        let Some((_, mut d)) = crate::cmyk::tiff(&self.bytes) else { return false };
-        let (mut plates, mut directories) = (0usize, 1usize);
-        while d.more_images() {
-            directories += 1;
-            if directories > MAX_DIRECTORIES || d.next_image().is_err() {
-                return false;
-            }
-            if d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().is_some_and(|s| s.starts_with(MARK)) {
+        let Some(tiff) = crate::cmyk::parse_tiff(&self.bytes) else { return false };
+        if tiff.ifds.len() > MAX_DIRECTORIES {
+            return false;
+        }
+        let mut plates = 0usize;
+        for ifd in tiff.ifds.iter().skip(1) {
+            if ifd.string(craft_tiff::tags::IMAGE_DESCRIPTION).is_some_and(|s| s.starts_with(MARK)) {
                 plates += 1;
                 if plates > MAX_PLATES {
                     return false;
@@ -313,16 +345,16 @@ impl ImageBlob {
     /// The plate files of their own a separated image was read from, as they were then; none for
     /// other images. Reads only the TIFF's first directory.
     pub fn plate_files(&self) -> Vec<PlateFile> {
-        let Some((_, mut d)) = crate::cmyk::tiff(&self.bytes) else { return vec![] };
-        d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().as_deref().map(parse_files).unwrap_or_default()
+        let Some(tiff) = crate::cmyk::parse_tiff(&self.bytes) else { return vec![] };
+        tiff.ifds.first().and_then(|ifd| ifd.string(craft_tiff::tags::IMAGE_DESCRIPTION)).map(parse_files).unwrap_or_default()
     }
 
     /// The clipping path a separated image's file draws it through, in its pixel space, as
     /// [`Self::separated_tiff_clipped`] noted it; `None` for other images. Reads only the TIFF's
     /// first directory.
     pub fn separated_clip(&self) -> Option<PathData> {
-        let (_, mut d) = crate::cmyk::tiff(&self.bytes)?;
-        let text = d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok()?;
+        let tiff = crate::cmyk::parse_tiff(&self.bytes)?;
+        let text = tiff.ifds.first()?.string(craft_tiff::tags::IMAGE_DESCRIPTION)?;
         let json = unhex(text.lines().find_map(|l| l.strip_prefix(CLIP_MARK))?, MAX_CLIP)?;
         serde_json::from_str(&json).ok()
     }
@@ -333,13 +365,13 @@ impl ImageBlob {
         if !self.is_separated() {
             return vec![];
         }
-        let Some((_, mut d)) = crate::cmyk::tiff(&self.bytes) else { return vec![] };
+        let Some(tiff) = crate::cmyk::parse_tiff(&self.bytes) else { return vec![] };
         let mut inks = vec![];
-        while d.more_images() && inks.len() < MAX_PLATES {
-            if d.next_image().is_err() {
+        for ifd in tiff.ifds.iter().skip(1) {
+            if inks.len() >= MAX_PLATES {
                 break;
             }
-            let plate = d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().as_deref().and_then(parse_description);
+            let plate = ifd.string(craft_tiff::tags::IMAGE_DESCRIPTION).and_then(parse_description);
             inks.extend(plate.filter(|(name, _)| !PROCESS_PLATES.contains(&name.as_str())));
         }
         inks
@@ -369,27 +401,41 @@ impl ImageBlob {
 
 /// The plates of TIFF `bytes`, each the size of its first image.
 fn read_plates(bytes: &[u8]) -> Option<Separated> {
-    let (_, mut d) = crate::cmyk::tiff(bytes)?;
-    let (w, h) = d.dimensions().ok()?;
-    let n = usize::try_from(u64::from(w) * u64::from(h)).ok()?;
+    let tiff = crate::cmyk::parse_tiff(bytes)?;
+    if tiff.ifds.len() > MAX_DIRECTORIES {
+        return None;
+    }
+    let first = tiff.ifds.first()?.image().ok()?;
+    let (w, h) = (first.width, first.height);
     let mut plates = vec![];
-    // Every plate is read: a file with more than [`MAX_PLATES`] is refused ([`Separated::fits`]),
-    // not cut short, and so is one with more than [`MAX_DIRECTORIES`] directories.
-    let mut directories = 1usize;
-    while d.more_images() {
-        directories += 1;
-        if directories > MAX_DIRECTORIES {
+    for (page, ifd) in tiff.ifds.iter().enumerate().skip(1) {
+        if plates.len() >= MAX_PLATES {
             return None;
         }
-        d.next_image().ok()?;
-        let Some((name, cmyk)) = d.get_tag_ascii_string(tiff::tags::Tag::ImageDescription).ok().as_deref().and_then(parse_description) else {
+        let Some((name, cmyk)) = ifd.string(craft_tiff::tags::IMAGE_DESCRIPTION).and_then(parse_description) else {
             continue;
         };
-        // Checked before the plate is decoded.
-        if d.dimensions().ok()? != (w, h) || !matches!(d.colortype().ok()?, tiff::ColorType::Gray(8)) || !Separated::fits(w, h, plates.len() + 1) {
+        let info = ifd.image().ok()?;
+        if (info.width, info.height) != (w, h)
+            || !matches!(info.photometric, 0 | 1)
+            || info.samples_per_pixel != 1
+            || info.bits_per_sample.first().copied() != Some(8)
+            || !Separated::fits(w, h, plates.len() + 1)
+        {
             return None;
         }
-        let data = crate::cmyk::read_samples(&mut d, n, 1)?.into_iter().map(|v| 255 - v).collect();
+        let mut opts = craft_image_codecs::DecodeOptions::default();
+        opts.keep_orientation = true;
+        opts.limits.max_pixels = crate::MAX_RASTER_ALLOC / 4;
+        opts.limits.max_alloc = crate::MAX_RASTER_ALLOC;
+        let decoded = craft_image_codecs::decode_tiff_page(bytes, page, &opts).ok()?;
+        if decoded.dimensions() != (w, h)
+            || decoded.layout() != craft_image_codecs::ChannelLayout::Gray
+            || decoded.sample_type() != craft_image_codecs::SampleType::U8
+        {
+            return None;
+        }
+        let data = decoded.into_data().into_iter().map(|v| 255 - v).collect();
         plates.push(InkPlate { name, cmyk, data });
     }
     Separated::new(w, h, plates)
@@ -465,19 +511,46 @@ mod tests {
         assert_eq!(ImageBlob::separated_tiff(&s, None, &files).unwrap().separated_clip(), None);
     }
 
+    fn test_ifd_cmyk() -> craft_tiff::IfdBuilder {
+        use craft_tiff::{IfdBuilder, ImageData, Value, tags};
+        let mut ifd = IfdBuilder::new();
+        ifd.set(tags::IMAGE_WIDTH, Value::Long(vec![1]))
+            .set(tags::IMAGE_LENGTH, Value::Long(vec![1]))
+            .set(tags::BITS_PER_SAMPLE, Value::Short(vec![8; 4]))
+            .set(tags::COMPRESSION, Value::Short(vec![1]))
+            .set(tags::PHOTOMETRIC, Value::Short(vec![5]))
+            .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![4]))
+            .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+            .set_image(ImageData::Strips { rows_per_strip: 1, strips: vec![vec![0, 0, 0, 0]] });
+        ifd
+    }
+
+    fn test_ifd_gray(desc: Option<String>) -> craft_tiff::IfdBuilder {
+        use craft_tiff::{IfdBuilder, ImageData, Value, tags};
+        let mut ifd = IfdBuilder::new();
+        ifd.set(tags::IMAGE_WIDTH, Value::Long(vec![1]))
+            .set(tags::IMAGE_LENGTH, Value::Long(vec![1]))
+            .set(tags::BITS_PER_SAMPLE, Value::Short(vec![8]))
+            .set(tags::COMPRESSION, Value::Short(vec![1]))
+            .set(tags::PHOTOMETRIC, Value::Short(vec![1]))
+            .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![1]))
+            .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+            .set_image(ImageData::Strips { rows_per_strip: 1, strips: vec![vec![255]] });
+        if let Some(d) = desc {
+            ifd.set(tags::IMAGE_DESCRIPTION, Value::Ascii(d));
+        }
+        ifd
+    }
+
     #[test]
     fn a_tiff_with_more_plates_than_are_read_is_refused() {
-        use tiff::encoder::{TiffEncoder, colortype};
         let tiff = |plates: usize| {
-            let mut out = Cursor::new(Vec::new());
-            let mut enc = TiffEncoder::new(&mut out).unwrap();
-            enc.write_image::<colortype::CMYK8>(1, 1, &[0, 0, 0, 0]).unwrap();
+            let mut ifds = vec![test_ifd_cmyk()];
             for i in 0..plates {
-                let mut img = enc.new_image::<colortype::Gray8>(1, 1).unwrap();
-                img.encoder().write_tag(tiff::tags::Tag::ImageDescription, description(&plate(&format!("S{i}"), [0.0; 4], &[0])).as_str()).unwrap();
-                img.write_data(&[255]).unwrap();
+                ifds.push(test_ifd_gray(Some(description(&plate(&format!("S{i}"), [0.0; 4], &[0])))));
             }
-            ImageBlob::new("image/tiff", out.into_inner())
+            let bytes = craft_tiff::TiffWriter::new(craft_tiff::ByteOrder::Little, false).write(&ifds).unwrap();
+            ImageBlob::new("image/tiff", bytes)
         };
         assert_eq!(tiff(MAX_PLATES).separated().map(|s| s.plates.len()), Some(MAX_PLATES));
         let over = tiff(MAX_PLATES + 1);
@@ -488,19 +561,13 @@ mod tests {
 
     #[test]
     fn a_tiff_with_more_directories_than_a_composite_and_its_plates_is_refused() {
-        use tiff::encoder::{TiffEncoder, colortype};
         let tiff = |others: usize| {
-            let mut out = Cursor::new(Vec::new());
-            let mut enc = TiffEncoder::new(&mut out).unwrap();
-            enc.write_image::<colortype::CMYK8>(1, 1, &[0, 0, 0, 0]).unwrap();
-            let mut img = enc.new_image::<colortype::Gray8>(1, 1).unwrap();
-            img.encoder().write_tag(tiff::tags::Tag::ImageDescription, description(&plate("S", [0.0; 4], &[0])).as_str()).unwrap();
-            img.write_data(&[255]).unwrap();
-            // Directories that are not plates.
+            let mut ifds = vec![test_ifd_cmyk(), test_ifd_gray(Some(description(&plate("S", [0.0; 4], &[0]))))];
             for _ in 0..others {
-                enc.write_image::<colortype::Gray8>(1, 1, &[255]).unwrap();
+                ifds.push(test_ifd_gray(None));
             }
-            ImageBlob::new("image/tiff", out.into_inner())
+            let bytes = craft_tiff::TiffWriter::new(craft_tiff::ByteOrder::Little, false).write(&ifds).unwrap();
+            ImageBlob::new("image/tiff", bytes)
         };
         let most = tiff(MAX_PLATES - 1);
         assert!(most.is_separated() && most.separated().is_some());

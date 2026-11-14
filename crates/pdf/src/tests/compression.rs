@@ -6,7 +6,7 @@
 use std::io::Cursor;
 
 use craft_pdf::syntax::object::{Name, Object};
-use image::{DynamicImage, ImageFormat};
+use image::DynamicImage;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point};
@@ -15,7 +15,40 @@ use crate::*;
 
 fn encoded(img: DynamicImage, format: ImageFormat) -> Vec<u8> {
     let mut out = Vec::new();
-    img.write_to(&mut Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = (img).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -57,7 +90,7 @@ fn pdf(d: &Document, compression: Value) -> (String, Vec<String>) {
 
 #[test]
 fn images_above_the_threshold_are_resampled_to_the_target_resolution() {
-    let d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let d = doc(encoded(colour(), craft_image_codecs::Format::Png), "image/png");
     for method in ["average", "subsample", "bicubic"] {
         let (text, warnings) = pdf(&d, json!({"color": {"downsample": method, "ppi": 150, "abovePpi": 225}}));
         assert!(text.contains("/Width 150") && text.contains("/Height 150"), "{method}");
@@ -68,7 +101,7 @@ fn images_above_the_threshold_are_resampled_to_the_target_resolution() {
         assert!(pdf(&d, c.clone()).0.contains("/Width 600"), "{c}");
     }
     // Greyscale images take the greyscale settings.
-    let grey = doc(encoded(colour().grayscale(), ImageFormat::Png), "image/png");
+    let grey = doc(encoded(colour().grayscale(), craft_image_codecs::Format::Png), "image/png");
     let (text, _) = pdf(&grey, json!({"color": {"downsample": "bicubic", "ppi": 150}, "gray": {"downsample": "bicubic", "ppi": 100}}));
     assert!(text.contains("/Width 100") && text.contains("/DeviceGray"), "grey at 100 ppi");
 }
@@ -78,7 +111,7 @@ fn images_above_the_threshold_are_resampled_to_the_target_resolution() {
 #[test]
 fn resampled_images_keep_their_color_beside_clear_pixels() {
     let striped = image::RgbaImage::from_fn(600, 600, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) });
-    let d = doc(encoded(striped.into(), ImageFormat::Png), "image/png");
+    let d = doc(encoded(striped.into(), craft_image_codecs::Format::Png), "image/png");
     for method in ["average", "bicubic"] {
         let mut settings: PdfSettings =
             serde_json::from_value(json!({"compression": {"color": {"downsample": method, "ppi": 150, "abovePpi": 225, "compression": "zip"}}}))
@@ -126,7 +159,7 @@ fn image_sizes(pdf: &[u8]) -> Vec<(u32, u32)> {
 fn a_warped_image_is_written_once_for_all_its_pieces() {
     let compression = json!({"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}});
     for masked in [false, true] {
-        let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+        let mut d = doc(encoded(colour(), craft_image_codecs::Format::Png), "image/png");
         let id = d.layers[0].children().unwrap()[0].id;
         let n = d.node(id).unwrap().clone();
         let NodeKind::Image(im) = &n.kind else { panic!("the image") };
@@ -156,8 +189,8 @@ fn a_warped_image_is_written_once_for_all_its_pieces() {
 
 #[test]
 fn jpeg_zip_and_automatic_compression() {
-    let png = doc(encoded(colour(), ImageFormat::Png), "image/png");
-    let jpeg = doc(encoded(colour(), ImageFormat::Jpeg), "image/jpeg");
+    let png = doc(encoded(colour(), craft_image_codecs::Format::Png), "image/png");
+    let jpeg = doc(encoded(colour(), craft_image_codecs::Format::Jpeg), "image/jpeg");
     let dct = |d: &Document, c: Value| pdf(d, c).0.contains("/DCTDecode");
     assert!(dct(&png, json!({"color": {"compression": "jpeg", "quality": "low"}})), "JPEG compression");
     assert!(!dct(&png, json!({"color": {"compression": "zip"}})) && pdf(&png, json!({})).0.contains("/FlateDecode"), "ZIP");
@@ -167,7 +200,7 @@ fn jpeg_zip_and_automatic_compression() {
     // JPEG has no transparency: an image with some stays lossless.
     let mut clear = colour().to_rgba8();
     clear.put_pixel(0, 0, image::Rgba([0, 0, 0, 0]));
-    let clear = doc(encoded(clear.into(), ImageFormat::Png), "image/png");
+    let clear = doc(encoded(clear.into(), craft_image_codecs::Format::Png), "image/png");
     let (text, _) = pdf(&clear, json!({"color": {"compression": "jpeg"}}));
     assert!(!text.contains("/DCTDecode") && text.contains("/SMask"));
 }
@@ -184,7 +217,7 @@ fn sixteen_bit_images_are_written_at_8_bits_before_pdf_1_5() {
         ("RGBA", DynamicImage::ImageRgba16(clear.to_rgba16()), clear),
     ];
     for (kind, deep, pixels) in images {
-        let d = doc(encoded(deep, ImageFormat::Png), "image/png");
+        let d = doc(encoded(deep, craft_image_codecs::Format::Png), "image/png");
         // PDF/X-1a and PDF/X-3 files are PDF 1.3. A PDF 1.3 file has no soft masks: the app
         // flattens an image with transparency before it is written.
         let mut cases = vec![(json!({"compatibility": "1.4"}), 8), (json!({"compatibility": "1.5"}), 16), (json!({"compatibility": "1.7"}), 16)];
@@ -210,14 +243,31 @@ fn sixteen_bit_images_are_written_at_8_bits_before_pdf_1_5() {
                 // The image reads back with the 8-bit pixels (within 1 for the PDF/X-3 file's RGB
                 // image, which is tagged with the sRGB profile).
                 let back = import(&r.bytes).unwrap();
-                let got = image::load_from_memory(&back.images.values().next().unwrap().bytes).unwrap().to_rgba8();
+                let got = craft_image_codecs::decode(&back.images.values().next().unwrap().bytes)
+                    .map(|__cimg| {
+                        let (__w, __h) = __cimg.dimensions();
+                        match (__cimg.layout(), __cimg.sample_type()) {
+                            (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                        }
+                    })
+                    .unwrap()
+                    .to_rgba8();
                 let close = got.dimensions() == (600, 600) && got.as_raw().iter().zip(pixels.to_rgba8().as_raw()).all(|(a, b)| a.abs_diff(*b) <= 1);
                 assert!(back.images.len() == 1 && close, "{kind}, {case}: the pixels");
             }
         }
     }
     // A 16-bit PNG whose pixel data can't be decoded is left out with the note.
-    let mut cut = encoded(DynamicImage::ImageRgb16(colour().to_rgb16()), ImageFormat::Png);
+    let mut cut = encoded(DynamicImage::ImageRgb16(colour().to_rgb16()), craft_image_codecs::Format::Png);
     let at = cut.windows(4).position(|w| w == b"IDAT").unwrap();
     cut.truncate(at + 10);
     let settings = serde_json::from_value(json!({"compatibility": "1.4"})).unwrap();
@@ -227,13 +277,13 @@ fn sixteen_bit_images_are_written_at_8_bits_before_pdf_1_5() {
 
 #[test]
 fn codecs_the_writer_lacks_are_zip_with_a_warning() {
-    let png = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let png = doc(encoded(colour(), craft_image_codecs::Format::Png), "image/png");
     let (text, warnings) = pdf(&png, json!({"color": {"compression": "jpeg2000"}}));
     assert!(!text.contains("/JPXDecode") && text.contains("/FlateDecode"));
     assert!(warnings.len() == 1 && warnings[0].contains("JPEG 2000"), "{warnings:?}");
     // Black-and-white images are monochrome: their settings apply, CCITT becomes ZIP.
     let bw = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([if (x / 7 + y / 5) % 2 == 0 { 0 } else { 255 }]));
-    let bw = doc(encoded(bw.into(), ImageFormat::Png), "image/png");
+    let bw = doc(encoded(bw.into(), craft_image_codecs::Format::Png), "image/png");
     let (text, warnings) = pdf(&bw, json!({"mono": {"downsample": "bicubic", "ppi": 300, "abovePpi": 450, "compression": "ccittG4"}}));
     assert!(text.contains("/Width 300") && !text.contains("/CCITTFaxDecode"));
     assert!(warnings.len() == 1 && warnings[0].contains("CCITT"), "{warnings:?}");

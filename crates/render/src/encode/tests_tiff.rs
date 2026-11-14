@@ -6,20 +6,20 @@ use craft_tiff::tags;
 use super::jpeg::ColorModel;
 use super::tiff::{self as t, ByteOrder, Compression, Image, Layout, Photometric, TiffOptions};
 
-fn ifd0(file: &[u8]) -> craft_tiff::reader::Ifd {
+fn ifd0(file: &[u8]) -> craft_tiff::Ifd {
     Tiff::parse(file).expect("a TIFF").ifds.into_iter().next().expect("IFD0")
 }
 
-fn tag_u16_vec(ifd: &craft_tiff::reader::Ifd, tag: u16) -> Option<Vec<u16>> {
+fn tag_u16_vec(ifd: &craft_tiff::Ifd, tag: u16) -> Option<Vec<u16>> {
     ifd.value(tag).map(|v| v.to_u64_vec().into_iter().map(|x| x as u16).collect())
 }
 
-fn tag_u32_vec(ifd: &craft_tiff::reader::Ifd, tag: u16) -> Option<Vec<u32>> {
+fn tag_u32_vec(ifd: &craft_tiff::Ifd, tag: u16) -> Option<Vec<u32>> {
     ifd.value(tag).map(|v| v.to_u64_vec().into_iter().map(|x| x as u32).collect())
 }
 
 fn pixels(file: &[u8]) -> Vec<u8> {
-    craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, file).expect("decodes").data
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, file).expect("decodes").into_data()
 }
 
 /// Straight RGBA: flat areas (as art is) with a transparent corner when `clear`.
@@ -69,7 +69,7 @@ fn lzw_is_smaller_and_decodes_the_same() {
     assert_eq!(pixels(&lzw), px, "transparency kept as an alpha channel");
     assert_eq!(pixels(&plain), px);
     let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &lzw).unwrap();
-    assert_eq!(img.data, px);
+    assert_eq!(img.data(), px.as_slice());
 }
 
 #[test]
@@ -77,14 +77,14 @@ fn colour_models_write_their_samples() {
     let px = art(9, 6, true);
     let rgba = t::encode_samples(&px, 9, 6, 72.0, &opts(ColorModel::Rgb)).unwrap();
     let rgba_ifd = ifd0(&rgba);
-    assert_eq!(rgba_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(2));
+    assert_eq!(rgba_ifd.u16(tags::PHOTOMETRIC), Some(2));
     assert_eq!(rgba_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(4));
     assert_eq!(tag_u16_vec(&rgba_ifd, tags::BITS_PER_SAMPLE).as_deref(), Some([8, 8, 8, 8].as_slice()));
     assert_eq!(tag_u16_vec(&rgba_ifd, tags::EXTRA_SAMPLES).as_deref(), Some([2].as_slice()), "unassociated alpha");
     let opaque = art(9, 6, false);
     let rgb = t::encode_samples(&opaque, 9, 6, 72.0, &opts(ColorModel::Rgb)).unwrap();
     let rgb_ifd = ifd0(&rgb);
-    assert_eq!(rgb_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(2));
+    assert_eq!(rgb_ifd.u16(tags::PHOTOMETRIC), Some(2));
     assert_eq!(rgb_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(3));
     assert!(rgb_ifd.value(tags::EXTRA_SAMPLES).is_none());
 
@@ -92,7 +92,7 @@ fn colour_models_write_their_samples() {
     let gray_ifd = ifd0(&gray);
     assert_eq!(gray_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(1));
     assert_eq!(tag_u16_vec(&gray_ifd, tags::BITS_PER_SAMPLE).as_deref(), Some([8].as_slice()));
-    assert_eq!(gray_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(1), "black is zero");
+    assert_eq!(gray_ifd.u16(tags::PHOTOMETRIC), Some(1), "black is zero");
     let g = pixels(&gray);
     assert_eq!((g[0], g[8]), (super::jpeg::to_gray()([200, 30, 40]), 255), "lightness; white stays white");
     let on_white = t::encode_samples(&px, 9, 6, 72.0, &opts(ColorModel::Gray)).unwrap();
@@ -105,10 +105,10 @@ fn colour_models_write_their_samples() {
     let cmyk = t::encode_samples(&inks, 9, 6, 72.0, &opts(ColorModel::Cmyk)).unwrap();
     let d = ifd0(&cmyk);
     assert_eq!(d.u16(tags::SAMPLES_PER_PIXEL), Some(4));
-    assert_eq!(d.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(5), "separated");
+    assert_eq!(d.u16(tags::PHOTOMETRIC), Some(5), "separated");
     assert_eq!(d.u16(332), Some(1), "CMYK inks");
     let cmyk_img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &cmyk).unwrap();
-    assert_eq!(cmyk_img.data, inks);
+    assert_eq!(cmyk_img.data(), inks.as_slice());
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn resolution_tags_and_the_profile() {
         let file = t::encode_samples(&px, 4, 4, ppi, &opts(ColorModel::Rgb)).unwrap();
         let d = ifd0(&file);
         for tag in [tags::X_RESOLUTION, tags::Y_RESOLUTION] {
-            let Some(craft_tiff::reader::IfdValue::Rationals(v)) = d.value(tag) else { panic!("rational") };
+            let Some(craft_tiff::Value::Rationals(v)) = d.value(tag) else { panic!("rational") };
             assert_eq!(v.as_slice(), &[rational]);
         }
         assert_eq!(d.u16(tags::RESOLUTION_UNIT), Some(2), "inches");

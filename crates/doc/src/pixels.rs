@@ -20,15 +20,15 @@ pub type PixelPick<'a> = (Option<[f64; 4]>, usize, &'a dyn Fn(f64, f64) -> bool)
 /// the header first: the decoder's limit is on the file's samples, and a gray image is a quarter
 /// of what it becomes here (#1717).
 fn rgba_within(bytes: &[u8], max: u64) -> Option<image::RgbaImage> {
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = max / 4;
+    opts.limits.max_alloc = max;
+    let img = craft_image_codecs::decode_with(bytes, &opts).ok()?;
+    let (w, h) = img.dimensions();
     if u64::from(w) * u64::from(h) > max / 4 {
         return None;
     }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(max);
-    reader.limits(limits);
-    Some(reader.decode().ok()?.into_rgba8())
+    image::RgbaImage::from_raw(w, h, img.to_rgba8())
 }
 
 impl ImageBlob {
@@ -60,8 +60,15 @@ impl ImageBlob {
         if !changed {
             return None;
         }
-        let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw = craft_image_codecs::Image::from_raw(
+            img.width(),
+            img.height(),
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            img.into_raw(),
+        )
+        .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         Some(Self::png(png))
     }
 
@@ -129,14 +136,13 @@ impl ImageBlob {
         if !changed {
             return None;
         }
-        let mut png = Vec::new();
-        let mut out = Cursor::new(&mut png);
-        if opaque {
-            let levels = gray_alpha.iter().step_by(2).copied().collect();
-            image::GrayImage::from_raw(width, height, levels)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
+        let (layout, data) = if opaque {
+            (craft_image_codecs::ChannelLayout::Gray, gray_alpha.iter().step_by(2).copied().collect())
         } else {
-            image::GrayAlphaImage::from_raw(width, height, gray_alpha)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
-        }
+            (craft_image_codecs::ChannelLayout::GrayA, gray_alpha)
+        };
+        let raw = craft_image_codecs::Image::from_raw(width, height, layout, craft_image_codecs::SampleType::U8, data).ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         Some(Self::png(png))
     }
 }
@@ -156,23 +162,28 @@ impl ImageBlob {
     /// header.
     pub fn gray_source(&self) -> Option<GraySource> {
         let gray = |one_bit: bool, alpha: bool| Some(GraySource { one_bit, alpha });
-        if let Some((kind, _)) = crate::cmyk::tiff(&self.bytes) {
-            return match kind {
-                tiff::ColorType::Gray(bits) => gray(bits == 1, false),
-                tiff::ColorType::GrayA(bits) => gray(bits == 1, true),
+        if let Some(info) = crate::cmyk::tiff_image_info(&self.bytes) {
+            return match (info.photometric, info.samples_per_pixel, info.bits_per_sample.first().copied()) {
+                (0 | 1, 1, Some(bits)) => gray(bits == 1, false),
+                (0 | 1, 2, Some(bits)) => gray(bits == 1, true),
                 _ => None,
             };
         }
         if crate::cmyk::jpeg_components(&self.bytes) == Some(1) {
             return gray(false, false);
         }
-        use image::{ExtendedColorType as E, ImageDecoder as _};
-        let reader = image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?;
-        match reader.into_decoder().ok()?.original_color_type() {
-            E::L1 => gray(true, false),
-            E::La1 => gray(true, true),
-            E::L2 | E::L4 | E::L8 | E::L16 => gray(false, false),
-            E::La2 | E::La4 | E::La8 | E::La16 => gray(false, true),
+        if self.bytes.starts_with(b"\x89PNG\r\n\x1a\n") && self.bytes.get(12..16) == Some(b"IHDR".as_slice()) {
+            let depth = self.bytes.get(24).copied()?;
+            let color = self.bytes.get(25).copied()?;
+            return match color {
+                0 => gray(depth == 1, false),
+                4 => gray(depth == 1, true),
+                _ => None,
+            };
+        }
+        match craft_image_codecs::decode(&self.bytes).ok()?.layout() {
+            craft_image_codecs::ChannelLayout::Gray => gray(false, false),
+            craft_image_codecs::ChannelLayout::GrayA => gray(false, true),
             _ => None,
         }
     }
@@ -206,7 +217,10 @@ impl ImageBlob {
     /// The width and height in pixels the image's file says it has; `None` for data that isn't an
     /// image the decoder reads. Reads only its header.
     pub fn pixel_size(&self) -> Option<(u32, u32)> {
-        image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions().ok()
+        craft_image_codecs::probe_size(&self.bytes)
+            .ok()
+            .or_else(|| self.header_size())
+            .or_else(|| craft_image_codecs::decode(&self.bytes).ok().map(|i| i.dimensions()))
     }
 
     /// Whether the image's file is a PNG that stores palette indices (an indexed-color image).
@@ -350,12 +364,66 @@ mod tests {
     fn blob(px: &[[u8; 4]], w: u32, h: u32) -> ImageBlob {
         let img = image::RgbaImage::from_raw(w, h, px.concat()).unwrap();
         let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (img).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         ImageBlob::png(png)
     }
 
     fn pixels(b: &ImageBlob) -> Vec<[u8; 4]> {
-        image::load_from_memory(&b.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+        craft_image_codecs::decode(&b.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .map(|p| p.0)
+            .collect()
     }
 
     /// Sampling reads the pixels of a box of the image, spread to about the budget, and only those
@@ -420,7 +488,41 @@ mod tests {
     fn pixels_past_the_allowance_are_not_decoded() {
         let grey = image::GrayImage::from_raw(4, 2, vec![7; 8]).unwrap();
         let mut png = Vec::new();
-        grey.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (grey).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         assert!(rgba_within(&png, 31).is_none(), "8 grey bytes are 32 as RGBA");
         assert_eq!(rgba_within(&png, 32).map(|i| i.dimensions()), Some((4, 2)));
         assert!(rgba_within(b"not an image", u64::MAX).is_none());
@@ -454,7 +556,41 @@ mod tests {
         assert!(rgba_within(&huge, u64::MAX).is_none());
         let gray = image::GrayImage::from_raw(4, 2, vec![7; 8]).unwrap();
         let mut png = Vec::new();
-        gray.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (gray).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         assert_eq!(rgba_within(&png, 35).map(|i| i.dimensions()), Some((4, 2)), "32 bytes as RGBA, within 35");
     }
 
@@ -527,7 +663,41 @@ mod tests {
 
     fn png_of(img: image::DynamicImage) -> ImageBlob {
         let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (img).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         ImageBlob::png(png)
     }
 
@@ -538,8 +708,19 @@ mod tests {
         assert_eq!(l8.gray_source(), gray(false, false));
         let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(1, 1, vec![0, 128]).unwrap()));
         assert_eq!(la8.gray_source(), gray(false, true));
-        let mut jpeg = Vec::new();
-        jpeg_encoder::Encoder::new(&mut jpeg, 90).encode(&[0, 255, 0, 255], 2, 2, jpeg_encoder::ColorType::Luma).unwrap();
+        let jpeg = craft_image_codecs::encode(
+            &craft_image_codecs::Image::from_raw(
+                2,
+                craft_image_codecs::Format::Jpeg,
+                2,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                vec![0, 255, 0, 255],
+            )
+            .unwrap(),
+            &craft_image_codecs::EncodeOptions { jpeg_quality: 90, ..craft_image_codecs::EncodeOptions::default() },
+        )
+        .unwrap();
         assert_eq!(ImageBlob::new("image/jpeg", jpeg).gray_source(), gray(false, false));
         // Black, white; white, black.
         let tif = ImageBlob::new("image/tiff", bilevel_tiff(2, 2, &[0b0100_0000, 0b1000_0000]));

@@ -12,11 +12,12 @@
 //! the same stack: the depths of the SVGs around it are added to its own, and an image past the
 //! cap is left out (`files`).
 
+use craft_svg::tree::usvg;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 
 use super::css::{Styles, XNode, parse_decls};
 

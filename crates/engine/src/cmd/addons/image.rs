@@ -412,23 +412,36 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
             bad(cmd, "every pixel matches the background: no image would be left")
         });
     }
-    let out = match (px, gray) {
-        (Pixels::Eight(img), false) => DynamicImage::ImageRgba8(img),
-        (Pixels::Sixteen(img), false) => DynamicImage::ImageRgba16(img),
-        (Pixels::Eight(img), true) => {
-            DynamicImage::ImageLumaA8(ImageBuffer::from_fn(w, h, |x, y| LumaA([img.get_pixel(x, y).0[0], img.get_pixel(x, y).0[3]])))
+    let raw = match (px, gray) {
+        (Pixels::Eight(img), false) => {
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, img.into_raw())
         }
-        (Pixels::Sixteen(img), true) => {
-            DynamicImage::ImageLumaA16(ImageBuffer::from_fn(w, h, |x, y| LumaA([img.get_pixel(x, y).0[0], img.get_pixel(x, y).0[3]])))
-        }
-    };
-    let mut png = Vec::new();
-    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
-    if let Some(icc) = icc {
-        use image::ImageEncoder as _;
-        encoder.set_icc_profile(icc).map_err(|e| bad(cmd, e.to_string()))?;
+        (Pixels::Sixteen(img), false) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U16,
+            img.into_raw().into_iter().flat_map(u16::to_ne_bytes).collect(),
+        ),
+        (Pixels::Eight(img), true) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::GrayA,
+            craft_image_codecs::SampleType::U8,
+            img.pixels().flat_map(|p| [p.0[0], p.0[3]]).collect(),
+        ),
+        (Pixels::Sixteen(img), true) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::GrayA,
+            craft_image_codecs::SampleType::U16,
+            img.pixels().flat_map(|p| [p.0[0], p.0[3]]).flat_map(u16::to_ne_bytes).collect(),
+        ),
     }
-    out.write_with_encoder(encoder).map_err(|e| bad(cmd, e.to_string()))?;
+    .map_err(|e| bad(cmd, e.to_string()))?
+    .with_icc(icc);
+    let mut png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| bad(cmd, e.to_string()))?;
     // The resolution the file declares, which sizes the image at 100% when it is replaced or relinked.
     if let Some(r) = ppi::resolution(&blob.bytes) {
         png = ppi::with_png_resolution(&png, r);
@@ -440,33 +453,34 @@ pub(crate) fn clear(blob: &ImageBlob, settings: &Settings, mut kept: Option<&mut
 /// can't be decoded or is too large to change is an error. The pixels are kept in `kept`, when it
 /// is given, if a copy of them fits the decode allowance beside the work. Errors are command `cmd`'s.
 fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>, cmd: &str) -> Result<(Arc<Pixels>, bool, Option<Vec<u8>>)> {
-    let reader = || {
-        image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(|_| bad(cmd, "the image's pixels can't be read"))
-    };
-    let mut decoder = reader()?.into_decoder().map_err(|e| bad(cmd, format!("the image's pixels can't be read: {e}")))?;
-    // The ICC profile the colors are in goes with them into the PNG.
-    let (w, h, kind, icc) = {
-        use image::ImageDecoder as _;
-        let (w, h) = decoder.dimensions();
-        (w, h, decoder.color_type(), decoder.icc_profile().ok().flatten())
-    };
-    drop(decoder);
-    // The file's pixels, those worked on (as many again for the PNG made of them) and the work,
-    // checked from the header before anything is decoded.
-    let deep = kind.bytes_per_pixel() > kind.channel_count();
-    let per_pixel = u64::from(kind.bytes_per_pixel()) + 2 * if deep { 8 } else { 4 } + WORK_BYTES;
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = MAX_RASTER_ALLOC;
+    let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(|e| match e {
+        craft_image_codecs::CodecError::LimitExceeded(_) => bad(cmd, "the image is too large to change"),
+        _ => bad(cmd, format!("the image's pixels can't be read: {e}")),
+    })?;
+    let (w, h) = img.dimensions();
+    let icc = img.icc.clone();
+    let deep = img.sample_type() == craft_image_codecs::SampleType::U16;
+    let gray = matches!(img.layout(), craft_image_codecs::ChannelLayout::Gray | craft_image_codecs::ChannelLayout::GrayA);
+    let per_pixel = u64::from(img.layout().channels() as u32 * img.sample_type().bytes() as u32) + 2 * if deep { 8 } else { 4 } + WORK_BYTES;
     if u64::from(w).checked_mul(u64::from(h)).and_then(|n| n.checked_mul(per_pixel)).is_none_or(|n| n > MAX_RASTER_ALLOC) {
         return Err(bad(cmd, format!("an image of {w} × {h} pixels is too large to change")));
     }
-    let mut reader = reader()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let img = reader.decode().map_err(|e| bad(cmd, format!("the image's pixels can't be read: {e}")))?;
     #[cfg(test)]
     DECODES.with(|c| c.set(c.get() + 1));
-    let gray = matches!(img.color(), image::ColorType::L8 | image::ColorType::La8 | image::ColorType::L16 | image::ColorType::La16);
-    let px = Arc::new(if deep { Pixels::Sixteen(img.into_rgba16()) } else { Pixels::Eight(img.into_rgba8()) });
+    let px = Arc::new(if deep {
+        let rgba16 = match (img.layout(), img.to_u16_samples()) {
+            (craft_image_codecs::ChannelLayout::Rgba, Some(v)) => v,
+            (craft_image_codecs::ChannelLayout::Rgb, Some(v)) => v.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], u16::MAX]).collect(),
+            (craft_image_codecs::ChannelLayout::GrayA, Some(v)) => v.chunks_exact(2).flat_map(|c| [c[0], c[0], c[0], c[1]]).collect(),
+            (craft_image_codecs::ChannelLayout::Gray, Some(v)) => v.into_iter().flat_map(|g| [g, g, g, u16::MAX]).collect(),
+            _ => img.to_rgba8().into_iter().map(|b| u16::from(b) * 257).collect(),
+        };
+        Pixels::Sixteen(ImageBuffer::from_raw(w, h, rgba16).ok_or_else(|| bad(cmd, "invalid 16-bit pixel buffer"))?)
+    } else {
+        Pixels::Eight(ImageBuffer::from_raw(w, h, img.to_rgba8()).ok_or_else(|| bad(cmd, "invalid 8-bit pixel buffer"))?)
+    });
     // A kept copy is worked on as a copy: one more set of the pixels worked on.
     let with_copy = per_pixel + if deep { 8 } else { 4 };
     if let Some(kept) = kept

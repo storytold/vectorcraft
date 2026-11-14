@@ -12,12 +12,13 @@
 //! turns or flips its pixels is turned before usvg gets it, so it is sized, fitted and stored as
 //! it is shown.
 
+use craft_svg::tree::usvg;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use usvg::{ImageHrefResolver, ImageKind, roxmltree};
+use craft_svg::tree::usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
 use vectorcraft_doc::links::missing_placeholder;
 
@@ -337,7 +338,7 @@ impl Files {
         let Some((bytes, link)) = read(file) else { return Some(Outcome::not_read("not found")) };
         let counted = if nested { bytes.len() as u64 } else { 0 };
         reading.svg_text = reading.svg_text.saturating_add(counted);
-        if nested && reading.spent() && image::guess_format(&bytes).is_ok() {
+        if nested && reading.spent() && craft_image_codecs::detect(&bytes).is_some() {
             self.too_much_linked.store(true, Ordering::Relaxed);
             return None;
         }
@@ -394,7 +395,7 @@ impl Files {
     /// (formats usvg doesn't read are stored as PNG) or an SVG, its own links not read yet; `None`
     /// for anything else.
     fn source(&mut self, bytes: Vec<u8>, link: LinkInfo) -> Option<Source> {
-        let Ok(format) = image::guess_format(&bytes) else {
+        let Some(format) = craft_image_codecs::detect(&bytes) else {
             // Unpacked once, here, within what the SVGZ images may unpack to.
             let text = crate::text_within(&bytes, &self.unpacked).ok()?;
             return text.contains("<svg").then(|| Source::Svg(Arc::new(SvgFile { text: Arc::from(text.as_ref()), sources: HashMap::new() })));
@@ -495,7 +496,7 @@ impl Files {
             // By type as usvg reads them, and TIFF; one without a type (`text/plain`) by its
             // bytes: one of those rasters, else SVG. A raster as [`shown`] gives it.
             resolve_data: Box::new(move |mime, bytes, opts| {
-                use image::ImageFormat as F;
+                use craft_image_codecs::Format as F;
                 let format = match mime {
                     "image/jpg" | "image/jpeg" => F::Jpeg,
                     "image/png" => F::Png,
@@ -503,7 +504,7 @@ impl Files {
                     "image/webp" => F::WebP,
                     "image/tiff" => F::Tiff,
                     "image/svg+xml" => return self.svg_data(&bytes, opts),
-                    "text/plain" => match image::guess_format(&bytes).ok().filter(|f| raster(*f).is_some() || *f == F::Tiff) {
+                    "text/plain" => match craft_image_codecs::detect(&bytes).filter(|f| raster(*f).is_some() || *f == F::Tiff) {
                         Some(format) => format,
                         None => return self.svg_data(&bytes, opts),
                     },
@@ -599,8 +600,8 @@ impl Files {
 }
 
 /// How usvg holds a raster of `format`, for the formats it reads.
-fn raster(format: image::ImageFormat) -> Option<RasterKind> {
-    use image::ImageFormat as F;
+fn raster(format: craft_image_codecs::Format) -> Option<RasterKind> {
+    use craft_image_codecs::Format as F;
     match format {
         F::Png => Some(ImageKind::PNG),
         F::Jpeg => Some(ImageKind::JPEG),
@@ -620,8 +621,8 @@ fn raster(format: image::ImageFormat) -> Option<RasterKind> {
 /// turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when the pixels can't be read, and for
 /// a TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]), before any decoder opens it.
-fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
-    use image::ImageFormat as F;
+fn shown(bytes: Arc<Vec<u8>>, format: craft_image_codecs::Format) -> Option<Shown> {
+    use craft_image_codecs::Format as F;
     if vectorcraft_doc::cmyk::oversized_tiff(&bytes).is_some() {
         return None;
     }
@@ -632,7 +633,7 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     {
         return Some(Shown { kind, bytes, cmyk: None });
     }
-    let tiff = image::guess_format(&bytes).ok() == Some(F::Tiff);
+    let tiff = craft_image_codecs::detect(&bytes) == Some(F::Tiff);
     let mut img = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
     let cmyk = match orientation {
         Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, None).map(|(tiff, _)| tiff),
@@ -642,30 +643,34 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     if let Some(orientation) = orientation {
         img.apply_orientation(orientation);
     }
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), F::Png).ok()?;
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .ok()?;
+    let png = craft_image_codecs::encode(&raw, F::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     Some(Shown { kind: ImageKind::PNG, bytes: Arc::new(png), cmyk })
 }
 
 /// The pixels of encoded image `bytes` (`format` when their bytes don't say), as stored, decoded
 /// within [`vectorcraft_doc::MAX_RASTER_ALLOC`], counted as decoded and as RGBA, as Open and Place
 /// decode them; `None` when they can't be.
-fn decoded(bytes: &[u8], format: image::ImageFormat) -> Option<image::DynamicImage> {
-    use image::ImageDecoder as _;
+fn decoded(bytes: &[u8], format: craft_image_codecs::Format) -> Option<image::DynamicImage> {
     let max = vectorcraft_doc::MAX_RASTER_ALLOC;
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-    if reader.format().is_none() {
-        reader.set_format(format);
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(max);
-    reader.limits(limits);
-    let decoder = reader.into_decoder().ok()?;
-    let (w, h) = decoder.dimensions();
-    if decoder.total_bytes() > max || u64::from(w) * u64::from(h) * 4 > max {
+    let detected = craft_image_codecs::detect(bytes).unwrap_or(format);
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = max;
+    opts.keep_orientation = true;
+    let img = craft_image_codecs::decode_as_with(detected, bytes, &opts).ok()?;
+    let (w, h) = img.dimensions();
+    if u64::from(w) * u64::from(h) * 4 > max {
         return None;
     }
-    image::DynamicImage::from_decoder(decoder).ok()
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).map(image::DynamicImage::ImageRgba8)
 }
 
 /// The pixels of TIFF `bytes`, as stored, read as Open and Place read them: a TIFF with extra
@@ -683,7 +688,8 @@ fn tiff_pixels(bytes: &[u8]) -> Option<image::DynamicImage> {
     if let Some(read) = vectorcraft_doc::cmyk::group3_tiff_rgba(bytes) {
         return read.ok().map(ImageRgba8);
     }
-    decoded(bytes, image::ImageFormat::Tiff).or_else(|| decoded(&vectorcraft_doc::cmyk::stored_cmyk_tiff(bytes, None)?, image::ImageFormat::Tiff))
+    decoded(bytes, craft_image_codecs::Format::Tiff)
+        .or_else(|| decoded(&vectorcraft_doc::cmyk::stored_cmyk_tiff(bytes, None)?, craft_image_codecs::Format::Tiff))
 }
 
 /// No image: left out, noted in `why` when `noted`.
@@ -893,9 +899,9 @@ mod tests {
     }
 
     fn png() -> Vec<u8> {
-        let mut out = vec![];
-        image::RgbaImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-        out
+        let img = craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, vec![0; 4])
+            .unwrap();
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     }
 
     fn linked_note() -> String {

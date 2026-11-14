@@ -3,6 +3,8 @@
 //! rectangles and ellipses whose dashes would start elsewhere, stays `<path>`; the picture and the
 //! reimported geometry don't change.
 
+use craft_svg::tree::draw::resvg;
+use craft_svg::tree::usvg;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, FillLayer, Node, StrokeLayer};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, shapes};

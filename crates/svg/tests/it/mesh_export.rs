@@ -2,6 +2,8 @@
 //! pieces, each patch cut finely enough that neighbouring pieces differ by about one 8-bit
 //! colour step at most, and no finer: a patch of one colour is one piece, not 64 alike.
 
+use craft_svg::tree::draw::resvg;
+use craft_svg::tree::usvg;
 use vectorcraft_color::Color;
 use vectorcraft_doc::live::{GradientMesh, MeshAppearance};
 use vectorcraft_doc::{Document, Node, NodeKind};

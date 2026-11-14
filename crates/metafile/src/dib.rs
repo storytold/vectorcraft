@@ -60,10 +60,15 @@ impl Rgba {
 
     /// As PNG bytes.
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.pixels.clone()).ok_or("the image's pixels don't match its size")?;
-        let mut png = vec![];
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| e.to_string())?;
-        Ok(png)
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            self.pixels.clone(),
+        )
+        .map_err(|_| "the image's pixels don't match its size".to_string())?;
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
     }
 }
 
@@ -203,13 +208,18 @@ pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha, left: &mut u64) -> R
         // A PNG's compressed ICC profile and text chunks expand when its decoder is made, and
         // nothing here uses them: they are left out before the size is read and the pixels decoded.
         let bits = png_without_metadata(bits);
-        let (w, h) = image::ImageReader::new(Cursor::new(&*bits)).with_guessed_format().map_err(|_| bad())?.into_dimensions().map_err(|_| bad())?;
-        if w > MAX_READ_SIDE || h > MAX_READ_SIDE || u64::from(w) * u64::from(h) > MAX_READ_PIXELS {
-            return Err("a bitmap is too large to read".into());
-        }
+        let mut opts = craft_image_codecs::DecodeOptions::default();
+        opts.limits.max_width = MAX_READ_SIDE;
+        opts.limits.max_height = MAX_READ_SIDE;
+        opts.limits.max_pixels = MAX_READ_PIXELS.min(*left);
+        let img = match craft_image_codecs::decode_with(&bits, &opts) {
+            Ok(img) => img,
+            Err(craft_image_codecs::CodecError::LimitExceeded(_)) => return Err("a bitmap is too large to read".into()),
+            Err(_) => return Err(bad()),
+        };
+        let (w, h) = img.dimensions();
         charge(w, h, left)?;
-        let img = image::load_from_memory(&bits).map_err(|_| bad())?.to_rgba8();
-        return Ok(Rgba { width: w, height: h, pixels: img.into_raw() });
+        return Ok(Rgba { width: w, height: h, pixels: img.to_rgba8() });
     }
     if compression != BI_RGB && compression != BI_BITFIELDS {
         return Err("compressed (RLE) bitmaps can't be read yet".into());
@@ -327,16 +337,16 @@ mod tests {
 
     #[test]
     fn a_pngs_compressed_metadata_is_left_out_before_it_is_decoded() {
-        use image::ImageEncoder;
-        let mut png = vec![];
-        let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
-        encoder.set_icc_profile(vec![0; 1 << 20]).unwrap();
-        encoder.write_image(&[10, 20, 30], 1, 1, image::ExtendedColorType::Rgb8).unwrap();
+        let raw =
+            craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, vec![10, 20, 30])
+                .unwrap()
+                .with_icc(Some(vec![0; 1 << 20]));
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         assert!(png.windows(4).any(|w| w == b"iCCP"));
         let stripped = png_without_metadata(&png);
         assert!(!stripped.windows(4).any(|w| w == b"iCCP") && stripped.len() < png.len());
-        let img = image::load_from_memory(&stripped).unwrap().to_rgba8();
-        assert_eq!(img.get_pixel(0, 0).0, [10, 20, 30, 255]);
+        let img = craft_image_codecs::decode(&stripped).unwrap();
+        assert_eq!(&img.to_rgba8()[..4], &[10, 20, 30, 255]);
         // Not a PNG, or a PNG cut short: unchanged.
         assert_eq!(&*png_without_metadata(b"BM...."), b"BM....");
         assert_eq!(&*png_without_metadata(&png[..png.len() - 3]), &png[..png.len() - 3]);

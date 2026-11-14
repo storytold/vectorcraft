@@ -42,9 +42,7 @@ pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceEr
         }
         let pixels = u64::from(info.width) * u64::from(info.height);
         let frame = gif_first_frame_pixels(bytes).unwrap_or(0);
-        let total_bytes = pixels
-            .saturating_mul(u64::from(info.channels))
-            .saturating_mul(u64::from(info.bits_per_sample.max(8).div_ceil(8)));
+        let total_bytes = pixels.saturating_mul(u64::from(info.channels)).saturating_mul(u64::from(info.bits_per_sample.max(8).div_ceil(8)));
         if pixels.max(frame) > MAX_PIXELS || total_bytes > ALPHA_MAX_DECODE_BYTES {
             return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_PIXELS >> 20 });
         }
@@ -315,7 +313,7 @@ mod tests {
         }
         let rgba = Image::from_u8(4, 4, ChannelLayout::Rgba, rgba_bytes).unwrap();
         let luma_a = Image::from_u8(4, 4, ChannelLayout::GrayA, luma_a_bytes).unwrap();
-        let rgba16 = Image::new(4, 4, ChannelLayout::Rgba, SampleType::U16, rgba16_bytes).unwrap();
+        let rgba16 = Image::from_raw(4, 4, ChannelLayout::Rgba, SampleType::U16, rgba16_bytes).unwrap();
         for (name, img) in [("rgba", rgba), ("gray and alpha", luma_a), ("16 bits", rgba16)] {
             let got = decode_alpha(&encoded(&img, Format::Png)).unwrap();
             assert_eq!(got, Some((4, 4, want.clone())), "{name}");

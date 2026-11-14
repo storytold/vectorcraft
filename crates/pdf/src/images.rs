@@ -14,12 +14,12 @@
 //! kept carries the CMYK profile it is given ([`cmyk_icc`]), whether it is embedded as it is or
 //! written again; without one it is untagged, a JPEG's own `ICC_PROFILE` segments included.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
+use craft_image_codecs::{ChannelLayout, Format, Limits as CodecLimits, SampleType};
 use craft_pdf::write::backend as krilla;
+use image::DynamicImage;
 use image::imageops::FilterType;
-use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
 
 use vectorcraft_doc::ImageBlob;
@@ -310,23 +310,35 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// can't be decoded is kept as it is.
 pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, interpolate: bool, convert: Option<&Pixels>) -> Recoded {
     let keep = Recoded { image: None, warning: None };
-    let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
-    let jpeg = reader.format() == Some(ImageFormat::Jpeg);
-    let Ok(mut decoder) = reader.into_decoder() else { return keep };
-    // What the header declares is decoded within the image allowance, not whatever it asks for.
-    if decoder.set_limits(limits()).is_err() {
-        return keep;
-    }
-    let dims = decoder.dimensions();
-    use ExtendedColorType as T;
-    let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
+    let Some(fmt) = craft_image_codecs::detect(bytes) else { return keep };
+    let jpeg = fmt == Format::Jpeg;
+    let (dims, grey) = match fmt {
+        Format::Png => {
+            let Ok(dec) = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &codec_limits()) else { return keep };
+            let h = dec.header();
+            ((h.width, h.height), matches!(h.layout, ChannelLayout::Gray | ChannelLayout::GrayA))
+        }
+        Format::Jpeg => {
+            let Some(info) = craft_image_codecs::jpeg_info(bytes) else { return keep };
+            ((info.width, info.height), matches!(info.layout, ChannelLayout::Gray | ChannelLayout::GrayA))
+        }
+        Format::Tiff => {
+            let Ok(info) = craft_image_codecs::tiff_info(bytes) else { return keep };
+            let Some(p) = info.pages.first() else { return keep };
+            ((p.width, p.height), false)
+        }
+        _ => {
+            let Ok(dims) = craft_image_codecs::probe_size(bytes) else { return keep };
+            (dims, false)
+        }
+    };
     let (kind, pixels) = if grey {
         // Only the pixels tell monochrome images from greyscale ones: decoded unless both keep it.
         let (g, m) = (rule(c, Kind::Gray), rule(c, Kind::Mono));
         if kept(&g, dims, size, jpeg) && kept(&m, dims, size, jpeg) && g.instead == m.instead {
             return Recoded { image: None, warning: g.instead };
         }
-        let Ok(img) = DynamicImage::from_decoder(decoder) else { return keep };
+        let Some(img) = decoded(bytes) else { return keep };
         (if bilevel(&img) { Kind::Mono } else { Kind::Gray }, Some(img))
     } else {
         (Kind::Color, None)
@@ -405,7 +417,7 @@ pub(crate) fn recode_cmyk(
     let jpeg = jpeg_components(&blob.bytes).is_some();
     let icc = icc.filter(|_| convert.is_none());
     if jpeg && convert.is_none() && alpha.is_none() {
-        let dims = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
+        let dims = craft_image_codecs::probe(&blob.bytes).ok().map(|i| (i.width, i.height));
         if let Some((w, h)) = dims.filter(|d| kept(&rule, *d, size, true)) {
             // The JPEG data as it is, tagged with `icc` rather than with its own segments; one
             // larger than [`MAX_EMBED_PIXELS`] is not written.
@@ -467,17 +479,26 @@ fn resampled_inks(inks: Inks, alpha: Option<Vec<u8>>, r: &Rule, to: (u32, u32)) 
 const MAX_DECODE: u64 = 512 << 20;
 
 /// The decoder limits of an image read here: [`MAX_DECODE`] bytes.
-fn limits() -> image::Limits {
-    let mut l = image::Limits::default();
-    l.max_alloc = Some(MAX_DECODE);
-    l
+fn codec_limits() -> CodecLimits {
+    CodecLimits { max_alloc: Some(MAX_DECODE), ..CodecLimits::default() }
 }
 
-/// `bytes` decoded within [`limits`]: an image whose header asks for more is not decoded.
+/// `bytes` decoded within [`codec_limits`]: an image whose header asks for more is not decoded.
 fn decoded(bytes: &[u8]) -> Option<DynamicImage> {
-    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    r.limits(limits());
-    r.decode().ok()
+    let opts = craft_image_codecs::DecodeOptions { limits: codec_limits(), ..Default::default() };
+    let img = craft_image_codecs::decode_with(bytes, &opts).ok()?;
+    let (w, h) = img.dimensions();
+    match (img.layout(), img.sample_type()) {
+        (ChannelLayout::Gray, SampleType::U8) => image::GrayImage::from_raw(w, h, img.into_data()).map(DynamicImage::ImageLuma8),
+        (ChannelLayout::GrayA, SampleType::U8) => image::GrayAlphaImage::from_raw(w, h, img.into_data()).map(DynamicImage::ImageLumaA8),
+        (ChannelLayout::Rgb, SampleType::U8) => image::RgbImage::from_raw(w, h, img.into_data()).map(DynamicImage::ImageRgb8),
+        (ChannelLayout::Rgba, SampleType::U8) => image::RgbaImage::from_raw(w, h, img.into_data()).map(DynamicImage::ImageRgba8),
+        (ChannelLayout::Gray, SampleType::U16) => image::ImageBuffer::from_raw(w, h, img.to_u16_samples()?).map(DynamicImage::ImageLuma16),
+        (ChannelLayout::GrayA, SampleType::U16) => image::ImageBuffer::from_raw(w, h, img.to_u16_samples()?).map(DynamicImage::ImageLumaA16),
+        (ChannelLayout::Rgb, SampleType::U16) => image::ImageBuffer::from_raw(w, h, img.to_u16_samples()?).map(DynamicImage::ImageRgb16),
+        (ChannelLayout::Rgba, SampleType::U16) => image::ImageBuffer::from_raw(w, h, img.to_u16_samples()?).map(DynamicImage::ImageRgba16),
+        _ => None,
+    }
 }
 
 /// The alpha an opacity mask whose art is greyscale image `blob` alone gives the image of
@@ -490,8 +511,8 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     }
     // The size from the header first: a mask of another size, or too large to hold as RGBA, is
     // not decoded at all.
-    let reader = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?;
-    if reader.into_dimensions().ok()? != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+    let info = craft_image_codecs::probe(&blob.bytes).ok()?;
+    if (info.width, info.height) != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
         return None;
     }
     let img = decoded(&blob.bytes)?.into_rgba8();
@@ -506,18 +527,17 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
 /// `quality`, tagged with ICC profile `icc` when given. CMYK JPEGs hold Adobe's inverted samples,
 /// which the PDF writer's Decode array undoes.
 fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, quality: u8, interpolate: bool, icc: Option<&[u8]>) -> Option<Image> {
-    let mut out = Vec::new();
-    match space {
-        ImageColorspace::Cmyk => {
-            let (w, h) = (u16::try_from(width).ok()?, u16::try_from(height).ok()?);
-            jpeg_encoder::Encoder::new(&mut out, quality).encode(samples, w, h, jpeg_encoder::ColorType::Cmyk).ok()?;
-        }
-        ImageColorspace::Rgb | ImageColorspace::Luma => {
-            let t = if space == ImageColorspace::Rgb { ExtendedColorType::Rgb8 } else { ExtendedColorType::L8 };
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(samples, width, height, t).ok()?;
-        }
+    let layout = match space {
+        ImageColorspace::Cmyk => craft_image_codecs::ChannelLayout::Cmyk,
+        ImageColorspace::Rgb => craft_image_codecs::ChannelLayout::Rgb,
+        ImageColorspace::Luma => craft_image_codecs::ChannelLayout::Gray,
         ImageColorspace::DeviceN => return None,
-    }
+    };
+    let mut img = craft_image_codecs::Image::from_u8(width, height, layout, samples.to_vec()).ok()?;
+    img.icc = icc.map(|i| i.to_vec());
+    let opts =
+        craft_image_codecs::EncodeOptions { jpeg_quality: quality.clamp(1, 100), embed_icc: false, embed_metadata: false, ..Default::default() };
+    let out = craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &opts).ok()?;
     Image::from_jpeg_with_icc(out.into(), icc.map(|i| i.to_vec().into()), interpolate).ok()
 }
 

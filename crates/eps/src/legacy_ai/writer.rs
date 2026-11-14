@@ -1140,7 +1140,11 @@ impl<'a> Writer<'a> {
         {
             return img.clone();
         }
-        let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
+        let img = craft_image_codecs::decode(&blob.bytes)
+            .ok()
+            .and_then(|i| image::RgbaImage::from_raw(i.width(), i.height(), i.to_rgba8()))
+            .map(image::DynamicImage::ImageRgba8)
+            .map(Arc::new);
         self.last_image = Some((blob.clone(), img.clone()));
         img
     }

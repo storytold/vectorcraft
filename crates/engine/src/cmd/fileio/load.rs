@@ -131,7 +131,7 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::heifread::is_heif(bytes) {
         return format("heif");
     }
-    if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
+    if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
     // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
@@ -157,9 +157,28 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     by_name
 }
 
-/// The readable raster format behind an `image` crate format.
-fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
-    f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
+/// The readable raster format behind a `craft_image_codecs` format.
+fn image_format(f: craft_image_codecs::Format) -> Option<&'static Format> {
+    let ext = match f {
+        craft_image_codecs::Format::Png => "png",
+        craft_image_codecs::Format::Jpeg => "jpg",
+        craft_image_codecs::Format::Gif => "gif",
+        craft_image_codecs::Format::WebP => "webp",
+        craft_image_codecs::Format::Tiff => "tiff",
+        craft_image_codecs::Format::Bmp => "bmp",
+        craft_image_codecs::Format::Tga => "tga",
+        craft_image_codecs::Format::Ico => "ico",
+        craft_image_codecs::Format::Qoi => "qoi",
+        craft_image_codecs::Format::Hdr => "hdr",
+        craft_image_codecs::Format::OpenExr => "exr",
+        craft_image_codecs::Format::Avif => "avif",
+        craft_image_codecs::Format::Jxl => "jxl",
+        craft_image_codecs::Format::Heif => "heic",
+        craft_image_codecs::Format::Jp2 => "jp2",
+        craft_image_codecs::Format::Psd => "psd",
+        _ => return None,
+    };
+    format(ext).filter(|f| f.read && f.raster)
 }
 
 /// Why a file carrying editing data (an SVG or PDF saved with Preserve Editing) opened as plain
@@ -823,16 +842,12 @@ pub(crate) use vectorcraft_doc::MAX_RASTER_ALLOC;
 /// says so; the pixels aren't read): Open, Place and the Links panel say it ([`size_note`], #1479).
 /// `None` for images within the allowance, and for bytes that aren't an image.
 pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
-    use image::ImageDecoder as _;
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let d = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
-    let (w, h) = d.dimensions();
-    // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
-    // gray with alpha, RGB) takes more than the decoder counts (#1717).
+    let (w, h) = craft_image_codecs::probe_size(bytes).ok().or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())?;
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    (rgba_over || d.total_bytes() > MAX_RASTER_ALLOC).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+    rgba_over.then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
 /// What Open, Place and the Links panel say of encoded image `bytes` that [`too_large_note`] is
@@ -842,7 +857,7 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
     let note = too_large_note(bytes)?;
     let Some(drawn) = vectorcraft_render::reduced_size(bytes) else { return Some(note) };
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let (w, h) = craft_image_codecs::probe_size(bytes).ok().or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())?;
     (drawn != (w, h)).then(|| format!("an image of {w} × {h} pixels is shown at reduced size"))
 }
 
@@ -898,17 +913,15 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
-    if reader.format().is_none() && super::tgaread::is_targa(bytes) {
-        reader.set_format(image::ImageFormat::Tga);
-    }
-    if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
+    let detected = craft_image_codecs::detect(bytes);
+    let kind = if detected.is_none() && super::tgaread::is_targa(bytes) {
+        Some(craft_image_codecs::Format::Tga)
+    } else if detected.is_none() && super::pcxread::is_pcx(bytes) {
         return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    } else {
+        detected
+    };
+    let kind = kind.ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
@@ -929,7 +942,10 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         _ => None,
     };
     if let Some(kept) = kept {
-        let (width, height) = reader.into_dimensions().map_err(err)?;
+        let (width, height) = craft_image_codecs::probe_size(bytes)
+            .ok()
+            .or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())
+            .ok_or_else(|| err("could not read image dimensions"))?;
         return stored(kept, f.mime, (width, height), ppi);
     }
     let extra_samples = || {
@@ -943,21 +959,49 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
             Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
-                use image::ImageDecoder as _;
-                let mut decoder = reader.into_decoder().map_err(err)?;
-                // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
-                let (w, h) = decoder.dimensions();
-                if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
-                    return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
-                }
-                // A profile the decoder can't read leaves the image without one. The image decoder
-                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
-                // read by the TIFF decoder itself.
+                let mut opts = craft_image_codecs::DecodeOptions::default();
+                opts.limits.max_alloc = MAX_RASTER_ALLOC;
+                opts.limits.max_pixels = MAX_RASTER_ALLOC / 4;
+                opts.keep_orientation = true;
+                let decoded = craft_image_codecs::decode_as_with(kind, bytes, &opts).map_err(|e| match e {
+                    craft_image_codecs::CodecError::LimitExceeded(_) => err("image is too large to draw"),
+                    _ => err(e),
+                })?;
+                let (w, h) = decoded.dimensions();
                 icc = match f.id {
                     "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
-                    _ => decoder.icc_profile().ok().flatten(),
+                    _ => decoded.icc.clone(),
                 };
-                image::DynamicImage::from_decoder(decoder).map_err(err)?
+                match (decoded.layout(), decoded.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => image::DynamicImage::ImageLuma8(
+                        image::GrayImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid gray buffer"))?,
+                    ),
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => image::DynamicImage::ImageLumaA8(
+                        image::GrayAlphaImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid gray alpha buffer"))?,
+                    ),
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid rgb buffer"))?)
+                    }
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U16) => {
+                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid gray16 buffer"))?;
+                        image::DynamicImage::ImageLuma16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid gray16 buffer"))?)
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U16) => {
+                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid graya16 buffer"))?;
+                        image::DynamicImage::ImageLumaA16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid graya16 buffer"))?)
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U16) => {
+                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid rgb16 buffer"))?;
+                        image::DynamicImage::ImageRgb16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid rgb16 buffer"))?)
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U16) => {
+                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid rgba16 buffer"))?;
+                        image::DynamicImage::ImageRgba16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid rgba16 buffer"))?)
+                    }
+                    _ => image::DynamicImage::ImageRgba8(
+                        image::RgbaImage::from_raw(w, h, decoded.to_rgba8()).ok_or_else(|| err("invalid rgba buffer"))?,
+                    ),
+                }
             }
         },
     };
@@ -987,15 +1031,63 @@ fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
 /// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
 /// colors are in. `img` has samples a PNG holds: 8 or 16 bits of gray or RGB, with or without alpha.
 pub(super) fn as_png(img: impl Into<image::DynamicImage>, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
-    use image::ImageEncoder as _;
+    use image::DynamicImage as D;
     let img: image::DynamicImage = img.into();
     let size = (img.width(), img.height());
-    let mut png = Vec::new();
-    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
-    if let Some(icc) = icc {
-        encoder.set_icc_profile(icc).map_err(err)?;
+    let (w, h) = size;
+    let u16_bytes = |v: Vec<u16>| v.into_iter().flat_map(u16::to_ne_bytes).collect::<Vec<u8>>();
+    let raw = match img {
+        D::ImageLuma8(b) => {
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw())
+        }
+        D::ImageLumaA8(b) => {
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+        }
+        D::ImageRgb8(b) => {
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw())
+        }
+        D::ImageRgba8(b) => {
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw())
+        }
+        D::ImageLuma16(b) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::Gray,
+            craft_image_codecs::SampleType::U16,
+            u16_bytes(b.into_raw()),
+        ),
+        D::ImageLumaA16(b) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::GrayA,
+            craft_image_codecs::SampleType::U16,
+            u16_bytes(b.into_raw()),
+        ),
+        D::ImageRgb16(b) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U16,
+            u16_bytes(b.into_raw()),
+        ),
+        D::ImageRgba16(b) => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U16,
+            u16_bytes(b.into_raw()),
+        ),
+        other => craft_image_codecs::Image::from_raw(
+            w,
+            h,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            other.into_rgba8().into_raw(),
+        ),
     }
-    img.write_with_encoder(encoder).map_err(err)?;
+    .map_err(err)?
+    .with_icc(icc);
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,
@@ -1029,12 +1121,10 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
             LoadedTexture::from_rgba(inks.width, inks.height, &rgba)
         }
         None => {
-            let mut reader = image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(err)?;
-            let mut limits = image::Limits::default();
-            limits.max_alloc = Some(MAX_RASTER_ALLOC);
-            reader.limits(limits);
-            let img = reader.decode().map_err(err)?.to_rgba8();
-            LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
+            let mut opts = craft_image_codecs::DecodeOptions::default();
+            opts.limits.max_alloc = MAX_RASTER_ALLOC;
+            let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(err)?;
+            LoadedTexture::from_rgba(img.width(), img.height(), &img.to_rgba8())
         }
     };
     texture.and_then(|t| t.to_stored()).ok_or_else(|| err("the image can't be read as a texture"))

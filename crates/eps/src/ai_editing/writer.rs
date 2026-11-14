@@ -1768,16 +1768,13 @@ pub(super) fn hide(text: &str, out: &mut String) {
 /// The image `bytes` decoded, when its header gives at most `max` pixels; the decoder may allocate
 /// at most 8 bytes a pixel.
 fn decode_bounded(bytes: &[u8], max: u64) -> Option<image::DynamicImage> {
-    let reader = || -> image::ImageResult<image::ImageReader<std::io::Cursor<&[u8]>>> {
-        let mut r = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(max * 8);
-        r.limits(limits);
-        Ok(r)
-    };
-    let (w, h) = reader().and_then(|r| r.into_dimensions()).ok()?;
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = max;
+    opts.limits.max_alloc = max * 8;
+    let img = craft_image_codecs::decode_with(bytes, &opts).ok()?;
+    let (w, h) = img.dimensions();
     if u64::from(w) * u64::from(h) > max {
         return None;
     }
-    reader().and_then(|r| r.decode()).ok()
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).map(image::DynamicImage::ImageRgba8)
 }

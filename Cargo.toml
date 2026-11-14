@@ -26,16 +26,19 @@ craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", re
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "228f6d0c50f1fdee4c5124603602993fc79d4c9d" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
-craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2", features = ["tree"] }
+craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32", features = ["tree"] }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
-craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
-craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
-craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
-craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
-craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
+craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
+craft-heif = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
@@ -94,11 +97,7 @@ wat = "1.228"
 # Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
 # vectorcraft-text gives it. The other default features stay.
 vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp", "tga"] }
-# Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
-# SVG import reads `<text>` from the XML itself and never gives usvg a font. A test of the SVG
-# crate turns `text` on.
-usvg = { version = "0.48", default-features = false, features = ["svgz"] }
+image = { version = "0.25", default-features = false }
 # Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
 # unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
 krilla = { version = "0.8", default-features = false, features = ["raster-images"] }
@@ -109,30 +108,11 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 rustix = { version = "1.1", default-features = false }
 # Zstandard decoder (pure Rust, builds for wasm32 too): the editing copy an EPS carries of its art.
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
-# CCITT Group 3 and Group 4 decoder (ITU-T T.4 and T.6): EPS images read through
-# `CCITTFaxDecode`. The PDF reader's hayro-syntax uses the same version.
-hayro-ccitt = "0.3"
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
 # The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page
 # the user picks (Mac OS Roman, Korean, Japanese, Chinese).
 encoding_rs = "0.8.42"
-jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
-gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
-# CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
-# decoders, read directly (the image crate converts CMYK to RGB).
-tiff = "0.11"
-zune-jpeg = "0.5"
-# JPEG XL decoder (pure Rust, MIT OR Apache-2.0): File › Open and Place read `.jxl` images. It is
-# built without its default `rayon` feature and decodes on one thread.
-jxl-oxide = { version = "0.12.6", default-features = false }
-# jxl-oxide's color conversions, run on colors after their alpha is divided out.
-jxl-color = "0.11.0"
-# jxl-oxide's buffer allocation error, told apart from other decoding errors.
-jxl-grid = "0.6.2"
-# Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
-zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
-zune-core = "0.5"
 
 # ui
 egui = "0.37"

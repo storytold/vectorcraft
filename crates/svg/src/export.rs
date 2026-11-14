@@ -1,5 +1,6 @@
 //! The SVG writer.
 
+use craft_svg::tree::usvg;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;

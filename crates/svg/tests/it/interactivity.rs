@@ -2,10 +2,11 @@
 //! and `<script xlink:href>` links (https://www.w3.org/TR/SVG11/script.html#ScriptElement), written
 //! by export and read back by import as text that nothing runs.
 
+use craft_svg::tree::usvg;
 use std::sync::Mutex;
 
+use craft_svg::tree::usvg::roxmltree;
 use proptest::prelude::*;
-use usvg::roxmltree;
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_svg::{Encoding, ExportOptions, ImportOptions, Profile, export, export_full, import, import_with};
 

@@ -9,9 +9,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use zune_jpeg::zune_core::bytestream::ZCursor;
-use zune_jpeg::zune_core::colorspace::ColorSpace;
-use zune_jpeg::zune_core::options::DecoderOptions;
+use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, Limits as CodecLimits, SampleType};
 
 use crate::ImageBlob;
 
@@ -47,9 +45,7 @@ pub fn jpeg_components(bytes: &[u8]) -> Option<usize> {
     if !bytes.starts_with(&[0xFF, 0xD8]) {
         return None;
     }
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    Some(d.info()?.components as usize)
+    craft_image_codecs::jpeg_info(bytes).map(|info| info.layout.channels())
 }
 
 fn is_tiff(bytes: &[u8]) -> bool {
@@ -124,20 +120,35 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
     (tiles || strips).then_some((width, height))
 }
 
-/// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
-pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
+/// Parsed TIFF `bytes`; `None` for non-TIFF or [`oversized_tiff`] images.
+pub(crate) fn parse_tiff(bytes: &[u8]) -> Option<craft_tiff::Tiff> {
     if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
         return None;
     }
-    let mut d = tiff::decoder::Decoder::new(Cursor::new(bytes)).ok()?;
-    Some((d.colortype().ok()?, d))
+    craft_tiff::Tiff::parse(bytes).ok()
+}
+
+/// Image metadata of TIFF `bytes`' first directory; `None` for non-TIFF or [`oversized_tiff`].
+pub(crate) fn tiff_image_info(bytes: &[u8]) -> Option<craft_tiff::image::ImageInfo> {
+    parse_tiff(bytes)?.ifds.first()?.image().ok()
+}
+
+/// Bit depth (8 or 16) when `info` describes a 4-channel CMYK TIFF.
+fn is_cmyk_tiff_info(info: &craft_tiff::image::ImageInfo) -> Option<u16> {
+    if info.photometric != 5 || info.samples_per_pixel != 4 {
+        return None;
+    }
+    let bps = *info.bits_per_sample.first()?;
+    if !matches!(bps, 8 | 16) || info.bits_per_sample.iter().any(|&b| b != bps) {
+        return None;
+    }
+    Some(bps)
 }
 
 /// The Orientation tag of TIFF `bytes`' first image, of any unsigned type; `None` for other images
 /// and TIFFs without one. Reads only its header.
 pub fn tiff_orientation(bytes: &[u8]) -> Option<u16> {
-    let (_, mut d) = tiff(bytes)?;
-    d.find_tag_unsigned::<u16>(tiff::tags::Tag::Orientation).ok().flatten()
+    parse_tiff(bytes)?.ifds.first()?.u16(craft_tiff::tags::ORIENTATION)
 }
 
 /// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
@@ -145,31 +156,97 @@ pub fn tiff_orientation(bytes: &[u8]) -> Option<u16> {
 /// extra samples) has its Orientation tag read from its first image ([`tiff_orientation`]). Reads
 /// only the image's header and metadata; `None` for an [`oversized_tiff`], which no decoder opens.
 pub fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
-    use image::ImageDecoder as _;
     use image::metadata::Orientation;
     if oversized_tiff(bytes).is_some() {
         return None;
     }
-    let decoded = || image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?.orientation().ok();
-    let tagged = || tiff_orientation(bytes).and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?));
-    decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
+    let raw = if is_tiff(bytes) {
+        tiff_orientation(bytes)
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        jpeg_exif_bytes(bytes).map(craft_image_codecs::exif_orientation)
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        png_exif_bytes(bytes).map(craft_image_codecs::exif_orientation)
+    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        webp_exif_bytes(bytes).map(craft_image_codecs::exif_orientation)
+    } else {
+        None
+    };
+    raw.and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?)).filter(|o| *o != Orientation::NoTransforms)
 }
 
-/// Does the TIFF `d` reads store one plane per channel (PlanarConfiguration 2)?
-fn planar(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
-    d.find_tag_unsigned::<u16>(tiff::tags::Tag::PlanarConfiguration).ok().flatten().is_some_and(|p| p != 1)
+/// EXIF payload from a JPEG's APP1 `Exif\0\0` segment, if present before SOS.
+fn jpeg_exif_bytes(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 2usize;
+    while i + 4 <= bytes.len() {
+        if bytes[i] != 0xFF {
+            return None;
+        }
+        while i < bytes.len() && bytes[i] == 0xFF {
+            i += 1;
+        }
+        let marker = *bytes.get(i)?;
+        i += 1;
+        if marker == 0xD9 || marker == 0xDA {
+            return None;
+        }
+        if (0xD0..=0xD8).contains(&marker) || marker == 0x01 {
+            continue;
+        }
+        let len = usize::from(u16::from_be_bytes([*bytes.get(i)?, *bytes.get(i + 1)?]));
+        if len < 2 || i + len > bytes.len() {
+            return None;
+        }
+        let payload = &bytes[i + 2..i + len];
+        if marker == 0xE1 && payload.starts_with(b"Exif\0\0") {
+            return Some(&payload[6..]);
+        }
+        i += len;
+    }
+    None
 }
 
-/// The samples of the `n` pixels of the TIFF `d` reads, `per` to a pixel (the number its color
-/// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
-/// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
-/// that many samples, which includes images whose planes together need more than the decoder's
-/// limit (256 MB of samples).
-pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
-    Some(match read_samples_at_depth(d, n, per)? {
-        Samples::Eight(v) => v,
-        Samples::Sixteen(v) => v.iter().map(|s| (s >> 8) as u8).collect(),
-    })
+/// EXIF payload from a PNG's `eXIf` chunk, if present.
+fn png_exif_bytes(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 8usize;
+    while i + 12 <= bytes.len() {
+        let len = usize::try_from(u32::from_be_bytes(bytes[i..i + 4].try_into().ok()?)).ok()?;
+        let kind = &bytes[i + 4..i + 8];
+        let end = i.checked_add(8)?.checked_add(len)?;
+        if end + 4 > bytes.len() {
+            return None;
+        }
+        if kind == b"eXIf" {
+            return Some(&bytes[i + 8..end]);
+        }
+        if kind == b"IEND" {
+            return None;
+        }
+        i = end + 4;
+    }
+    None
+}
+
+/// EXIF payload from a WebP's `EXIF` RIFF chunk, if present.
+fn webp_exif_bytes(bytes: &[u8]) -> Option<&[u8]> {
+    let mut i = 12usize;
+    while i + 8 <= bytes.len() {
+        let kind = &bytes[i..i + 4];
+        let len = usize::try_from(u32::from_le_bytes(bytes[i + 4..i + 8].try_into().ok()?)).ok()?;
+        let end = i.checked_add(8)?.checked_add(len)?;
+        if end > bytes.len() {
+            return None;
+        }
+        if kind == b"EXIF" {
+            return Some(&bytes[i + 8..end]);
+        }
+        i = end + (len & 1);
+    }
+    None
+}
+
+/// Does the TIFF `ifd` store one plane per channel (PlanarConfiguration 2)?
+fn planar(ifd: &craft_tiff::Ifd) -> bool {
+    ifd.u16(craft_tiff::tags::PLANAR_CONFIGURATION).is_some_and(|p| p != 1)
 }
 
 /// Samples of an image, pixel by pixel, at the depth its file stores them.
@@ -195,31 +272,20 @@ enum SampleSlice<'a> {
     Sixteen(&'a [u16]),
 }
 
-/// [`read_samples`], keeping 16-bit samples at 16 bits.
-fn read_samples_at_depth(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Samples> {
-    let mut buf = tiff::decoder::DecodingResult::U8(Vec::new());
-    let layout = d.read_image_to_buffer(&mut buf).ok()?;
-    match buf {
-        tiff::decoder::DecodingResult::U8(v) => chunky(v, layout.planes, n, per).map(Samples::Eight),
-        tiff::decoder::DecodingResult::U16(v) => chunky(v, layout.planes, n, per).map(Samples::Sixteen),
+/// Decode CMYK TIFF `bytes` (8 or 16 bits, chunky or planar) via `craft-image-codecs`.
+fn decode_cmyk_tiff_samples(bytes: &[u8], info: &craft_tiff::image::ImageInfo) -> Option<Samples> {
+    let _ = is_cmyk_tiff_info(info)?;
+    let _ = pixels(info.width, info.height)?;
+    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::unlimited(), keep_orientation: true };
+    let img = craft_image_codecs::decode_as_with(Format::Tiff, bytes, &opts).ok()?;
+    if img.layout != ChannelLayout::Cmyk || img.width != info.width || img.height != info.height {
+        return None;
+    }
+    match img.sample_type {
+        SampleType::U8 => Some(Samples::Eight(img.into_data())),
+        SampleType::U16 => Some(Samples::Sixteen(img.to_u16_samples()?)),
         _ => None,
     }
-}
-
-/// `data`, the samples of `n` pixels, `per` to a pixel, stored in `planes` planes, as the samples
-/// pixel by pixel; `None` when it doesn't hold that many samples or a plane per sample.
-fn chunky<T: Copy>(data: Vec<T>, planes: usize, n: usize, per: usize) -> Option<Vec<T>> {
-    if Some(data.len()) != n.checked_mul(per) {
-        return None;
-    }
-    if planes <= 1 {
-        return Some(data);
-    }
-    if planes != per {
-        return None;
-    }
-    let planes: Vec<&[T]> = data.chunks_exact(n).collect();
-    Some((0..n).flat_map(|i| planes.iter().filter_map(move |p| p.get(i).copied())).collect())
 }
 
 /// The color space an ICC profile's header names (bytes 16 to 19, such as `RGB `, `GRAY` or
@@ -231,24 +297,65 @@ pub fn icc_color_space(icc: &[u8]) -> Option<[u8; 4]> {
     icc.get(16..20)?.try_into().ok()
 }
 
-/// The ICC profile of TIFF tag 34675 (ICCProfile) of the image `d` reads; `None` without one.
-fn tiff_icc(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> Option<Vec<u8>> {
-    d.get_tag_u8_vec(tiff::tags::Tag::IccProfile).ok().filter(|icc| !icc.is_empty())
+/// The ICC profile of TIFF tag 34675 (ICCProfile) of `ifd`; `None` without one.
+fn tiff_icc(ifd: &craft_tiff::Ifd) -> Option<Vec<u8>> {
+    ifd.bytes(craft_tiff::tags::ICC_PROFILE).filter(|icc| !icc.is_empty()).map(|icc| icc.to_vec())
 }
 
-/// The ICC profile of TIFF `bytes`' first image (tag 34675), read with the `tiff` decoder's own
-/// limits, whatever the size of the image; `None` for other images and TIFFs without one.
+/// The ICC profile of TIFF `bytes`' first image (tag 34675); `None` for other images and TIFFs
+/// without one.
 pub fn tiff_icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
-    let (_, mut d) = tiff(bytes)?;
-    tiff_icc(&mut d)
+    tiff_icc(parse_tiff(bytes)?.ifds.first()?)
 }
 
 /// The ICC profile of a JPEG, put together from all its numbered `ICC_PROFILE` APP2 segments;
 /// `None` without one.
 fn jpeg_icc(bytes: &[u8]) -> Option<Vec<u8>> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    d.icc_profile().filter(|icc| !icc.is_empty())
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut chunks: Vec<(u8, u8, &[u8])> = Vec::new();
+    let mut i = 2usize;
+    while i + 4 <= bytes.len() {
+        if bytes[i] != 0xFF {
+            break;
+        }
+        while i < bytes.len() && bytes[i] == 0xFF {
+            i += 1;
+        }
+        let Some(&marker) = bytes.get(i) else { break };
+        i += 1;
+        if marker == 0xD9 || marker == 0xDA {
+            break;
+        }
+        if (0xD0..=0xD8).contains(&marker) || marker == 0x01 {
+            continue;
+        }
+        let len = usize::from(u16::from_be_bytes([*bytes.get(i)?, *bytes.get(i + 1)?]));
+        if len < 2 || i + len > bytes.len() {
+            break;
+        }
+        let payload = &bytes[i + 2..i + len];
+        if marker == 0xE2 && payload.starts_with(b"ICC_PROFILE\0") && payload.len() >= 14 {
+            let seq = payload[12];
+            let total = payload[13];
+            if seq >= 1 && total >= seq {
+                chunks.push((seq, total, &payload[14..]));
+            }
+        }
+        i += len;
+    }
+    if chunks.is_empty() {
+        return None;
+    }
+    let total = chunks[0].1;
+    chunks.sort_by_key(|c| c.0);
+    let mut out = Vec::new();
+    for expected in 1..=total {
+        let (_, _, data) = chunks.iter().find(|c| c.0 == expected && c.1 == total)?;
+        out.extend_from_slice(data);
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// `icc` when it is a profile of CMYK colors, which the samples of a CMYK image are in.
@@ -267,15 +374,12 @@ struct CmykSource {
 /// The samples of CMYK TIFF `bytes` (8 or 16 bits), their inks together or one plane per ink, with
 /// the TIFF's CMYK ICC profile; `None` for other images and ones larger than [`MAX_CMYK_PIXELS`].
 fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
-    let (kind, mut d) = tiff(bytes)?;
-    if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
-        return None;
-    }
-    let (width, height) = d.dimensions().ok()?;
-    let n = usize::try_from(pixels(width, height)?).ok()?;
-    let icc = cmyk_icc(tiff_icc(&mut d));
-    let samples = read_samples_at_depth(&mut d, n, 4)?;
-    Some(CmykSource { width, height, samples, icc })
+    let tiff = parse_tiff(bytes)?;
+    let ifd = tiff.ifds.first()?;
+    let info = ifd.image().ok()?;
+    let samples = decode_cmyk_tiff_samples(bytes, &info)?;
+    let icc = cmyk_icc(tiff_icc(ifd));
+    Some(CmykSource { width: info.width, height: info.height, samples, icc })
 }
 
 /// The ink amounts of a four-component JPEG, 8 bits each, with its CMYK ICC profile.
@@ -289,57 +393,38 @@ fn jpeg_source(bytes: &[u8]) -> Option<CmykSource> {
 /// above 0, and carrying `icc` as tag 34675 (ICCProfile, of type UNDEFINED); `None` when it can't be
 /// written.
 fn write_cmyk_tiff(width: u32, height: u32, samples: SampleSlice<'_>, ppi: Option<(f64, f64)>, icc: Option<&[u8]>) -> Option<Vec<u8>> {
-    use tiff::encoder::colortype::{CMYK8, CMYK16, ColorType};
-    use tiff::encoder::{Compression, ImageEncoder, Rational, TiffEncoder, TiffKind, compression::DeflateLevel};
-    use tiff::tags::{ResolutionUnit, Tag};
-    fn tags<W: std::io::Write + std::io::Seek, C: ColorType, K: TiffKind>(
-        img: &mut ImageEncoder<'_, W, C, K>,
-        ppi: Option<(f64, f64)>,
-        icc: Option<&[u8]>,
-    ) -> Option<()> {
-        if let Some((x, y)) = ppi.filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0)) {
-            // Ten-thousandths of a pixel per inch.
-            let r = |v: f64| Rational { n: (v * 10_000.0).round() as u32, d: 10_000 };
-            img.encoder().write_tag(Tag::XResolution, r(x)).ok()?;
-            img.encoder().write_tag(Tag::YResolution, r(y)).ok()?;
-            img.encoder().write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch).ok()?;
-        }
-        if let Some(icc) = icc {
-            img.encoder().write_tag(Tag::IccProfile, Undefined(icc)).ok()?;
-        }
-        Some(())
-    }
-    let mut out = Cursor::new(Vec::new());
-    let mut enc = TiffEncoder::new(&mut out).ok()?.with_compression(Compression::Deflate(DeflateLevel::Balanced));
-    match samples {
-        SampleSlice::Eight(data) => {
-            let mut img = enc.new_image::<CMYK8>(width, height).ok()?;
-            tags(&mut img, ppi, icc)?;
-            img.write_data(data).ok()?;
-        }
-        SampleSlice::Sixteen(data) => {
-            let mut img = enc.new_image::<CMYK16>(width, height).ok()?;
-            tags(&mut img, ppi, icc)?;
-            img.write_data(data).ok()?;
-        }
-    }
-    Some(out.into_inner())
-}
+    use craft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value, tags};
+    use flate2::{Compression, write::ZlibEncoder};
+    use std::io::Write as _;
 
-/// Bytes written as a TIFF field of type UNDEFINED, the type of an embedded ICC profile.
-struct Undefined<'a>(&'a [u8]);
+    let (bps, raw): (u16, Vec<u8>) = match samples {
+        SampleSlice::Eight(data) => (8, data.to_vec()),
+        SampleSlice::Sixteen(data) => (16, data.iter().flat_map(|s| s.to_le_bytes()).collect()),
+    };
+    let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+    enc.write_all(&raw).ok()?;
+    let compressed = enc.finish().ok()?;
 
-impl tiff::encoder::TiffValue for Undefined<'_> {
-    const BYTE_LEN: u8 = 1;
-    const FIELD_TYPE: tiff::tags::Type = tiff::tags::Type::UNDEFINED;
+    let mut ifd = IfdBuilder::new();
+    ifd.set(tags::IMAGE_WIDTH, Value::Long(vec![width]))
+        .set(tags::IMAGE_LENGTH, Value::Long(vec![height]))
+        .set(tags::BITS_PER_SAMPLE, Value::Short(vec![bps; 4]))
+        .set(tags::COMPRESSION, Value::Short(vec![8]))
+        .set(tags::PHOTOMETRIC, Value::Short(vec![5]))
+        .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![4]))
+        .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+        .set(tags::SAMPLE_FORMAT, Value::Short(vec![1; 4]))
+        .set_image(ImageData::Strips { rows_per_strip: height.max(1), strips: vec![compressed] });
 
-    fn count(&self) -> usize {
-        self.0.len()
+    if let Some((x, y)) = ppi.filter(|(x, y)| [x, y].iter().all(|v| v.is_finite() && **v > 0.0)) {
+        ifd.set(tags::X_RESOLUTION, Value::Rational(vec![((x * 10_000.0).round() as u32, 10_000)]))
+            .set(tags::Y_RESOLUTION, Value::Rational(vec![((y * 10_000.0).round() as u32, 10_000)]))
+            .set(tags::RESOLUTION_UNIT, Value::Short(vec![2]));
     }
-
-    fn data(&self) -> std::borrow::Cow<'_, [u8]> {
-        std::borrow::Cow::Borrowed(self.0)
+    if let Some(icc) = icc {
+        ifd.set(tags::ICC_PROFILE, Value::Undefined(icc.to_vec()));
     }
+    TiffWriter::new(ByteOrder::Little, false).write(&[ifd]).ok()
 }
 
 impl ImageBlob {
@@ -358,25 +443,22 @@ impl ImageBlob {
     /// Does the image hold CMYK samples (a four-component JPEG or a CMYK TIFF)? Reads only its
     /// header.
     pub fn is_cmyk(&self) -> bool {
-        jpeg_components(&self.bytes) == Some(4) || tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(8 | 16)))
+        jpeg_components(&self.bytes) == Some(4) || tiff_image_info(&self.bytes).is_some_and(|info| is_cmyk_tiff_info(&info).is_some())
     }
 
     /// Does the image hold CMYK samples of 16 bits (a CMYK TIFF), which [`Self::cmyk`] gives at 8
     /// bits? Reads only its header.
     pub fn is_cmyk16(&self) -> bool {
-        tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(16)))
+        tiff_image_info(&self.bytes).is_some_and(|info| is_cmyk_tiff_info(&info) == Some(16))
     }
 
     /// The width and height a JPEG or TIFF says it has, for any color type. Reads only its header.
     pub fn header_size(&self) -> Option<(u32, u32)> {
         let bytes = self.bytes.as_slice();
         if bytes.starts_with(&[0xFF, 0xD8]) {
-            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-            d.decode_headers().ok()?;
-            let (w, h) = d.dimensions()?;
-            return Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?));
+            return craft_image_codecs::jpeg_info(bytes).map(|info| (info.width, info.height));
         }
-        tiff(bytes).and_then(|(_, mut d)| d.dimensions().ok())
+        tiff_image_info(bytes).map(|info| (info.width, info.height))
     }
 
     /// The ink amounts of a CMYK image; `None` for other images, and ones that can't be decoded
@@ -394,11 +476,11 @@ impl ImageBlob {
         if jpeg_components(bytes) == Some(4) {
             return cmyk_icc(jpeg_icc(bytes));
         }
-        let (kind, mut d) = tiff(bytes)?;
-        if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
-            return None;
-        }
-        cmyk_icc(tiff_icc(&mut d))
+        let tiff = parse_tiff(bytes)?;
+        let ifd = tiff.ifds.first()?;
+        let info = ifd.image().ok()?;
+        let _ = is_cmyk_tiff_info(&info)?;
+        cmyk_icc(tiff_icc(ifd))
     }
 
     /// The ink amounts around pixel (`x`, `y`) of a CMYK image, in the pixel space of an image
@@ -449,45 +531,27 @@ fn sample_inks(inks: &Inks, x: f64, y: f64, size: u32) -> Option<[u8; 4]> {
     Some(sum.map(c))
 }
 
-/// The ink amounts of a four-component JPEG (its samples inverted back; YCCK converted to CMYK
-/// first, as JPEG readers do).
+/// The ink amounts of a four-component JPEG.
 fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    let space = d.input_colorspace()?;
-    if d.info()?.components != 4 || !matches!(space, ColorSpace::CMYK | ColorSpace::YCCK) {
+    let limits = CodecLimits { max_pixels: MAX_CMYK_PIXELS, ..CodecLimits::default() };
+    let img = craft_image_codecs::decode_as_with(Format::Jpeg, bytes, &limits).ok()?;
+    if img.layout() != ChannelLayout::Cmyk || img.sample_type() != SampleType::U8 {
         return None;
     }
-    let (w, h) = d.dimensions()?;
-    let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+    let (w, h) = img.dimensions();
     pixels(w, h)?;
-    d.set_options(DecoderOptions::default().jpeg_set_out_colorspace(space));
-    let mut data = d.decode().ok()?;
-    for p in data.as_chunks_mut::<4>().0 {
-        if space == ColorSpace::YCCK {
-            let [y, cb, cr] = [p[0], p[1], p[2]].map(f32::from);
-            // libjpeg's YCCK → CMYK: the complement of the YCbCr colour's RGB.
-            p[0] = (434.456 - y - 1.402 * cr).clamp(0.0, 255.0) as u8;
-            p[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).clamp(0.0, 255.0) as u8;
-            p[2] = (481.816 - y - 1.772 * cb).clamp(0.0, 255.0) as u8;
-        }
-        for v in p.iter_mut() {
-            *v = 255 - *v;
-        }
-    }
-    Inks::new(w, h, data)
+    Inks::new(w, h, img.into_data())
 }
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
 /// per ink.
 fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
-    let (kind, mut d) = tiff(bytes)?;
-    let (w, h) = d.dimensions().ok()?;
-    if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
-        return None;
-    }
-    let n = usize::try_from(pixels(w, h)?).ok()?;
-    Inks::new(w, h, read_samples(&mut d, n, 4)?)
+    let info = tiff_image_info(bytes)?;
+    let data = match decode_cmyk_tiff_samples(bytes, &info)? {
+        Samples::Eight(v) => v,
+        Samples::Sixteen(v) => v.into_iter().map(|s| (s >> 8) as u8).collect(),
+    };
+    Inks::new(info.width, info.height, data)
 }
 
 /// CMYK TIFF `bytes` that no orientation turns ([`turned_cmyk`] stores the others) as Open and
@@ -497,8 +561,9 @@ fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
 /// whose inks [`ImageBlob::cmyk`] doesn't read.
 pub fn stored_cmyk_tiff(bytes: &[u8], ppi: Option<(f64, f64)>) -> Option<Vec<u8>> {
     let source = tiff_source(bytes)?;
-    let (_, mut d) = tiff(bytes)?;
-    if !planar(&mut d) {
+    let tiff = parse_tiff(bytes)?;
+    let ifd = tiff.ifds.first()?;
+    if !planar(ifd) {
         return Some(bytes.to_vec());
     }
     write_cmyk_tiff(source.width, source.height, source.samples.as_slice(), ppi, source.icc.as_deref())
@@ -535,23 +600,35 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// is rounded to 8 bits. The samples may be stored together or one plane per channel. `None` for
 /// other images and ones larger than [`MAX_CMYK_PIXELS`].
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
-    use tiff::tags::Tag;
-    let (kind, mut d) = tiff(bytes)?;
-    let (w, h) = d.dimensions().ok()?;
-    // 0: white is zero, 1: black is zero (the two grayscales).
-    let photometric = d.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).ok().flatten();
+    let tiff = parse_tiff(bytes)?;
+    let ifd = tiff.ifds.first()?;
+    let info = ifd.image().ok()?;
+    let bps = *info.bits_per_sample.first()?;
+    if !matches!(bps, 8 | 16) || info.bits_per_sample.iter().any(|&b| b != bps) {
+        return None;
+    }
+    let is_cmyka = info.photometric == 5 && info.samples_per_pixel == 5;
+    let is_gray_extra = matches!(info.photometric, 0 | 1) && info.samples_per_pixel >= 2;
+    if !is_cmyka && !is_gray_extra {
+        return None;
+    }
+    let (w, h) = (info.width, info.height);
+    let n = usize::try_from(pixels(w, h)?).ok()?;
     // ExtraSamples 1: associated alpha (premultiplied colour), 2: unassociated alpha, 0: not alpha.
-    let extra = d.find_tag_unsigned_vec::<u16>(Tag::ExtraSamples).ok().flatten().and_then(|v| v.first().copied());
-    // (samples in a pixel, how many of them are its colour, is the next one alpha?)
-    let (samples, colour, alpha) = match kind {
-        tiff::ColorType::CMYKA(8 | 16) => (5, 4, true),
-        tiff::ColorType::Multiband { bit_depth: 8 | 16, num_samples: n @ 2.. } if matches!(photometric, Some(0 | 1)) => {
-            (usize::from(n), 1, matches!(extra, Some(1 | 2)))
-        }
+    let extra = ifd.u64s(craft_tiff::tags::EXTRA_SAMPLES).and_then(|v| v.first().copied()).and_then(|v| u16::try_from(v).ok());
+    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::unlimited(), keep_orientation: true };
+    let img = craft_image_codecs::decode_as_with(Format::Tiff, bytes, &opts).ok()?;
+    let (samples, colour, alpha) = match img.layout {
+        ChannelLayout::CmykA if is_cmyka => (5, 4, true),
+        ChannelLayout::GrayA if is_gray_extra => (2, 1, true),
+        ChannelLayout::Gray if is_gray_extra => (1, 1, false),
         _ => return None,
     };
-    let n = usize::try_from(pixels(w, h)?).ok()?;
-    let data = read_samples_at_depth(&mut d, n, samples)?;
+    let data = match img.sample_type {
+        SampleType::U8 => Samples::Eight(img.into_data()),
+        SampleType::U16 => Samples::Sixteen(img.to_u16_samples()?),
+        _ => return None,
+    };
     // Sample `i` of the image, 0..1.
     let level_at = |i: usize| match &data {
         Samples::Eight(v) => v.get(i).map(|&s| f32::from(s) / 255.0),
@@ -576,7 +653,6 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
         };
         let [r, g, b] = match colour {
             4 => rgb([level(0), level(1), level(2), level(3)]),
-            _ if photometric == Some(0) => [1.0 - level(0); 3],
             _ => [level(0); 3],
         };
         out.extend([r, g, b].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
@@ -595,7 +671,7 @@ pub enum Group3Error {
     /// doesn't read, such as T.4's uncompressed mode, or a row of the wrong width), or a tile is
     /// larger than [`crate::MAX_RASTER_ALLOC`] allows as RGBA.
     #[error("could not decode image: {0}")]
-    Damaged(hayro_ccitt::DecodeError),
+    Damaged(craft_stream_codecs::CcittErrorKind),
 }
 
 /// The pixels of a 1-bit TIFF compressed with CCITT Group 3, which the image decoder doesn't read,
@@ -610,151 +686,138 @@ pub enum Group3Error {
 /// an error when the pixels would take more than [`crate::MAX_RASTER_ALLOC`] as RGBA, a tile is
 /// larger than that allowance, or a strip or tile can't be decoded or ends before its last row.
 pub fn group3_tiff_rgba(bytes: &[u8]) -> Option<Result<image::RgbaImage, Group3Error>> {
-    use hayro_ccitt::{DecodeError, DecodeSettings, DecoderContext, EncodingMode};
-    use tiff::tags::Tag;
-    let (kind, mut d) = tiff(bytes)?;
-    let compression = d.find_tag_unsigned::<u16>(Tag::Compression).ok().flatten()?;
-    let (w, h) = d.dimensions().ok()?;
-    if kind != tiff::ColorType::Gray(1) || !matches!(compression, 2 | 3) || w == 0 || h == 0 {
+    use craft_stream_codecs::{CcittErrorKind, CcittParams, decode_ccitt_raw};
+    use craft_tiff::tags;
+    let tiff = parse_tiff(bytes)?;
+    let ifd = tiff.ifds.first()?;
+    let info = ifd.image().ok()?;
+    let compression = info.compression;
+    let (w, h) = (info.width, info.height);
+    if info.samples_per_pixel != 1 || info.bits_per_sample != [1] || !matches!(compression, 2 | 3) || w == 0 || h == 0 {
         return None;
     }
     // The level of a 0 bit (a white run): white when white is zero (0), black when black is zero (1).
-    let zero = match d.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).ok().flatten() {
-        Some(0) => u8::MAX,
-        Some(1) => 0,
+    let zero = match info.photometric {
+        0 => u8::MAX,
+        1 => 0,
         _ => return None,
     };
     if u64::from(w) * u64::from(h) > crate::MAX_RASTER_ALLOC / 4 {
         return Some(Err(Group3Error::TooLarge { w, h }));
     }
-    let t4_options = d.find_tag_unsigned::<u32>(Tag::Unknown(292)).ok().flatten().unwrap_or(0);
-    let lsb_first = d.find_tag_unsigned::<u16>(Tag::FillOrder).ok().flatten() == Some(2);
-    let encoding = if compression == 3 && t4_options & 1 != 0 {
-        // Each row's tag bit says how it is coded.
-        EncodingMode::Group3_2D { k: 2 }
-    } else {
-        EncodingMode::Group3_1D
-    };
+    let t4_options = ifd.u32(292).unwrap_or(0);
+    let lsb_first = ifd.u16(266) == Some(2);
+    let k = if compression == 3 && t4_options & 1 != 0 { 2 } else { 0 };
     // The width and height of each strip or tile, and the tags of their offsets and byte counts.
-    let tiled = d.get_chunk_type() == tiff::decoder::ChunkType::Tile;
-    let (cw, ch, offsets, counts) = if tiled {
-        let tw = d.find_tag_unsigned::<u32>(Tag::TileWidth).ok().flatten().filter(|&v| v > 0)?;
-        let th = d.find_tag_unsigned::<u32>(Tag::TileLength).ok().flatten().filter(|&v| v > 0)?;
-        (tw, th, Tag::TileOffsets, Tag::TileByteCounts)
+    let tiled = ifd.contains(tags::TILE_WIDTH);
+    let (cw, ch) = if tiled {
+        let tw = ifd.u32(tags::TILE_WIDTH).filter(|&v| v > 0)?;
+        let th = ifd.u32(tags::TILE_LENGTH).filter(|&v| v > 0)?;
+        (tw, th)
     } else {
-        let rows = d.find_tag_unsigned::<u32>(Tag::RowsPerStrip).ok().flatten().filter(|&v| v > 0).map_or(h, |r| r.min(h));
-        (w, rows, Tag::StripOffsets, Tag::StripByteCounts)
+        let rows = ifd.u32(tags::ROWS_PER_STRIP).filter(|&v| v > 0).map_or(h, |r| r.min(h));
+        (w, rows)
     };
-    let damaged = |e: DecodeError| Some(Err(Group3Error::Damaged(e)));
+    let damaged = |e: CcittErrorKind| Some(Err(Group3Error::Damaged(e)));
     // A tile is held to the allowance the image is held to; a strip is no larger than the image.
     if u64::from(cw) * u64::from(ch) > crate::MAX_RASTER_ALLOC / 4 {
-        return damaged(DecodeError::Overflow);
+        return damaged(CcittErrorKind::Overflow);
     }
-    let offsets = d.find_tag_unsigned_vec::<u64>(offsets).ok().flatten().unwrap_or_default();
-    let counts = d.find_tag_unsigned_vec::<u64>(counts).ok().flatten().unwrap_or_default();
+    let offsets = &info.offsets;
+    let counts = &info.byte_counts;
     let across = w.div_ceil(cw);
     let chunks = u64::from(across) * u64::from(h.div_ceil(ch));
     if chunks > offsets.len().min(counts.len()) as u64 {
-        return damaged(DecodeError::UnexpectedEof);
+        return damaged(CcittErrorKind::UnexpectedEof);
     }
     let mut gray = vec![zero; usize::try_from(u64::from(w) * u64::from(h)).ok()?];
     let mut budget = bytes.len();
+    let stride = (cw as usize).div_ceil(8);
     for (i, (&offset, &count)) in (0..chunks).zip(offsets.iter().zip(&counts)) {
         let (x0, y0) = (u32::try_from(i % u64::from(across)).ok()? * cw, u32::try_from(i / u64::from(across)).ok()? * ch);
         let Some(start) = usize::try_from(offset).ok().filter(|&s| s <= bytes.len()) else {
-            return damaged(DecodeError::UnexpectedEof);
+            return damaged(CcittErrorKind::UnexpectedEof);
         };
         let len = usize::try_from(count).unwrap_or(usize::MAX).min(bytes.len() - start).min(budget);
         budget -= len;
         let data = bytes.get(start..start + len)?;
         let data: std::borrow::Cow<[u8]> = if lsb_first { data.iter().map(|b| b.reverse_bits()).collect() } else { data.into() };
-        let settings = DecodeSettings {
-            columns: cw,
-            // A tile is coded whole; the last strip only has the image's remaining rows.
-            rows: if tiled { ch } else { ch.min(h - y0) },
+        // A tile is coded whole; the last strip only has the image's remaining rows.
+        let target_rows = if tiled { ch } else { ch.min(h - y0) };
+        let params = CcittParams {
+            k,
+            columns: i64::from(cw),
+            rows: i64::from(target_rows),
             end_of_block: compression == 3,
             end_of_line: compression == 3,
-            rows_are_byte_aligned: compression == 2,
-            encoding,
-            invert_black: false,
+            encoded_byte_align: compression == 2,
+            black_is_1: true,
         };
-        let mut rows = Rows { out: &mut gray, width: w, height: h, x0, y0, x: 0, y: 0, zero };
-        if let Err(e) = hayro_ccitt::decode(&data, &mut rows, &mut DecoderContext::new(settings)) {
+        let Ok(out) = decode_ccitt_raw(&data, &params, target_rows) else {
+            return damaged(CcittErrorKind::Overflow);
+        };
+        if let Some(e) = out.error {
             return damaged(e);
         }
-        // The data ended, or six EOL codes came, before the strip's or tile's last row.
-        if rows.y < settings.rows {
-            return damaged(DecodeError::UnexpectedEof);
+        if out.rows_decoded < target_rows {
+            return damaged(CcittErrorKind::UnexpectedEof);
+        }
+        let max_y = target_rows.min(h - y0);
+        let max_x = cw.min(w - x0);
+        for y in 0..max_y {
+            let src_row = &out.data[y as usize * stride..][..stride];
+            let dst_off = (y0 + y) as usize * w as usize + x0 as usize;
+            for x in 0..max_x as usize {
+                let bit = (src_row[x / 8] >> (7 - (x % 8))) & 1;
+                gray[dst_off + x] = if bit == 0 { zero } else { u8::MAX - zero };
+            }
         }
     }
     let gray = image::GrayImage::from_raw(w, h, gray)?;
     Some(Ok(image::DynamicImage::ImageLuma8(gray).to_rgba8()))
 }
 
-/// Where a strip or tile of a Group 3 TIFF ([`group3_tiff_rgba`]) puts its decoded pixels: `out`
-/// holds the image's levels row by row, `width` × `height`, and the strip or tile starts at (`x0`,
-/// `y0`). Pixels past the image's right or bottom edge (a tile's padding) are dropped.
-struct Rows<'a> {
-    out: &'a mut [u8],
-    width: u32,
-    height: u32,
-    x0: u32,
-    y0: u32,
-    /// The next pixel in the strip or tile.
-    x: u64,
-    y: u32,
-    /// The level of a white run.
-    zero: u8,
-}
-
-impl Rows<'_> {
-    /// The next `n` pixels of the row, a white run's or a black run's.
-    fn run(&mut self, white: bool, n: u64) {
-        let level = if white { self.zero } else { u8::MAX - self.zero };
-        let row = u64::from(self.y0) + u64::from(self.y);
-        let left = u64::from(self.x0) + self.x;
-        let right = left.saturating_add(n).min(u64::from(self.width));
-        if row < u64::from(self.height) && left < right {
-            let at = row * u64::from(self.width);
-            if let (Ok(a), Ok(b)) = (usize::try_from(at + left), usize::try_from(at + right))
-                && let Some(px) = self.out.get_mut(a..b)
-            {
-                px.fill(level);
-            }
-        }
-        self.x = self.x.saturating_add(n);
-    }
-}
-
-impl hayro_ccitt::Decoder for Rows<'_> {
-    fn push_pixel(&mut self, white: bool) {
-        self.run(white, 1);
-    }
-
-    fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
-        self.run(white, u64::from(chunk_count) * 8);
-    }
-
-    fn next_line(&mut self) {
-        self.y = self.y.saturating_add(1);
-        self.x = 0;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn test_extra_tiff_u8(width: u32, height: u32, photometric: u16, spp: u16, extra: u16, data: &[u8]) -> Vec<u8> {
+        use craft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value, tags};
+        let mut ifd = IfdBuilder::new();
+        ifd.set(tags::IMAGE_WIDTH, Value::Long(vec![width]))
+            .set(tags::IMAGE_LENGTH, Value::Long(vec![height]))
+            .set(tags::BITS_PER_SAMPLE, Value::Short(vec![8; usize::from(spp)]))
+            .set(tags::COMPRESSION, Value::Short(vec![1]))
+            .set(tags::PHOTOMETRIC, Value::Short(vec![photometric]))
+            .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![spp]))
+            .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+            .set(tags::SAMPLE_FORMAT, Value::Short(vec![1; usize::from(spp)]))
+            .set(tags::EXTRA_SAMPLES, Value::Short(vec![extra]))
+            .set_image(ImageData::Strips { rows_per_strip: height, strips: vec![data.to_vec()] });
+        TiffWriter::new(ByteOrder::Little, false).write(&[ifd]).unwrap()
+    }
+
+    fn test_extra_tiff_u16(width: u32, height: u32, photometric: u16, spp: u16, extra: u16, data: &[u16]) -> Vec<u8> {
+        use craft_tiff::{ByteOrder, IfdBuilder, ImageData, TiffWriter, Value, tags};
+        let raw: Vec<u8> = data.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let mut ifd = IfdBuilder::new();
+        ifd.set(tags::IMAGE_WIDTH, Value::Long(vec![width]))
+            .set(tags::IMAGE_LENGTH, Value::Long(vec![height]))
+            .set(tags::BITS_PER_SAMPLE, Value::Short(vec![16; usize::from(spp)]))
+            .set(tags::COMPRESSION, Value::Short(vec![1]))
+            .set(tags::PHOTOMETRIC, Value::Short(vec![photometric]))
+            .set(tags::SAMPLES_PER_PIXEL, Value::Short(vec![spp]))
+            .set(tags::PLANAR_CONFIGURATION, Value::Short(vec![1]))
+            .set(tags::SAMPLE_FORMAT, Value::Short(vec![1; usize::from(spp)]))
+            .set(tags::EXTRA_SAMPLES, Value::Short(vec![extra]))
+            .set_image(ImageData::Strips { rows_per_strip: height, strips: vec![raw] });
+        TiffWriter::new(ByteOrder::Little, false).write(&[ifd]).unwrap()
+    }
+
     #[test]
     fn a_cmyk_tiff_with_alpha_reads_as_rgba() {
-        use tiff::encoder::{TiffEncoder, colortype::CMYKA8};
         // 2 × 1: full cyan opaque, then 100% K at half alpha (premultiplied: K 128, alpha 128).
-        let mut file = Cursor::new(Vec::new());
-        let mut enc = TiffEncoder::new(&mut file).unwrap();
-        let mut img = enc.new_image::<CMYKA8>(2, 1).unwrap();
-        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[1u16][..]).unwrap();
-        img.write_data(&[255, 0, 0, 0, 255, 0, 0, 0, 128, 128]).unwrap();
-        let bytes = file.into_inner();
+        let bytes = test_extra_tiff_u8(2, 1, 5, 5, 1, &[255, 0, 0, 0, 255, 0, 0, 0, 128, 128]);
         let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
         let px = extra_samples_tiff_rgba(&bytes, naive).expect("CMYKA reads");
         assert_eq!(px.dimensions(), (2, 1));
@@ -764,31 +827,12 @@ mod tests {
         assert!(extra_samples_tiff_rgba(&ImageBlob::cmyk_tiff(&inks()).unwrap().bytes, naive).is_none());
     }
 
-    /// Two 8-bit samples a pixel: gray and one extra sample, which the file's `ExtraSamples` names.
-    struct GrayExtra8;
-    impl tiff::encoder::colortype::ColorType for GrayExtra8 {
-        type Inner = u8;
-        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::BlackIsZero;
-        const BITS_PER_SAMPLE: &'static [u16] = &[8, 8];
-        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 2];
-        fn horizontal_predict(row: &[u8], result: &mut Vec<u8>) {
-            result.extend_from_slice(row);
-        }
-    }
-
-    /// A grayscale TIFF with an alpha channel, or with a channel that isn't one (#1466): the image
-    /// decoder reads neither.
+    /// A grayscale TIFF with an alpha channel, or with a channel that isn't one (#1466).
     #[test]
     fn a_grayscale_tiff_with_an_extra_channel_reads_as_rgba() {
         let gray = |extra: u16| {
-            let mut file = Cursor::new(Vec::new());
-            let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
-            let mut img = enc.new_image::<GrayExtra8>(3, 1).unwrap();
-            img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[extra][..]).unwrap();
             // White opaque, a gray of 64 at 80% alpha (premultiplied: 51), black with no alpha.
-            img.write_data(&[255, 255, 51, 204, 0, 0]).unwrap();
-            let bytes = file.into_inner();
-            assert!(image::load_from_memory(&bytes).is_err(), "the image decoder reads it now: this reader may go");
+            let bytes = test_extra_tiff_u8(3, 1, 1, 2, extra, &[255, 255, 51, 204, 0, 0]);
             extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).expect("gray with an extra sample reads").into_raw()
         };
         assert_eq!(gray(1), [255, 255, 255, 255, 64, 64, 64, 204, 0, 0, 0, 0], "associated alpha, divided back out");
@@ -796,48 +840,15 @@ mod tests {
         assert_eq!(gray(0), [255, 255, 255, 255, 51, 51, 51, 255, 0, 0, 0, 255], "a channel that isn't alpha: opaque");
     }
 
-    /// Five 16-bit samples a pixel: the four inks and one extra sample, which the file's
-    /// `ExtraSamples` names.
-    struct Cmyka16;
-    impl tiff::encoder::colortype::ColorType for Cmyka16 {
-        type Inner = u16;
-        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::CMYK;
-        const BITS_PER_SAMPLE: &'static [u16] = &[16; 5];
-        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 5];
-        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
-            result.extend_from_slice(row);
-        }
-    }
-
-    /// Two 16-bit samples a pixel: gray and one extra sample.
-    struct GrayExtra16;
-    impl tiff::encoder::colortype::ColorType for GrayExtra16 {
-        type Inner = u16;
-        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::BlackIsZero;
-        const BITS_PER_SAMPLE: &'static [u16] = &[16, 16];
-        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 2];
-        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
-            result.extend_from_slice(row);
-        }
-    }
-
-    /// A one-row TIFF of `C`'s pixels `data`, with the ExtraSamples value `extra`.
-    fn extra_tiff<C: tiff::encoder::colortype::ColorType<Inner = u16>>(extra: u16, data: &[u16]) -> Vec<u8> {
-        let samples = C::BITS_PER_SAMPLE.len();
-        let mut file = Cursor::new(Vec::new());
-        let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
-        let mut img = enc.new_image::<C>(u32::try_from(data.len() / samples).unwrap(), 1).unwrap();
-        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[extra][..]).unwrap();
-        img.write_data(data).unwrap();
-        file.into_inner()
-    }
-
     /// 16-bit CMYK with alpha converts its 16-bit inks and alpha, and rounds only the result to 8
     /// bits; the high byte of each sample alone would give other pixels.
     #[test]
     fn a_16_bit_cmyk_tiff_with_alpha_converts_at_16_bits() {
         let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
-        let read = |extra: u16, data: &[u16]| extra_samples_tiff_rgba(&extra_tiff::<Cmyka16>(extra, data), naive).expect("CMYKA reads").into_raw();
+        let read = |extra: u16, data: &[u16]| {
+            let w = u32::try_from(data.len() / 5).unwrap();
+            extra_samples_tiff_rgba(&test_extra_tiff_u16(w, 1, 5, 5, extra, data), naive).expect("CMYKA reads").into_raw()
+        };
         // Unassociated: 129 of cyan, opaque; no ink at an alpha of 129; no ink at an alpha of 386.
         let straight = [129, 0, 0, 0, 65535, 0, 0, 0, 0, 129, 0, 0, 0, 0, 386];
         assert_eq!(read(2, &straight), [254, 255, 255, 255, 255, 255, 255, 1, 255, 255, 255, 2]);
@@ -851,7 +862,7 @@ mod tests {
     fn a_16_bit_grayscale_tiff_with_alpha_converts_at_16_bits() {
         let read = |extra: u16| {
             // A gray of 129, opaque, then 128 at an alpha of 256.
-            let bytes = extra_tiff::<GrayExtra16>(extra, &[129, 65535, 128, 256]);
+            let bytes = test_extra_tiff_u16(2, 1, 1, 2, extra, &[129, 65535, 128, 256]);
             extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).expect("gray with alpha reads").into_raw()
         };
         assert_eq!(read(2), [1, 1, 1, 255, 0, 0, 0, 1], "unassociated");
@@ -862,16 +873,11 @@ mod tests {
     /// Alpha Handling), whatever its color samples hold.
     #[test]
     fn a_pixel_with_no_associated_alpha_has_no_color() {
-        use tiff::encoder::{TiffEncoder, colortype::CMYKA8};
         let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
-        let mut file = Cursor::new(Vec::new());
-        let mut enc = TiffEncoder::new(&mut file).unwrap();
-        let mut img = enc.new_image::<CMYKA8>(1, 1).unwrap();
-        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[1u16][..]).unwrap();
-        img.write_data(&[255, 0, 0, 0, 0]).unwrap();
-        let cmyk = extra_samples_tiff_rgba(&file.into_inner(), naive).expect("CMYKA reads");
+        let cmyk_bytes = test_extra_tiff_u8(1, 1, 5, 5, 1, &[255, 0, 0, 0, 0]);
+        let cmyk = extra_samples_tiff_rgba(&cmyk_bytes, naive).expect("CMYKA reads");
         assert_eq!(cmyk.into_raw(), [255, 255, 255, 0], "no ink");
-        let gray = extra_samples_tiff_rgba(&extra_tiff::<GrayExtra16>(1, &[50_000, 0]), |_| [0.0; 3]).expect("gray reads");
+        let gray = extra_samples_tiff_rgba(&test_extra_tiff_u16(1, 1, 1, 2, 1, &[50_000, 0]), |_| [0.0; 3]).expect("gray reads");
         assert_eq!(gray.into_raw(), [0, 0, 0, 0], "a gray of zero");
     }
 
@@ -944,8 +950,8 @@ mod tests {
         assert!(b.is_cmyk());
         assert_eq!(b.cmyk(), Some(inks()), "lossless");
         // Every image reader sees an RGB image: cyan is (0, 255, 255).
-        let rgb = image::load_from_memory(&b.bytes).unwrap().to_rgb8();
-        assert_eq!(rgb.get_pixel(1, 0).0, [0, 255, 255]);
+        let rgb = craft_image_codecs::decode(&b.bytes).unwrap().to_rgba8();
+        assert_eq!(&rgb[4..7], &[0, 255, 255]);
     }
 
     #[test]
@@ -975,8 +981,11 @@ mod tests {
         assert!(big.is_cmyk());
         assert_eq!(big.header_size(), Some((6000, 6000)));
         assert_eq!(big.cmyk(), None);
-        let mut png = Vec::new();
-        image::RgbaImage::new(2, 2).write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let png = craft_image_codecs::encode(
+            &CodecImage::from_raw(2, Format::Png, 2, ChannelLayout::Rgba, SampleType::U8, vec![0; 16]).unwrap(),
+            &EncodeOptions::default(),
+        )
+        .unwrap();
         assert_eq!(ImageBlob::png(png).header_size(), None, "not a JPEG or TIFF");
     }
 
@@ -989,8 +998,11 @@ mod tests {
         // 3 × 3 around (1, 0), clipped to the image: all six pixels averaged.
         assert_eq!(b.sample_cmyk_object(1.5, 0.5, (3, 2), 3), Some([45, 55, 69, 56]));
         assert_eq!(b.sample_cmyk_object(3.5, 0.5, (3, 2), 1), None, "outside");
-        let mut png = Vec::new();
-        image::RgbaImage::new(2, 2).write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let png = craft_image_codecs::encode(
+            &CodecImage::from_raw(2, Format::Png, 2, ChannelLayout::Rgba, SampleType::U8, vec![0; 16]).unwrap(),
+            &EncodeOptions::default(),
+        )
+        .unwrap();
         assert_eq!(ImageBlob::png(png).sample_cmyk_object(0.5, 0.5, (2, 2), 1), None, "an RGB image has no inks");
     }
 
@@ -999,8 +1011,11 @@ mod tests {
         // A flat CMYK JPEG: Adobe's inverted samples with its marker.
         let flat = [10u8, 40, 100, 20];
         let px: Vec<u8> = (0..16 * 16).flat_map(|_| flat).collect();
-        let mut jpg = Vec::new();
-        jpeg_encoder::Encoder::new(&mut jpg, 100).encode(&px, 16, 16, jpeg_encoder::ColorType::Cmyk).unwrap();
+        let jpg = craft_image_codecs::encode(
+            &CodecImage::from_raw(16, Format::Jpeg, 16, ChannelLayout::Cmyk, SampleType::U8, px).unwrap(),
+            &EncodeOptions { jpeg_quality: 100, ..EncodeOptions::default() },
+        )
+        .unwrap();
         let b = ImageBlob::new("image/jpeg", jpg);
         assert_eq!(jpeg_components(&b.bytes), Some(4));
         assert!(b.is_cmyk());
@@ -1013,10 +1028,16 @@ mod tests {
 
     #[test]
     fn other_images_are_not_cmyk() {
-        let mut png = Vec::new();
-        image::RgbaImage::new(2, 2).write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
-        let mut jpg = Vec::new();
-        image::RgbImage::new(8, 8).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+        let png = craft_image_codecs::encode(
+            &CodecImage::from_raw(2, Format::Png, 2, ChannelLayout::Rgba, SampleType::U8, vec![0; 16]).unwrap(),
+            &EncodeOptions::default(),
+        )
+        .unwrap();
+        let jpg = craft_image_codecs::encode(
+            &CodecImage::from_raw(8, Format::Jpeg, 8, ChannelLayout::Rgb, SampleType::U8, vec![0; 8 * 8 * 3]).unwrap(),
+            &EncodeOptions::default(),
+        )
+        .unwrap();
         for b in [ImageBlob::png(png), ImageBlob::new("image/jpeg", jpg), ImageBlob::new("image/tiff", b"II*\0junk".to_vec())] {
             assert!(!b.is_cmyk() && b.cmyk().is_none(), "{}", b.mime);
         }

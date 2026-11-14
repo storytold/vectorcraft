@@ -1629,7 +1629,7 @@ impl<'a> Scene<'a> {
 
     /// Image `blob` as RGBA pixels; `None` (with a warning) when it can't be written.
     fn decode_image(&mut self, blob: Option<&ImageBlob>) -> Option<image::RgbaImage> {
-        let Some(img) = blob.and_then(|blob| image::load_from_memory(&blob.bytes).ok()) else {
+        let Some(img) = blob.and_then(|blob| craft_image_codecs::decode(&blob.bytes).ok()) else {
             self.warn(UNDECODED);
             return None;
         };
@@ -1637,7 +1637,7 @@ impl<'a> Scene<'a> {
             self.warn(LARGE_IMAGE);
             return None;
         }
-        Some(img.to_rgba8())
+        image::RgbaImage::from_raw(img.width(), img.height(), img.to_rgba8())
     }
 
     /// Draw the image of `codes[i]` on the unit square mapped by `place`. Its operators go in when

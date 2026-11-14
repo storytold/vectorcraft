@@ -28,15 +28,48 @@ fn open(s: &mut Session, name: &str, bytes: &[u8]) -> Value {
 }
 
 /// A `w`×`h` image of one colour in `format`.
-fn image_bytes(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
+fn image_bytes(w: u32, h: u32, format: craft_image_codecs::Format) -> Vec<u8> {
     let rgba = image::RgbaImage::from_pixel(w, h, image::Rgba([200, 30, 40, 255]));
-    let img = if format == image::ImageFormat::Jpeg {
+    let img = if format == craft_image_codecs::Format::Jpeg {
         image::DynamicImage::ImageRgb8(image::DynamicImage::ImageRgba8(rgba).to_rgb8())
     } else {
         rgba.into()
     };
     let mut out = Vec::new();
-    img.write_to(&mut Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = (img).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -84,12 +117,12 @@ fn opens_every_readable_format() {
         assert!(s.doc().unwrap().doc.node_count() >= 2, "{name}: the rectangle came through");
     }
     for (name, kind) in [
-        ("p.png", image::ImageFormat::Png),
-        ("p.jpg", image::ImageFormat::Jpeg),
-        ("p.gif", image::ImageFormat::Gif),
-        ("p.webp", image::ImageFormat::WebP),
-        ("p.tif", image::ImageFormat::Tiff),
-        ("p.bmp", image::ImageFormat::Bmp),
+        ("p.png", craft_image_codecs::Format::Png),
+        ("p.jpg", craft_image_codecs::Format::Jpeg),
+        ("p.gif", craft_image_codecs::Format::Gif),
+        ("p.webp", craft_image_codecs::Format::WebP),
+        ("p.tif", craft_image_codecs::Format::Tiff),
+        ("p.bmp", craft_image_codecs::Format::Bmp),
     ] {
         let r = open(&mut s, name, &image_bytes(5, 4, kind));
         assert_eq!(r["format"], format(name.rsplit('.').next().unwrap()).unwrap().id, "{name}");
@@ -107,12 +140,12 @@ fn opens_every_readable_format() {
 #[test]
 fn webp_opens_at_its_pixel_size() {
     let mut s = Session::new();
-    open(&mut s, "tiny.webp", &image_bytes(3, 2, image::ImageFormat::WebP));
+    open(&mut s, "tiny.webp", &image_bytes(3, 2, craft_image_codecs::Format::WebP));
     let im = image_of(&s);
     assert_eq!((im.width, im.height), (3, 2));
     let ab = s.doc().unwrap().doc.artboards[0].rect;
     assert_eq!((ab.width(), ab.height()), (3.0, 2.0));
-    let r = raster_image(&image_bytes(3, 2, image::ImageFormat::WebP)).unwrap();
+    let r = raster_image(&image_bytes(3, 2, craft_image_codecs::Format::WebP)).unwrap();
     assert_eq!((r.width, r.height, r.blob.mime.as_str()), (3, 2, "image/webp"));
 }
 
@@ -123,7 +156,7 @@ fn cmyk_tiffs_keep_their_inks_and_other_tiffs_become_png() {
     let r = raster_image(&tiff.bytes).unwrap();
     assert_eq!((r.width, r.height, r.blob.mime.as_str()), (2, 1, "image/tiff"));
     assert_eq!(r.blob.cmyk(), Some(inks));
-    let rgb = raster_image(&image_bytes(2, 1, image::ImageFormat::Tiff)).unwrap();
+    let rgb = raster_image(&image_bytes(2, 1, craft_image_codecs::Format::Tiff)).unwrap();
     assert_eq!(rgb.blob.mime, "image/png");
 }
 
@@ -140,7 +173,25 @@ fn kept(what: &str, bytes: &[u8]) -> (Option<Vec<u8>>, Vec<u8>) {
     let r = raster_image(bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
     assert_eq!((r.width, r.height, r.ppi), (3, 2, Some((150.0, 150.0))), "{what}");
     assert_eq!(super::ppi::resolution(&r.blob.bytes), Some((150.0, 150.0)), "{what}: the stored image keeps the resolution");
-    let rgba = image::load_from_memory(&r.blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_rgba8().into_raw();
+    let rgba = craft_image_codecs::decode(&r.blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap_or_else(|e| panic!("{what}: {e}"))
+        .to_rgba8()
+        .into_raw();
     (r.blob.cmyk().map(|i| i.data), rgba)
 }
 
@@ -241,7 +292,26 @@ fn planar_cmyk_tiffs_open_and_place_with_their_inks() {
     let inks = [vec![255u16, 0, 12, 0, 40, 9], vec![0, 255, 34, 0, 50, 8], vec![0, 0, 56, 0, 60, 7], vec![0, 0, 78, 255, 70, 6]];
     let file = hand_tiff(5, 8, &[], true, &inks);
     let want: Vec<u8> = (0..6).flat_map(|i| inks.iter().map(move |v| v[i] as u8)).collect();
-    assert!(image::load_from_memory(&file).is_err(), "the image decoder reads planar CMYK now");
+    assert!(
+        craft_image_codecs::decode(&file)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .is_err(),
+        "the image decoder reads planar CMYK now"
+    );
     let mut s = Session::new();
     open(&mut s, "planar.tif", &file);
     let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
@@ -250,7 +320,26 @@ fn planar_cmyk_tiffs_open_and_place_with_their_inks() {
     s.execute("file.place", &json!({"name": "planar.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
     let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
     assert_eq!(blob.cmyk().map(|i| i.data), Some(want), "Place keeps the inks");
-    assert!(image::load_from_memory(&blob.bytes).is_ok(), "the image decoder reads the stored image");
+    assert!(
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .is_ok(),
+        "the image decoder reads the stored image"
+    );
 }
 
 /// A 70 × 7 picture, `true` for black: a white row and a black row (runs past 63 take a make-up
@@ -295,12 +384,49 @@ fn ccitt_group3_tiffs_open_and_place_with_their_pixels() {
                         rtc,
                     };
                     let file = vectorcraft_testkit::tiff::group3(&g);
-                    assert!(image::load_from_memory(&file).is_err(), "{what}: the image decoder reads Group 3 now");
+                    assert!(
+                        craft_image_codecs::decode(&file)
+                            .map(|__cimg| {
+                                let (__w, __h) = __cimg.dimensions();
+                                match (__cimg.layout(), __cimg.sample_type()) {
+                                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                                }
+                            })
+                            .is_err(),
+                        "{what}: the image decoder reads Group 3 now"
+                    );
                     // A black run's pixels are 1 bits, which show as black when white is zero.
                     let want: Vec<u8> = rows.concat().iter().map(|&black| if black == (photometric == 0) { 0 } else { 255 }).collect();
                     let pixels = |s: &Session| {
                         let blob = &s.doc().unwrap().doc.images[&image_of(s).key];
-                        image::load_from_memory(&blob.bytes).unwrap_or_else(|e| panic!("{what}: {e}")).to_luma8().into_raw()
+                        craft_image_codecs::decode(&blob.bytes)
+                            .map(|__cimg| {
+                                let (__w, __h) = __cimg.dimensions();
+                                match (__cimg.layout(), __cimg.sample_type()) {
+                                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                    }
+                                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                                }
+                            })
+                            .unwrap_or_else(|e| panic!("{what}: {e}"))
+                            .to_luma8()
+                            .into_raw()
                     };
                     open(&mut s, "fax.tif", &file);
                     assert_eq!(pixels(&s), want, "{what}: Open");
@@ -362,7 +488,7 @@ fn ccitt_group3_tiffs_too_large_or_cut_short_are_refused() {
 
 #[test]
 fn content_beats_a_wrong_extension() {
-    let png = image_bytes(2, 2, image::ImageFormat::Png);
+    let png = image_bytes(2, 2, craft_image_codecs::Format::Png);
     assert_eq!(detect("photo.jpg", &png).unwrap().id, "png");
     assert_eq!(detect("noext", b"<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap().id, "svg");
     assert_eq!(detect("x.ait", b"%PDF-1.7").unwrap().id, "ait");
@@ -570,7 +696,27 @@ fn pdf_export_honours_artboard_and_range() {
     // Single-image formats take one artboard.
     assert!(s.execute("document.export", &json!({"format": "png", "range": "1-2"})).is_err());
     let png = b64(&s.execute("document.export", &json!({"format": "png", "range": "2", "scale": 0.5})).unwrap());
-    assert_eq!(image::load_from_memory(&png).unwrap().width(), 50);
+    assert_eq!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        50
+    );
     assert!(s.execute("document.export", &json!({"format": "png", "scale": "big"})).is_err(), "typed options reject a bad type");
 }
 
@@ -611,7 +757,26 @@ fn template_doc() -> (Session, u64, u64) {
 }
 
 fn has_red(png: &[u8]) -> bool {
-    image::load_from_memory(png).unwrap().to_rgba8().pixels().any(|p| p[0] > 200 && p[2] < 80 && p[3] > 0)
+    craft_image_codecs::decode(png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .pixels()
+        .any(|p| p[0] > 200 && p[2] < 80 && p[3] > 0)
 }
 
 #[test]
@@ -619,7 +784,29 @@ fn raster_exports_leave_template_layers_out() {
     let (mut s, red, blue) = template_doc();
     let png = b64(&s.execute("document.export", &json!({"format": "png"})).unwrap());
     assert!(!has_red(&png), "no red pixels from the template layer");
-    assert!(image::load_from_memory(&png).unwrap().to_rgba8().get_pixel(75, 50)[2] > 200, "the normal layer is exported");
+    assert!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(75, 50)[2]
+            > 200,
+        "the normal layer is exported"
+    );
     s.execute("select.set", &json!({"ids": [red, blue]})).unwrap();
     let r = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
     assert!(!has_red(&b64(&r)));
@@ -651,7 +838,27 @@ fn export_for_screens_one_page_per_pdf_unique_names() {
     // No folder: the files come back as bytes.
     let r = s.execute("document.exportForScreens", &json!({"range": "3", "formats": [{"format": "jpg", "scale": 0.5}]})).unwrap();
     assert_eq!(r["files"][0]["name"], "Artboard-3@0.5x.jpg");
-    assert_eq!(image::load_from_memory(&b64(&r["files"][0])).unwrap().width(), 50);
+    assert_eq!(
+        craft_image_codecs::decode(&b64(&r["files"][0]))
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        50
+    );
     // A native row: each artboard as a document of its own to edit.
     let r = s.execute("document.exportForScreens", &json!({"range": "1", "formats": [{"format": "vectorcraft"}]})).unwrap();
     assert!(r["files"][0]["name"].as_str().unwrap().ends_with(".vectorcraft"), "{r}");
@@ -921,7 +1128,41 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
         }
     }
     let mut jpg = Vec::new();
-    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::DynamicImage::ImageRgb8(rgb)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| jpg.extend_from_slice(&__b))
+    }
+    .unwrap();
     // An EXIF segment with Orientation 6: turn a quarter clockwise to show.
     let exif: Vec<u8> =
         [b"Exif\0\0".as_slice(), b"II", &[0x2a, 0, 8, 0, 0, 0], &[1, 0], &[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0], &[0, 0, 0, 0]].concat();
@@ -934,7 +1175,24 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
     assert_eq!((plain.width, plain.height, plain.blob.bytes.as_slice()), (16, 8, jpg.as_slice()), "a photo as taken keeps its bytes");
     let img = raster_image(&turned).unwrap();
     assert_eq!((img.width, img.height), (8, 16), "turned a quarter");
-    let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+    let px = craft_image_codecs::decode(&img.blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8();
     let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
 }
@@ -980,7 +1238,41 @@ fn a_quarter_turn_swaps_the_resolution_axes() {
     // 48 × 32: the top-left 16 × 16 (one whole JPEG MCU) red, the rest white.
     let rgb = image::RgbImage::from_fn(48, 32, |x, y| if x < 16 && y < 16 { image::Rgb([220, 0, 0]) } else { image::Rgb([255, 255, 255]) });
     let mut jpg = Vec::new();
-    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::DynamicImage::ImageRgb8(rgb)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| jpg.extend_from_slice(&__b))
+    }
+    .unwrap();
     for orientation in [0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9] {
         let exif = [b"Exif\0\0".as_slice(), &exif_block(orientation, (300, 150))].concat();
         // Without a JFIF density the resolution comes from the EXIF block.
@@ -996,7 +1288,24 @@ fn a_quarter_turn_swaps_the_resolution_axes() {
         let img = raster_image(&turned).unwrap();
         assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
         assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
-        let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+        let px = craft_image_codecs::decode(&img.blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgb8();
         let red = |x: u32, y: u32| px.get_pixel(x, y)[1] < 80;
         let (w, h) = size;
         let corners = [(false, false), (true, false), (true, true), (false, true)];
@@ -1058,7 +1367,26 @@ fn tiffs_read_without_the_image_decoder_follow_their_orientation() {
     let fax = vectorcraft_testkit::tiff::group3(&g);
     // The Group 3 file declares no resolution.
     for (kind, file, y_ppi) in [("Group 3", fax, None), ("gray with alpha", gray, Some(300))] {
-        assert!(image::load_from_memory(&file).is_err(), "{kind}: the image decoder reads it now");
+        assert!(
+            craft_image_codecs::decode(&file)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .is_err(),
+            "{kind}: the image decoder reads it now"
+        );
         for (orientation, long) in (1..=8).flat_map(|o| [(o, false), (o, true)]) {
             let what = format!("{kind}, orientation {orientation}, LONG {long}");
             let img = raster_image(&tiff_oriented(&file, orientation, long, y_ppi)).unwrap_or_else(|e| panic!("{what}: {e}"));
@@ -1067,7 +1395,24 @@ fn tiffs_read_without_the_image_decoder_follow_their_orientation() {
             let ppi = y_ppi.map(|y| if quarter { (f64::from(y), 150.0) } else { (150.0, f64::from(y)) });
             assert_eq!(((img.width, img.height), img.ppi), (size, ppi), "{what}");
             assert_eq!(super::ppi::resolution(&img.blob.bytes), ppi, "{what}: the stored image");
-            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let px = craft_image_codecs::decode(&img.blob.bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_luma8();
             let (right, bottom) = first_pixel_at(orientation);
             let (x, y) = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
             let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
@@ -1156,18 +1501,25 @@ fn cmyk_jpegs_turned_by_their_orientation_keep_their_inks() {
 /// half turn keeps them.
 #[test]
 fn png_webp_and_rgb_tiff_turned_a_quarter_swap_their_resolution() {
-    use image::ImageEncoder as _;
     let rgb = image::RgbImage::from_fn(3, 2, |x, y| image::Rgb(if x == 0 && y == 0 { [0, 0, 0] } else { [255, 255, 255] }));
     for orientation in [3u16, 6, 8] {
-        let mut png = Vec::new();
-        let mut enc = image::codecs::png::PngEncoder::new(&mut png);
-        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
-        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let mut cimg = craft_image_codecs::Image::from_raw(
+            3,
+            2,
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U8,
+            rgb.as_raw().to_vec(),
+        )
+        .unwrap();
+        cimg.meta.exif = Some(exif_block(orientation, (150, 300)));
+        let png = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let png = super::ppi::with_png_resolution(&png, (150.0, 300.0));
-        let mut webp = Vec::new();
-        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut webp);
-        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
-        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let webp = craft_image_codecs::encode(
+            &cimg,
+            craft_image_codecs::Format::WebP,
+            &craft_image_codecs::EncodeOptions { webp_lossless: true, ..craft_image_codecs::EncodeOptions::default() },
+        )
+        .unwrap();
         let channel = |c: usize| -> Vec<u16> { rgb.pixels().map(|p| u16::from(p[c])).collect() };
         let tiff = tiff_oriented(&hand_tiff(2, 8, &[], false, &[channel(0), channel(1), channel(2)]), orientation, false, Some(300));
         for (kind, file) in [("PNG", png), ("WebP", webp), ("TIFF", tiff)] {
@@ -1178,7 +1530,24 @@ fn png_webp_and_rgb_tiff_turned_a_quarter_swap_their_resolution() {
             let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
             assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
             assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
-            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let px = craft_image_codecs::decode(&img.blob.bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_luma8();
             let (right, bottom) = first_pixel_at(orientation);
             let at = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
             let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
@@ -1225,18 +1594,34 @@ fn tiff_with_icc(tiff: &[u8], icc: &[u8]) -> Vec<u8> {
     out
 }
 
-/// The ICC profile and pixels of a stored image, read by the image decoder for its format.
-fn stored_pixels(what: &str, img: &RasterImage) -> (Option<Vec<u8>>, image::ExtendedColorType, image::DynamicImage) {
-    use image::ImageDecoder as _;
-    let bytes = Cursor::new(img.blob.bytes.as_slice());
-    let mut d: Box<dyn image::ImageDecoder> = match img.blob.mime.as_str() {
-        "image/png" => Box::new(image::codecs::png::PngDecoder::new(bytes).unwrap()),
-        "image/tiff" => Box::new(image::codecs::tiff::TiffDecoder::new(bytes).unwrap()),
+/// The ICC profile, sample bit depth, and pixels of a stored image, read by the image decoder for its format.
+fn stored_pixels(what: &str, img: &RasterImage) -> (Option<Vec<u8>>, u16, image::DynamicImage) {
+    let fmt = match img.blob.mime.as_str() {
+        "image/png" => craft_image_codecs::Format::Png,
+        "image/tiff" => craft_image_codecs::Format::Tiff,
         other => panic!("{what}: stored as {other}"),
     };
-    let icc = d.icc_profile().unwrap();
-    let color = d.original_color_type();
-    (icc, color, image::DynamicImage::from_decoder(d).unwrap())
+    let opts = craft_image_codecs::DecodeOptions { keep_orientation: true, ..Default::default() };
+    let decoded = craft_image_codecs::decode_as_with(fmt, img.blob.bytes.as_slice(), &opts).unwrap();
+    let icc = decoded.meta.icc.clone();
+    let bits = u16::try_from(decoded.sample_type().bytes() * 8).unwrap();
+    let (w, h) = decoded.dimensions();
+    let dyn_img = match (decoded.layout(), decoded.sample_type()) {
+        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, decoded.into_data()).unwrap())
+        }
+        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U16) => {
+            image::DynamicImage::ImageLuma16(image::ImageBuffer::from_raw(w, h, decoded.to_u16_samples().unwrap()).unwrap())
+        }
+        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, decoded.into_data()).unwrap())
+        }
+        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U16) => {
+            image::DynamicImage::ImageRgb16(image::ImageBuffer::from_raw(w, h, decoded.to_u16_samples().unwrap()).unwrap())
+        }
+        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(w, h, decoded.to_rgba8()).unwrap()),
+    };
+    (icc, bits, dyn_img)
 }
 
 /// An image turned by its orientation and stored as PNG keeps the gray or RGB ICC profile its file
@@ -1245,7 +1630,7 @@ fn stored_pixels(what: &str, img: &RasterImage) -> (Option<Vec<u8>>, image::Exte
 /// space than the samples' is left out.
 #[test]
 fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
-    use image::{DynamicImage, ImageEncoder as _};
+    use image::DynamicImage;
     let (rgb_icc, gray_icc, cmyk_icc) = (icc_profile(b"RGB ", 600), icc_profile(b"GRAY", 300), icc_profile(b"CMYK", 400));
     // 3 × 2, every sample's low byte different.
     let rgb16 = image::ImageBuffer::from_fn(3, 2, |x, y| {
@@ -1255,27 +1640,56 @@ fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
     let rgb16 = DynamicImage::ImageRgb16(rgb16);
     let gray16 = DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(3, 2, |x, y| image::Luma([u16::try_from(x * 0x3001 + y * 0x0107).unwrap()])));
     let rgb8 = DynamicImage::ImageRgb8(image::RgbImage::from_fn(3, 2, |x, y| image::Rgb([u8::try_from(x * 70 + y * 9).unwrap(), 200, 13])));
+    let to_cimg = |img: &DynamicImage| -> craft_image_codecs::Image {
+        match img {
+            DynamicImage::ImageRgb8(b) => craft_image_codecs::Image::from_raw(
+                b.width(),
+                b.height(),
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U8,
+                b.as_raw().to_vec(),
+            )
+            .unwrap(),
+            DynamicImage::ImageRgb16(b) => craft_image_codecs::Image::from_raw(
+                b.width(),
+                b.height(),
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.as_raw().iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            )
+            .unwrap(),
+            DynamicImage::ImageLuma16(b) => craft_image_codecs::Image::from_raw(
+                b.width(),
+                b.height(),
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.as_raw().iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            )
+            .unwrap(),
+            _ => unreachable!(),
+        }
+    };
     let png = |img: &DynamicImage, icc: &[u8], orientation: u16| {
-        let mut out = Vec::new();
-        let mut enc = image::codecs::png::PngEncoder::new(&mut out);
-        enc.set_icc_profile(icc.to_vec()).unwrap();
-        enc.set_exif_metadata(exif_block(orientation, (150, 150))).unwrap();
-        img.write_with_encoder(enc).unwrap();
-        out
+        let mut cimg = to_cimg(img);
+        cimg.meta.icc = Some(icc.to_vec());
+        cimg.meta.exif = Some(exif_block(orientation, (150, 150)));
+        craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
     };
     let webp = {
-        let mut out = Vec::new();
-        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut out);
-        enc.set_icc_profile(rgb_icc.clone()).unwrap();
-        enc.set_exif_metadata(exif_block(6, (150, 150))).unwrap();
-        rgb8.write_with_encoder(enc).unwrap();
-        out
+        let mut cimg = to_cimg(&rgb8);
+        cimg.meta.icc = Some(rgb_icc.clone());
+        cimg.meta.exif = Some(exif_block(6, (150, 150)));
+        craft_image_codecs::encode(
+            &cimg,
+            craft_image_codecs::Format::WebP,
+            &craft_image_codecs::EncodeOptions { webp_lossless: true, ..craft_image_codecs::EncodeOptions::default() },
+        )
+        .unwrap()
     };
     let tiff = |orientation: Option<u16>| {
-        let mut out = Vec::new();
-        let mut enc = image::codecs::tiff::TiffEncoder::new(Cursor::new(&mut out));
-        enc.set_icc_profile(rgb_icc.clone()).unwrap();
-        rgb16.write_with_encoder(enc).unwrap();
+        let mut cimg = to_cimg(&rgb16);
+        cimg.meta.icc = Some(rgb_icc.clone());
+        let out = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Tiff, &craft_image_codecs::EncodeOptions::default()).unwrap();
         match orientation {
             Some(o) => tiff_oriented(&out, o, false, None),
             None => out,
@@ -1295,9 +1709,9 @@ fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
     for (what, file, icc, want, wide) in cases {
         let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
         assert_eq!((img.width, img.height, img.blob.mime.as_str()), (want.width(), want.height(), "image/png"), "{what}");
-        let (kept, color, px) = stored_pixels(what, &img);
+        let (kept, bits, px) = stored_pixels(what, &img);
         assert_eq!(kept.as_deref(), icc, "{what}: the ICC profile");
-        assert_eq!(color.bits_per_pixel() / u16::from(color.channel_count()), if wide { 16 } else { 8 }, "{what}: the sample depth");
+        assert_eq!(bits, if wide { 16 } else { 8 }, "{what}: the sample depth");
         if wide {
             assert_eq!(px.to_rgb16(), want.to_rgb16(), "{what}: the samples");
         } else {
@@ -1305,10 +1719,14 @@ fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
         }
     }
     // A JPEG's samples change in encoding; its profile is kept.
-    let mut jpg = Vec::new();
-    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpg, 95);
-    enc.set_icc_profile(rgb_icc.clone()).unwrap();
-    rgb8.write_with_encoder(enc).unwrap();
+    let mut cimg = to_cimg(&rgb8);
+    cimg.meta.icc = Some(rgb_icc.clone());
+    let jpg = craft_image_codecs::encode(
+        &cimg,
+        craft_image_codecs::Format::Jpeg,
+        &craft_image_codecs::EncodeOptions { jpeg_quality: 95, ..craft_image_codecs::EncodeOptions::default() },
+    )
+    .unwrap();
     let exif = [b"Exif\0\0".as_slice(), &exif_block(6, (150, 150))].concat();
     let mut turned = jpg[..2].to_vec();
     turned.extend([0xff, 0xe1]);
@@ -1444,7 +1862,23 @@ fn export_for_screens_jpgs_open_in_every_colour_model() {
                 assert_eq!(bytes.get(..2), Some(&[0xFF, 0xD8][..]), "{what}: starts with SOI");
                 let jfif = bytes.get(2..4) == Some(&[0xFF, 0xE0][..]);
                 assert_eq!(jfif, components != 4, "{what}: JFIF only on one- and three-component files");
-                let image = image::load_from_memory(&bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
+                let image = craft_image_codecs::decode(&bytes)
+                    .map(|__cimg| {
+                        let (__w, __h) = __cimg.dimensions();
+                        match (__cimg.layout(), __cimg.sample_type()) {
+                            (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                        }
+                    })
+                    .unwrap_or_else(|e| panic!("{what}: {e}"));
                 assert_eq!(image.width(), width, "{what}");
             }
         }

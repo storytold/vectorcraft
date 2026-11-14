@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use jpeg_encoder::{ColorType, Density, Encoder};
+use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, JpegFormat};
 use vectorcraft_color::cms::{self, lab};
 
 use crate::Rendered;
@@ -124,97 +124,41 @@ impl Default for JpegOptions {
 /// Encode `px` (`o.color_model`'s channels per pixel: RGB, CMYK ink amounts with 0 = no ink, or
 /// grey) at `quality` 0–100, with the resolution `ppi` (if any) in the JFIF header.
 pub fn encode(px: &[u8], width: u32, height: u32, quality: u8, ppi: Option<f64>, o: &JpegOptions) -> Result<Vec<u8>, String> {
-    let fail = |e: jpeg_encoder::EncodingError| format!("JPEG encoding failed: {e}");
-    let (Ok(w), Ok(h)) = (u16::try_from(width), u16::try_from(height)) else {
+    if u16::try_from(width).is_err() || u16::try_from(height).is_err() {
         return Err(format!("{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution"));
-    };
+    }
     if px.len() as u64 != u64::from(width) * u64::from(height) * o.color_model.channels() as u64 {
         return Err("JPEG encoding failed: pixel buffer doesn't match the image size".into());
     }
-    let mut buf = Vec::new();
-    let mut enc = Encoder::new(&mut buf, quality.clamp(1, 100));
-    if let Some(ppi) = ppi {
-        let d = ppi.round().clamp(1.0, u16::MAX as f64) as u16;
-        enc.set_density(Density::Inch { x: d, y: d });
-    }
-    match o.method {
-        Method::Baseline => {}
-        Method::Optimized => enc.set_optimized_huffman_tables(true),
-        Method::Progressive => {
-            enc.set_optimized_huffman_tables(true);
-            enc.set_progressive_scans(o.scans.clamp(*SCANS.start(), *SCANS.end()));
-        }
+    let layout = match o.color_model {
+        ColorModel::Rgb => ChannelLayout::Rgb,
+        ColorModel::Cmyk => ChannelLayout::Cmyk,
+        ColorModel::Gray => ChannelLayout::Gray,
+    };
+    let mut img = Image::from_u8(width, height, layout, px.to_vec()).map_err(|e| format!("JPEG encoding failed: {e}"))?;
+    if let Some(ppi) = ppi.filter(|p| p.is_finite() && *p >= 1.0) {
+        let d = ppi.round().clamp(1.0, f64::from(u16::MAX)) as f32;
+        img.meta.dpi = Some((d, d));
     }
     if o.embed_icc {
         let icc = cms::icc_bytes(&o.color_model.profile()).map_err(|e| format!("JPEG colour profile: {e}"))?;
-        enc.add_icc_profile(&icc).map_err(fail)?;
+        img.icc = Some(icc);
     }
-    let ty = match o.color_model {
-        ColorModel::Rgb => ColorType::Rgb,
-        ColorModel::Cmyk => ColorType::Cmyk,
-        ColorModel::Gray => ColorType::Luma,
+    let (jpeg_format, jpeg_progressive_scans) = match o.method {
+        Method::Baseline => (JpegFormat::Baseline, None),
+        Method::Optimized => (JpegFormat::Optimized, None),
+        Method::Progressive => (JpegFormat::Progressive, Some(o.scans.clamp(*SCANS.start(), *SCANS.end()))),
     };
-    enc.encode(px, w, h, ty).map_err(fail)?;
-    // JFIF describes one- and three-component images (greyscale and YCbCr), so its APP0 segment
-    // must not head a four-component CMYK frame: the file then says two different things about
-    // its colours, and a strict reader rejects it rather than guessing. Adobe's own CMYK JPEGs
-    // carry the APP14 marker the encoder already writes, and no JFIF (#3084).
-    if o.color_model == ColorModel::Cmyk {
-        unlabel_jfif(&mut buf, ppi);
-    }
-    Ok(buf)
-}
-
-/// Replace the leading APP0/JFIF segment, which the encoder always writes, with an EXIF segment
-/// carrying the same resolution (TIFF `XResolution`, `YResolution` and `ResolutionUnit`, which is
-/// where a reader looks when there is no JFIF). Without a resolution the segment is simply
-/// dropped.
-fn unlabel_jfif(buf: &mut Vec<u8>, ppi: Option<f64>) {
-    // SOI, then APP0 with its two length bytes and the tag it is identified by.
-    let Some(head) = buf.get(..13) else { return };
-    if head[..4] != [0xFF, 0xD8, 0xFF, 0xE0] || &head[6..11] != b"JFIF\0" {
-        return;
-    }
-    let len = usize::from(u16::from_be_bytes([head[4], head[5]]));
-    if 4 + len > buf.len() {
-        return;
-    }
-    let exif = ppi.filter(|p| p.is_finite() && *p >= 1.0).map(|p| exif_resolution(p.round() as u32)).unwrap_or_default();
-    buf.splice(2..4 + len, exif);
-}
-
-/// An APP1 EXIF segment holding `dpi` as IFD0's resolution: big-endian TIFF, three entries, each
-/// rational pointing past the directory.
-fn exif_resolution(dpi: u32) -> Vec<u8> {
-    let mut tiff = Vec::new();
-    tiff.extend_from_slice(b"MM\0*"); // big-endian, TIFF magic
-    tiff.extend_from_slice(&8u32.to_be_bytes()); // IFD0 right after the header
-    tiff.extend_from_slice(&3u16.to_be_bytes()); // three entries
-    // Entry: tag, type (5 = rational, 3 = short), count, then the value or its offset.
-    let entry = |tag: u16, ty: u16, value: [u8; 4]| {
-        let mut e = Vec::with_capacity(12);
-        e.extend_from_slice(&tag.to_be_bytes());
-        e.extend_from_slice(&ty.to_be_bytes());
-        e.extend_from_slice(&1u32.to_be_bytes());
-        e.extend_from_slice(&value);
-        e
+    let opts = EncodeOptions {
+        jpeg_quality: quality.clamp(1, 100),
+        jpeg_chroma_subsampling: false,
+        jpeg_format,
+        jpeg_progressive_scans,
+        embed_icc: o.embed_icc,
+        embed_metadata: true,
+        ..Default::default()
     };
-    // The two rationals sit after the directory: header 8 + count 2 + 3 entries + next-IFD 4.
-    let after = 8 + 2 + 3 * 12 + 4;
-    tiff.extend(entry(282, 5, (after as u32).to_be_bytes())); // XResolution
-    tiff.extend(entry(283, 5, (after as u32 + 8).to_be_bytes())); // YResolution
-    tiff.extend(entry(296, 3, [0, 2, 0, 0])); // ResolutionUnit: inches
-    tiff.extend_from_slice(&0u32.to_be_bytes()); // no next IFD
-    for _ in 0..2 {
-        tiff.extend_from_slice(&dpi.to_be_bytes());
-        tiff.extend_from_slice(&1u32.to_be_bytes());
-    }
-    let mut seg = vec![0xFF, 0xE1];
-    let body_len = 6 + tiff.len() + 2;
-    seg.extend_from_slice(&u16::try_from(body_len).unwrap_or(u16::MAX).to_be_bytes());
-    seg.extend_from_slice(b"Exif\0\0");
-    seg.extend_from_slice(&tiff);
-    seg
+    craft_image_codecs::encode(&img, Format::Jpeg, &opts).map_err(|e| format!("JPEG encoding failed: {e}"))
 }
 
 /// `img` flattened on white as RGB, or as grey with each colour's lightness.

@@ -131,10 +131,9 @@ pub(super) fn fit_lines(obj: &mut TextObject, w: f64, h: f64) -> bool {
 
 /// RGBA pixels as a PNG file.
 pub(super) fn png(width: u32, height: u32, rgba: Vec<u8>) -> Option<Vec<u8>> {
-    let buf = image::RgbaImage::from_raw(width, height, rgba)?;
-    let mut png = Vec::new();
-    buf.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
-    Some(png)
+    let raw =
+        craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 /// Where a line of `w` starts in a span from 0 to `room` (as a share of `room - w`).

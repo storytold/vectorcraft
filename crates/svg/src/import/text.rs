@@ -27,6 +27,7 @@
 //! moves into its sizes ([`size_scale`], [`fold_scale`]), and the rest (a stretch, skew,
 //! rotation or reflection) stays its transform.
 
+use craft_svg::tree::usvg;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -35,7 +36,7 @@ use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
 use std::str::FromStr;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, ParaDirection, ParaStyle, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;

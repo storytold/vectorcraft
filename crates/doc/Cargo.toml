@@ -13,15 +13,15 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
-tiff = { workspace = true }
+craft-image-codecs = { workspace = true }
+craft-tiff = { workspace = true }
+flate2 = { workspace = true }
 # 1-bit TIFFs compressed with CCITT Group 3 (Compression 2 and 3).
-hayro-ccitt = { workspace = true }
-zune-jpeg = { workspace = true }
+craft-stream-codecs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
-jpeg-encoder = { workspace = true }
 proptest = { workspace = true }

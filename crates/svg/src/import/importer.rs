@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
+use craft_svg::tree::usvg;
 use kurbo::BezPath;
 use vectorcraft_color::GradientSpread;
 
@@ -766,10 +767,9 @@ impl Importer {
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
         let size = i.size();
-        let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
-            .with_guessed_format()
+        let (pw, ph) = craft_image_codecs::probe_size(bytes)
             .ok()
-            .and_then(|r| r.into_dimensions().ok())
+            .or_else(|| craft_image_codecs::decode(bytes).ok().map(|i| i.dimensions()))
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
         let cmyk = self.files.stored(i.kind());
