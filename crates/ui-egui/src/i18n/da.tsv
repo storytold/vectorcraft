@@ -5204,6 +5204,7 @@ imageTrace	Outline	Kontur
 @msg	no action set to save	intet handlingssæt at gemme
 @msg	the action set file can't be read in full	handlingssætfilen kan ikke læses helt
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Indlæste »{name}«: {n} trin blev udeladt|Indlæste »{name}«: {n} trin blev udeladt
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Indlæste »{name}«: {n} trin har en ukendt kommando og blev beholdt: »{action}«, trin {step}, `{command}`|Indlæste »{name}«: {n} trin har ukendte kommandoer og blev beholdt; det første: »{action}«, trin {step}, `{command}`
 @msg	not an action set file	ikke en handlingssætfil
 @msg	the action set file is larger than 8 MiB	handlingssætfilen er større end 8 MiB
 @msg	the action set file holds more than 1,000 actions	handlingssætfilen indeholder mere end 1.000 handlinger
