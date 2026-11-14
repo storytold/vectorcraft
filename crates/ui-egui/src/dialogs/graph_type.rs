@@ -656,9 +656,22 @@ fn value_page(ui: &mut egui::Ui, d: &mut Dialog, right: bool) {
     // Without Separate Scales the right axis shows the left axis' tick values, and with it a side
     // without series shows the other side's.
     let own_scale = scale_used(d, right);
-    check(ui, d, scale.overridden, tl!("Override Calculated Values"), own_scale);
+    // A side without a scale of its own shows the tick values of the scale drawn on it.
+    let drawn = if own_scale {
+        scale
+    } else if right {
+        &LEFT
+    } else {
+        &RIGHT
+    };
+    check(ui, d, drawn.overridden, tl!("Override Calculated Values"), own_scale);
     ui.add_enabled_ui(own_scale && d.bool(scale.overridden), |ui| {
-        let ((lo, hi), count) = (bounds(d, scale), divisions(d, scale));
+        let ((lo, hi), count) = if own_scale || d.bool(drawn.overridden) {
+            (bounds(d, drawn), divisions(d, drawn))
+        } else {
+            let (lo, hi, count) = calculated(d, drawn);
+            ((lo, hi), count)
+        };
         for (key, label, shown) in [(scale.min, tl!("Minimum:"), lo), (scale.max, tl!("Maximum:"), hi)] {
             widgets::label_row(ui, label, LABEL_W, |ui| {
                 if let Some(v) = widgets::plain_field(ui, ("graph-type", key), shown, "", 4, NUMBER_W) {
@@ -1228,6 +1241,30 @@ mod tests {
         {
             assert!(crate::dialogs::protected_field(d, field), "{field}");
         }
+    }
+
+    /// A value axis side without a scale of its own shows the tick values of the scale drawn on it,
+    /// not bounds kept for it.
+    #[test]
+    fn a_side_without_its_own_scale_shows_the_scale_drawn_on_it() {
+        let mut app = app_with_graph("column");
+        app.run(COMMAND, json!({"valueAxis": "both", "rightAxisMin": 100, "rightAxisMax": 200})).unwrap();
+        open(&mut app).unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().bool("rightOverrideValues"));
+        set(&mut app, PAGE, json!("rightAxis"));
+        let mut h = harness(app);
+        let shown = |h: &Harness, name: &str| {
+            let node = h.get_by_role_and_label(Role::TextInput, name);
+            node.accesskit_node().value().as_deref().and_then(|v| v.trim().parse::<f64>().ok())
+        };
+        assert_eq!((shown(&h, "Minimum:"), shown(&h, "Maximum:")), (Some(0.0), Some(4.0)), "the left scale, calculated");
+        let overridden = h.get_by_role_and_label(Role::CheckBox, "Override Calculated Values");
+        assert!(overridden.accesskit_node().is_disabled());
+        // With Separate Scales and a series on the right axis, the side shows its own bounds.
+        set(h.state_mut(), "separateScales", json!(true));
+        set(h.state_mut(), RIGHT_SERIES, json!([1]));
+        h.run_steps(3);
+        assert_eq!((shown(&h, "Minimum:"), shown(&h, "Maximum:")), (Some(100.0), Some(200.0)));
     }
 
     /// OK changes the graph and the series the dialog opened on, even when the selection changed
