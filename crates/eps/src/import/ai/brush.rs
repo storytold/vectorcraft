@@ -18,7 +18,8 @@
 //!   1 pt draws it at its own size), the brush by name (`/GObjRef : (name) (plug-in)
 //!   /PluginObject`), and the brush's settings for this path as entries: `Diameter`, `Roundness`,
 //!   `Angle`, their `…Variation` either side and `…DependsOn` codes, and `AngleRelativeTo` (0 the
-//!   page).
+//!   page). Samples of the pen may follow a path's own lines on `%_` lines (`(hex) Xt n XD`). They
+//!   aren't read, so such a path keeps its drawn look when a setting varies with the pen.
 //! - A path with an Art brush is a stroke in its art style too: the filter
 //!   `(Adobe ArtOnPath Brush Tool)`, its stroke's paint and weight (the weight scales the art across
 //!   the path), the brush by name, and its settings for this path as entries: `Scaling`,
