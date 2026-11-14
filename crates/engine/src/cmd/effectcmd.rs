@@ -298,7 +298,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 /// edits its equal item, or its equal object-level effect, each target matched on its own whatever
 /// the other targets have; in a target without them, `item` and `index` stand for themselves.
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
-    let roots = edit_targets(s, p)?;
+    let roots = edit_targets(s, p, cmd)?;
     let d = &s.doc()?.doc;
     let per = item.per_target(s, &roots);
     let first = roots.first().and_then(|f| d.node(*f));
@@ -453,7 +453,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        let targets = edit_targets(s, p)?;
+        let targets = edit_targets(s, p, C)?;
         for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
@@ -494,7 +494,7 @@ fn loose_for_pathfinder(s: &Session, p: &Value, id: &str) -> Result<Option<Vec<N
     }
     let d = &s.doc()?.doc;
     // The art of a graph design in a series stays where the graph draws it.
-    let roots = super::appearance::without_design_art(d, super::appearance::subject_roots(s)?, "appearance")?;
+    let roots = super::appearance::without_design_art(d, super::appearance::subject_roots(s)?, "effect.apply")?;
     let grouped = roots.iter().any(|r| d.node(*r).is_some_and(|n| matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })));
     Ok((roots.len() >= 2 && !grouped).then_some(roots))
 }
@@ -607,7 +607,7 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
     let copy = switch_or(p, "copy", false, C)?;
-    let roots = edit_targets(s, p)?;
+    let roots = edit_targets(s, p, C)?;
     // Where an aligned effect would go in each of several different stacks isn't one place.
     if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
@@ -892,8 +892,11 @@ fn can_expand(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     let ids = appearance_targets(s, &Value::Null).map_err(|e| e.to_string())?;
     let d = &s.doc().map_err(|e| e.to_string())?.doc;
+    // The art of a graph design in a series, selected or inside a selected graph, is drawn again from the design.
+    let ids = super::appearance::drop_design_art(d, ids);
     // A dimension selected with the art it measures is left as it is.
-    let kept = super::dimension::with_their_art(d, &ids);
+    let mut kept = super::dimension::with_their_art(d, &ids);
+    kept.extend(super::appearance::design_art_in(d, &ids));
     if ids.iter().filter_map(|id| d.node(*id)).any(|n| expandable_except(n, &kept)) {
         Ok(())
     } else {
@@ -1219,12 +1222,22 @@ fn holds_plugin_effect(d: &Document, n: &Node, in_art: bool, seen: &mut std::col
 }
 
 fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
-    let roots = appearance_targets(s, p)?;
+    let roots = edit_targets(s, p, "effect.expandAppearance")?;
     // In Safe Mode a plug-in effect draws nothing: expanding it would drop the effect and keep the
     // geometry it hasn't changed.
     if vectorcraft_plugins::safe_mode::active() {
-        // A dimension selected with the art it measures is left as it is.
-        let d = &*super::dimension::without_kept(&s.doc()?.doc, &roots);
+        // A dimension selected with the art it measures is left as it is, and so is the art of a graph design in a
+        // series.
+        let mut d = super::dimension::without_kept(&s.doc()?.doc, &roots);
+        let designs = super::appearance::design_art_in(&d, &roots);
+        if !designs.is_empty() {
+            let view = d.to_mut();
+            for id in designs {
+                // Art already gone (inside other art removed) needs nothing more.
+                let _ = view.remove(id);
+            }
+        }
+        let d = &*d;
         let mut seen = std::collections::HashSet::new();
         if roots.iter().filter_map(|id| d.node(*id)).any(|n| holds_plugin_effect(d, n, false, &mut seen)) {
             return Err(EngineError::Other("Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode".into()));
@@ -1234,6 +1247,8 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let ids = s.edit("Expand Appearance", |d, _| {
         let before = d.clone();
+        // The art of graph designs in the graphs and series among the roots stays as the graph draws it.
+        let designs = super::appearance::design_art_in(d, &roots);
         // A dimension selected with the art it measures keeps its own lines and label: it is out
         // of the document while the art expands.
         let lifted = super::dimension::lift(d, &roots);
@@ -1244,6 +1259,15 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         let threaded = super::threads::frames(d);
         for id in &roots {
             expand_node(d, *id, &brushes, &mut out);
+        }
+        for id in &designs {
+            if let (Some(was), Some(slot)) = (before.node(*id), d.node_mut(*id)) {
+                *slot = was.clone();
+            }
+        }
+        if !designs.is_empty() {
+            // A mark that expands into a group stays listed: only what lies in the restored art is left out.
+            out.retain(|id| d.node(*id).is_some() && !d.ancestry(*id).is_some_and(|up| up.iter().any(|a| designs.contains(a))));
         }
         super::dimension::put_back(d, lifted);
         // A dimension whose source was replaced stays where it was, no longer linked.

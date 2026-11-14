@@ -167,7 +167,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if apply {
         // Objects that can't take a style are refused before any style is added.
-        super::appearance::edit_targets(s, &if ids_given { json!({"ids": p["ids"]}) } else { json!({}) })?;
+        super::appearance::edit_targets(s, &if ids_given { json!({"ids": p["ids"]}) } else { json!({}) }, C)?;
     }
     let mut names = names_param(p, C)?;
     names.extend(text_param(p, "name", C)?.map(str::to_string));
