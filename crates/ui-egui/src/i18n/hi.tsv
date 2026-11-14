@@ -8889,3 +8889,121 @@ theme	Appearance	अपीयरेंस
 	Grommets	आईलेट
 	Grommet Inset	किनारे से आईलेट की दूरी
 	Diameter	व्यास
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D इफ़ेक्ट्स के लिए 100 मिलियन पॉइंट के भीतर परिमित निर्देशांक चाहिए
+@msg	3D effects require one to ten lights	3D इफ़ेक्ट्स के लिए एक से दस लाइटें चाहिए
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP डेप्थ {_1}: प्रति पिक्सेल 1, 4, 8, 16, 24 या 32 बिट
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP एन्कोडिंग विफल: {width} × {height} पिक्सेल न फ़ॉर्मैट में फ़िट होते हैं, न पिक्सेल बफ़र में
+@msg	GIF encoding failed: the palette image is malformed	GIF एन्कोडिंग विफल: पैलेट इमेज विकृत है
+@msg	GIF encoding failed: {e}	GIF एन्कोडिंग विफल: {e}
+@msg	JPEG colour profile: {e}	JPEG कलर प्रोफ़ाइल: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	JPEG encoding failed: {e}	JPEG एन्कोडिंग विफल: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	PNG encoding failed: the palette image is malformed	PNG एन्कोडिंग विफल: पैलेट इमेज विकृत है
+@msg	PNG encoding failed: {e}	PNG एन्कोडिंग विफल: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG एन्कोडिंग विफल: {width} × {height} पिक्सेल मान्य इमेज आकार नहीं है
+@msg	PSD colour profile: {e}	PSD कलर प्रोफ़ाइल: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	Revolve profile contains invalid coordinates	रिवॉल्व प्रोफ़ाइल में अमान्य निर्देशांक हैं
+@msg	Revolve profile is too complex	रिवॉल्व प्रोफ़ाइल बहुत जटिल है
+@msg	Revolve projection is not finite	रिवॉल्व प्रोजेक्शन परिमित नहीं है
+@msg	Revolve requires finite profile coordinates within 100 million points	रिवॉल्व के लिए 100 मिलियन पॉइंट के भीतर परिमित प्रोफ़ाइल निर्देशांक चाहिए
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	रिवॉल्व सतह बहुत जटिल है; सेगमेंट कम करें या प्रोफ़ाइल सरल करें
+@msg	Revolve surface is too complex; simplify the profile	रिवॉल्व सतह बहुत जटिल है; प्रोफ़ाइल सरल करें
+@msg	Revolve visibility cannot split the projected boundary	रिवॉल्व दृश्यता प्रोजेक्ट की गई सीमा को विभाजित नहीं कर सकती
+@msg	Revolve visibility creates too many fragments	रिवॉल्व दृश्यता बहुत अधिक टुकड़े बनाती है
+@msg	Revolve visibility creates too many vector anchors	रिवॉल्व दृश्यता बहुत अधिक वेक्टर एंकर बनाती है
+@msg	Revolve visibility exceeds its geometry work limit	रिवॉल्व दृश्यता अपनी ज्यामिति गणना की सीमा से आगे निकल जाती है
+@msg	Revolve visibility exceeds its spatial index limit	रिवॉल्व दृश्यता अपनी स्पेशियल इंडेक्स सीमा से आगे निकल जाती है
+@msg	Revolve visibility has too many boundary crossings	रिवॉल्व दृश्यता में सीमा के बहुत अधिक क्रॉसिंग हैं
+@msg	Revolve visibility has too many input anchors	रिवॉल्व दृश्यता में बहुत अधिक इनपुट एंकर हैं
+@msg	Revolve visibility requires convex cap sectors	रिवॉल्व दृश्यता के लिए उत्तल कैप सेक्टर चाहिए
+@msg	Revolve visibility requires finite projected faces	रिवॉल्व दृश्यता के लिए परिमित प्रोजेक्ट किए गए फ़ेस चाहिए
+@msg	SVG options: {e}	SVG ऑप्शन्स: {e}
+@msg	Save for Web settings: {e}	वेब के लिए सेव करें की सेटिंग्स: {e}
+@msg	TIFF colour profile: {e}	TIFF कलर प्रोफ़ाइल: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	TIFF encoding failed: {e}	TIFF एन्कोडिंग विफल: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa डेप्थ {_1}: प्रति पिक्सेल 16, 24 या 32 बिट
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	The 3D projection is not finite	3D प्रोजेक्शन परिमित नहीं है
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D छाया बहुत जटिल है; छायाएँ बंद करें या आर्टवर्क सरल करें
+@msg	The shape contains invalid coordinates	शेप में अमान्य निर्देशांक हैं
+@msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
+@msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है
+@msg	a line can't run from a point to itself	कोई लाइन किसी पॉइंट से उसी पॉइंट तक नहीं जा सकती
+@msg	a line needs at least two points	लाइन के लिए कम से कम दो पॉइंट चाहिए
+@msg	a number cannot be read	एक संख्या पढ़ी नहीं जा सकती
+@msg	a swatch exchange block is too long	स्वॉच एक्सचेंज का एक ब्लॉक बहुत लंबा है
+@msg	a swatch exchange name is too long	स्वॉच एक्सचेंज का एक नाम बहुत लंबा है
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} इमेज का आकार बदलकर {width} × {height} पिक्सेल नहीं किया जा सकता
+@msg	a {width} × {height} image is too large	{width} × {height} इमेज बहुत बड़ी है
+@msg	a {width} × {height} image: {e}	{width} × {height} इमेज: {e}
+@msg	an image could not be written: {e}	एक इमेज लिखी नहीं जा सकी: {e}
+@msg	an image that couldn't be read was left out	जो इमेज पढ़ी नहीं जा सकी, उसे छोड़ दिया गया
+@msg	can't open “{name}”: {e}	“{name}” ओपन नहीं किया जा सकता: {e}
+@msg	cannot align zip entries to {align} bytes	ज़िप एंट्री को {align} बाइट पर अलाइन नहीं किया जा सकता
+@msg	cannot open the automation {kind} root `{_1}`: {e}	ऑटोमेशन {kind} रूट `{_1}` ओपन नहीं किया जा सकता: {e}
+@msg	cannot read profile: {0}	प्रोफ़ाइल पढ़ी नहीं जा सकती: {0}
+@msg	color book version {version} isn't supported (only 1)	कलर बुक वर्ज़न {version} समर्थित नहीं है (केवल 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	कलर स्पेस {other} वाली कलर बुक समर्थित नहीं हैं (केवल RGB, CMYK और Lab)
+@msg	file name too long to zip: {_1}	ज़िप करने के लिए फ़ाइल का नाम बहुत लंबा है: {_1}
+@msg	file name too long to zip: {name}	ज़िप करने के लिए फ़ाइल का नाम बहुत लंबा है: {name}
+@msg	freeform line {i}: {e}	फ्रीफॉर्म लाइन {i}: {e}
+@msg	freeform point {i}: {e}	फ्रीफॉर्म पॉइंट {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` या `{other}` दें, दोनों नहीं
+@msg	grayscale profiles can't be working spaces yet	ग्रेस्केल प्रोफ़ाइल अभी वर्किंग स्पेस नहीं हो सकतीं
+@msg	input contains NaN or infinite coordinates	इनपुट में NaN या अनंत निर्देशांक हैं
+@msg	input path could not be closed	इनपुट पाथ बंद नहीं किया जा सका
+@msg	invalid ICC profile: {0}	अमान्य ICC प्रोफ़ाइल: {0}
+@msg	invalid scale {scale}	अमान्य स्केल {scale}
+@msg	its localized names take more than {_1} KB	इसके स्थानीयकृत नाम {_1} KB से अधिक जगह लेते हैं
+@msg	its objects are nested too deep ({e})	इसके ऑब्जेक्ट बहुत गहराई तक नेस्ट किए गए हैं ({e})
+@msg	its tag table lists the `{_1}` tag more than once	इसकी टैग तालिका में `{_1}` टैग एक से अधिक बार है
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	जिन नॉकआउट ग्रुप में ब्रश स्ट्रोक दूसरे पारदर्शी एलिमेंट के ऊपर हैं, वे PDF नॉकआउट ग्रुप के रूप में लिखे जाते हैं: उनके पारदर्शी एलिमेंट अपने नीचे का पूरा हिस्सा नॉकआउट करते हैं
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	बहुत अधिक ओवरलैप करने वाले पारदर्शी एलिमेंट वाले नॉकआउट ग्रुप PDF नॉकआउट ग्रुप के रूप में लिखे जाते हैं: उनके पारदर्शी एलिमेंट अपने नीचे का पूरा हिस्सा नॉकआउट करते हैं
+@msg	not a graphic style library: {e}	यह ग्राफ़िक स्टाइल लाइब्रेरी नहीं है: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	यह स्वॉच लाइब्रेरी नहीं है (.vcswatches या .gpl)
+@msg	not a swatch library (format `{_1}`)	यह स्वॉच लाइब्रेरी नहीं है (फ़ॉर्मैट `{_1}`)
+@msg	not a swatch library: {e}	यह स्वॉच लाइब्रेरी नहीं है: {e}
+@msg	not an action set file ({e})	यह एक्शन सेट फ़ाइल नहीं है ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	प्रोफ़ाइल का कलर स्पेस {other} RGB, CMYK या Gray नहीं है
+@msg	regular expression too large	रेगुलर एक्सप्रेशन बहुत बड़ा है
+@msg	script file is not UTF-8 text: {value}	स्क्रिप्ट फ़ाइल UTF-8 टेक्स्ट नहीं है: {value}
+@msg	stop {i}: {e}	स्टॉप {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	स्वॉच एक्सचेंज वर्ज़न {major}.{minor} समर्थित नहीं है (केवल 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	कलर बुक में {ASE_MAX_ENTRIES} से अधिक रंग हैं
+@msg	the color book is cut short	कलर बुक अधूरी है
+@msg	the color book's names take more than {_1} MB	कलर बुक के नाम {_1} MB से अधिक जगह लेते हैं
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	इमेज {w} × {h} पिक्सेल की होगी; रास्टर एक्सपोर्ट हर तरफ़ अधिकतम {MAX_RASTER_SIDE} पिक्सेल और {_1} मेगापिक्सेल तक सीमित हैं: स्केल या रिज़ॉल्यूशन कम करें
+@msg	the optimised image can't be read back: {e}	ऑप्टिमाइज़ की गई इमेज वापस पढ़ी नहीं जा सकती: {e}
+@msg	the pixel buffer doesn't match the image size	पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	the preview: {e}	प्रीव्यू: {e}
+@msg	the request may not read the New Document profiles folder	अनुरोध नया डॉक्यूमेंट प्रोफ़ाइल फ़ोल्डर नहीं पढ़ सकता
+@msg	the shapes are too degenerate to combine	शेप इतने विकृत हैं कि उन्हें मिलाया नहीं जा सकता
+@msg	the shapes cross themselves and each other too often to combine	शेप खुद को और एक-दूसरे को इतनी बार काटते हैं कि उन्हें मिलाया नहीं जा सकता
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	स्वॉच एक्सचेंज फ़ाइल में {ASE_MAX_ENTRIES} से अधिक रंग और ग्रुप हैं
+@msg	the swatch exchange file is cut short	स्वॉच एक्सचेंज फ़ाइल अधूरी है
+@msg	the {_1} plate can't be read: {e}	{_1} प्लेट पढ़ी नहीं जा सकती: {e}
+@msg	this binary DXF file is damaged or cut short	यह बाइनरी DXF फ़ाइल क्षतिग्रस्त या अधूरी है
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	यह एक DWG ड्रॉइंग है, जिसे पढ़ा नहीं जा सकता: इसे CAD ऐप से DXF के रूप में सेव करें और वह फ़ाइल ओपन करें
+@msg	too many classes	बहुत अधिक क्लास
+@msg	too many groups	बहुत अधिक ग्रुप
+@msg	too many layers for PSD (at most 32767)	PSD के लिए बहुत अधिक लेयर्स (अधिकतम 32767)
+@msg	too many swatch exchange blocks	स्वॉच एक्सचेंज के बहुत अधिक ब्लॉक
+@msg	unknown colour profile: {0}	अज्ञात कलर प्रोफ़ाइल: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} किसी अंतर्निहित प्रोफ़ाइल के नाम से टकराता है
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} पिक्सेल GIF के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB में या sRGB से बदलने का कोई उपयोगी ट्रांसफ़ॉर्म नहीं है
+@msg	{name} is not a CMYK profile	{name} CMYK प्रोफ़ाइल नहीं है
+@msg	{name} is not an RGB profile	{name} RGB प्रोफ़ाइल नहीं है
+@msg	{path}: could not be read	{path}: पढ़ा नहीं जा सका
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} पिक्सेल JPEG के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} पिक्सेल Targa के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} पिक्सेल PSD के लिए बहुत बड़ा है (हर तरफ़ अधिकतम {MAX_SIDE} पिक्सेल): रिज़ॉल्यूशन कम करें
