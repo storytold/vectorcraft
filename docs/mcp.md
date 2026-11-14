@@ -627,8 +627,9 @@ the list return an error and change nothing. The command returns `{view, channel
 kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
-the box), and `"none"` hides them; `"oklch"` is an error while the working RGB space is not sRGB. `color.convert {"to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB,
-and headless MCP reaches it too.
+the box), and `"none"` hides them; `"oklch"` is an error while the working RGB space is not sRGB.
+`color.convert {"to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB. A color outside sRGB
+(a Lab or CMYK color, or an RGB color in a wider working RGB space) is clipped to sRGB first.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

@@ -265,6 +265,11 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
+/// The colored bar inside the rail `rect` of [`color_slider_stepped`] and its siblings.
+pub(crate) fn color_rail_bar(rect: Rect) -> Rect {
+    Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(rect.width() - 8.0, 7.0))
+}
+
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
 /// that a click or drag gives and the phase.
 fn color_rail(
@@ -278,7 +283,7 @@ fn color_rail(
 ) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
-    let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
+    let bar = color_rail_bar(rect);
     let resp = ui.interact(rect, id, Sense::click_and_drag());
     gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);

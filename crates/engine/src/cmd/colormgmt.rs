@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\"|\"oklch\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}; oklch values are [L (0..100 %), C, H (0..360°)] of the color's display sRGB (CSS Color 4 OKLCH: https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch), with H 0 for a gray; in a working RGB space other than sRGB, a color outside sRGB is clamped to sRGB first",
+            "{color (#rrggbbaa and #rgba are refused), to: \"rgb\"|\"cmyk\"|\"gray\"|\"lab\"|\"oklch\", intent?} → {model, values, hex, lab: [L,a,b], outOfGamut, deltaE}; oklch values are [L (0..100 %), C, H (0..360°)] of the color's display sRGB (CSS Color 4 OKLCH: https://www.w3.org/TR/css-color-4/#specifying-oklab-oklch), with H 0 for a gray; a color outside sRGB (a Lab color, a CMYK color or an RGB color in a wider working RGB space) is clipped to sRGB first",
             always,
             convert_color
         ),

@@ -685,6 +685,12 @@ fn the_oklch_tracks_dim_the_colors_outside_srgb_and_the_tick_marks_the_largest_c
         assert_eq!(oklch_track([l, max * 0.5, h], max_chroma).a(), 255, "{max_chroma:?}: inside sRGB");
         assert!(oklch_track([l, 0.4, h], max_chroma).a() < 255, "{max_chroma:?}: outside sRGB is dimmed");
     }
+    // Near white, an L or H track shows the color a pick there stores: the largest chroma that fits,
+    // not each channel clamped on its own.
+    let (stored, lowered) = vectorcraft_color::oklab::from_oklch(0.98, 0.2, h);
+    let [r, g, b] = stored.map(|v| (f64::from(v).clamp(0.0, 1.0) * 255.0).round() as u8);
+    assert!(lowered);
+    assert_eq!(oklch_track([0.98, 0.2, h], None), egui::Color32::from_rgb(r, g, b).gamma_multiply(0.3));
     assert!((chroma_tick(max) - (max / 0.4) as f32).abs() < 1e-6 && chroma_tick(max) > 0.1 && chroma_tick(max) < 1.0);
     assert_eq!((chroma_tick(0.0), chroma_tick(0.5)), (0.0, 1.0));
 }

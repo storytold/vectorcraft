@@ -196,7 +196,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let on = set.sliders == Sliders::Oklch;
     // While the rows show, the item stays enabled so that they can be hidden.
     let enabled = on || cms::active().rgb_is_srgb();
-    if widgets::menu_item_name_hint(ui, tl!("OKLCH Sliders"), enabled, on, tl!("OKLCH needs sRGB as the working RGB space")) {
+    if widgets::menu_item_hint(ui, tl!("OKLCH Sliders"), enabled, on, tl!("OKLCH needs sRGB as the working RGB space")) {
         let sliders = if on { Sliders::None } else { Sliders::Oklch };
         if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
             app.status(e);
@@ -385,15 +385,16 @@ pub(crate) fn remembered_oklch(cms: &Cms, c: &Color, shown: [f32; 3], lch: [f64;
 }
 
 /// The color a track shows at OKLCH `lch`: the color itself inside sRGB, and outside it dimmed.
-/// With `max_chroma` (the C track, whose L and H stay fixed) a chroma past it shows the color at
-/// that chroma; without it, a color outside sRGB shows clamped to it.
+/// A color outside sRGB shows at the largest chroma that fits at its L and H, the color a pick
+/// there stores. With `max_chroma` (the C track, whose L and H stay fixed) that chroma is given;
+/// without it, it is found for each color.
 pub(crate) fn oklch_track(lch: [f64; 3], max_chroma: Option<f64>) -> Color32 {
     let (rgb, outside) = match max_chroma {
         Some(m) if lch[1] > m => (oklab::oklch_to_srgb(lch[0], m, lch[2]), true),
         Some(_) => (oklab::oklch_to_srgb(lch[0], lch[1], lch[2]), false),
         None => {
-            let exact = oklab::oklch_to_srgb(lch[0], lch[1], lch[2]);
-            (exact, !oklab::in_srgb(exact))
+            let (rgb, lowered) = oklab::from_oklch(lch[0], lch[1], lch[2]);
+            (rgb.map(f64::from), lowered)
         }
     };
     let [r, g, b] = rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
@@ -446,13 +447,13 @@ pub(crate) fn oklch_rows(app: &VectorcraftApp, ui: &mut Ui, tgt: &Target, color:
                 let v = shown[i].clamp(0.0, max);
                 let at = |x: f32| with(i, f64::from(x) * max);
                 let track = |x: f32| if enabled { oklch_track(at(x), (i == 1).then_some(max_c)) } else { t.input };
-                let rail = Rect::from_min_size(ui.cursor().min, vec2(slider_w, 22.0));
                 let value = SliderValue::field(v, 0.0..=max, suffix, 0);
                 let (dragged, phase, keyed) =
                     widgets::color_slider_stepped(ui, ("color-wheel-oklch", i), name, Some(value), (v / max) as f32, slider_w, &track);
-                if i == 1 && enabled {
-                    // The bar of `color_slider_stepped`'s rail: 4 points in from its left, top and right.
-                    let bar = Rect::from_min_size(rail.min + vec2(4.0, 4.0), vec2(slider_w - 8.0, 7.0));
+                // The tick goes on the bar of the rail as the row laid it out.
+                let rail = (i == 1 && enabled).then(|| ui.ctx().read_response(widgets::id_with(ui.scope_id(), ("color-wheel-oklch", i)))).flatten();
+                if let Some(rail) = rail {
+                    let bar = widgets::color_rail_bar(rail.rect);
                     let x = bar.left() + chroma_tick(max_c) * bar.width();
                     ui.painter().line_segment([pos2(x, bar.top() - 3.0), pos2(x, bar.bottom())], Stroke::new(1.5, t.text));
                     let tip = Rect::from_x_y_ranges(x - 3.0..=x + 3.0, bar.top() - 3.0..=bar.bottom());

@@ -640,11 +640,6 @@
 	Color Themes	રંગ થીમ
 	Color Type:	રંગ પ્રકાર:
 	Color Wheel	રંગ વ્હીલ
-	OKLCH Sliders	OKLCH સ્લાઇડર્સ
-	Chroma	ક્રોમા
-	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
-	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
-	Lightness	લાઇટનેસ
 	Color blindness – Deuteranopia-type	રંગ અંધત્વ – ડ્યુટેરેનોપિયા પ્રકાર
 	Color blindness – Protanopia-type	રંગ અંધત્વ – પ્રોટેનોપિયા પ્રકાર
 	Color blindness – Tritanopia-type	રંગ અંધત્વ – ટ્રિટેનોપિયા પ્રકાર
@@ -1852,6 +1847,11 @@
 	Knife	નાઇફ
 	Knockout Group	નૉકઆઉટ ગ્રૂપ
 	LZW Compression	LZW કમ્પ્રેશન
+	OKLCH Sliders	OKLCH સ્લાઇડર્સ
+	Chroma	ક્રોમા
+	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
+	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
+	Lightness	લાઇટનેસ
 	Lab Spot Colors:	Lab સ્પોટ રંગો:
 	Landscape	લેન્ડસ્કેપ
 	Language	ભાષા

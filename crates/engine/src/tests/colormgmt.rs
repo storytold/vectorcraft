@@ -317,6 +317,12 @@ fn convert_to_oklch_answers_lightness_chroma_and_hue() {
     let naive = vectorcraft_color::oklab::to_oklch([0.0, 1.0, 1.0]);
     let l = cyan["values"][0].as_f64().unwrap() / 100.0;
     assert!((l - shown[0]).abs() < 1e-9 && (l - naive[0]).abs() > 0.02, "{cyan} {shown:?} {naive:?}");
+    // A Lab color outside sRGB answers the OKLCH of its color clipped to sRGB.
+    let vivid = s.execute("color.convert", &json!({"color": {"l": 50.0, "a": 100.0, "b": 0.0}, "to": "oklch"})).unwrap();
+    let w: Vec<f64> = vivid["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let clipped = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::lab(50.0, 100.0, 0.0)));
+    assert!((w[0] / 100.0 - clipped[0]).abs() < 1e-9 && (w[1] - clipped[1]).abs() < 1e-9, "{vivid} {clipped:?}");
+    assert!(vectorcraft_color::oklab::in_srgb(vectorcraft_color::oklab::oklch_to_srgb(w[0] / 100.0, w[1], w[2])), "{vivid}");
 }
 
 #[test]
