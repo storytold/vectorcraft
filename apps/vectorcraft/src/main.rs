@@ -28,6 +28,7 @@ mod clipboard;
 mod compositor_gpu;
 mod control_server;
 mod cursor_theme;
+mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod hang_watch;
@@ -53,6 +54,8 @@ mod mac_tablet;
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+mod portal_request;
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
 mod portal_save;
 mod prefs_dir;
@@ -87,6 +90,8 @@ mod titlebar;
 use app::bring_window_forward;
 use app::native_input_hook;
 use app::open_or_hold;
+#[cfg(all(test, not(any(target_os = "macos", windows))))]
+use app::{QuittingWindow, hide_before_teardown};
 use host_services::services;
 #[cfg(all(test, feature = "wgpu"))]
 use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
@@ -102,7 +107,7 @@ use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
 #[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame, system_title_bar_applies};
+use titlebar::{app_draws_frame, caption_layout_from, opted_into_app_title_bar, start_frame, system_title_bar_applies};
 use titlebar::{custom_titlebar, native_options, titlebar_from_env};
 
 struct App {
@@ -116,7 +121,8 @@ struct App {
     frames: u64,
     /// Keeps the custom title bar's window borderless (Windows, #1758).
     window_frame: Option<window_frame::WindowFrameFn>,
-    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635).
+    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
+    /// and to hide the window on quit before the clipboard handles let go (`app::hide_before_teardown`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
     /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
     pending_maximize: bool,
@@ -126,6 +132,8 @@ struct App {
     held_files: Vec<String>,
     /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
     monitors_listed: Option<(f64, f32)>,
+    /// Reads the profile of the display that shows the main window, for the canvas.
+    display_profile: display_profile::Reader,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
 }
@@ -359,7 +367,7 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
-    let custom_titlebar = custom_titlebar(saved.as_ref());
+    let (custom_titlebar, caption_layout) = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
@@ -585,6 +593,7 @@ fn main() -> std::process::ExitCode {
                 }
                 app.titlebar_from_env = titlebar_from_env();
                 app.custom_titlebar = custom_titlebar;
+                app.caption_layout = caption_layout;
                 app.desktop_frame = !custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
@@ -629,6 +638,7 @@ fn main() -> std::process::ExitCode {
                     maximize_tries: 8,
                     held_files,
                     monitors_listed: None,
+                    display_profile: Default::default(),
                     frame_start: None,
                 }))
             }),

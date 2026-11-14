@@ -10,7 +10,7 @@ use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -330,12 +330,14 @@ fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
 
 /// As [`current`], with all the attributes of the paragraph whose stops the panel shows, its left
 /// indent as laid out ([`ParaStyle::laid_out_left_indent`]: its list level's indent added), where
-/// the ruler shows it.
+/// the ruler shows it. Without the Type tool editing text, the panel shows the first paragraph of
+/// the first selected text object, also when that text is in a selected group or follows a
+/// selected object that is not text.
 fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let editing = super::character::text_editing(app);
     let n = match editing {
         Some((id, _, _)) => app.session.active()?.doc.node(id)?.clone(),
-        None => first_selected(app)?,
+        None => super::character::first_selected_text_node(app)?.clone(),
     };
     let NodeKind::Text(t) = &n.kind else { return None };
     let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);

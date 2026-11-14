@@ -25,7 +25,8 @@ pub struct ViewInfo {
     /// View → Pixel Preview: while it is on, the tools use no Smart Guides.
     pub pixel_preview: bool,
     pub show_bbox: bool,
-    /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
+    /// View → Snap to Pixel: drawing, moving and scaling land on whole pixels (points at 72 ppi),
+    /// each while its Pixel Snapping option (`view.snapToPixel.options`) is on.
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
     pub snap_to_point: bool,
@@ -73,6 +74,15 @@ fn rgb(hex: &str, fallback: [u8; 3]) -> [u8; 3] {
 fn nine_slice_guide_preview(cmd: &str, p: &Value) -> bool {
     cmd == "symbol.options"
         && p.as_object().is_some_and(|m| m.contains_key("nineSliceGuides") && m.keys().all(|k| k == "name" || k == "nineSliceGuides"))
+}
+
+/// `ui` with a status message first for each of `warnings` (which came before its requests) that it
+/// doesn't already show.
+fn with_status(mut ui: Vec<UiRequest>, warnings: Vec<String>) -> Vec<UiRequest> {
+    let new: Vec<UiRequest> =
+        warnings.into_iter().filter(|w| !ui.iter().any(|r| matches!(r, UiRequest::Status(s) if s == w))).map(UiRequest::Status).collect();
+    ui.splice(0..0, new);
+    ui
 }
 
 /// Requests from tools that only the frontend can fulfil.
@@ -227,24 +237,28 @@ impl Session {
 
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
     /// selection tool [`Self::lent_tool`] takes the gesture, pressing without Cmd (a plain click,
-    /// not Select Behind). The tool lent to stays as it was, unaware, until the release.
-    fn lend_selection_tool(&mut self, ev: &PointerEvent) -> PointerEvent {
+    /// not Select Behind). The tool lent to stays as it was, unaware, until the release. → the event
+    /// for the tool, and the warnings of a preview that keeping the typing applied.
+    fn lend_selection_tool(&mut self, ev: &PointerEvent) -> Result<(PointerEvent, Vec<String>)> {
         if ev.kind != PointerKind::Down || !ev.mods.cmd || self.lender.is_some() {
-            return *ev;
+            return Ok((*ev, vec![]));
         }
-        let Some(id) = self.lent_tool(self.tool.id(), &ev.mods) else { return *ev };
+        let Some(id) = self.lent_tool(self.tool.id(), &ev.mods) else { return Ok((*ev, vec![])) };
         // Typing in progress is kept as its own step first: the lent tool's drag previews from the
-        // document its interaction started from, which would drop the typing (#1881).
+        // document its interaction started from, which would drop the typing (#1881). When it
+        // can't be kept, the press is not lent.
+        let mut settled = vec![];
         if crate::cmd::typing_in_progress(self) {
-            // Fails only without a document, and then there is no typing to keep.
-            let _ = crate::cmd::settle_interaction(self);
+            let (r, warnings) = self.collect_settled_warnings(crate::cmd::settle_interaction);
+            r?;
+            settled = warnings;
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
         let lent = self.make_tool(id);
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
-        PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
+        Ok((PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }, settled))
     }
 
     /// The lent selection tool's gesture is over: the tool it was lent to is back as it was (the
@@ -355,6 +369,7 @@ impl Session {
             // Snap to Grid and Snap to Pixel are exclusive, as in Illustrator; left both on, the grid
             // wins instead of pixels quietly rounding every drag to whole points (#1816).
             snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
+            pixel_snap: self.prefs.pixel_snap,
             snap_to_point: view.snap_to_point,
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
@@ -659,7 +674,8 @@ impl Session {
         }
         self.leave_draw_inside(ev, view)?;
         self.tell_tool_history_moved();
-        let ev = &self.lend_selection_tool(ev);
+        let (ev, settled) = self.lend_selection_tool(ev)?;
+        let ev = &ev;
         let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         if !keep {
@@ -670,7 +686,7 @@ impl Session {
             if keep && ev.kind == PointerKind::Up {
                 self.keep_tool_settings();
             }
-            self.apply_actions(acts)
+            self.apply_actions(acts).map(|ui| with_status(ui, settled))
         });
         // The tool's own edits do not move the history for it. A selection tool that Cmd lends
         // edits for the lender, which hears of the edit at its next event.
@@ -786,6 +802,12 @@ impl Session {
     /// Does the active tool want [`Session::tool_tick`]s now?
     pub fn tool_wants_ticks(&self) -> bool {
         self.tool.wants_ticks()
+    }
+
+    /// Did the active tool leave part of its overlays for the next frame
+    /// ([`vectorcraft_tools::Tool::overlays_pending`])?
+    pub fn tool_overlays_pending(&self) -> bool {
+        self.tool.overlays_pending()
     }
 
     /// Does the active tool build a stroke from every position the pointer passed
@@ -1142,6 +1164,12 @@ impl Session {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
+    /// Does the active tool take `key`, pressed with `mods` held, ahead of the shortcuts bound to it
+    /// (see `Tool::claims_key_with`)?
+    pub fn tool_claims_key_with(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> bool {
+        self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key_with(cx, key, mods))
+    }
+
     /// Has the active tool started something that Escape ends while no button is pressed (see
     /// `Tool::ends_on_escape`)?
     pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
@@ -1289,14 +1317,12 @@ impl Session {
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        // The active tool's merge being computed is applied with the options it was started with.
-        if tool.is_none_or(|t| t == self.tool.id()) {
-            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
-        }
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {
             values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
         }
+        // Every value is checked before any is set, so an invalid one changes nothing.
+        vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {
@@ -1313,6 +1339,10 @@ impl Session {
             {
                 return Err("Unknown dimension mode".into());
             }
+        }
+        // The active tool's merge being computed is applied with the options it was started with.
+        if tool.is_none_or(|t| t == self.tool.id()) {
+            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         Ok(self.set_tool_options(tool, &values))
     }
@@ -1375,7 +1405,14 @@ impl Session {
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
-        let r = self.apply_tool_actions(acts);
+        // A preview that settling applied (typing kept as its own step before a drag begins) shows
+        // its warning in the status bar, as the tool's own commit shows its preview's.
+        let r = if !outer && self.depth == 0 {
+            let (r, settled) = self.collect_settled_warnings(|s| s.apply_tool_actions(acts));
+            r.map(|ui| with_status(ui, settled))
+        } else {
+            self.apply_tool_actions(acts)
+        };
         self.in_tool_actions = outer;
         if !outer && self.depth == 0 {
             self.trim_histories();

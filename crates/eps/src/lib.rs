@@ -352,64 +352,23 @@ fn read_data(ps: &[u8], name: &str) -> Option<Vec<u8>> {
     None
 }
 
-/// The magic number of an EPS file with a binary header (a preview).
-const DOS_MAGIC: [u8; 4] = [0xC5, 0xD0, 0xD3, 0xC6];
-/// The binary header's size.
-const DOS_HEADER: usize = 30;
+pub use craft_eps::{DOS_HEADER, DOS_MAGIC, Sections, is_eps};
 
 /// `ps` behind a binary header, followed by the TIFF preview `tiff`.
 fn dos_eps(ps: &[u8], tiff: &[u8]) -> Result<Vec<u8>, String> {
-    let big = || "the file is too large for an EPS preview header (4 GB): choose no preview".to_string();
-    let ps_len = u32::try_from(ps.len()).map_err(|_| big())?;
-    let tiff_at = u32::try_from(DOS_HEADER + ps.len()).map_err(|_| big())?;
-    let tiff_len = u32::try_from(tiff.len()).map_err(|_| big())?;
-    tiff_at.checked_add(tiff_len).ok_or_else(big)?;
-    let mut out = Vec::with_capacity(DOS_HEADER + ps.len() + tiff.len());
-    out.extend(DOS_MAGIC);
-    out.extend((DOS_HEADER as u32).to_le_bytes());
-    out.extend(ps_len.to_le_bytes());
-    // No metafile preview.
-    out.extend(0u32.to_le_bytes());
-    out.extend(0u32.to_le_bytes());
-    out.extend(tiff_at.to_le_bytes());
-    out.extend(tiff_len.to_le_bytes());
-    // No checksum.
-    out.extend(0xFFFFu16.to_le_bytes());
-    out.extend(ps);
-    out.extend(tiff);
-    Ok(out)
+    craft_eps::wrap(ps, Some(tiff), None).map_err(|e| e.to_string())
 }
 
 /// The sections of an EPS file: its PostScript and its TIFF preview (binary header), or the whole
 /// file as PostScript. `None` when a binary header points outside the file.
 pub fn sections(bytes: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
-    if !bytes.starts_with(&DOS_MAGIC) {
-        return Some((bytes, None));
-    }
-    let word = |at: usize| bytes.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
-    let part = |at: usize| {
-        let (start, len) = (word(at)?, word(at + 4)?);
-        bytes.get(start..start.checked_add(len)?)
-    };
-    let ps = part(4)?;
-    let tiff = match word(24) {
-        Some(0) | None => None,
-        Some(_) => Some(part(20)?),
-    };
-    Some((ps, tiff))
+    let s = craft_eps::sections(bytes).ok()?;
+    Some((s.postscript, s.tiff))
 }
 
 /// The Windows metafile preview behind an EPS file's binary header, if it has one.
 pub fn metafile_preview(bytes: &[u8]) -> Option<&[u8]> {
-    if !bytes.starts_with(&DOS_MAGIC) {
-        return None;
-    }
-    let word = |at: usize| bytes.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(|b| u32::from_le_bytes(b) as usize);
-    let (start, len) = (word(12)?, word(16)?);
-    if start == 0 || len == 0 {
-        return None;
-    }
-    bytes.get(start..start.checked_add(len)?)
+    craft_eps::sections(bytes).ok()?.metafile
 }
 
 /// The native document an EPS file written by [`export`] carries, if any.

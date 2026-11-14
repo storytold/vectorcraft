@@ -111,6 +111,9 @@ struct Chain {
     left: Option<Vec<vectorcraft_doc::NodeId>>,
     /// How many of its pastes wait.
     waiting: usize,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] when the chain started: a paste
+    /// given after a File → Revert does not join it.
+    reverts: u64,
 }
 
 /// What a paste whose bitmap was decoded off the UI thread pastes.
@@ -129,6 +132,9 @@ pub struct Pending {
     pub label: String,
     /// The document they are placed in ([`vectorcraft_engine::DocState::uid`]).
     doc: u64,
+    /// Its [`vectorcraft_engine::DocState::reverts`] when the read started: a read for content that
+    /// File → Revert has since thrown away is dropped.
+    reverts: u64,
     /// Whether the file was dropped on the canvas (its messages say so, as
     /// [`crate::place::drop_files`]'s do).
     dropped: bool,
@@ -177,6 +183,8 @@ struct PendingSwatch {
     insertion: Insertion,
     selection: Vec<vectorcraft_doc::NodeId>,
     doc: u64,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] when the dialog opened.
+    reverts: u64,
     chain: u64,
 }
 
@@ -254,14 +262,19 @@ pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<
         return Ok(None);
     }
     let copied = app.clipboard_publishing.latest();
-    let (doc, objects) = app.session.doc().map(|st| (st.uid, st.selection.objects.clone())).map_err(|e| e.to_string())?;
+    let (doc, reverts, objects) = app.session.doc().map(|st| (st.uid, st.reverts, st.selection.objects.clone())).map_err(|e| e.to_string())?;
     let insertion = Insertion::of(app).ok_or("no document")?;
     // A paste given while one of the document's latest chain waits, with the selection and the
     // insertion context that chain expects, joins it: it goes next to what the paste before it
-    // leaves selected, as at once. Otherwise it starts a chain.
+    // leaves selected, as at once. Otherwise (also when the document was reverted since the chain
+    // started) it starts a chain.
     let context = (objects, insertion.clone());
-    let joins =
-        app.placing.latest_chain.get(&doc).copied().filter(|c| app.placing.chains.get(c).is_some_and(|ch| ch.waiting > 0 && ch.context == context));
+    let joins = app
+        .placing
+        .latest_chain
+        .get(&doc)
+        .copied()
+        .filter(|c| app.placing.chains.get(c).is_some_and(|ch| ch.waiting > 0 && ch.reverts == reverts && ch.context == context));
     let (chain, selection) = match joins {
         Some(chain) => (chain, None),
         None => (app.placing.next_chain, Some(context.0.clone())),
@@ -285,7 +298,7 @@ pub fn adopt_for_paste(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<
     if started.is_some() {
         if joins.is_none() {
             app.placing.next_chain += 1;
-            app.placing.chains.insert(chain, Chain { context, left: None, waiting: 0 });
+            app.placing.chains.insert(chain, Chain { context, left: None, waiting: 0, reverts });
             app.placing.latest_chain.insert(doc, chain);
         }
         if let Some(ch) = app.placing.chains.get_mut(&chain) {
@@ -321,7 +334,7 @@ fn spawn_labeled(
     chain: Option<u64>,
     read: impl FnOnce() -> Result<Read, String> + Send + 'static,
 ) -> Result<Option<Value>, String> {
-    let doc = app.session.doc().map_err(|e| e.to_string())?.uid;
+    let (doc, reverts) = app.session.doc().map(|st| (st.uid, st.reverts)).map_err(|e| e.to_string())?;
     let (tx, done) = channel();
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
@@ -360,7 +373,7 @@ fn spawn_labeled(
         let _ = reader.send(job);
         app.placing.reader = Some(reader);
     }
-    app.placing.pending.push(Pending { name, label: label.clone(), doc, dropped, paste: chain.is_some(), chain, done, scope: completion });
+    app.placing.pending.push(Pending { name, label: label.clone(), doc, reverts, dropped, paste: chain.is_some(), chain, done, scope: completion });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(Some(json!({ "background": true, "status": status })))
@@ -416,6 +429,19 @@ fn finish(app: &mut VectorcraftApp, p: &Pending, r: Result<Read, String>) {
         }
         return;
     };
+    // File → Revert threw away the content the read was started for: what was read is dropped,
+    // with the document, its selection, the clipboard and the tools as they are.
+    if app.session.documents().get(i).is_some_and(|st| st.reverts != p.reverts) {
+        let name = &p.name;
+        if p.paste {
+            app.status("Couldn't paste: the document it was pasted in was reverted");
+        } else if p.dropped {
+            app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
+        } else {
+            app.status(format!("Couldn't place {name}: the document it was placed in was reverted"));
+        }
+        return;
+    }
     if p.paste {
         let error = match &r {
             Ok(Read::Paste(paste)) => match &paste.pasted {
@@ -508,6 +534,7 @@ fn finish_paste(app: &mut VectorcraftApp, paste: Paste) {
                         insertion: paste.insertion.clone(),
                         selection: requested_selection,
                         doc: st.uid,
+                        reverts: st.reverts,
                         chain,
                     });
                     deferred = true;
@@ -579,6 +606,12 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
         finish_chain(app, waiting.chain);
         return Err("Couldn't paste: the document it was pasted in was closed".into());
     };
+    // File → Revert threw away the content the paste was given in: nothing is pasted, and the
+    // clipboard, selection and insertion context stay as they are.
+    if app.session.documents().get(index).is_some_and(|st| st.reverts != waiting.reverts) {
+        finish_chain(app, waiting.chain);
+        return Err("Couldn't paste: the document it was pasted in was reverted".into());
+    }
     app.session.set_active(index);
     app.sync_views();
     let current = std::mem::replace(&mut app.session.clipboard, waiting.clipboard);

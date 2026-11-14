@@ -1165,7 +1165,9 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
-        if self.graph.take().is_some() {
+        if self.graph.is_some() {
+            self.graph_plain();
+            self.graph = None;
             self.warn(super::types::GRAPH_UNENDED);
         }
         // Envelopes whose plugin never closed them keep their drawn art.
@@ -1367,6 +1369,7 @@ impl<'a> Reader<'a> {
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
                 page,
+                alone: None,
             },
             styles_read,
             text_patterns,

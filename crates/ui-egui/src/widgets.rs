@@ -60,10 +60,10 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
-    panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
+    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
@@ -71,18 +71,18 @@ pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_labe
 pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
-    opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
-    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
-    spin_plain_named, spin_range,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
+    num_field_within_empty, opt_field, opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped,
+    size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning,
+    spin_length_within, spin_plain, spin_plain_named, spin_range,
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
 pub(crate) use panel_chrome::{PANEL_FOOTER, panel_footer, panel_footer_bottom, panel_footer_space, panel_list_height};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
-    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
-    reject_dialog_commit, set_dialog_open, take_dialog_focus,
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, dialog_reject_pass, disarm_field_focus, enter_modifiers, focus_field,
+    own_field_shift_enter, reject_dialog_commit, set_dialog_open, take_dialog_focus,
 };
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
