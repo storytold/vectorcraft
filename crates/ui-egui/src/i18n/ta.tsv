@@ -3677,6 +3677,7 @@ antiAlias	Sharp	கூர்மையான
 	Proportional Metrics	விகித அளவீடுகள்
 	Insert Aki Left	இடது Aki ஐச் செருகு
 	Insert Aki Right	வலது Aki ஐச் செருகு
+	Tsume	Tsume
 	Proportional Oldstyle	விகிதாசார பழைய பாணி எண்கள்
 	Protect Corners	மூலைகளைப் பாதுகாத்திடு
 	Proximity Guides	அருகாமை வழிகாட்டிகள்
@@ -5572,9 +5573,12 @@ antiAlias	Sharp	கூர்மையான
 @msg	a painted live effect returns only `objects`	வண்ணம் தீட்டும் நேரடி விளைவு `objects` ஐ மட்டுமே திருப்பித் தரும்
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	வண்ணம் தீட்டும் நேரடி விளைவின் ஒரு துண்டில் `path`, `fillRule`, `fills`, `strokes` மட்டுமே இருக்கும்
 @msg	a read-only object was left out	படிக்க மட்டுமேயான ஒரு பொருள் விடுபட்டுள்ளது
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	படிக்க மட்டுமேயான ஒரு பொருள் விடுபட்டுள்ளது: அதைத் திருப்பி அனுப்பவும், {{"id": …}} மட்டுமாகவோ கொடுக்கப்பட்டபடியோ
 @msg	a read-only object was left out: return it, as {"id"} alone or as it was given	படிக்க மட்டுமேயான ஒரு பொருள் விடுபட்டுள்ளது: அதை {"id"} மட்டுமாகவோ கொடுக்கப்பட்டபடியோ திருப்பித் தரவும்
 @msg	a string	ஓர் உரைச்சரம்
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ஒரு கோட்டில் `paint`, `width`, `join`, `cap`, `miterLimit` மட்டுமே இருக்கும்
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ஒரு கோடு {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} ஆக இருக்க வேண்டும்
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ஒரு விளைவு {{"id", "params"?, "visible"?}} ஆக இருக்க வேண்டும்
 @msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ஒரு கோடு {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} ஆக இருக்க வேண்டும்
 @msg	an effect must be {"id", "params"?, "visible"?}	ஒரு விளைவு {"id", "params"?, "visible"?} ஆக இருக்க வேண்டும்
 @msg	an effect on a fill returns only `fills`	நிரப்பின் மீதான விளைவு `fills` ஐ மட்டுமே திருப்பித் தரும்
@@ -5855,6 +5859,129 @@ antiAlias	Sharp	கூர்மையான
 @msg	the paths are too many or too tangled to find where they cross	பாதைகள் மிக அதிகமாக அல்லது மிகவும் சிக்கலாகப் பின்னியிருப்பதால் அவை குறுக்கிடும் இடங்களைக் கண்டறிய முடியவில்லை
 @msg	the rectangle or line reaches too many paths to check	செவ்வகம் அல்லது கோடு சரிபார்க்க முடியாத அளவுக்கு அதிகமான பாதைகளைத் தொடுகிறது
 @msg	{name} must be a number	{name} ஓர் எண்ணாக இருக்க வேண்டும்
+@msg	3D effects require finite coordinates within 100 million points	3D விளைவுகளுக்கு 100 மில்லியன் புள்ளிகளுக்குள் முடிவுள்ள ஆயத்தொலைவுகள் தேவை
+@msg	3D effects require one to ten lights	3D விளைவுகளுக்கு ஒன்று முதல் பத்து ஒளிகள் தேவை
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP ஆழம் {_1}: ஒரு பிக்சலுக்கு 1, 4, 8, 16, 24 அல்லது 32 பிட்கள்
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP குறியாக்கம் தோல்வியடைந்தது: {width} × {height} பிக்சல்கள் இந்த வடிவத்துக்கோ பிக்சல் இடையகத்துக்கோ பொருந்தவில்லை
+@msg	GIF encoding failed: the palette image is malformed	GIF குறியாக்கம் தோல்வியடைந்தது: தட்டுப் படம் தவறான வடிவில் உள்ளது
+@msg	GIF encoding failed: {e}	GIF குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	JPEG colour profile: {e}	JPEG நிறச் சுயவிவரம்: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG குறியாக்கம் தோல்வியடைந்தது: பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	JPEG encoding failed: {e}	JPEG குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG குறியாக்கம் தோல்வியடைந்தது: பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	PNG encoding failed: the palette image is malformed	PNG குறியாக்கம் தோல்வியடைந்தது: தட்டுப் படம் தவறான வடிவில் உள்ளது
+@msg	PNG encoding failed: {e}	PNG குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG குறியாக்கம் தோல்வியடைந்தது: {width} × {height} பிக்சல்கள் சரியான பட அளவு அல்ல
+@msg	PSD colour profile: {e}	PSD நிறச் சுயவிவரம்: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD குறியாக்கம் தோல்வியடைந்தது: பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	Revolve profile contains invalid coordinates	சுழற்றி உருவாக்கு: வெளிவடிவத்தில் தவறான ஆயத்தொலைவுகள் உள்ளன
+@msg	Revolve profile is too complex	சுழற்றி உருவாக்கு: வெளிவடிவம் மிகச் சிக்கலானது
+@msg	Revolve projection is not finite	சுழற்றி உருவாக்கு: எறிவு முடிவுள்ளதாக இல்லை
+@msg	Revolve requires finite profile coordinates within 100 million points	சுழற்றி உருவாக்குவதற்கு 100 மில்லியன் புள்ளிகளுக்குள் முடிவுள்ள வெளிவடிவ ஆயத்தொலைவுகள் தேவை
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	சுழற்றி உருவாக்கு: மேற்பரப்பு மிகச் சிக்கலானது; பகுதிகளைக் குறைக்கவும் அல்லது வெளிவடிவத்தை எளிமையாக்கவும்
+@msg	Revolve surface is too complex; simplify the profile	சுழற்றி உருவாக்கு: மேற்பரப்பு மிகச் சிக்கலானது; வெளிவடிவத்தை எளிமையாக்கவும்
+@msg	Revolve visibility cannot split the projected boundary	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்புயால் எறியப்பட்ட எல்லையைப் பிரிக்க முடியாது
+@msg	Revolve visibility creates too many fragments	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்பு மிக அதிகமான துண்டுகளை உருவாக்குகிறது
+@msg	Revolve visibility creates too many vector anchors	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்பு மிக அதிகமான வெக்டர் நங்கூரங்களை உருவாக்குகிறது
+@msg	Revolve visibility exceeds its geometry work limit	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்பு அதன் வடிவியல் வேலை வரம்பை மீறுகிறது
+@msg	Revolve visibility exceeds its spatial index limit	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்பு அதன் இடஞ்சார் குறியீட்டு வரம்பை மீறுகிறது
+@msg	Revolve visibility has too many boundary crossings	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்புயில் மிக அதிகமான எல்லைக் குறுக்கீடுகள் உள்ளன
+@msg	Revolve visibility has too many input anchors	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்புயில் மிக அதிகமான உள்ளீட்டு நங்கூரங்கள் உள்ளன
+@msg	Revolve visibility requires convex cap sectors	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்புக்குக் குவிந்த மூடிப் பகுதிகள் தேவை
+@msg	Revolve visibility requires finite projected faces	சுழற்றி உருவாக்கு: தெரிவுநிலைக் கணிப்புக்கு முடிவுள்ள எறியப்பட்ட முகங்கள் தேவை
+@msg	SVG options: {e}	SVG விருப்பங்கள்: {e}
+@msg	Save for Web settings: {e}	இணையத்திற்காகச் சேமி அமைப்புகள்: {e}
+@msg	TIFF colour profile: {e}	TIFF நிறச் சுயவிவரம்: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF குறியாக்கம் தோல்வியடைந்தது: பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	TIFF encoding failed: {e}	TIFF குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa ஆழம் {_1}: ஒரு பிக்சலுக்கு 16, 24 அல்லது 32 பிட்கள்
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa குறியாக்கம் தோல்வியடைந்தது: பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	The 3D projection is not finite	3D எறிவு முடிவுள்ளதாக இல்லை
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D நிழல் மிகச் சிக்கலானது; நிழல்களை அணைக்கவும் அல்லது ஓவியத்தை எளிமையாக்கவும்
+@msg	The shape contains invalid coordinates	வடிவத்தில் தவறான ஆயத்தொலைவுகள் உள்ளன
+@msg	Too many Revolve faces for visibility evaluation	தெரிவுநிலைக் கணிப்புக்கு சுழற்றி உருவாக்கு முகங்கள் மிக அதிகம்
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	ஒரு வண்ண மாதிரி பரிமாற்றக் கோப்பிலிருந்து VectorCraft அதிகபட்சம் {ASE_MAX_ENTRIES} நிறங்களையும் குழுக்களையும் மட்டுமே படிக்கும்; இந்த நூலகத்தில் {entries} உள்ளன
+@msg	WebP encoding failed: {e}	WebP குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` என்பது smallThumb, mediumThumb, largeThumb, smallList அல்லது largeList ஆகும்
+@msg	a line can't run from a point to itself	ஒரு கோடு ஒரு புள்ளியிலிருந்து அதே புள்ளிக்குச் செல்ல முடியாது
+@msg	a line needs at least two points	ஒரு கோட்டுக்குக் குறைந்தது இரண்டு புள்ளிகள் தேவை
+@msg	a number cannot be read	ஓர் எண்ணைப் படிக்க முடியவில்லை
+@msg	a swatch exchange block is too long	ஒரு வண்ண மாதிரி பரிமாற்றத் தொகுதி மிக நீளமானது
+@msg	a swatch exchange name is too long	ஒரு வண்ண மாதிரி பரிமாற்றப் பெயர் மிக நீளமானது
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} படத்தை {width} × {height} பிக்சல்களுக்கு மறுஅளவிட முடியாது
+@msg	a {width} × {height} image is too large	{width} × {height} படம் மிகப் பெரியது
+@msg	a {width} × {height} image: {e}	{width} × {height} படம்: {e}
+@msg	an image could not be written: {e}	ஒரு படத்தை எழுத முடியவில்லை: {e}
+@msg	an image that couldn't be read was left out	படிக்க முடியாத ஒரு படம் விடுபட்டது
+@msg	can't open “{name}”: {e}	“{name}” ஐத் திறக்க முடியவில்லை: {e}
+@msg	cannot align zip entries to {align} bytes	zip உள்ளீடுகளை {align} பைட்டுகளுக்குச் சீரமைக்க முடியாது
+@msg	cannot open the automation {kind} root `{_1}`: {e}	தானியக்க {kind} மூலக் கோப்புறை `{_1}` ஐத் திறக்க முடியவில்லை: {e}
+@msg	cannot read profile: {0}	சுயவிவரத்தைப் படிக்க முடியவில்லை: {0}
+@msg	color book version {version} isn't supported (only 1)	நிறப் புத்தகப் பதிப்பு {version} ஆதரிக்கப்படவில்லை (1 மட்டும்)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	{other} நிற வெளியில் உள்ள நிறப் புத்தகங்கள் ஆதரிக்கப்படவில்லை (RGB, CMYK, Lab மட்டும்)
+@msg	file name too long to zip: {_1}	zip செய்ய முடியாத அளவுக்குக் கோப்புப் பெயர் நீளமானது: {_1}
+@msg	file name too long to zip: {name}	zip செய்ய முடியாத அளவுக்குக் கோப்புப் பெயர் நீளமானது: {name}
+@msg	freeform line {i}: {e}	கட்டற்ற கோடு {i}: {e}
+@msg	freeform point {i}: {e}	கட்டற்ற புள்ளி {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` அல்லது `{other}` ஐக் கொடுக்கவும், இரண்டையும் அல்ல
+@msg	grayscale profiles can't be working spaces yet	சாம்பல் அளவுச் சுயவிவரங்கள் இன்னும் பணி வெளிகளாக இருக்க முடியாது
+@msg	input contains NaN or infinite coordinates	உள்ளீட்டில் NaN அல்லது முடிவிலி ஆயத்தொலைவுகள் உள்ளன
+@msg	input path could not be closed	உள்ளீட்டுப் பாதையை மூட முடியவில்லை
+@msg	invalid ICC profile: {0}	தவறான ICC சுயவிவரம்: {0}
+@msg	invalid scale {scale}	தவறான அளவு விகிதம் {scale}
+@msg	its localized names take more than {_1} KB	அதன் உள்ளூர்மயமாக்கப்பட்ட பெயர்கள் {_1} KB-க்கு மேல் எடுக்கின்றன
+@msg	its objects are nested too deep ({e})	அதன் பொருட்கள் மிக ஆழமாக உள்ளமைக்கப்பட்டுள்ளன ({e})
+@msg	its tag table lists the `{_1}` tag more than once	அதன் குறிச்சொல் அட்டவணை `{_1}` குறிச்சொல்லை ஒன்றுக்கு மேற்பட்ட முறை பட்டியலிடுகிறது
+@msg	not a graphic style library: {e}	வரைகலை பாணி நூலகம் அல்ல: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	வண்ண மாதிரி நூலகம் அல்ல (.vcswatches அல்லது .gpl)
+@msg	not a swatch library (format `{_1}`)	வண்ண மாதிரி நூலகம் அல்ல (வடிவம் `{_1}`)
+@msg	not a swatch library: {e}	வண்ண மாதிரி நூலகம் அல்ல: {e}
+@msg	not an action set file ({e})	செயல் தொகுப்புக் கோப்பு அல்ல ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	சுயவிவரத்தின் நிற வெளி {other} RGB, CMYK அல்லது Gray அல்ல
+@msg	regular expression too large	வழக்கமான வெளிப்பாடு மிகப் பெரியது
+@msg	script file is not UTF-8 text: {value}	ஸ்கிரிப்ட் கோப்பு UTF-8 உரை அல்ல: {value}
+@msg	stop {i}: {e}	நிறுத்தம் {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	வண்ண மாதிரி பரிமாற்றப் பதிப்பு {major}.{minor} ஆதரிக்கப்படவில்லை (1.x மட்டும்)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	நிறப் புத்தகத்தில் {ASE_MAX_ENTRIES} க்கும் மேற்பட்ட நிறங்கள் உள்ளன
+@msg	the color book is cut short	நிறப் புத்தகம் இடையில் துண்டிக்கப்பட்டுள்ளது
+@msg	the color book's names take more than {_1} MB	நிறப் புத்தகத்தின் பெயர்கள் {_1} MB-க்கு மேல் எடுக்கின்றன
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	படம் {w} × {h} பிக்சல்களாக இருக்கும்; ராஸ்டர் ஏற்றுமதிகள் ஒரு பக்கத்துக்கு {MAX_RASTER_SIDE} பிக்சல்கள், {_1} மெகாபிக்சல்கள் வரை மட்டுமே: அளவு விகிதத்தை அல்லது தெளிவுத்திறனைக் குறைக்கவும்
+@msg	the optimised image can't be read back: {e}	உகப்பாக்கிய படத்தைத் திரும்பப் படிக்க முடியவில்லை: {e}
+@msg	the pixel buffer doesn't match the image size	பிக்சல் இடையகம் பட அளவுடன் பொருந்தவில்லை
+@msg	the preview: {e}	முன்னோட்டம்: {e}
+@msg	the request may not read the New Document profiles folder	இந்தக் கோரிக்கை புதிய ஆவணச் சுயவிவரங்கள் கோப்புறையைப் படிக்கக் கூடாது
+@msg	the shapes are too degenerate to combine	வடிவங்கள் இணைக்க முடியாத அளவுக்குச் சிதைந்துள்ளன
+@msg	the shapes cross themselves and each other too often to combine	வடிவங்கள் தம்மையும் ஒன்றையொன்றும் பலமுறை குறுக்கிடுவதால் இணைக்க முடியாது
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	வண்ண மாதிரி பரிமாற்றக் கோப்பில் {ASE_MAX_ENTRIES} க்கும் மேற்பட்ட நிறங்களும் குழுக்களும் உள்ளன
+@msg	the swatch exchange file is cut short	வண்ண மாதிரி பரிமாற்றக் கோப்பு இடையில் துண்டிக்கப்பட்டுள்ளது
+@msg	the {_1} plate can't be read: {e}	{_1} தட்டைப் படிக்க முடியவில்லை: {e}
+@msg	this binary DXF file is damaged or cut short	இந்த பைனரி DXF கோப்பு சேதமடைந்துள்ளது அல்லது இடையில் துண்டிக்கப்பட்டுள்ளது
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	இது DWG வரைபடம், இதைப் படிக்க முடியாது: CAD பயன்பாட்டிலிருந்து DXF ஆகச் சேமித்து அதைத் திறக்கவும்
+@msg	too many classes	மிக அதிகமான வகுப்புகள்
+@msg	too many groups	மிக அதிகமான குழுக்கள்
+@msg	too many layers for PSD (at most 32767)	PSD-க்கு மிக அதிகமான அடுக்குகள் (அதிகபட்சம் 32767)
+@msg	too many swatch exchange blocks	மிக அதிகமான வண்ண மாதிரி பரிமாற்றத் தொகுதிகள்
+@msg	unknown colour profile: {0}	அறியப்படாத நிறச் சுயவிவரம்: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} ஓர் உள்ளமைந்த சுயவிவரப் பெயருடன் மோதுகிறது
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} பிக்சல்கள் GIF-க்கு மிகப் பெரியது (ஒரு பக்கத்துக்கு அதிகபட்சம் 65535 பிக்சல்கள்): தெளிவுத்திறனைக் குறைக்கவும்
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB-க்கு/இலிருந்து பயன்படுத்தக்கூடிய உருமாற்றம் இல்லை
+@msg	{name} is not a CMYK profile	{name} ஒரு CMYK சுயவிவரம் அல்ல
+@msg	{name} is not an RGB profile	{name} ஒரு RGB சுயவிவரம் அல்ல
+@msg	{path}: could not be read	{path}: படிக்க முடியவில்லை
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} பிக்சல்கள் JPEG-க்கு மிகப் பெரியது (ஒரு பக்கத்துக்கு அதிகபட்சம் 65535 பிக்சல்கள்): தெளிவுத்திறனைக் குறைக்கவும்
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} பிக்சல்கள் Targa-வுக்கு மிகப் பெரியது (ஒரு பக்கத்துக்கு அதிகபட்சம் 65535 பிக்சல்கள்): தெளிவுத்திறனைக் குறைக்கவும்
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} பிக்சல்கள் PSD-க்கு மிகப் பெரியது (ஒரு பக்கத்துக்கு அதிகபட்சம் {MAX_SIDE} பிக்சல்கள்): தெளிவுத்திறனைக் குறைக்கவும்
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` 0.01 முதல் 1000 pt வரை இருக்க வேண்டும்
+@msg	select the banner, or mark every artboard	பேனரைத் தேர்ந்தெடுக்கவும், அல்லது ஒவ்வொரு ஆர்ட்போர்டையும் குறிக்கவும்
+@msg	the banner has no width or height	பேனருக்கு அகலமோ உயரமோ இல்லை
+@msg	the grommet inset is too large for the banner	கண்ணி வளைய உள்தள்ளல் பேனருக்கு மிகப் பெரியது
+@msg	the hem is too deep for the banner	மடிப்பு ஓரம் பேனருக்கு மிக ஆழமானது
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	இந்த இடைவெளியால் {MAX_GROMMETS} க்கும் மேற்பட்ட கண்ணி வளையங்கள் உருவாகும்
+@msg	there is no banner to mark	குறிக்க பேனர் எதுவும் இல்லை
+@msg	turn on at least one side	குறைந்தது ஒரு பக்கத்தையாவது இயக்கவும்
+@msg	with no hem and no grommets there is nothing to mark	மடிப்பு ஓரமும் கண்ணி வளையங்களும் இல்லாததால் குறிக்க எதுவும் இல்லை
 	Banner Hems and Grommets…	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்…
 	Banner Hems and Grommets	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்
 	Hem	மடிப்பு ஓரம்
@@ -6787,8 +6914,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	Expand: no gradient fills	விரிவாக்கு: சாய்வு நிரப்புகள் இல்லை
 @msg	Expand: nothing to expand	விரிவாக்கு: விரிவாக்க எதுவும் இல்லை
 @msg	expanded SVG styles exceed the import size limit	விரிவாக்கப்பட்ட SVG பாணிகள் இறக்குமதி அளவு வரம்பை மீறுகின்றன
-@msg	expected {"dataBase64"}	{"dataBase64"} எதிர்பார்க்கப்பட்டது
-@msg	expected {"objects"}	{"objects"} எதிர்பார்க்கப்பட்டது
+@msg	expected {{"dataBase64": "…"}}	{{"dataBase64": "…"}} எதிர்பார்க்கப்பட்டது
+@msg	expected {{"objects": [...]}}	{{"objects": [...]}} எதிர்பார்க்கப்பட்டது
 @msg	export `{name}`: {e}	நிரல்கூறு ஏற்றுமதி `{name}`: {e}
 @msg	Export cancelled	ஏற்றுமதி ரத்துசெய்யப்பட்டது
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	திரைகளுக்கு ஏற்றுமதி png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai அல்லது vectorcraft வடிவங்களில் மட்டுமே எழுதும்
@@ -7493,6 +7620,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	Word ஆவணம் அல்ல: அதன் WordDocument ஓட்டம் கோப்புத் தகவல் தொகுதியுடன் தொடங்கவில்லை
 @msg	the action set file can't be read in full	செயல் தொகுப்புக் கோப்பை முழுமையாகப் படிக்க முடியவில்லை
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” ஏற்றப்பட்டது: {n} படி விடுபட்டது|“{name}” ஏற்றப்பட்டது: {n} படிகள் விடுபட்டன
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” ஏற்றப்பட்டது: {n} படியில் அறியப்படாத கட்டளை உள்ளது, அது வைக்கப்பட்டது: “{action}”, படி {step}, `{command}`|“{name}” ஏற்றப்பட்டது: {n} படிகளில் அறியப்படாத கட்டளைகள் உள்ளன, அவை வைக்கப்பட்டன; முதலாவது: “{action}”, படி {step}, `{command}`
 @msg	not an action set file	இது செயல் தொகுப்புக் கோப்பு அல்ல
 @msg	not an EMF or WMF file	EMF அல்லது WMF கோப்பு அல்ல
 @msg	not an HP-GL file	இது HP-GL கோப்பு அல்ல
@@ -8381,6 +8509,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	unknown character style number field	தெரியாத எழுத்து பாணி எண் புலம்
 @msg	unknown CMYK profile `{name}`	அறியப்படாத CMYK சுயவிவரம் `{name}`
 @msg	unknown command `{0}`	அறியப்படாத கட்டளை `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}” இன் படி {step} அறியப்படாத கட்டளை `{command}` ஐ இயக்குகிறது
 @msg	unknown command `{0}`; did you mean `{1}`?	தெரியாத கட்டளை `{0}`; நீங்கள் `{1}` ஐக் குறிப்பிட்டீர்களா?
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	அறியப்படாத கட்டுப்பாடு `{name}`: fillStroke, coloring, drawMode அல்லது screenMode
 @msg	Unknown dimension mode	அறியப்படாத அளவீட்டுப் பயன்முறை
@@ -8821,6 +8950,12 @@ theme	Appearance	தோற்றப்பாணி
 @msg	open the practice sample of `{id}` first (see learn.openSample)	முதலில் `{id}` இன் பயிற்சி மாதிரியைத் திறக்கவும் (learn.openSample ஐப் பார்க்கவும்)
 @msg	finish `{id}` first (see learn.finish)	முதலில் `{id}` ஐ முடிக்கவும் (learn.finish ஐப் பார்க்கவும்)
 @msg	`{id}` is the last tutorial in its skill	`{id}` அதன் திறனின் கடைசிப் பயிற்சி
+	Reset progress	முன்னேற்றத்தை மீட்டமை
+	Mark Tutorial Step	பயிற்சிப் படியைக் குறி
+	Reset Learn Progress	கற்றல் முன்னேற்றத்தை மீட்டமை
+@msg	missing `step` (see learn.show)	`step` இல்லை (learn.show ஐப் பார்க்கவும்)
+@msg	`step` must be a step number from 0 to {last}	`step` என்பது 0 முதல் {last} வரையிலான படி எண்ணாக இருக்க வேண்டும்
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` முடிந்துவிட்டது (learn.resetProgress ஐப் பார்க்கவும்)
 	Refresh Deferred Effects	ஒத்திவைக்கப்பட்ட விளைவுகளை மீள்புதுப்பி
 	Deferred Effects	ஒத்திவைக்கப்பட்ட விளைவுகள்
 @msg	no plug-in effect is deferred	எந்தச் செருகுநிரல் விளைவும் ஒத்திவைக்கப்படவில்லை
@@ -8957,6 +9092,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} சுயவிவரத்தைப் படிக்க முடியவில்லை, எனவே புதிய ஆவணத்தில் இயல்புநிலை அமைப்புகள் உள்ளன: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	பிணை: {_1} க்கும் மேற்பட்ட பொருள் இணைகள் பிணைக்கும் அளவுக்கு அருகருகே உள்ளன, அல்லது மிக அதிகமான பொருட்கள் ஒரே கிடைமட்ட வரம்பைப் பகிர்கின்றன; ஒரே நேரத்தில் குறைவான பொருட்களைப் பிணைக்கவும்
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	களைநீக்கப் பெட்டியும் கோடுகளும்: ஓவியத்திற்கு வெளியே எந்தக் களைநீக்கக் கோடும் பொருந்தவில்லை, களைநீக்கப் பெட்டியும் முடக்கத்தில் உள்ளது
+@msg	\\ at end of pattern	வடிவமாதிரியின் இறுதியில் \\
 @msg	`alignOn` cannot be empty	`alignOn` காலியாக இருக்கக்கூடாது
 @msg	`alignOn` must be a string	`alignOn` ஒரு உரையாக இருக்க வேண்டும்
 @msg	`align` must be a string	`align` ஒரு உரையாக இருக்க வேண்டும்
@@ -9049,6 +9185,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`{u}` is no Unicode character	`{u}` ஒரு Unicode எழுத்து அல்ல
 @msg	`{word}` isn't in the custom dictionary	`{word}` தனிப்பயன் அகராதியில் இல்லை
 @msg	a CMap has too many mappings	ஒரு CMap இல் மிக அதிகமான பொருத்தங்கள் உள்ளன
+@msg	a \\u escape needs four hexadecimal digits	\\u விடுபடு வரிசைக்கு நான்கு ஹெக்ஸ் இலக்கங்கள் தேவை
 @msg	a comma in an XPath expression must separate function arguments	XPath வெளிப்பாட்டில் உள்ள காற்புள்ளி செயல்பாட்டுச் செயலுருபுகளைப் பிரிக்க மட்டுமே பயன்பட வேண்டும்
 @msg	a document holds at most {_1} SVG filters	ஓர் ஆவணத்தில் அதிகபட்சம் {_1} SVG வடிகட்டிகள் இருக்கலாம்
 @msg	a document with unsaved changes has no recovery copy	சேமிக்கப்படாத மாற்றங்கள் உள்ள ஓர் ஆவணத்துக்கு மீட்பு நகல் இல்லை
@@ -9293,6 +9430,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	unknown panel `{panel}`	அறியப்படாத பலகம் `{panel}`
 @msg	unknown parameter `{key}`	அறியப்படாத அளவுரு `{key}`
 @msg	unknown parameter `{within}settings.{format}`; {why}	அறியப்படாத அளவுரு `{within}settings.{format}`; {why}
+@msg	unknown parameter `{within}{key}`; {why}	அறியப்படாத அளவுரு `{within}{key}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	அறியப்படாத குறைப்பு `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform அல்லது document)
 @msg	unmatched ')'	பொருந்தாத ')'
 @msg	unterminated character class	முடிக்கப்படாத எழுத்து வகுப்பு
