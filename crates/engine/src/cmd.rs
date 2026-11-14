@@ -46,7 +46,7 @@ pub mod importmatches;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
-mod layer;
+pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
 pub mod linkfiles;
@@ -440,6 +440,15 @@ pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
         Some(v) => v.as_f64().ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
 }
+/// The whole number of 0 or more that `p` gives for `key`. A missing key or null is "missing integer
+/// `{key}`"; any other value, such as `"3"`, `2.5`, `-1` or `true`, is "`{key}` must be a whole
+/// number", as [`object_param`] words it.
+pub(crate) fn u64_req(p: &Value, key: &str, cmd: &str) -> Result<u64> {
+    match p.get(key) {
+        None | Some(Value::Null) => Err(bad(cmd, format!("missing integer `{key}`"))),
+        Some(v) => v.as_u64().ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
 /// The number `p` gives for `key`, or `default` when `p` leaves it out or gives null. Any other
 /// value, such as `"40"`, is an error: "`{key}` must be a number, not {v}".
 pub(crate) fn number_or(p: &Value, key: &str, default: f64, cmd: &str) -> Result<f64> {
@@ -549,6 +558,15 @@ pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<No
 /// `v` as an index, a count or a byte offset: past `usize::MAX` reads as `usize::MAX`, past the end of any list.
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
+}
+/// The whole number of 0 or more that `p` gives for `key`, read with [`index`], or `None` when `p`
+/// leaves it out or gives null. Any other value, such as `"3"`, `2.5`, `-1` or `true`, is an error
+/// under `cmd`: "`{key}` must be a whole number".
+pub(crate) fn index_opt(p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(|n| Some(index(n))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
 }
 /// Validate all explicit targets before a command changes the document or selection.
 pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {

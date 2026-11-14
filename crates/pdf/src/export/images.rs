@@ -1,5 +1,5 @@
 use super::exporter::{UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
-use super::{Arc, BlendMode, Color, Exporter, Image, NodeKind, Paint, Rect, Size, Surface, cmyk, krilla};
+use super::{Arc, BlendMode, Color, Exporter, Image, Node, NodeKind, Paint, Rect, Size, Surface, cmyk, krilla};
 use krilla::color::device_n::{Colorant, DeviceNSpace, Process};
 use krilla::image::{BitsPerComponent, CustomImage, ImageColorspace};
 
@@ -59,13 +59,17 @@ impl Exporter<'_> {
     /// the Output settings write them. The coverage is resampled as the Compression settings ask
     /// ([`crate::images::coverage_sized`]). `None` when the paint isn't a solid color, the image is
     /// missing or left out, its pixels can't be decoded, or its color channel exceeds
-    /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; image rejections are cached like [`Self::load_image`].
+    /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
+    /// resampled), image rejections too.
     /// With `interpolate` (and the export's own setting), viewers may smooth it.
     pub(super) fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, paint: &Paint, interpolate: bool) -> Option<Image> {
         let Paint::Solid { color, swatch, tint } = paint else { return None };
-        let size = placed_size(im);
+        let size = self.image_size(im);
         let interpolate = interpolate && self.interpolate;
-        let mut cache = format!("{}\u{0}{paint:?}\u{0}{:.3}x{:.3}", im.key, size.0, size.1);
+        let mut cache = format!("{}\u{0}{paint:?}", im.key);
+        if self.downsampled() {
+            cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
+        }
         if !interpolate && self.interpolate {
             cache.push_str("\u{0}pixelated");
         }
@@ -124,9 +128,8 @@ impl Exporter<'_> {
     fn load_image(&mut self, im: &vectorcraft_doc::ImageObject, size: (f64, f64), interpolate: bool) -> Option<Image> {
         let key = im.key.as_str();
         let c = self.compression;
-        let sized = [c.color.downsample, c.gray.downsample, c.mono.downsample].iter().any(|d| *d != crate::Downsample::None);
         let interpolate = interpolate && self.interpolate;
-        let mut cache = if sized { format!("{key}\u{0}{:.3}x{:.3}", size.0, size.1) } else { key.to_string() };
+        let mut cache = if self.downsampled() { format!("{key}\u{0}{:.3}x{:.3}", size.0, size.1) } else { key.to_string() };
         if !interpolate && self.interpolate {
             cache.push_str("\u{0}pixelated");
         }
@@ -173,9 +176,12 @@ impl Exporter<'_> {
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {
             return None;
         }
-        let size = placed_size(im);
+        let size = self.image_size(im);
         let interpolate = interpolate && self.interpolate;
-        let mut cache = format!("{}\u{0}{}\u{0}{}\u{0}{:.3}x{:.3}", im.key, mi.key, m.clip, size.0, size.1);
+        let mut cache = format!("{}\u{0}{}\u{0}{}", im.key, mi.key, m.clip);
+        if self.downsampled() {
+            cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
+        }
         if !interpolate && self.interpolate {
             cache.push_str("\u{0}pixelated");
         }
@@ -206,7 +212,7 @@ impl Exporter<'_> {
             }
             return;
         }
-        let Some(img) = img.or_else(|| self.load_image(im, placed_size(im), !pixelated)) else {
+        let Some(img) = img.or_else(|| self.load_image(im, self.image_size(im), !pixelated)) else {
             self.image_left_out = self.image_left_out.map(|_| true);
             return;
         };
@@ -221,6 +227,56 @@ impl Exporter<'_> {
         s.draw_image(img, size);
         s.pop();
     }
+
+    /// Whether the Compression settings resample any kind of image.
+    fn downsampled(&self) -> bool {
+        let c = self.compression;
+        [c.color.downsample, c.gray.downsample, c.mono.downsample].iter().any(|d| *d != crate::Downsample::None)
+    }
+
+    /// The size image `im` is resampled for: [`Self::warp_image_size`]'s while the pieces of a
+    /// mesh-warped image of the same pixels are written, else the size it is placed at.
+    fn image_size(&self, im: &vectorcraft_doc::ImageObject) -> (f64, f64) {
+        match &self.warp_size {
+            Some(w) if (w.key.as_str(), w.width, w.height) == (im.key.as_str(), im.width, im.height) => w.size,
+            _ => placed_size(im),
+        }
+    }
+
+    /// When `children` are the pieces of a mesh-warped image ([`Node::warp_piece_image`]) and the
+    /// Compression settings resample images: the image they show, and the widest and highest any
+    /// piece places it, which every piece's image is resampled for, so that the pieces paint one
+    /// image. `None` for other children, pieces of different images, or a size that isn't finite
+    /// and positive.
+    pub(super) fn warp_image_size(&self, children: &[Arc<Node>]) -> Option<SharedSize> {
+        if !self.downsampled() {
+            return None;
+        }
+        let mut shared: Option<SharedSize> = None;
+        for c in children {
+            let n = c.warp_piece_image()?;
+            let NodeKind::Image(im) = &n.kind else { return None };
+            let im = self.doc.shown_image(n, im);
+            let (w, h) = placed_size(&im);
+            match &mut shared {
+                Some(s) if (s.key.as_str(), s.width, s.height) == (im.key.as_str(), im.width, im.height) => {
+                    s.size = (s.size.0.max(w), s.size.1.max(h));
+                }
+                Some(_) => return None,
+                None => shared = Some(SharedSize { key: im.key.clone(), width: im.width, height: im.height, size: (w, h) }),
+            }
+        }
+        shared.filter(|s| s.size.0.is_finite() && s.size.1.is_finite() && s.size.0 > 0.0 && s.size.1 > 0.0)
+    }
+}
+
+/// The size the pixels of image `key` (`width` × `height` pixels) are resampled for while the
+/// pieces of a mesh-warped image are written ([`Exporter::warp_image_size`]).
+pub(super) struct SharedSize {
+    key: String,
+    width: u32,
+    height: u32,
+    size: (f64, f64),
 }
 
 /// The size image `im` is placed at: its pixel grid's sides through its transform.
@@ -320,11 +376,46 @@ mod tests {
             let image =
                 ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
             assert!(exporter.colorized_image(&image, &paint, true).is_none(), "{key}");
-            let cache = format!("{key}\u{0}{paint:?}\u{0}1.000x1.000");
+            let cache = format!("{key}\u{0}{paint:?}");
             assert!(matches!(exporter.images.get(&cache), Some(None)), "rejection for {key} was not cached");
             assert!(exporter.colorized_image(&image, &paint, true).is_none(), "second call for {key}");
         }
         assert_eq!(exporter.images.len(), 3);
+    }
+
+    /// Without downsampling, a colorized image and a CMYK image with a grid mask are made once for
+    /// every size they are placed at.
+    #[test]
+    fn colorized_and_grid_masked_images_are_made_once_for_every_size_without_downsampling() {
+        let gray = |pixels: Vec<u8>| {
+            let mut png = vec![];
+            image::GrayImage::from_raw(2, 2, pixels).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            ImageBlob::png(png)
+        };
+        let mut doc = Document::new(100.0, 100.0);
+        doc.images.insert("pic".into(), gray(vec![0, 255, 128, 64]));
+        doc.images.insert("alpha".into(), gray(vec![255, 128, 0, 64]));
+        let inks = vectorcraft_doc::cmyk::Inks::new(2, 2, [0u8, 102, 255, 0].repeat(4)).unwrap();
+        doc.images.insert("inks".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+        let settings = crate::PdfSettings::default();
+        let mut exporter = Exporter::new(&doc, &settings);
+        let paint = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let image = |key: &str, scale: f64| ImageObject {
+            key: key.into(),
+            width: 2,
+            height: 2,
+            xf: Affine::scale(scale),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        for scale in [10.0, 20.0] {
+            assert!(exporter.colorized_image(&image("pic", scale), &paint, true).is_some(), "colorized at {scale}");
+            let art = vectorcraft_doc::Node::new(doc.layers[0].id, vectorcraft_doc::NodeKind::Image(Box::new(image("alpha", scale))));
+            let mask = vectorcraft_doc::OpacityMask::new(art, true);
+            assert!(exporter.masked_image(&image("inks", scale), &mask, true).is_some(), "masked at {scale}");
+        }
+        assert_eq!(exporter.images.len(), 2, "{:?}", exporter.images.keys().collect::<Vec<_>>());
     }
 
     #[test]

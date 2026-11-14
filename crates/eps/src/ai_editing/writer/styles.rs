@@ -39,9 +39,10 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
 }
 
-/// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
-/// by id: paths and compound paths with points and groups, with live effects, linked to a graphic
-/// style or (paths and compound paths) with a brush on a stroke, and embedded images with one Warp
+/// The objects of `doc`'s layers and of their opacity masks' art that may be written with an art
+/// style ([`Writer::styled_object`]), by id (a mask's art root shown, as [`Writer::mask`] writes
+/// it): paths and compound paths with points and groups, with live effects, linked to a graphic
+/// style or (paths and compound paths) with a brush on a stroke, and images with one Warp
 /// ([`warped_image`]), without Opacity & Mask Define
 /// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
@@ -51,6 +52,13 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
         for n in nodes {
             if candidate(n) {
                 out.insert(n.id, n.clone());
+            }
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut art = m.art.clone();
+                if !art.visible {
+                    Arc::make_mut(&mut art).visible = true;
+                }
+                walk(std::slice::from_ref(&art), out);
             }
             // A group's members are written with a style of their own only when the group is written
             // without one. Baking a container with effects of its own changes its members, which
@@ -92,12 +100,11 @@ fn candidate(n: &Node) -> bool {
     }
 }
 
-/// Is `n` an embedded image without an opacity mask whose appearance is one Warp, with no fills or
-/// strokes that paint and no effects on them: an image the reader reads with its Warp live
-/// ([`crate::import::read_art_style`]'s `image_warp`)?
+/// Is `n` an image, embedded or linked, without an opacity mask whose appearance is one Warp, with
+/// no fills or strokes that paint and no effects on them: an image the reader reads with its Warp
+/// live ([`crate::import::read_art_style`]'s `image_warp`)?
 fn warped_image(n: &Node) -> bool {
-    let NodeKind::Image(im) = &n.kind else { return false };
-    im.link.is_none()
+    matches!(n.kind, NodeKind::Image(_))
         && n.extras().mask.is_none()
         && matches!(n.appearance.effects.as_slice(), [e] if e.id.starts_with("warp."))
         && n.appearance.items.iter().all(|i| i.paint().is_none() && i.effects().is_empty())
@@ -717,7 +724,8 @@ impl Writer<'_> {
     /// glows or feathers, the object's transparency
     /// after the group's end, `0 0 Xd`, `6 () XW`); the object itself on `%_` lines (a path's or
     /// compound path's points painted with nothing, or with its gradient fill when its style has
-    /// one; a group with its members; an image with its pixels), its name and opacity mask; then
+    /// one; a group with its members; an image with its pixels, or on the layers a linked image as
+    /// a placed file with its path, folder and preview), its name and opacity mask; then
     /// `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
     /// room for them, nothing is written, and the object counts neither as written with its graphic
@@ -764,6 +772,9 @@ impl Writer<'_> {
         // The object, on `%_` lines, in its own state (the look's members may have changed it).
         self.state(orig.locked, !orig.visible);
         let saved = std::mem::take(&mut self.body);
+        // On the layers, a linked image's copy is a placed file; in an opacity mask's art, it is
+        // embedded, as other linked images there are.
+        let on_layers = self.hidden == 0;
         self.hidden += 1;
         let fit = drawn_outline(n, orig).map(|p| p.bounding_box());
         // A path's or an image's objects were kept for it above; it counts them itself.
@@ -773,7 +784,11 @@ impl Writer<'_> {
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(orig, im), xy),
+            NodeKind::Image(im) => {
+                let was = std::mem::replace(&mut self.styled_copy, on_layers);
+                self.image(&self.doc.shown_image(orig, im), xy);
+                self.styled_copy = was;
+            }
             NodeKind::Group { children, .. } => {
                 self.line("u");
                 for c in children {

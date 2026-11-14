@@ -136,9 +136,9 @@ pub trait Tool: Send {
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
     }
-    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the band of a
-    /// long smoothing drag, outlined again after a zoom change)? The host then draws again on the
-    /// next frame, even when the pointer holds still.
+    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the outline of a
+    /// long Blob Brush or Eraser drag, the band of a long smoothing drag outlined again after a
+    /// zoom change)? The host then draws again on the next frame, even when the pointer holds still.
     fn overlays_pending(&self) -> bool {
         false
     }
@@ -181,6 +181,11 @@ pub trait Tool: Send {
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
+    }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
     }
     /// Has the tool started something that Escape ends while no button is pressed (a path being
     /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
@@ -619,8 +624,16 @@ mod cursor_tests {
     /// Use Precise Cursors turns it into the crosshair.
     #[test]
     fn drawing_tools_show_their_own_cursor() {
-        let (d, _) = doc_with_rect();
+        let (d, rect) = doc_with_rect();
         let away = Point::new(400.0, 400.0);
+        // The Smooth tool shows its own cursor only with a selected path (Not Allowed without one).
+        let mut selected = Selection::default();
+        selected.set([rect]);
+        let paint = paint();
+        let cursor_of = |id: &str| match id {
+            "smooth" => create(id).cursor(&cx(&d, &selected, &paint), away, Mods::default()),
+            _ => cursor_at(id, &d, away),
+        };
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
@@ -646,7 +659,7 @@ mod cursor_tests {
             ("symbolStyler", Cursor::SymbolStyler),
             ("mesh", Cursor::MeshAdd),
         ] {
-            assert_eq!(cursor_at(id, &d, away), c, "{id}");
+            assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
             // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
             // Live Paint Bucket's bucket is drawn.

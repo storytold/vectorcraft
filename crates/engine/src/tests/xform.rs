@@ -571,6 +571,25 @@ fn distort_command_warps_the_linked_mask_of_a_path_in_a_group() {
     assert_eq!(a.extras().mask.as_ref().unwrap().art.path_data(), a.path_data(), "and so is its mask");
 }
 
+/// Corners where the box already stands change nothing: no undo step, the document as it was. A
+/// corner moved by a hundredth of a point is a warp.
+#[test]
+fn unchanged_distort_records_no_history() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let n = undo_len(&s);
+    let at = |x1: f64| json!([[b.x0, b.y0], [x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]);
+    assert_eq!(s.execute("object.distort", &json!({"corners": at(b.x1)})).unwrap()["ids"], json!([a.0]));
+    assert_eq!(undo_len(&s), n);
+    assert!(s.doc().unwrap().doc == doc, "the document is unchanged");
+    s.execute("object.distort", &json!({"corners": at(b.x1 + 0.01)})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(s.doc().unwrap().doc != doc);
+}
+
 #[test]
 fn distort_perspective_midpoint_is_projective() {
     // Distort a tiny probe at the centre of a 100×100 source box into a trapezoid: with a real
@@ -1239,7 +1258,7 @@ fn distort_reads_from_in_a_turned_frame_and_rejects_a_bad_angle() {
     }
     s.execute("object.distort", &json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": 90, "ids": [a.0]})).unwrap();
     assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
-    assert_eq!(undo_len(&s), history + 1);
+    assert_eq!(undo_len(&s), history, "corners where the box stands change nothing");
     // Without `from`, the box is the objects' bounds in the turned frame: the same box here.
     s.execute("object.distort", &json!({"corners": corners, "angle": 90, "ids": [a.0]})).unwrap();
     assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));

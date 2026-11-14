@@ -37,6 +37,9 @@ pub struct DocState {
     /// The objects Start Global Edit would take, highlighted before it starts
     /// ([`cmd::globaledit::similar`]), as of a revision. Not saved, not undoable.
     pub(crate) similar_outlines: cmd::globaledit::SimilarCache,
+    /// Whether Start Global Edit supports the one selected object
+    /// ([`cmd::globaledit::SupportCache`]), as of a revision. Not saved, not undoable.
+    pub(crate) global_edit_support: cmd::globaledit::SupportCache,
     /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
     pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
@@ -125,6 +128,11 @@ pub struct DocState {
     empty_artboards: std::cell::RefCell<EmptyArtboards>,
     /// What [`DocState::any_art_to_fit`] last measured. Not saved.
     art_to_fit: std::cell::RefCell<Option<ArtToFit>>,
+    /// The document as [`crate::Session::replace_document`] left it in a tab in the back, with its
+    /// type measured in its own composite fonts, and the lowercased names of those fonts. When the
+    /// same document comes to the front, its type set in them is not measured again. While this
+    /// reference lasts, its allocation holds no other document. Not saved.
+    pub(crate) measured_in_own: Option<(std::sync::Weak<Document>, std::collections::HashSet<String>)>,
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -311,6 +319,7 @@ impl DocState {
             isolation: None,
             global_edit: None,
             similar_outlines: Default::default(),
+            global_edit_support: Default::default(),
             symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
@@ -341,6 +350,7 @@ impl DocState {
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
+            measured_in_own: None,
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
@@ -359,12 +369,13 @@ impl DocState {
     /// menu asks on every frame it is open, and measuring builds the solids of 3D effects, so the
     /// answer is kept for this version of the document and those artboards, and a change of the
     /// selection or the view keeps it. It is measured again when what the measure reads outside the
-    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts,
-    /// which set the bounds of all type.
+    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts and
+    /// the hyphenation exceptions, which set the bounds of all type.
     pub fn any_art_to_fit(&self, indices: &[usize]) -> bool {
-        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::FontDb::global().generation()))
+        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::layout_inputs()))
     }
-    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the fonts.
+    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the layout inputs
+    /// ([`vectorcraft_text::layout_inputs`]).
     pub(crate) fn any_art_to_fit_with(&self, indices: &[usize], outside: (u64, u64)) -> bool {
         // Measuring runs renderer and plug-in code; should it ever ask again while measuring, it
         // is measured without being kept rather than borrowed twice.
