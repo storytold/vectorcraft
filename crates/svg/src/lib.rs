@@ -458,21 +458,17 @@ pub(crate) fn body_hash(parts: &[&str]) -> String {
 
 /// Does `bytes` start like gzip data (an SVGZ file)?
 pub fn is_svgz(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0x1f, 0x8b])
+    craft_svg::sniff::is_svgz(bytes)
 }
 
 /// Compress SVG text as SVGZ (gzip).
 pub fn compress(svg: &str) -> Vec<u8> {
-    compress_bytes(svg.as_bytes())
+    craft_svg::svgz::compress(svg.as_bytes())
 }
 
 /// Compress an SVG file (in any encoding, see [`Output::bytes`]) as SVGZ (gzip).
 pub fn compress_bytes(svg: &[u8]) -> Vec<u8> {
-    use std::io::Write as _;
-    let mut gz = flate2::write::GzEncoder::new(Vec::with_capacity(svg.len() / 4), flate2::Compression::default());
-    // Writing to a Vec cannot fail.
-    let _ = gz.write_all(svg);
-    gz.finish().unwrap_or_default()
+    craft_svg::svgz::compress(svg)
 }
 
 /// Most bytes an SVGZ file may unpack to (a guard against decompression bombs).
@@ -487,72 +483,25 @@ pub fn text_of(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, SvgError> {
 /// [`text_of`], SVGZ bytes unpacking within what `unpacked`, the bytes SVGZ data unpacked to so
 /// far, leaves of [`MAX_SVGZ`]. What they unpack to is added to it, whether or not it decodes.
 pub(crate) fn text_within<'a>(bytes: &'a [u8], unpacked: &std::sync::atomic::AtomicU64) -> Result<std::borrow::Cow<'a, str>, SvgError> {
-    use std::io::Read as _;
     use std::sync::atomic::Ordering;
     if !is_svgz(bytes) {
-        return match decode(bytes)? {
-            Decoded::Utf8(skip) => std::str::from_utf8(bytes.get(skip..).unwrap_or_default()).map(Into::into).map_err(|_| not_utf8()),
-            Decoded::Text(t) => Ok(t.into()),
-        };
+        return craft_svg::svgz::decode(bytes).map_err(|_| not_utf8());
     }
-    let most = MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed));
-    let mut raw = Vec::new();
-    let read = flate2::read::GzDecoder::new(bytes).take(most.saturating_add(1)).read_to_end(&mut raw);
-    // Read before a failure is kept: it was unpacked too.
-    unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
-    read.map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
-    if raw.len() as u64 > most {
-        return Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20)));
-    }
-    match decode(&raw)? {
-        Decoded::Utf8(skip) => {
-            raw.drain(..skip);
-            String::from_utf8(raw).map(Into::into).map_err(|_| not_utf8())
+    let most = usize::try_from(MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed))).unwrap_or(usize::MAX);
+    match craft_svg::svgz::inflate(bytes, most) {
+        Ok(raw) => {
+            unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
+            craft_svg::svgz::decode(&raw).map(|t| std::borrow::Cow::Owned(t.into_owned())).map_err(|_| not_utf8())
         }
-        Decoded::Text(t) => Ok(t.into()),
+        Err(craft_svg::svgz::Error::TooLarge(_)) => Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20))),
+        Err(craft_svg::svgz::Error::Corrupt(e)) => Err(SvgError::Parse(format!("not a valid SVGZ file: {e}"))),
+        Err(craft_svg::svgz::Error::Encoding) => Err(not_utf8()),
+        Err(e) => Err(SvgError::Parse(e.to_string())),
     }
 }
 
 fn not_utf8() -> SvgError {
     SvgError::Parse("SVG is not UTF-8, UTF-16 or ISO 8859-1".into())
-}
-
-/// How SVG bytes are read.
-enum Decoded {
-    /// UTF-8 after this many bytes (a byte order mark).
-    Utf8(usize),
-    /// Text decoded from another encoding.
-    Text(String),
-}
-
-/// The encoding of SVG bytes: a byte order mark (UTF-8 or UTF-16), else the XML declaration's
-/// (ISO 8859-1 by its names; anything else is read as UTF-8).
-fn decode(bytes: &[u8]) -> Result<Decoded, SvgError> {
-    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
-        let (units, odd) = rest.as_chunks::<2>();
-        if !odd.is_empty() {
-            return Err(not_utf8());
-        }
-        char::decode_utf16(units.iter().map(|u| unit(*u))).collect::<Result<String, _>>().map(Decoded::Text).map_err(|_| not_utf8())
-    };
-    match bytes {
-        [0xef, 0xbb, 0xbf, ..] => Ok(Decoded::Utf8(3)),
-        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
-        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
-        _ if declared_latin1(bytes) => Ok(Decoded::Text(bytes.iter().map(|b| char::from(*b)).collect())),
-        _ => Ok(Decoded::Utf8(0)),
-    }
-}
-
-/// Does the XML declaration at the start of `bytes` name ISO 8859-1?
-fn declared_latin1(bytes: &[u8]) -> bool {
-    let head = bytes.get(..bytes.len().min(200)).unwrap_or_default();
-    let Some(decl) = head.strip_prefix(b"<?xml").and_then(|d| d.split(|b| *b == b'>').next()) else { return false };
-    let decl = String::from_utf8_lossy(decl).to_ascii_lowercase();
-    let Some(at) = decl.find("encoding") else { return false };
-    let value = decl.get(at + "encoding".len()..).unwrap_or("").trim_start().trim_start_matches('=').trim_start();
-    let name = value.trim_start_matches(['"', '\'']).split(['"', '\'', ' ', '?']).next().unwrap_or("");
-    matches!(name, "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "latin-1" | "l1")
 }
 
 /// Import an SVG document.
