@@ -112,8 +112,8 @@ fn link_in(stops: &[GradientStop], t: f32) -> (Option<String>, f32, Option<[f32;
 const STEP: f32 = 1e-4;
 
 /// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred). An
-/// offset given twice is a step: the second stop paints what `g` steps to there (its last stop
-/// within [`STEP`] of it), or what it paints there when it does not step.
+/// offset given twice is a step: the second stop paints what `g` steps to there (the last of its
+/// stops at one offset within [`STEP`] of it), or what it paints there when it does not step.
 fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
     let mut out = g.clone();
     out.stops = offsets
@@ -121,8 +121,8 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
         .enumerate()
         .map(|(i, &o)| {
             let after = i.checked_sub(1).and_then(|j| offsets.get(j)) == Some(&o);
-            let mut near = g.stops.iter().filter(|s| (s.offset - o).abs() < STEP);
-            let stepped = if after && near.next().is_some() { near.next_back() } else { None };
+            let stepped =
+                if after { g.stops.windows(2).rfind(|w| w[0].offset == w[1].offset && (w[0].offset - o).abs() < STEP).map(|w| &w[1]) } else { None };
             match stepped {
                 Some(s) => {
                     GradientStop { opacity: s.opacity, swatch: s.swatch.clone(), tint: s.tint, plates: s.plates, ..GradientStop::new(o, s.color) }
@@ -3138,6 +3138,19 @@ mod tests {
         assert_eq!(at(&a), vec![(0.0, Color::WHITE), (0.5, Color::BLACK), (0.5, Color::WHITE), (0.50015, red), (1.0, Color::BLACK)]);
         assert_eq!(b.stops.len(), 5);
         assert_eq!(b.stops.get(1).map(|s| s.color), b.stops.get(2).map(|s| s.color), "a gradient without the step paints one color there");
+        // A gradient with two stops close to the other's step, but no step of its own, does not step there.
+        let close = Gradient::new(
+            vectorcraft_color::GradientKind::Linear,
+            vec![
+                GradientStop::new(0.0, Color::WHITE),
+                GradientStop::new(0.5, Color::BLACK),
+                GradientStop::new(0.50005, red),
+                GradientStop::new(1.0, Color::BLACK),
+            ],
+        );
+        let (_, b) = common_stops(&stepped, &close).unwrap_or_else(|| panic!("one kind"));
+        assert_eq!(b.stops.get(1).map(|s| s.color), Some(Color::BLACK));
+        assert_eq!(b.stops.get(2).map(|s| s.color), Some(Color::BLACK), "{:?}", b.stops);
     }
 
     #[test]
