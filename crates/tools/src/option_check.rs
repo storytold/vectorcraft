@@ -69,7 +69,7 @@ pub fn string_or_null(key: &str, v: &Value) -> Result<(), String> {
 /// `values`, or with no parameters (null), the options are empty: the command reads them.
 pub fn set_option_params(p: &Value) -> Result<(Option<&str>, Map<String, Value>), String> {
     if !p.is_object() && !p.is_null() {
-        return Err("the parameters must be an object".into());
+        return Err(format!("the params must be an object, not {}", shown(p)));
     }
     let tool = match p.get("tool") {
         None => None,
@@ -92,6 +92,32 @@ pub fn set_option_params(p: &Value) -> Result<(Option<&str>, Map<String, Value>)
         (None, Some(_)) => return Err("`value` needs a `key`".into()),
     }
     Ok((tool, values))
+}
+
+/// The JSON text of `v` as a parameter error shows it: cut to 40 characters, with `…` when it was
+/// longer. The text is written only up to the cut.
+fn shown(v: &Value) -> String {
+    struct Cut {
+        text: String,
+        left: usize,
+    }
+    impl std::fmt::Write for Cut {
+        fn write_str(&mut self, s: &str) -> std::fmt::Result {
+            for c in s.chars() {
+                if self.left == 0 {
+                    return Err(std::fmt::Error);
+                }
+                self.left -= 1;
+                self.text.push(c);
+            }
+            Ok(())
+        }
+    }
+    let mut out = Cut { text: String::new(), left: 40 };
+    if std::fmt::Write::write_fmt(&mut out, format_args!("{v}")).is_err() {
+        out.text.push('…');
+    }
+    out.text
 }
 
 /// Check every one of `values` as an option of `tool` ([`Tool::check_options`]), before any is
@@ -145,9 +171,13 @@ mod tests {
         // Omitted parameters arrive as null: a read, like `{}`.
         let (tool, values) = set_option_params(&Value::Null).unwrap();
         assert!(tool.is_none() && values.is_empty());
-        for bad in [json!(true), json!(7), json!([]), json!("x")] {
-            assert_eq!(set_option_params(&bad).err(), Some("the parameters must be an object".into()), "{bad}");
+        for (bad, got) in [(json!(true), "true"), (json!(7), "7"), (json!([]), "[]"), (json!("x"), "\"x\"")] {
+            assert_eq!(set_option_params(&bad).err(), Some(format!("the params must be an object, not {got}")), "{bad}");
         }
+        // A long value is shown cut, as the other parameter errors show it.
+        let long = json!("a".repeat(100));
+        let shown = format!("\"{}…", "a".repeat(39));
+        assert_eq!(set_option_params(&long).err(), Some(format!("the params must be an object, not {shown}")));
         assert_eq!(set_option_params(&json!({"tool": 3})).err(), Some("`tool` must be a tool id".into()));
         assert_eq!(set_option_params(&json!({"values": [1]})).err(), Some("`values` must be an object".into()));
         assert_eq!(set_option_params(&json!({"key": 3, "value": 1})).err(), Some("`key` must be a string".into()));

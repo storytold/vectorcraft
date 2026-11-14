@@ -48,7 +48,7 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "tool.setOption",
         "Tool Option",
-        "{key?, value? | values?: {key: value…}, tool?: id (default: the active tool)} → the tool's options (`{}` reads them); kept options last across tool switches",
+        "{key?, value? | values?: {key: value…}, tool?: id (default: the active tool)} → the tool's options (`{}` or no params reads them; params that are not an object are an error); kept options last across tool switches",
     ),
 ];
 

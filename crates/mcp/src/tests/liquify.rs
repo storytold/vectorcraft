@@ -43,6 +43,21 @@ fn a_refused_option_value_is_an_error_result() {
     assert_eq!(command(&mut h, "tool.setOption", json!({})), before);
 }
 
+/// `tool.setOption` with params that are not an object is an error result that sets nothing;
+/// without params it reads the options, as `{}` does.
+#[test]
+fn set_option_params_that_are_not_an_object_are_an_error_result() {
+    let mut h = Headless::with_document();
+    command(&mut h, "tool.select", json!({"tool": "warp"}));
+    let before = command(&mut h, "tool.setOption", json!({}));
+    for params in [json!(true), json!(7), json!([]), json!("x")] {
+        let r = call_tool(&mut h, "run_command", &json!({"command": "tool.setOption", "params": params}));
+        assert!(r.is_error, "{params}: {r:?}");
+    }
+    assert_eq!(ok(&mut h, "run_command", json!({"command": "tool.setOption"})), before);
+    assert_eq!(command(&mut h, "tool.setOption", json!({})), before);
+}
+
 #[test]
 fn pointer_gestures_carry_pen_pressure() {
     let bloat = |pressure: f64| {

@@ -370,6 +370,11 @@ fn an_empty_set_option_reads_and_saves_nothing() {
     let saved = s.prefs.tool_settings.clone();
     assert_eq!(s.set_tool_option_cmd(&json!({})).unwrap(), s.tool_options());
     assert_eq!(s.set_tool_option_cmd(&json!({"tool": "flare"})).unwrap(), s.tool_options_of("flare"));
+    // No params (null) read too; params that are not an object are an error.
+    assert_eq!(s.set_tool_option_cmd(&serde_json::Value::Null).unwrap(), s.tool_options());
+    for (bad, got) in [(json!(true), "true"), (json!([]), "[]")] {
+        assert_eq!(s.set_tool_option_cmd(&bad).unwrap_err(), format!("the params must be an object, not {got}"));
+    }
     assert_eq!(s.prefs.tool_settings, saved);
 }
 

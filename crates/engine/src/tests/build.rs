@@ -1049,9 +1049,9 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
     }
 }
 
-/// `tool.setOption` without a tool, while a Cmd press is held during a merge, sets the Shape
-/// Builder's option: finishing the merge makes the press, which lends the selection tool, and the
-/// value still goes to the Shape Builder it was checked against.
+/// When `tool.setOption` names no tool, the option is set on the tool that was active when the
+/// call arrived (the Shape Builder), even when finishing its merge replays a held Cmd press that
+/// switches to the Selection tool.
 #[test]
 fn shape_builder_option_set_while_a_cmd_press_is_held_goes_to_the_shape_builder() {
     let v = ViewInfo::default();
@@ -1067,6 +1067,16 @@ fn shape_builder_option_set_while_a_cmd_press_is_held_goes_to_the_shape_builder(
     assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("shapeBuilder"));
     assert_eq!(out["pickColorFrom"], json!("artwork"));
     assert_eq!(s.lender.as_ref().map(|t| t.options()["pickColorFrom"].clone()), Some(json!("artwork")));
+    // Named while it waits, the Shape Builder is read where it waits, not made afresh from the
+    // preferences.
+    s.lender.as_mut().unwrap().set_option("pickColorFrom", &json!("swatches"));
+    let read = s.set_tool_option_cmd(&json!({"tool": "shapeBuilder"})).unwrap();
+    assert_eq!(read["pickColorFrom"], json!("swatches"), "read from the waiting tool");
+    // A value set on it counts as set on the tool chosen.
+    s.tool_set_since_reset = false;
+    s.set_tool_option_cmd(&json!({"tool": "shapeBuilder", "key": "highlightFill", "value": false})).unwrap();
+    assert!(s.tool_set_since_reset(), "the tool chosen was set");
+    assert_eq!(s.lender.as_ref().map(|t| t.options()["highlightFill"].clone()), Some(json!(false)));
 }
 
 /// A new revision of the document made outside a command while a merge is computed on another

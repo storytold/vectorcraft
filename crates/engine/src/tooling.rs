@@ -1260,7 +1260,14 @@ impl Session {
 
     /// The options of tool `id`: the active tool's, or those it would have if chosen now.
     pub fn tool_options_of(&self, id: &str) -> Value {
-        if id == self.tool.id() { self.tool.options() } else { self.make_tool(id).options() }
+        if id == self.tool.id() {
+            self.tool.options()
+        } else if let Some(lender) = self.lender.as_deref().filter(|l| l.id() == id) {
+            // The tool that lent a selection tool for a Cmd-drag holds its options while it waits.
+            lender.options()
+        } else {
+            self.make_tool(id).options()
+        }
     }
 
     /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
@@ -1272,7 +1279,10 @@ impl Session {
             self.note_place_queue_roots();
         }
         let active = id.is_none_or(|id| id == self.tool.id());
-        self.tool_set_since_reset |= active;
+        // The tool that lent a selection tool for a Cmd-drag is the tool chosen, and active again
+        // when the drag ends.
+        let lender = id.is_some_and(|id| self.lender.as_deref().is_some_and(|l| l.id() == id));
+        self.tool_set_since_reset |= active || lender;
         // The Place queue and a parametric shape's kind are set first: setting the queue starts
         // again at its first file, and a `current` given with it is an index into it; setting the
         // kind puts the shape's other numbers back to that kind's, and those given with it are its.
@@ -1284,7 +1294,7 @@ impl Session {
             t.set_option(k, v);
         }
         Self::store_tool_settings(&mut self.prefs, t);
-        let out = t.options();
+        let mut out = t.options();
         if let Some(other) = other {
             // The tool that lent a selection tool for a Cmd-drag is kept aside, not made again when
             // it is back: when it is the tool set, it takes the writes too (the Rounded Rectangle's
@@ -1297,6 +1307,9 @@ impl Session {
                     }
                 }
                 Self::restore_tool_settings(&self.prefs, lender);
+                if lender.id() == other.id() {
+                    out = lender.options();
+                }
             }
             // Only the stores it shares with the tool set: the active tool's own options stay as they
             // are, also in the middle of a drag that Escape can cancel.
@@ -1308,10 +1321,11 @@ impl Session {
 
     /// `tool.setOption {tool?, key?, value?, values?}` (a command of the desktop app and of the
     /// headless host): set one option (`key`, `value`) or several (`values`) of `tool` (default:
-    /// the active tool) → its options. With no option given, the options are read and nothing is
-    /// set. Every option given is checked first ([`vectorcraft_tools::Tool::check_option`]): an
-    /// unknown option, a value of the wrong type or a number out of range is an error that sets
-    /// none of them.
+    /// the tool active when the call arrives, named before the edit in progress is finished) → its
+    /// options. With no option given, the options are read and nothing is set. Parameters that are
+    /// not an object are an error; none (null) read the options. Every option given is checked
+    /// first ([`vectorcraft_tools::Tool::check_option`]): an unknown option, a value of the wrong
+    /// type or a number out of range is an error that sets none of them.
     pub fn set_tool_option_cmd(&mut self, p: &Value) -> std::result::Result<Value, String> {
         let (tool, values) = vectorcraft_tools::option_check::set_option_params(p)?;
         if let Some(t) = tool

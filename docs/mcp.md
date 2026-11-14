@@ -9816,10 +9816,10 @@ to that tool), a value of the wrong type, a number outside the tool's range, an 
 `value`, a `values` that is not an object or a `tool` that is not a tool id is an error result that names the tool and
 the option, and nothing changes: no option, no saved preference and no undo step, also when another option given with
 it is good. Parameters that are not an object are an error too. `{}`, or no parameters, reads the options and sets
-nothing. The ranges are VectorCraft's own (for example the Smooth tool's
-`fidelity` takes 0.05 to 100, the Pencil's 0.01 to 100); a refused value in a Tool Options dialog keeps the dialog
-open. The Live Paint tools' `width` and the Shape Builder's `gapLength` are set to the nearest end of their range
-when a number outside it is given, as their sections above say.
+nothing. The ranges are VectorCraft's own (for example the Smooth tool's `fidelity` takes 0.05 to 100, the Pencil's
+0.01 to 100); a refused value in a Tool Options dialog keeps the dialog open. The Live Paint tools' `width` and the
+Shape Builder's `gapLength` are set to the nearest end of their range when a number outside it is given, as their
+sections above say.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
