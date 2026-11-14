@@ -599,6 +599,60 @@ fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
     assert_eq!(evaluated(), before + 2);
 }
 
+/// For instances of the symbol "Painted", a fill that paints the square from (300, 0) to
+/// (320, 20); nothing for anything else.
+fn painted_far_away(_: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+    match &n.kind {
+        NodeKind::SymbolInstance { symbol, .. } if symbol == "Painted" => {
+            let square = shapes::rectangle(Rect::new(300.0, 0.0, 320.0, 20.0)).to_bezpath();
+            vec![(square, FillRule::NonZero, AppearanceItem::Fill(crate::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)))))]
+        }
+        _ => vec![],
+    }
+}
+
+/// Clicks and hovers measure the shapes a symbol instance's fill and stroke effects paint once,
+/// and again only after the instance or the symbols change.
+#[test]
+fn clicks_measure_a_symbol_instances_painted_shapes_once_until_it_changes() {
+    set_image_paint(painted_far_away);
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let mut n = Node::new(inst, NodeKind::SymbolInstance { symbol: "Painted".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    n.appearance = Appearance::default_art().into();
+    let offset = crate::Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 10}), visible: true };
+    n.appearance.items[0].effects_mut().push(offset);
+    d.insert(Some(l), 0, n).unwrap();
+    let measured = || PAINT_EVALUATED.with(std::cell::Cell::get);
+    let before = measured();
+    let at = |d: &Document, x: f64| hit_test(d, Point::new(x, 10.0), HitOptions::default()).map(|h| h.leaf);
+    assert_eq!(at(&d, 310.0), Some(inst), "a click where the instance's fill paints");
+    assert_eq!(at(&d, 500.0), None);
+    assert_eq!(at(&d, 10.0), Some(inst));
+    assert_eq!(measured(), before + 1);
+    d.node_mut(inst).unwrap().appearance.items[0].effects_mut()[0].params = serde_json::json!({"offset": 12});
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 2, "a changed instance is measured again");
+    let other = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Other".into(), art: Arc::new(other) });
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 3, "changed symbols measure it again");
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 3);
+    // An image's pixels change when its file is read again, so with one in a symbol's art every
+    // click measures the instance.
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    let im = crate::ImageObject { key: "k".into(), width: 10, height: 10, xf, link: None, placement: Default::default(), pixels: None };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Photo".into(), art: Arc::new(image) });
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert!(measured() >= before + 5, "each click measures it: {}", measured() - before);
+}
+
 /// A kept evaluation is the evaluation of the object only while the fonts and plug-ins
 /// ([`LiveInputs`]) are as they were.
 #[test]
@@ -611,17 +665,30 @@ fn a_kept_evaluation_is_stale_after_the_live_inputs_change() {
 }
 
 /// An evaluation of `n` in `d`, with inputs 7, holding no symbols, patterns or art.
-fn kept_evaluation(d: &Document, n: &Node) -> EvaluatedLive {
-    EvaluatedLive {
+fn kept_evaluation(d: &Document, n: &Node) -> Evaluated<Vec<Node>> {
+    Evaluated {
         node: n.clone(),
         symbols: vec![],
         patterns: vec![],
         swatches: d.swatches.clone(),
         swatch_groups: d.swatch_groups.clone(),
+        unknown: d.unknown.clone(),
         inputs: 7,
         art: std::rc::Rc::new(vec![]),
         size: 0,
     }
+}
+
+/// A kept evaluation is stale once a symbol's 9-slice guides or natural size change: they place
+/// the symbol's art, and the document keeps them apart from the symbols.
+#[test]
+fn a_kept_evaluation_is_stale_after_a_symbols_placement_changes() {
+    let mut d = Document::new(100.0, 100.0);
+    let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let e = kept_evaluation(&d, &n);
+    assert!(e.is_of(&d, &n, 7));
+    d.unknown.insert(crate::SYMBOL_SIZES.into(), serde_json::json!({"Logo": [40.0, 20.0]}));
+    assert!(!e.is_of(&d, &n, 7));
 }
 
 /// A kept evaluation is stale once a swatch changes, in a color group too: a painted live effect's

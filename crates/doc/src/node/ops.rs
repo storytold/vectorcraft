@@ -214,8 +214,10 @@ impl Node {
     /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
-    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
-    /// takes in where its spine can put its keys and steps.
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`], taking in the
+    /// shapes their art paints with the geometry effects of their own fill or stroke
+    /// ([`crate::hit::set_image_paint`]). A blend's box takes in where its spine can put its keys
+    /// and steps.
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -248,10 +250,13 @@ impl Node {
                     .map(|b| b.inflate(o, o))
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
-            // The frame and each shape the image's own fills and strokes paint, a stroke's grown by
-            // the farthest it can reach from its shape.
-            NodeKind::Image(_) => {
-                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(self.geometric(symbols), |acc, (bp, _, item)| {
+            // The frame and each shape the image's own fills and strokes paint, or a symbol
+            // instance's box and each shape its art paints with the geometry effects of the
+            // instance's own fill or stroke, a stroke's grown by the farthest it can reach from its
+            // shape.
+            NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
+                let start = if matches!(self.kind, NodeKind::Image(_)) { self.geometric(symbols) } else { self.visual(symbols) };
+                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(start, |acc, (bp, _, item)| {
                     let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
                     vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
                 })
