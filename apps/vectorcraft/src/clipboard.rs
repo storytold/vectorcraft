@@ -11,9 +11,9 @@
 //!   backend reads the compositor's clipboard (X11 through XWayland only sees what X11 apps
 //!   copied), falling back to X11 where the compositor lacks the protocol, and where there is no
 //!   X11 either (a Flatpak on GNOME) to the compositor's core protocol on the window's connection:
-//!   Copy offers SVG (`image/svg+xml`), PNG (`image/png`) and text together, and Paste reads SVG,
-//!   text and PNG. A clipboard that can't be opened is tried again after a wait that grows to a
-//!   minute, not each time Paste asks. On Linux and the BSDs a read waits 2 s at most for the app
+//!   Copy offers SVG (`image/svg+xml`), PNG (`image/png`) and text together, and Paste reads copied
+//!   files (`text/uri-list`), SVG, text and PNG. A clipboard that can't be opened is tried again
+//!   after a wait that grows to a minute, not each time Paste asks. On Linux and the BSDs a read waits 2 s at most for the app
 //!   that copied to send its data (a bitmap 10 s), and until that app answers, later reads fail at
 //!   once; a paste then waits for that read's answer off the UI thread.
 //! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, EPS,
@@ -170,6 +170,85 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
         let data = std::fs::read(&path).ok()?;
         (!data.is_empty()).then_some(Flavour { mime, data })
     })
+}
+
+/// The most URIs a copied file list may hold, VectorCraft's own limit: a longer list (untrusted
+/// data) names no files.
+const MAX_URIS: usize = 1024;
+
+/// The local files a `text/uri-list` names, in order ([`file_uri_path`]). Each line holds one URI
+/// and a line that starts with `#` is a comment (RFC 2483, section 5); lines end in CRLF or LF.
+/// Lines that are not UTF-8 and URIs that don't name a local file are skipped. A list of more than
+/// [`MAX_URIS`] URIs names none.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn uri_list_paths(list: &[u8]) -> Vec<PathBuf> {
+    let uris: Vec<&[u8]> = list
+        .split(|&b| b == b'\n')
+        .map(|line| line.strip_suffix(b"\r").unwrap_or(line))
+        .filter(|line| !line.is_empty() && !line.starts_with(b"#"))
+        .take(MAX_URIS + 1)
+        .collect();
+    if uris.len() > MAX_URIS {
+        return vec![];
+    }
+    uris.into_iter().filter_map(|uri| file_uri_path(std::str::from_utf8(uri).ok()?)).collect()
+}
+
+/// The local files GNOME Files' `x-special/gnome-copied-files` names: a first line of `copy` or
+/// `cut`, then one URI a line, read as [`uri_list_paths`] reads them. A paste places the files'
+/// art either way and leaves the files where they are. No files when the first line is neither.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn gnome_copied_paths(list: &[u8]) -> Vec<PathBuf> {
+    let (action, uris) = match list.iter().position(|&b| b == b'\n') {
+        Some(end) => (list.get(..end).unwrap_or_default(), list.get(end + 1..).unwrap_or_default()),
+        None => (list, &[][..]),
+    };
+    match action.strip_suffix(b"\r").unwrap_or(action) {
+        b"copy" | b"cut" => uri_list_paths(uris),
+        _ => vec![],
+    }
+}
+
+/// The absolute path a `file:` URI names on this machine: `file:/path`, `file:///path` or
+/// `file://localhost/path` (RFC 8089, section 2; scheme and host in any letter case), its percent
+/// escapes decoded once (RFC 3986, section 2.1) and a fragment (`#…`) left out. None for another
+/// scheme, another host, a relative path, a query (`?…`), a bad escape, an escaped NUL or a path
+/// that is not UTF-8 once decoded.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn file_uri_path(uri: &str) -> Option<PathBuf> {
+    let uri = uri.trim_matches(|c: char| c.is_ascii_whitespace());
+    let uri = uri.split_once('#').map_or(uri, |(before, _)| before);
+    if uri.contains('?') {
+        return None;
+    }
+    let scheme = uri.get(..5).filter(|s| s.eq_ignore_ascii_case("file:"))?;
+    let rest = uri.get(scheme.len()..)?;
+    let path = match rest.strip_prefix("//") {
+        Some(authority_and_path) => {
+            let slash = authority_and_path.find('/')?;
+            let host = authority_and_path.get(..slash)?;
+            if !host.is_empty() && !host.eq_ignore_ascii_case("localhost") {
+                return None;
+            }
+            authority_and_path.get(slash..)?
+        }
+        None => rest.starts_with('/').then_some(rest)?,
+    };
+    let mut bytes = Vec::with_capacity(path.len());
+    let mut it = path.bytes();
+    while let Some(b) = it.next() {
+        if b == b'%' {
+            let hex = |d: Option<u8>| char::from(d?).to_digit(16);
+            let (hi, lo) = (hex(it.next())?, hex(it.next())?);
+            bytes.push(u8::try_from(hi * 16 + lo).ok()?);
+        } else {
+            bytes.push(b);
+        }
+    }
+    if bytes.contains(&0) {
+        return None;
+    }
+    String::from_utf8(bytes).ok().map(PathBuf::from)
 }
 
 #[cfg(windows)]
@@ -1094,7 +1173,9 @@ mod portable {
             }
         }
 
-        /// Files copied in a file manager (none where the backend can't read a file list).
+        /// Files copied in a file manager, read through arboard. The Wayland core protocol reads
+        /// its file list with the rest of a paste
+        /// ([`DataClipboard::read`](super::wayland::DataClipboard::read)).
         fn file_list(&mut self) -> Vec<PathBuf> {
             match self {
                 Self::Arboard(cb) => cb.read(Request::Files).files(),
@@ -1233,8 +1314,9 @@ mod portable {
         }
 
         /// Text and copied files are read here, and work that reads arboard's image comes back. On
-        /// the Wayland core protocol the first of `mimes` the clipboard offers is read: text here,
-        /// SVG and PNG by the work that comes back, which waits [`IMAGE_WAIT`] at most.
+        /// the Wayland core protocol the copied files, else the first of `mimes` the clipboard
+        /// offers, is read: text here, file lists, SVG and PNG by the work that comes back, which
+        /// waits [`IMAGE_WAIT`] at most.
         fn read_now_or_later(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
             let cb = self.cb(Asker::User).ok()?;
             #[cfg(target_os = "linux")]
@@ -1335,9 +1417,9 @@ mod portable {
         }
 
         /// Text, on macOS vector art or a bitmap (by the pasteboard's types), and on the Wayland
-        /// core protocol SVG, text or PNG (by the types offered, nothing read). arboard has no
-        /// cheap way to ask for a bitmap (reading one costs as much as pasting it): the paste keys
-        /// take it, the menu item waits for text.
+        /// core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
+        /// arboard has no cheap way to ask for a bitmap (reading one costs as much as pasting it):
+        /// the paste keys take it, the menu item waits for text.
         fn has(&mut self, mimes: &[&'static str]) -> bool {
             #[cfg(target_os = "macos")]
             if super::mac::has(mimes) {
@@ -1784,12 +1866,13 @@ mod portable {
 /// window's own Wayland connection: what Copy and Paste use where the compositor lacks the
 /// data-control protocol arboard needs (GNOME) and there is no X11 to fall back on (the Flatpak on
 /// a Wayland session). A Copy offers its SVG as `image/svg+xml`, its PNG as `image/png` and its
-/// text under each of [`TEXT_TYPES`]; Paste reads the clipboard's SVG, text and PNG, and the paste
-/// check looks at the types offered without reading any data. The protocol gives the clipboard to
-/// the window with the keyboard focus only. A worker thread handles the protocol's events and
-/// starts a thread for each paste of a Copy's data by another app ([`MAX_SENDS`] at once). Reads
-/// run on another worker and take [`MAX_BYTES`] at most; text waits [`LOAD_WAIT`] at most, SVG and
-/// PNG as long as a paste's bitmap from arboard. A read that gets no answer in its wait is kept for
+/// text under each of [`TEXT_TYPES`]; Paste reads the files a file manager copied
+/// ([`FILE_LISTS`]), then the clipboard's SVG, text and PNG, and the paste check looks at the types
+/// offered without reading any data. The protocol gives the clipboard to the window with the
+/// keyboard focus only. A worker thread handles the protocol's events and starts a thread for each
+/// paste of a Copy's data by another app ([`MAX_SENDS`] at once). Reads run on another worker and
+/// take [`MAX_BYTES`] at most; text waits [`LOAD_WAIT`] at most, file lists, SVG and PNG as long as
+/// a paste's bitmap from arboard. A read that gets no answer in its wait is kept for
 /// a paste to wait for off the UI thread, as arboard's are. A read or send whose pipe moves no data
 /// for [`IDLE_WAIT`] fails and closes the pipe, which frees its worker or thread.
 #[cfg(target_os = "linux")]
@@ -1817,11 +1900,17 @@ mod wayland {
     use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 
     use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
-    use super::{BITMAP, Flavour, PNG, SVG, TEXT};
+    use super::{BITMAP, Flavour, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, uri_list_paths};
 
     /// The types text is offered under and read from, best first: `text/plain;charset=utf-8` (GTK
     /// and Qt apps), `UTF8_STRING` (X11 apps through XWayland) and `text/plain`.
     const TEXT_TYPES: [&str; 3] = ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain"];
+    /// What reads the files a file list names.
+    type PathsOf = fn(&[u8]) -> Vec<PathBuf>;
+    /// The types files copied in a file manager are offered under, each with what reads its files,
+    /// best first: `text/uri-list` (RFC 2483), and GNOME Files' own list, read only when the first
+    /// names no file.
+    const FILE_LISTS: [(&str, PathsOf); 2] = [("text/uri-list", uri_list_paths), ("x-special/gnome-copied-files", gnome_copied_paths)];
     /// The most bytes a read takes from the app that copied (untrusted data), VectorCraft's own
     /// limit: a read of more fails.
     const MAX_BYTES: usize = 64 << 20;
@@ -1903,6 +1992,35 @@ mod wayland {
             }
         }
         Some(first)
+    }
+
+    /// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
+    fn takes_files(mimes: &[&'static str]) -> bool {
+        mimes.iter().any(|&m| m != TEXT)
+    }
+
+    /// The first type among `offered` that lists copied files ([`FILE_LISTS`]), in any letter case.
+    fn file_list_type(offered: &[String]) -> Option<&str> {
+        FILE_LISTS.iter().find_map(|(list, _)| offered.iter().find(|o| o.eq_ignore_ascii_case(list))).map(String::as_str)
+    }
+
+    /// The first file a file manager copied that pastes as one of `mimes` ([`copied_file`]), from
+    /// the first of [`FILE_LISTS`] among `offered` that names a file, `read` reading each list.
+    fn copied(offered: &[String], mimes: &[&'static str], mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<Flavour> {
+        if !takes_files(mimes) {
+            return None;
+        }
+        let paths = FILE_LISTS.iter().find_map(|(list, paths_of)| {
+            let wire = offered.iter().find(|o| o.eq_ignore_ascii_case(list))?;
+            Some(paths_of(&read(wire)?)).filter(|paths| !paths.is_empty())
+        })?;
+        copied_file(paths, mimes)
+    }
+
+    /// What a paste of one of `mimes` takes: the first copied file that is art ([`copied`]), else
+    /// what [`pick`] takes.
+    fn pick_pasted(offered: &[String], mimes: &[&'static str], mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<Flavour> {
+        copied(offered, mimes, &mut read).or_else(|| pick(offered, mimes, read))
     }
 
     /// The time `idle` from now; None when that is past the clock's range (no limit).
@@ -2089,9 +2207,9 @@ mod wayland {
 
     impl Unanswered {
         /// What a paste of one of `mimes` takes once this read's answer comes, waiting for it until
-        /// `limit` after the read was sent: the clipboard read again as [`pick`] reads it, each read
-        /// waiting as long, [`LOAD_WAIT`] at least, since the app that answers late may have lost the
-        /// clipboard meanwhile. None when the answer doesn't come or the clipboard holds this
+        /// `limit` after the read was sent: the clipboard read again as [`pick_pasted`] reads it,
+        /// each read waiting as long, [`LOAD_WAIT`] at least, since the app that answers late may
+        /// have lost the clipboard meanwhile. None when the answer doesn't come or the clipboard holds this
         /// connection's Copy.
         pub(super) fn paste(self, mimes: &[&'static str], limit: Duration) -> Option<Flavour> {
             let left = |now: Instant| (self.sent + limit).saturating_duration_since(now);
@@ -2103,7 +2221,9 @@ mod wayland {
                 }
                 seen.offered.clone()
             };
-            pick(&offered, mimes, |wire| wait_for_answer(&self.reads.ask(wire.to_string()).ok()?, LOAD_WAIT.max(left(Instant::now()))).ok()?.ok())
+            pick_pasted(&offered, mimes, |wire| {
+                wait_for_answer(&self.reads.ask(wire.to_string()).ok()?, LOAD_WAIT.max(left(Instant::now()))).ok()?.ok()
+            })
         }
     }
 
@@ -2136,12 +2256,36 @@ mod wayland {
             }
         }
 
-        /// What a paste of one of `mimes` reads: the first the clipboard offers. Text is read here,
-        /// [`LOAD_WAIT`] at most, and pasted unless it is empty; SVG and PNG are asked for here and
-        /// waited for, `wait` at most, by the work that comes back. When that read fails or is
-        /// empty, the work reads the rest of `mimes` as [`pick`] does, each read waiting until
-        /// `wait` after the first was sent, [`LOAD_WAIT`] at least.
+        /// What a paste of one of `mimes` reads: the files a file manager copied, else the first of
+        /// `mimes` the clipboard offers. A file list is asked for here and read, with the files,
+        /// by the work that comes back, which pastes the first file that is art ([`copied`]) and
+        /// else reads `mimes` as [`pick`] does. Text is read here, [`LOAD_WAIT`] at most, and
+        /// pasted unless it is empty; SVG and PNG are asked for here and waited for, `wait` at most,
+        /// by the work that comes back. When that read fails or is empty, the work reads the rest
+        /// of `mimes` as [`pick`] does. Each read the work makes after the first waits until `wait`
+        /// after the first was sent, [`LOAD_WAIT`] at least.
         pub(super) fn read(&mut self, mimes: &[&'static str], wait: Duration) -> Option<ClipboardRead> {
+            if takes_files(mimes) {
+                let offered = lock(&self.seen).offered.clone();
+                if let Some(list) = file_list_type(&offered).map(str::to_string) {
+                    let sent = Instant::now();
+                    let answer = self.loads.ask(list.clone()).ok()?;
+                    self.unanswered = None;
+                    let (reads, mimes) = (self.loads.asker(), mimes.to_vec());
+                    return Some(ClipboardRead::Later(Box::new(move || {
+                        let left = || LOAD_WAIT.max((sent + wait).saturating_duration_since(Instant::now()));
+                        // The list asked for here is read from its answer, every other type anew.
+                        let mut first = Some((list, answer));
+                        pick_pasted(&offered, &mimes, |wire| {
+                            let answer = match first.take_if(|(list, _)| list.as_str() == wire) {
+                                Some((_, answer)) => answer,
+                                None => reads.ask(wire.to_string()).ok()?,
+                            };
+                            wait_for_answer(&answer, left()).ok()?.ok()
+                        })
+                    })));
+                }
+            }
             mimes.iter().enumerate().find_map(|(i, &mime)| {
                 let wire = self.wire(mime)?;
                 if mime == TEXT {
@@ -2163,10 +2307,11 @@ mod wayland {
             })
         }
 
-        /// Whether the clipboard offers one of `mimes`; nothing is read.
+        /// Whether the clipboard offers one of `mimes`, or files a file manager copied when a paste
+        /// of `mimes` can take a file; nothing is read.
         pub(super) fn has(&self, mimes: &[&'static str]) -> bool {
             let seen = lock(&self.seen);
-            mimes.iter().any(|m| wire_type(m, &seen.offered).is_some())
+            (takes_files(mimes) && file_list_type(&seen.offered).is_some()) || mimes.iter().any(|m| wire_type(m, &seen.offered).is_some())
         }
 
         /// Whether the clipboard holds this connection's last Copy.
@@ -2835,6 +2980,85 @@ mod wayland {
             let Some(ClipboardRead::Later(work)) = reads.read(&[BITMAP], Duration::from_secs(600)) else { panic!("the PNG is asked for") };
             assert!(work().is_none());
         }
+
+        /// Reads of a clipboard holding `data` by type, answered at once.
+        fn reads_holding(data: Vec<(String, Vec<u8>)>) -> Reads {
+            let types: Vec<String> = data.iter().map(|(t, _)| t.clone()).collect();
+            let loads = Loads::spawn("test", Duration::ZERO, move |wire: String| {
+                data.iter().find(|(t, _)| *t == wire).map(|(_, d)| d.clone()).ok_or_else(|| "not offered".to_string())
+            })
+            .unwrap();
+            let types: Vec<&str> = types.iter().map(String::as_str).collect();
+            Reads::new(loads, Arc::new(Mutex::new(Seen::offering(&types))))
+        }
+
+        /// The `file:` URI of `path`, its spaces escaped.
+        fn file_uri(path: &std::path::Path) -> String {
+            format!("file://{}", path.display().to_string().replace(' ', "%20"))
+        }
+
+        /// What a paste of `mimes` takes from `reads`.
+        fn paste(reads: &mut Reads, mimes: &[&'static str]) -> Option<(&'static str, Vec<u8>)> {
+            match reads.read(mimes, Duration::from_secs(600))? {
+                ClipboardRead::Now(f) => Some((f.mime, f.data)),
+                ClipboardRead::Later(work) => work().map(|f| (f.mime, f.data)),
+            }
+        }
+
+        #[test]
+        fn files_copied_in_a_file_manager_paste_as_their_art() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let d = tempfile::Builder::new().prefix("vectorcraft-wayland-files-").tempdir().unwrap();
+            let (notes, red) = (d.path().join("notes.txt"), d.path().join("red image.png"));
+            let mut png = vec![];
+            image::RgbaImage::new(2, 2).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            std::fs::write(&notes, "not art").unwrap();
+            std::fs::write(&red, &png).unwrap();
+            let list = |paths: &[&std::path::Path]| paths.iter().map(|p| file_uri(p) + "\r\n").collect::<String>().into_bytes();
+            let held = |types: &[(&str, Vec<u8>)]| reads_holding(types.iter().map(|(t, d)| (t.to_string(), d.clone())).collect());
+            let text = ("text/plain;charset=utf-8", b"the files' paths".to_vec());
+            // A file list alone enables Paste and pastes the first file that is art.
+            let mut reads = held(&[("text/uri-list", list(&[&notes, &red]))]);
+            assert!(reads.has(&PASTE_ORDER) && reads.has(&[BITMAP]));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            // A paste of text alone takes no file.
+            assert!(!reads.has(&[TEXT]));
+            assert_eq!(paste(&mut reads, &[TEXT]), None);
+            // The files come before the other types offered, as on the other platforms; the type in
+            // any letter case.
+            let mut reads = held(&[(SVG, b"<svg/>".to_vec()), text.clone(), ("Text/URI-List", list(&[&red]))]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            assert_eq!(paste(&mut reads, &[TEXT]), Some((TEXT, text.1.clone())));
+            // With no file that is art, the paste takes the other types.
+            let mut reads = held(&[("text/uri-list", list(&[&notes, &d.path().join("gone.png")])), text.clone()]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((TEXT, text.1.clone())));
+            let mut reads = held(&[("text/uri-list", b"https://example.com/art.png\r\n".to_vec())]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), None);
+            // GNOME Files' own list, alone or when the URI list names no local file.
+            let gnome = [b"copy\n".to_vec(), file_uri(&red).into_bytes()].concat();
+            let mut reads = held(&[("x-special/gnome-copied-files", gnome.clone())]);
+            assert!(reads.has(&PASTE_ORDER));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            let mut reads = held(&[("text/uri-list", b"file://server/art.png\r\n".to_vec()), ("x-special/gnome-copied-files", gnome)]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            // KDE's cut marker is not a file list.
+            let mut reads = held(&[("application/x-kde-cutselection", b"1".to_vec())]);
+            assert!(!reads.has(&PASTE_ORDER));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), None);
+        }
+
+        #[test]
+        fn a_file_list_that_cant_be_read_gives_way_to_the_other_types() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let offered = offered(&["text/uri-list", "text/plain"]);
+            let mut asked = vec![];
+            let f = pick_pasted(&offered, &PASTE_ORDER, |wire| {
+                asked.push(wire.to_string());
+                (wire == "text/plain").then(|| b"words".to_vec())
+            });
+            assert_eq!(f.map(|f| (f.mime, f.data)), Some((TEXT, b"words".to_vec())));
+            assert_eq!(asked, ["text/uri-list", "text/plain"]);
+        }
     }
 }
 
@@ -2950,6 +3174,70 @@ mod tests {
         std::fs::write(&red, png(2, 2)).unwrap();
         let with_cr = PathBuf::from(format!("{}\r", red.display()));
         assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));
+    }
+
+    fn uri_paths(list: &[u8]) -> Vec<String> {
+        uri_list_paths(list).into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn a_uri_list_names_the_local_files_of_its_lines() {
+        // CRLF or LF, comment lines and blank lines.
+        assert_eq!(uri_paths(b"# copied\r\nfile:///home/a/one.svg\r\n\r\nfile:///home/a/two.png\n"), ["/home/a/one.svg", "/home/a/two.png"]);
+        assert_eq!(uri_paths(b"file:///a.svg"), ["/a.svg"]);
+        // Percent escapes are decoded once; `+` and an escaped `#` are part of the name.
+        assert_eq!(uri_paths(b"file:///home/a/red%20image.png"), ["/home/a/red image.png"]);
+        assert_eq!(uri_paths(b"file:///home/a/caf%C3%A9.svg\nfile:///home/a/caf\xC3\xA9.svg"), ["/home/a/café.svg", "/home/a/café.svg"]);
+        assert_eq!(uri_paths(b"file:///a/%231+2.svg"), ["/a/#1+2.svg"]);
+        assert_eq!(uri_paths(b"file:///a/100%2525.svg"), ["/a/100%25.svg"]);
+        // No host, `localhost` in any case, and the short form name this machine; a fragment is
+        // left out.
+        assert_eq!(
+            uri_paths(b"file://localhost/a.svg\nFILE://LocalHost/b.svg\nfile:/c.svg\nfile:///d.svg#page=2"),
+            ["/a.svg", "/b.svg", "/c.svg", "/d.svg"]
+        );
+        // Other hosts and schemes, relative paths, queries, bad escapes, an escaped NUL, a name
+        // that is not UTF-8 once decoded and a line that is not UTF-8 name no file.
+        for uri in [
+            &b"file://server/a.svg"[..],
+            b"https://example.com/a.svg",
+            b"file:a.svg",
+            b"file://",
+            b"file://localhost",
+            b"file:///a.svg?x=1",
+            b"file:///a%2",
+            b"file:///a%zz.svg",
+            b"file:///a%00b.svg",
+            b"file:///a%FF.svg",
+            b"file:///a\xFF.svg",
+            b"/home/a/one.svg",
+            b"#file:///a.svg",
+        ] {
+            assert!(uri_list_paths(uri).is_empty(), "{}", String::from_utf8_lossy(uri));
+        }
+        // The files beside a URI that names none are kept.
+        assert_eq!(uri_paths(b"https://example.com/a.svg\r\nfile:///b.svg\r\n"), ["/b.svg"]);
+        assert!(uri_list_paths(b"").is_empty());
+    }
+
+    #[test]
+    fn a_uri_list_longer_than_the_limit_names_no_file() {
+        assert_eq!(MAX_URIS, 1024);
+        let list = |n: usize| (0..n).map(|i| format!("# file {i}\r\nfile:///f{i}.svg\r\n")).collect::<String>();
+        // Comment lines don't count.
+        assert_eq!(uri_list_paths(list(MAX_URIS).as_bytes()).len(), MAX_URIS);
+        assert!(uri_list_paths(list(MAX_URIS + 1).as_bytes()).is_empty());
+    }
+
+    #[test]
+    fn gnome_files_list_names_its_files_after_copy_or_cut() {
+        let paths = |list: &[u8]| gnome_copied_paths(list).into_iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(paths(b"copy\nfile:///a.svg\nfile:///b%20c.png"), ["/a.svg", "/b c.png"]);
+        assert_eq!(paths(b"cut\r\nfile:///a.svg\r\n"), ["/a.svg"]);
+        // Another first line, none, or no files.
+        for list in [&b"move\nfile:///a.svg"[..], b"file:///a.svg\nfile:///b.svg", b"copy", b"", b"Copy\nfile:///a.svg"] {
+            assert!(gnome_copied_paths(list).is_empty(), "{}", String::from_utf8_lossy(list));
+        }
     }
 
     /// A DIB of `w`×`h` pixels (top row first when `h` is negative): a `header`-byte header (40,
