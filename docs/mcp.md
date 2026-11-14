@@ -1073,7 +1073,14 @@ apps (`editingData`), and always comes back with the warning `Preserve editing w
 bounds would replace the document's artboards when reopened`; with `pdfCompatible: false` it is refused, whatever
 `editingData` says. A legacy version 7 `.ai` (`aiVersion: "7"`) of the art's bounds is written as before.
 Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
-Artboards section and the page is the bounds of the visible art.
+Artboards section and the page is the bounds of the visible art. `document.exportSelection` run in the app with no
+params or `{}` (a shortcut, or an automation call) opens the save panel, and the picked format's options dialog
+follows as after Export As: Save PDF without its Artboards section, SVG Options without its artboards, the raster
+options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
+exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
+`document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
+write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -3707,7 +3714,9 @@ A graphic style holds an appearance (fills, strokes, effects) plus opacity, blen
 object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
 `add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
-updates only the objects still linked. `graphicStyle.list` returns each style with the ids linked to it and the
+updates only the objects still linked. The art of a column or marker design in a graph series is never linked:
+`graphicStyle.new` can make a style from it, and `graphicStyle.redefine` leaves its look as it was and unlinks it,
+whether it is the source or a linked object. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
 Styles keep placed gradients relative to the bounds of the object they were made from, and each object a
 style is applied to gets them at the same place relative to its own bounds.
@@ -8814,6 +8823,28 @@ Insert Aki values; save it with Preserve Editing to keep them editable.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
 ```
 
+## Tsume
+
+`text.setFormat` and `text.setRangeStyle {tsume?}` set Tsume of the characters, a percentage that narrows the space
+around them ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). The range,
+the default and how the space is measured are VectorCraft's own rules: the value is from 0 to 100, 0 by default and
+saved only when not 0, and it is the share of the blank space on each side of a character's ink, inside the
+character's own width, that is taken away. 50 halves that space, and 100 sets the ink against the characters before and
+after it; the glyph keeps its shape. A character without ink, such as a space, keeps its width. A ligature or a letter
+with its marks takes the value of its first character. Tracking, kerning and Insert Aki are added after it, and
+justification keeps it. Tsume applies to horizontal type; vertical type keeps its spacing. Character styles carry it
+(`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` refuse a value outside the range). A value that is not a
+number is refused with `` `tsume` must be a number ``, and one outside the range with `` `tsume` must be from 0 to
+100 ``. One undo step, and a call that gives the value the characters already have records none. With Show East Asian
+Options on, the Character panel shows a Tsume field, blank where the selected characters differ, with 0, 25, 50, 75 and
+100 in its menu, and a value typed past 100 sets 100; Reset Panel sets it to 0. Character Style Options shows it in
+Advanced Character Formats. Live SVG text places each character Tsume moves, and type on a path with Tsume is written
+as outlines.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"tsume":50}}}
+```
+
 ## Composite Fonts
 
 A composite font sets each class of character in a font of its own
@@ -9516,7 +9547,7 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
-`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
@@ -9524,7 +9555,8 @@ Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
 an em, with the Character panel's 0, 250, 500 and 1000 in their menus; a value typed below 0 or past 1000 sets 0 or
-1000) and `language` (a name or tag from Document
+1000), Tsume `tsume` (percent, with the Character panel's 0, 25, 50, 75 and 100 in its menu; a value typed below 0 or
+past 100 sets 0 or 100; an explicit 0 stays distinct from unset) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.

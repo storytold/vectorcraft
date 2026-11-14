@@ -3361,6 +3361,7 @@ digits	Malayalam	Malaiàlam
 	Proportional Metrics	Mètriques proporcionals
 	Insert Aki Left	Insereix aki a l'esquerra
 	Insert Aki Right	Insereix aki a la dreta
+	Tsume	Tsume
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -5936,7 +5937,7 @@ digits	Malayalam	Malaiàlam
 @msg	not an HP-GL file	no és un fitxer HP-GL
 @msg	not a PICT file	no és un fitxer PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
-@msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	no és un fitxer RTF: no comença amb {{\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
 @msg	finish editing the pattern first	acabeu primer l’edició del motiu
@@ -6501,8 +6502,8 @@ digits	Malayalam	Malaiàlam
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un exportador declara d’1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	com a màxim {MAX_UNGROUPED} paràmetres fora de grups: doneu un `group` als altres
 @msg	can't encode the input	no es pot codificar l’entrada
-@msg	expected {"dataBase64"}	s’esperava {"dataBase64"}
-@msg	expected {"objects"}	s’esperava {"objects"}
+@msg	expected {{"dataBase64": "…"}}	s’esperava {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	s’esperava {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportació del mòdul `{name}`: {e}
 @msg	extension {e} is listed twice	l’extensió {e} apareix dues vegades
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensió {e}: feu servir 1-16 lletres minúscules i dígits, sense el punt
@@ -6566,11 +6567,11 @@ digits	Malayalam	Malaiàlam
 @msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	s’ha omès un objecte de només lectura
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {"id"} sol o tal com s’ha rebut
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un traç ha de ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un efecte ha de ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un traç ha de ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un efecte ha de ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
 @msg	an effect on a stroke returns only `strokes`	un efecte en un traç només retorna `strokes`
 @msg	an object must be a JSON object	un objecte ha de ser un objecte JSON

@@ -1573,6 +1573,7 @@ lighting	Light	Svjetlo
 	Proportional Metrics	Proporcionalna metrika
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
+	Tsume	Tsume
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -6493,7 +6494,7 @@ anchor	Points:	Tačke:
 	Stop on Errors	Zaustavi pri greškama
 	Yonroku-ban	Yonroku-ban
 @msg	image '{key}' has no pixels and was left out	slika '{key}' nema piksela i izostavljena je
-@msg	not an RTF file: it doesn't start with {\\rtf	nije RTF datoteka: ne počinje s {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	nije RTF datoteka: ne počinje s {{\\rtf
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	ovo je PostScript datoteka (.ai sačuvan u starijem formatu ili bez PDF kompatibilnosti, ili EPS datoteka), koja se još ne može otvoriti: sačuvajte je kao PDF, .ai kompatibilan s PDF-om ili SVG
 font-script	Japanese	Japansko
 swatch	[None]	[Nijedna]
