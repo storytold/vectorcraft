@@ -10577,6 +10577,7 @@ fn type_with_an_art_brush_keeps_its_drawn_look() {
 }
 
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};
+use vectorcraft_doc::{GraphKind, TickLength};
 
 /// Editing data in the legacy format (version 7 specification, chapter 2): `%AI5_FileFormat 2.0`,
 /// the art size and the template box in the header, then `body`.
@@ -10716,6 +10717,223 @@ fn a_graphs_records_take_their_operands() {
     assert!(matches!(kids.last().map(|k| &k.kind), Some(NodeKind::Path { .. })), "the bar is kept after the empty groups: {kids:?}");
     assert_eq!(paths(&a[0]), 1, "the empty groups hold no art");
     assert_eq!(r.warnings, [GRAPH_PLAIN]);
+}
+
+/// A graph's style record (`Gy`) for a grouped column graph: no shadow, legends as in column
+/// graphs, lines without marks, measured against the left axis.
+const LIVE_STYLE: &str = "%_5 0 0 14 0 1 0 0 6 44 Gy\n";
+
+/// A graph's dialog record (`Gd`): columns 90% wide in clusters 80% wide.
+const LIVE_DIALOG: &str = "%_10 2 0 0 90 80 0 Gd\n";
+
+/// A graph's axes, bottom, left and right: the bottom one with no tick marks, between its labels;
+/// the left one labeled `$` … ` units`, with two tick marks a division.
+const LIVE_AXES: &str = "%_1 () Ga\n%_0 13 0 0 0 0 1 () GA\n%_2 ($) Ga\n%_0 14 0 0 0 2 0 ( units) GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n";
+
+/// A graph's table: series East and West, categories Q1 to Q3, and an empty cell (West in Q2).
+const LIVE_TABLE: &str = "%_4 3 1 1 Gz\n%_() Gc (East) Gc (West) Gc\n%_(Q1) Gc 5 3 (Q2) Gc 7 () Gc (Q3) Gc 4 6 Gc GC\n";
+
+/// A column of a graph's series at `x`, tagged as one data bar.
+fn series_bar(x: f64) -> String {
+    format!("0 0 0 1 k\n{}f\n%_4 1 0 0 Go\n", rect_path(x, 100.0, x + 20.0, 150.0))
+}
+
+/// The first series' mark in [`live_art`].
+fn series_mark() -> String {
+    format!("0 0 0 1 k\n{}f\n", rect_path(110.0, 100.0, 130.0, 150.0))
+}
+
+/// [`series_mark`] filled and stroked, then an outline stroked alike with no fill.
+fn series_mark_and_outline() -> String {
+    format!("0 0 0 1 k\n0 0 0 1 K\n{}B\n{}S\n", rect_path(110.0, 100.0, 130.0, 150.0), rect_path(112.0, 100.0, 118.0, 120.0))
+}
+
+/// The drawn art of the graph [`live_graph`] gives: two series groups, each tagged as one series by
+/// its table column, and the axes on the plot's left and bottom edges.
+fn live_art() -> String {
+    format!(
+        "u\n{}U\n%_2 1 0 0 Go\nu\n{}U\n%_2 2 0 0 Go\nu\n0 0 0 1 K\n100 200 m\n100 100 L\n300 100 L\nS\nU\n%_9 0 0 2 Go\n",
+        series_bar(110.0),
+        series_bar(140.0)
+    )
+}
+
+/// A graph whose records read whole, written from the version 7 specification's appendix A, on the
+/// plot 100 100 300 200 (art space).
+fn live_graph() -> String {
+    format!("%_Gs\n%_100 200 300 100 Gb\n{LIVE_STYLE}{LIVE_DIALOG}{LIVE_AXES}{LIVE_TABLE}u\n{}U\n%_GS\n", live_art())
+}
+
+/// The graphs in `doc`'s art, and the series groups tagged in them.
+fn live_graphs(doc: &Document) -> (Vec<Node>, usize) {
+    let (mut graphs, mut tagged) = (vec![], 0);
+    doc.walk(|n| {
+        if n.extras().graph.is_some() {
+            graphs.push(n.clone());
+        }
+        tagged += usize::from(n.extras().series_index.is_some());
+    });
+    (graphs, tagged)
+}
+
+fn same_rect(a: Rect, b: Rect) -> bool {
+    (a.x0 - b.x0).abs() + (a.y0 - b.y0).abs() + (a.x1 - b.x1).abs() + (a.y1 - b.y1).abs() < 1e-9
+}
+
+/// A graph whose records read whole keeps its data and settings on its group, which holds its
+/// drawn art as it is, each series group tagged with its index.
+#[test]
+fn a_graph_whose_records_read_whole_keeps_its_data_and_settings() {
+    let r = read(stream7(&layer7("Graph", &live_graph())).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    let g = a[0].extras().graph.clone().expect("a live graph");
+    assert_eq!(g.kind, GraphKind::Column);
+    assert_eq!(g.series, ["East", "West"]);
+    assert_eq!(g.categories, ["Q1", "Q2", "Q3"]);
+    assert_eq!(g.cells(), [[Some(5.0), Some(3.0)], [Some(7.0), None], [Some(4.0), Some(6.0)]]);
+    assert_eq!((g.column_width, g.cluster_width), (90.0, 80.0));
+    assert_eq!((g.prefix.as_str(), g.suffix.as_str(), g.tick_length, g.tick_marks), ("$", " units", TickLength::Short, 2));
+    assert_eq!((g.category_tick_length, g.ticks_between_labels), (TickLength::None, true));
+    assert_eq!((g.ticks, g.axis_min, g.axis_max), (0, None, None));
+    assert!(g.legend && !g.legend_across_top && !g.mark_points && g.connect_points && !g.drop_shadow && !g.edge_to_edge, "{g:?}");
+    // The drawn art: two series groups and the axes, as written.
+    let kids = a[0].children().unwrap();
+    assert_eq!(kids.len(), 3);
+    let index: Vec<_> = kids.iter().map(|k| k.extras().series_index).collect();
+    assert_eq!(index, [Some(0), Some(1), None]);
+    assert!(kids[..2].iter().all(|k| k.children().is_some_and(|c| c.len() == 1)));
+    // Each series keeps its marks' fill, and no stroke, for when the graph is drawn again.
+    assert_eq!(g.series_paints.len(), 2);
+    let fill = kids[0].children().unwrap()[0].appearance.items.iter().find(|i| i.is_fill()).map(|i| i.paint().clone());
+    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke.as_ref().is_some_and(|s| s.is_none())), "{:?}", g.series_paints);
+    let axes = kids[2].children().unwrap()[0].geometric_bounds().unwrap();
+    assert!(same_rect(g.rect, axes), "the plot is where the axes are: {:?} {axes:?}", g.rect);
+    assert_eq!(g.placed, a[0].geometric_bounds());
+}
+
+/// The graph types the records give: 5 grouped column, 6 stacked column, 7 line, 10 area; and the
+/// style and dialog settings, each kept as the graph's.
+#[test]
+fn a_graphs_type_and_settings_come_from_its_records() {
+    let live = |style: &str, dialog: &str, axes: &str| {
+        let text = live_graph().replace(LIVE_STYLE, style).replace(LIVE_DIALOG, dialog).replace(LIVE_AXES, axes);
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{style}{dialog}: {:?}", r.warnings);
+        art(&r.doc)[0].extras().graph.clone().expect("a live graph")
+    };
+    for (ty, kind) in [(5, GraphKind::Column), (6, GraphKind::StackedColumn), (7, GraphKind::Line), (10, GraphKind::Area)] {
+        let g = live(&format!("%_{ty} 0 0 14 0 1 0 0 6 44 Gy\n"), LIVE_DIALOG, LIVE_AXES);
+        assert_eq!(g.kind, kind, "{ty}");
+    }
+    let axes = LIVE_AXES.replace("%_0 14 0 0 0 2 0 ( units) GA", "%_1 15 0 100 25 0 0 () GA");
+    let g = live("%_7 1 1 14 1 0 0 1 6 44 0 2 Gy\n", "%_10 2 1 0 120 50 1 Gd\n", &axes);
+    assert!(g.drop_shadow && g.first_row_in_front && g.mark_points && !g.connect_points && g.legend_across_top, "{g:?}");
+    assert!(g.first_column_in_front && g.edge_to_edge, "{g:?}");
+    assert_eq!((g.column_width, g.cluster_width), (120.0, 50.0));
+    assert_eq!((g.ticks, g.axis_min, g.axis_max, g.tick_length, g.tick_marks), (4, Some(0.0), Some(100.0), TickLength::Full, 1));
+    // A line graph's series draws its line unfilled beside its filled marks.
+    let text = live_graph().replace(LIVE_STYLE, "%_7 0 0 14 0 1 0 0 6 44 Gy\n").replacen(&series_mark(), &series_mark_and_outline(), 1);
+    let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(art(&r.doc)[0].extras().graph.is_some());
+    // An empty list of customizations, of the version appendix A gives (2), sets nothing.
+    let text = live_graph().replace("GC\n", "GC\n%_2 Gt\n%_GT\n");
+    let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(art(&r.doc)[0].extras().graph.is_some());
+}
+
+/// A graph keeps its drawn art and stays plain, with one note, when a record has a shape or value
+/// appendix A doesn't give, sets what the model doesn't keep, or the table, the series tags or the
+/// art don't fit the graph.
+#[test]
+fn graphs_the_model_cant_keep_stay_plain_art() {
+    let cases: Vec<(&str, String)> = vec![
+        ("an eleventh style value", live_graph().replace(LIVE_STYLE, "%_5 0 0 14 0 1 0 0 6 44 0 Gy\n")),
+        ("eleven dialog values", live_graph().replace(LIVE_DIALOG, "%_10 2 0 0 90 80 0 0 0 0 0 Gd\n")),
+        ("a fourth axis", live_graph().replace(LIVE_AXES, &format!("{LIVE_AXES}%_8 () Ga\n%_0 14 0 0 0 0 0 () GA\n"))),
+        ("ten axis values", live_graph().replace("%_0 14 0 0 0 0 0 () GA", "%_0 14 0 0 0 0 0 () 0 0 GA")),
+        ("a pie graph", live_graph().replace("%_5 0 0 14", "%_8 0 0 14")),
+        ("a scatter graph", live_graph().replace("%_5 0 0 14", "%_9 0 0 14")),
+        ("type 11", live_graph().replace("%_5 0 0 14", "%_11 0 0 14")),
+        ("legends in wedges", live_graph().replace("%_5 0 0 14", "%_5 0 0 15")),
+        ("the right axis", live_graph().replace("6 44 Gy", "6 45 Gy")),
+        ("lines as shapes", live_graph().replace("%_5 0 0 14 0 1 0", "%_5 0 0 14 0 1 1")),
+        ("both axes alike", live_graph().replace(LIVE_DIALOG, "%_10 2 0 1 90 80 0 Gd\n")),
+        ("a subscription", live_graph().replace(LIVE_DIALOG, &format!("{LIVE_DIALOG}%_0 0 1 1 1 Gj\n"))),
+        ("a customization", live_graph().replace("GC\n", "GC\n%_2 Gt\n%_(Bars) GD\n%_GT\n")),
+        ("customizations without their version", live_graph().replace("GC\n", "GC\n%_Gt\n%_GT\n")),
+        ("customizations of another version", live_graph().replace("GC\n", "GC\n%_3 Gt\n%_GT\n")),
+        ("bounds upside down", live_graph().replace("%_100 200 300 100 Gb", "%_100 100 300 200 Gb")),
+        ("a plot the axes aren't on", live_graph().replace("%_100 200 300 100 Gb", "%_50 200 300 100 Gb")),
+        ("a text data cell", live_graph().replace("7 () Gc", "(seven) Gc () Gc")),
+        ("a table of empty cells", live_graph().replace(LIVE_TABLE, "%_4 3 1 1 Gz\n%_() Gc (East) Gc (West) Gc\n%_GC\n")),
+        ("a cell past the table", live_graph().replace("4 6 Gc GC", "4 6 1 Gc GC")),
+        ("too many categories", live_graph().replace("%_4 3 1 1 Gz", "%_10002 3 1 1 Gz")),
+        ("a table too large", live_graph().replace("%_4 3 1 1 Gz", "%_4000000000 4000000000 1 1 Gz")),
+        ("a number as a label", live_graph().replace("(West) Gc", "2025 Gc")),
+        ("a series untagged", live_graph().replace("%_2 2 0 0 Go", "%_4 2 0 0 Go")),
+        ("a series tagged twice", live_graph().replace("%_2 2 0 0 Go", "%_2 1 0 0 Go")),
+        ("a path tagged as a series", live_graph().replacen("%_4 1 0 0 Go", "%_2 1 0 0 Go", 1)),
+        ("a target the specification doesn't list", live_graph().replace("%_9 0 0 2 Go", "%_3 0 0 2 Go")),
+        ("art before its group", live_graph().replace("GC\nu\n", &format!("GC\n{}f\nu\n", rect_path(0.0, 0.0, 5.0, 5.0)))),
+        ("a record on a line that shows", live_graph().replace("%_10 2 0 0 90 80 0 Gd", "10 2 0 0 90 80 0 Gd")),
+        ("series groups inside another group", live_graph().replace("GC\nu\n", "GC\nu\nu\n").replace("U\n%_GS", "U\nU\n%_GS")),
+        (
+            "two fills in one series",
+            live_graph().replacen(
+                "f\n%_4 1 0 0 Go\nU\n",
+                &format!("f\n%_4 1 0 0 Go\n0 0 0 0.5 k\n{}f\nU\n", rect_path(112.0, 100.0, 118.0, 120.0)),
+                1,
+            ),
+        ),
+        ("axes filled, not stroked", live_graph().replace("300 100 L\nS\n", "300 100 L\nf\n")),
+        ("a series tagged on a row", live_graph().replace("%_2 2 0 0 Go", "%_2 2 1 0 Go")),
+        ("a series tagged on the right axis", live_graph().replace("%_2 2 0 0 Go", "%_2 2 0 4 Go")),
+        ("an unfilled mark in a column series", live_graph().replacen(&series_mark(), &series_mark_and_outline(), 1)),
+        ("a series' mark in a group of its own", live_graph().replacen(&series_mark(), &format!("u\n{}U\n", series_mark()), 1)),
+        (
+            "an untagged graph of one series",
+            live_graph()
+                .replace(LIVE_TABLE, "%_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n")
+                .replace("%_2 2 0 0 Go", "%_4 1 0 0 Go")
+                .replace("%_2 1 0 0 Go", "%_4 1 0 0 Go"),
+        ),
+    ];
+    for (what, text) in cases {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(r.warnings, [GRAPH_PLAIN], "{what}");
+        assert_eq!(live_graphs(&r.doc), (vec![], 0), "{what}");
+        let mut kept = false;
+        r.doc.walk(|n| kept |= n.children().is_some_and(|c| c.len() == 3));
+        assert!(kept, "{what}: the drawn art is kept");
+    }
+}
+
+/// A graph in a group or a clipping group keeps its data on its own group, not the container's; of
+/// two graphs in one layer, each is kept or left plain on its own, and the note is given once.
+#[test]
+fn graphs_are_kept_one_by_one_wherever_they_are() {
+    let clip = format!("q\n{}W n\n{}Q\n", rect_path(0.0, 0.0, 400.0, 400.0), live_graph());
+    for (what, text) in [("in a group", format!("u\n{}U\n", live_graph())), ("in a clipping group", clip)] {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{what}: {:?}", r.warnings);
+        let outer = &art(&r.doc)[0];
+        assert!(outer.extras().graph.is_none(), "{what}");
+        let (graphs, tagged) = live_graphs(&r.doc);
+        assert_eq!((graphs.len(), tagged), (1, 2), "{what}");
+        assert!(outer.children().unwrap().iter().any(|c| c.id == graphs[0].id), "{what}: the graph's own group");
+    }
+    let pie = live_graph().replace("%_5 0 0 14", "%_8 0 0 14");
+    let body = format!("{}{pie}{}", live_graph(), live_graph());
+    let r = read(stream7(&layer7("Graph", &body)).as_bytes()).unwrap();
+    assert_eq!(r.warnings, [GRAPH_PLAIN]);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 3);
+    let live: Vec<bool> = a.iter().map(|n| n.extras().graph.is_some()).collect();
+    assert_eq!(live, [true, false, true]);
 }
 
 /// Editing data in the legacy format (`%AI5_FileFormat 2.0`, ten `Lb` operands), then `body`.

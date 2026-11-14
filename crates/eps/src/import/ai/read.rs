@@ -79,7 +79,8 @@
 //!
 //! - Graphs (version 7 specification §17): `%_Gs`, the graph's data and settings on `%_` lines,
 //!   its drawn art as ordinary groups, paths and type (each object followed by `%_… Go`), `%_GS`.
-//!   The drawn art is read; the data and settings are left out, with a note.
+//!   The drawn art is read as it is. Its group keeps the data and settings when they read whole
+//!   ([`graph`]); otherwise they are left out, with a note.
 //!
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
@@ -134,6 +135,7 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod graph;
 mod masks;
 mod on_path;
 mod ops;
@@ -147,12 +149,13 @@ pub use document::{
     symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
+use graph::Graph;
 pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -671,7 +674,7 @@ struct Reader<'a> {
     brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
-    /// The graph being read (see [`Reader::graph_record`]).
+    /// The graph being read (see [`graph`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
     multi_mask: Option<masks::MultiMask>,
