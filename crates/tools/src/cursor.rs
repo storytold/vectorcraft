@@ -259,9 +259,7 @@ impl Cursor {
 
     /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
     /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools', the Live
-    /// Paint tools') become a plain crosshair at the hotspot. The Pencil's and the Paintbrush's
-    /// badged cursors are drawn on the crosshair already and keep their badge, which says what the
-    /// press or the release does (a new path, continuing, closing, a straight line).
+    /// Paint tools') become a plain crosshair at the hotspot.
     pub fn precise(self) -> Self {
         match self {
             Cursor::Pen
@@ -284,7 +282,12 @@ impl Cursor {
             | Cursor::Lasso
             | Cursor::MagicWand
             | Cursor::Pencil
+            | Cursor::PencilNew
+            | Cursor::PencilClose
+            | Cursor::PencilStraight
+            | Cursor::PencilContinue
             | Cursor::Paintbrush
+            | Cursor::PaintbrushClose
             | Cursor::BlobBrush
             | Cursor::Eraser
             | Cursor::Smooth

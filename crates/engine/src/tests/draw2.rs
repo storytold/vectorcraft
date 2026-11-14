@@ -5203,6 +5203,22 @@ fn pencil_extend_closes_as_closed_says() {
     }
 }
 
+/// A continued path closed from away from its other end closes with a straight segment, even when
+/// that end carries a handle the open path didn't use.
+#[test]
+fn pencil_extend_closes_far_away_with_a_straight_segment() {
+    let mut s = session();
+    let anchors = json!([{"x": 0, "y": 0, "in": [-40, 30]}, {"x": 200, "y": 0}]);
+    let l = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    let points = json!([[200, 0], [200, 100], [100, 150], [0, 50]]);
+    let p = json!({"points": points, "fidelity": 1.5, "closed": true, "extend": {"id": l.0}, "keepSelected": false});
+    s.execute("path.freehand", &p).unwrap();
+    let sp = path(&s, l).subpaths[0].clone();
+    assert!(sp.closed);
+    let (first, last) = (sp.anchors[0], sp.anchors[sp.anchors.len() - 1]);
+    assert_eq!((first.h_in, last.h_out), (first.p, last.p), "the closing segment has no handles: {:?}", sp.anchors);
+}
+
 /// At Fidelity 0.01 short, one-point and repeated-point strokes still draw or are refused, never
 /// crash, and what they draw has finite anchors.
 #[test]

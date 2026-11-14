@@ -253,7 +253,15 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             a0.h_in = l.h_in;
             sp.closed = true;
         } else if closing && !ends_on_first && sp.anchors.len() > 2 {
+            // Closed from away from the other end: a straight segment back to it, whatever
+            // handles the open ends carried.
             sp.closed = true;
+            if let Some(l) = sp.anchors.last_mut() {
+                l.h_out = l.p;
+            }
+            if let Some(f) = sp.anchors.first_mut() {
+                f.h_in = f.p;
+            }
         }
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);

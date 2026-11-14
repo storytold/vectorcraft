@@ -723,10 +723,8 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
         assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} off");
     }
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
-    for (tool, c) in own {
-        // The Pencil's star is drawn on the crosshair and keeps its badge.
-        let want = if tool == "pencil" { c } else { Cursor::Crosshair };
-        assert_eq!(cursor(&mut s, tool), want, "{tool} on");
+    for (tool, _) in own {
+        assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
     }
     for tool in always {
         assert_eq!(cursor(&mut s, tool), Cursor::Crosshair, "{tool} on");
@@ -760,8 +758,8 @@ fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
     }
 }
 
-/// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors. Use Precise Cursors keeps
-/// them: they are drawn on the crosshair, and the ring says the release closes the path.
+/// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors
+/// turns those into a crosshair too.
 #[test]
 fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
     use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind};
@@ -775,7 +773,7 @@ fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
             s.select_tool(tool, ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 250.0), ViewInfo::default()).unwrap();
             s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), ViewInfo::default()).unwrap();
-            assert_eq!(s.cursor(at, alt, ViewInfo::default()), c, "{tool}, precise {precise}");
+            assert_eq!(s.cursor(at, alt, ViewInfo::default()), if precise { Cursor::Crosshair } else { c }, "{tool}, precise {precise}");
             s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), ViewInfo::default()).unwrap();
         }
     }
