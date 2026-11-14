@@ -3255,7 +3255,8 @@ fn images_are_written_again_as_the_same_bytes() {
 
 /// The program of `doc` with LF line ends, and each image's samples (from after `XI` and its line
 /// end to `%%EndData`, a `%_` before it kept) and each preview's rows (from after `32 17 ` to the
-/// line end before `%AI26_EndPlacedObjectPreview`) shown as `<n bytes>`.
+/// line end before `%AI26_EndPlacedObjectPreview` or `%_%AI26_EndPlacedObjectPreview`) shown as
+/// `<n bytes>`.
 fn program_shown(doc: &Document) -> String {
     shown(&export_ai_editing(doc, &opts()).unwrap().program)
 }
@@ -3267,10 +3268,13 @@ fn shown(p: &[u8]) -> String {
     let mut at = 0;
     loop {
         let xi = find(at, b"\r\nXI\r\n").map(|i| (i + 6, b"%%EndData".as_slice()));
-        let pv = find(at, b" 32 17 ").map(|i| (i + 7, b"\r\n%AI26_EndPlacedObjectPreview".as_slice()));
+        let pv = find(at, b" 32 17 ").map(|i| (i + 7, b"%AI26_EndPlacedObjectPreview".as_slice()));
         let Some((start, end)) = [xi, pv].into_iter().flatten().min_by_key(|(s, _)| *s) else { break };
         let mut stop = find(start, end).unwrap();
-        if end.starts_with(b"%%") && p.get(stop - 2..stop) == Some(b"%_") {
+        if p.get(stop - 2..stop) == Some(b"%_") {
+            stop -= 2;
+        }
+        if end.starts_with(b"%AI26") && p.get(stop - 2..stop) == Some(b"\r\n") {
             stop -= 2;
         }
         out.extend_from_slice(&p[at..start]);
@@ -7354,18 +7358,147 @@ fn an_image_on_hidden_lines_does_not_come_in_beside_its_look() {
     assert_eq!(art[0].name.as_deref(), Some("Photo"));
 }
 
-/// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
-/// written as their drawn art, with no art style.
+/// [`warped_photo`] linked to `/Users/someone/Job/art/photo.png`, in folder `art` next to the
+/// document's.
+fn linked_warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let mut n = warped_photo(doc, effects);
+    if let NodeKind::Image(im) = &mut n.kind {
+        let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/photo.png");
+        link.relative = Some("art/photo.png".into());
+        im.link = Some(link);
+    }
+    n
+}
+
+/// A linked image with one Warp is written with an art style of that Warp, its bent pieces as its
+/// drawn look and the image itself as a placed file on `%_` lines, with its path, folder and
+/// preview: it reads back as the linked image, its pixels, placement, name, opacity and link as
+/// they were, with its Warp live and its settings kept.
+#[test]
+fn a_linked_image_with_a_warp_reads_back_linked_with_its_warp_live() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone, and read back
+    // without its Warp or its link.
+    let params = serde_json::json!({"bend": 40.0});
+    let doc = photo_doc(|d| linked_warped_photo(d, vec![fx("warp.arc", params.clone())]));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program_shown(&doc);
+    assert!(text.contains("\n%_%AI5_BeginPlace\n"), "{text}");
+    assert!(text.contains("\n%_(/Users/someone/Job/art/photo.png)`\n"), "{text}");
+    assert!(text.contains("\n%_(art/)\n"), "{text}");
+    assert!(text.contains("\n%_8 8 32 32 17 <256 bytes>\n"), "{text}");
+    assert!(text.contains("\n%_%AI5_EndPlace\n") && text.contains("\n1 (Anon 1) XW\n"), "{text}");
+    assert!(!text.contains("BeginRaster\n%_"), "no embedded copy: {text}");
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    let (mut want, mut got) = (vec![], vec![]);
+    pictures(&doc, doc.layers[0].children().unwrap(), "", &mut want);
+    pictures(&back, art, "", &mut got);
+    assert_eq!(got, want);
+    let [warp] = art[0].appearance.effects.as_slice() else { panic!("{:?}", art[0].appearance) };
+    assert_eq!(warp.id, "warp.arc");
+    let (w, g) = (vectorcraft_effects::merged_params("warp.arc", &params), vectorcraft_effects::merged_params(&warp.id, &warp.params));
+    for key in ["bend", "horizontal", "vertical"] {
+        assert!((g[key].as_f64().unwrap() - w[key].as_f64().unwrap()).abs() < 6e-3, "{key}: {g} for {w}");
+    }
+}
+
+/// A linked image with one Warp larger than a placed file's preview: its copy's preview and its drawn
+/// look's pieces (placed files of the same image) hold the same smaller preview, so fine detail
+/// reads back with the Warp live, the link kept and the preview's pixels, as a linked image without
+/// a Warp does.
+#[test]
+fn a_large_linked_image_with_a_warp_reads_back_from_its_preview() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let checks =
+        image::RgbaImage::from_fn(600, 300, |x, y| if (x + y) % 2 == 0 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) });
+    let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/checks.png");
+    link.relative = Some("art/checks.png".into());
+    let xf = Affine::new([0.25, 0.0, 0.0, 0.25, 20.0, 10.0]);
+    let mut n = image_node(&mut doc, ImageBlob::png(png_of(checks.into())), (600, 300), xf, Some(link));
+    n.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program_shown(&doc);
+    assert!(text.contains("\n%_256 128 1024 32 17 <131072 bytes>\n"), "the copy's preview");
+    assert!(text.contains("\n256 128 1024 32 17 <131072 bytes>\n"), "the look's pieces' previews");
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    let NodeKind::Image(im) = &art[0].kind else { panic!("{:?}", art[0].kind) };
+    assert_eq!((im.width, im.height), (256, 128));
+    assert_eq!(
+        im.link.as_ref().map(|l| (l.path.as_str(), l.relative.as_deref())),
+        Some(("/Users/someone/Job/art/checks.png", Some("art/checks.png")))
+    );
+    assert_eq!(art[0].appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+}
+
+/// A hidden or locked image with one Warp, embedded or linked, keeps its state, its link and its
+/// live Warp.
+#[test]
+fn a_hidden_or_locked_image_with_a_warp_keeps_its_state() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone, and a hidden image's
+    // Warp was compared with a look that drew nothing, so it came in as its drawn pieces.
+    for (what, make) in [("embedded", warped_photo as fn(&mut Document, Vec<vectorcraft_doc::Effect>) -> Node), ("linked", linked_warped_photo)] {
+        for (shown, locked) in [(true, true), (false, false), (false, true)] {
+            let doc = photo_doc(|d| {
+                let mut n = make(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+                (n.visible, n.locked) = (shown, locked);
+                n
+            });
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            assert!(out.warnings.is_empty(), "{what} {shown} {locked}: {:?}", out.warnings);
+            let back = read_back(&doc);
+            let art = back.layers[0].children().unwrap();
+            assert_eq!(art.len(), 1, "{what} {shown} {locked}: {:#?}", lines(&back));
+            assert_eq!(images_of(&back).len(), 1, "{what} {shown} {locked}");
+            assert_eq!(images_of(&back), images_of(&doc), "{what} {shown} {locked}");
+            assert_eq!(art[0].appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+        }
+    }
+}
+
+/// A linked image with one Warp in an opacity mask's art keeps its live Warp; its copy on `%_` lines
+/// is embedded, as linked images in masks are, with that warning.
+#[test]
+fn a_linked_image_with_a_warp_in_a_mask_is_embedded_with_its_warp_live() {
+    // GUARDS: the placed file of a styled image written in an opacity mask's art.
+    let doc = photo_doc(|d| {
+        let art = linked_warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+        let mut square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        square
+    });
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::LINKS_EMBEDDED]);
+    let text = program_shown(&doc);
+    assert!(!text.contains("BeginPlace") && text.contains("1 (Anon 1) XW"), "{text}");
+    let back = read_back(&doc);
+    let mask = back.layers[0].children().unwrap()[0].extras().mask.as_ref().map(|m| m.art.clone()).expect("the mask");
+    let NodeKind::Image(im) = &mask.kind else { panic!("{:?}", mask.kind) };
+    assert!(im.link.is_none());
+    assert_eq!(mask.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+}
+
+/// An image with an opacity mask and an image with a Warp and another effect are written as their
+/// drawn art, with no art style, linked or embedded.
 #[test]
 fn other_warped_images_are_written_as_their_drawn_art() {
     let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
-    let linked = photo_doc(|d| {
-        let mut n = warped_photo(d, vec![arc()]);
-        if let NodeKind::Image(im) = &mut n.kind {
-            im.link = Some(vectorcraft_doc::LinkInfo::new("/art/photo.png"));
-        }
+    let linked_masked = photo_doc(|d| {
+        let mut n = linked_warped_photo(d, vec![arc()]);
+        let white =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::WHITE), Paint::None, 0.0));
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, false)));
         n
     });
+    let linked_stacked = photo_doc(|d| linked_warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
     let masked = photo_doc(|d| {
         let mut n = warped_photo(d, vec![arc()]);
         let white =
@@ -7374,7 +7507,7 @@ fn other_warped_images_are_written_as_their_drawn_art() {
         n
     });
     let stacked = photo_doc(|d| warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
-    for (what, doc) in [("linked", linked), ("masked", masked), ("stacked", stacked)] {
+    for (what, doc) in [("linked masked", linked_masked), ("linked stacked", linked_stacked), ("masked", masked), ("stacked", stacked)] {
         assert!(!program_shown(&doc).contains("1 (Anon"), "{what}");
         let back = read_back(&doc);
         let art = back.layers[0].children().unwrap();
