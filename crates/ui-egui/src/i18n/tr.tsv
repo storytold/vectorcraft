@@ -4246,6 +4246,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
 @msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
+@msg	`index` must be a whole number	`index` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be one of {_1}	`{key}`, {_1}'den biri olmalıdır
