@@ -1066,7 +1066,12 @@ or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
-`range`. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
+`range`. A PDF or `.ai` page of the art's bounds is measured without the non-printing layers that the file leaves out
+(unless `includeNonPrinting` or `createLayers` keeps them; a `.ai` file keeps layers by default). An HP-GL plot of the
+art's bounds is measured without what the plot leaves out: non-printing layers, objects at 0% opacity, placed images,
+gradient meshes whose every point is at 0% opacity, and paths without effects whose fills and strokes paint nothing.
+A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
+dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
 `useArtboards: false` writes that one page too, without the native document and without the editing copy for other
 apps (`editingData`), and always comes back with the warning `Preserve editing was left out: an .ai file of the art's
@@ -7763,7 +7768,7 @@ instructions is refused with "not an HP-GL file".
 
 `document.export` (and `export`, and Export As) with format `hpgl` writes a plot file (`.plt`) of the first artboard
 (or `artboard`) for pen plotters and cutters; `useArtboards: true` writes one file per chosen artboard
-(`{stem}-{artboard}.plt`), `false` the bounds of the visible art. Each visible path is drawn once along its own line:
+(`{stem}-{artboard}.plt`), `false` the bounds of the art it plots. Each visible path is drawn once along its own line:
 a filled shape is its closed outline, also when a stroke gives its color, and a stroked path is its center line, so
 fills, stroke widths, dashes, brushes and arrowheads are not painted. Type is drawn as its glyph outlines, and a
 gradient mesh as its outline, also inside a blend (a mesh whose every point is at 0% opacity draws nothing). A

@@ -138,7 +138,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     // Nothing to export keeps the dialog open too (before the save dialog, not after it). An
     // exporter plug-in decides for itself what it can write.
-    if !use_artboards && plugin.is_none() && app.session.active().is_some_and(|s| vectorcraft_render::encode::art_bounds(&s.doc).is_none()) {
+    if !use_artboards
+        && plugin.is_none()
+        && app.session.active().is_some_and(|s| vectorcraft_engine::cmd::fileio::export_art_bounds(&s.doc, f.id).is_none())
+    {
         return Err("nothing to export: the document has no visible art (or turn on Use Artboards)".into());
     }
     app.ui.dialog = None;

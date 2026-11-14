@@ -2,11 +2,12 @@
 //! (unknown keys are ignored, so one params object can carry the options of several formats).
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use vectorcraft_doc::{Artboard, Document};
+use vectorcraft_doc::{Artboard, Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
@@ -419,18 +420,41 @@ pub(super) fn use_artboards(cmd: &str, p: &Value) -> Result<Option<bool>> {
 
 /// With `useArtboards: false` in `p`: `doc` without its opacity-mask or symbol editing layer and
 /// with one artboard, the bounds of its visible art, and `p` without the artboard choice. `None`
-/// when `useArtboards` is absent, null or true. A document with no visible art is refused.
-pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Document, Value)>> {
+/// when `useArtboards` is absent, null or true. The objects that `left_out` picks (layers or
+/// objects the format leaves out, see [`hidden_nodes`]) are not measured, and a document with no
+/// other visible art is refused.
+pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value, left_out: impl Fn(&Node) -> bool) -> Result<Option<(Document, Value)>> {
     if use_artboards(cmd, p)? != Some(false) {
         return Ok(None);
     }
     let doc = &*doc.without_edit_modes();
-    let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
+    let bounds = bounds_without(doc, &left_out).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
     let mut q = super::export::without_artboards(p);
     if let Some(o) = q.as_object_mut() {
         o.remove("useArtboards");
     }
     Ok(Some((single_artboard(doc, bounds, "Art"), q)))
+}
+
+/// The bounds of the visible art of `doc` that a `format` file of the art's bounds draws, as
+/// [`art_page`] measures it with that format's default options: for HP-GL without what a plot
+/// leaves out ([`vectorcraft_cad::hpgl::write::plots_nothing`]), for other formats all of it (the
+/// non-printing layers a PDF leaves out depend on options chosen after the save panel). `None`
+/// when there is none, which such an export refuses.
+pub fn export_art_bounds(doc: &Document, format: &str) -> Option<Rect> {
+    let doc = &*doc.without_edit_modes();
+    bounds_without(doc, &|n| format == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(n))
+}
+
+/// The bounds of the visible art of `doc` with the objects that `left_out` picks hidden
+/// ([`hidden_nodes`]).
+fn bounds_without(doc: &Document, left_out: &dyn Fn(&Node) -> bool) -> Option<Rect> {
+    let drawn = hidden_nodes(&doc.layers, left_out).map(|layers| {
+        let mut d = doc.clone();
+        d.layers = layers;
+        d
+    });
+    vectorcraft_render::encode::art_bounds(drawn.as_ref().unwrap_or(doc))
 }
 
 /// The `rect` param of a raster export: `[x, y, width, height]` in points, y down. `None` when
@@ -479,6 +503,35 @@ pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> D
         guide_label: None,
     }];
     d
+}
+
+/// `nodes` with the visible objects that `left_out` picks hidden, in layers, sublayers and groups
+/// that don't clip, at any depth (what an object it picks holds is not looked at); `None` when it
+/// picks none of them. Clipping layers are looked in too, as their sublayers can be picked.
+pub(super) fn hidden_nodes(nodes: &[Arc<Node>], left_out: &dyn Fn(&Node) -> bool) -> Option<Vec<Arc<Node>>> {
+    let mut out: Option<Vec<Arc<Node>>> = None;
+    for (i, l) in nodes.iter().enumerate() {
+        let new = if left_out(l) {
+            l.visible.then(|| {
+                let mut n = (**l).clone();
+                n.visible = false;
+                Arc::new(n)
+            })
+        } else {
+            let (NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false }) = &l.kind else { continue };
+            hidden_nodes(children, left_out).map(|c| {
+                let mut n = (**l).clone();
+                if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut n.kind {
+                    *children = c;
+                }
+                Arc::new(n)
+            })
+        };
+        if let Some(slot) = new.and_then(|new| Some((out.get_or_insert_with(|| nodes.to_vec()).get_mut(i)?, new))) {
+            *slot.0 = slot.1;
+        }
+    }
+    out
 }
 
 fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
@@ -636,8 +689,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     {
         return Ok(enc);
     }
+    let left_out = |n: &Node| f.id == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(n);
     if use_artboards == Some(false)
-        && let Some((art, q)) = art_page(C, doc, p)?
+        && let Some((art, q)) = art_page(C, doc, p, left_out)?
     {
         return encode_files(&art, f, &q);
     }

@@ -170,6 +170,57 @@ fn a_plot_reads_back_as_its_art() {
     assert!((board.height() - (30.0 + pen)).abs() < 0.1, "{board:?}");
 }
 
+/// A plot of the art's bounds is measured on the art it plots: art on a non-printing layer, on a
+/// layer at 0% opacity or at 0% opacity in a group, a placed image and a path that paints nothing
+/// don't move its origin, a clipping layer is measured as clipped, and a document whose only
+/// visible art is such art is refused.
+#[test]
+fn a_plot_of_the_arts_bounds_leaves_out_the_layers_it_does_not_plot() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let alone = plot(&mut s).unwrap();
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    for props in [json!({"printable": false}), json!({})] {
+        let layer = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+        if props.as_object().unwrap().is_empty() {
+            s.execute("transparency.set", &json!({"ids": [layer], "opacity": 0})).unwrap();
+        } else {
+            let mut p = props.clone();
+            p["id"] = layer.clone();
+            s.execute("layer.setProps", &p).unwrap();
+        }
+        s.execute("shape.rectangle", &json!({"x": -300, "y": 500, "width": 20, "height": 20})).unwrap();
+        assert_eq!(plot(&mut s).unwrap(), alone, "{props}");
+    }
+    // An object at 0% opacity in a group, on a layer that plots.
+    s.execute("layer.new", &json!({})).unwrap();
+    let far = s.execute("shape.rectangle", &json!({"x": -500, "y": 700, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("object.group", &json!({"ids": [far]})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [far], "opacity": 0})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "0% opacity in a group");
+    // A placed image and a path whose fill and stroke paint nothing.
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(4, 4).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a placed image");
+    let bare = s.execute("shape.rectangle", &json!({"x": 500, "y": -400, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [bare], "none": true})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a path that paints nothing");
+
+    // A clipping layer's clipping path, which loses its paint, still clips the art measured: a
+    // large square clipped to the first square draws nothing more.
+    let clipping = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    s.execute("shape.rectangle", &json!({"x": -300, "y": -300, "width": 800, "height": 800})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("layer.clippingMask.toggle", &json!({"id": clipping})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a clipping layer");
+
+    s.execute("layer.setProps", &json!({"id": clipping, "visible": false})).unwrap();
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+}
+
 #[test]
 fn export_options_are_checked() {
     let mut s = two_boards();
