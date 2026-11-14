@@ -1,6 +1,6 @@
 use super::access::file_list;
 use super::formats::formats;
-use super::{CommandSpec, action_batch, always, batch, cmd, export, has_doc, has_selection, load, pdfimport, save, screens};
+use super::{CommandSpec, action_batch, always, batch, cmd, export, has_doc, has_selection, load, pdfimport, psdlayers, save, screens};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -138,6 +138,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path | name? | dataBase64 (a file's path, or its bytes), password?, thumbnail?: page (1-based), thumbnailSize?: 160 (px, longest side), cropTo?: crop (the thumbnail's box)} → {pages, needsPassword, wrongPassword?, pageInfo: [{width, height (pt, as shown), rotation, boxes: {media, crop, bleed, trim, art: [x0, y0, x1, y1] (PDF space, pt)}}], thumbnail?: PNG dataBase64}; a page whose UserUnit (PDF 1.6) is above 1 gives its size and boxes in pt, its numbers times the UserUnit (one above 75,000 counts as 75,000); an encrypted PDF without its password → {pages: 0, needsPassword: true}; a PostScript file (an EPS, a .ps file, a .ai in PostScript form) → {pages: 1, needsPassword: false, pageInfo: [{width, height (its bounding box, a US Letter page without one), rotation: 0, boxes: {}}]} (password and cropTo don't apply; thumbnail: 1 shows what the page prints)",
             always,
             pdfimport::pdf_info
+        ),
+        cmd!(
+            query "document.psdInfo",
+            "PSD Info",
+            [],
+            None,
+            "{path} or {name?, dataBase64} what a PSD or PSB file holds, read from its header and layer records without decoding pixels → {format: psd|psb, width, height (the canvas, px), layers (group markers not counted), hiddenLayers (the hidden ones among them), groups}; a file without layer records, or whose layer records can't be read, has layers: 0 and opens and places as its merged image; a file that is not a PSD or PSB file is an error",
+            always,
+            psdlayers::psd_info
         ),
         cmd!(
             "document.exportForOffice",

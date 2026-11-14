@@ -816,6 +816,9 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The PSD Import Options chosen last (layers, hiddenLayers; null: never used).
+    #[serde(default)]
+    pub psd_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid
     /// and the document count when it opened. Choosing a tab, or a document opening, closing or
     /// becoming active, leaves it.
@@ -1233,6 +1236,7 @@ impl Default for UiState {
             transform_each: Value::Null,
             rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
+            psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
             layers_panel: Default::default(),
