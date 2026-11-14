@@ -213,6 +213,13 @@ fn drop_shadow() -> vectorcraft_doc::Effect {
 /// Whether every `<g mask>` in `svg` starts with a hidden, unpainted rectangle over its mask's region,
 /// and whether any does.
 fn spanning_rects(svg: &str) -> (bool, bool) {
+    let spans = masked_group_spans(svg);
+    (spans.iter().all(|s| *s), spans.iter().any(|s| *s))
+}
+
+/// For each `<g mask>` in `svg`, in document order, whether it starts with a hidden, unpainted
+/// rectangle over its mask's region.
+fn masked_group_spans(svg: &str) -> Vec<bool> {
     let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
     let spans: Vec<bool> = xml
         .descendants()
@@ -228,7 +235,7 @@ fn spanning_rects(svg: &str) -> (bool, bool) {
         })
         .collect();
     assert!(!spans.is_empty(), "no masked group in {svg}");
-    (spans.iter().all(|s| *s), spans.iter().any(|s| *s))
+    spans
 }
 
 /// The number of paths `svg` imports as.
@@ -346,9 +353,9 @@ fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
     }
 }
 
-/// In a knockout group, each element is drawn inside the masks of the elements above it. When an
+/// In a knockout group, each element is drawn inside one mask of the elements above it. When the
 /// element inside a mask's group has a drop shadow, that group starts with the same hidden,
-/// unpainted rectangle over the region, and import leaves it out.
+/// unpainted rectangle over the region, the other groups don't, and import leaves it out.
 #[test]
 fn a_knockout_group_spans_its_masks_when_an_element_paints_past_its_shapes() {
     for shadowed in [false, true] {
@@ -365,7 +372,8 @@ fn a_knockout_group_spans_its_masks_when_an_element_paints_past_its_shapes() {
         group.knockout = vectorcraft_doc::Knockout::On;
         add(&mut d, group);
         let svg = export(&d, &ExportOptions::default());
-        assert_eq!(spanning_rects(&svg), (shadowed, shadowed), "shadowed {shadowed}:\n{svg}");
+        // The bottom and middle elements are masked, in paint order; the top one isn't.
+        assert_eq!(masked_group_spans(&svg), [shadowed, false], "shadowed {shadowed}:\n{svg}");
         assert_eq!(imported_paths(&svg), 3, "shadowed {shadowed}:\n{svg}");
     }
 }
@@ -429,4 +437,94 @@ fn a_mask_region_covers_a_blend_as_written() {
     let mask = xml.descendants().find(|n| n.has_tag_name("mask")).unwrap();
     let [x, y, w, h] = ["x", "y", "width", "height"].map(|a| mask.attribute(a).and_then(|v| v.parse::<f64>().ok()).unwrap_or(f64::NAN));
     assert!(x <= 0.0 && y <= 0.0 && x + w >= 95.0 && y + h >= 35.0 && w < 200.0 && h < 200.0, "{x} {y} {w} {h} in {svg}");
+}
+
+/// A knockout group of `n` red, green and blue squares at 50% opacity that all overlap, over an
+/// opaque backdrop. `knockout_shape`: their opacity defines their knockout shape.
+fn knockout_squares(n: usize, knockout_shape: bool) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    let backdrop = rect(&mut d, Rect::new(0.0, 0.0, 200.0, 200.0), [230, 200, 50]);
+    add(&mut d, backdrop);
+    let colors = [[255, 0, 0], [0, 200, 0], [0, 0, 255]];
+    let squares = (0..n)
+        .map(|i| {
+            let x = (i % 20) as f64 * 2.0;
+            let mut s = rect(&mut d, Rect::new(20.0 + x, 50.0, 120.0 + x, 150.0), colors[i % 3]);
+            (s.opacity, s.knockout_shape) = (0.5, knockout_shape);
+            std::sync::Arc::new(s)
+        })
+        .collect();
+    let mut group = Node::group(d.alloc_id(), squares);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// The deepest an element of `svg` nests, counting the root element as 1.
+fn element_depth(svg: &str) -> usize {
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    xml.descendants().filter(|n| n.is_element()).map(|n| n.ancestors().filter(|a| a.is_element()).count()).max().unwrap_or(0)
+}
+
+/// The elements of a knockout group are siblings, each in one mask of the overlapping elements
+/// above it, however many there are: 200 translucent elements stay well within the nesting the
+/// web build reads (34 levels), and the file reads back with nothing merged. Where the elements'
+/// shapes are the area they paint, the file draws as the canvas does.
+#[test]
+fn a_knockout_group_of_many_translucent_elements_stays_shallow() {
+    for knockout_shape in [false, true] {
+        let d = knockout_squares(200, knockout_shape);
+        let (svg, warnings) = vectorcraft_svg::export_with_report(&d, &ExportOptions::default());
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(svg.matches("<mask").count(), 199);
+        // Each shape is written once.
+        assert_eq!(svg.matches("<use ").count(), 200 * 199 / 2);
+        let depth = element_depth(&svg);
+        assert!(depth < 12, "{depth}");
+        let (back, notes) = vectorcraft_svg::import_with_report(&svg).unwrap();
+        assert!(!notes.contains(&vectorcraft_doc::depth::merged_note()), "{notes:?}");
+        assert!(back.layers[0].children().is_some_and(|c| !c.is_empty()));
+        if !knockout_shape {
+            let (file, canvas) = (resvg_render(&svg, 200, 200), render_artboard(&d));
+            for (x, y) in [(30, 100), (100, 100), (150, 100), (10, 10)] {
+                assert!(
+                    within(file.over_white(x, y), canvas.over_white(x, y), 3),
+                    "{x},{y}: {:?} {:?}",
+                    file.over_white(x, y),
+                    canvas.over_white(x, y)
+                );
+            }
+        }
+    }
+}
+
+/// When the masks of a knockout group would use more than 65,536 shapes, the group is written as
+/// a plain group, with a warning.
+#[test]
+fn a_knockout_group_too_large_to_mask_is_a_plain_group_with_a_warning() {
+    // 400 elements that all overlap: 79,800 shapes in their masks.
+    let d = knockout_squares(400, false);
+    let (svg, warnings) = vectorcraft_svg::export_with_report(&d, &ExportOptions::default());
+    assert!(warnings.iter().any(|w| w.contains("too many overlapping elements")), "{warnings:?}");
+    assert!(!svg.contains("<mask"));
+    assert!(element_depth(&svg) < 12);
+}
+
+/// Elements that don't overlap need no masks of each other.
+#[test]
+fn knockout_masks_hold_only_the_elements_that_overlap() {
+    let mut d = Document::new(200.0, 100.0);
+    let squares = (0..3)
+        .map(|i| {
+            let x = f64::from(i) * 60.0;
+            let mut s = rect(&mut d, Rect::new(x, 0.0, x + 40.0, 40.0), [0, 0, 255]);
+            s.opacity = 0.5;
+            std::sync::Arc::new(s)
+        })
+        .collect();
+    let mut group = Node::group(d.alloc_id(), squares);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<mask"), "{svg}");
 }
