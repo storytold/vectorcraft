@@ -7183,7 +7183,11 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a twisted group", read(&twist(90.0, None), &distort_group()), 2),
         ("a group with a hidden member", read(&twist(45.0, None), &hidden_member), 2),
         ("a curve twisted a quarter turn back", read(&twist(-90.0, BLUE_FILL), &curved), 0),
-        ("a straight compound path with a guide, as before", read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(20.0, 20.0, 60.0, 50.0))), 2),
+        (
+            "a straight compound path with a guide inside it, as before",
+            read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(0.0, 0.0, 60.0, 50.0))),
+            2,
+        ),
     ] {
         assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
         let a = art(&r.doc);
@@ -7242,6 +7246,48 @@ fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
         ("a square twisted two turns", read(720.0, &square)),
         ("a square twisted ten turns", read(3600.0, &square)),
         ("a straight compound path twisted a full turn", read(360.0, &frame)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn twist_on_a_straight_compound_path_keeps_the_drawn_look_where_a_guide_reaches_past_its_other_members() {
+    // GUARDS: a straight compound path whose guide members reach past its other members was read
+    // with a live Twist measured from bounds that take in those guides, which draws differently from
+    // the art saved with it.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    // A compound path of a square and the guide from `from` to `to`.
+    let with_guide = |from: (f64, f64), to: (f64, f64)| {
+        object(&format!("*u\n{}f\n{} {} m\n{} {} L\n(N) *\n*U\n", rect_path(20.0, 20.0, 60.0, 50.0), from.0, from.1, to.0, to.1))
+    };
+    let twist = |angle: f64| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), BLUE_FILL);
+    let read = |angle: f64, art_: &str| read_ok(&format!("{}{}", twist(angle), layer(art_)));
+    for (what, r) in [
+        ("a guide inside the square", read(45.0, &with_guide((25.0, 25.0), (35.0, 35.0)))),
+        ("a guide on the square's corners", read(180.0, &with_guide((20.0, 20.0), (60.0, 50.0)))),
+        ("a guide inside the square, half a turn back", read(-180.0, &with_guide((30.0, 40.0), (50.0, 30.0)))),
+        ("a guide outside the square, not turned", read(0.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), 2, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, "distort.twist", "{what}");
+    }
+    for (what, r) in [
+        ("a guide outside the square", read(45.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+        ("a guide reaching past the square's right side", read(45.0, &with_guide((30.0, 30.0), (70.0, 40.0)))),
+        ("a guide reaching past the square's top, half a turn", read(180.0, &with_guide((30.0, 30.0), (40.0, 51.0)))),
+        ("a guide around the square, a quarter turn back", read(-90.0, &with_guide((0.0, 0.0), (80.0, 70.0)))),
+        ("a compound path of guides only", read(45.0, &object("*u\n25 25 m\n35 35 L\n(N) *\n40 25 m\n50 35 L\n(N) *\n*U\n"))),
     ] {
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{what}: {a:#?}");
