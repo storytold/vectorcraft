@@ -507,7 +507,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "text_wrap",
             "Text wrap",
-            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap.",
+            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap. An offset outside -1000 to 1000 or not a number, or an invert or release that is not true or false, is an error and changes nothing.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},

@@ -1307,6 +1307,9 @@ antiAlias	Sharp	Nítid
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Click to replace	Feu clic per substituir
+	Show all alternates in the Glyphs panel	Mostra totes les alternatives al tauler Glifs
+	Show Character Alternates	Mostra les alternatives del caràcter
 	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
@@ -1794,6 +1797,7 @@ digits	Malayalam	Malaiàlam
 	Format	Format
 	Format Options	Opcions de format
 	Format Settings	Configuració de format
+	Format Settings…	Configuració de format…
 	Format:	Format:
 	Formats:	Formats:
 	Fractional Widths	Amplades fraccionàries
@@ -2101,6 +2105,7 @@ digits	Malayalam	Malaiàlam
 	Import Library…	Importa biblioteca…
 	Import Matches	Importa coincidències
 	Import PDF	Importa PDF
+	Import PDF pages as links	Importa les pàgines del PDF com a enllaços
 	Import PDF Presets	Importa preajustos de PDF
 	Import Perspective Grid Presets	Importa preajustos de quadrícula de perspectiva
 	Import Print Presets	Importa preajustos d’impressió
@@ -4372,6 +4377,18 @@ digits	Malayalam	Malaiàlam
 	Smart Guides (View → Smart Guides)	Guies intel·ligents (Visualitza → Guies intel·ligents)
 	Smart Guides (⌘U)	Guies intel·ligents (⌘U)
 	Smart Punctuation…	Puntuació intel·ligent…
+	Smart Punctuation	Puntuació intel·ligent
+	ff, fi, ffi Ligatures	Lligadures ff, fi, ffi
+	ff, fl, ffl Ligatures	Lligadures ff, fl, ffl
+	Smart Quotes	Cometes intel·ligents
+	Smart Spaces	Espais intel·ligents
+	En, Em Dashes	Ratlles en i em
+	Ellipses	Punts suspensius
+	Expert Fractions	Fraccions expertes
+	Replace In	Reemplaça a
+	Selected Text Only	Només el text seleccionat
+	Entire Document	Tot el document
+	Report Results	Informa dels resultats
 	Smooth	Suavitza
 	Smooth Color	Color suau
 	Smooth Tool	Eina de suavitzat
@@ -4407,6 +4424,7 @@ digits	Malayalam	Malaiàlam
 	Sort by Luminance	Ordena per lluminositat
 	Sort by Name	Ordena per nom
 	Sort by Popularity	Ordena per popularitat
+	Sort by Size	Ordena per mida
 	Sort by Status	Ordena per estat
 	Sort Swatches	Ordena les mostres
 	Source code on GitHub	Codi font a GitHub
@@ -5868,7 +5886,7 @@ digits	Malayalam	Malaiàlam
 @msg	no segment {segment} on line {line}	no hi ha el segment {segment} a la línia {line}
 @msg	no selected slice in the image: select slices, or save all of them	no hi ha cap tall seleccionat a la imatge: seleccioneu talls o deseu-los tots
 @msg	no selection bounds	no hi ha límits de selecció
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
 @msg	Global Edit is off	L’edició global no està activa
 @msg	only an object of the Global Edit other than the one it started from can be left out	només es pot excloure un objecte de l’edició global que no sigui aquell amb què va començar
 @msg	no slice selected	no hi ha cap tall seleccionat
@@ -6334,6 +6352,7 @@ digits	Malayalam	Malaiàlam
 @msg	the spine has no segments	l’espina no té segments
 @msg	the stroke has no weight	el traç no té gruix
 @msg	the SVG's elements are nested more than {0} deep	els elements de l’SVG estan imbricats a més de {0} nivells de profunditat
+@msg	the SVG's styles expand to more than {0} MB	els estils de l’SVG s’expandeixen a més de {0} MB
 @msg	the target layer is locked or hidden	la capa de destinació està blocada o amagada
 @msg	the thumbnail image is malformed	la imatge de la miniatura està mal formada
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	l’objecte superior ha de ser un traçat, un traçat compost o un objecte de text per fer-lo servir com a màscara de retall
@@ -7450,6 +7469,9 @@ breakText	Glyphs	Glifs
 	Open Tutorial Sample	Obre la mostra del tutorial
 	Finish Tutorial	Acaba el tutorial
 	Next Tutorial	Tutorial següent
+	Show Learn Tab	Mostra una pestanya d'Aprèn
+	Show Skill	Mostra l'habilitat
+	Back One Level	Torna un nivell enrere
 	Back to Skills	Torna a les habilitats
 @msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
 @msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
@@ -7490,6 +7512,9 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+	Nest Shapes…	Encaixa les formes…
+	Nest Shapes	Encaixa les formes
+	Roll	Rotlle
 # Status and error messages of image export, color profiles and libraries, 3D effects, path operations and scripts.
 @msg	3D effects require finite coordinates within 100 million points	Els efectes 3D requereixen coordenades finites dins de 100 milions de punts
 @msg	3D effects require one to ten lights	Els efectes 3D requereixen d’un a deu llums
