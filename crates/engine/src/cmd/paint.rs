@@ -955,8 +955,14 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
-            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
+            // The graph keeps the default paint for every label and line of a kind it reached, also when one already
+            // showed it.
+            let labels = super::graph::capture_label_styles(d, &ids, &|st| {
+                st.fill = Paint::solid(Color::BLACK);
+                st.stroke = Paint::None;
+            });
+            let lines = super::graph::capture_line_rows(d, &ids);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
         })?;
     }
     super::newart::reset(s);

@@ -529,16 +529,20 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
 }
 
 /// Apply `change` to the style graph `graph` keeps for its labels of kind `role` (or the default one). Returns whether
-/// the kept style changed.
+/// the kept style changed. A kind that keeps no style and that `change` leaves at the default style keeps none.
 fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn Fn(&mut CharStyle)) -> bool {
     let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { return false };
-    let mut style = label_style(&spec.label_styles, role);
+    let was = label_style(&spec.label_styles, role);
+    let mut style = was.clone();
     change(&mut style);
     let slot = match role {
         Role::Value => &mut spec.label_styles.values,
         Role::Category => &mut spec.label_styles.categories,
         Role::Legend => &mut spec.label_styles.legend,
     };
+    if slot.is_none() && style == was {
+        return false;
+    }
     let changed = slot.as_ref() != Some(&style);
     *slot = Some(style);
     changed

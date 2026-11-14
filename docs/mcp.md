@@ -809,7 +809,8 @@ except by `graphicStyle.redefine`, which passes the style to the lines and label
 holds. An `index`, `indices` or fill or stroke `item` given an Axes or Legend group whose lines and labels have
 different rows, as the lines and labels of a new graph do, is an error unless `aligned` is true, which makes it a row
 of the stack of the backmost line or label in the group, and `appearance.moveItem` does not move the rows of such a
-group. The graph keeps no graphic style link on its lines and
+group. With `aligned`, the graph stores the rows of only the lines and labels that have that row; a kind of label none
+of whose labels has it keeps what it stored before. The graph keeps no graphic style link on its lines and
 labels: they keep the look of a style applied to them, and are unlinked when the graph is drawn again. The commands
 find these groups by their names, so a renamed Axes or Legend group is edited itself.
 
@@ -856,7 +857,9 @@ placement they set there. A stroke weight and dashes are stored as the label sho
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
 every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. What they change on a graph's axis lines, tick marks and radar rings is stored as described below.
+a dark wedge. `paint.default` stores the black fill and no stroke for the kind of each label it reaches, also when the
+label already showed them. What they change on a graph's axis lines, tick marks and radar rings is stored as described
+below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -889,8 +892,9 @@ opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor comma
 graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
 The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
 `transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
-`item` and `object.setProps` store only the object opacity and blend mode. `appearance.copyFrom` stores the rows
-whatever it picks up, with or without `append`. The recolor commands, `paint.swap` and `paint.default` store a line's rows when they change them. The
+`item` and `object.setProps` store only the object opacity and blend mode. `appearance.copyFrom` stores the rows when it
+picks up a fill or stroke attribute or adds rows with `append`; a pick of only the object's transparency stores only the
+object opacity and blend mode. The recolor commands and `paint.swap` store a line's rows when they change them. The
 other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
 (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and

@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode, and with `append` its topmost visible fill and stroke rows; on a graph's axis line, tick mark or radar ring, its topmost visible fill and stroke rows and object opacity and blend mode for every line of its kind → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode, and with `append` its topmost visible fill and stroke rows; on a graph's axis line, tick mark or radar ring, its topmost visible fill and stroke rows (not for a pick of only the object's transparency) and object opacity and blend mode for every line of its kind → {ids}",
             has_doc,
             copy_from
         ),
@@ -1069,6 +1069,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let per = items_per_target(&before, &ids, &[idx], aligned(p, "appearance.setItem")?);
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
+        // The targets that have the row: an aligned row leaves out the members of a graph's Axes or Legend group that
+        // lack it, and the graph keeps the rows of the labels and lines it reached only.
+        let mut reached = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
             let Some(&idx) = at.first() else { continue };
             let Some(n) = d.node_mut(*id) else { continue };
@@ -1079,6 +1082,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let bounds = n.geometric_bounds();
             let Some(item) = n.appearance.items.get_mut(idx) else { continue };
+            reached.push(*id);
             let (pp, op, bl, vis, bounds) = match item {
                 AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible, bounds),
                 AppearanceItem::Stroke(st) => {
@@ -1121,7 +1125,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, written));
         let painted = super::graph::capture_series_top_paints(d, &rows);
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = super::graph::capture_label_rows(d, &reached);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     if let Some(pa) = &paint {
@@ -1156,8 +1160,13 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     let before = s.doc()?.doc.clone();
     let per = items_per_target(&before, &ids, &idx, aligned(p, "appearance.removeItem")?);
     super::overprint::edit_counted(s, "Remove Item", |d| {
+        // The targets that had a row to remove, as in `set_item`.
+        let mut reached = Vec::new();
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
+                if idx.iter().any(|i| *i < n.appearance.items.len()) {
+                    reached.push(*id);
+                }
                 let mut idx = idx.clone();
                 idx.sort_unstable();
                 // From the top down, so the lower indices stay valid.
@@ -1169,7 +1178,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &ids);
+        let labels = super::graph::capture_label_rows(d, &reached);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The rows removed from the active row's object, which need not come first in `ids`.
@@ -1207,6 +1216,8 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
         // showed it.
         let mut added = Vec::new();
+        // The targets that took a copy, as in `set_item`.
+        let mut reached = Vec::new();
         for (id, idx) in ids.iter().zip(&per) {
             let Some(n) = d.node_mut(*id) else { continue };
             let has_contents = n.contents_label().is_some();
@@ -1231,6 +1242,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                     ap.set_contents_at(c);
                 }
                 any = true;
+                reached.push(*id);
                 continue;
             }
             let mut idx = idx.clone();
@@ -1245,6 +1257,9 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                         added.push((*id, kind));
                     }
                     any = true;
+                    if reached.last() != Some(id) {
+                        reached.push(*id);
+                    }
                 }
             }
         }
@@ -1255,7 +1270,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, added));
         super::graph::capture_series_top_paints(d, &rows);
-        super::graph::capture_label_rows(d, &ids);
+        super::graph::capture_label_rows(d, &reached);
         Ok(())
     })?;
     // Rows at or above each copy move up by one (by the block, for copies placed at `to`).
@@ -1697,8 +1712,21 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         };
         // `append` adds rows and leaves the characters as they were.
         let text = !append && super::graph::capture_label_text(d, &targets, kept_text, kept_para)?;
-        // A graph line is a path: every pick writes its rows.
-        let lines = super::graph::capture_line_rows(d, &targets);
+        // A graph line is a path: a pick of fill or stroke attributes writes its rows. A pick of only the object's
+        // opacity and blend mode leaves the fill and stroke its kind keeps, as `capture_label_object_opacity` keeps them.
+        let to_rows = append
+            || fill.color
+            || fill.transparency
+            || fill.overprint
+            || stroke.color
+            || stroke.transparency
+            || stroke.overprint
+            || stroke.weight
+            || stroke.cap
+            || stroke.join
+            || stroke.miter
+            || stroke.dash;
+        let lines = to_rows && super::graph::capture_line_rows(d, &targets);
         Ok(count_changed(d, &before, &targets) + usize::from(kept || painted || object || rows || text || lines))
     })?;
     Ok(finish(s, &targets))

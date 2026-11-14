@@ -6294,6 +6294,83 @@ fn a_row_index_given_the_axes_group_is_a_row_of_its_backmost_member_with_aligned
     assert!((l.appearance.items[top_row(&s, l.id, false)].opacity() - 0.4).abs() < 1e-6, "the stroke row's opacity is kept");
 }
 
+/// An aligned row edit given the Axes group leaves alone what a kind of label keeps from a label without that row: the
+/// category labels keep the orange fill row of one of them through an edit of the lines' stroke rows.
+#[test]
+fn an_aligned_row_edit_given_the_axes_group_keeps_the_rows_of_labels_it_did_not_reach() {
+    let cases = [("appearance.setItem", json!({"color": "#0000ff"})), ("appearance.duplicateItem", json!({})), ("appearance.removeItem", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff8000"})).unwrap();
+        let kept = spec(&s, id).label_styles.categories_rows;
+        assert!(kept.is_some(), "the category labels keep the orange row");
+        let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+        let back = axes.children().unwrap()[0].id;
+        let mut p = params.clone();
+        p["ids"] = json!([axes.id.0]);
+        p["index"] = json!(top_row(&s, back, false));
+        p["aligned"] = json!(true);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.categories_rows, kept, "{cmd}");
+    });
+}
+
+/// An Eyedropper pick of only the object's opacity on an axis line keeps the stroke its kind keeps from another line,
+/// though the line it is given still shows the default stroke.
+#[test]
+fn an_eyedropper_pick_of_only_the_opacity_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.setProps", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    let fill = json!({"color": false, "transparency": false, "overprint": false});
+    let stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
+    let opacity_only = json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke}});
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "pickUp": opacity_only})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{looks:?}");
+}
+
+/// Default Fill and Stroke on a label or an axis line that already shows the default paint is kept for its kind, in
+/// place of the paint the kind keeps from another label or line.
+#[test]
+fn default_fill_and_stroke_on_a_label_or_line_that_shows_it_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("paint.setFill", &json!({"ids": [text_id(&s, id, "Axes", "4").0], "color": "#ff0000"})).unwrap();
+    let hex = |st: &CharStyle| st.fill.color().map(|c| c.to_hex());
+    assert_eq!(hex(&label_run_style(&s, id, "Axes", "0")).as_deref(), Some("#000000"), "the other labels show black until the graph is drawn again");
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "0").0]})).unwrap();
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "4");
+    assert_eq!((hex(&st).as_deref(), st.stroke.is_none()), (Some("#000000"), true));
+    let lines = line_nodes(&s, id);
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| *l == ("#000000".into(), 1.0, 1.0)), "the 1 pt black default stroke");
+}
+
+/// Default Fill and Stroke on a label of a kind that keeps no style, which already shows the default paint, is no edit.
+#[test]
+fn default_fill_and_stroke_on_a_label_that_shows_it_is_no_edit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "4").0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.values, None);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+}
+
 /// Redefine Graphic Style on an Axes group linked to the style with rows of its own (as a file can hold it) restyles and
 /// links the lines and labels in it, and clears and unlinks the group; Break Link given the group unlinks them. A style
 /// applied through the group links its lines and labels, and the graph keeps their look, not the link, when it is drawn
