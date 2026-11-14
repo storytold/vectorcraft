@@ -665,6 +665,8 @@ font-technology	Variable	Μεταβλητές
 	Crop Image	Περικοπή εικόνας
 	Image Tools	Εργαλεία εικόνας
 	Remove Background…	Αφαίρεση φόντου…
+	Draw (Pencil)	Σχεδίαση (μολύβι)
+	Place Image	Τοποθέτηση εικόνας
 	Remove Background	Αφαίρεση φόντου
 	Background	Φόντο
 	Edge Color	Χρώμα άκρης
@@ -2559,6 +2561,7 @@ axis	Both	Και τα δύο
 @msg	`select` must be true or false	Το `select` πρέπει να είναι true ή false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	Τα `minAnchors` και `maxAnchors` πρέπει να είναι ακέραιοι αριθμοί
 @msg	`{key}` must be a number not below 0	Το `{key}` πρέπει να είναι αριθμός όχι μικρότερος από 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	Το `{key}` πρέπει να είναι τέσσερις αριθμοί όχι μικρότεροι από 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	Το `{key}` πρέπει να είναι [x, y, width, height]: τέσσερις πεπερασμένοι αριθμοί, με πλάτος και ύψος όχι αρνητικά
 @msg	`{min_key}` is greater than `{max_key}`	Το `{min_key}` είναι μεγαλύτερο από το `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	δώστε τουλάχιστον ένα από τα `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -3425,6 +3428,7 @@ theme	Appearance	Εμφάνιση
 	Proportional Metrics	Αναλογικές μετρικές
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
+	Tsume	Tsume
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -5234,6 +5238,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Όσο η Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας είναι ανενεργή, αυτή η επιφάνεια εργασίας σχεδιάζει τη γραμμή τίτλου του παραθύρου, είτε αυτή η επιλογή είναι ενεργή είτε όχι.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά
@@ -6341,8 +6346,8 @@ axis	Y Axis	Άξονας Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εξαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	το πολύ {MAX_UNGROUPED} παράμετροι εκτός ομάδων: δώστε στις υπόλοιπες ένα `group`
 @msg	can't encode the input	η είσοδος δεν μπορεί να κωδικοποιηθεί
-@msg	expected {"dataBase64"}	αναμενόταν {"dataBase64"}
-@msg	expected {"objects"}	αναμενόταν {"objects"}
+@msg	expected {{"dataBase64": "…"}}	αναμενόταν {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	αναμενόταν {{"objects": [...]}}
 @msg	export `{name}`: {e}	εξαγωγή `{name}`: {e}
 @msg	extension {e} is listed twice	η επέκταση {e} αναφέρεται δύο φορές
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	επέκταση {e}: χρησιμοποιήστε 1-16 πεζά γράμματα και ψηφία, χωρίς την τελεία
@@ -6406,11 +6411,11 @@ axis	Y Axis	Άξονας Y
 @msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {"id"} μόνο ή όπως δόθηκε
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ένα περίγραμμα πρέπει να είναι {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ένα εφέ πρέπει να είναι {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
 @msg	an effect on a stroke returns only `strokes`	ένα εφέ σε περίγραμμα επιστρέφει μόνο `strokes`
 @msg	an object must be a JSON object	ένα αντικείμενο πρέπει να είναι αντικείμενο JSON
@@ -6552,6 +6557,8 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Button Mode	Λειτουργία κουμπιών
+	No actions.	Δεν υπάρχουν ενέργειες.
 	Insert Stop…	Εισαγωγή διακοπής…
 	Insert Stop	Εισαγωγή διακοπής
 	Record Stop	Καταγραφή διακοπής
