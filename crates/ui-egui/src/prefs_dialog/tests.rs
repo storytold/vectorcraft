@@ -55,6 +55,29 @@ fn start_lists_from_typed_markers_is_a_saved_type_preference() {
     }
 }
 
+/// Type › Show Character Alternates is a checkbox in the Type panel, on by default; turning it
+/// off is saved, and every bundled language translates its label and the row's two tooltips.
+#[test]
+fn show_character_alternates_is_a_saved_type_preference() {
+    const LABEL: &str = "Show Character Alternates";
+    let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert!(a.session.prefs.show_character_alternates);
+    open(&mut a, Some("Type"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains(LABEL), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields.get("showCharacterAlternates"), Some(&json!(true)));
+    a.ui.dialog.as_mut().unwrap().fields.insert("showCharacterAlternates".into(), json!(false));
+    confirm(&mut a).unwrap();
+    assert!(!a.session.prefs.show_character_alternates);
+    let saved: Prefs = serde_json::from_value(a.ui.engine_prefs.clone()).unwrap();
+    assert!(!saved.show_character_alternates);
+    for lang in crate::i18n::Lang::all().filter(|l| l.code() != crate::i18n::Lang::EN.code()) {
+        for source in [LABEL, "Click to replace", "Show all alternates in the Glyphs panel"] {
+            assert!(crate::i18n::has(lang, source), "{}: {source}", lang.code());
+        }
+    }
+}
+
 /// A resting checkbox must have a visible outline in both states and every brightness.
 #[test]
 fn preference_checkboxes_draw_outlines_without_hover() {
