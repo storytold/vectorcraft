@@ -493,6 +493,16 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
 
+/// `attributes.info` reads the overprint of a graph design's art in a series, which the overprint edits leave out.
+#[test]
+fn attributes_info_reads_a_graph_designs_art() {
+    let (mut s, _, _, art, _) = design_art();
+    let info = s.execute("attributes.info", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(info["ids"], json!([art.0]));
+    assert_eq!(info["overprintFill"], json!(false), "{info}");
+    assert_eq!(info["overprintStroke"], json!(false), "{info}");
+}
+
 /// With only the art of a graph design selected, `stroke.setAdvanced` and the stroke mode of `paint.editGradient` act
 /// as edits of a selection, not of the stroke the next object drawn takes.
 #[test]
