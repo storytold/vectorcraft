@@ -241,8 +241,8 @@ fn holds_placed_symbol(n: &Node) -> bool {
 /// Symbol instance `n`, while [`bake_document_placing_symbols`] bakes and its symbol is one it
 /// places, as the art it draws: the symbol's art with the instance's own appearance changes and
 /// its stain ([`vectorcraft_doc::symbol_overrides::instance_art`]), placed by the instance as the exporters
-/// place it, in a group with the instance's id, name, visibility, transparency, opacity mask and
-/// raster effects. The art is placed before its effects are baked, as the canvas draws it, so an
+/// place it, in a group with the instance's id, name, visibility, transparency, opacity mask,
+/// raster effects and attributes (its URL among them). The art is placed before its effects are baked, as the canvas draws it, so an
 /// instance that scales its art does not scale what its effects do. `None` for other objects,
 /// for instances the export does not write ([`unwritten`], hidden or inside such an object), for
 /// instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and when the art
@@ -266,7 +266,9 @@ fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
         return None;
     }
     let placed = if clip { d.place_symbol_art(symbol, &art, *xf) } else { d.place_symbol_art_unclipped(symbol, &art, *xf) }?;
-    Some(dressed(Node::group(n.id, vec![Arc::new(placed)]), n))
+    let mut g = dressed(Node::group(n.id, vec![Arc::new(placed)]), n);
+    g.extras_mut().attrs = n.extras().attrs.clone();
+    Some(g)
 }
 
 /// `n` with its geometry effects evaluated (`None` = unchanged).
