@@ -4629,6 +4629,31 @@ imageTrace	Outline	Obrys
 @msg	$.evalFile requires a file path	$.evalFile vyžaduje cestu k souboru
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: časový limit musí být konečný počet milisekund, 0 nebo více
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: přijímá cestu k souboru a časový limit
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} není definováno
+@msg	cannot read property '{key}' of {base}	nelze číst vlastnost '{key}' hodnoty {base}
+@msg	cannot set property '{key}' of {base}	nelze nastavit vlastnost '{key}' hodnoty {base}
+@msg	cannot read a property of {base}	nelze číst vlastnost hodnoty {base}
+@msg	cannot set a property of {base}	nelze nastavit vlastnost hodnoty {base}
+@msg	cannot define property '{key}': {why}	nelze definovat vlastnost '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	nelze přiřadit do vlastnosti '{key}': {why}
+@msg	cannot delete property '{key}'	nelze odstranit vlastnost '{key}'
+@msg	cannot declare function {name}	nelze deklarovat funkci {name}
+@msg	invalid assignment target	neplatný cíl přiřazení
+@msg	the array's length is read-only	délka pole je jen pro čtení
+@msg	the property cannot be redefined	vlastnost nelze znovu definovat
+@msg	the object is not extensible	objekt nelze rozšiřovat
+@msg	the length cannot be redefined	délku nelze znovu definovat
+@msg	it is read-only	je jen pro čtení
+@msg	an element cannot be deleted	prvek nelze odstranit
+@msg	it has only a getter	má pouze getter
+@msg	the value is a primitive	hodnota je primitivní
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: řádek {line}, sloupec {column} v {file}: {e} (vyvolána výjimka)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: řádek {line}, sloupec {column}: {e} (vyvolána výjimka)
 @msg	{name}: {e} (thrown)	{name}: {e} (vyvolána výjimka)

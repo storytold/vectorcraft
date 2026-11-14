@@ -4083,6 +4083,44 @@ axis	Both	Her İkisi
 @msg	$.evalFile requires a file path	$.evalFile bir dosya yolu gerektirir
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: zaman aşımı sonlu bir milisaniye sayısı olmalıdır, 0 veya daha fazla
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: bir dosya yolu ve bir zaman aşımı alır
+@msg	assignment to a constant binding	sabit bir bağlamaya atama
+@msg	invalid array length	geçersiz dizi uzunluğu
+@msg	array literal too long	dizi değişmezi çok uzun
+@msg	the value is not a function	değer bir fonksiyon değil
+@msg	apply was called on a value that is not a function	apply, fonksiyon olmayan bir değer üzerinde çağrıldı
+@msg	the argument list is not an object	argüman listesi bir nesne değil
+@msg	too many arguments	çok fazla argüman
+@msg	the value is not a constructor	değer bir yapıcı değil
+@msg	cannot convert the object to a primitive value	nesne ilkel bir değere dönüştürülemiyor
+@msg	cannot convert undefined or null to an object	undefined veya null bir nesneye dönüştürülemiyor
+@msg	the right side of 'in' is not an object	'in' işlecinin sağ tarafı bir nesne değil
+@msg	the right side of 'instanceof' is not a function	'instanceof' işlecinin sağ tarafı bir fonksiyon değil
+@msg	the function's prototype is not an object	fonksiyonun prototipi bir nesne değil
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} tanımlı değil
+@msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
+@msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
+@msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
+@msg	cannot set a property of {base}	{base} değerinin bir özelliği ayarlanamıyor
+@msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
+@msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
+@msg	cannot declare function {name}	{name} fonksiyonu bildirilemiyor
+@msg	invalid assignment target	geçersiz atama hedefi
+@msg	the array's length is read-only	dizinin uzunluğu salt okunur
+@msg	the property cannot be redefined	özellik yeniden tanımlanamaz
+@msg	the object is not extensible	nesne genişletilemez
+@msg	the length cannot be redefined	uzunluk yeniden tanımlanamaz
+@msg	it is read-only	salt okunur
+@msg	an element cannot be deleted	bir öğe silinemez
+@msg	it has only a getter	yalnızca getter'ı var
+@msg	the value is a primitive	değer ilkel
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: satır {line}, sütun {column}: {e} (fırlatıldı)
 @msg	{name}: {e} (thrown)	{name}: {e} (fırlatıldı)

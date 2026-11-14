@@ -239,6 +239,27 @@ fn errors_carry_line_and_column() {
     assert_eq!(e.message, "42");
 }
 
+/// An error about a property of `null` or `undefined` names a computed property whose name is a
+/// primitive, and says whether the script read or set it, never naming an empty property; a
+/// member assignment, an object key and a long name leave the name out.
+#[test]
+fn errors_about_null_and_undefined_name_the_property() {
+    for (source, message) in [
+        ("null[1]", "TypeError: cannot read property '1' of null"),
+        ("var u; u['k'] += 1", "TypeError: cannot set property 'k' of undefined"),
+        ("var u; u['k']++", "TypeError: cannot read property 'k' of undefined"),
+        ("delete null[true]", "TypeError: cannot read property 'true' of null"),
+        ("var u; u['k'] = 1", "TypeError: cannot set property 'k' of undefined"),
+        ("null.x", "TypeError: cannot read property 'x' of null"),
+        ("var u; u.y = 1", "TypeError: cannot set a property of undefined"),
+        ("var u; u[{}] = 1", "TypeError: cannot set a property of undefined"),
+        ("null[new Array(300).join('a')]", "TypeError: cannot read a property of null"),
+    ] {
+        assert_eq!(fail(source).message, message, "{source}");
+    }
+    truth("var k = {toString: function () { throw 1; }}; try { null[k]; false } catch (e) { e instanceof TypeError }");
+}
+
 #[test]
 fn host_functions_receive_arguments_and_return_values() {
     let mut realm = Realm::new();

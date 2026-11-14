@@ -2848,12 +2848,23 @@ fn f(i: &mut Interp, interp: &mut Interp) -> JsResult<Value> {
     let _ = self.error("the path has an empty step");
     let _ = self.throw_host(t, "not an error: a longer name");
     let _ = throw_type_error(interp, "not an error: a function");
+    let _ = self.reject_bool(throw, &k, "the object is not extensible");
+    let _ = self.reject(throw, &key("length"), "it is read-only");
     Ok(Value::Undefined)
 }
 "#;
     let js: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "js").map(|&(_, call, before)| (call, before)).collect();
     let found = source_messages(code, &js, &Default::default());
-    assert_eq!(found, ["{what}: the object is not a File or a Folder", "File.seek: the mode must be 0, 1 or 2", "the path has an empty step"]);
+    assert_eq!(
+        found,
+        [
+            "{what}: the object is not a File or a Folder",
+            "File.seek: the mode must be 0, 1 or 2",
+            "the path has an empty step",
+            "the object is not extensible",
+            "it is read-only"
+        ]
+    );
 }
 
 /// The scan reads the message a `.map_err` closure returns, a literal, a `format!` string or a
@@ -3251,6 +3262,119 @@ fn script_host_errors_are_translated() {
             );
         }
         assert!(message(lang, &commands[2]).contains("\"kept\""), "{code}");
+    }
+}
+
+/// The errors the script interpreter's core throws at a script (an unknown name, a property of
+/// `null` or `undefined`, a property that cannot be defined, assigned or deleted and why, a value
+/// that is not a function or a constructor) are translated in every language of
+/// [`COMPLETE_MESSAGES`], on their own and in the status bar's line for a run that ends with one.
+/// Names, property names, `null`, `undefined` and the operators `in` and `instanceof` stay as they
+/// are, and a script that catches one reads its English message.
+#[test]
+fn script_interpreter_core_errors_are_translated() {
+    use serde_json::json;
+    let scanned = message_literals();
+    let templates = [
+        "assignment to a constant binding",
+        "invalid array length",
+        "array literal too long",
+        "the value is not a function",
+        "apply was called on a value that is not a function",
+        "the argument list is not an object",
+        "too many arguments",
+        "the value is not a constructor",
+        "cannot convert the object to a primitive value",
+        "cannot convert undefined or null to an object",
+        "the right side of 'in' is not an object",
+        "the right side of 'instanceof' is not a function",
+        "the function's prototype is not an object",
+        "{name} is not defined",
+        "cannot read property '{key}' of {base}",
+        "cannot set property '{key}' of {base}",
+        "cannot read a property of {base}",
+        "cannot set a property of {base}",
+        "cannot define property '{key}': {why}",
+        "cannot assign to property '{key}': {why}",
+        "cannot delete property '{key}'",
+        "cannot declare function {name}",
+        "the array's length is read-only",
+        "the property cannot be redefined",
+        "the object is not extensible",
+        "the length cannot be redefined",
+        "it is read-only",
+        "an element cannot be deleted",
+        "it has only a getter",
+        "the value is a primitive",
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "{template}");
+    }
+    // The compiler gives this one to the interpreter as the text of the error it throws.
+    let compiler = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../js/src/compiler.rs");
+    assert!(std::fs::read_to_string(compiler).unwrap_or_default().contains("\"invalid assignment target\""));
+    let mut s = vectorcraft_engine::Session::new();
+    let mut lines: Vec<(String, String, Vec<&str>)> = vec![];
+    for (source, inner, kept) in [
+        ("nope", "nope is not defined", vec!["nope"]),
+        ("null.x", "cannot read property 'x' of null", vec!["'x'", "null"]),
+        ("var u; u['y'] = 1", "cannot set property 'y' of undefined", vec!["'y'", "undefined"]),
+        ("var u; u.y = 1", "cannot set a property of undefined", vec!["undefined"]),
+        ("null[new Array(300).join('a')]", "cannot read a property of null", vec!["null"]),
+        ("null['invalid array length']", "cannot read property 'invalid array length' of null", vec!["'invalid array length'", "null"]),
+        (
+            "'use strict'; var o = {}; Object.defineProperty(o, 'a', {value: 1}); o.a = 2",
+            "cannot assign to property 'a': it is read-only",
+            vec!["'a'"],
+        ),
+        (
+            "'use strict'; var o = {}; Object.defineProperty(o, 'g', {get: function () { return 1; }}); o.g = 2",
+            "cannot assign to property 'g': it has only a getter",
+            vec!["'g'"],
+        ),
+        ("'use strict'; var o = Object.preventExtensions({}); o.b = 1", "cannot assign to property 'b': the object is not extensible", vec!["'b'"]),
+        (
+            "Object.defineProperty(Object.preventExtensions({}), 'c', {value: 1})",
+            "cannot define property 'c': the object is not extensible",
+            vec!["'c'"],
+        ),
+        (
+            "var o = {}; Object.defineProperty(o, 'd', {value: 1}); Object.defineProperty(o, 'd', {value: 2})",
+            "cannot define property 'd': the property cannot be redefined",
+            vec!["'d'"],
+        ),
+        ("'use strict'; delete Object.prototype", "cannot delete property 'prototype'", vec!["'prototype'"]),
+        ("'use strict'; 'abc'.x = 1", "cannot assign to property 'x': the value is a primitive", vec!["'x'"]),
+        ("(function f() { 'use strict'; f = 1; })()", "assignment to a constant binding", vec![]),
+        ("new Array(-1)", "invalid array length", vec![]),
+        ("var n = 1; n()", "the value is not a function", vec![]),
+        ("new 1", "the value is not a constructor", vec![]),
+        ("'a' in 1", "the right side of 'in' is not an object", vec!["'in'"]),
+        ("1 instanceof 1", "the right side of 'instanceof' is not a function", vec!["'instanceof'"]),
+        ("function f() {} for (f() in {a: 1}) {}", "invalid assignment target", vec![]),
+    ] {
+        let e = s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap_err().to_string();
+        assert!(e.starts_with("t.js: ") && e.contains(&format!("Error: {inner} (")), "{source}: {e}");
+        lines.push((e, inner.to_string(), kept));
+    }
+    // A script that catches one of these errors reads it in English, whatever the interface's language.
+    let caught = "try { nope; } catch (e) { if (e.message !== 'nope is not defined') throw new Error(e.message); }";
+    assert!(s.execute("script.run", &json!({"source": caught, "name": "t.js"})).is_ok());
+    let reasons = &templates[22..];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in templates[..13].iter().chain(reasons).chain(["invalid assignment target"].iter()) {
+            assert_ne!(message(lang, m), *m, "{code}");
+        }
+        for (line, inner, kept) in &lines {
+            let shown = message(lang, inner);
+            assert_ne!(shown, *inner, "{code}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {inner} -> {shown}");
+            assert!(reasons.iter().all(|r| !inner.ends_with(r) || shown.ends_with(&message(lang, r))), "{code}: {inner} -> {shown}");
+            let whole = message(lang, line);
+            let kinds = ["(thrown)", "(limit)", "(syntax)", "(stopped)", "(internal)"];
+            assert!(whole.starts_with("t.js") && whole.contains(&shown) && kinds.iter().all(|k| !whole.contains(k)), "{code}: {line} -> {whole}");
+        }
     }
 }
 
@@ -4224,8 +4348,9 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 /// value), `out_err(at, msg)` (plug-in output), `in_range(x, lo, hi, at, what)` and
 /// `unit(x, at, what)` (a painted effect's numbers) and `.read_packed(packed, what, max)` (the block
 /// a plug-in returned), and the script interpreter's methods that throw an error at a script:
-/// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`. A helper that
-/// starts with `.` is a method of any receiver.
+/// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`, with the reasons
+/// it gives for a property it cannot define or assign (`.reject_bool(throw, key, why)` and
+/// `.reject(throw, key, why)`). A helper that starts with `.` is a method of any receiver.
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
     ("engine", "err(", 0),
@@ -4244,6 +4369,8 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("js", ".type_error(", 0),
     ("js", ".throw(", 1),
     ("js", ".error(", 0),
+    ("js", ".reject_bool(", 2),
+    ("js", ".reject(", 2),
 ];
 
 /// Error variants whose first argument is a name, not a message: a command id

@@ -4228,6 +4228,44 @@ axis	Both	Båda
 @msg	$.evalFile requires a file path	$.evalFile kräver en filsökväg
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgränsen måste vara ett ändligt antal millisekunder, 0 eller mer
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: tar en filsökväg och en tidsgräns
+@msg	assignment to a constant binding	tilldelning till en konstant bindning
+@msg	invalid array length	ogiltig arraylängd
+@msg	array literal too long	arrayliteralen är för lång
+@msg	the value is not a function	värdet är inte en funktion
+@msg	apply was called on a value that is not a function	apply anropades på ett värde som inte är en funktion
+@msg	the argument list is not an object	argumentlistan är inte ett objekt
+@msg	too many arguments	för många argument
+@msg	the value is not a constructor	värdet är inte en konstruktor
+@msg	cannot convert the object to a primitive value	objektet kan inte konverteras till ett primitivt värde
+@msg	cannot convert undefined or null to an object	undefined eller null kan inte konverteras till ett objekt
+@msg	the right side of 'in' is not an object	högersidan av 'in' är inte ett objekt
+@msg	the right side of 'instanceof' is not a function	högersidan av 'instanceof' är inte en funktion
+@msg	the function's prototype is not an object	funktionens prototyp är inte ett objekt
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} är inte definierat
+@msg	cannot read property '{key}' of {base}	det går inte att läsa egenskapen '{key}' för {base}
+@msg	cannot set property '{key}' of {base}	det går inte att sätta egenskapen '{key}' för {base}
+@msg	cannot read a property of {base}	det går inte att läsa en egenskap för {base}
+@msg	cannot set a property of {base}	det går inte att sätta en egenskap för {base}
+@msg	cannot define property '{key}': {why}	det går inte att definiera egenskapen '{key}': {why}
+@msg	cannot assign to property '{key}': {why}	det går inte att tilldela egenskapen '{key}': {why}
+@msg	cannot delete property '{key}'	det går inte att ta bort egenskapen '{key}'
+@msg	cannot declare function {name}	det går inte att deklarera funktionen {name}
+@msg	invalid assignment target	ogiltigt tilldelningsmål
+@msg	the array's length is read-only	arrayens längd är skrivskyddad
+@msg	the property cannot be redefined	egenskapen kan inte definieras om
+@msg	the object is not extensible	objektet kan inte utökas
+@msg	the length cannot be redefined	längden kan inte definieras om
+@msg	it is read-only	den är skrivskyddad
+@msg	an element cannot be deleted	ett element kan inte tas bort
+@msg	it has only a getter	den har bara en getter
+@msg	the value is a primitive	värdet är primitivt
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: rad {line}, kolumn {column} i {file}: {e} (kastat)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rad {line}, kolumn {column}: {e} (kastat)
 @msg	{name}: {e} (thrown)	{name}: {e} (kastat)

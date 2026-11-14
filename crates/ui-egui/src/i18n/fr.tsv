@@ -4307,6 +4307,31 @@ axis	Both	Les deux
 @msg	$.evalFile requires a file path	$.evalFile nécessite un chemin de fichier
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile : le délai doit être un nombre fini de millisecondes, 0 ou plus
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile : prend un chemin de fichier et un délai
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} n'est pas défini
+@msg	cannot read property '{key}' of {base}	impossible de lire la propriété '{key}' de {base}
+@msg	cannot set property '{key}' of {base}	impossible de modifier la propriété '{key}' de {base}
+@msg	cannot read a property of {base}	impossible de lire une propriété de {base}
+@msg	cannot set a property of {base}	impossible de modifier une propriété de {base}
+@msg	cannot define property '{key}': {why}	impossible de définir la propriété '{key}' : {why}
+@msg	cannot assign to property '{key}': {why}	impossible d'affecter la propriété '{key}' : {why}
+@msg	cannot delete property '{key}'	impossible de supprimer la propriété '{key}'
+@msg	cannot declare function {name}	impossible de déclarer la fonction {name}
+@msg	invalid assignment target	cible d'affectation non valide
+@msg	the array's length is read-only	la longueur du tableau est en lecture seule
+@msg	the property cannot be redefined	la propriété ne peut pas être redéfinie
+@msg	the object is not extensible	l'objet n'est pas extensible
+@msg	the length cannot be redefined	la longueur ne peut pas être redéfinie
+@msg	it is read-only	elle est en lecture seule
+@msg	an element cannot be deleted	un élément ne peut pas être supprimé
+@msg	it has only a getter	elle n'a qu'un getter
+@msg	the value is a primitive	la valeur est une primitive
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name} : ligne {line}, colonne {column} de {file} : {e} (levée)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name} : ligne {line}, colonne {column} : {e} (levée)
 @msg	{name}: {e} (thrown)	{name} : {e} (levée)

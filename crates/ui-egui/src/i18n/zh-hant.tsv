@@ -2529,6 +2529,31 @@ file-filter	Templates	範本
 @msg	$.evalFile requires a file path	$.evalFile 需要檔案路徑
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：逾時必須是 0 或更大的有限毫秒數
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一個檔案路徑和一個逾時值
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} 未定義
+@msg	cannot read property '{key}' of {base}	無法讀取 {base} 的屬性 '{key}'
+@msg	cannot set property '{key}' of {base}	無法設定 {base} 的屬性 '{key}'
+@msg	cannot read a property of {base}	無法讀取 {base} 的屬性
+@msg	cannot set a property of {base}	無法設定 {base} 的屬性
+@msg	cannot define property '{key}': {why}	無法定義屬性 '{key}'：{why}
+@msg	cannot assign to property '{key}': {why}	無法為屬性 '{key}' 賦值：{why}
+@msg	cannot delete property '{key}'	無法刪除屬性 '{key}'
+@msg	cannot declare function {name}	無法宣告函式 {name}
+@msg	invalid assignment target	賦值目標無效
+@msg	the array's length is read-only	陣列的長度是唯讀的
+@msg	the property cannot be redefined	屬性無法重新定義
+@msg	the object is not extensible	物件不可擴充
+@msg	the length cannot be redefined	長度無法重新定義
+@msg	it is read-only	它是唯讀的
+@msg	an element cannot be deleted	無法刪除元素
+@msg	it has only a getter	它只有 getter
+@msg	the value is a primitive	該值是基本值
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 欄：{e}（擲回）
 @msg	{name}: {e} (thrown)	{name}：{e}（擲回）

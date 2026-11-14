@@ -91,6 +91,31 @@
 @msg	$.evalFile requires a file path	$.evalFile vereist een bestandspad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: de time-out moet een eindig aantal milliseconden zijn, 0 of meer
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: verwacht een bestandspad en een time-out
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} is niet gedefinieerd
+@msg	cannot read property '{key}' of {base}	kan eigenschap '{key}' van {base} niet lezen
+@msg	cannot set property '{key}' of {base}	kan eigenschap '{key}' van {base} niet instellen
+@msg	cannot read a property of {base}	kan geen eigenschap van {base} lezen
+@msg	cannot set a property of {base}	kan geen eigenschap van {base} instellen
+@msg	cannot define property '{key}': {why}	kan eigenschap '{key}' niet definiëren: {why}
+@msg	cannot assign to property '{key}': {why}	kan niet toewijzen aan eigenschap '{key}': {why}
+@msg	cannot delete property '{key}'	kan eigenschap '{key}' niet verwijderen
+@msg	cannot declare function {name}	kan functie {name} niet declareren
+@msg	invalid assignment target	ongeldig toewijzingsdoel
+@msg	the array's length is read-only	de lengte van de array is alleen-lezen
+@msg	the property cannot be redefined	de eigenschap kan niet opnieuw worden gedefinieerd
+@msg	the object is not extensible	het object is niet uitbreidbaar
+@msg	the length cannot be redefined	de lengte kan niet opnieuw worden gedefinieerd
+@msg	it is read-only	deze is alleen-lezen
+@msg	an element cannot be deleted	een element kan niet worden verwijderd
+@msg	it has only a getter	deze heeft alleen een getter
+@msg	the value is a primitive	de waarde is primitief
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: regel {line}, kolom {column} van {file}: {e} (opgeworpen)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: regel {line}, kolom {column}: {e} (opgeworpen)
 @msg	{name}: {e} (thrown)	{name}: {e} (opgeworpen)

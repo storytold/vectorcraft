@@ -4241,6 +4241,31 @@ theme	Appearance	Erscheinungsbild
 @msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name} ist nicht definiert
+@msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
+@msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
+@msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
+@msg	cannot set a property of {base}	eine Eigenschaft von {base} kann nicht gesetzt werden
+@msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
+@msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
+@msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
+@msg	cannot declare function {name}	die Funktion {name} kann nicht deklariert werden
+@msg	invalid assignment target	ungültiges Zuweisungsziel
+@msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
+@msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden
+@msg	the object is not extensible	das Objekt ist nicht erweiterbar
+@msg	the length cannot be redefined	die Länge kann nicht neu definiert werden
+@msg	it is read-only	sie ist schreibgeschützt
+@msg	an element cannot be deleted	ein Element kann nicht gelöscht werden
+@msg	it has only a getter	sie hat nur einen Getter
+@msg	the value is a primitive	der Wert ist ein primitiver Wert
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
 @msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)

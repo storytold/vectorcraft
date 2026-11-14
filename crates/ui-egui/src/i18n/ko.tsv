@@ -5062,6 +5062,31 @@ theme	Appearance	외관
 @msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{name} is not defined	{name}이(가) 정의되지 않았습니다
+@msg	cannot read property '{key}' of {base}	{base}의 속성 '{key}'을(를) 읽을 수 없습니다
+@msg	cannot set property '{key}' of {base}	{base}의 속성 '{key}'을(를) 설정할 수 없습니다
+@msg	cannot read a property of {base}	{base}의 속성을 읽을 수 없습니다
+@msg	cannot set a property of {base}	{base}의 속성을 설정할 수 없습니다
+@msg	cannot define property '{key}': {why}	속성 '{key}'을(를) 정의할 수 없습니다: {why}
+@msg	cannot assign to property '{key}': {why}	속성 '{key}'에 대입할 수 없습니다: {why}
+@msg	cannot delete property '{key}'	속성 '{key}'을(를) 삭제할 수 없습니다
+@msg	cannot declare function {name}	함수 {name}을(를) 선언할 수 없습니다
+@msg	invalid assignment target	대입 대상이 잘못되었습니다
+@msg	the array's length is read-only	배열의 길이는 읽기 전용입니다
+@msg	the property cannot be redefined	속성을 다시 정의할 수 없습니다
+@msg	the object is not extensible	객체를 확장할 수 없습니다
+@msg	the length cannot be redefined	길이를 다시 정의할 수 없습니다
+@msg	it is read-only	읽기 전용입니다
+@msg	an element cannot be deleted	요소를 삭제할 수 없습니다
+@msg	it has only a getter	getter만 있습니다
+@msg	the value is a primitive	값이 원시 값입니다
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}의 {line}행 {column}열: {e} (발생)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}행 {column}열: {e} (발생)
 @msg	{name}: {e} (thrown)	{name}: {e} (발생)
