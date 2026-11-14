@@ -5128,6 +5128,16 @@ fn a_first_baseline_minimum_and_a_path_end_the_reader_cant_read_are_reported() {
     };
     assert_eq!(with(on_path(Some(0.999))).0, [writer::TYPE_ATTRIBUTES]);
     assert!(with(on_path(None)).0.is_empty());
+    // Type that starts before its open path comes back starting at the path's start.
+    let mut before = on_path(None);
+    if let TextKind::OnPath { start, .. } = &mut before.kind {
+        *start = -0.25;
+    }
+    let (warnings, back) = with(before);
+    assert_eq!(warnings, [writer::TYPE_ATTRIBUTES]);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    let TextKind::OnPath { start, .. } = t.kind else { panic!("type on a path") };
+    assert!(start.abs() < 1e-3, "{start}");
     let (warnings, back) = with(on_path(Some(0.5)));
     assert!(warnings.is_empty(), "{warnings:?}");
     let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };

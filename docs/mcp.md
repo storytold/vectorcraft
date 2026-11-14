@@ -9597,7 +9597,9 @@ neighbors, the kerning of the two characters keeps it and the characters after i
 wider or narrower character moves the characters after it by the change in its width. Touch Type gives the character
 before it a kerning value of its own (with `dx`, and with any other change where the font kerned the character with
 its neighbors), and that character can then move by the font's kerning pair with the one before
-it, as with any style change to one character (`text.setRangeStyle`). The type stays editable.
+it, as with any style change to one character (`text.setRangeStyle`). The type stays editable. The characters of type
+on an open path that are not drawn because they fall before the path's start cannot be selected with the tool, and
+`text.touchType` returns an error for them.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
@@ -9687,9 +9689,10 @@ same in any language. Saved documents keep what they say, and imported text (PDF
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.
 `type.pathOptions {start?, end?, flip?, effect?, alignToPath?, spacing?, ids?}` sets them and the rest of Type on a
-Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
-then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
-the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
+Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); on an open
+path a `start` below 0 starts the text that far before the path's start (on a closed path it is the path's start);
+`flip` then turns the type to the other side of its path, the path running the other way and the brackets swapping
+ends so the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
 default) along the path, each character by its own font, size and vertical scale: `ascender` runs the top of the
 font's em box along it (its ideographic em box, else an em box centered on the cap height), `descender` runs the
 bottom of the font's bounding box along it, and `center` runs a line at half the height of the top of the font's H
@@ -9701,6 +9704,13 @@ Spacing and leaves the brackets where they are. As in the reference app, the Sel
 show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type
 begins or ends, dragging the centre bracket slides the type along its path and, dragged across the path, flips it
 (with Cmd/Ctrl held it only slides). Each is one undo step.
+
+Type on an open path that starts before the path's start keeps every character, and the characters whose middle falls
+before the path's start are not drawn. A `flip` starts it at the start bracket, and dragging the center bracket slides
+it from where it starts and no further before the path. Past the path's end, text that does not fit is overflow, as
+for other type on a path. SVG import reads a `<textPath>` anchored or offset before an open path's start this way, and
+SVG export writes it as a negative `startOffset`. Releasing it to point type keeps the first drawn character where it
+was drawn.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
@@ -12066,10 +12076,11 @@ VectorCraft addition and changes no parity score.
   the path's fill and stroke), so the released path has no fill and no stroke.
 - **The text** keeps its runs with their character attributes and its paragraph attributes, and becomes point type on
   one straight line along the object's own axis, with the baseline starting where the first character sat on the path
-  (type with no characters starts at its start bracket). Type on a Path Options (effect, align to path, spacing, flip,
-  brackets) don't apply to point type and are dropped. Type with Dynamic Text on (`type.dynamicText`) becomes point
-  type with it off, at the sizes it was drawn at: each size, leading and baseline shift is multiplied by the fit factor.
-  Without `keepOriginal` the type object itself becomes the point
+  (type with no characters starts at its start bracket; type that starts before an open path's start keeps its first
+  drawn character where it was drawn, with the characters that were not drawn before it). Type on a Path Options
+  (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped. Type with Dynamic Text
+  on (`type.dynamicText`) becomes point type with it off, at the sizes it was drawn at: each size, leading and
+  baseline shift is multiplied by the fit factor. Without `keepOriginal` the type object itself becomes the point
   type, keeping its id, so a frame of threaded text leaves its thread with the text it holds, as
   `type.convertToPointType` does for area type.
 - It acts on the type on a path among `ids` (or `id`, else the selection), groups included; other objects are left
