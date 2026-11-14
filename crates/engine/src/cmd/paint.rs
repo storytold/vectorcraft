@@ -966,7 +966,13 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
+    let targets = paint_targets(s, p)?;
+    let given = !targets.is_empty();
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // Only design art was given or selected: nothing changes, the defaults included.
+    if given && ids.is_empty() {
+        return ok();
+    }
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -1001,7 +1007,13 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
+    let targets = paint_targets(s, p)?;
+    let given = !targets.is_empty();
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // Only design art was given or selected: nothing changes, the defaults included.
+    if given && ids.is_empty() {
+        return ok();
+    }
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -1073,6 +1085,10 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
     let (r, shown_item) = match item {
         ItemTarget::Item { index, .. } => {
             let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
+            // Only design art was given or selected: nothing changes, the remembered colors included.
+            if ids.is_empty() {
+                return Ok(json!({ "changed": 0 }));
+            }
             let mut changed = 0;
             edit_items(s, &ids, item, cmd, label, !stroke, |n, i| {
                 let paint =

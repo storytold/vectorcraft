@@ -579,6 +579,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(&for_default, &default_paint, &stored), None, &|_| true, model)
         .map_err(|e| bad(C, e))?;
+    // Only design art was given or selected: nothing changes, the defaults and the remembered paint included.
+    if selected && ids.is_empty() {
+        return Ok(json!({"ids": []}));
+    }
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()

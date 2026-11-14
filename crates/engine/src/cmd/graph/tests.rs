@@ -507,6 +507,43 @@ fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
     assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
 }
 
+/// With only the art of a graph design given or selected, the gradient, swap, default and recolor commands leave the
+/// paint for new art and the remembered colors as they are.
+#[test]
+fn paint_edits_of_design_art_alone_leave_the_defaults() {
+    let (mut s, _, _, art, _) = design_art();
+    let fill = top_row(&s, art, true);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let defaults = |s: &Session| format!("{:?}", (&s.paint, s.last_solid, &s.last_gradient, &s.recent_colors));
+    let commands = [
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.editGradient", json!({"kind": "radial", "stroke": true})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.complement", json!({"item": fill, "stroke": false})),
+    ];
+    for (cmd, p) in &commands {
+        let was = defaults(&s);
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute(cmd, &q).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, given");
+        // Selecting the art makes the defaults take its paint.
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        let was = defaults(&s);
+        s.execute(cmd, p).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, selected");
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+    }
+    // With nothing selected, the swap still swaps the defaults.
+    let was = defaults(&s);
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_ne!(defaults(&s), was);
+}
+
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
 /// sets only theirs.
 #[test]
