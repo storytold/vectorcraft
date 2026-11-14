@@ -323,12 +323,21 @@ fn fill_rings(img: &mut egui::ColorImage, rings: &[Vec<Pos2>], color: Color32) {
     let (c0, c1) = (left.floor().clamp(0.0, sx) as usize, right.ceil().clamp(0.0, sx) as usize);
     let mut cover = vec![0f32; c1.saturating_sub(c0)];
     let mut xs: Vec<(f32, i32)> = vec![];
+    // Each sample row looks only at the edges that reach it: the edges in order of their tops are
+    // taken in as the rows reach them, and dropped once the rows pass their bottoms.
+    edges.sort_by(|a, b| a.1.min(a.3).total_cmp(&b.1.min(b.3)));
+    let (mut next, mut active) = (0, Vec::<(f32, f32, f32, f32)>::new());
     for row in y0..y1 {
         cover.fill(0.0);
         for k in 0..SUB {
             let y = row as f32 + (k as f32 + 0.5) / SUB as f32;
+            while let Some(&e) = edges.get(next).filter(|e| e.1.min(e.3) <= y) {
+                active.push(e);
+                next += 1;
+            }
+            active.retain(|e| e.1.max(e.3) > y);
             xs.clear();
-            for &(x0, ya, x1, yb) in &edges {
+            for &(x0, ya, x1, yb) in &active {
                 if (ya <= y) != (yb <= y) {
                     xs.push((x0 + (y - ya) / (yb - ya) * (x1 - x0), if yb > ya { 1 } else { -1 }));
                 }
