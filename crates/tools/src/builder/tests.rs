@@ -1178,6 +1178,15 @@ fn bucket_triple_click_on_a_made_group_skips_open_paths() {
     let mut look = Appearance::default_art();
     look.set_fill(blue);
     d.insert(Some(l), 1, Node::path(front, PathData::single(SubPath::polyline(&u, false)), look)).unwrap();
+    // The face the planar map makes there takes its fill from the square, as the group's would.
+    let shapes: Vec<vectorcraft_pathops::Shape> = [back, front]
+        .iter()
+        .enumerate()
+        .filter_map(|(k, id)| node_outline(d.node(*id)?).map(|(path, rule)| vectorcraft_pathops::Shape::new(path, rule, k as u64)))
+        .collect();
+    let (regions, _) = vectorcraft_pathops::live_paint(&shapes);
+    let face = regions.iter().find(|r| r.contains(Point::new(75.0, 25.0))).expect("a face at (75, 25)");
+    assert_eq!(face.top(), Some(0), "the square is the face's top shape");
     let mut s = Selection::default();
     s.set([back, front]);
     let p = paint();

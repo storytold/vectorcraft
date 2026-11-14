@@ -331,8 +331,9 @@ fn lp_segments(pd: &PathData) -> Vec<kurbo::CubicBez> {
 /// face that shares with a face already reached an edge that is hidden or draws no stroke
 /// ([`unstroked`]). Hidden faces are not reached and do not pass the flood on. A face runs along an
 /// edge segment over the part of it between the points nearest the ends of one of the face's
-/// outline segments, when that part lies within [`LP_JOIN_TOL`] of the outline segment; one outline
-/// segment can run along several edge segments. Two faces share the edge where those parts overlap
+/// outline segments, when that part's points at a quarter, half and three quarters of its
+/// parameter range lie within [`LP_JOIN_TOL`] of the outline segment; one outline segment can run
+/// along several edge segments. Two faces share the edge where those parts overlap
 /// along more than [`LP_JOIN_TOL`], so two faces that a Gap Detection gap parts on the same side of
 /// an edge, whose parts only touch, do not.
 fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
