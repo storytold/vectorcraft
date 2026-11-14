@@ -5111,17 +5111,7 @@ theme	Appearance	외관
 @msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
-@msg	`answers` must be a list of answers	`answers`는 답의 목록이어야 합니다
-@msg	`answers` has more than {MAX_ANSWERS} answers	`answers`에 답이 {MAX_ANSWERS}개보다 많습니다
-@msg	`answers` is larger than 1 MiB	`answers`가 1 MiB보다 큽니다
 @msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
-@msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 객체여야 합니다
-@msg	must have exactly `kind` and `value`	정확히 `kind`와 `value`만 있어야 합니다
-@msg	is an alert's answer, whose `value` must be "ok"	alert의 답이므로 `value`는 "ok"여야 합니다
-@msg	is a confirm's answer, whose `value` must be true or false	confirm의 답이므로 `value`는 true 또는 false여야 합니다
-@msg	is longer than 16 KiB	16 KiB보다 깁니다
-@msg	is a prompt's answer, whose `value` must be a string or null	prompt의 답이므로 `value`는 문자열 또는 null이어야 합니다
-@msg	must have `kind` alert, confirm or prompt	`kind`는 alert, confirm 또는 prompt여야 합니다
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다

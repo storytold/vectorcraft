@@ -4409,7 +4409,6 @@ axis	Both	Оба
 @msg	`answers` must be a list of answers	`answers` должен быть списком ответов
 @msg	`answers` has more than {MAX_ANSWERS} answers	в `answers` больше {MAX_ANSWERS} ответов
 @msg	`answers` is larger than 1 MiB	`answers` больше 1 МиБ
-@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	должен быть объектом с `kind` и `value`
 @msg	must have exactly `kind` and `value`	должен содержать ровно `kind` и `value`
 @msg	is an alert's answer, whose `value` must be "ok"	является ответом на alert, поэтому его `value` должно быть "ok"
