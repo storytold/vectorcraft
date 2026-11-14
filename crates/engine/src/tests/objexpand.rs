@@ -754,6 +754,78 @@ fn create_outlines_draws_the_type_objects_own_paint() {
     assert!(differing(&before, &render(&session()), 24) > 1000, "the type paints something");
 }
 
+/// Selected type "HIH" at 40 pt with ruby, underlined and struck through, its characters filled
+/// with `fill` (a `paint.setFill` param) and stroked 2 pt wide, then scaled to 150% and rotated 20
+/// degrees (the stroke keeps its 2 pt, which is 4/3 pt in text space).
+fn transformed_gradient_type(s: &mut Session, fill: Value) -> NodeId {
+    let t = run(s, "text.create", json!({"x": 30, "y": 110, "text": "HIH", "size": 40}))["id"].as_u64().unwrap();
+    run(s, "select.set", json!({"ids": [t]}));
+    run(s, "type.ruby", json!({"text": "ab"}));
+    run(s, "text.setFormat", json!({"ids": [t], "underline": true, "strikethrough": true}));
+    run(s, "paint.setFill", fill);
+    run(s, "paint.setStroke", json!({"color": "#008000"}));
+    run(s, "stroke.set", json!({"weight": 2}));
+    run(s, "object.scale", json!({"ids": [t], "sx": 150, "sy": 150}));
+    run(s, "object.rotate", json!({"ids": [t], "angle": 20}));
+    NodeId(t)
+}
+
+/// Create Outlines draws what the type drew: a gradient on the characters that has no vector of
+/// its own keeps one gradient across every glyph, ruby glyph and bar, fitted to the layout's box,
+/// and one with a vector keeps it where it was, both with the type's scale and rotation. The
+/// characters' stroke keeps the weight it was drawn at.
+#[test]
+fn create_outlines_keeps_a_character_gradient_across_the_type() {
+    let placed = json!({"gradient": {"kind": "linear", "start": [40, 100], "end": [110, 100],
+        "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}});
+    for fill in [red_blue(), placed] {
+        let mut s = session();
+        let t = transformed_gradient_type(&mut s, fill.clone());
+        let NodeKind::Text(text) = &node(&s, t).kind else { panic!("not type") };
+        assert!(!text.ruby.is_empty() && text.runs.iter().all(|r| r.style.underline && r.style.strikethrough), "{fill}");
+        // The characters' stroke is kept in text space and drawn scaled by the type's transform.
+        let weight = text.runs[0].style.stroke_layer().width;
+        let drawn = weight * vectorcraft_doc::Scaling::factor(text.xf).unwrap_or(1.0);
+        assert!((drawn - weight).abs() > 0.1, "the type's transform scales: {weight} {drawn}");
+        let before = render(&s);
+        let g = run(&mut s, "type.createOutlines", json!({}))["ids"][0].as_u64().unwrap();
+        let after = render(&s);
+        let n = differing(&before, &after, 24);
+        assert!(n < 60, "{fill}: {n} pixels differ");
+        assert!(differing(&before, &render(&session()), 24) > 1000, "the type paints something");
+        // Every glyph, ruby glyph and bar takes the same gradient, placed, and the stroke at the
+        // weight it was drawn at.
+        let mut gradients = vec![];
+        let mut widths = vec![];
+        node(&s, NodeId(g)).walk(&mut |c: &Node| {
+            if let Paint::Gradient(gr) = c.appearance.fill_paint() {
+                gradients.push(gr.clone());
+            }
+            widths.extend(c.appearance.stroke().map(|st| st.width));
+        });
+        assert!(gradients.len() >= 6, "{fill}: three glyphs, ruby and two bars: {}", gradients.len());
+        assert!(gradients.iter().all(|gr| gr.is_placed() && *gr == gradients[0]), "{fill}: {gradients:?}");
+        assert!(widths.len() == gradients.len() && widths.iter().all(|w| (w - drawn).abs() < 1e-9), "{fill}: {drawn} {widths:?}");
+    }
+}
+
+/// Expand outlines the type before its fills expand, so a gradient on its characters that has no
+/// vector of its own expands across the whole type, as the canvas draws it, and the query reports
+/// it.
+#[test]
+fn expand_keeps_a_character_gradient_across_the_type() {
+    let mut s = session();
+    transformed_gradient_type(&mut s, red_blue());
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["gradient"].clone(), info["fill"].clone(), info["object"].clone()), (json!(true), json!(true), json!(true)), "{info}");
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({}));
+    let after = render(&s);
+    assert_eq!(gradients_and_type(&s), (0, 0), "outlined and expanded");
+    let d = mean_diff(&before, &after);
+    assert!(d < 0.5, "{d}");
+}
+
 /// `object.expand.info` reports the type object's own stroke, pattern fill and gradient fill, which
 /// Object turns into paths of its whole outline: a gradient only when that outline's box needs no
 /// more runs than are written.

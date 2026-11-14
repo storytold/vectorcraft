@@ -475,6 +475,20 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
     (runs, all, layout.bounds, colours)
 }
 
+/// Paint `piece`, a piece of type's outline in text space (glyphs, ruby glyphs or an underline or
+/// strikethrough bar), with `style`, the fills and strokes of its run, and place it in the document
+/// by `xf`, the type's transform, as the renderer paints the run: its unplaced gradients are fixed
+/// to `bounds`, the layout's bounds in text space, so every piece of the type shows the one
+/// gradient fitted across the whole layout, and the transform also scales its stroke weights and
+/// dashes and transforms its pattern tiles. Placed gradients keep their place in text space and
+/// move with the type.
+pub fn paint_type_piece(piece: &mut Node, style: &vectorcraft_doc::CharStyle, bounds: Rect, xf: Affine) {
+    let mut ap = style.appearance();
+    ap.pin_gradients(bounds);
+    piece.appearance = ap.into();
+    piece.transform(xf, vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() });
+}
+
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
 /// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
 /// outline with the object's items below the characters under them and the others over them, as
@@ -487,7 +501,6 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let (runs, all, bounds, colours) = laid_out(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
-    let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
     let mut children: Vec<Arc<Node>> = vec![];
     for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
         // Colour glyphs paint themselves, under their run's fill, as the renderer paints them.
@@ -495,10 +508,8 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         if bp.elements().is_empty() {
             continue;
         }
-        let mut ap = run.style.appearance();
-        ap.pin_gradients(bounds);
-        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
-        piece.transform(t.xf, scaling);
+        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), Appearance::default());
+        paint_type_piece(&mut piece, &run.style, bounds, t.xf);
         children.push(Arc::new(piece));
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
