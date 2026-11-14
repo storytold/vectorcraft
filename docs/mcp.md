@@ -9015,7 +9015,8 @@ Options). Warichu characters are set at `warichuScale` percent of their size (10
 `warichuLines` lines (a whole number from 1 to 6, default 2) inside their line: one above the other in horizontal type
 and side by side across the column in vertical type, the first line above or to the right. `warichuGap` is the space
 between the lines in points (0 to 100, default 0, document points as `baselineShift`). The stack is centered across the
-line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size.
+line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size, or
+more when the stack needs it: the line's ascent and descent take in the characters of the outer lines.
 A stretch of warichu characters is one block that takes the settings of its first character; a character with other
 settings, another size or the other kind of leading (Auto or a number) starts a new one, and a tab, a forced line break or a tate-chu-yoko character ends it. In
 vertical type a character marked `tateChuYoko` as well is set as tate-chu-yoko at its own size, and two or three digits
