@@ -22,23 +22,65 @@ fn drag_held(t: &mut GestureTool, cx: &ToolContext, pts: &[(f64, f64)], m: Mods)
     v
 }
 
-/// The Pencil's new path starts and ends on Smart Guides (#506), the points between where
-/// the hand went.
+/// The Pencil follows the hand from the press to the release: it ignores Smart Guides and Snap to Point and shows no
+/// Smart Guides, hovering or drawing over the art, with Smart Guides on or with only Snap to Point.
 #[test]
-fn pencil_ends_snap_to_smart_guides() {
+fn pencil_follows_the_hand_and_shows_no_smart_guides() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let cx = cx(&d, &s, &p);
-    let mut t = GestureTool::new("pencil");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (250.0, 320.0), (198.0, 203.0)], Mods::default());
-    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-    assert_eq!(v["points"], json!([[100.0, 100.0], [151.0, 300.0], [250.0, 320.0], [200.0, 200.0]]));
+    let on = cx(&d, &s, &p);
+    let snap_to_point = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    // Near the corners at (100, 100) and (200, 200), within Snap to Point's 2 px of them.
+    let hand = [(101.0, 99.0), (151.0, 300.0), (250.0, 320.0), (199.0, 201.0)];
+    for cx in [&on, &snap_to_point] {
+        let mut t = GestureTool::new("pencil");
+        t.pointer(cx, &PointerEvent::new(PointerKind::Move, hand[0].0, hand[0].1));
+        assert!(t.overlays(cx).is_empty(), "hovering: {:?}", t.overlays(cx));
+        t.pointer(cx, &PointerEvent::new(PointerKind::Down, hand[0].0, hand[0].1));
+        for &(x, y) in &hand[1..] {
+            t.pointer(cx, &PointerEvent::new(PointerKind::Drag, x, y));
+            assert!(t.snap.guides().is_empty(), "drawing: {:?}", t.snap.guides());
+        }
+        let last = hand[hand.len() - 1];
+        let acts = t.pointer(cx, &PointerEvent::new(PointerKind::Up, last.0, last.1));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!(hand.map(|(x, y)| [x, y])));
+    }
     // The Paintbrush follows the hand all the way.
     let mut t = GestureTool::new("paintbrush");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
+    let acts = drag(&mut t, &on, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
     let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
     assert_eq!(v["points"][0], json!([102.0, 98.0]));
+}
+
+/// Snap to Grid and Snap to Pixel are not Smart Guides: they still move the Pencil's ends (and an
+/// Alt line's), while the points between follow the hand.
+#[test]
+fn pencil_ends_still_snap_to_the_grid_and_pixels() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &s, &p) };
+    let on = |cx: &ToolContext, q: (f64, f64)| match cx.snap_to_grid {
+        true => vectorcraft_geom::snap::snap_point_to_grid(Point::new(q.0, q.1), cx.grid_step()),
+        false => Point::new(q.0.round(), q.1.round()),
+    };
+    let hand = [(301.3, 302.6), (351.4, 420.2), (447.7, 452.9)];
+    for cx in [&grid, &pixel] {
+        let (first, last) = (on(cx, hand[0]), on(cx, hand[2]));
+        assert!(first != Point::new(hand[0].0, hand[0].1) && last != Point::new(hand[2].0, hand[2].1));
+        let mut t = GestureTool::new("pencil");
+        let acts = drag(&mut t, cx, &hand, Mods::default());
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[first.x, first.y], [351.4, 420.2], [last.x, last.y]]));
+        // Alt's straight line ends on the grid or a pixel too.
+        let mut t = GestureTool::new("pencil");
+        let acts = drag_held(&mut t, cx, &[hand[0], hand[2]], Mods { alt: true, ..Mods::default() });
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"][1], json!([last.x, last.y]));
+    }
 }
 
 /// #852: the Paintbrush sends each point's pen pressure; a mouse (always fully pressed) and
@@ -693,10 +735,10 @@ fn pencil_shift_draws_a_straight_line_at_45_degree_steps() {
     }
 }
 
-/// #3799: a Shift line leaves no Smart Guides of its press on screen while it is dragged
-/// (its end doesn't snap), and Alt at its release leaves it open.
+/// #3799: a Shift line shows no Smart Guides, at its press or while it is dragged, and Alt at its
+/// release leaves it open.
 #[test]
-fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
+fn pencil_shift_line_shows_no_guides_and_stays_open_with_alt() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
@@ -704,7 +746,7 @@ fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = GestureTool::new("pencil");
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 102.0, 98.0).with_mods(shift));
-    assert!(!t.overlays(&cx).is_empty(), "the press snaps to the corner and shows it");
+    assert!(t.snap.guides().is_empty(), "the press: {:?}", t.snap.guides());
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 140.0).with_mods(shift));
     assert!(t.overlays(&cx).is_empty(), "{:?}", t.overlays(&cx));
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
@@ -1649,10 +1691,11 @@ fn paintbrush_alt_with_a_two_anchor_curve_selected_smooths() {
     }
 }
 
-/// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
-/// a selected open path it continues the path from that end to the pointer.
+/// #3799: Alt's line runs from the press to the pointer as a stroke does, snapping to nothing,
+/// and pressed on an end of a selected open path it continues the path from that end to the
+/// pointer.
 #[test]
-fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
+fn pencil_alt_line_follows_the_hand_and_continues_a_selected_path() {
     let (mut d, _) = doc_with_rect();
     let alt = Mods { alt: true, ..Default::default() };
     let p = paint();
@@ -1662,7 +1705,7 @@ fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
         let mut t = GestureTool::new("pencil");
         let acts = drag_held(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (198.0, 203.0)], alt);
         let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-        assert_eq!(v["points"], json!([[100.0, 100.0], [200.0, 200.0]]));
+        assert_eq!(v["points"], json!([[102.0, 98.0], [198.0, 203.0]]));
     }
     let l = d.layers[0].id;
     let id = d.alloc_id();

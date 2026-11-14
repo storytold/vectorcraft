@@ -6,9 +6,9 @@
 //! points with straight segments and the release fits them; Alt on release (or ending near the start) closes the path, and starting
 //! near an end of a selected open path continues it. Shift held at the press draws a straight
 //! Pencil line at 45° steps from the Constrain Angle instead, and Alt held at the press (with Alt
-//! key toggles to Smooth Tool off) draws a straight line at any angle. The Pencil's new path starts and ends on
-//! Smart Guides ([`DrawSnap`]: an anchor, a path, in line with the art), hovering too; the points
-//! between follow the hand. The Paintbrush records the pen pressure of each point (a stroke a pen
+//! key toggles to Smooth Tool off) draws a straight line at any angle. The Pencil ignores Smart
+//! Guides and Snap to Point: it shows no Smart Guides, hovering or drawing, and its ends follow the
+//! hand. Snap to Grid and Snap to Pixel still move its ends (`grid_snaps`). The Paintbrush records the pen pressure of each point (a stroke a pen
 //! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
 //! the pen's tilt and barrel rotation where the pen reads them (`[x, y, pressure, tiltX, tiltY,
 //! rotation]` points, `null` for what a point lacks) for brushes that vary with them. The Blob
@@ -853,27 +853,29 @@ impl GestureTool {
         }
     }
 
-    /// Do the ends of its strokes snap (the Pencil)?
-    fn snaps(&self) -> bool {
-        self.id == "pencil"
-    }
-
     /// Does a straight Knife cut snap to anchors and paths? Only with Smart Guides on, which Snap to
-    /// Pixel (for drawing) and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the
-    /// Pencil's straight line's do: the press, and the release unless Shift keeps it on a 45° step.
+    /// Pixel (for drawing) and Snap to Grid turn off (`PointSnap::new`). Its ends snap: the press,
+    /// and the release unless Shift keeps it on a 45° step.
     fn knife_snaps(&self, cx: &ToolContext) -> bool {
         self.id == "knife" && self.straight && cx.smart_guides && !cx.snaps_to_pixel(crate::PixelOp::Drawing) && !cx.snap_to_grid
     }
 
-    /// Does the end of a straight line snap: the Pencil's Alt line's, or a straight Knife cut's
-    /// without Shift?
+    /// Do the Pencil's ends snap? Only to the grid or to pixels, with View → Snap to Grid or Snap
+    /// to Pixel on: those are separate from Smart Guides (and turn them off), and the grid case is
+    /// its own question (#2958). Smart Guides and Snap to Point never move them.
+    fn grid_snaps(&self, cx: &ToolContext) -> bool {
+        self.id == "pencil" && (cx.snap_to_grid || cx.snaps_to_pixel(crate::PixelOp::Drawing))
+    }
+
+    /// Does the end of a straight line without Shift snap: the Pencil's Alt line's to the grid or
+    /// pixels, a straight Knife cut's to anchors and paths?
     fn line_end_snaps(&self, cx: &ToolContext) -> bool {
-        self.straight && self.unconstrained && (self.snaps() || self.knife_snaps(cx))
+        self.straight && self.unconstrained && (self.grid_snaps(cx) || self.knife_snaps(cx))
     }
 
     /// Where a stroke or straight line released at `p` ends: where it snaps when its end snaps.
     fn release_end(&mut self, cx: &ToolContext, p: Point) -> Point {
-        if (self.snaps() && !self.smoothing && !self.straight) || self.line_end_snaps(cx) { self.snap.drag(cx, p, None) } else { p }
+        if (self.grid_snaps(cx) && !self.smoothing && !self.straight) || self.line_end_snaps(cx) { self.snap.drag(cx, p, None) } else { p }
     }
 
     /// Is a straight line with its end at `end` back at its press point (within a pixel), so that
@@ -1259,10 +1261,6 @@ impl Tool for GestureTool {
             self.tip_at = (!ev.mods.cmd && !self.blob_alt_smooths(ev.mods)).then_some(p);
         }
         match ev.kind {
-            PointerKind::Move if self.snaps() => {
-                self.snap.hover(cx, p, &[], None);
-                vec![]
-            }
             PointerKind::Down => {
                 self.active = true;
                 self.began = false;
@@ -1285,11 +1283,12 @@ impl Tool for GestureTool {
                     _ => vec![],
                 };
                 self.redraw = if self.draws_path() && !self.smoothing && self.extend.is_none() { self.find_redraw(cx, p) } else { None };
-                // A path continued starts at its end, one redrawn on it; a new one where it snaps.
-                // A straight line is constrained from the end it continues, so it starts there.
+                // A path continued starts at its end, one redrawn on it; a new one at the press,
+                // or on the grid or a pixel when they snap. A straight line is constrained from the
+                // end it continues, so it starts there.
                 let start = if let Some((_, _, end)) = extend.filter(|_| self.straight) {
                     end
-                } else if self.snaps() && !self.smoothing && self.extend.is_none() && self.redraw.is_none() {
+                } else if self.grid_snaps(cx) && !self.smoothing && self.extend.is_none() && self.redraw.is_none() {
                     self.snap.press(cx, p, &[], None)
                 } else if self.knife_snaps(cx) {
                     // A straight Knife cut, its overlay and Shift's 45° steps start from the snapped point.
@@ -1313,13 +1312,13 @@ impl Tool for GestureTool {
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
                 let p = self.constrained(cx, p, ev.mods);
                 let mut end = p;
-                if self.snaps() && !self.smoothing && !self.straight {
-                    // Where the stroke would end: shown, taken on release.
+                if self.grid_snaps(cx) && !self.smoothing && !self.straight {
+                    // Where the stroke would end on the grid or a pixel: taken on release.
                     end = self.snap.drag(cx, p, None);
                 }
                 let p = if self.line_end_snaps(cx) {
-                    // Alt's line ends where a stroke would, and a Knife cut's on the anchors and
-                    // paths its press snaps to: shown, taken on release.
+                    // Alt's line ends on the grid or a pixel when they snap, and a Knife cut on the
+                    // anchors and paths its press snaps to: shown, taken on release.
                     self.snap.drag(cx, p, None)
                 } else {
                     p
@@ -1339,7 +1338,7 @@ impl Tool for GestureTool {
                 } else if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
                     // A release here keeps the last point unless it snaps (`Up`), so the ring
                     // follows the point `finish` will test.
-                    let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.snaps());
+                    let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.grid_snaps(cx));
                     let release_end = kept.unwrap_or(end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     return vec![];
@@ -1394,7 +1393,7 @@ impl Tool for GestureTool {
                     }
                 } else if self.points.last().is_some_and(|l| l.distance(p) >= cx.tol(1.0)) {
                     self.push(end, ev);
-                } else if self.snaps()
+                } else if self.grid_snaps(cx)
                     && !self.smoothing
                     && self.points.len() > 1
                     && let Some(last) = self.points.last_mut()
