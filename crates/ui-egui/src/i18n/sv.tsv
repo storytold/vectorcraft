@@ -2603,6 +2603,7 @@ font-technology	Variable	Variabla
 	Proportional Metrics	Proportionella mått
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
+	Tsume	Tsume
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska
@@ -6451,11 +6452,11 @@ axis	Y Axis	Y-axel
 @msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
 @msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {"id"} eller som det gavs
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs
 @msg	a string	en sträng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	en kontur måste vara {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	en effekt måste vara {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en kontur måste vara {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt måste vara {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
 @msg	an effect on a stroke returns only `strokes`	en effekt på en kontur returnerar bara `strokes`
 @msg	an object must be a JSON object	ett objekt måste vara ett JSON-objekt
@@ -7002,7 +7003,7 @@ anchor	Points:	Punkter:
 	VectorCraft Updates	Uppdateringar för VectorCraft
 	Yonroku-ban	Yonroku-ban
 @msg	image '{key}' has no pixels and was left out	bilden '{key}' har inga pixlar och utelämnades
-@msg	not an RTF file: it doesn't start with {\\rtf	inte en RTF-fil: den börjar inte med {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	inte en RTF-fil: den börjar inte med {{\\rtf
 shape	Open	Öppen
 
 # Color Effects add-on: Select by Color Kind.
@@ -7601,7 +7602,7 @@ digits	Hindi	Hindi
 @msg	`expand` must be true or false	`expand` måste vara true eller false
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` måste vara 1 till 1000 sökvägar till typsnittsfiler som den senaste text.findFontFiles-sökningen hittade
 @msg	`folder` must be an absolute folder path	`folder` måste vara en absolut mappsökväg
-@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` måste vara ett objekt med axeltaggar och värden, till exempel {"wght"}
+@msg	`fontAxes` must be an object of axis tags and values, such as {{"wght": 650}}	`fontAxes` måste vara ett objekt med axeltaggar och värden, till exempel {{"wght": 650}}
 @msg	`format` must be a string	`format` måste vara en sträng
 @msg	`format` must be one of {_1}	`format` måste vara något av {_1}
 @msg	`fractions` is chop or scale	`fractions` är chop eller scale
@@ -7624,12 +7625,12 @@ digits	Hindi	Hindi
 @msg	`index` must be a point index	`index` måste vara ett punktindex
 @msg	`index` must be a whole number or null	`index` måste vara ett heltal eller null
 @msg	`indices` must be a non-empty array of item indices	`indices` måste vara en icke-tom array av objektindex
-@msg	`items` is a list of {kind, item}	`items` är en lista med {kind, item}
+@msg	`items` is a list of {{kind, item}}	`items` är en lista med {{kind, item}}
 @msg	`items` is empty	`items` är tom
 @msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` måste vara en lista med {{id, anchors?}}, inte {v}
-@msg	`items` must be a list of {id, points}	`items` måste vara en lista med {id, points}
+@msg	`items` must be a list of {{id, points}}	`items` måste vara en lista med {{id, points}}
 @msg	`items` must be an array of {{id, corners?}}, not {v}	`items` måste vara en array av {{id, corners?}}, inte {v}
-@msg	`items` must be an array of {id, anchors}	`items` måste vara en array av {id, anchors}
+@msg	`items` must be an array of {{id, anchors}}	`items` måste vara en array av {{id, anchors}}
 @msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` måste vara "none", "short", "medium", "long" eller "stylistic"
 @msg	`kind` is one of {_1}	`kind` är något av {_1}
 @msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` måste vara "round", "invertedRound" eller "chamfer", inte {v}
@@ -7795,7 +7796,7 @@ digits	Hindi	Hindi
 @msg	artboard {i} doesn't print	rityta {i} skrivs inte ut
 @msg	artboard is a 0-based index	artboard är ett 0-baserat index
 @msg	artboard must be a 0-based index	artboard måste vara ett 0-baserat index
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout måste vara {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout måste vara {{layout?, columns?, spacing?, rightToLeft?}}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns måste vara 1 eller mer
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout måste vara gridByRow, gridByColumn, row eller column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft måste vara true eller false
@@ -7943,13 +7944,13 @@ digits	Hindi	Hindi
 @msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF-skalan måste vara ett positivt tal upp till {_1}, inte {scale}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf-enhet `{u}`: en enhet som mm, cm, in eller pt
 @msg	dxf: {e}	dxf: {e}
-@msg	each format is an object {format, scale?, suffix?}	varje format är ett objekt {format, scale?, suffix?}
+@msg	each format is an object {{format, scale?, suffix?}}	varje format är ett objekt {{format, scale?, suffix?}}
 @msg	each item needs an id	varje objekt behöver ett id
 @msg	each match needs `kind`	varje matchning behöver `kind`
 @msg	each match needs a `name`	varje matchning behöver ett `name`
-@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	varje post i `fonts` är {family, style?}; 1 till 1000 stycken
+@msg	each of `fonts` is {{family, style?}}; 1 to 1000 of them	varje post i `fonts` är {{family, style?}}; 1 till 1000 stycken
 @msg	each of `items` is {{id, corners?}} with an object id, not {it}	varje post i `items` är {{id, corners?}} med ett objekt-id, inte {it}
-@msg	each of `items` is {kind, item}	varje post i `items` är {kind, item}
+@msg	each of `items` is {{kind, item}}	varje post i `items` är {{kind, item}}
 @msg	each row needs `from`	varje rad behöver `from`
 @msg	each stop needs a position	varje stopp behöver en position
 @msg	each subpath needs an anchors array	varje delbana behöver en anchors-array
@@ -7967,8 +7968,8 @@ digits	Hindi	Hindi
 @msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
-@msg	expected {"dataBase64"}	förväntade {"dataBase64"}
-@msg	expected {"objects"}	förväntade {"objects"}
+@msg	expected {{"dataBase64": "…"}}	förväntade {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	förväntade {{"objects": [...]}}
 @msg	export `{name}`: {e}	export av `{name}`: {e}
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	Exportera för skärmar skriver png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai eller vectorcraft
 @msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	filen med exportförinställningar är större än {MAX_PRESET_FILE_BYTES} byte
@@ -7981,7 +7982,7 @@ digits	Hindi	Hindi
 @msg	featureChanges must be a list of tags	featureChanges måste vara en lista med taggar
 @msg	features must be a list of tags	features måste vara en lista med taggar
 @msg	fidelity must be 0..100	fidelity måste vara 0..100
-@msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
+@msg	files must be {{name, dataBase64}}	files måste vara {{name, dataBase64}}
 @msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit måste vara none|autoHeight|shrinkText|block, fick {id}
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna för Ljusreflex måste vara ändliga tal
 @msg	flattener: {e}	utplattning: {e}
@@ -7999,7 +8000,7 @@ digits	Hindi	Hindi
 @msg	frequency must be between 1 and 300 lines per inch	frequency måste vara mellan 1 och 300 linjer per tum
 @msg	from and to must be finite	from och to måste vara ändliga
 @msg	from must be [x0, y0, x1, y1]	from måste vara [x0, y0, x1, y1]
-@msg	give {key, value} or {values}	ange {key, value} eller {values}
+@msg	give {{key, value}} or {{values}}	ange {{key, value}} eller {{values}}
 @msg	give `before` or `after`, not both	ange `before` eller `after`, inte båda
 @msg	give `char` or `text`	ange `char` eller `text`
 @msg	give `colors`, or `color` and `rule`	ange `colors`, eller `color` och `rule`
@@ -8014,7 +8015,7 @@ digits	Hindi	Hindi
 @msg	give `id` and `anchors`, or `items`, not both	ange `id` och `anchors`, eller `items`, inte båda
 @msg	give `id` or `guide`, not both	ange `id` eller `guide`, inte båda
 @msg	give `length` or `to`	ange `length` eller `to`
-@msg	give `matches`: [{kind, name, target}]	ange `matches`: [{kind, name, target}]
+@msg	give `matches`: [{{kind, name, target}}]	ange `matches`: [{{kind, name, target}}]
 @msg	give `name` (or edit a pattern)	ange `name` (eller redigera ett mönster)
 @msg	give `name` or `names`	ange `name` eller `names`
 @msg	give `path` (a .wasm file) or `dataBase64` (the module)	ange `path` (en .wasm-fil) eller `dataBase64` (modulen)
@@ -8050,7 +8051,7 @@ digits	Hindi	Hindi
 @msg	give the preset a `name`	ge förinställningen ett `name`
 @msg	give the preset a name	ge förinställningen ett namn
 @msg	give the preset a name (1–64 characters)	ge förinställningen ett namn (1–64 tecken)
-@msg	give the settings to change, e.g. {"formats"}]}	ange inställningarna som ska ändras, t.ex. {"formats"}]}
+@msg	give the settings to change, e.g. {{"formats": [{{"format": "png", "scale": "2x"}}]}}	ange inställningarna som ska ändras, t.ex. {{"formats": [{{"format": "png", "scale": "2x"}}]}}
 @msg	give the style a name	ge stilen ett namn
 @msg	give two or more style `names`	ange två eller fler stilnamn i `names`
 @msg	give two or more swatches	ange två eller fler färgrutor
@@ -8155,7 +8156,7 @@ digits	Hindi	Hindi
 @msg	missing `library`	`library` saknas
 @msg	missing `library` (see graphicStyle.libraries)	`library` saknas (se graphicStyle.libraries)
 @msg	missing `library` (see swatch.library.list)	`library` saknas (se swatch.library.list)
-@msg	missing `map` (rows [{from, to}] or {current})	`map` saknas (rader [{from, to}] eller {current})
+@msg	missing `map` (rows [{{from, to}}] or {{current: new}})	`map` saknas (rader [{{from, to}}] eller {{current: new}})
 @msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f] saknas
 @msg	missing `name` (see gradient.presets.list)	`name` saknas (se gradient.presets.list)
 @msg	missing `offset` (a distance in points)	`offset` saknas (ett avstånd i punkter)
@@ -8447,7 +8448,7 @@ digits	Hindi	Hindi
 @msg	print settings: {e}	utskriftsinställningar: {e}
 @msg	procedures nest too deeply	procedurerna är nästlade för djupt
 @msg	procedures nested too deeply	procedurerna nästlades för djupt
-@msg	quotes must be {double?, single?}	quotes måste vara {double?, single?}
+@msg	quotes must be {{double?, single?}}	quotes måste vara {{double?, single?}}
 @msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} måste vara ett inledande och ett avslutande citattecken, t.ex. "“”"
 @msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi måste vara 1–2400 (72 skärm, 150 medel, 300 hög)
 @msg	rating must be a whole number from 0 to {MAX_RATING}	rating måste vara ett heltal från 0 till {MAX_RATING}
@@ -8559,13 +8560,13 @@ digits	Hindi	Hindi
 @msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG-filen är inte i UTF-8, UTF-16 eller ISO 8859-1
 @msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict måste vara "merge" eller "add", inte {v}
 @msg	Switch x/y is for scatter graphs	Växla x/y gäller spridningsdiagram
-@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text måste vara {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	text must be {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}	text måste vara {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}
 @msg	Text options: {e}	Textalternativ: {e}
 @msg	text transform is collapsed or unrepresentable	texttransformeringen är kollapsad eller kan inte återges
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: använd "{_1}" eller "{_2}"
 @msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces måste vara ett heltal från 2 till 100
 @msg	textureImage: {e}	textureImage: {e}
-@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ange {path} eller {name, dataBase64} för en bildfil, eller en textur så som effect.list anger den
+@msg	textureImage: give {{path}} or {{name, dataBase64}} of an image file, or a texture as effect.list gives it	textureImage: ange {{path}} eller {{name, dataBase64}} för en bildfil, eller en textur så som effect.list anger den
 @msg	that makes more than {MAX_PIECES} slices	det ger fler än {MAX_PIECES} skivor
 @msg	that object is not in the overlap	det objektet ingår inte i överlappningen
 @msg	the action set ids are not a list	åtgärdsuppsättningarnas id:n är inte en lista
