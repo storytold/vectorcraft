@@ -126,6 +126,105 @@ flipped crack's, and the image does have cracks the one-sided reading gets wrong
 48 px noisy ripple in Black and White at thresholds 140, 157, 170 and Paths 0, 50, 100, sampled on
 the 4 × 4 grid per pixel the shared-boundary check uses). With the one-sided reading 482–1,228
 sample points per trace were uncovered; now none are. The crate's other tests pass unchanged.
+## Band borders in smooth areas
+In a gradient or a shaded area, the palette colors on either side of a band border differ by more than
+the image changes across it. Pixel noise placed the border, and the fitter smoothed it over 0.5 px as it
+smooths an edge, so the border wobbled, kept stair steps and took many anchors. For each crack between
+two colors, `Layers::step` now reads the share of the step between the two colors that the image makes
+next to the crack and a few pixels further out, how far the image changes next to the crack along the
+line between the two colors and in any direction, and how much it changes within each side, as RGB
+distances (0 to 255 a channel). `subpixel::low_contrast` makes a piece of outline the contour of a smooth
+area when, over its cracks, the near share is under one half; the far share is at least 1.25 times the
+near one, the change along the line is under 12 (about 7 levels in each channel of a gray), or no crack
+has a far share; the sides change within themselves, by at least 1/32 of the change along the line; and the
+whole change is under twice the change along the line, or under 24. Black and White traces do not use
+the rule. A contour piece is smoothed over 4 px (a closed one over at most an eighth of its smaller width
+or height), keeps no corners, is fitted to at least 0.5 px and is checked against its smoothed points.
+Grayscale now reads each pixel as its gray for this rule and for every edge's sub-pixel shift
+(`Layers::shift`), which read the pixels' colors against gray palette entries before.
+Measured with the harness below, before and after the change: Color traces of the "flat colour art"
+inputs, and corners % in every row, do not change. Shades of Gray on those inputs: off mean 0.263 to 0.165 px,
+off max 1.47 to 1.04 px, anchors 196 to 122. Gradient and photo inputs: anchors 2,138 to 798 (16 Colors,
+gradient and photo), 1,372 to 200 (16 Colors, linear gradients), 10,063 to 6,766 (High Fidelity Photo,
+gradient and photo); ΔE and edge ΔE change by −0.25 to +0.02. Specks rise by up to 0.8 per image (16
+Colors on gradient and photo 0.0 to 0.8, Auto Color 0.0 to 0.5). Auto Color, enhanced (Shapes on) on
+gradient and photo leaves a gap of 0.3 px (was 0.0) and an overlap of 0.4 px (was 0.1). The tables below
+are the previous measurement, not a rerun.
+Tests on code-drawn images: `tests::the_borders_of_a_gradients_bands_follow_its_contours` (a 256 × 128
+gradient whose contours wave, with noise, and a dark square with crisp sides: the band borders stray
+under 0.9 px RMS from the gradient's contours, 1.13 px when smoothed as edges, and the square keeps its
+four corners); `layers::tests` (a ramp, flat colors in palette entries far apart, close flat colors, a
+thin flat stroke, colors off the line between their entries, and Grayscale's grays, each read from both
+sides of the crack) and `subpixel::tests` (the rule, and one decision for a whole piece from either side).
+## Blurred edges
+`settled` moved a blend pixel to a side of its edge only when the picture's own colors on both sides lay
+within 2 px of it, so the middle of an edge blurred over more than about 4 px kept the palette's
+in-between tones and traced as rings of thin paths around the edge. In Color with a Limited palette of
+at most 16 colors and in Grayscale with at most 16 grays, `cut_edge::settled_wide` now does the work, by
+VectorCraft's own rule (RGB distances, 0 to 255 a channel; Grayscale reads each pixel as its gray). A
+blend pixel with no own pixel of its color within 4 px pairs the 8 own colors within 8 px that are nearest
+to its color. It takes the nearer side of the pair it is best a blend of when that pair explains it twice
+as well as its own color, or when it lies between the two and off the line between them by less than 0.15
+of their distance apart. Of two pairs that fit equally well it takes the closer pair. Other palettes,
+High Fidelity Photo, Low Fidelity Photo and Black and White keep `settled`.
+Measured with the harness below on `main` at `77970c6924`, before and after the change (256 px variants
+unless stated): 16 Colors on blurred flat art 9.0 paths to 3.0, 158 anchors to 34, 0.239 px off to 0.069;
+6 Colors 6.0 paths to 3.0, 118 anchors to 33, 0.226 px off to 0.071; scanned, 16 Colors 8.0 paths to 3.0
+and 0.259 px off to 0.110, 6 Colors 7.5 paths to 3.0 and 0.235 px off to 0.093. On each preset's own
+inputs (section 1), 6 Colors went from 4.1 paths to 3.0 and 0.143 px off to 0.101, and 16 Colors from 4.6
+paths to 3.0 and 0.145 px off to 0.100. Auto Color does not change. Worse by more than 5% (25 of 211 rows
+that moved, most of them variants of the same inputs): askew shapes, odd px 11 to 22 with 6 Colors (paths
+4.0 to 4.3, odd colours 0.3 to 0.7), 23 to 26 with 3 Colors, 17 to 22 with 16 Colors and 27 to 30 with
+Shades of Gray; thin lines, missed max 23.5 to 45.3 px with 16 Colors, and with Shades of Gray paths 5.3 to
+7.3, anchors 36 to 41 and odd colours 3.0 to 5.0; linear gradients with 3 Colors, paths 3.0 to 3.3, and
+with 6 Colors with Gradients, paths 1.3 to 1.5 and anchors 13 to 16; two- and three-stop gradients with 6
+Colors with Gradients, paths 1.2 to 1.3; gradient and photo with 16 Colors, overlap px 0.0 to 0.2 and
+specks 0.8 to 1.0. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn images: `tests::a_blurred_edge_is_no_ring_of_a_tone_between_its_sides` (a disc
+blurred into a 10 px ramp, 16 Colors), `tests::grayscale_settles_a_blurred_edge_between_its_own_two_grays`,
+`tests::grayscale_settles_a_tinted_blurred_edge_by_its_lightness`,
+`tests::the_photo_presets_keep_the_tones_of_a_blurred_edge` and `quantize::cut_edge::tests`.
+## Staircases in smooth areas
+Where a band border in a gradient or a shaded area runs at a slant, its pixels form a staircase whose
+steps are two or more pixels long. One piece of outline can run along a sharp edge in the image and then
+along such a border with no junction between them. That piece as a whole is not a contour (see above),
+and the outline kept a corner at every step. `subpixel::outline` now reads a run of three or more edges of
+1 to 8 px (`STAIR_MAX`), each turning one way where it starts and the other where it ends, with no
+junction on it, as a staircase when the run's own cracks pass `subpixel::low_contrast`. A run is cut at
+any step whose own cracks show half of the step between the two colors or more. The 8 px limit and the
+one-half cut are VectorCraft's own values. The run's edges are then steps, as one-pixel steps already
+were: the outline has no corner where two of them meet, and each gives one point, its middle, moved by the
+mean of its cracks' shifts. Where a run meets an edge that is not a step, the corner between them stays,
+so a straight edge longer than 8 px next to a staircase stays straight. A straight edge of 8 px or less
+between two turns of opposite sign is read as one more step of the run. Inside a run, two one-pixel steps
+between longer ones are read as part of the slope and do not make a notch. A staircase of longer steps,
+and one whose cracks read as an edge, keep their corners, and Black and White traces do not use the rule.
+The runs are the same from either side of the border.
+Measured with the harness below, before and after the change: rows of the "flat colour art" inputs do not
+change. On gradient and photo inputs, anchors change in 106 rows, 101 of them fewer, by −64% to +6.4%: for
+example 390 to 142 (Shades of Gray, linear gradients), 1,860 to 1,537 (High Fidelity Photo, linear
+gradients), 6,766 to 6,542 (High Fidelity Photo, gradient and photo) and 47 to 50 (High Fidelity Photo with
+Gradients, blurred). On gradient and photo, 6 Colors, 6 Colors with Shapes, with Auto Grouping, without
+Gradients and enhanced each leave a gap of 0.9 px (was 1.2) and an overlap of 1.0 px (was 0.8). Edge ΔE
+of Shades of Gray on linear gradients goes from 8.36 to 8.40 (8.39 enhanced), and that of 6 Colors with
+Gradients on a blurred input from 2.24 to 2.22; other ΔE and edge ΔE values change by 0.01 or less.
+Lines % changes by −2 to +3, grouped % by −1 to +4, upright % by +1 in 3 rows (Shades of Gray on a blurred
+input), and specks do not change. On synthetic photos of 800 and 4,000 px traced outside this harness,
+the corners of rectilinear staircases per 100 px of outline fall from 0.57 to 0.46 and from 1.09 to 0.94
+with High Fidelity Photo. On the 800 px photo, the 95th percentile of the pixel difference with High
+Fidelity Photo rises from 6.33 to 6.67, and 16 Colors leaves 2 staircases of steps of 2 px or more where
+it left none. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn outlines in `subpixel::tests`:
+`a_staircase_of_longer_steps_in_a_smooth_area_becomes_the_slope_through_its_steps` (a piece with a
+staircase of 2 × 3 px steps in a smooth area, a straight run and the same staircase on a sharp edge: the
+first gives its steps' middles and none of its corners, the straight run keeps the corners at its ends, the
+second staircase keeps its corners, both regions get the same points, and 10 px steps keep their corners
+in a smooth area), `a_staircase_that_runs_on_from_a_smooth_area_into_an_edge_keeps_the_edges_corners`,
+`a_staircase_whose_cracks_do_not_read_as_a_contour_keeps_its_corners` (two flat colors),
+`a_staircase_step_moves_by_the_mean_shift_of_its_cracks`,
+`a_staircase_of_mixed_one_pixel_and_longer_steps_is_one_slope_without_a_notch`,
+`a_run_of_two_steps_keeps_its_corners`, `a_junction_on_a_step_ends_the_staircase_there` and
+`a_step_whose_cracks_read_as_an_edge_ends_the_staircase_there`.
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
 right. It used to build a table of outgoing directions for every pixel corner in a raster pass and

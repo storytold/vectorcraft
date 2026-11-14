@@ -4,7 +4,8 @@ use super::common::{
 };
 use super::{
     Anchor, Appearance, BTreeSet, BoolOp, Cap, Color, Document, EngineError, FillRule, Join, NewArt, Node, NodeId, NodeKind, Paint, PathData, Point,
-    Result, Selection, Session, SimplifyOptions, SubPath, Value, bad, id_param, insert_look, json, number_or, po, remove_each, str_param, switch_or,
+    Result, Selection, Session, SimplifyOptions, SubPath, Value, bad, insert_look, json, number_or, object_param, po, remove_each, str_param,
+    switch_or,
 };
 
 // ---------- Pencil / Paintbrush ----------
@@ -150,7 +151,11 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pen = PenRecord::of_samples(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, vectorcraft_tools::draw2::MAX_FIT_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
@@ -158,7 +163,7 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
-        let id = id_param(ext, "id").ok_or_else(|| bad(C, "extend needs id"))?;
+        let id = object_param(ext, "id", C)?.ok_or_else(|| bad(C, "extend needs id"))?;
         let at_start = str_param(ext, "end") == Some("start");
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
         let si = pd.subpaths.iter().rposition(|s| !s.closed && !s.anchors.is_empty()).ok_or_else(|| bad(C, "path has no open end"))?;
@@ -179,7 +184,7 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         // open subpath, that subpath starting at the end the stroke ends on, it ends at its end).
         let connect = match p.get("connect").filter(|v| !v.is_null()) {
             Some(cn) => {
-                let other = id_param(cn, "id").ok_or_else(|| bad(C, "connect needs id"))?;
+                let other = object_param(cn, "id", C)?.ok_or_else(|| bad(C, "connect needs id"))?;
                 if other == id {
                     return Err(bad(C, "connect needs a path other than the one extended"));
                 }
@@ -199,7 +204,9 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        let close_tol = (tol * 4.0).max(6.0);
+        // An extending stroke that ends within four Fidelities of the path's other end closes it:
+        // at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
+        let close_tol = (tol * 4.0).clamp(6.0, 400.0);
         let closing = connect.is_none() && sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
         if closing && let Some(l) = pts.last_mut() {
             *l = first;
@@ -299,7 +306,7 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "id": id.0 }));
     }
     if let Some(rd) = p.get("redraw").filter(|v| !v.is_null()) {
-        let id = id_param(rd, "id").ok_or_else(|| bad(C, "redraw needs id"))?;
+        let id = object_param(rd, "id", C)?.ok_or_else(|| bad(C, "redraw needs id"))?;
         let within = number_or(rd, "within", 12.0, C)?;
         if !within.is_finite() || within < 0.0 {
             return Err(bad(C, "redraw within must be a finite distance of 0 or more"));

@@ -3,11 +3,18 @@ use super::{
     Color32, Point, PointerEvent, PointerKind, Pos2, RULER, Rect, Sense, Shape, Stroke, Tokens, Ui, Unit, VectorcraftApp, Xf, json, pos2, vec2,
 };
 
-/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), cached per
-/// look, and its cell size in screen points.
-pub(crate) fn checker_texture(ctx: &egui::Context, setup: &vectorcraft_doc::DocSetup) -> (egui::TextureHandle, f32) {
-    let colors = setup.grid_colors.map(|c| crate::panels::c32(&c));
-    let id = egui::Id::unique("transparency-grid-tile");
+/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), converted
+/// into the display profile `display` when there is one, cached per look, and its cell size in
+/// screen points.
+pub(crate) fn checker_texture(
+    ctx: &egui::Context,
+    setup: &vectorcraft_doc::DocSetup,
+    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+) -> (egui::TextureHandle, f32) {
+    let colors = setup.grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
+    // A tile of its own with a display profile, so a preview drawn in sRGB beside the canvas
+    // doesn't make the canvas's tile again each frame.
+    let id = egui::Id::unique("transparency-grid-tile").with(display.is_some());
     let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);
     let tex = cached.map(|(_, t)| t).unwrap_or_else(|| {
         let [a, b] = colors;
@@ -181,8 +188,9 @@ pub(super) fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 /// it makes none. A double-click on a ruler (both clicks on that ruler) makes a guide at the
 /// pointer, across the ruler's axis (a vertical one on the top ruler, a horizontal one on the
 /// left; swapped in a view turned 90°, where the rulers read the other document axis, and the
-/// nearer axis in between), unsnapped, as one `guide.add` and so one undo step. The corner drags the rulers' origin or resets it on a
-/// double-click.
+/// nearer axis in between), unsnapped, as one `guide.add` and so one undo step. The corner drags
+/// the rulers' origin, snapped as a drawn point is (`Session::ruler_origin_drag`), or resets it on
+/// a double-click.
 pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) -> Option<Point> {
     let [top, left, corner] = ruler_rects(full);
     // Right-click on a ruler or the origin box: the document units, to swap between them as
@@ -274,9 +282,17 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
     let mut preview = None;
     if let Some((started_in, mut cancelled)) = ui.data(|d| d.get_temp::<(Option<u64>, bool)>(drag_id)) {
         cancelled |= started_in != uid || ui.input(|i| !i.focused || i.key_pressed(egui::Key::Escape));
-        let at = corner.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos())).filter(|p| canvas.contains(*p)).map(|p| xf.to_doc(p));
+        let pointer =
+            corner.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos())).filter(|p| canvas.contains(*p)).map(|p| xf.to_doc(p));
+        // The origin snaps as a drawn point does (Smart Guides, Snap to Point, pixels, the grid).
+        let at = if cancelled {
+            app.session.end_ruler_origin_drag();
+            None
+        } else {
+            app.session.ruler_origin_drag(pointer, app.view_info())
+        };
         if corner.drag_stopped_by(egui::PointerButton::Primary) {
-            ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(drag_id));
+            end_ruler_origin_drag(app, ui);
             if !cancelled
                 && let Some(at) = at
                 && let Err(e) = app.run("document.setRulerOrigin", json!({"x": at.x, "y": at.y, "artboard": app.view().map_or(0, |v| v.artboard)}))
@@ -284,7 +300,7 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
                 app.status(e.to_string());
             }
         } else if !ui.input(|i| i.pointer.primary_down()) {
-            ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(drag_id));
+            end_ruler_origin_drag(app, ui);
         } else {
             ui.data_mut(|d| d.insert_temp(drag_id, (started_in, cancelled)));
             if !cancelled {
@@ -293,6 +309,21 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         }
     }
     preview
+}
+
+/// The rulers are hidden (View › Rulers, Presentation Mode): a drag of their origin they were
+/// showing for is cancelled, so its snapping guides don't stay on the canvas. Nothing previews.
+pub(super) fn rulers_hidden(app: &mut VectorcraftApp, ui: &Ui) -> Option<Point> {
+    if ruler_origin_dragging(ui.ctx()) {
+        end_ruler_origin_drag(app, ui);
+    }
+    None
+}
+
+/// Ends a drag from the rulers' corner, released or cancelled: its state and its snapping guides go.
+fn end_ruler_origin_drag(app: &mut VectorcraftApp, ui: &Ui) {
+    ui.data_mut(|d| d.remove::<(Option<u64>, bool)>(ruler_origin_drag_id()));
+    app.session.end_ruler_origin_drag();
 }
 
 /// The key of the ruler origin drag's state in egui's temporary data.

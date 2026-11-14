@@ -9,14 +9,53 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
-use super::super::{Result, Session, bad, bool_or, edit, f64_or, str_param};
+use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
+    ARTBOARD_PARAMS, Format, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
+    write_or_return,
 };
 
+/// The keys the export commands take for every format, beside the path, the format and the
+/// options `document.formats` lists for each: `richBlack` is Appearance of Black's setting for a
+/// raster export, and `params` an exporter plug-in's own.
+pub(crate) const EXPORT_PARAMS: [&str; 4] = ["includeArtboardFill", "selectedOnly", "richBlack", "params"];
+
+/// A note for each option in `p` that some format takes but the file an export of `cmd` writes in
+/// `f` doesn't read (`{format: pdf, quality: 80}`), in the wording of a save's note. An exporter
+/// plug-in's format gets none. The notes cover the formats' options only: a key of the command's
+/// own ([`EXPORT_PARAMS`]) and an artboard choice that a selection export leaves out get none.
+pub fn unused_option_notes(cmd: &str, f: &Format, p: &Value) -> Vec<String> {
+    let Some(given) = p.as_object() else { return Vec::new() };
+    if vectorcraft_plugins::export::by_format(f.id).is_some() {
+        return Vec::new();
+    }
+    let listed = |k: &str| super::FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).any(|o| o.name == k);
+    let written = super::save::written_as(cmd, f, p);
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false);
+    let reads = |k: &str| match (f.id, k) {
+        // A legacy `.ai` file is not a PDF: it reads its own options only.
+        ("ai", _) if legacy => super::legacy_ai::reads(k),
+        // The other `.ai` files don't read the legacy file's options, and `preserveEditing` is
+        // on for them whatever is given.
+        ("ai", "preserveEditing") => false,
+        ("ai", _) if super::legacy_ai::LEGACY_ONLY.contains(&k) => false,
+        // An export writes one file: only a save writes each artboard to a file of its own, and
+        // a native file's `range` names those files.
+        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
+        _ => super::save::reads_option(f, k),
+    };
+    given
+        .iter()
+        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !reads(k))
+        .map(|(k, _)| super::save::unused_option_note(k, &written))
+        .collect()
+}
+
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
-    let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
+    let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
+    check_linked_scripts("document.serialize", f.id, s.doc()?)?;
+    let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
@@ -27,7 +66,8 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
-    let enc = encode_all(doc, f.id, &q)?;
+    let mut enc = encode_all(doc, f.id, &q)?;
+    enc.add_setting_notes(unused);
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -42,7 +82,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
-    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));
+    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.notes() }));
     if main.len() > 1 {
         out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }
@@ -53,11 +93,13 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = str_param(p, "path");
+    let path = text_param(p, "path", "document.export")?;
     if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
-    let f = writable("document.export", str_param(p, "format"), path)?;
+    let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
+    check_linked_scripts("document.export", f.id, s.doc()?)?;
+    let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
@@ -68,8 +110,9 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
-    let enc = encode_all(doc, f.id, &q)?;
-    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
+    let mut enc = encode_all(doc, f.id, &q)?;
+    enc.add_setting_notes(unused);
+    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.notes() }))
 }
 
 /// The document an export of `st` in format `f` writes ([`export_source`]): a `.ai` or `.ait`
@@ -86,7 +129,7 @@ pub fn export_doc<'a>(st: &'a DocState, f: &Format, p: &Value) -> Result<Cow<'a,
 /// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
 /// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
 pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
-    if !bool_or(p, "selectedOnly", false) {
+    if !switch_or(p, "selectedOnly", false, "document.export")? {
         return Ok(Cow::Borrowed(&*st.doc));
     }
     let keep: HashSet<NodeId> = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc)).into_iter().collect();
@@ -237,7 +280,8 @@ fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Va
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
 fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(Cow<'a, Document>, bool)> {
-    if f.id == "txt" && bool_or(p, "selectionOnly", false) {
+    check_switches(p, &["selectedOnly"], cmd)?;
+    if switch_or(p, "selectionOnly", false, cmd)? && f.id == "txt" {
         let doc = selection(s, cmd, true)?.0;
         let display_doc_title = super::has_own_title(&doc);
         return Ok((Cow::Owned(doc), display_doc_title));
@@ -309,17 +353,24 @@ pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Do
 /// are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
-    if let Some(path) = str_param(p, "path") {
+    let path = text_param(p, "path", C)?;
+    if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
-    let path = str_param(p, "path");
-    let f = writable(C, str_param(p, "format"), path)?;
+    let f = writable(C, text_param(p, "format", C)?, path)?;
+    check_linked_scripts(C, f.id, s.doc()?)?;
+    let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C, f.id == "txt")?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
-    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
+    let (bytes, mut warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
+    for note in unused {
+        if !warnings.contains(&note) {
+            warnings.push(note);
+        }
+    }
     write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings, "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
 
@@ -327,11 +378,12 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
 /// `transparent`, with the encoder's warnings.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
-    if let Some(path) = str_param(p, "path") {
+    let path = text_param(p, "path", C)?;
+    if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
-    let path = str_param(p, "path");
-    let ppi = f64_or(p, "ppi", 150.0);
+    let ppi = number_or(p, "ppi", 150.0, C)?;
+    let transparent = switch_or(p, "transparent", false, C)?;
     let doc = &s.doc()?.doc;
     let artboard = match p.get("artboard") {
         None | Some(Value::Null) => 0,
@@ -340,7 +392,7 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     if artboard >= doc.artboards.len() {
         return Err(bad(C, format!("no artboard {artboard} (0-based; the document has {})", doc.artboards.len())));
     }
-    let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
+    let background = if transparent { "transparent" } else { "white" };
     let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
     let (bytes, warnings) = encode_with_warnings(doc, "png", &opts)?;
     // The pixel size, from the PNG header.

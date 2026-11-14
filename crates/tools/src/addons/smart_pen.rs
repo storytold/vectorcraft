@@ -6,7 +6,8 @@
 //! tangent); a drag makes a smooth anchor (Alt held breaks the outgoing handle off, Shift keeps it
 //! to 45° steps, Space moves the anchor); Tab switches the segment into the anchor being placed, or
 //! the last one drawn, between straight and curved. A rubber band shows the next segment. A click
-//! on the first anchor closes the path, on an end of another open path joins the two, and away
+//! on the first anchor closes the path (a drag from it shapes the closing segment as the Pen's
+//! closing drag does), on an end of another open path joins the two, and away
 //! from paths, with no path being drawn, starts a new one. Enter or Esc ends the path.
 //!
 //! Editing the shown paths' points: a click selects a point (an end of an open path is then drawn
@@ -30,7 +31,7 @@ use vectorcraft_pathops::addons::pen::{leave_handle, straighten_segment};
 use crate::direct::hit_handle;
 use crate::draw2::{anchor_in, hit_segment, segment_in, shown_paths};
 use crate::guides::{DrawSnap, Leave};
-use crate::pen::{active_path, continue_from, open_end_at};
+use crate::pen::{active_path, close_drag, continue_from, first_anchor, open_end_at};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The tool's id.
@@ -82,11 +83,13 @@ struct Place {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Target {
     Place(Place),
-    /// Closing the path being drawn on its first anchor, at `first`.
+    /// Closing the path being drawn on its first anchor, at `first`; `anchor` holds that anchor as
+    /// the press found it and its outgoing handle as the drag last left it.
     Close {
         id: NodeId,
         si: usize,
         first: Point,
+        anchor: Option<(Anchor, Point)>,
     },
     /// An anchor of a shown path at `p`; `n` anchors in its subpath, `closed` or not.
     Point {
@@ -285,7 +288,8 @@ impl SmartPenTool {
         let press = |what| Press { at: ev.pos, mods: ev.mods, dragged: false, begun: false, what };
         match self.hit(cx, ev.pos) {
             Hit::Close(id, si, first) => {
-                self.press = Some(Press { begun: true, ..press(Target::Close { id, si, first }) });
+                let anchor = first_anchor(cx, id, si).map(|a| (a, a.h_out));
+                self.press = Some(Press { begun: true, ..press(Target::Close { id, si, first, anchor }) });
                 let seg = if self.curved { "curved" } else { "straight" };
                 vec![
                     Action::Begin("Close Path".into()),
@@ -362,10 +366,11 @@ impl SmartPenTool {
                 pr.what = Target::Place(pl);
                 ("", self.place_preview(&pl, true))
             }
-            Target::Close { id, si, first } => {
+            Target::Close { id, si, first, mut anchor } => {
                 let out = Self::handle_to(cx, first, ev.pos, first, shift, false);
-                let h_in = first - (out - first);
-                ("", Action::Preview("path.close".into(), json!({"id": id.0, "subpath": si, "in": xy(h_in), "independent": alt})))
+                let act = close_drag(id, Some(si), None, first - (out - first), alt, anchor.as_mut());
+                pr.what = Target::Close { id, si, first, anchor };
+                ("", act)
             }
             Target::Point { id, si, ai, p, .. } if pr.mods.alt => {
                 let h = Self::handle_to(cx, p, ev.pos, p, shift, false);
@@ -568,12 +573,15 @@ impl Tool for SmartPenTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
-        if cx.pen_rubber_band
-            && self.press.is_none()
+        // The rubber band preference hides only the preview segment; Measurement Labels decides the readout.
+        if self.press.is_none()
             && let (Some((id, _, sp)), Some(h)) = (self.active(cx), self.hover)
-            && let Some(path) = self.rubber_band(sp, h)
         {
-            o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            if cx.pen_rubber_band
+                && let Some(path) = self.rubber_band(sp, h)
+            {
+                o.push(Overlay::Path { path, color: cx.doc.layer_color(id), width: 1.0, dashed: false });
+            }
             if let Some(last) = sp.anchors.last().map(|a| a.p)
                 && cx.measurement_labels
                 && last.distance(h) > 1e-9

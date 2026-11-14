@@ -793,8 +793,9 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
             assert_eq!(labels, ["Move", "Shape Builder"]);
         }),
-        // The proof views redraw every document (a new revision); they are left off, as the
-        // other tests of the process-wide proof view expect.
+        // The proof views apply the merge first by command id (`WAIT_FOR_TOOL_EDIT`), also when
+        // the view does not change and no document gets a new revision. They are left off, as
+        // the other tests of the process-wide proof view expect.
         ("Separations Preview", |s, _, _| {
             s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
         }),
@@ -806,6 +807,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
         ("Proof Setup", |s, _, _| {
             s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a proof view that changes", |s, _, _| {
+            let _v = crate::tests_colormgmt::DefaultView::new();
+            s.execute("view.proofColors", &json!({"on": true})).unwrap();
+            let on = s.doc().unwrap().revision;
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+            assert!(s.doc().unwrap().revision > on, "the view changes and the documents get new revisions");
         }),
         ("a preference", |s, _, _| {
             let every = s.prefs.gridline_every;
@@ -832,7 +840,7 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
+    let dir = vectorcraft_testkit::TempDir::new("shape-builder-merge-first");
     for (what, then) in next {
         let mut s = session();
         if what == "Select All Instances" {
@@ -1740,6 +1748,203 @@ fn shape_builder_arrow_keys_pass_swatches_of_the_same_color() {
     assert_eq!(s.paint.fill, after, "the swatch after Twin B");
 }
 
+/// The colors of the cursor swatch preview's chips, left to right, and which one is ringed.
+fn swatch_chips(s: &mut Session, v: ViewInfo) -> Vec<([u8; 4], bool)> {
+    let mut chips: Vec<(f64, [u8; 4], bool)> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Swatch { p, color, selected } => Some((p.x, color, selected)),
+            _ => None,
+        })
+        .collect();
+    chips.sort_by(|a, b| a.0.total_cmp(&b.0));
+    chips.into_iter().map(|(_, c, sel)| (c, sel)).collect()
+}
+
+/// A solid paint's color as the chips draw it.
+fn chip_color(p: &Paint) -> [u8; 4] {
+    match p {
+        Paint::Solid { color, .. } => color.to_rgba8(1.0),
+        _ => panic!("not a solid color: {p:?}"),
+    }
+}
+
+/// Live Paint Bucket: Left and Right step the active paint through the document's color swatches
+/// (the selected art keeps its paint), the Cursor Swatch Preview (on at first) shows the active
+/// paint ringed between the swatches before and after it, and with it off the arrows still step.
+#[test]
+fn live_paint_bucket_arrow_keys_step_the_active_paint_through_the_swatches() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_options_of("livePaintBucket")["cursorSwatchPreview"], json!(true));
+    assert!(s.tool_claims_key(ToolKey::Right, v) && s.tool_claims_key(ToolKey::Left, v));
+    assert!(!s.tool_claims_key(ToolKey::Up, v), "Up and Down keep their own use");
+    let list: Vec<(String, Paint)> =
+        vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| (sw.name.clone(), sw.paint.clone())).collect();
+    assert!(list.len() >= 4);
+    let n = list.len();
+    let stroke = s.paint.stroke.clone();
+    s.execute("paint.setFill", &json!({"swatch": list[0].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[2].1);
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[1].1);
+    assert_eq!(s.paint.stroke, stroke, "the stroke stays");
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&list[0].1), false), (chip_color(&list[1].1), true), (chip_color(&list[2].1), false)]);
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0).with_mods(alt), v).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty(), "Alt samples with the eyedropper and shows no chips");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    // Past the first swatch, Left wraps around to the last.
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[n - 1].1);
+    assert_eq!(swatch_chips(&mut s, v).iter().map(|c| c.0).collect::<Vec<_>>(), [&list[n - 2].1, &list[n - 1].1, &list[0].1].map(chip_color));
+    // With the Stroke proxy in front, the arrows step the stroke and the chips show it.
+    s.execute("paint.toggleActive", &json!({"fill": false})).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("paint.setStroke", &json!({"swatch": list[1].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!((&s.paint.fill, &s.paint.stroke), (&fill, &list[2].1));
+    assert!(!s.fill_active, "the Stroke proxy stays in front");
+    assert_eq!(swatch_chips(&mut s, v)[1], (chip_color(&list[2].1), true));
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its paint");
+    // Cursor Swatch Preview off hides the chips; the arrows still step.
+    s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"cursorSwatchPreview": false}})).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty());
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, list[3].1);
+}
+
+/// The Live Paint Bucket and the Shape Builder take Left and Right for swatches only without
+/// modifiers: Shift, Alt and Cmd/Ctrl arrows are left to their shortcuts and change no paint.
+#[test]
+fn swatch_arrow_keys_leave_modified_arrows_to_the_shortcuts() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    let first = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[0].name.clone();
+    s.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    for tool in ["livePaintBucket", "shapeBuilder"] {
+        s.select_tool(tool, v).unwrap();
+        if tool == "shapeBuilder" {
+            s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches"}})).unwrap();
+        }
+        let fill = s.paint.fill.clone();
+        assert!(s.tool_claims_key_with(ToolKey::Right, Mods::default(), v), "{tool}");
+        for m in [Mods { shift: true, ..Default::default() }, Mods { alt: true, ..Default::default() }, Mods { cmd: true, ..Default::default() }] {
+            for key in [ToolKey::Left, ToolKey::Right] {
+                assert!(!s.tool_claims_key_with(key, m, v), "{tool} {key:?} {m:?}");
+                s.tool_key(key, m, v).unwrap();
+                assert_eq!(s.paint.fill, fill, "{tool} {key:?} {m:?}");
+            }
+        }
+        s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        assert_ne!(s.paint.fill, fill, "{tool}: a plain Right steps");
+    }
+}
+
+/// Two swatches of the same color: the Bucket's arrows step through both, and the fill and the
+/// stroke each step on from the swatch picked for them.
+#[test]
+fn live_paint_bucket_arrow_keys_pass_swatches_of_the_same_color_for_fill_and_stroke() {
+    let mut s = session();
+    two(&mut s);
+    for name in ["Twin A", "Twin B"] {
+        s.execute("swatch.new", &json!({"name": name, "color": "#123456"})).unwrap();
+    }
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    let names: Vec<String> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.name.clone()).collect();
+    let a = names.iter().position(|n| n == "Twin A").unwrap();
+    assert_eq!(names[a + 1], "Twin B");
+    let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
+    // The fill goes to Twin B.
+    s.execute("paint.setFill", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    let twin = s.paint.fill.clone();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, twin, "Twin B");
+    // The stroke starts at Twin A: Right goes to Twin B, then past it.
+    s.execute("paint.setStroke", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    assert!(!s.fill_active);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, twin, "Twin B for the stroke");
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, after, "the swatch after Twin B");
+    // Back on the fill, which is still Twin B: Right goes past it.
+    s.execute("paint.toggleActive", &json!({"fill": true})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, after, "the fill steps on from Twin B");
+}
+
+/// A color that is no swatch shows alone and Right picks the first swatch, Left the last; a paint
+/// that is not a solid color shows no chip; one swatch steps to itself; with no color swatch the
+/// tool leaves the arrows alone; during a fill drag the arrows change nothing.
+#[test]
+fn live_paint_bucket_arrow_keys_handle_unmatched_paint_few_swatches_and_drags() {
+    let mut s = session();
+    live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    let list: Vec<Paint> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.paint.clone()).collect();
+    let odd = Paint::solid(Color::rgb8(0x12, 0x34, 0x57));
+    assert!(!list.contains(&odd));
+    s.paint.fill = odd.clone();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&odd), true)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    s.paint.fill = odd.clone();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[list.len() - 1]);
+    s.paint.fill = Paint::None;
+    assert!(swatch_chips(&mut s, v).is_empty());
+
+    // During a fill drag the arrows are not taken and change nothing.
+    s.paint.fill = list[0].clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    assert!(s.tool_busy());
+    assert!(!s.tool_claims_key(ToolKey::Right, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    assert!(swatch_chips(&mut s, v).is_empty(), "no chips during a drag");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 25.0, 50.0), v).unwrap();
+
+    // One color swatch: both arrows pick it, and it stands on both sides of itself.
+    let one = list[0].clone();
+    s.edit("t", |d, _| {
+        d.swatch_groups.clear();
+        d.swatches.retain(|sw| sw.paint == one);
+        d.swatches.truncate(1);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).len(), 1);
+    s.paint.fill = odd;
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+    s.pointer(&PointerEvent::new(PointerKind::Move, 301.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&one), false), (chip_color(&one), true), (chip_color(&one), false)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+
+    // No color swatch: the arrows are left to the canvas and the paint stays.
+    s.edit("t", |d, _| {
+        d.swatches.clear();
+        Ok(())
+    })
+    .unwrap();
+    assert!(!s.tool_claims_key(ToolKey::Right, v) && !s.tool_claims_key(ToolKey::Left, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+}
+
 #[test]
 fn shape_builder_tool_alt_deletes_line_pieces() {
     let mut s = session();
@@ -2438,6 +2643,193 @@ fn live_paint_stroke_edge() {
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
 }
 
+/// The undo and redo depths, the unsaved state and the revision of the active document.
+fn history_state(s: &Session) -> (usize, usize, bool, u64) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty(), st.revision)
+}
+
+/// Draw a rectangle and undo it, so a redo step is waiting, then mark the document saved with `g`
+/// alone selected.
+fn redo_waiting_and_saved(s: &mut Session, g: NodeId) {
+    rect(s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// The active document and its [`history_state`].
+type Snapshot = (vectorcraft_doc::Document, (usize, usize, bool, u64));
+
+fn snapshot(s: &Session) -> Snapshot {
+    ((*s.doc().unwrap().doc).clone(), history_state(s))
+}
+
+/// After a Live Paint edit that changed nothing: the document, the undo and redo steps, the saved
+/// state and the revision are as `before`, and Redo still brings back the rectangle
+/// [`redo_waiting_and_saved`] undid. Undoes the rectangle again, marks the document saved and
+/// takes a new `before`.
+fn assert_unchanged(s: &mut Session, before: &mut Snapshot, what: &str) {
+    assert!(*s.doc().unwrap().doc == before.0, "{what}: the document is as it was");
+    assert_eq!(history_state(s), before.1, "{what}: no undo step, the redo step kept, still saved");
+    let children = layer_children(s);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(layer_children(s), children + 1, "{what}: Redo brings back the rectangle");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    *before = snapshot(s);
+}
+
+#[test]
+fn live_paint_fill_same_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let drag = json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#00ff00"});
+    s.execute("livePaint.fill", &drag).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    // A color used since stays the newest recent color and the last color.
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    s.remember_paint_now(&Paint::solid(blue));
+    let recent = (s.recent_colors.clone(), s.last_solid);
+    let mut before = snapshot(&s);
+    let click = s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50], "color": "#00ff00"})).unwrap();
+    let face = vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(75.0, 50.0)).unwrap().id;
+    assert_eq!(click, json!({"group": g.0, "face": face.0}), "the usual reply");
+    assert_unchanged(&mut s, &mut before, "a click on a face with the paint");
+    s.execute("livePaint.fill", &drag).unwrap();
+    assert_unchanged(&mut s, &mut before, "a drag over faces with the paint");
+    // Without a group, the click finds the Live Paint group among the selected objects.
+    s.execute("livePaint.fill", &json!({"point": [125, 50], "color": "#00ff00"})).unwrap();
+    assert_unchanged(&mut s, &mut before, "a click in the selected group");
+    assert_eq!((s.recent_colors.clone(), s.last_solid), recent, "the recent colors are as they were");
+    // A drag that reaches one face without the paint is one undo step and remembers the color.
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    for x in [25, 75] {
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [x, 50], "color": "#ff0000"})).unwrap();
+    }
+    s.remember_paint_now(&Paint::solid(blue));
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#ff0000"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert_eq!(Paint::solid(s.last_solid), red);
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), red, "{x}");
+    }
+}
+
+#[test]
+fn live_paint_bucket_click_with_the_face_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let click = |s: &mut Session, x: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 50.0), v).unwrap();
+    };
+    click(&mut s, 125.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    click(&mut s, 125.0);
+    assert_unchanged(&mut s, &mut before, "a Bucket click on a face with the paint");
+    // A drag over faces with the paint changes nothing either.
+    click(&mut s, 25.0);
+    click(&mut s, 75.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    assert_unchanged(&mut s, &mut before, "a Bucket drag over faces with the paint");
+}
+
+#[test]
+fn live_paint_stroke_edge_same_paint_and_width_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let call = json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 3});
+    let first = s.execute("livePaint.strokeEdge", &call).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    s.remember_paint_now(&Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let last = s.last_solid;
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.strokeEdge", &call).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "an edge with the paint and the width");
+    assert_eq!(s.last_solid, last, "the last color is as it was");
+    // Another width is an edit.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_same_values_are_no_op() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let set = json!({"detect": true, "size": "small", "color": "#123456"});
+    let first = s.execute("livePaint.gapOptions", &set).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.gapOptions", &set).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "the options the group has");
+    s.execute("livePaint.gapOptions", &json!({})).unwrap();
+    assert_unchanged(&mut s, &mut before, "no options given");
+    // Close Gaps With Paths with a gap to close is an edit.
+    let r = s.execute("livePaint.gapOptions", &json!({"closeGaps": true})).unwrap();
+    assert_eq!(r["closed"], 1);
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_close_without_gaps_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
+    assert_eq!((ids(&r), &r["faces"], &r["closed"], gaps_of(&r).len()), (vec![g], &json!(3), &json!(0), 0));
+    assert_unchanged(&mut s, &mut before, "no gap to close");
+    // With other options, the faces keep their ids when no path is added.
+    let faces = |s: &Session| vectorcraft_tools::builder::faces(&node(s, g)).iter().map(|f| f.id).collect::<Vec<_>>();
+    let ids_before = faces(&s);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+    assert_eq!(faces(&s), ids_before);
+}
+
+#[test]
+fn live_paint_make_existing_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(r["edges"].as_u64().unwrap(), vectorcraft_tools::builder::edges(&node(&s, g)).len() as u64);
+    assert_unchanged(&mut s, &mut before, "Make with the group alone");
+}
+
+#[test]
+fn live_paint_merge_single_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let other = rect(&mut s, 300.0, 0.0, 50.0, 50.0);
+    redo_waiting_and_saved(&mut s, g);
+    // Given by id, the group is selected without an undo step.
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let before = snapshot(&s);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    assert!(*s.doc().unwrap().doc == before.0);
+    let (undo, redo, dirty, _) = history_state(&s);
+    assert_eq!((undo, redo, dirty), (before.1.0, before.1.1, before.1.2));
+    // A path to add is an edit.
+    s.execute("livePaint.merge", &json!({"ids": [g.0, other.0]})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
 /// Shape Builder refuses an on/off option that is not true or false and a tolerance or gap that is
 /// not a number, given as text or as another value of the wrong kind, naming the key; the document
 /// and the undo history stay as they were. True, false and null still work.
@@ -2946,6 +3338,120 @@ fn merged_live_paint_groups_keep_the_bottom_groups_gap_options() {
 }
 
 #[test]
+fn live_paint_bucket_drag_fills_multiple_faces() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let before = s.doc().unwrap().doc.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    // Skip the middle face between pointer events, as can happen in a fast drag.
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+        assert_eq!(f.appearance.fill_paint(), s.paint.fill, "dragged face at {x}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before, "one Undo restores every face");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 125.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty(), "hover still highlights a face");
+    assert_eq!(s.doc().unwrap().doc, before, "hover does not paint");
+}
+
+#[test]
+fn live_paint_bucket_drag_crosses_thin_grid_cells_and_can_cancel() {
+    for (deferred, cancel) in [(false, false), (false, true), (true, false)] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (50.25, 0.0), (50.25, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = !deferred;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            assert!(s.tool_claims_key(ToolKey::Escape, v));
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+            assert!(!s.tool_claims_key(ToolKey::Escape, v));
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 50.125, 125.0] {
+                let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+                assert_eq!(f.appearance.fill_paint(), s.paint.fill, "deferred={deferred}, x={x}");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "deferred={deferred}, cancel={cancel}: original paths and selection art must be restored");
+    }
+}
+
+#[test]
+fn live_paint_bucket_long_drag_keeps_late_turns_and_release_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (100.0, 0.0), (100.0, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|id| id.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = false;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        for i in 1..4096 {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 50.0), v).unwrap();
+        }
+        // Turn around the middle face after the chunk limit, then enter the right face on Up.
+        for (x, y) in [(25.0, 150.0), (125.0, 150.0)] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        }
+        if cancel {
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 125.0] {
+                assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), s.paint.fill);
+            }
+            assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(75.0, 50.0)).unwrap().appearance.fill_paint(), Paint::solid(Color::WHITE));
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "long drag is one cancellable undo step");
+    }
+}
+
+#[test]
+fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live(&mut s);
+    let before = s.doc().unwrap().doc.clone();
+    for points in
+        [json!([]), json!([[26.0, 50.0]]), json!([[25.0, 50.0], [null, 0]]), json!([[25.0, 50.0], [1e30, 0]]), json!(vec![[25.0, 50.0]; 4097])]
+    {
+        assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": points})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[26.0, 50.0], [125.0, 50.0]]]), json!([vec![[25.0, 50.0]; 4097]])] {
+        assert!(
+            s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": [[25.0, 50.0]], "continuation": continuation}))
+                .is_err()
+        );
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
 fn live_paint_bucket_tool_fills_face() {
     let mut s = session();
     let g = live(&mut s);
@@ -2963,6 +3469,145 @@ fn live_paint_bucket_tool_fills_face() {
     s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 50.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
     assert_eq!(s.doc().unwrap().selection.objects, vec![f.id]);
+}
+
+/// `tool.setOption` refuses an invalid value for the Live Paint tools, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a color that is not an RGB color (an alpha part included), a width that is not a number
+/// and an option the tool does not have. Nothing is set, also from the valid values sent with it,
+/// and the saved settings stay as they were.
+#[test]
+fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    let widths = [json!("wide"), json!(null), json!(true)];
+    let switches = [json!("true"), json!(null), json!(1)];
+    for (tool, keys) in [
+        ("livePaintBucket", &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"][..]),
+        ("livePaintSelection", &["selectFills", "selectStrokes"][..]),
+    ] {
+        let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
+        bad.extend(colors.iter().map(|v| ("color", v.clone())));
+        bad.extend(widths.iter().map(|v| ("width", v.clone())));
+        bad.push(("colour", json!("#00ff00")));
+        for active in [false, true] {
+            let mut s = session();
+            if active {
+                s.select_tool(tool, ViewInfo::default()).unwrap();
+            }
+            let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+            for (key, v) in &bad {
+                let mut values = serde_json::Map::new();
+                values.insert("width".into(), json!(9));
+                values.insert(key.to_string(), v.clone());
+                for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                    let e = s.set_tool_option_cmd(&p).unwrap_err();
+                    assert!(e.contains(&format!("`{key}`")), "{tool} {p}: {e}");
+                    assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{tool} {p}");
+                }
+            }
+            // A `key` left without a `value` is an invalid value too.
+            assert!(s.set_tool_option_cmd(&json!({"tool": tool, "key": "color"})).is_err());
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+            assert_eq!(s.tool_options_of(tool), options, "{tool}");
+        }
+    }
+}
+
+/// The Live Paint tools' options take each color form they took before, and a width out of range
+/// is clamped to 1–20 rather than refused; the values are saved with the preferences.
+#[test]
+fn live_paint_tool_options_take_rgb_colors_and_clamp_the_width() {
+    let mut s = session();
+    for tool in ["livePaintBucket", "livePaintSelection"] {
+        for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "color", "value": color})).unwrap();
+            assert_eq!(o["color"], hex, "{tool} {color}");
+        }
+        for (width, set) in [(100.0, 20.0), (0.0, 1.0), (-3.0, 1.0), (7.5, 7.5)] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"width": width}})).unwrap();
+            assert_eq!(o["width"], set, "{tool} {width}");
+        }
+        assert_eq!(s.prefs.tool_settings[tool]["width"], 7.5);
+        assert_eq!(s.prefs.tool_settings[tool]["color"], "#ffffff");
+    }
+    let o = s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"paintFills": false, "highlight": false}})).unwrap();
+    assert_eq!((&o["paintFills"], &o["highlight"]), (&json!(false), &json!(false)));
+}
+
+/// Saved Live Paint settings that hold an invalid value still load: the tool keeps its default for
+/// that option and takes the valid ones.
+#[test]
+fn live_paint_tools_load_saved_settings_with_invalid_values() {
+    let mut s = session();
+    let saved = json!({"paintFills": "yes", "highlight": false, "width": "wide", "color": "nope", "paintStrokes": true});
+    s.prefs.tool_settings.insert("livePaintBucket".into(), saved.as_object().unwrap().clone());
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let o = s.tool_options_of("livePaintBucket");
+    assert_eq!(
+        (&o["paintFills"], &o["paintStrokes"], &o["highlight"], &o["width"], &o["color"]),
+        (&json!(true), &json!(true), &json!(false), &json!(4.0), &json!("#ff2a2a"))
+    );
+}
+
+/// `tool.setOption` refuses an invalid value for the Shape Builder, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a `pickColorFrom` or `selection` that is not one of its names, a `gapLength` that is not
+/// a number, a `highlightColor` that is not an RGB color (an alpha part included) and an option the
+/// tool does not have. Nothing is set, also from the valid values sent with it, and the saved
+/// settings stay as they were.
+#[test]
+fn shape_builder_tool_options_refuse_invalid_values_and_change_nothing() {
+    let tool = "shapeBuilder";
+    let switches = ["openFilledAsClosed", "cursorSwatchPreview", "highlightFill", "gapDetection", "clickStrokeSplitsPath", "highlightStroke"];
+    let mut bad: Vec<(&str, Value)> = switches.iter().flat_map(|k| [json!("true"), json!(null), json!(1)].map(move |v| (*k, v))).collect();
+    bad.extend([json!("Swatches"), json!(true), json!(null), json!("")].map(|v| ("pickColorFrom", v)));
+    bad.extend([json!("straight"), json!(1), json!(null)].map(|v| ("selection", v)));
+    bad.extend([json!("wide"), json!(null), json!(true)].map(|v| ("gapLength", v)));
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    bad.extend(colors.map(|v| ("highlightColor", v)));
+    bad.push(("color", json!("#00ff00")));
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+        }
+        let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+        for (key, v) in &bad {
+            let mut values = serde_json::Map::new();
+            values.insert("gapLength".into(), json!(9));
+            values.insert(key.to_string(), v.clone());
+            for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                let e = s.set_tool_option_cmd(&p).unwrap_err();
+                assert!(e.contains(&format!("`{key}`")), "{p}: {e}");
+                assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{p}");
+            }
+        }
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options_of(tool), options);
+    }
+}
+
+/// The Shape Builder's options take each value they took before: the names of `pickColorFrom` and
+/// `selection`, each RGB color form, and a gap length out of range clamped rather than refused.
+#[test]
+fn shape_builder_tool_options_take_valid_values_and_clamp_the_gap() {
+    let mut s = session();
+    let tool = "shapeBuilder";
+    for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "highlightColor", "value": color})).unwrap();
+        assert_eq!(o["highlightColor"], hex, "{color}");
+    }
+    for (gap, set) in [(1000.0, vectorcraft_tools::builder::SHAPE_BUILDER_MAX_GAP), (-3.0, 0.0), (7.5, 7.5)] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"gapLength": gap}})).unwrap();
+        assert_eq!(o["gapLength"], set, "{gap}");
+    }
+    let o = s
+        .set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches", "selection": "straightLine", "gapDetection": true}}))
+        .unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"], &o["gapDetection"]), (&json!("swatches"), &json!("straightLine"), &json!(true)));
+    let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "artwork", "selection": "freeform"}})).unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"]), (&json!("artwork"), &json!("freeform")));
+    assert_eq!(s.prefs.tool_settings[tool]["gapLength"], 7.5);
 }
 
 #[test]
@@ -3666,6 +4311,103 @@ fn a_trace_run_needs_the_library_colours_it_traced_with() {
     assert!(!run.current(&s), "{name} changed");
 }
 
+/// `image_doc`'s image with its disc 20 px to the left: the same size, other pixels.
+fn moved_disc_png() -> Vec<u8> {
+    vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 30.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    })
+    .encode_png()
+}
+
+/// Puts `bytes` under the image key `key`, or takes the key's image data away (`None`).
+fn set_image_data(s: &mut Session, key: &str, bytes: Option<Vec<u8>>) {
+    s.edit("image data", |d, _| {
+        match bytes {
+            Some(b) => d.images.insert(key.into(), ImageBlob::new("image/png", b)),
+            None => d.images.remove(key),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// The middle of the first traced path of the Image Trace object the reply `r` names, in x.
+fn traced_center_x(s: &Session, r: &Value) -> f64 {
+    outline(&traced_paths(&node(s, NodeId(r["id"].as_u64().unwrap())))[0]).0.bounds().unwrap().center().x
+}
+
+/// A trace made away from its command no longer applies once the pixels under its image's key
+/// change, though the object, its image record and the settings stay as they were; both commands
+/// then trace the pixels there now. The same bytes in another allocation still apply.
+#[test]
+fn a_trace_run_needs_the_pixels_it_traced() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        image_doc(&mut s);
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        // The same bytes, allocated anew: still current.
+        let same = s.doc().unwrap().doc.images["img1"].bytes.to_vec();
+        set_image_data(&mut s, "img1", Some(same));
+        assert!(run.current(&s), "{command}: equal bytes");
+        // Other pixels under the same key: no longer current, and the hand-off is dropped.
+        set_image_data(&mut s, "img1", Some(moved_disc_png()));
+        assert!(!run.current(&s), "{command}: other pixels");
+        traced.hand_in(&mut s);
+        let r = s.execute(command, run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        // The disc is now at image x 30, which the ×2 placement at 50 puts at 110.
+        let x = traced_center_x(&s, &r);
+        assert!((x - 110.0).abs() < 1.5, "{command}: traced the pixels there now, at {x}");
+    }
+}
+
+/// Image data that is missing or empty: a run made before it went no longer applies, the run's
+/// command gives the error it gives without a run, and nothing panics.
+#[test]
+fn a_trace_run_of_missing_or_empty_image_data() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    let traced = run.run(&|_, _| true).unwrap();
+    set_image_data(&mut s, "img1", None);
+    assert!(!run.current(&s), "missing");
+    traced.hand_in(&mut s);
+    let e = s.execute(run.command(), run.params()).unwrap_err().to_string();
+    assert!(e.contains("image data `img1` is missing"), "{e}");
+    set_image_data(&mut s, "img1", Some(vec![]));
+    assert!(!run.current(&s), "empty");
+    let empty = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(empty.current(&s), "two empty blobs are equal");
+    assert!(matches!(empty.run(&|_, _| true), Err(EngineError::Other(_))));
+    assert!(matches!(s.execute(run.command(), run.params()), Err(EngineError::Other(_))));
+}
+
+/// Tracing an Image Trace object again follows the same rule: once the pixels of the image it
+/// holds change, a run made before no longer applies, and the command traces the pixels there now.
+#[test]
+fn a_trace_run_of_an_image_trace_object_needs_its_pixels() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let g = s.execute("imageTrace.make", &p).unwrap()["id"].as_u64().unwrap();
+    let again = json!({"id": g, "params": {"ignoreWhite": true}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &again).unwrap();
+    assert_eq!(run.target(), NodeId(g));
+    let traced = run.run(&|_, _| true).unwrap();
+    assert!(run.current(&s));
+    set_image_data(&mut s, "img1", Some(moved_disc_png()));
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let r = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let x = traced_center_x(&s, &r);
+    assert!((x - 110.0).abs() < 1.5, "traced the pixels there now, at {x}");
+}
+
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
 /// circle as its traced path; without the option it is a plain path.
 #[test]
@@ -3915,7 +4657,10 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         sorted.sort();
         assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
         let n = node(&s, g);
-        assert_eq!(names(&n), order, "{method}");
+        // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
+        // group of the field's color, above the black one.
+        let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
+        assert_eq!(names(&n), want, "{method}");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
         let groups = n.children().unwrap();
@@ -3929,8 +4674,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), 3, "{method}");
-        for (sub, name) in subs.iter().zip(&order) {
+        assert_eq!(subs.len(), want.len(), "{method}");
+        for (sub, name) in subs.iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");

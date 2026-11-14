@@ -11,8 +11,9 @@
 //! in Folder… (`ui.findLinksInFolder`), they stay as they are.
 //!
 //! Fields: `document` (the document's uid), `missing` (`[{name, path, ids}]`), `modified` (the ids
-//! of the images whose file was modified, offered for update afterwards), `back` (the files left
-//! without a choice and those that fail to relink go back to dialog `missingLinks`), `state`
+//! of the images whose file was modified, offered for update afterwards), `notes` (from
+//! `missingLinks`: the open's notes, shown with the line about the modified files), `back` (the
+//! files left without a choice and those that fail to relink go back to dialog `missingLinks`), `state`
 //! (empty, `searching`, `done`, `stopped` or `failed`), `search` (the search's `id`), `folder`,
 //! `found` (`links.findFiles`'s `links`, with the files found), `searched`, `skipped`,
 //! `unreadable`, `stopped`, `error`, `picks` (the file chosen for each row of `missing`, or null),
@@ -66,6 +67,7 @@ fn dialog(app: &VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, back:
 /// Linked Files, searching `folder` for every file `d` still asks about.
 pub(super) fn from_missing_links(app: &mut VectorcraftApp, d: &mut Dialog, folder: &str) -> Result<(), String> {
     let mut find = dialog(app, rows(d, "missing"), rows(d, "modified"), true)?;
+    find.fields.insert("notes".into(), json!(super::missing_links::notes(d)));
     start_search(app, &mut find, folder)?;
     *d = find;
     Ok(())
@@ -112,11 +114,12 @@ pub(crate) fn find_in_folder_command(app: &mut VectorcraftApp, folder: Option<St
     Ok(Value::Null)
 }
 
-/// Whether object `id` of the active document is an image (and not a placed document).
+/// Whether object `id` of the active document is an image (and not a placed document), in the
+/// layers or in opacity-mask art or the art of a symbol, graph design or pattern.
 fn is_image(app: &VectorcraftApp, id: &Value) -> bool {
     let Some(id) = id.as_u64() else { return false };
     let st = app.session.active();
-    st.and_then(|st| st.doc.node(vectorcraft_doc::NodeId(id))).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)))
+    st.and_then(|st| st.doc.stored_node(vectorcraft_doc::NodeId(id))).is_some_and(|(n, _)| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)))
 }
 
 /// Make the dialog's document the active one: it may be another tab's.
@@ -146,10 +149,12 @@ fn start_search(app: &mut VectorcraftApp, d: &mut Dialog, folder: &str) -> Resul
     Ok(())
 }
 
-/// The files a search found for `row` (`{path, ids}`), best first: the answer's `links` row with
-/// the same path and ids.
+/// The files a search found for `row` (`{path?, ids}`), best first: the answer's `links` row with
+/// the same ids and, when both have one, the same path. A row has no `path` when its file is outside
+/// an automation client's read roots.
 fn files_for<'a>(found: &'a [Value], row: &Value) -> &'a [Value] {
-    found.iter().find(|r| r["path"] == row["path"] && r["ids"] == row["ids"]).and_then(|r| r["files"].as_array()).map_or(&[], Vec::as_slice)
+    let same_path = |r: &Value| r["path"].is_null() || row["path"].is_null() || r["path"] == row["path"];
+    found.iter().find(|r| r["ids"] == row["ids"] && same_path(r)).and_then(|r| r["files"].as_array()).map_or(&[], Vec::as_slice)
 }
 
 /// The file chosen at the start among `files`: the only one that is the same file, else the only
@@ -383,7 +388,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         None => {}
     }
     if d.bool("back") {
-        super::missing_links::ask_next(app, rest, rows(d, "modified"));
+        super::missing_links::ask_next(app, rest, rows(d, "modified"), super::missing_links::notes(d));
     }
     Ok(json!({ "relinked": relinked, "failed": failed }))
 }

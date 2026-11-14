@@ -215,7 +215,7 @@ fn a_typed_extension_of_a_format_the_save_does_not_write_is_replaced() {
 #[test]
 fn a_replaced_extension_asks_before_replacing_a_file_there() {
     let (mut app, shown, written) = portal_app();
-    app.services.exists = Some(Box::new(|p: &str| p == "/art/card.vectorcraft"));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/art/card.vectorcraft"));
     assert_eq!(saved_from(&mut app, &shown, &written, "file.save", &["/art/card.png"]), "/art/card.vectorcraft");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::REPLACE));
     assert!(written.borrow().is_empty());
@@ -254,7 +254,7 @@ fn a_document_in_another_format_saves_as_the_type_picked() {
 #[test]
 fn a_name_given_the_picked_types_extension_asks_before_replacing() {
     let (mut app, shown, written) = portal_app();
-    app.services.exists = Some(Box::new(|p: &str| p == "/art/poster.ai"));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/art/poster.ai"));
     assert_eq!(saved_from(&mut app, &shown, &written, "file.save", &["/art/poster", "ai"]), "/art/poster.ai");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::REPLACE));
     assert!(written.borrow().is_empty());
@@ -284,7 +284,7 @@ fn on_disk(tag: &str, typed: &str) -> (VectorcraftApp, std::path::PathBuf) {
     let picked = dir.join(typed).to_string_lossy().into_owned();
     let services = Services {
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-        exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
+        exists: Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists())),
         pick_save: Some(Box::new(move |_: &FilePick| Some(picked.clone()))),
         ..Default::default()
     };
@@ -371,7 +371,7 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
     ];
     for (cmd, params, path) in cases {
         let (mut app, w) = saving_app("/tmp/out");
-        app.services.exists = Some(Box::new(|_: &str| true));
+        app.services.exists = Some(std::sync::Arc::new(|_: &str| true));
         app.run("select.all", json!({})).unwrap();
         assert!(app.run(cmd, params).is_err(), "{cmd}");
         assert!(w.borrow().is_empty(), "{cmd}: nothing is written while it asks");
@@ -382,7 +382,7 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
     }
     // Export As: the question's OK picks the file again, and PNG Options follows.
     let (mut app, w) = saving_app("/tmp/out");
-    app.services.exists = Some(Box::new(|_: &str| true));
+    app.services.exists = Some(std::sync::Arc::new(|_: &str| true));
     app.run("file.exportAs", json!({"format": "png"})).unwrap();
     assert!(dialogs::confirm(&mut app).is_err());
     let open = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.str("path")));
@@ -390,6 +390,22 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(open(&app), Some(("pngOptions".to_string(), "/tmp/out.png".to_string())));
     assert!(w.borrow().is_empty());
+}
+
+/// Export As to a format without Use Artboards (a template holds the whole document) gives the
+/// export no artboard option, so an export that automation confirms gets no note that one was
+/// not used.
+#[test]
+fn export_as_a_template_is_given_no_artboard_option() {
+    for use_artboards in [false, true] {
+        let (mut app, w) = saving_app("/tmp/out");
+        app.ui.answering_control = true;
+        app.run("file.exportAs", json!({"format": "template", "useArtboards": use_artboards})).unwrap();
+        let r = dialogs::confirm(&mut app).unwrap();
+        assert_eq!(last(&w), "/tmp/out.vctemplate");
+        assert!(r["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+        assert!(!app.ui.status.contains("was not used"), "{}", app.ui.status);
+    }
 }
 
 #[test]

@@ -31,10 +31,12 @@ impl<'a> Exporter<'a> {
             warnings: vec![],
             images: HashMap::new(),
             image_left_out: None,
+            warp_size: None,
             brushes: None,
             knockout: doc.page_knockout,
             lab_spots: vec![],
             interpolate: set.standard != Standard::PdfA2b,
+            sweeps: set.standard != Standard::PdfA2b,
             // PDF 1.3 and 1.4 files are written with the PDF 1.4 settings ([`Writer::new`]).
             sixteen_bit: !matches!(set.compatibility, Compatibility::Pdf13 | Compatibility::Pdf14),
             compression: &set.compression,

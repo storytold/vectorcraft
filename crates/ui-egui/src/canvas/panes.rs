@@ -12,8 +12,8 @@ use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
     Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, cache_key,
-    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, plugin_key, pos2, rulers, shows_artboards,
-    textured_quad, vec2, view_rects,
+    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
+    shows_artboards, textured_quad, vec2, view_rects,
 };
 use crate::doc_windows::Win;
 use crate::thumb_worker::ThumbWorker;
@@ -70,9 +70,17 @@ impl Panes {
     }
 
     /// Bring `slot`'s render up to `key` (`size` pixels through `view`), on the worker when there
-    /// is one, then draw the slot's latest render through `xf`, turned and scaled into the view it
-    /// was rendered for.
-    fn draw(&mut self, ctx: &egui::Context, painter: &egui::Painter, xf: &Xf, slot: Slot, frame: PaneFrame) {
+    /// is one, converted into the display profile `display`, then draw the slot's latest render
+    /// through `xf`, turned and scaled into the view it was rendered for.
+    fn draw(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        xf: &Xf,
+        slot: Slot,
+        frame: PaneFrame,
+        display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
+    ) {
         let (key, doc, ((w, h), view), opts) = frame;
         if !self.worker_started {
             self.worker_started = true;
@@ -101,8 +109,16 @@ impl Panes {
         if !current {
             let mut queued = false;
             if let Some(worker) = &self.worker {
-                let (job_doc, job_opts) = (doc.clone(), opts.clone());
-                queued = worker.submit(slot, (slot, key.clone()), Box::new(move |r| Some(r.render(&job_doc, w, h, view, &job_opts))));
+                let (job_doc, job_opts, job_display) = (doc.clone(), opts.clone(), display.clone());
+                queued = worker.submit(
+                    slot,
+                    (slot, key.clone()),
+                    Box::new(move |r| {
+                        let mut img = r.render(&job_doc, w, h, view, &job_opts);
+                        crate::display_profile::convert(job_display.as_deref(), &mut img.pixels);
+                        Some(img)
+                    }),
+                );
                 if queued {
                     self.pending.insert(slot, key.clone());
                 } else {
@@ -110,7 +126,8 @@ impl Panes {
                 }
             }
             if !queued {
-                let img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
+                let mut img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
+                crate::display_profile::convert(display.as_deref(), &mut img.pixels);
                 self.upload(ctx, slot, key, &img);
             }
         }
@@ -263,11 +280,11 @@ fn refit_resized(app: &mut VectorcraftApp, areas: &[(Win, egui::Rect)]) -> Vec<b
         .collect()
 }
 
-/// Fit `v` to show its artboard (the first if it has gone) in `rect`, as Fit Artboard in Window
-/// does.
-fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, rect: egui::Rect) {
+/// Fit `v` to show its artboard (the first if it has gone) in `rect`, with the interface zoomed by
+/// `ui_zoom`, as Fit Artboard in Window does.
+fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, rect: egui::Rect, ui_zoom: f32) {
     if let Some(target) = doc.artboards.get(v.artboard).or(doc.artboards.first()).map(|a| a.rect) {
-        v.zoom = fit_zoom(rect, target, v.rotation);
+        v.zoom = fit_zoom(rect, target, v.rotation, ui_zoom);
         v.center = target.center();
         v.fitted = true;
     }
@@ -284,13 +301,14 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     let (full, rect) = view_rects(app, cell, ppp);
     let Some(st) = app.session.documents().get(w.0) else { return false };
     let doc = st.doc.clone();
+    let ui_zoom = ui.ctx().zoom_factor();
     if let Some(v) = crate::doc_windows::view_mut(app, w).filter(|v| !v.fitted) {
-        fit_pane(v, &doc, rect);
+        fit_pane(v, &doc, rect, ui_zoom);
     }
     let v = crate::doc_windows::view(app, w).copied().unwrap_or_default();
     let Some(st) = app.session.documents().get(w.0) else { return false };
     let slot = (st.uid, w.1);
-    let xf = Xf::new(rect, &v);
+    let xf = Xf::at(rect, &v, ui_zoom);
     let painter = ui.painter_at(rect);
     paint_paper(app, st, ui, &painter, &xf, rect, (&t, v.outline));
     let grid_look = app.ui.view.grid.then(|| LineLook::grid(&app.session.prefs));
@@ -301,17 +319,20 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     let size = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
     let (pw, ph) = (size(rect.width()), size(rect.height()));
     // View › Pixel Preview, as the canvas draws it.
-    let pixel = (app.ui.view.pixel_preview && v.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
-    let mut key = cache_key(app, ui, st, &t, &v, (pw, ph, ppp), (pixel, smooth_images, plugins));
+    let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
+    let drawn = v.on_screen(ui_zoom);
+    let mut key = cache_key(app, ui, st, &t, &drawn, (pw, ph, ppp), (pixel, smooth_images, plugins, placed));
     // The current document's drag and Image Trace hold are not this document's, and this view has
     // its own Outline or Preview.
     (key.dragging, key.trace_source, key.outline) = (false, None, v.outline);
     let opts = frame_options(app, &key, st.shown_mask(), smooth_images);
-    let (fw, fh, view) = frame_view(pixel, (pw, ph), &v, ppp);
+    let (fw, fh, view) = frame_view(pixel, (pw, ph), &drawn, ppp);
     let doc = st.doc.clone();
-    app.canvas.panes.draw(ui.ctx(), &painter, &xf, slot, (key, doc, ((fw, fh), view), opts));
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
+    app.canvas.panes.draw(ui.ctx(), &painter, &xf, slot, (key, doc, ((fw, fh), view), opts), display);
     let Some(st) = app.session.documents().get(w.0) else { return false };
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);

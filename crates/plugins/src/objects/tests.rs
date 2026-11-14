@@ -67,6 +67,75 @@ fn objects_round_trip_through_the_json_model() {
     assert_eq!(d, before);
 }
 
+/// A mirrored conic gradient handed back keeps its negative aspect (its sweep stays mirrored),
+/// kept within the same range as other aspects; a radial's is kept positive.
+#[test]
+fn a_mirrored_conic_keeps_its_sign_through_a_plug_in() {
+    let (d, ids, _) = doc();
+    let a = ids[0].0;
+    let fill = |kind: &str, aspect: f64| {
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default());
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect, focal: None });
+        let mut p = serde_json::to_value(Paint::Gradient(Box::new(g))).unwrap();
+        p["gradient"]["kind"] = json!(kind);
+        p
+    };
+    for (kind, aspect, want) in [("Conic", -0.5, -0.5), ("Conic", -500.0, -100.0), ("Conic", 0.5, 0.5), ("Radial", -0.5, 0.01)] {
+        let mut d = d.clone();
+        let out = decode_json(json!({"objects": [{"id": a, "fills": [fill(kind, aspect)]}]})).unwrap();
+        apply_output(&mut d, &ids, out, None, &keep).unwrap();
+        let Paint::Gradient(g) = d.node(ids[0]).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+        assert_eq!(g.geom.unwrap().aspect, want, "{kind} {aspect}");
+    }
+}
+
+/// A focal point handed back on a conic or diamond gradient, which have none, is dropped; a
+/// radial's is kept.
+#[test]
+fn only_a_radial_keeps_a_focal_point_through_a_plug_in() {
+    let (d, ids, _) = doc();
+    let a = ids[0].0;
+    let focal = Point::new(3.0, 1.0);
+    for (kind, want) in [("Conic", None), ("Diamond", None), ("Radial", Some(focal))] {
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default());
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: Some(focal) });
+        let mut p = serde_json::to_value(Paint::Gradient(Box::new(g))).unwrap();
+        p["gradient"]["kind"] = json!(kind);
+        let mut d = d.clone();
+        let out = decode_json(json!({"objects": [{"id": a, "fills": [p]}]})).unwrap();
+        apply_output(&mut d, &ids, out, None, &keep).unwrap();
+        let Paint::Gradient(g) = d.node(ids[0]).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+        assert_eq!(g.geom.unwrap().focal, want, "{kind}");
+    }
+}
+
+/// A gradient stop's process plates handed back out of range are clamped to 0..1, each in its
+/// place, in a fill and in a stroke (a JSON number too large for `f32` is infinite); plates in range
+/// and a stop without plates are kept.
+#[test]
+fn gradient_stop_plates_are_clamped_through_a_plug_in() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let (mut d, ids, _) = doc();
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(0.5, Color::gray(0.5)), GradientStop::new(1.0, Color::BLACK)];
+    let mut p = serde_json::to_value(Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))).unwrap();
+    p["gradient"]["stops"][0]["plates"] = json!([-0.5, 1.5, -1e300, 1e300]);
+    p["gradient"]["stops"][1]["plates"] = json!([0.25, 2.0, 0.75, -3.0]);
+    let out = json!({"objects": [{"id": ids[0].0, "fills": [p.clone()], "strokes": [{"paint": p}]}]});
+    apply_output(&mut d, &ids, decode_json(out).unwrap(), None, &keep).unwrap();
+    let ap = &d.node(ids[0]).unwrap().appearance;
+    for (what, paint) in [("fill", ap.fill_paint()), ("stroke", ap.stroke_paint())] {
+        let Paint::Gradient(g) = paint else { panic!("a gradient {what}") };
+        let plates: Vec<_> = g.gradient.stops.iter().map(|s| s.plates).collect();
+        assert_eq!(plates, [Some([0.0, 1.0, 0.0, 1.0]), Some([0.25, 1.0, 0.75, 0.0]), None], "{what}");
+    }
+}
+
+/// A plate that is not a number is 0; infinities go to the nearest end of 0..1.
+#[test]
+fn plates_that_are_not_finite_are_in_range() {
+    assert_eq!([f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.5].map(plate), [0.0, 1.0, 0.0, 0.5]);
+}
+
 /// A path handed back as it was stays the live shape it was (a rectangle keeps its corner
 /// widgets); a path that changed is a plain path.
 #[test]

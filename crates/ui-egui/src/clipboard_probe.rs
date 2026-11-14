@@ -9,13 +9,10 @@ use std::time::{Duration, Instant};
 
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 
-use crate::sysclip::ClipboardProbeFactory;
+use crate::sysclip::{CLIPBOARD_PROBE_STOP_WAIT as STOP_WAIT, ClipboardProbeFactory};
 
 /// How often the worker looks at the clipboard while the UI wants to know.
 const PROBE_INTERVAL: Duration = Duration::from_millis(250);
-
-/// How long dropping the probe waits for the worker to let go of its clipboard handle.
-const STOP_WAIT: Duration = Duration::from_millis(250);
 
 /// The background clipboard check ([`crate::VectorcraftApp`]'s `clipboard_probe`).
 pub(crate) struct Probe {
@@ -25,7 +22,13 @@ pub(crate) struct Probe {
     verdicts: Receiver<bool>,
     /// The worker's last verdict.
     last: bool,
+    /// How `Drop` waits for the worker: [`wait_for_worker`], or a controllable clock in tests.
+    pub(crate) stop: StopWait,
 }
+
+/// Waits on the worker's verdicts, from the quit to the deadline [`stop_by`] gives, until the worker
+/// is gone or the deadline passes.
+pub(crate) type StopWait = Box<dyn FnMut(&Receiver<bool>, Instant, Instant) + Send>;
 
 impl Probe {
     /// Start the worker. `None` on wasm, or when the thread can't be spawned: the caller then falls
@@ -62,13 +65,14 @@ impl Probe {
                         Err(RecvTimeoutError::Disconnected) => break,
                     }
                 }
-                // The handle goes before the app stops waiting (`Drop`): on X11 the last one alive
-                // hands what the app copied to the clipboard manager, which must finish before exit.
+                // The handle goes before `Drop` stops waiting, unless dropping it takes longer than
+                // `STOP_WAIT`: on X11 the last one alive hands what the app copied to the clipboard
+                // manager, which must finish before exit.
                 drop(clipboard);
                 drop(tx);
             })
             .ok()?;
-        Some(Self { wants: Some(wants), wanted: false, verdicts, last: false })
+        Some(Self { wants: Some(wants), wanted: false, verdicts, last: false, stop: Box::new(wait_for_worker) })
     }
 
     /// Paste can take from the system clipboard: `wanted` (nothing copied in the app, a document
@@ -89,11 +93,21 @@ impl Probe {
 }
 
 impl Drop for Probe {
-    /// Wake the worker to stop and wait (a moment at most: it may be stuck on an owner that never
-    /// answers) until it has let go of its clipboard handle.
+    /// Wake the worker to stop and wait ([`STOP_WAIT`] at most: it may be stuck on an owner that
+    /// never answers) until it has let go of its clipboard handle.
     fn drop(&mut self) {
         self.wants = None;
-        let end = Instant::now() + STOP_WAIT;
-        while self.verdicts.recv_timeout(end.saturating_duration_since(Instant::now())).is_ok() {}
+        let quit = Instant::now();
+        (self.stop)(&self.verdicts, quit, stop_by(quit));
     }
+}
+
+/// When dropping the probe at `quit` stops waiting for its worker.
+pub(crate) fn stop_by(quit: Instant) -> Instant {
+    quit + STOP_WAIT
+}
+
+/// Waits until the worker has dropped its sender (it has let go of its clipboard handle) or `end`.
+fn wait_for_worker(verdicts: &Receiver<bool>, _quit: Instant, end: Instant) {
+    while verdicts.recv_timeout(end.saturating_duration_since(Instant::now())).is_ok() {}
 }

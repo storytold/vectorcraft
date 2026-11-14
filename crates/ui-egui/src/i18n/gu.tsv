@@ -3,7 +3,8 @@
 # Clean-room: written from the plain meaning of the English labels. Loanwords are transliterated
 # in Gujarati script where that is how the words are spoken; established Gujarati words are used otherwise.
 # Product names, file extensions, keyboard keys, units and placeholders stay as in the English.
-# Native-speaker review is pending.
+# Original 4,286 rows reviewed by a native Gujarati-speaking contributor.
+# Later additions, marked below, are drafts awaiting native proofreading.
 	  — missing	  — ગુમ
 	  — substituted by {style}	  — {style} દ્વારા બદલ્યું
 	  — {n} characters from another font	  — બીજા ફોન્ટમાંથી {n} અક્ષરો
@@ -4290,3 +4291,392 @@ antiAlias	Sharp	શાર્પ
 @plural	{n} host call|{n} host calls	{n} હોસ્ટ કૉલ|{n} હોસ્ટ કૉલ
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} અગાઉની લાઇન છોડી|{n} અગાઉની લાઇનો છોડી
 @plural	{n} line cut|{n} lines cut	{n} લાઇન કાપી|{n} લાઇનો કાપી
+# Interface labels added since the original native review; draft translations awaiting proofreading.
+	Convert to Indexed Color	ઇન્ડેક્સ્ડ કલરમાં ફેરવો
+	Convert to Indexed Color…	ઇન્ડેક્સ્ડ કલરમાં ફેરવો…
+	Image Tools	ઇમેજ ટૂલ્સ
+	Remove Background…	પૃષ્ઠભૂમિ દૂર કરો…
+	Remove Background	પૃષ્ઠભૂમિ દૂર કરો
+	Background	પૃષ્ઠભૂમિ
+	Edge Color	કિનારીનો રંગ
+	Picked Colors	પસંદ કરેલા રંગો
+	Corner Color	ખૂણાનો રંગ
+	Contiguous	સળંગ
+	Each Channel	દરેક ચેનલ
+	Color Mask…	કલર માસ્ક…
+	Color Mask	કલર માસ્ક
+	Remove Color Mask	કલર માસ્ક દૂર કરો
+	Apply Color Mask	કલર માસ્ક લાગુ કરો
+	Delete the selected items and their artwork?	પસંદ કરેલી આઇટમ્સ અને તેમની આર્ટવર્ક કાઢી નાખવી છે?
+	Delete this layer and its artwork?	આ લેયર અને તેની આર્ટવર્ક કાઢી નાખવી છે?
+	Preserve	જાળવો
+	TIFF (Black & White)	TIFF (કાળું અને સફેદ)
+	TIFF (8-bit Color)	TIFF (8-bit રંગ)
+	High Resolution	ઉચ્ચ રિઝોલ્યુશન
+	Medium Resolution	મધ્યમ રિઝોલ્યુશન
+	Low Resolution	નીચું રિઝોલ્યુશન
+	Language Level 2	લેંગ્વેજ લેવલ 2
+	Language Level 3	લેંગ્વેજ લેવલ 3
+	Select one character with the Type tool first.	પહેલા ટાઇપ ટૂલ વડે એક અક્ષર પસંદ કરો.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} એ {font}નો ગ્લિફ છે, પસંદ કરેલા લખાણના ફોન્ટ ({text_font})નો નથી.
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} એ {base} (U+{base_code})નો {place} ગ્લિફ છે; તમારી પસંદગી {sel} (U+{code}) છે.
+	at the start of a word	શબ્દની શરૂઆતમાં
+	in the middle of a word	શબ્દની વચ્ચે
+	at the end of a word	શબ્દના અંતે
+	standing alone	અલગ ઊભેલો
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	શબ્દમાં તેના સ્થાન મુજબ {glyph} એ {sel} (U+{code})નો વૈકલ્પિક ગ્લિફ નથી.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	તેના બદલે {base} (U+{code}) દાખલ કરવા ડબલ-ક્લિક કરો: પ્રેઝન્ટેશન ફોર્મ જોડાતું નથી, અક્ષર જોડાય છે.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	પ્રેઝન્ટેશન ફોર્મના બદલે {base} (U+{code}) દાખલ કર્યો: ફોન્ટ તેને સ્થાન પ્રમાણે આસપાસના અક્ષરો સાથે જોડે છે.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	અહીં કોઈ OpenType ફીચર આ ગ્લિફ દોરતું નથી, તેથી તે અક્ષરના ગ્લિફને બદલે છે અને કદાચ આસપાસના અક્ષરો સાથે જોડાશે નહીં.
+	Show samples on white	સફેદ પૃષ્ઠભૂમિ પર નમૂનાઓ બતાવો
+	Switch Selection and Drawing Modes	પસંદગી અને ડ્રોઇંગ મોડ્સ બદલો
+	Revolve (Classic)…	રિવોલ્વ (ક્લાસિક)…
+	Rotate (Classic)…	રોટેટ (ક્લાસિક)…
+	Painted and Sketched	રંગેલું અને સ્કેચ કરેલું
+	Washed Blue	ધોવાયેલો વાદળી
+	Bristle Ochre	બ્રિસલ ગેરુ
+	Pastel Heather	પેસ્ટલ હેધર
+	Charcoal Shade	ચારકોલ છાંયો
+	Ink Contour	શાહીનો કોન્ટૂર
+	Wet Ink	ભીની શાહી
+	Fine Pen	બારીક પેન
+	Detach	અલગ કરો
+	Detach Object from Path	ઑબ્જેક્ટને પાથથી અલગ કરો
+	Include Variable Data	વેરિએબલ ડેટા સામેલ કરો
+	Pad	પેડ
+	Repeats	રિપીટ્સ
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
+	Blend Easing	બ્લેન્ડ ઇઝિંગ
+	missing from the Brushes panel	બ્રશ પેનલમાં નથી
+	Show DCS Transparency Interactions	DCS ટ્રાન્સપરન્સીની પરસ્પર અસરો બતાવો
+	Transparent, or overlaps transparent objects: check its separations	પારદર્શક છે અથવા પારદર્શક ઑબ્જેક્ટ્સ પર આવે છે: તેના કલર સેપરેશન્સ તપાસો
+	Dynamic Text Presets	ડાયનેમિક ટેક્સ્ટ પ્રીસેટ્સ
+	Arch	કમાન
+	Organic Fades	ઑર્ગેનિક ફેડ્સ
+	Holographic	હોલોગ્રાફિક
+	Preview:	પ્રીવ્યૂ:
+	Insert Aki Left	ડાબે અકી ઉમેરો
+	Insert Aki Right	જમણે અકી ઉમેરો
+	Conic Gradient	કોનિક ગ્રેડિયન્ટ
+	Diamond Gradient	ડાયમંડ ગ્રેડિયન્ટ
+	Include Placed Images	પ્લેસ કરેલી ઇમેજો સામેલ કરો
+	Include Fill Hatches	ફિલ હેચિસ સામેલ કરો
+	Use Monitor Profile for Canvas	કેનવાસ માટે મોનિટર પ્રોફાઇલ વાપરો
+	The canvas is drawn in sRGB.	કેનવાસ sRGBમાં દોરાય છે.
+	Canvas display profile:	કેનવાસ ડિસ્પ્લે પ્રોફાઇલ:
+	The system matches the window to the display's colors.	સિસ્ટમ વિન્ડોના રંગો ડિસ્પ્લેના રંગો સાથે મેળવે છે.
+	No usable display profile was found: the canvas is drawn in sRGB.	ઉપયોગી ડિસ્પ્લે પ્રોફાઇલ મળી નથી: કેનવાસ sRGBમાં દોરાય છે.
+	Create Spine	સ્પાઇન બનાવો
+	Create Spine:	સ્પાઇન બનાવો:
+	Always	હંમેશાં
+	Never	ક્યારેય નહીં
+	Arrowheads	એરોહેડ્સ
+	Edit Arrowheads	એરોહેડ્સ સંપાદિત કરો
+	Edit Arrowheads…	એરોહેડ્સ સંપાદિત કરો…
+	Reload Arrowheads	એરોહેડ્સ ફરી લોડ કરો
+	Color Theme Picker	કલર થીમ પિકર
+	Click or drag across the art to pick its colors; Shift adds more	આર્ટના રંગો પસંદ કરવા તેના પર ક્લિક કરો અથવા ડ્રેગ કરો; Shiftથી વધુ ઉમેરાય છે
+	Prominent Colors	મુખ્ય રંગો
+	Save All Colors	બધા રંગો સાચવો
+	Save Prominent Colors	મુખ્ય રંગો સાચવો
+	Korean Line Break Anywhere	કોરિયન લાઇન ગમે ત્યાં તોડો
+	Bunri-Kinshi	બુનરી-કિન્શી
+	East Asian Composition Settings	પૂર્વ એશિયાઈ કમ્પોઝિશન સેટિંગ્સ
+	Korean Composition Settings	કોરિયન કમ્પોઝિશન સેટિંગ્સ
+	Show Bounding Box While Moving and Drawing	ખસેડતી અને દોરતી વખતે બાઉન્ડિંગ બોક્સ બતાવો
+	Textures	ટેક્સ્ચર્સ
+	Fine Grain	બારીક દાણા
+	Canvas Weave	કેનવાસ વણાટ
+	Burlap Sack	શણનો કોથળો
+	Cracked Glaze	તિરાડવાળું ગ્લેઝ
+	Mosaic Floor	મોઝેક ફ્લોર
+	Quilted Squares	ગાદીદાર ચોરસ
+	Leaded Glass	લેડેડ ગ્લાસ
+	Damp Paper	ભીનો કાગળ
+	Show Recent Colors	તાજેતરના રંગો બતાવો
+	Toggle RGB Percent	RGB ટકાવારી ચાલુ/બંધ કરો
+	Spot Color Objects	સ્પોટ કલર ઑબ્જેક્ટ્સ
+	Pattern Objects	પેટર્ન ઑબ્જેક્ટ્સ
+	Gradient Objects	ગ્રેડિયન્ટ ઑબ્જેક્ટ્સ
+	Font Details	ફોન્ટની વિગતો
+	Linked Images	લિંક કરેલી ઇમેજો
+	Embedded Images	એમ્બેડ કરેલી ઇમેજો
+	Compound Paths	કમ્પાઉન્ડ પાથ્સ
+	Text Objects	ટેક્સ્ટ ઑબ્જેક્ટ્સ
+	Placed Documents	પ્લેસ કરેલા દસ્તાવેજો
+	Symbol Instances	સિમ્બોલ ઇન્સ્ટન્સિસ
+	Gradient Meshes	ગ્રેડિયન્ટ મેશિસ
+	Blends	બ્લેન્ડ્સ
+	Envelopes	એન્વલોપ્સ
+	Intertwine Groups	ઇન્ટરટ્વાઇન ગ્રુપ્સ
+	Opacity Masks	ઓપેસિટી માસ્ક્સ
+	Objects with Effects	ઇફેક્ટ્સવાળા ઑબ્જેક્ટ્સ
+	Pattern Swatches	પેટર્ન સ્વેચ
+	Tate-chu-yoko Up/Down	ટાટે-ચુ-યોકો ઉપર/નીચે
+	Tate-chu-yoko Left/Right	ટાટે-ચુ-યોકો ડાબે/જમણે
+	Add Tool…	ટૂલ ઉમેરો…
+	Remove Tool	ટૂલ દૂર કરો
+	Center on Top	ઉપર કેન્દ્રિત કરો
+	Center on Bottom	નીચે કેન્દ્રિત કરો
+	Working RGB (don't tag)	વર્કિંગ RGB (ટૅગ ન કરો)
+	Dock to Left	ડાબે ડૉક કરો
+	Dock to Right	જમણે ડૉક કરો
+	Dock Toolbar	ટૂલબાર ડૉક કરો
+	Float Toolbar	ટૂલબાર ફ્લોટ કરો
+	Control Bar Options	કન્ટ્રોલ બાર વિકલ્પો
+	Tool Options	ટૂલ વિકલ્પો
+	Object Options	ઑબ્જેક્ટ વિકલ્પો
+	Image Options	ઇમેજ વિકલ્પો
+	Vertical Alignment	ઊભું એલાઇનમેન્ટ
+	Align and Distribute	સંરેખિત કરો અને વહેંચો
+	Document Options	દસ્તાવેજ વિકલ્પો
+	Rename Library Item	લાઇબ્રેરી આઇટમનું નામ બદલો
+	Add to Character Styles	કેરેક્ટર સ્ટાઇલ્સમાં ઉમેરો
+	Shadows	પડછાયા
+	Distance from Object	ઑબ્જેક્ટથી અંતર
+	Shadow Bounds	પડછાયાની સીમા
+	Behind Object	ઑબ્જેક્ટની પાછળ
+	Below Object	ઑબ્જેક્ટની નીચે
+	Optical Effects	ઑપ્ટિકલ ઇફેક્ટ્સ
+	Grit Textures	ખરબચડા ટેક્સ્ચર્સ
+	Hue Clockwise	હ્યૂ ઘડિયાળની દિશામાં
+	Hue Counterclockwise	હ્યૂ ઘડિયાળની વિરુદ્ધ દિશામાં
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ઑટોમેશને આ પ્લગ-ઇન ઇન્સ્ટૉલ કરવા કહ્યું છે. ઇન્સ્ટૉલ કરવા માટે જાતે Object › Plug-ins › Install Plug-in… પસંદ કરો.
+	Move Action Step	ઍક્શનનું પગલું ખસેડો
+	Insert Menu Item…	મેનુ આઇટમ ઉમેરો…
+	Insert Menu Item	મેનુ આઇટમ ઉમેરો
+	Insert Select Path	પાથ પસંદ કરવાનું પગલું ઉમેરો
+	Select Path	પાથ પસંદ કરો
+	Select Object…	ઑબ્જેક્ટ પસંદ કરો…
+	Select Object	ઑબ્જેક્ટ પસંદ કરો
+	Set Selection	પસંદગી સેટ કરો
+	Case Sensitive	મોટા-નાના અક્ષરનો ભેદ રાખો
+	Whole Word	આખો શબ્દ
+	Select Object: {note}	ઑબ્જેક્ટ પસંદ કરો: {note}
+	Select by Note	નોંધ દ્વારા પસંદ કરો
+	Menu Item:	મેનુ આઇટમ:
+	No menu item matches.	કોઈ મેનુ આઇટમ મેળ ખાતી નથી.
+	Several menu items match. Choose one from the list.	ઘણી મેનુ આઇટમ્સ મેળ ખાય છે. યાદીમાંથી એક પસંદ કરો.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	ડાયલોગ ખોલતી આઇટમ્સ અને File, Window તથા Help મેનુની આઇટમ્સ યાદીમાં નથી.
+	Ink and Wash	શાહી અને વૉશ
+	Tapered Ink	ટેપર થયેલી શાહી
+	Brush Pen	બ્રશ પેન
+	Soft Wash	સોફ્ટ વૉશ
+	Pooling Wash	એકઠો થતો વૉશ
+	Bristle Brushes	બ્રિસલ બ્રશ
+	Fine Liner	ફાઇન લાઇનર
+	Pointed Flat	અણીદાર સપાટ
+	Stubby Round	ટૂંકો ગોળ
+	Dry Scrub	સૂકું સ્ક્રબ
+	Soft Dome	સોફ્ટ ડોમ
+	Filbert	ફિલ્બર્ટ
+	Angled Round	ખૂણાવાળો ગોળ
+	Angled Flat	ખૂણાવાળો સપાટ
+	Fan Blender	ફેન બ્લેન્ડર
+	Grass Fan	ગ્રાસ ફેન
+	Dry Media	સૂકાં માધ્યમો
+	Chalk Grain	ચૉકના દાણા
+	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
+	Wax Crayon	વેક્સ ક્રેયોન
+	Charcoal Dust	ચારકોલનો ભૂકો
+	Notched Ribbon	ખાંચાવાળી રિબન
+	Double Line	બેવડી રેખા
+	Wave	તરંગ
+	Teardrop	આંસુનો આકાર
+	Striped Ribbon	પટ્ટાવાળી રિબન
+	Fine Nib	બારીક નિબ
+	Broad Nib	પહોળી નિબ
+	Chisel	છીણી
+	Round Pen	ગોળ પેન
+	Pressure Pen	પ્રેશર પેન
+	Beads	મણકા
+	Dash Dot	ડૅશ ડૉટ
+	Scallops	કમાનવાળી કિનારી
+	Stars	તારા
+	Triangles	ત્રિકોણ
+	Sparkles	ચમકારા
+	Pixel Snapping Options	પિક્સેલ સ્નેપિંગ વિકલ્પો
+	Pixel Snapping Options…	પિક્સેલ સ્નેપિંગ વિકલ્પો…
+	Snap to Pixel While Drawing	દોરતી વખતે પિક્સેલ પર સ્નેપ કરો
+	Snap to Pixel While Moving	ખસેડતી વખતે પિક્સેલ પર સ્નેપ કરો
+	Snap to Pixel While Scaling	સ્કેલ કરતી વખતે પિક્સેલ પર સ્નેપ કરો
+	These options take effect when View › Snap to Pixel is on.	View › Snap to Pixel ચાલુ હોય ત્યારે આ વિકલ્પો લાગુ થાય છે.
+	Basic Paragraph Formats	પેરાગ્રાફના મૂળભૂત ફૉર્મેટ્સ
+	Composition	કમ્પોઝિશન
+	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
+	Replace Brush Art	બ્રશ આર્ટ બદલો
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
+	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
+	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો
+	Copy Troubleshooting Info	સમસ્યા નિવારણની માહિતી કૉપી કરો
+	Align New Objects to Pixel Grid	નવા ઑબ્જેક્ટ્સને પિક્સેલ ગ્રિડ સાથે સંરેખિત કરો
+	Not Aligned to Pixel Grid	પિક્સેલ ગ્રિડ સાથે સંરેખિત નથી
+	Learn	શીખો
+	Explore tutorials	ટ્યુટોરિયલ્સ શોધો
+	For you	તમારા માટે
+	Skills	કૌશલ્યો
+	Get started	શરૂ કરો
+	Quick skill guide	કૌશલ્યની ઝડપી માર્ગદર્શિકા
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	મુખ્ય ટૂલ્સ માટે કૌશલ્ય પ્રમાણે ગોઠવેલા ટૂંકા પ્રાયોગિક ટ્યુટોરિયલ્સ. તેના ટ્યુટોરિયલ્સ જોવા કૌશલ્ય પસંદ કરો.
+	List Tutorials	ટ્યુટોરિયલ્સની યાદી બતાવો
+	Show Tutorial	ટ્યુટોરિયલ બતાવો
+	Show Tool Location	ટૂલનું સ્થાન બતાવો
+	Show where this tool is	આ ટૂલ ક્યાં છે તે બતાવો
+	View more	વધુ જુઓ
+	Finish tutorial	ટ્યુટોરિયલ પૂર્ણ કરો
+	Next Up	હવે પછી
+	You finished the last tutorial in this skill.	તમે આ કૌશલ્યનો છેલ્લો ટ્યુટોરિયલ પૂર્ણ કર્યો છે.
+	Back to skills	કૌશલ્યો પર પાછા જાઓ
+	Open Tutorial Sample	ટ્યુટોરિયલનો નમૂનો ખોલો
+	Finish Tutorial	ટ્યુટોરિયલ પૂર્ણ કરો
+	Next Tutorial	આગળનો ટ્યુટોરિયલ
+	Back to Skills	કૌશલ્યો પર પાછા જાઓ
+	Cutting Tools	કટિંગ ટૂલ્સ
+	Stencil Bridges…	સ્ટેન્સિલ બ્રિજિસ…
+	Stencil Bridges	સ્ટેન્સિલ બ્રિજિસ
+	Shortest Crossing	સૌથી ટૂંકો ક્રોસિંગ
+	Direction	દિશા
+	Weed Box and Lines…	વીડ બોક્સ અને રેખાઓ…
+	Weed Box and Lines	વીડ બોક્સ અને રેખાઓ
+	Margin	માર્જિન
+	Box	બોક્સ
+	Swatch	સ્વેચ
+# Current-main coverage additions; draft translations awaiting native proofreading.
+	built in	બિલ્ટ-ઇન
+	embedding not allowed	એમ્બેડ કરવાની મંજૂરી નથી
+	embedding for editing	સંપાદન માટે એમ્બેડ કરવાની મંજૂરી
+	embedding for preview and print	પ્રીવ્યૂ અને પ્રિન્ટ માટે એમ્બેડ કરવાની મંજૂરી
+	embedding allowed	એમ્બેડ કરવાની મંજૂરી છે
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	બદલાયેલ: {family} {style}માં બતાવ્યું ({detail})
+	missing: shown in {family} {style}	ગુમ: {family} {style}માં બતાવ્યું
+	missing	ગુમ
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	લીનિયર ગ્રેડિયન્ટ
+	Radial gradient	રેડિયલ ગ્રેડિયન્ટ
+	Conic gradient	કોનિક ગ્રેડિયન્ટ
+	Diamond gradient	ડાયમંડ ગ્રેડિયન્ટ
+	Freeform gradient	ફ્રીફોર્મ ગ્રેડિયન્ટ
+@plural	{n} instance|{n} instances	{n} ઇન્સ્ટન્સ|{n} ઇન્સ્ટન્સિસ
+@plural	{n} row|{n} rows	{n} પંક્તિ|{n} પંક્તિઓ
+@plural	{n} column|{n} columns	{n} કૉલમ|{n} કૉલમ
+	Warichu	વારિચુ
+	Warichu Settings…	વારિચુ સેટિંગ્સ…
+	Warichu Settings	વારિચુ સેટિંગ્સ
+	Lines:	રેખાઓ:
+	Line Gap:	રેખાઓ વચ્ચેનું અંતર:
+	Trim at Crossings Tool	છેદબિંદુઓ પર કાપવાનું ટૂલ
+	Trim at Crossings	છેદબિંદુઓ પર કાપો
+	Banner Hems and Grommets…	બેનરની મોડેલી કિનારીઓ અને ગ્રોમેટ્સ…
+	Banner Hems and Grommets	બેનરની મોડેલી કિનારીઓ અને ગ્રોમેટ્સ
+	Hem	મોડેલી કિનારી
+	Grommets	ગ્રોમેટ્સ
+	Grommet Inset	ગ્રોમેટનું અંદરની બાજુનું અંતર
+	Diameter	વ્યાસ
+	Add as Single Graphic	એક ગ્રાફિક તરીકે ઉમેરો
+	Bow	ધનુષાકાર
+	Expand as Wireframes	વાયરફ્રેમ્સ તરીકે વિસ્તારો
+	Add art with Add as Single Graphic, or drop art here.	એક ગ્રાફિક તરીકે ઉમેરો વડે આર્ટ ઉમેરો, અથવા આર્ટ અહીં મૂકો.
+	Align On:	આના પર સંરેખિત કરો:
+	Delete Tab	ટૅબ કાઢી નાખો
+	Face	સપાટી
+	Graphics map onto the Plane, Extrude and Revolve object types.	ગ્રાફિક્સને Plane, Extrude અને Revolve પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
+	Justify with last line aligned center	છેલ્લી લાઇન મધ્યમાં રાખીને જસ્ટિફાઇ કરો
+	Justify with last line aligned right	છેલ્લી લાઇન જમણે રાખીને જસ્ટિફાઇ કરો
+	Leader:	લીડર:
+	Line Gap	લાઇન્સ વચ્ચેનું અંતર
+	Manage Profiles	પ્રોફાઇલ્સનું સંચાલન કરો
+	Mapped graphics	મેપ કરેલા ગ્રાફિક્સ
+	Materials	મટિરિયલ્સ
+	NEW DOCUMENT PROFILES	નવા દસ્તાવેજની પ્રોફાઇલ્સ
+	Opacity Mask	ઓપેસિટી માસ્ક
+	Pick a graphic above to map it onto the object.	ઑબ્જેક્ટ પર મેપ કરવા ઉપરથી ગ્રાફિક પસંદ કરો.
+	Remove Graphic	ગ્રાફિક દૂર કરો
+	Replace the selected 3D objects with the edges of their faces, as stroked paths.	પસંદ કરેલા 3D ઑબ્જેક્ટ્સને તેમની સપાટીઓની કિનારીઓના સ્ટ્રોકવાળા પાથ્સથી બદલો.
+	Select a 3D object to map the graphic onto it.	ગ્રાફિક મેપ કરવા માટે 3D ઑબ્જેક્ટ પસંદ કરો.
+	The selected objects have different graphics.	પસંદ કરેલા ઑબ્જેક્ટ્સમાં જુદાં ગ્રાફિક્સ છે.
+	Word Gap	શબ્દો વચ્ચેનું અંતર
+	X:	X:
+	Y:	Y:
+	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, +{added} / −{deleted} લાઇન્સ (Δ {delta}), +{binary_added} / −{binary_deleted} બાઇનરી ઍસેટ્સ, {first} – {last}
+	PRs	PRs
+	Preset {number}	પ્રીસેટ {number}
+@plural	{n} PR|{n} PRs	{n} PR|{n} PRs
+@plural	{n} commit|{n} commits	{n} કમિટ|{n} કમિટ્સ
+anchor	Points:	પોઇન્ટ્સ:
+diagnostics	render	રેન્ડર
+diagnostics	ui	ઇન્ટરફેસ
+file-filter	All placeable files	પ્લેસ કરી શકાય તેવી બધી ફાઇલો
+file-filter	All readable files	વાંચી શકાય તેવી બધી ફાઇલો
+file-filter	Export presets	એક્સપોર્ટ પ્રીસેટ્સ
+file-filter	Flattener presets	ફ્લેટનર પ્રીસેટ્સ
+file-filter	PDF presets	PDF પ્રીસેટ્સ
+file-filter	PDF-compatible .ai	PDF-સુસંગત .ai
+file-filter	Print presets	પ્રિન્ટ પ્રીસેટ્સ
+file-filter	SVG Compressed	સંકુચિત SVG
+file-filter	Swatch libraries	સ્વેચ લાઇબ્રેરીઓ
+file-filter	Templates	ટેમ્પ્લેટ્સ
+file-filter	VectorCraft Template	VectorCraft ટેમ્પ્લેટ
+gradient-kind	Radial	રેડિયલ
+lighting	Light	લાઇટ
+mark-style	Japanese	જાપાનીઝ
+swatch	Amber	એમ્બર
+swatch	Aqua	એક્વા
+swatch	Azure	આસમાની
+swatch	Black	કાળો
+swatch	Blue	વાદળી
+swatch	Bright Blue	તેજસ્વી વાદળી
+swatch	Bright Green	તેજસ્વી લીલો
+swatch	Bright Red	તેજસ્વી લાલ
+swatch	Bright Violet	તેજસ્વી વાયોલેટ
+swatch	Bright Yellow	તેજસ્વી પીળો
+swatch	Brights	તેજસ્વી
+swatch	Brown	ભૂરો
+swatch	Chocolate	ચૉકલેટ
+swatch	Coffee	કોફી
+swatch	Copper	તાંબાઈ
+swatch	Cyan	સાયન
+swatch	Cyan Green	સાયન લીલો
+swatch	Emerald	એમરાલ્ડ
+swatch	Espresso	એસ્પ્રેસો
+swatch	Grays	ગ્રે
+swatch	Green	લીલો
+swatch	Indigo	ઈન્ડિગો
+swatch	Lime	લાઇમ
+swatch	Magenta	મેજેન્ટા
+swatch	Ocean	સમુદ્રી
+swatch	Orange	નારંગી
+swatch	Orange Red	નારંગી લાલ
+swatch	Pink	ગુલાબી
+swatch	Purple	જાંબલી
+swatch	Radial White, Black	રેડિયલ સફેદ, કાળો
+swatch	Red	લાલ
+swatch	Rose	રોઝ
+swatch	Rust	કાટિયો
+swatch	Sand	રેતિયો
+swatch	Sunset	સૂર્યાસ્ત
+swatch	Tan	આછો ભૂરો
+swatch	Teal	ટીલ
+swatch	Violet	વાયોલેટ
+swatch	Walnut	અખરોટિયો
+swatch	White	સફેદ
+swatch	White, Black	સફેદ, કાળો
+swatch	Yellow	પીળો
+swatch	Yellow Green	પીળો લીલો
+swatch	[None]	[કંઈ નહીં]
+swatch	[Registration]	[રજિસ્ટ્રેશન]
+	Burst Ray	વિસ્ફોટક કિરણ
+	Dash Trail	ડૅશની લડી
+	Speed Line	ગતિ રેખા
+	Zigzag	ઝિગઝૅગ
+	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
+	Path Length	પાથની લંબાઈ

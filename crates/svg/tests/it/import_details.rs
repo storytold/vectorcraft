@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};
 use vectorcraft_geom::Rect;
-use vectorcraft_svg::{ImportOptions, MAX_NESTED_SVG_IMAGES, SvgError, import_with, import_with_report, import_within};
+use vectorcraft_svg::{ImportOptions, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, SvgError, import_with, import_with_report, import_within};
 use vectorcraft_testkit::raster::{Image, assert_similar, render_artboard};
 
 fn svg(body: &str) -> String {
@@ -89,6 +89,23 @@ fn a_linked_png_resolves_against_the_svg_folder_and_stays_linked() {
 }
 
 #[test]
+fn hrefs_spelling_one_file_differently_read_it_once() {
+    let dir = folder("spellings");
+    std::fs::write(dir.join("img").join("a.png"), png(4, 4)).unwrap();
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counting = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/a.png" width="4" height="4"/><image href="./img/a.png" width="4" height="4"/><image href="img/%61.png" width="4" height="4"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counting) }).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(images(&d).len(), 3);
+    assert_eq!(reads.into_inner(), 1, "one read for the three spellings");
+}
+
+#[test]
 fn a_missing_link_warns_and_keeps_a_placeholder_in_its_box() {
     let dir = folder("missing");
     let (d, w) = open_in(&dir, r#"<image href="img/gone.png" x="10" y="20" width="100" height="50"/>"#);
@@ -137,6 +154,26 @@ fn files_with_the_same_pixels_have_keys_of_their_own() {
     assert_eq!(a.key, a2.key, "one file, one key");
     assert_eq!(*d.images[&a.key].bytes, bytes);
     assert_eq!(*d.images[&b.key].bytes, bytes);
+}
+
+#[test]
+fn hrefs_spelling_one_missing_file_differently_each_warn_and_keep_their_own_link() {
+    let dir = folder("missing_twice");
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counting = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/gone.png" width="4" height="4"/><image href="./img/gone.png" width="4" height="4"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counting) }).unwrap();
+    assert_eq!(w.iter().filter(|w| w.contains("gone.png") && w.contains("not found")).count(), 2, "{w:?}");
+    assert_eq!(reads.into_inner(), 1, "the failed read is cached");
+    let found = images(&d);
+    assert_eq!(found.len(), 2);
+    for (_, im) in found {
+        assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join("gone.png"));
+    }
 }
 
 #[test]
@@ -644,6 +681,87 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
+}
+
+/// Nested SVG images that can't be read: text that isn't XML, and an SVG without a size.
+const BROKEN_SVG_IMAGES: [&str; 2] =
+    [r#"<svg xmlns="http://www.w3.org/2000/svg" width="10"#, r#"<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"/>"#];
+const SMALL_SVG_IMAGE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="5" height="5"/></svg>"#;
+
+/// `broken` images showing the broken SVG images in turn from data URLs, then `good` images
+/// showing a rectangle.
+fn broken_then_good(broken: usize, good: usize) -> String {
+    let broken: String = (0..broken).map(|i| image_of("image/svg+xml", BROKEN_SVG_IMAGES[i % 2])).collect();
+    format!(r#"<svg {SVG_NS} width="500" height="500">{broken}{}</svg>"#, image_of("image/svg+xml", SMALL_SVG_IMAGE).repeat(good))
+}
+
+/// Only nested SVG images that decode count toward `MAX_NESTED_SVG_IMAGES`: an image after that
+/// many broken ones, from data URLs or a linked file shown again and again, is imported, and the
+/// images past that many decoded ones are still left out.
+#[test]
+fn broken_nested_svg_images_do_not_use_up_the_image_allowance() {
+    let allowance = |w: &[String]| w.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images")));
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_IMAGES + 10, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("left out")), "{w:?}");
+    let (d, w) = import_with(&broken_then_good(10, MAX_NESTED_SVG_IMAGES + 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), MAX_NESTED_SVG_IMAGES, "{w:?}");
+    assert!(allowance(&w), "{w:?}");
+
+    let dir = folder("brokensvgimages");
+    std::fs::write(dir.join("img").join("broken.svg"), BROKEN_SVG_IMAGES[0]).unwrap();
+    std::fs::write(dir.join("img").join("good.svg"), SMALL_SVG_IMAGE).unwrap();
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counted = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let body = format!(
+        r#"{}<image href="img/good.svg" width="10" height="10"/>"#,
+        r#"<image href="img/broken.svg" width="10" height="10"/>"#.repeat(MAX_NESTED_SVG_IMAGES + 10)
+    );
+    let folder = dir.to_string_lossy();
+    let (d, w) = import_with(&svg(&body), &ImportOptions { folder: Some(&folder), read: Some(&counted) }).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("left out")), "{w:?}");
+    assert_eq!(reads.into_inner(), 2, "each file is read once");
+}
+
+/// Every nested SVG image read, decoded or not, counts toward `MAX_NESTED_SVG_READS`: past it,
+/// images are left out with a warning, also when `<use>` shows one broken linked file many times.
+#[test]
+fn nested_svg_images_are_read_at_most_max_nested_svg_reads_times() {
+    let past = |w: &[String]| w.iter().any(|w| w.contains(&format!("read at most {MAX_NESTED_SVG_READS} times")));
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_READS - 1, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!past(&w), "{w:?}");
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_READS, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 0, "{w:?}");
+    assert!(past(&w), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))), "{w:?}");
+
+    let dir = folder("brokensvguses");
+    std::fs::write(dir.join("img").join("broken.svg"), BROKEN_SVG_IMAGES[0]).unwrap();
+    std::fs::write(dir.join("img").join("good.svg"), SMALL_SVG_IMAGE).unwrap();
+    let uses = r##"<use href="#broken"/>"##.repeat(2 * MAX_NESTED_SVG_READS);
+    let body = format!(
+        r#"<defs><g id="broken"><image href="img/broken.svg" width="10" height="10"/></g></defs>{uses}<image href="img/good.svg" width="10" height="10"/>"#
+    );
+    let (d, w) = open_in(&dir, &body);
+    assert_eq!(rects(&d), 0, "{w:?}");
+    assert!(past(&w), "{w:?}");
+}
+
+/// A nested SVG image that can't be read and is left out gives no warning about its text.
+#[test]
+fn broken_nested_svg_images_do_not_warn_about_their_text() {
+    let text = |svg: &str| {
+        let file = format!(r#"<svg {SVG_NS} width="50" height="50">{}</svg>"#, image_of("image/svg+xml", svg));
+        let (_, w) = import_with(&file, &ImportOptions::default()).unwrap();
+        w.iter().any(|w| w.contains("text inside an SVG image"))
+    };
+    assert!(!text(r#"<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"><text>Hi</text></svg>"#));
+    assert!(text(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>Hi</text></svg>"#));
 }
 
 /// #3566: entity references in element content count toward the expansion limit, as in

@@ -35,11 +35,11 @@ mod map;
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
 #[cfg(test)]
 use live_paint::LpHover;
-use live_paint::lp_color;
 pub use live_paint::{
-    LP_BUCKET_EDGE_FRACTION, LP_BUCKET_WIDTH, LP_BUCKET_WIDTH_RANGE, LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE, LivePaintBucketTool,
-    LivePaintSelectionTool,
+    LP_BUCKET_EDGE_FRACTION, LP_BUCKET_WIDTH, LP_BUCKET_WIDTH_RANGE, LP_FILL_CHUNK_POINTS, LP_SELECT_WIDTH, LP_SELECT_WIDTH_RANGE,
+    LivePaintBucketTool, LivePaintSelectionTool,
 };
+use live_paint::{check_live_paint_options, lp_color, lp_rgb_color};
 pub use lookup::{
     EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, builder_members, drawn_outlines, edge_near, edges, face_at, faces,
     is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for,
@@ -141,6 +141,38 @@ fn step_swatch(list: &[&Swatch], fill: &Paint, last: Option<usize>, forward: boo
         (None, true) => (n > 0).then_some(0),
         (None, false) => n.checked_sub(1),
     }
+}
+
+/// Is no Shift, Alt, Cmd or Ctrl held? The arrows step swatches only then.
+fn plain(mods: Mods) -> bool {
+    !(mods.shift || mods.alt || mods.cmd || mods.ctrl)
+}
+
+/// The color swatch the Right (`forward`) or Left arrow key picks for the current `paint`, with its
+/// index in [`color_swatches`] (see [`step_swatch`]); None when the document has no color swatch.
+fn pick_swatch(doc: &Document, paint: &Paint, last: Option<usize>, forward: bool) -> Option<(usize, String)> {
+    let list = color_swatches(doc);
+    step_swatch(&list, paint, last, forward).and_then(|i| Some((i, list.get(i)?.name.clone())))
+}
+
+/// The cursor swatch preview for the current `paint` with the pointer at `at`: the swatch before
+/// it, `paint` itself (ringed, while it is a solid color) and the swatch after it, side by side above
+/// the pointer. With `matched_only`, the swatches beside it show only while `paint` is one of the
+/// color swatches; otherwise the last and the first swatch stand beside a color that is none of them.
+fn swatch_chips(cx: &ToolContext, at: Point, paint: &Paint, last: Option<usize>, matched_only: bool) -> Vec<Overlay> {
+    let list = color_swatches(cx.doc);
+    let rgba = |p: &Paint| match p {
+        Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
+        _ => None,
+    };
+    let beside = !matched_only || swatch_index(&list, paint, last).is_some();
+    let chip = |forward| beside.then(|| step_swatch(&list, paint, last, forward)).flatten().and_then(|i| rgba(&list.get(i)?.paint));
+    let (before, after) = (chip(false), chip(true));
+    let y = at.y - cx.tol(22.0);
+    [(before, -16.0, false), (rgba(paint), 0.0, true), (after, 16.0, false)]
+        .into_iter()
+        .filter_map(|(color, dx, selected)| Some(Overlay::Swatch { p: Point::new(at.x + cx.tol(dx), y), color: color?, selected }))
+        .collect()
 }
 
 /// Shape Builder tool: drag across regions to merge them. Holding Alt (Option) switches to erase
@@ -425,20 +457,7 @@ impl ShapeBuilderTool {
     /// The cursor swatch preview: the swatch before the current fill, the current fill (ringed)
     /// and the swatch after it, side by side above the pointer.
     fn swatch_chips(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let Some(at) = self.at else { return vec![] };
-        let list = color_swatches(cx.doc);
-        let fill = &cx.paint.fill;
-        let rgba = |p: &Paint| match p {
-            Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
-            _ => None,
-        };
-        let chip = |forward| step_swatch(&list, fill, self.picked, forward).and_then(|i| rgba(&list.get(i)?.paint));
-        let (before, after) = (chip(false), chip(true));
-        let y = at.y - cx.tol(22.0);
-        [(before, -16.0, false), (rgba(fill), 0.0, true), (after, 16.0, false)]
-            .into_iter()
-            .filter_map(|(color, dx, selected)| Some(Overlay::Swatch { p: Point::new(at.x + cx.tol(dx), y), color: color?, selected }))
-            .collect()
+        self.at.map(|at| swatch_chips(cx, at, &cx.paint.fill, self.picked, false)).unwrap_or_default()
     }
 }
 
@@ -712,9 +731,15 @@ impl Tool for ShapeBuilderTool {
         (self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)) || (self.dragging && key == ToolKey::Escape)
     }
 
-    fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    /// The arrows pick swatches only without modifiers; Shift, Alt and Cmd/Ctrl arrows keep their
+    /// shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, mods: Mods) -> bool {
+        self.claims_key(cx, key) && (key == ToolKey::Escape || plain(mods))
+    }
+
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         // While a merge is being computed, the arrows leave the current fill it takes as it was.
-        if !self.claims_key(cx, key) || self.editing() {
+        if !self.claims_key_with(cx, key, mods) || self.editing() {
             return vec![];
         }
         if key == ToolKey::Escape {
@@ -726,13 +751,12 @@ impl Tool for ShapeBuilderTool {
             (self.marquee, self.hover, self.far) = (None, None, false);
             return vec![];
         }
-        let list = color_swatches(cx.doc);
-        let Some((i, s)) = step_swatch(&list, &cx.paint.fill, self.picked, key == ToolKey::Right).and_then(|i| Some((i, list.get(i)?))) else {
+        let Some((i, name)) = pick_swatch(cx.doc, &cx.paint.fill, self.picked, key == ToolKey::Right) else {
             return vec![];
         };
         self.picked = Some(i);
         // The current fill only (no `ids`): the selected art keeps its own.
-        vec![Action::Exec("paint.setFill".into(), json!({ "swatch": s.name, "ids": [] }))]
+        vec![Action::Exec("paint.setFill".into(), json!({ "swatch": name, "ids": [] }))]
     }
 
     fn options(&self) -> Value {
@@ -775,6 +799,39 @@ impl Tool for ShapeBuilderTool {
         self.cache.clear();
         self.cache.gap = self.gap();
     }
+}
+
+/// Why `tool.setOption` cannot give the builder-family tool `tool` the options `values`, checked
+/// before any of them is set. For `shapeBuilder`: an option the tool does not have, a switch that
+/// is not true or false, a `pickColorFrom` other than `artwork` or `swatches`, a `selection` other
+/// than `freeform` or `straightLine`, a `highlightColor` that is not an RGB color without an alpha
+/// part and a `gapLength` that is not a finite number are errors. A finite gap length out of 0 to
+/// [`SHAPE_BUILDER_MAX_GAP`] is not an error: the tool clamps it. The Live Paint tools are checked
+/// by [`check_live_paint_options`]; Ok for every other tool. Saved settings go to the tools'
+/// `set_option` instead, which skips a value it cannot read.
+pub fn check_builder_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if tool != "shapeBuilder" {
+        return check_live_paint_options(tool, values);
+    }
+    let one_of = |key: &str, v: &Value, names: &[&str]| {
+        (!v.as_str().is_some_and(|s| names.contains(&s))).then(|| format!("`{key}` must be one of {}", names.join(", ")))
+    };
+    for (key, v) in values {
+        let error = match key.as_str() {
+            "openFilledAsClosed" | "cursorSwatchPreview" | "highlightFill" | "gapDetection" | "clickStrokeSplitsPath" | "highlightStroke" => {
+                (!v.is_boolean()).then(|| format!("`{key}` must be true or false"))
+            }
+            "pickColorFrom" => one_of(key, v, &["artwork", "swatches"]),
+            "selection" => one_of(key, v, &["freeform", "straightLine"]),
+            "gapLength" => (!v.as_f64().is_some_and(f64::is_finite)).then(|| format!("`{key}` must be a number")),
+            "highlightColor" => (!lp_rgb_color(v)).then(|| format!("`{key}` must be a #rrggbb color or a layer color name")),
+            _ => Some(format!("unknown Shape Builder option `{key}`")),
+        };
+        if let Some(e) = error {
+            return Err(e);
+        }
+    }
+    Ok(())
 }
 
 /// Create a builder-family tool by id (None = not one of ours).

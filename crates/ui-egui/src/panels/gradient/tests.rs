@@ -328,6 +328,69 @@ fn the_method_menu_makes_the_gradient_perceptual() {
     assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
 }
 
+/// The Method menu lists the two hue methods after Classic and Perceptual; choosing one mixes
+/// the gradient around the hue wheel that way, as one undo step, and the menu then shows it.
+#[test]
+fn the_method_menu_mixes_the_gradient_around_the_hue_wheel() {
+    for (label, method) in [("Hue Clockwise", GradientMethod::HueClockwise), ("Hue Counterclockwise", GradientMethod::HueCounterclockwise)] {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        let shown = texts.iter().find(|(t, _)| t == "Classic").expect("Classic shown").1;
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let texts = p.click(&mut app, shown);
+        for listed in ["Classic", "Perceptual", "Hue Clockwise", "Hue Counterclockwise"] {
+            assert!(texts.iter().any(|(t, _)| t == listed), "the menu lists {listed}: {texts:?}");
+        }
+        let option = texts.iter().find(|(t, _)| t == label).expect("the menu lists the method").1;
+        p.click(&mut app, option);
+        assert_eq!(fill(&app).gradient.method, method, "{label}");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{label}: one undo step");
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        assert!(texts.iter().any(|(t, _)| t == label), "the menu shows the method: {texts:?}");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
+    }
+}
+
+/// The Spread menu makes the gradient repeat (one undo step), and the Repeats field, dimmed while
+/// it pads, then sets the count.
+#[test]
+fn the_spread_menu_and_repeats_field_set_the_spread() {
+    use vectorcraft_color::GradientSpread;
+    let mut app = app(json!({"gradient": {}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    assert!(texts.iter().any(|(t, _)| t == "Spread:"), "{texts:?}");
+    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    // While it pads, the Repeats field takes no count.
+    let field = p.widget_after(shown);
+    p.click(&mut app, field.center());
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    assert_eq!((fill(&app).gradient.repeats, app.session.doc().unwrap().history.undo.len()), (1, undo), "dimmed with Pad");
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
+    let texts = p.click(&mut app, shown);
+    let option = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu lists Reflect").1;
+    p.click(&mut app, option);
+    assert_eq!(fill(&app).gradient.spread, GradientSpread::Reflect);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // The count: typed into the field beside the menu.
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let shown = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu shows Reflect").1;
+    let field = p.widget_after(shown);
+    p.click(&mut app, field.center());
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    assert_eq!(fill(&app).gradient.repeat_count(), 4);
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fill(&app).gradient.spread, GradientSpread::Pad);
+}
+
 #[test]
 fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
@@ -352,6 +415,51 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let texts = p.click(&mut app, stop.center());
     assert_eq!(app.session.selected_stop(), Some(0));
     assert!(texts.iter().any(|(t, _)| t == "0%"));
+}
+
+/// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
+/// sweep mirrored.
+#[test]
+fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
+    let mut app = app(json!({"gradient": {"kind": "conic", "aspect": -50}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let field = texts.iter().find(|(t, _)| t == "50%").unwrap_or_else(|| panic!("the aspect field: {texts:?}")).1;
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let geom = fill(&app).geom.unwrap();
+    assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
+}
+
+/// The Type row's Diamond button (the fourth of five) makes the gradient a diamond, and the
+/// Aspect Ratio field then edits its aspect.
+#[test]
+fn the_diamond_button_makes_a_diamond_whose_aspect_field_edits_it() {
+    let mut app = app(json!({"gradient": {"kind": "linear", "start": [150, 150], "end": [200, 150]}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = texts.iter().find(|(t, _)| t == "Type:").unwrap_or_else(|| panic!("the Type row: {texts:?}")).1;
+    let buttons = p.row_after(label, 24.0);
+    assert_eq!(buttons.len(), 5, "Linear, Radial, Conic, Diamond and Freeform");
+    p.click(&mut app, buttons[3].center());
+    assert_eq!(fill(&app).gradient.kind, GradientKind::Diamond);
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    // The aspect field is the first 100% (above Opacity's).
+    let field = texts
+        .iter()
+        .filter(|(t, _)| t == "100%")
+        .map(|(_, at)| *at)
+        .min_by(|a, b| a.y.total_cmp(&b.y))
+        .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let g = fill(&app);
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    assert!((g.geom.unwrap().aspect - 0.8).abs() < 1e-9, "{:?}", g.geom);
 }
 
 #[test]

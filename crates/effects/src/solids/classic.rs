@@ -1,17 +1,21 @@
 //! Extrude & Bevel (Classic): the solid Extrude & Bevel builds from a path, drawn with the classic
 //! surfaces (Wireframe, No Shading, Diffuse and Plastic), their highlight, blend steps and shading
-//! color.
+//! color. Rotate (Classic): the plane Rotate turns, drawn with the No Shading and Diffuse surfaces.
 use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node};
 use vectorcraft_geom::Rect;
 use vectorcraft_three_d::{Bevel, BevelShape, ClassicShading, ClassicSurface, Extrude, Facet, Light};
 
 use crate::util::{flag, num, text};
 
 pub const CLASSIC_EXTRUDE: &str = "threeD.classicExtrude";
+pub const CLASSIC_ROTATE: &str = "threeD.classicRotate";
+
+/// The surfaces Rotate (Classic) takes: No Shading and Diffuse.
+pub const ROTATE_SURFACES: [&str; 2] = ["none", "diffuse"];
 
 /// The width of a Wireframe edge, in points.
 const WIRE: f64 = 0.5;
@@ -104,8 +108,39 @@ const FLAGS: [&str; 4] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"
 /// its parameters, numbers are in range, flags are true or false, and `surface`, `shadingColor` and
 /// `shadingCustom` name a surface, a shading color and a #rrggbb color.
 pub fn validate(p: &Value) -> Result<(), String> {
+    validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)
+}
+
+/// Rotate (Classic)'s numeric parameters: (key, lowest, highest, whole numbers only).
+const ROTATE_RANGES: [(&str, f64, f64, bool); 9] = [
+    ("rotationX", -180.0, 180.0, false),
+    ("rotationY", -180.0, 180.0, false),
+    ("rotationZ", -180.0, 180.0, false),
+    ("perspectiveAngle", 0.0, 160.0, false),
+    ("lightRotation", -180.0, 180.0, false),
+    ("lightHeight", 0.0, 90.0, false),
+    ("lightIntensity", 0.0, 100.0, false),
+    ("ambient", 0.0, 100.0, false),
+    ("blendSteps", 1.0, 256.0, true),
+];
+
+/// Check Rotate (Classic)'s parameters `p` (its defaults filled in) as [`validate`] checks Extrude &
+/// Bevel (Classic)'s, with `surface` No Shading or Diffuse only.
+pub fn validate_rotate(p: &Value) -> Result<(), String> {
+    validate_classic(CLASSIC_ROTATE, p, &ROTATE_RANGES, &["lightBehind"])?;
+    if p.get("surface").is_some_and(|v| !v.as_str().is_some_and(|s| ROTATE_SURFACES.contains(&s))) {
+        return Err(format!("`surface` must be one of {}", ROTATE_SURFACES.join(", ")));
+    }
+    Ok(())
+}
+
+/// Check the parameters `p` of classic 3D effect `id` (its defaults filled in): every key is one of
+/// its parameters, the numbers `ranges` lists, as (key, lowest, highest, whole numbers only), are in
+/// range, the `flags` are true or false, and `surface`, `shadingColor` and `shadingCustom` name a
+/// surface, a shading color and a #rrggbb color.
+pub(crate) fn validate_classic(id: &str, p: &Value, ranges: &[(&str, f64, f64, bool)], flags: &[&str]) -> Result<(), String> {
     let Some(map) = p.as_object() else { return Ok(()) };
-    let defaults = crate::default_params(CLASSIC_EXTRUDE).unwrap_or(Value::Null);
+    let defaults = crate::default_params(id).unwrap_or(Value::Null);
     let known: Vec<&str> = defaults.as_object().map(|m| m.keys().map(String::as_str).collect()).unwrap_or_default();
     for key in map.keys() {
         if !known.contains(&key.as_str()) {
@@ -113,7 +148,7 @@ pub fn validate(p: &Value) -> Result<(), String> {
             return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
         }
     }
-    for (key, min, max, whole) in RANGES {
+    for &(key, min, max, whole) in ranges {
         let Some(v) = map.get(key) else { continue };
         let Some(x) = v.as_f64() else { return Err(format!("`{key}` must be a number")) };
         if whole && (x.fract() != 0.0 || !(min..=max).contains(&x)) {
@@ -123,7 +158,7 @@ pub fn validate(p: &Value) -> Result<(), String> {
             return Err(format!("`{key}` must be between {min} and {max} (got {x})"));
         }
     }
-    for key in FLAGS {
+    for &key in flags {
         if map.get(key).is_some_and(|v| !v.is_boolean()) {
             return Err(format!("`{key}` must be true or false"));
         }
@@ -161,7 +196,7 @@ fn shaded(c: Color, tone: f64, spec: f64, shade: Option<Color>) -> Color {
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
 /// its tone and highlight. A gradient with transparent stops is shaded opaque and then masked by
 /// its own transparency, so the shading follows the gradient's coverage.
-pub(super) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
+pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
@@ -172,8 +207,8 @@ pub(super) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
         .into_iter()
         .map(|face| {
             if wire {
-                let mut edge = StrokeLayer::new(paint.clone(), WIRE);
-                edge.join = vectorcraft_doc::LineJoin::Round;
+                // A wire edge is drawn as a seam is: a round-joined stroke of the paint.
+                let edge = crate::lighting::seam_stroke(paint.clone(), WIRE);
                 return Arc::new(Node::path(n.id, face.path(), Appearance { items: vec![AppearanceItem::Stroke(edge)], ..Default::default() }));
             }
             let (tone, spec) = shading.tone(face.normal, &lights);
@@ -183,18 +218,23 @@ pub(super) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
                 // Unshaded (No Shading, no shading color, or a face in full light) with no
                 // highlight: the paint itself, its color space and swatch kept.
                 Some(_) if (tone >= 1.0 || shade.is_none()) && spec <= 0.0 => {
-                    vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(StrokeLayer::new(paint.clone(), seam))]
+                    vec![
+                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
+                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
+                    ]
                 }
                 Some(c) => {
                     let fill = Paint::solid(shaded(c, tone, spec, shade));
-                    vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(StrokeLayer::new(fill, seam))]
+                    vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))]
                 }
                 // Gradients and patterns keep their paint, darkened by a layer of the shading color
                 // and lightened by one of white. As with the other 3D effects' pattern shadow, the
                 // layers cover the whole face, transparent pattern cells included.
                 None => {
-                    let mut items =
-                        vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(StrokeLayer::new(paint.clone(), seam))];
+                    let mut items = vec![
+                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
+                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
+                    ];
                     for (color, share) in [(shade, 1.0 - tone), (Some(Color::WHITE), spec)] {
                         if let Some(color) = color.filter(|_| share > 0.0) {
                             let mut layer = FillLayer::new(Paint::solid(color));

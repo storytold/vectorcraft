@@ -133,6 +133,16 @@
 //!   A fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that
 //!   fills by the even-odd rule is written as its drawn look. A style is written only when the
 //!   reader reads it back as the object's appearance (or the graphic style's).
+//! - Brushes, as the reader reads them (`brush.rs`, `style.rs`): the Brushes panel's brushes as
+//!   plug-in objects in a non-printing block after the symbols (`%AI8_BeginPluginObject`, the
+//!   plug-in's name, the brush's name, its parameters in strings that `-` continues and `.` ends),
+//!   after the brush manager's order of them; the art of Scatter and Art brushes in a non-printing
+//!   block before the symbols (`%AI8_BeginBrushPattern`, its name, a group of an unpainted frame at
+//!   the art's bounds and the art, or the art alone when it has no width or height), when the
+//!   document has brushes of its own or an object is written with one.
+//!   A path or compound path with a brush the reader reads live is written with an art style whose
+//!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
+//!   it back with its settings.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -162,19 +172,21 @@
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
 //! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
-//! strokes a plain line can't draw
+//! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
 //! layers and opacity masks nested too deep, and, on objects written without an art style, live
 //! effects other than geometry effects left out; graphic styles the reader wouldn't read, links to
-//! graphic styles on objects not written with them, and every art style on a large canvas, are left
-//! out; art past [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads),
-//! counted as the reader counts them, is left out.
+//! graphic styles on objects not written with them, brushes the reader wouldn't read back, and every
+//! art style and brush on a large canvas, are left out; art past
+//! [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads), counted as the
+//! reader counts them, is left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
 
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -288,6 +300,7 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     let mut w = Writer::new(doc, to_art, origin);
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
+    w.brushes_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
     w.reserve_swatch_gradients();
@@ -305,6 +318,8 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();
+    // The brushes, once the layers have said whether an object is written with one.
+    let (brush_art, brush_objects) = w.brush_blocks();
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
@@ -323,7 +338,9 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     let mut s = header.clone();
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
     w.definitions(&mut s);
+    s.push_str(&brush_art);
     w.symbol_definitions(&mut s);
+    s.push_str(&brush_objects);
     w.art_styles(&mut s);
     s.push_str(&palette);
     w.art_style_list(&mut s);
@@ -369,9 +386,15 @@ fn splice(text: &[u8], payloads: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// `doc` with its geometry effects and group paint baked ([`vectorcraft_effects::bake_document`]),
-/// in its symbols' art and its patterns' tile art too (which instances and pattern fills are
-/// written as); `None` when nothing changes.
+/// in its symbols' art, its patterns' tile art (which instances and pattern fills are written as)
+/// and its opacity masks' art too ([`baked_masks`]); `None` when nothing changes.
 fn baked(doc: &Document) -> Option<Document> {
+    let art = baked_art(doc);
+    baked_masks(art.as_ref().unwrap_or(doc)).or(art)
+}
+
+/// [`baked`] for the layers, symbols and patterns, leaving opacity masks' art as it is.
+fn baked_art(doc: &Document) -> Option<Document> {
     let baked = vectorcraft_effects::bake_document(doc);
     let d = baked.as_ref().unwrap_or(doc);
     let needs = vectorcraft_effects::needs_bake;
@@ -398,6 +421,100 @@ fn baked(doc: &Document) -> Option<Document> {
         }
     }
     Some(out)
+}
+
+/// `doc` with the art of the opacity masks in its layers', symbols' and patterns' art baked as
+/// [`baked_art`] bakes the layers. Each round bakes the art of the outermost masks whose art needs
+/// it, and the next round the masks inside that art, at most [`writer::MAX_NEST`] rounds (the
+/// writer leaves masks nested deeper out). Baked art keeps its id, by which the writer finds the
+/// art as it was before baking ([`writer::styled_objects`]). `None` when no mask's art needs baking.
+fn baked_masks(doc: &Document) -> Option<Document> {
+    let mut out: Option<Document> = None;
+    // The masks' art baked so far, by id: it isn't baked again.
+    let mut done = HashSet::new();
+    for _ in 0..writer::MAX_NEST {
+        let d = out.as_ref().unwrap_or(doc);
+        let roots = || d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.patterns.iter().flat_map(|p| p.art.iter()));
+        let mut arts = vec![];
+        for n in roots() {
+            mask_arts(n, &done, &mut arts);
+        }
+        if arts.is_empty() {
+            break;
+        }
+        // Each art baked as a layer of a copy of the document, as [`baked_art`] bakes symbols.
+        let mut copy = d.clone();
+        copy.layers = arts.iter().map(|a| Arc::new(Node::group(vectorcraft_doc::NodeId(0), vec![a.clone()]))).collect();
+        let Some(mut next) = vectorcraft_effects::bake_document(&copy) else { break };
+        let layers = std::mem::replace(&mut next.layers, d.layers.clone());
+        let mut baked = layers.iter().map(|l| l.children().and_then(|c| c.first().cloned()));
+        for l in next.layers.iter_mut() {
+            if let Some(n) = with_baked_masks(l, &done, &mut baked) {
+                *l = n;
+            }
+        }
+        for s in next.symbols.iter_mut() {
+            if let Some(n) = with_baked_masks(&s.art, &done, &mut baked) {
+                s.art = n;
+            }
+        }
+        for p in next.patterns.iter_mut() {
+            for a in p.art.iter_mut() {
+                if let Some(n) = with_baked_masks(a, &done, &mut baked) {
+                    *a = n;
+                }
+            }
+        }
+        done.extend(arts.iter().map(|a| a.id));
+        out = Some(next);
+    }
+    out
+}
+
+/// Does [`baked_masks`] bake the art of mask `m` in this round?
+fn bakes_mask_art(m: &vectorcraft_doc::OpacityMask, done: &HashSet<vectorcraft_doc::NodeId>) -> bool {
+    !done.contains(&m.art.id) && vectorcraft_effects::needs_bake(&m.art)
+}
+
+/// The art of the opacity masks in `n` that [`baked_masks`] bakes in this round, in the order
+/// [`with_baked_masks`] puts them back: a mask's art before the object's members, and the masks
+/// inside art that isn't baked.
+fn mask_arts(n: &Node, done: &HashSet<vectorcraft_doc::NodeId>, out: &mut Vec<Arc<Node>>) {
+    if let Some(m) = n.extras().mask.as_ref() {
+        if bakes_mask_art(m, done) {
+            out.push(m.art.clone());
+        } else {
+            mask_arts(&m.art, done, out);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        mask_arts(c, done, out);
+    }
+}
+
+/// `n` with the art of its opacity masks taken from `baked` in the order [`mask_arts`] lists it;
+/// `None` when nothing in it changes.
+fn with_baked_masks(n: &Arc<Node>, done: &HashSet<vectorcraft_doc::NodeId>, baked: &mut dyn Iterator<Item = Option<Arc<Node>>>) -> Option<Arc<Node>> {
+    let art =
+        n.extras().mask.as_ref().and_then(|m| if bakes_mask_art(m, done) { baked.next().flatten() } else { with_baked_masks(&m.art, done, baked) });
+    let members: Vec<Option<Arc<Node>>> = n.children().map(|c| c.iter().map(|c| with_baked_masks(c, done, baked)).collect()).unwrap_or_default();
+    if art.is_none() && members.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut m = (**n).clone();
+    if let Some(a) = art
+        && let Some(mask) = m.extras_if_any().and_then(|e| e.mask.as_mut())
+    {
+        mask.art = a;
+    }
+    if let Some(children) = m.children_mut() {
+        for (c, new) in children.iter_mut().zip(members) {
+            if let Some(new) = new {
+                *c = new;
+            }
+        }
+    }
+    Some(Arc::new(m))
 }
 
 /// The editing data of `doc` as a `.ai` file's pages carry it: the program compressed with

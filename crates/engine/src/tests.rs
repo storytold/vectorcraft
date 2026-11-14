@@ -7,8 +7,10 @@ use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 mod actionset;
 pub(super) mod adjust;
 mod ai_open_path;
+mod anchor_edit_work;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
 mod assets_3d;
 mod attributes;
@@ -20,6 +22,7 @@ mod brushlib;
 mod brushsym;
 mod build;
 mod cancel;
+mod caret_kerning;
 mod charstroke;
 pub(super) mod clip;
 mod clipboard;
@@ -42,8 +45,10 @@ mod containers;
 mod css;
 mod cut;
 mod dashalign;
+mod dcs;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
@@ -89,6 +94,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;
@@ -132,6 +138,7 @@ mod placed_document;
 mod plugins;
 mod prefs;
 mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;
@@ -154,11 +161,13 @@ mod scalestrokes;
 mod script_console;
 mod script_dialogs;
 mod script_dollar;
+mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
 mod scripts;
+mod select_effects;
 mod select_ids_first;
 mod shaper;
 mod shapetools;
@@ -169,6 +178,7 @@ mod smartguides;
 mod smooth_path;
 mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;
@@ -201,6 +211,7 @@ mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
@@ -3160,7 +3171,7 @@ fn every_command_survives_empty_params() {
     // The view toggles among them flip the process-wide proof view.
     let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
-        for c in command_specs() {
+        for c in command_specs().iter().filter(|c| crate::runs_with_empty_params(c.id)) {
             let mut s = session();
             let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
             rect(&mut s, 20.0, 0.0, 10.0, 10.0);
@@ -4024,6 +4035,38 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
     assert_eq!((b.x0, b.y0), (17.0, 16.0));
 }
 
+/// Pixel Snapping Options (`view.snapToPixel.options`): with While Drawing off a rectangle drawn
+/// with Snap to Pixel on keeps its fractional corners while a move still lands on whole pixels, and
+/// with While Moving off a move keeps its fractional offset while drawing snaps again.
+#[test]
+fn pixel_snapping_options_choose_the_edits_snap_to_pixel_rounds() {
+    let mut s = session();
+    let v = ViewInfo { snap_to_pixel: true, smart_guides: false, snap_to_point: false, ..Default::default() };
+    let drag = |s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)| {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let bounds = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0, b.x1, b.y1)
+    };
+    s.execute("view.snapToPixel.options", &json!({"drawing": false})).unwrap();
+    drag(&mut s, "rectangle", (10.25, 10.5), (60.5, 40.25));
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, id), (10.25, 10.5, 60.5, 40.25), "drawing does not snap");
+    drag(&mut s, "selection", (30.0, 30.0), (37.5, 34.75));
+    assert_eq!(bounds(&s, id).0, 18.0, "moving still snaps the left edge");
+    assert_eq!(bounds(&s, id).1, 15.0, "moving still snaps the top edge");
+    s.execute("view.snapToPixel.options", &json!({"drawing": true, "moving": false})).unwrap();
+    drag(&mut s, "selection", (40.0, 30.0), (45.25, 33.5));
+    assert_eq!((bounds(&s, id).0, bounds(&s, id).1), (23.25, 18.5), "moving does not snap");
+    drag(&mut s, "rectangle", (100.25, 100.5), (140.5, 130.75));
+    let drawn = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, drawn), (100.0, 101.0, 141.0, 131.0), "drawing snaps again");
+}
+
 #[test]
 fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_punch_fills() {
     let mut s = session();
@@ -4245,8 +4288,8 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
 
 /// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
 /// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
-/// current layer or a new object instead, and the document, the selection and the undo history
-/// stay as they are.
+/// current layer or a new object instead, and the document, the selection, the undo history,
+/// isolation mode and the shown opacity mask stay as they are.
 #[test]
 fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
     let mut s = session();
@@ -4294,17 +4337,19 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
             if let Some(p) = p.as_object_mut() {
                 p.insert(key.into(), bad.clone());
             }
-            let (doc, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), s.doc().unwrap().history.undo.len());
+            let st = s.doc().unwrap();
+            let (doc, selection, undo, modes) = (st.doc.clone(), st.selection.clone(), st.history.undo.len(), (st.isolation, st.mask_view));
             let r = s.execute(cmd, &p);
             let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
             let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
-            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().selection == selection && s.doc().unwrap().history.undo.len() == undo;
+            let st = s.doc().unwrap();
+            let same = st.doc == doc && st.selection == selection && st.history.undo.len() == undo && (st.isolation, st.mask_view) == modes;
             if !(refused && same) {
                 wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
             }
             if !same {
                 let st = s.doc_mut().unwrap();
-                (st.doc, st.selection) = (doc, selection);
+                (st.doc, st.selection, (st.isolation, st.mask_view)) = (doc, selection, modes);
                 st.history.undo.truncate(undo);
             }
         }

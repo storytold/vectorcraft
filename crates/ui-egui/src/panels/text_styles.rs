@@ -3,7 +3,7 @@
 //! Click a style to apply it to the selected text (or the Type tool's selected characters);
 //! Alt-click applies it and clears overrides. Double-clicking a character style's row opens its
 //! Character Style Options (`ui.charStyleOptions`), as the panel menu does; a paragraph style's row
-//! opens its Paragraph Style Options, the rename dialog the panel menu opens. The style of the
+//! opens its Paragraph Style Options (`ui.paraStyleOptions`). The style of the
 //! selection is highlighted, with a "+" when the text overrides some of its attributes. New makes
 //! a style from the selected text; Alt-click on New first asks for its name (`ui.newCharStyle`,
 //! `ui.newParaStyle`).
@@ -32,6 +32,7 @@ impl Kind {
     fn prefix(self) -> &'static str {
         if self == Kind::Char { "charStyle" } else { "paraStyle" }
     }
+    #[cfg(test)]
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
@@ -228,17 +229,11 @@ fn row_look(is_cur: bool, in_highlight: bool, hovered: bool, t: &Tokens) -> (Opt
     (fill, is_cur && in_highlight)
 }
 
-/// Opens `name`'s options: Character Style Options for a character style, or the Paragraph Style
-/// Options the Paragraph Styles panel menu opens, which rename the style (`ui.paramDialog` runs
-/// `paraStyle.rename`).
+/// Opens `name`'s options: Character Style Options for a character style, Paragraph Style Options
+/// for a paragraph style.
 fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
-    if kind == Kind::Char {
-        app.run("ui.charStyleOptions", json!({ "name": name })).ok();
-    } else {
-        let label = format!("{} Style Options", kind.what());
-        app.run("ui.paramDialog", json!({ "command": format!("{}.rename", kind.prefix()), "label": label, "params": { "name": name, "to": name } }))
-            .ok();
-    }
+    let command = if kind == Kind::Char { "ui.charStyleOptions" } else { "ui.paraStyleOptions" };
+    app.run(command, json!({ "name": name })).ok();
 }
 
 /// The style list and its New and Delete buttons. Shift-click highlights every style from the
@@ -251,7 +246,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
     let cur_name = cur.as_ref().map(|(n, _)| n.clone().unwrap_or_else(|| normal.clone()));
     let mut clicked: Option<(String, egui::Modifiers)> = None;
-    // A double-clicked Character Style's row, whose options open after the list is laid out.
+    // A double-clicked style's row, whose options open after the list is laid out.
     let mut options: Option<String> = None;
     // Set on a double-click's second click, which must not apply the style again.
     let mut double_click = false;
@@ -278,7 +273,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             // Overrides: an attribute the style sets that the selection doesn't match.
             let overridden = is_cur && cur.as_ref().is_some_and(|(_, m)| attrs.iter().any(|(k, v)| m.get(k) != Some(v)));
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-            if resp.drag_started() {
+            if resp.drag_started_by(egui::PointerButton::Primary) {
                 egui::DragAndDrop::set_payload(ui.ctx(), RowDrag { kind, name: name.clone() });
             }
             if scroll_to.as_deref() == Some(name.as_str()) {
@@ -299,7 +294,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
             }
-            // A double-click on a user character style opens its Character Style Options, as the
+            // A double-click on a user style opens its Character or Paragraph Style Options, as the
             // panel menu's item does; with Shift, Cmd/Ctrl or Alt held it only follows the click
             // rules. The second click never applies the style again, also on the Normal style,
             // which has no options to open.

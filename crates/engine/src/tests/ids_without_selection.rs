@@ -94,8 +94,47 @@ fn run_fresh(
     params: &serde_json::Value,
 ) -> (std::result::Result<serde_json::Value, String>, Option<std::sync::Arc<vectorcraft_doc::Document>>) {
     let (mut s, ..) = doc_with_type();
-    let r = s.execute(cmd, params).map_err(|e| e.to_string());
+    let r = s.execute(cmd, params).map(|v| without_plugin_effects(cmd, v)).map_err(|e| e.to_string());
     (r, s.doc().ok().map(|d| d.doc.clone()))
+}
+
+/// `cmd`'s result with the plug-in effects (`plugin.<id>`) taken out of `effect.list`'s catalog.
+/// The plug-in tests install and remove plug-ins in the process-wide registry while these
+/// comparisons run, so two runs of `effect.list` can list different plug-ins.
+fn without_plugin_effects(cmd: &str, mut r: serde_json::Value) -> serde_json::Value {
+    if cmd == "effect.list"
+        && let Some(catalog) = r.get_mut("catalog").and_then(serde_json::Value::as_array_mut)
+    {
+        catalog.retain(|e| !e["id"].as_str().is_some_and(|id| id.starts_with(vectorcraft_plugins::PREFIX)));
+    }
+    r
+}
+
+/// Whether two results of `cmd` are the same, apart from the plug-in effects in `effect.list`'s
+/// catalog ([`without_plugin_effects`]).
+fn same_without_plugin_effects(cmd: &str, x: &serde_json::Value, y: &serde_json::Value) -> bool {
+    if cmd == "effect.list" { without_plugin_effects(cmd, x.clone()) == without_plugin_effects(cmd, y.clone()) } else { x == y }
+}
+
+/// Two `effect.list` results that differ only in a plug-in effect in the catalog compare the same;
+/// a difference in a built-in effect, in `applied` or in `activeItem`, or in another command's
+/// result, does not.
+#[test]
+fn plugin_effects_are_left_out_of_the_effect_list_comparison() {
+    let list = |catalog: &[&str], applied: serde_json::Value, active: serde_json::Value| {
+        let catalog: Vec<_> = catalog.iter().map(|id| json!({"id": id, "label": id})).collect();
+        json!({"catalog": catalog, "applied": applied, "activeItem": active})
+    };
+    let base = list(&["stylize.dropShadow"], json!([]), json!(null));
+    let with_plugin = list(&["stylize.dropShadow", "plugin.test.glow"], json!([]), json!(null));
+    assert!(same_without_plugin_effects("effect.list", &base, &with_plugin));
+    assert!(same_without_plugin_effects("effect.list", &with_plugin, &base));
+    assert_eq!(without_plugin_effects("effect.list", with_plugin.clone()), base);
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&[], json!([]), json!(null))), "a built-in effect");
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&["stylize.dropShadow"], json!([{"id": 3}]), json!(null))), "applied");
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&["stylize.dropShadow"], json!([]), json!(0))), "activeItem");
+    assert!(!same_without_plugin_effects("object.transform", &base, &with_plugin), "another command");
+    assert_eq!(without_plugin_effects("object.transform", with_plugin.clone()), with_plugin);
 }
 
 /// Every command whose params description names both `id` and `ids` (`{ids?|id?}`, `{id?, ids?:
@@ -265,7 +304,7 @@ fn ids_and_selection(cmd: &str, picks: &[usize]) -> std::result::Result<bool, St
     with_ids["ids"] = json!(list);
     let (a, b) = (given.execute(cmd, &with_ids), selected.execute(cmd, &params));
     let same_result = match (&a, &b) {
-        (Ok(x), Ok(y)) => x == y,
+        (Ok(x), Ok(y)) => same_without_plugin_effects(cmd, x, y),
         (Err(x), Err(y)) => x.to_string() == y.to_string(),
         _ => false,
     };
@@ -329,6 +368,7 @@ fn ids_cases(d: u64) -> Vec<(&'static str, &'static str, serde_json::Value, Unse
         ("edit.colors.invert", "ids", json!({}), Selected),
         ("edit.colors.toCMYK", "ids", json!({}), Selected),
         ("edit.colors.toGrayscale", "ids", json!({}), Selected),
+        ("edit.colors.toIndexed", "ids", json!({}), Selected),
         ("edit.colors.toRGB", "ids", json!({}), Selected),
         ("edit.colors.saturate", "ids", json!({"intensity": 50}), Selected),
         ("edit.colors.adjustBalance", "ids", json!({"r": 20}), Selected),

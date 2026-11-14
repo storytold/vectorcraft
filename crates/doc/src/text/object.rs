@@ -1,6 +1,6 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
-use super::para_style::ParaStyle;
+use super::para_style::{JustificationOptions, ParaStyle};
 use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
 use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
@@ -34,10 +34,19 @@ impl TextObject {
         style.baseline_shift *= scale.points;
         style.tcy_up_down *= scale.points;
         style.tcy_left_right *= scale.points;
+        style.warichu_gap *= scale.points;
         style.h_scale *= scale.horizontal;
-        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.tcy_up_down, style.tcy_left_right, style.h_scale]
-            .iter()
-            .all(|v| v.is_finite())
+        if ![
+            style.size,
+            style.leading.unwrap_or(0.0),
+            style.baseline_shift,
+            style.tcy_up_down,
+            style.tcy_left_right,
+            style.warichu_gap,
+            style.h_scale,
+        ]
+        .iter()
+        .all(|v| v.is_finite())
         {
             return None;
         }
@@ -114,6 +123,12 @@ impl TextObject {
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
     }
+    /// Does layout stack some of this type's characters as warichu ([`CharStyle::warichu`])? Not
+    /// on a path, which sets them as they are. Exports that write live text write such type as
+    /// outlines, as they do ruby: their text can't place the stacked lines.
+    pub fn stacks_warichu(&self) -> bool {
+        !matches!(self.kind, TextKind::OnPath { .. }) && self.runs.iter().any(|r| r.style.warichu && !r.text.is_empty())
+    }
     /// Clamp the ruby spans to the plain text, drop empty/empty-reading ones and sort them.
     ///
     /// Called after loading and editing text: ranges from a file or an edit are untrusted, and a
@@ -169,6 +184,19 @@ impl TextObject {
     /// Attributes of paragraph `i` (the last paragraph's past the end).
     pub fn para_at(&self, i: usize) -> &ParaStyle {
         self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
+    }
+    /// The Justification… options the layout sets `para` with: its own, except that with Dynamic
+    /// Text's Block on area type ([`Self::dynamic_text`]) the Desired word spacing is the word gap
+    /// ([`AreaOptions::block_gaps`]), and Minimum and Maximum move out to it when it lies outside
+    /// them. The paragraph keeps its own values, which apply again when Block is off.
+    pub fn layout_justification(&self, para: &ParaStyle) -> JustificationOptions {
+        let mut j = para.justification.clone();
+        if self.dynamic_text && matches!(self.kind, TextKind::Area { .. }) {
+            let gap = self.area.block_gaps().0;
+            let [min, _, max] = j.word_spacing;
+            j.word_spacing = [min.min(gap), gap, max.max(gap)];
+        }
+        j
     }
     /// Every paragraph's attributes, one per paragraph.
     pub fn paragraph_styles(&self) -> Vec<ParaStyle> {
@@ -477,14 +505,33 @@ impl crate::Document {
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
             st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
             st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
+            st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
+            st.aki_right = num("akiRight").unwrap_or(st.aki_right);
+            st.warichu_gap = num("warichuGap").unwrap_or(st.warichu_gap);
+            st.warichu_scale = num("warichuScale").unwrap_or(st.warichu_scale);
             st.keep_dimensions_in_range();
+            // Lines is a whole number: a stored number outside the range, or with a fraction,
+            // becomes the nearest whole number within it.
+            if let Some(old) = def.attrs.get_mut("warichuLines")
+                && old.is_number()
+                && old.as_u64().is_none_or(|v| !super::WARICHU_LINES.contains(&u8::try_from(v).unwrap_or(u8::MAX)))
+            {
+                let (lo, hi) = (*super::WARICHU_LINES.start(), *super::WARICHU_LINES.end());
+                let v = old.as_f64().filter(|v| v.is_finite()).map_or(2.0, |v| v.round().clamp(f64::from(lo), f64::from(hi)));
+                // Within 1..6 after the clamp, so the cast keeps the value.
+                *old = (v as u8).into();
+            }
             let kept = [
+                ("warichuGap", Some(st.warichu_gap)),
+                ("warichuScale", Some(st.warichu_scale)),
                 ("size", Some(st.size)),
                 ("h_scale", Some(st.h_scale)),
                 ("v_scale", Some(st.v_scale)),
                 ("baseline_shift", Some(st.baseline_shift)),
                 ("tcyUpDown", Some(st.tcy_up_down)),
                 ("tcyLeftRight", Some(st.tcy_left_right)),
+                ("akiLeft", Some(st.aki_left)),
+                ("akiRight", Some(st.aki_right)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

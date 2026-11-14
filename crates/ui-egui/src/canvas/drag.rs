@@ -265,6 +265,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
+/// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
+pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
+    space && (m.command || !app.session.tool_wants_text())
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
@@ -293,9 +299,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     let tool = app.session.tool_id();
     let Some(st) = app.session.active().filter(|_| matches!(tool, "selection" | "directSelection" | "groupSelection")) else { return false };
     // The tool's interaction while it moves (or Alt-copies) the selection.
-    if !st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy") {
-        return false;
-    }
+    let Some(it) = st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy") else { return false };
     if tool != "selection" && st.selection.objects.iter().any(|id| st.selection.partial(*id).is_some() || st.selection.segments.contains_key(id)) {
         return false;
     }
@@ -305,7 +309,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     if on_canvas(ui, resp, p) && ui.input(|i| i.pointer.has_pointer()) {
         return false;
     }
-    let ids = st.selection.objects.clone();
+    // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
+    // copies, selected while it previews, go with that.
+    let ids = it.selection.objects.clone();
     egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
     true
 }
@@ -399,7 +405,9 @@ fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool
     }
 }
 
-/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error. When an
+/// edit the tool committed or ran no longer fits in the action being recorded, the edit stays and
+/// the status bar names the limit ([`crate::panels::actions::after_journaled_edit`]).
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
@@ -420,6 +428,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     }
                 }
             }
+            crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
     }

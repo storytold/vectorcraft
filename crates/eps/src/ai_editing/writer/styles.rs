@@ -39,9 +39,12 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
 }
 
-/// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
-/// by id: paths and compound paths with points and groups, with live effects or linked to a graphic
-/// style, without Opacity & Mask Define Knockout Shape (the reader takes an object's transparency
+/// The objects of `doc`'s layers and of their opacity masks' art that may be written with an art
+/// style ([`Writer::styled_object`]), by id (a mask's art root shown, as [`Writer::mask`] writes
+/// it): paths and compound paths with points and groups, with live effects, linked to a graphic
+/// style or (paths and compound paths) with a brush on a stroke, and embedded images with one Warp
+/// ([`warped_image`]), without Opacity & Mask Define
+/// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
 /// groups, none with effects or anything baking changes.
 pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, Arc<Node>> {
@@ -49,6 +52,13 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
         for n in nodes {
             if candidate(n) {
                 out.insert(n.id, n.clone());
+            }
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut art = m.art.clone();
+                if !art.visible {
+                    Arc::make_mut(&mut art).visible = true;
+                }
+                walk(std::slice::from_ref(&art), out);
             }
             // A group's members are written with a style of their own only when the group is written
             // without one. Baking a container with effects of its own changes its members, which
@@ -76,7 +86,8 @@ fn bakes_members(n: &Node) -> bool {
 
 /// Whether `n` may be written with an art style ([`styled_objects`]).
 fn candidate(n: &Node) -> bool {
-    let styled = !n.appearance.effects.is_empty() || n.extras().graphic_style.is_some();
+    let brushed = brushed(n) && matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+    let styled = !n.appearance.effects.is_empty() || n.extras().graphic_style.is_some() || brushed;
     if !styled || n.knockout_shape {
         return false;
     }
@@ -84,8 +95,26 @@ fn candidate(n: &Node) -> bool {
         NodeKind::Path { path, guide: false, clipping: false, .. } => has_points(path),
         NodeKind::Compound { .. } => has_points(&compound_path(n)),
         NodeKind::Group { children, clip: false } => !n.is_compound_shape() && children.iter().all(|c| plain_member(c)),
+        NodeKind::Image(_) => warped_image(n),
         _ => false,
     }
+}
+
+/// Is `n` an embedded image without an opacity mask whose appearance is one Warp, with no fills or
+/// strokes that paint and no effects on them: an image the reader reads with its Warp live
+/// ([`crate::import::read_art_style`]'s `image_warp`)?
+fn warped_image(n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    im.link.is_none()
+        && n.extras().mask.is_none()
+        && matches!(n.appearance.effects.as_slice(), [e] if e.id.starts_with("warp."))
+        && n.appearance.items.iter().all(|i| i.paint().is_none() && i.effects().is_empty())
+}
+
+/// Does `n` have a stroke with a brush that paints, one that its art style holds ([`Writer::style_text`]
+/// leaves out what paints nothing)?
+fn brushed(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && !s.paint.is_none()))
 }
 
 /// Does `path` write anything ([`Writer::plain_object`] skips subpaths without points)?
@@ -144,7 +173,7 @@ impl Styles {
 }
 
 /// One style as the reader's section holds it: `/KnownStyle :`, `(name) /Name ,`, its text.
-fn known_style(name: &str, text: &str) -> String {
+pub(super) fn known_style(name: &str, text: &str) -> String {
     format!("/KnownStyle :\n{} /Name ,\n{text}", ps::bytes(name.as_bytes()))
 }
 
@@ -172,7 +201,7 @@ const NO_LINE: &str = "0 J 0 j 1 w 10 M []0 d\n";
 
 /// A basic filter's start: its name and kind numbers (`1 0` for an effect, `0 0` for the
 /// style's own filters), `/Visible` and the dictionary's start.
-fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
+pub(super) fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
     let _ = write!(s, "/BasicFilter :\n{} {} 0 /Filter ,\n{} /Visible ,\n", ps::bytes(name.as_bytes()), u8::from(effect), u8::from(visible));
 }
 
@@ -180,7 +209,7 @@ fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
 const CONDUIT: &str = "/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n";
 
 /// A basic filter's end.
-const END_BASIC: &str = "; /Dict ;\n /Part ,\n";
+pub(super) const END_BASIC: &str = "; /Dict ;\n /Part ,\n";
 
 /// The blend filter of transparency `xy`.
 fn blend_filter(s: &mut String, xy: Xy) {
@@ -228,7 +257,7 @@ fn flag(p: &Value, key: &str) -> Option<bool> {
 
 impl Writer<'_> {
     /// What `paint` writes with [`Self::color`] (a color, a spot or global color), as a string.
-    fn color_ops(&mut self, paint: &Paint, stroke: bool) -> String {
+    pub(super) fn color_ops(&mut self, paint: &Paint, stroke: bool) -> String {
         let saved = std::mem::take(&mut self.body);
         self.color(paint, stroke);
         std::mem::replace(&mut self.body, saved)
@@ -267,9 +296,12 @@ impl Writer<'_> {
     }
 
     /// A stroke's basic filter: a color, its line style, and its width profile as the arrays
-    /// `BSVariableWidthTValuesArray`, `BSLeftWidthsArray` and `BSRightWidthsArray`. `None` for
-    /// other paint.
+    /// `BSVariableWidthTValuesArray`, `BSLeftWidthsArray` and `BSRightWidthsArray`; a stroke with a
+    /// brush, the brush's filter ([`Self::brush_filter`]). `None` for other paint.
     fn stroke_filter(&mut self, s: &mut String, st: &StrokeLayer, visible: bool) -> Option<()> {
+        if st.brush.is_some() {
+            return self.brush_filter(s, st, visible);
+        }
         if !matches!(st.paint, Paint::Solid { .. }) || st.overprint {
             return None;
         }
@@ -652,17 +684,19 @@ impl Writer<'_> {
             && let Some(text) = self.styles.known.iter().find(|(n, _)| *n == name).map(|(_, t)| t.clone())
             && object_reads(orig, &text)
         {
-            self.styles.links_written += 1;
             return Some(name);
         }
-        if orig.appearance.effects.is_empty() || !own_style_holds(&orig.appearance) {
+        let brushed = brushed(orig);
+        if (orig.appearance.effects.is_empty() && !brushed) || !(own_style_holds(&orig.appearance) || warped_image(orig)) {
             return None;
         }
         let graded = orig.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_)));
         let saved = (graded.then(|| self.gradient_mark()), self.warnings.len());
         let path = drawn_outline(n, orig);
         let rule = object_rule(orig);
-        let text = self.style_text(&orig.appearance, Xy::of(orig), path.as_ref().map(|p| (p, rule))).filter(|t| object_reads(orig, t));
+        let text = self
+            .style_text(&orig.appearance, Xy::of(orig), path.as_ref().map(|p| (p, rule)))
+            .filter(|t| object_reads(orig, t) && (!brushed || self.brushed_style_reads(t)));
         let Some(text) = text else {
             if let Some(mark) = saved.0 {
                 self.gradient_rollback(mark);
@@ -691,18 +725,26 @@ impl Writer<'_> {
     /// glows or feathers, the object's transparency
     /// after the group's end, `0 0 Xd`, `6 () XW`); the object itself on `%_` lines (a path's or
     /// compound path's points painted with nothing, or with its gradient fill when its style has
-    /// one; a group with its members), its name and opacity mask; then `1 (name) XW`.
+    /// one; a group with its members; an image with its pixels), its name and opacity mask; then
+    /// `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
-    /// room for them, nothing is written.
+    /// room for them, nothing is written, and the object counts neither as written with its graphic
+    /// style nor as written with a brush on its stroke.
     pub(super) fn styled_object(&mut self, n: &Node, orig: &Node, name: &str) {
         let own = match &orig.kind {
             NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
             NodeKind::Compound { .. } => super::object_count(compound_path(orig).subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
-            NodeKind::Group { .. } => 1,
+            NodeKind::Group { .. } | NodeKind::Image(_) => 1,
             _ => 0,
         };
         if !self.take_objects(1 + own) {
             return;
+        }
+        let linked = orig.extras().graphic_style.and_then(|id| self.styles.panel.get(&id)).is_some_and(|p| p == name);
+        if linked {
+            self.styles.links_written += 1;
+        } else if brushed(orig) {
+            self.brush_set.live_written += 1;
         }
         self.state(orig.locked, !orig.visible);
         let xy = Xy::of(orig);
@@ -732,13 +774,14 @@ impl Writer<'_> {
         let saved = std::mem::take(&mut self.body);
         self.hidden += 1;
         let fit = drawn_outline(n, orig).map(|p| p.bounding_box());
-        // A path's objects were kept for it above; it counts them itself.
+        // A path's or an image's objects were kept for it above; it counts them itself.
         if !matches!(orig.kind, NodeKind::Group { .. }) {
             self.objects -= own;
         }
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(orig, im), xy),
             NodeKind::Group { children, .. } => {
                 self.line("u");
                 for c in children {
@@ -827,15 +870,20 @@ fn object_rule(n: &Node) -> FillRule {
 
 /// Can appearance `ap` be written as a style of an object's own: fills and strokes that paint without
 /// transparency or effects of their own, and no Warp, Distort & Transform or Blur effect? Those
-/// are written only in the Graphic Styles panel's styles.
+/// are written only in the Graphic Styles panel's styles, apart from a Warp on an image
+/// ([`warped_image`]).
 fn own_style_holds(ap: &Appearance) -> bool {
     let plain = |i: &AppearanceItem| i.opacity() >= 1.0 && i.blend() == BlendMode::Normal && i.effects().is_empty();
     let panel_only = |e: &Effect| ["warp.", "distort.", "blur."].iter().any(|p| e.id.starts_with(p));
     ap.items.iter().filter(|i| !i.paint().is_none()).all(plain) && !ap.effects.iter().any(panel_only)
 }
 
-/// Does the reader read graphic style `g` from style text `text` as it is?
+/// Does the reader read graphic style `g` from style text `text` as it is? It leaves out a graphic
+/// style with a brush on a stroke that paints.
 fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
+    if g.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && !s.paint.is_none())) {
+        return false;
+    }
     let section = known_style("x", text);
     let Some(read) = crate::import::read_art_style(section.as_bytes(), "x", None) else { return false };
     // The opacity within the written number's precision.
@@ -846,13 +894,16 @@ fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
 /// Does the reader read object `n` written with style text `text` as it is: a path or compound
 /// path with a style it reads on any object, filled by the non-zero rule when the style fills it,
 /// or a group with no fills or strokes of its own, with effects that move the outline only where the
-/// reader reads them ([`crate::import::style_moves_with`])?
+/// reader reads them ([`crate::import::style_moves_with`]), or an image ([`warped_image`]) with a
+/// style of one Warp? The reader takes such an image's Warp where it draws as its drawn look.
 fn object_reads(n: &Node, text: &str) -> bool {
     let section = known_style("x", text);
     let own = n.appearance.fill().map(|f| &f.paint).filter(|p| matches!(p, Paint::Gradient(_)));
     let Some(mut read) = crate::import::read_art_style(section.as_bytes(), "x", own) else { return false };
     let group = matches!(n.kind, NodeKind::Group { .. });
-    if !read.simple
+    let image = matches!(n.kind, NodeKind::Image(_));
+    if (image && !(read.image_warp && warped_image(n)))
+        || (!image && !read.simple)
         || (group && !read.appearance.items.is_empty())
         || (!group && read.pathfinder)
         || !crate::import::style_moves_with(section.as_bytes(), "x", n)
@@ -889,9 +940,16 @@ pub(in crate::ai_editing) fn same_appearance(a: &Appearance, b: &Appearance) -> 
 }
 
 /// Effect `e`'s settings with its defaults filled in, its blending mode in lower case and its color as
-/// `#rrggbb`.
+/// `#rrggbb`. A Warp's map `version` is left out: the file holds the warp's settings, and the reader
+/// gives every warp it reads the newest map, so a warp saved before the version existed is written
+/// with its settings as before.
 fn normalized_params(e: &Effect) -> Value {
     let mut p = vectorcraft_effects::merged_params(&e.id, &e.params);
+    if e.id.starts_with("warp.")
+        && let Value::Object(m) = &mut p
+    {
+        m.remove("version");
+    }
     if let Some(m) = word(&p, "mode") {
         p["mode"] = Value::String(m);
     }
@@ -911,7 +969,7 @@ fn normalized_params(e: &Effect) -> Value {
 const NEAR: f64 = 6e-3;
 
 /// JSON values equal but for numbers within the written numbers' precision.
-fn near(a: &Value, b: &Value) -> bool {
+pub(super) fn near(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => match (x.as_f64(), y.as_f64()) {
             (Some(x), Some(y)) => (x - y).abs() <= NEAR,

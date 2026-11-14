@@ -363,6 +363,11 @@ antiAlias	Sharp	Nítid
 	Art Brush Options	Opcions del pinzell artístic
 	Art Optimized	Optimitzat per a l’art
 	Art Ribbons	Cintes d’art
+	Ink and Wash	Tinta i aiguada
+	Tapered Ink	Tinta afuada
+	Brush Pen	Retolador de pinzell
+	Soft Wash	Aiguada suau
+	Pooling Wash	Aiguada amb vora
 	Zigzag	Zigzag
 	Burst Ray	Raig d’impacte
 	Dash Trail	Estela discontínua
@@ -400,6 +405,7 @@ antiAlias	Sharp	Nítid
 	Asset Export Settings	Configuració d’exportació de recursos
 	Assets	Recursos
 	Assign	Assigna
+	Assign Profile	Assigna el perfil
 	Assign Profile…	Assigna el perfil…
 	Assign:	Assigna:
 	Attach	Adjunta
@@ -607,6 +613,17 @@ antiAlias	Sharp	Nítid
 	Calligraphic Brush	Pinzell cal·ligràfic
 	Calligraphic Brush Options	Opcions del pinzell cal·ligràfic
 	Calligraphic Nibs	Plomes cal·ligràfiques
+	Bristle Brushes	Pinzells de cerres
+	Fine Liner	Traç fi
+	Pointed Flat	Pla punxegut
+	Stubby Round	Rodó curt
+	Dry Scrub	Fregat sec
+	Soft Dome	Cúpula suau
+	Filbert	Llengua de gat
+	Angled Round	Rodó bisellat
+	Angled Flat	Pla bisellat
+	Fan Blender	Ventall difuminador
+	Grass Fan	Ventall d'herba
 	Can't export “{name}”.	No es pot exportar “{name}”.
 	Can't open “{name}”.	No es pot obrir “{name}”.
 	Can't print these settings: see the Summary	No es poden imprimir aquests paràmetres: consulta el resum
@@ -889,6 +906,8 @@ antiAlias	Sharp	Nítid
 	Convert to destination (preserve numbers)	Converteix al destí (conserva els números)
 	Convert to Global	Converteix en global
 	Convert to Grayscale	Converteix a escala de grisos
+	Convert to Indexed Color	Converteix a color indexat
+	Convert to Indexed Color…	Converteix a color indexat…
 	Convert To Outlines	Converteix en contorns
 	Convert To Point Type	Converteix en text de punt
 	Convert to RGB	Converteix a RGB
@@ -985,6 +1004,19 @@ antiAlias	Sharp	Nítid
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Retalla
 	Crop Image	Retalla la imatge
+	Image Tools	Eines d’imatge
+	Remove Background…	Elimina el fons…
+	Remove Background	Elimina el fons
+	Background	Fons
+	Edge Color	Color de la vora
+	Picked Colors	Colors triats
+	Corner Color	Color de les cantonades
+	Contiguous	Contigu
+	Each Channel	Cada canal
+	Color Mask…	Màscara de color…
+	Color Mask	Màscara de color
+	Remove Color Mask	Elimina la màscara de color
+	Apply Color Mask	Aplica la màscara de color
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -1133,6 +1165,8 @@ antiAlias	Sharp	Nítid
 	Delete Width Point	Suprimeix el punt d’amplada
 	Delete Workspace	Suprimeix l’espai de treball
 	Delete {kind} Style	Suprimeix l’estil de {kind}
+	Delete the selected items and their artwork?	Voleu suprimir els elements seleccionats i el seu art?
+	Delete this layer and its artwork?	Voleu suprimir aquesta capa i el seu art?
 	Delete “{name}”?	Voleu suprimir “{name}”?
 	Depth	Profunditat
 	Depth:	Profunditat:
@@ -1215,6 +1249,17 @@ antiAlias	Sharp	Nítid
 	Dock Panel	Acobla el panell
 	Dock to Top	Acobla a dalt
 	Dock to Bottom	Acobla a baix
+	Dock to Left	Acobla a l’esquerra
+	Dock to Right	Acobla a la dreta
+	Dock Toolbar	Acobla la barra d’eines
+	Float Toolbar	Flota la barra d’eines
+	Control Bar Options	Opcions de la barra de control
+	Tool Options	Opcions de l’eina
+	Object Options	Opcions de l’objecte
+	Image Options	Opcions de la imatge
+	Vertical Alignment	Alineació vertical
+	Align and Distribute	Alinea i distribueix
+	Document Options	Opcions del document
 	Dock Control Bar	Acobla la barra de control
 	Document	Document
 	Document Color Mode	Mode de color del document
@@ -1260,6 +1305,17 @@ antiAlias	Sharp	Nítid
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
+	at the start of a word	a l’inici d’una paraula
+	in the middle of a word	al mig d’una paraula
+	at the end of a word	al final d’una paraula
+	standing alone	quan va sol
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no és una alternativa de {sel} (U+{code}) tal com es troba a la seva paraula.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Feu doble clic per inserir {base} (U+{code}): una forma de presentació no s’uneix, la lletra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	S’ha inserit {base} (U+{code}) en lloc d’una forma de presentació: el tipus de lletra l’uneix als veïns segons la posició.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.
 	Double-click to insert	Feu doble clic per inserir
 	Double-click to rename	Feu doble clic per canviar el nom
 	Double-click to target the contents	Feu doble clic per apuntar al contingut
@@ -1424,12 +1480,14 @@ antiAlias	Sharp	Nítid
 	Enable copying of text, images and other content	Activa la còpia de text, imatges i altre contingut
 	Enable Guides for 9-Slice Scaling	Activa les guies per a l’escalat de 9 talls
 	Enable in-menu font previews	Activa les previsualitzacions de tipus de lletra als menús
+	Show samples on white	Mostra les mostres sobre fons blanc
 	Enable Missing Glyph Protection	Activa la protecció de glifs absents
 	Enable Opacity Mask	Activa la màscara d’opacitat
 	Enable plaintext metadata	Activa les metadades en text pla
 	Enable Rubber Band for	Activa la goma elàstica per a
 	Enable text access for screen readers	Activa l’accés al text per als lectors de pantalla
 	Enable Touch Gestures	Activa els gestos tàctils
+	Switch Selection and Drawing Modes	Canvia entre els modes de selecció i de dibuix
 	Enable Touch Workspace	Activa l’espai de treball tàctil
 	Encoding	Codificació
 	Encoding and writing the file…	S’està codificant i escrivint el fitxer…
@@ -1490,6 +1548,8 @@ antiAlias	Sharp	Nítid
 	Expand Live Paint	Expandeix la pintura interactiva
 	Expand Object	Expandeix l’objecte
 	Expand Objects on Path	Expandeix els objectes del traçat
+	Detach	Separa
+	Detach Object from Path	Separa l’objecte del traçat
 	Expand Options	Opcions d’expansió
 	Expand Panels	Expandeix els panells
 	Expand Repeat	Expandeix la repetició
@@ -1556,6 +1616,8 @@ antiAlias	Sharp	Nítid
 	Extrude & Bevel…	Extrudeix i bisella…
 	3D (Classic)	3D (clàssic)
 	Extrude & Bevel (Classic)…	Extrudeix i bisella (clàssic)…
+	Revolve (Classic)…	Revoluciona (clàssic)…
+	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
 	No Shading	Sense ombra
@@ -1865,6 +1927,7 @@ digits	Malayalam	Malaiàlam
 	Gridline every	Línia de quadrícula cada
 	Gridline every:	Línia de quadrícula cada:
 	Grids In Back	Quadrícules al darrere
+	Grit Textures	Textures granulades
 	Group	Agrupa
 	Group Selection	Selecció de grup
 	Group Selection Tool	Eina de selecció de grup
@@ -1889,6 +1952,14 @@ digits	Malayalam	Malaiàlam
 	Hand	Mà
 	Hand Tool	Eina de mà
 	Hand-Drawn	Dibuixat a mà
+	Painted and Sketched	Pintat i esbossat
+	Washed Blue	Blau rentat
+	Bristle Ochre	Ocre de cerres
+	Pastel Heather	Bruc pastel
+	Charcoal Shade	Ombra de carbó
+	Ink Contour	Contorn de tinta
+	Wet Ink	Tinta humida
+	Fine Pen	Ploma fina
 	Handles	Nanses
 	Hard	Dur
 	Hard Light	Llum dura
@@ -2055,6 +2126,7 @@ digits	Malayalam	Malaiàlam
 	Include Hidden Layers	Inclou les capes ocultes
 	Include Linked Files	Inclou els fitxers enllaçats
 	Include Metadata	Inclou les metadades
+	Include Variable Data	Inclou les dades de variables
 	Include non-printing layers	Inclou les capes no imprimibles
 	Write pages longer than 200 in at full size in points	Escriu les pàgines de més de 200 in a mida real, en punts
 	Include Objects On Canvas	Inclou els objectes del llenç
@@ -2259,6 +2331,11 @@ digits	Malayalam	Malaiàlam
 	Ligatures are off while the text is tracked.	Les lligadures estan desactivades mentre el text té espaiat.
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
+	Shadows	Ombres
+	Distance from Object	Distància de l’objecte
+	Shadow Bounds	Límits de l’ombra
+	Behind Object	Darrere de l’objecte
+	Below Object	Sota l’objecte
 	Light Blue	Blau clar
 	Light Red	Vermell clar
 	Light Direction	Direcció de la llum
@@ -2487,6 +2564,8 @@ digits	Malayalam	Malaiàlam
 	Meters	Metres
 	Method	Mètode
 	Method:	Mètode:
+	Pad	Allarga
+	Repeats	Repeticions
 	Mezzotint	Mezzotinta
 	Mezzotint…	Mezzotinta…
 	Millimeters	Mil·límetres
@@ -2525,6 +2604,10 @@ digits	Malayalam	Malaiàlam
 	Modify	Modifica
 	Mojikumi	Ajust mojikumi
 	Mojikumi Set	Conjunt mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	RGB del monitor
 	Mono	Monocrom
 	Monochromatic	Monocromàtic
@@ -2559,6 +2642,8 @@ digits	Malayalam	Malaiàlam
 	Move in Perspective	Mou en perspectiva
 	Move Library Group	Mou el grup de la biblioteca
 	Move Library Item to Group	Mou l’element de la biblioteca al grup
+	Rename Library Item	Canvia el nom de l’element de la biblioteca
+	Add to Character Styles	Afegeix als estils de caràcter
 	Move Locked and Hidden Artwork with Artboard	Mou la il·lustració bloquejada i oculta amb el tauler
 	Move Mesh Point	Mou el punt de malla
 	Move Mesh Points	Mou els punts de malla
@@ -2745,6 +2830,8 @@ digits	Malayalam	Malaiàlam
 	Note:	Nota:
 	Nothing is selected. Select the art to export, then open this tab again.	No hi ha res seleccionat. Selecciona la il·lustració que vols exportar i torna a obrir aquesta pestanya.
 	Nothing matches the Show filter.	Res no coincideix amb el filtre Mostra.
+	Show DCS Transparency Interactions	Mostra les interaccions de transparència DCS
+	Transparent, or overlaps transparent objects: check its separations	És transparent o se superposa a objectes transparents: comproveu-ne les separacions
 	Nothing to print	No hi ha res per imprimir
 	NTSC Colors	Colors NTSC
 	Nudge	Desplaça
@@ -2883,15 +2970,25 @@ digits	Malayalam	Malaiàlam
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
 	Optical	Òptic
+	Optical Effects	Efectes òptics
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
+	Dynamic Text Presets	Valors predefinits de text dinàmic
+	Arch	Volta
+@msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el text sobre un traçat obert o compost no es pot centrar a dalt o a baix: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el text sobre un traçat sense longitud o sense alçada no es pot centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el text sobre un traçat d’un text enllaçat no es pot centrar a dalt o a baix: {frames}
+@msg	select type on a closed path	seleccioneu text sobre un traçat tancat
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
 	Options	Opcions
 	Options for Selection…	Opcions per a la selecció…
 	Options:	Opcions:
 	Options…	Opcions…
+	Organic Fades	Esvaïments orgànics
+	Holographic	Hologràfics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3017,6 +3114,30 @@ digits	Malayalam	Malaiàlam
 	Pattern	Motiu
 	Pattern Borders	Vores de motiu
 	Pattern Brush	Pinzell de motiu
+	missing from the Brushes panel	absent del tauler Pinzells
+	built in	integrat
+	embedding not allowed	incrustació no permesa
+	embedding for editing	incrustació per a l’edició
+	embedding for preview and print	incrustació per a la visualització i la impressió
+	embedding allowed	incrustació permesa
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
+	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
+	missing	absent
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradat lineal
+	Radial gradient	Degradat radial
+	Conic gradient	Degradat cònic
+	Diamond gradient	Degradat de rombe
+	Freeform gradient	Degradat de forma lliure
+@plural	{n} instance|{n} instances	{n} instància|{n} instàncies
+@plural	{n} row|{n} rows	{n} fila|{n} files
+@plural	{n} column|{n} columns	{n} columna|{n} columnes
 	Pattern Brush Options	Opcions del pinzell de motiu
 	Pattern Editing	Edició de motius
 	Pattern Options	Opcions del motiu
@@ -3048,6 +3169,8 @@ digits	Malayalam	Malaiàlam
 	per slice	per tall
 	Percent:	Percentatge:
 	Perceptual	Perceptual
+	Hue Clockwise	To en sentit horari
+	Hue Counterclockwise	To en sentit antihorari
 	Perceptual Scales	Escales perceptuals
 	Performance	Rendiment
 	Permissions	Permisos
@@ -3182,6 +3305,7 @@ digits	Malayalam	Malaiàlam
 	Press Quality	Qualitat d’impressió
 	Pressure	Pressió
 	Preview	Previsualització
+	Preview:	Previsualització:
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
@@ -3230,6 +3354,8 @@ digits	Malayalam	Malaiàlam
 	Proof Setup	Configuració de prova
 	Properties	Propietats
 	Proportional Metrics	Mètriques proporcionals
+	Insert Aki Left	Insereix aki a l'esquerra
+	Insert Aki Right	Insereix aki a la dreta
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -3265,6 +3391,8 @@ digits	Malayalam	Malaiàlam
 	Radial Dividers:	Divisors radials:
 	Radial Glows	Resplendors radials
 	Radial Gradient	Degradat radial
+	Conic Gradient	Degradat cònic
+	Diamond Gradient	Degradat de rombe
 	Radial Repeat	Repetició radial
 	Radius	Radi
 	Radius 1	Radi 1
@@ -3281,6 +3409,8 @@ digits	Malayalam	Malaiàlam
 	Range:	Interval:
 	Raster Effects	Efectes de ràster
 	Raster File Format:	Format de fitxer de ràster:
+	Include Placed Images	Inclou les imatges col·locades
+	Include Fill Hatches	Inclou les trames dels emplenaments
 	Raster Sample Size:	Mida de mostra de ràster:
 	Raster/Vector Balance:	Equilibri ràster/vector:
 	Rasterize	Rasteritza
@@ -3298,6 +3428,11 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
+	Canvas display profile:	Perfil de pantalla del llenç:
+	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No s’ha trobat cap perfil de pantalla utilitzable: el llenç es dibuixa en sRGB.
 	Rearrange	Reorganitza
 	Select All Artboards	Selecciona tots els taulers
 	Switch Orientation	Canvia l’orientació
@@ -3467,6 +3602,10 @@ digits	Malayalam	Malaiàlam
 	Replace Font	Reemplaça el tipus de lletra
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplaça’l per un altre fitxer o ignora’l: les seves imatges continuaran mostrant la previsualització desada amb el document.
 	Replace Spine	Reemplaça l’espina
+	Create Spine	Crea l’espina
+	Create Spine:	Crea l’espina:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Reemplaça el símbol
 	Reset Transformation	Restableix la transformació
 	Replace With Font	Reemplaça per un tipus de lletra
@@ -3507,9 +3646,18 @@ digits	Malayalam	Malaiàlam
 	No settings found	No s'ha trobat cap paràmetre
 	Reset Printing and Proofing	Restableix impressió i prova
 	Reset Profiles	Restableix els perfils
+	Arrowheads	Puntes de fletxa
+	Edit Arrowheads	Edita les puntes de fletxa
+	Edit Arrowheads…	Edita les puntes de fletxa…
+	Reload Arrowheads	Torna a carregar les puntes de fletxa
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
+	Color Theme Picker	Selector de tema de colors
+	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
+	Prominent Colors	Colors predominants
+	Save All Colors	Desa tots els colors
+	Save Prominent Colors	Desa els colors predominants
 	Reset to Default	Restableix el valor predeterminat
 	Reset to default	Restableix el valor predeterminat
 	Reset to Defaults	Restableix els valors predeterminats
@@ -3528,6 +3676,7 @@ digits	Malayalam	Malaiàlam
 	Reshape Segment	Remodela el segment
 	Reshape Spine	Remodela l’espina
 	Reshape Spine Segment	Remodela el segment de l’espina
+	Blend Easing	Suavitzat de la fusió
 	Reshape Tool	Eina de remodelació
 	Reshape Type Area	Remodela l’àrea de text
 	Resize	Redimensiona
@@ -3586,6 +3735,10 @@ digits	Malayalam	Malaiàlam
 	Roman	Romà
 	Roman Baseline	Línia de base romana
 	Roman Hanging Punctuation	Puntuació penjant romana
+	Korean Line Break Anywhere	Salt de línia coreà a qualsevol lloc
+	Bunri-Kinshi	Bunri-Kinshi
+	East Asian Composition Settings	Configuració de composició de l’Àsia oriental
+	Korean Composition Settings	Configuració de composició coreana
 	Rotate	Gira
 	Rotate 90° CW	Gira 90° en sentit horari
 	Rotate Tool	Eina de gir
@@ -3802,6 +3955,27 @@ digits	Malayalam	Malaiàlam
 	Scatter Brush Options	Opcions del pinzell de dispersió
 	Scatter Graph Tool	Eina de gràfic de dispersió
 	Scatter Shapes	Formes de dispersió
+	Dry Media	Tècniques seques
+	Chalk Grain	Gra de guix
+	Graphite Pencil	Llapis de grafit
+	Wax Crayon	Cera de colors
+	Charcoal Dust	Pols de carbó
+	Notched Ribbon	Cinta dentada
+	Double Line	Línia doble
+	Wave	Ona
+	Teardrop	Llàgrima
+	Striped Ribbon	Cinta ratllada
+	Fine Nib	Plomí fi
+	Broad Nib	Plomí ample
+	Chisel	Escarpra
+	Round Pen	Ploma rodona
+	Pressure Pen	Ploma de pressió
+	Beads	Perles
+	Dash Dot	Ratlla i punt
+	Scallops	Festons
+	Stars	Estrelles
+	Triangles	Triangles
+	Sparkles	Espurnes
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores
@@ -3928,12 +4102,41 @@ digits	Malayalam	Malaiàlam
 	Continue	Continua
 	Continue Action	Continua l’acció
 	Delete Action Step	Suprimeix el pas de l’acció
+	Move Action Step	Mou el pas de l’acció
 	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
 	Stop: {message}	Aturada: {message}
 @msg	no action is waiting at a stop	cap acció no espera en una aturada
 @msg	message must be text	message ha de ser text
 @msg	allowContinue must be true or false	allowContinue ha de ser true o false
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
+@msg	Batch cannot play an action with a View menu step	Lot no pot reproduir una acció amb un pas del menú Visualitza
+	Insert Menu Item…	Insereix un element de menú…
+	Insert Menu Item	Insereix un element de menú
+	Insert Select Path	Insereix una selecció de traçat
+	Select Path	Selecciona el traçat
+@msg	select one whole path or compound path	selecciona un traçat sencer o un traçat compost
+@msg	select only one path	selecciona només un traçat
+@msg	the path is hidden or locked, or cannot be selected here	el traçat està amagat o bloquejat, o no es pot seleccionar aquí
+@msg	object {value} is not the stored path: it changed, or the document is another one	l’objecte {value} no és el traçat desat: ha canviat o el document és un altre
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` ha de ser "v1:" i 16 dígits hexadecimals en minúscula
+	Select Object…	Selecciona un objecte…
+	Select Object	Selecciona un objecte
+	Set Selection	Defineix la selecció
+	Case Sensitive	Distingeix majúscules i minúscules
+	Whole Word	Paraula sencera
+	Select Object: {note}	Selecciona un objecte: {note}
+	Select by Note	Selecciona per nota
+@msg	the note is empty	la nota és buida
+@msg	the note is longer than 1,024 bytes	la nota té més de 1.024 bytes
+@msg	no object that can be selected has a note matching “{query}”	cap objecte que es pugui seleccionar té una nota que coincideixi amb “{query}”
+	Menu Item:	Element de menú:
+	No menu item matches.	Cap element de menú no coincideix.
+	Several menu items match. Choose one from the list.	Coincideixen diversos elements de menú. Trieu-ne un de la llista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	No es mostren els elements que obren un quadre de diàleg ni els elements dels menús Fitxer, Finestra i Ajuda.
+@msg	command must be text	command ha de ser text
+@msg	no menu item that can be inserted runs this command	cap element de menú que es pugui inserir no executa aquesta ordre
+@msg	the action already has 10,000 steps	l’acció ja té 10.000 passos
+@msg	the action set would be larger than 8 MiB	el conjunt d’accions superaria els 8 MiB
 	Playback Options	Opcions de reproducció
 	Accelerated	Accelerada
 	Step by Step	Pas a pas
@@ -3976,6 +4179,15 @@ digits	Malayalam	Malaiàlam
 	Stun Pulse	Atordiment
 	Stealth Fade	Sigil
 	Shield Buff	Escut
+	Textures	Textures
+	Fine Grain	Gra fi
+	Canvas Weave	Teixit de llenç
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Vidrat esquerdat
+	Mosaic Floor	Terra de mosaic
+	Quilted Squares	Quadrats encoixinats
+	Leaded Glass	Vitrall emplomat
+	Damp Paper	Paper humit
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -4056,6 +4268,8 @@ digits	Malayalam	Malaiàlam
 	Show Modified	Mostra els modificats
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
+	Show Recent Colors	Mostra els colors recents
+	Toggle RGB Percent	Commuta RGB en percentatge
 	Show Original Path	Mostra el traçat original
 	Show Package	Mostra el paquet
 	Show Panel	Mostra el panell
@@ -4223,6 +4437,22 @@ digits	Malayalam	Malaiàlam
 	Sponge…	Esponja…
 	spot	directe
 	Spot Color	Color directe
+	Spot Color Objects	Objectes amb colors directes
+	Pattern Objects	Objectes amb motius
+	Gradient Objects	Objectes amb degradats
+	Font Details	Detalls dels tipus de lletra
+	Linked Images	Imatges enllaçades
+	Embedded Images	Imatges incrustades
+	Compound Paths	Traçats compostos
+	Text Objects	Objectes de text
+	Placed Documents	Documents col·locats
+	Symbol Instances	Instàncies de símbol
+	Gradient Meshes	Malles de degradat
+	Blends	Fusions
+	Envelopes	Embolcalls
+	Intertwine Groups	Grups entrellaçats
+	Opacity Masks	Màscares d’opacitat
+	Objects with Effects	Objectes amb efectes
 	Spot Colors	Colors directes
 	Spot Colors (0)	Colors directes (0)
 	Spot Colors…	Colors directes…
@@ -4406,6 +4636,11 @@ digits	Malayalam	Malaiàlam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configuració de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configuració de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Configuració de Warichu…
+	Warichu Settings	Configuració de Warichu
+	Lines:	Línies:
+	Line Gap:	Separació entre línies:
 	Composite Fonts…	Tipus de lletra compostos…
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
@@ -4417,6 +4652,8 @@ digits	Malayalam	Malaiàlam
 	Scale at Center	Escala des del centre
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
+	Tate-chu-yoko Left/Right	Tate-chu-yoko esquerra/dreta
 	Technical Drawing	Dibuix tècnic
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/To…
@@ -4528,6 +4765,8 @@ digits	Malayalam	Malaiàlam
 	Toolbar: Add Tool	Barra d’eines: afegeix una eina
 	Toolbar: Advanced / Basic	Barra d’eines: avançada / bàsica
 	Toolbar: Remove Tool	Barra d’eines: suprimeix una eina
+	Add Tool…	Afegeix una eina…
+	Remove Tool	Suprimeix una eina
 	Toolbar: Reset	Barra d’eines: restableix
 	Toolbar: Show Controls	Barra d’eines: mostra els controls
 	Toolbar: Single/Double Column	Barra d’eines: columna simple o doble
@@ -4558,6 +4797,7 @@ digits	Malayalam	Malaiàlam
 	Tracking	Espaiat
 	Trackpad Gesture to Rotate View	Gesticulació del trackpad per girar la vista
 	Hold a Tool Shortcut to Use the Tool Temporarily	Mantén premuda la drecera d’una eina per usar-la temporalment
+	Show Bounding Box While Moving and Drawing	Mostra el quadre delimitador en moure i dibuixar
 	Trademark Symbol	Símbol de marca comercial
 	Transform	Transforma
 	Transform Again	Transforma de nou
@@ -4626,6 +4866,8 @@ digits	Malayalam	Malaiàlam
 	Type on a Path	Text sobre un traçat
 	Type on a Path Options	Opcions de text sobre un traçat
 	Type on a Path Options…	Opcions de text sobre un traçat…
+	Center on Top	Centra a dalt
+	Center on Bottom	Centra a baix
 	Type on a Path Tool	Eina de text sobre un traçat
 	Type Optimized	Optimitzat per al text
 	Type Orientation	Orientació del text
@@ -4883,6 +5125,7 @@ digits	Malayalam	Malaiàlam
 	Words Longer Than:	Paraules més llargues de:
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
+	Working RGB (don't tag)	RGB de treball (sense etiquetar)
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}
@@ -5007,9 +5250,14 @@ digits	Malayalam	Malaiàlam
 @msg	`ids` must be an array of object ids, not {v}	`ids` ha de ser una matriu d’identificadors d’objecte, no {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
-@msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` ha de ser classic, perceptual, hue-clockwise o hue-counterclockwise
+@msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` han de ser nombres enters
 @msg	`mode` applies to freeform gradients	`mode` s’aplica als degradats de forma lliure
+@msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
+@msg	`focal` applies to radial gradients	`focal` s’aplica als degradats radials
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
@@ -5019,6 +5267,7 @@ digits	Malayalam	Malaiàlam
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` ha de ser 1, 3 o 5
 @msg	`select` must be true or false	`select` ha de ser true o false
 @msg	`stops` must be an array	`stops` ha de ser una matriu
+@msg	`{key}` must be an array	`{key}` ha de ser una matriu
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` ha de ser un objecte d’opcions SVG (vegeu document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` ha de ser "corner" o "smooth"
 @msg	`{_1}` has no brushes to apply	`{_1}` no té pinzells per aplicar
@@ -5034,11 +5283,15 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` ha de ser [x, y, width, height]: quatre nombres finits, amb amplada i alçada no negatives
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` ha de ser `auto` o un codi d’idioma com `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` ha de ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
+@msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
+@msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
 @msg	`{key}` must be a number, not {v}	`{key}` ha de ser un nombre, no {v}
 @msg	`{key}` must be a string	`{key}` ha de ser una cadena
+@msg	`{key}` must be a profile name or null	`{key}` ha de ser un nom de perfil o null
 @msg	`{key}` must be a whole number	`{key}` ha de ser un nombre enter
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` ha de ser un nombre enter entre {min} i {max} (rebut {x})
 @msg	`{key}` must be an array of these names: {_1}	`{key}` ha de ser una matriu d’aquests noms: {_1}
@@ -5207,6 +5460,7 @@ digits	Malayalam	Malaiàlam
 @msg	column must be true or a number from 1	column ha de ser true o un nombre a partir d’1
 @msg	Combine Slices: the slices have no bounds	Combina els talls: els talls no tenen límits
 @msg	command `{0}` is not available right now: {1}	l’ordre `{0}` no està disponible ara mateix: {1}
+@msg	command `{id}` is not available right now	l’ordre `{id}` no està disponible ara mateix
 @msg	compound paths can only contain paths	els traçats compostos només poden contenir traçats
 @msg	compressed (RLE) bitmaps can't be read yet	encara no es poden llegir els mapes de bits comprimits (RLE)
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
@@ -5237,6 +5491,85 @@ digits	Malayalam	Malaiàlam
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
+@msg	Script file access denied	S'ha denegat l'accés al fitxer de l'script
+@msg	Script file exceeds 8 MiB	El fitxer de l'script supera els 8 MiB
+@msg	Script file is not open	El fitxer de l'script no està obert
+@msg	Script file cannot be decoded	No es pot descodificar el fitxer de l'script
+@msg	Script file is not a regular file	El fitxer de l'script no és un fitxer normal
+@msg	Script file does not exist	El fitxer de l'script no existeix
+@msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
+@msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
+@msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
+@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
+@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
+@msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
+@msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
+@msg	Script has 256 files open	L'script té 256 fitxers oberts
+@msg	Script file path exceeds 32,767 characters	El camí del fitxer de l'script supera els 32.767 caràcters
+@msg	Script folder mask takes too many steps to match	La màscara de carpeta de l'script requereix massa passos per coincidir
+@msg	the script opened more file data than one run may open (32 MiB)	l'script ha obert més dades de fitxer de les que pot obrir una execució (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: rep una posició i un mode
+@msg	vc.run: give a command id, as a string	vc.run: indiqueu un id d'ordre, com a cadena
+@msg	vc.run: takes a command id and an object of parameters	vc.run: rep un id d'ordre i un objecte de paràmetres
+@msg	vc.run: the parameters must be an object	vc.run: els paràmetres han de ser un objecte
+@msg	vc.run: the result{place} is too large for a script	vc.run: el resultat{place} és massa gran per a un script
+@msg	$.evalFile requires a file path	$.evalFile requereix un camí de fitxer
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el temps d'espera ha de ser un nombre finit de mil·lisegons, 0 o més
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: rep un camí de fitxer i un temps d'espera
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línia {line}, columna {column} de {file}: {e} (llançat)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línia {line}, columna {column}: {e} (llançat)
+@msg	{name}: {e} (thrown)	{name}: {e} (llançat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: línia {line}, columna {column} de {file}: {e} (límit)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: línia {line}, columna {column}: {e} (límit)
+@msg	{name}: {e} (limit)	{name}: {e} (límit)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: línia {line}, columna {column} de {file}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: línia {line}, columna {column}: {e} (error de sintaxi)
+@msg	{name}: {e} (syntax)	{name}: {e} (error de sintaxi)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: línia {line}, columna {column} de {file}: {e} (aturat)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: línia {line}, columna {column}: {e} (aturat)
+@msg	{name}: {e} (stopped)	{name}: {e} (aturat)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: línia {line}, columna {column} de {file}: {e} (error intern)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: línia {line}, columna {column}: {e} (error intern)
+@msg	{name}: {e} (internal)	{name}: {e} (error intern)
+@msg	{e} (these files stay written: {paths})	{e} (aquests fitxers continuen escrits: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indiqueu un nom, com a cadena
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indiqueu una configuració regional com "en" o "de_DE", o null per a la de la interfície
+@msg	$.localize: give true or false	$.localize: indiqueu true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: només es pot establir 512, que activa la localització, o 0
+@msg	$.flags: give a number	$.flags: indiqueu un nombre
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: aquí els scripts només llegeixen i escriuen UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indiqueu el nom d'una codificació, com a cadena
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: no es pot establir la mida de la memòria cau
+@msg	$.setenv: give a value, as a string	$.setenv: indiqueu un valor, com a cadena
+@msg	$.setenv: only {_1} can be set	$.setenv: només es poden establir {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valor té com a màxim {MAX_ENV_BYTES} lletres, xifres i _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indiqueu un nombre de mil·lisegons de 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indiqueu un nombre de mil·lisegons
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: una execució no pot esperar dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-la des del codi propi de l'script
+@msg	$.bp: scripts here have no debugger	$.bp: aquí els scripts no tenen depurador
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: els scripts encara no poden mostrar un quadre de diàleg
+@msg	{name}: give a message	{name}: indiqueu un missatge
+@msg	{name}: give the text the field starts with	{name}: indiqueu el text amb què comença el camp
+@msg	{name}: the message is longer than 16 KiB	{name}: el missatge ocupa més de 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: el títol ocupa més de 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: el text amb què comença el camp ocupa més de 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
+@msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
+@msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
+@msg	the script made more host calls than one run may make	l'script ha fet més crides a l'amfitrió de les que pot fer una execució
+@msg	the script passed more data to and from commands than one run may pass	l'script ha passat més dades a les ordres i des de les ordres de les que pot passar una execució
+@msg	the script added more objects and data to the documents than one run may add	l'script ha afegit als documents més objectes i dades dels que pot afegir una execució
+@msg	{what}: the object is not a File or a Folder	{what}: l'objecte no és un File ni un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: el recompte ha de ser un nombre finit, 0 o més
+@msg	File.seek: the position must be a finite number	File.seek: la posició ha de ser un nombre finit
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: el mode ha de ser 0, 1 o 2
+@msg	script file is compiled: {value}	el fitxer de l'script està compilat: {value}
+@msg	`name` must be the name of a script engine	`name` ha de ser el nom d'un motor d'scripts
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor d'scripts principal és nou a cada execució i no es conserva mai, per tant no es pot descartar
+@msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
@@ -5247,9 +5580,16 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No s’ha pogut col·locar {name}: el document on es va deixar anar s’ha revertit
+@msg	Couldn't place {name}: the document it was placed in was reverted	No s’ha pogut col·locar {name}: el document on es va col·locar s’ha revertit
+@msg	Couldn't paste: the document it was pasted in was reverted	No s’ha pogut enganxar: el document on s’enganxava s’ha revertit
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Crea a partir de guies: el document no té cap tauler
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crea a partir de guies: les guies fan més de {MAX_PIECES} talls
 @msg	Create from Selection: the selection has no area	Crea a partir de la selecció: la selecció no té àrea
@@ -5266,6 +5606,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
+@msg	select a path	seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
 @msg	docking action contains an unknown panel or an excessive split path	l’acció d’acoblament conté un panell desconegut o un camí de divisió excessiu
 @msg	Downloaded {what}	S’ha baixat {what}
@@ -5338,8 +5679,10 @@ digits	Malayalam	Malaiàlam
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita: activeu «Escriu les pàgines de més de 200 in a mida real, en punts»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	el PDF 1.4 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per quedar dins del límit de pàgina de 14.400 unitats del PDF/A-2: el fitxer s’escriu com a PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pàgina del tauler {n} fa {size}, massa llarga i estreta per als costats de pàgina del PDF de 3 a 14.400 unitats: s'escriu amb una UserUnit de {unit}, que manté el costat curt en 3 unitats o més, i les aplicacions que respecten el límit retallen el costat llarg a 14.400 unitats
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	els fitxers {label} admeten nombres reals fins a {max}, i la pàgina del tauler {n}, de {side} pt, en necessita de més grans: trieu PDF 1.6 o posterior sense estàndard PDF/X, o un tauler més petit
 @msg	Invalid real scale	Escala real no vàlida
@@ -5390,6 +5733,8 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	linked type areas past VectorCraft's limits were left out	s’han omès les àrees de text enllaçades que superen els límits de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	s’ha omès l’ajust de salt de línia del text en format antic
+@msg	the Japanese layout rules of legacy type were left out	s’han omès les regles de composició japonesa del text en format antic
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el text que canvia de direcció d’escriptura dins d’un objecte de text s’obre en la direcció del seu primer caràcter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
@@ -5426,6 +5771,7 @@ digits	Malayalam	Malaiàlam
 @msg	no such color	no existeix aquest color
 @msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
 @msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	l’acció “{_1}” defineix la preferència de carpeta {_2}; suprimiu aquest pas per desar el conjunt
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
@@ -5478,8 +5824,10 @@ digits	Malayalam	Malaiàlam
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu
@@ -5576,6 +5924,9 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft file: {0}	no és un fitxer de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
+@msg	not an HP-GL file	no és un fitxer HP-GL
+@msg	not a PICT file	no és un fitxer PICT
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -5615,6 +5966,7 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. S’ha obert amb {n} nota: {first}|{notice}. S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
@@ -5687,6 +6039,7 @@ digits	Malayalam	Malaiàlam
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
+@msg	the document it was prepared for is no longer active	el document per al qual es va preparar ja no està actiu
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
@@ -5726,10 +6079,23 @@ digits	Malayalam	Malaiàlam
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` ha de ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` ha de llistar d’1 a 16 colors, cadascun en hexadecimal (#rrggbb o #rgb) o com a black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imatge enllaçada mostra la previsualització: incrusta-la o torna a enllaçar-la primer
+@msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
+@msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
+@msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
+@msg	select an image with a color mask	selecciona una imatge amb una màscara de color
+@msg	the color mask's settings are out of range	la configuració de la màscara de color és fora de l’interval
+@msg	a CMYK image can't take a color mask	una imatge CMYK no pot tenir una màscara de color
+@msg	the mask would hide every pixel	la màscara amagaria tots els píxels
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
+@msg	choose the object to detach with its Select/Move widget	tria l’objecte que vols separar amb el seu control Selecciona/Mou
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
 @msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
@@ -5766,7 +6132,7 @@ digits	Malayalam	Malaiàlam
 @msg	span must be "object" or "selection", got {v}	span ha de ser "object" o "selection", s’ha rebut {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" col·loca un `gradient`, no una mostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" col·loca un degradat: dona `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" col·loca un degradat lineal o radial, no un de lliure
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial, cònic o de rombe, no un de lliure
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" col·loca el degradat mateix: omet `start` i `end` (ja el col·loquen en coordenades del document)
 @msg	Split Into Grid: select paths large enough for the grid	Divideix en quadrícula: selecciona traçats prou grans per a la quadrícula
 @msg	stop {i} needs `offset`	la parada {i} necessita `offset`
@@ -5776,7 +6142,69 @@ digits	Malayalam	Malaiàlam
 @msg	t, dx and dy must be finite	t, dx i dy han de ser finits
 @msg	Targa files are RGB: colorModel rgb	Els fitxers Targa són RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ajustament de text: selecciona un objecte d’ajustament
+@msg	the active document changed while the question was open; nothing was deleted	el document actiu ha canviat mentre la pregunta era oberta; no s’ha suprimit res
 @msg	that document is no longer open	aquest document ja no està obert
+@msg	Extrude & Bevel	Extrudeix i bisella
+@msg	Revolve	Revoluciona
+@msg	Inflate	Infla
+@msg	Rotate	Gira
+@msg	Extrude & Bevel (Classic)	Extrudeix i bisella (clàssic)
+@msg	Revolve (Classic)	Revoluciona (clàssic)
+@msg	Rotate (Classic)	Gira (clàssic)
+@msg	This effect	Aquest efecte
+@msg	clipping paths	traçats de retall
+@msg	other objects	altres objectes
+@msg	{label} requires a group holding a shape with at least two anchors	{label} requereix un grup que contingui una forma amb com a mínim dos punts d’ancoratge
+@msg	Revolve requires a group holding a shape with at least two anchors	Revoluciona requereix un grup que contingui una forma amb com a mínim dos punts d’ancoratge
+@msg	Revolve requires a shape with at least two anchors	Revoluciona requereix una forma amb com a mínim dos punts d’ancoratge
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} en un grup necessita traçats, traçats compostos, text, grups, grups de retall, fusions i instàncies de símbol: primer allibera o expandeix aquests elements: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} en un grup admet com a màxim {MAX_MEMBERS} objectes
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un efecte 3D en un grup o una capa s’aplica al mateix grup, no al seu farciment ni al seu traç
+@msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
+@msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
+@msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
+@msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} no pot construir un sòlid a partir de la instància del símbol «{symbol}»: la il·lustració del símbol no està disponible
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: el traçat de retall és massa complex per retallar-hi la il·lustració
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} admet com a màxim {MAX_MEMBERS} objectes
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} no pot construir sòlids a partir d’una il·lustració imbricada en més de {MAX_DEPTH} nivells
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	La pintura de Revoluciona és massa complexa per a aquesta superfície; redueix Segments o simplifica el degradat
+@msg	Revolve edge must be left or right	Revoluciona: edge ha de ser left o right
+@msg	Revolve cap must be a boolean	Revoluciona: cap ha de ser un booleà
+@msg	the revolved object has no fill or stroke	l’objecte de revolució no té farciment ni traç
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor ha de ser un color RGB opac en format #rrggbb
+@msg	lights must contain one to ten lights	lights ha de contenir d’un a deu llums
+@msg	each light must be an object	cada llum ha de ser un objecte
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	paràmetre de llum desconegut: fes servir color, intensity, rotation, height, softness o behind
+@msg	light {key} must be a number from {min} to {max}	llum: {key} ha de ser un nombre de {min} a {max}
+@msg	light color must use opaque #rrggbb	color d’un llum ha de fer servir #rrggbb opac
+@msg	light behind must be true or false	behind d’un llum ha de ser true o false
+@msg	shadow must be true or false	shadow ha de ser true o false
+@msg	shadowPosition must be behind or below	shadowPosition ha de ser behind o below
+@msg	{key} must be a number from {min} to {max}	{key} ha de ser un nombre de {min} a {max}
+@msg	each of `{GRAPHICS}` must be an object	cada element de `{GRAPHICS}` ha de ser un objecte
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les entrades de `{GRAPHICS}` admeten symbol, face, x, y, scale i rotation, no `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada element de `{GRAPHICS}` necessita `symbol`, el nom d’un símbol
+@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
+@msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
+@msg	The graphics are too complex: simplify the symbols' art	Els gràfics són massa complexos: simplifica la il·lustració dels símbols
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	La il·lustració d’un gràfic es pot imbricar com a màxim en {MAX_LEVELS} nivells: simplifica la il·lustració del símbol
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	La il·lustració d’un gràfic pot imbricar símbols com a màxim en {MAX_NESTING} nivells: simplifica la il·lustració del símbol
+@msg	A graphic's art holds too many objects: simplify the symbol's art	La il·lustració d’un gràfic conté massa objectes: simplifica la il·lustració del símbol
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Un gràfic dibuixa com a màxim {MAX_PIECES} farciments i traços: simplifica la il·lustració del símbol
+@msg	`surface` must be one of {_1}	`surface` ha de ser un de {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} dibuixa la il·lustració d’origen d’aquest objecte en lloc de la seva superfície 3D
+@msg	{label} draws no faces for this object	{label} no dibuixa cap cara per a aquest objecte
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	el filferro té més de {MAX_WIRE_EDGES} arestes
 @msg	The 3D surface is too complex; simplify the shape	La superfície 3D és massa complexa; simplifica la forma
 @msg	the action has no steps	l’acció no té cap pas
 @msg	the action has no included steps	l’acció no té cap pas inclòs
@@ -5918,6 +6346,8 @@ digits	Malayalam	Malaiàlam
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	aquest fitxer PostScript no es pot llegir ({why}): desa’l com a PDF o SVG a l’aplicació que l’ha creat
 @msg	This shortcut file is in a form VectorCraft can't read.	Aquest fitxer de dreceres té un format que VectorCraft no pot llegir.
 @msg	this system has no screen color sampler	aquest sistema no té cap mostrejador de color de pantalla
+@msg	the screen color sampler did not answer	el mostrejador de color de pantalla no ha respost
+@msg	the screen color sampler failed	el mostrejador de color de pantalla ha fallat
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	aquesta traça crearia més de {max} punts d’ancoratge, més dels que el document pot mostrar amb fluïdesa: augmenta el Soroll, redueix Traçats o Colors, o tria un preajust de fidelitat més baixa
 @msg	thumbnail: no page {n} (the file has 1)	miniatura: no hi ha la pàgina {n} (el fitxer en té 1)
 @msg	tintReduction must be from 0 to 100 %	tintReduction ha de ser d’entre 0 i 100 %
@@ -5940,11 +6370,12 @@ digits	Malayalam	Malaiàlam
 @msg	unknown format	format desconegut
 @msg	unknown format `{f}` (Save writes {_1})	format desconegut `{f}` (Desa escriu {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forma lliure desconegut `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipus de degradat desconegut `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ressaltat desconegut `{h}`
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
@@ -5953,6 +6384,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` està imbricat massa profundament
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	Preferences imported.	S’han importat les preferències.
 @msg	not a preferences file: {e}	no és un fitxer de preferències: {e}
@@ -6001,7 +6433,13 @@ digits	Malayalam	Malaiàlam
 @msg	x and y must be provided together	cal proporcionar x i y alhora
 @msg	x and y must both be numbers	x i y han de ser tots dos nombres
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Els canvis no desats es conserven en aquest navegador: torna a carregar la pàgina per recuperar-los.
-@msg	zipped 32-bit PSD image data with prediction can't be read	les dades d’imatge PSD de 32 bits comprimides amb predicció no es poden llegir
+@msg	zipped 1-bit PSD image data with prediction can't be read	les dades d’imatge PSD d’1 bit comprimides amb predicció no es poden llegir
+@msg	the PSD file's layer data uses an unknown compression ({m})	les dades de capa del fitxer PSD utilitzen una compressió desconeguda ({m})
+@msg	the PSD file's layer records are damaged	els registres de capes del fitxer PSD estan malmesos
+@msg	the PSD file's layer groups are nested too deeply	els grups de capes del fitxer PSD estan imbricats massa profundament
+@msg	a layer of the PSD file is too large to read	una capa del fitxer PSD és massa gran per llegir-la
+@msg	the PSD file's layers take more memory to read than allowed	les capes del fitxer PSD necessiten més memòria de la permesa per llegir-les
+@msg	the layers can't be read ({e}): the file opened as its merged image	no es poden llegir les capes ({e}): el fitxer s’ha obert com a imatge combinada
 @msg	zone must be a string	zone ha de ser una cadena
 @msg	zone must be tab, center, left, right, top or bottom	zone ha de ser tab, center, left, right, top o bottom
 @msg	{_1} failed: {e}	{_1} ha fallat: {e}
@@ -6045,12 +6483,147 @@ digits	Malayalam	Malaiàlam
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles
+@msg	`version`, `description` or `author` is too long	`version`, `description` o `author` és massa llarg
+@msg	`warnings` must be a list of strings	`warnings` ha de ser una llista de cadenes
+@msg	`{k}` must be one of {_1}	`{k}` ha de ser un de {_1}
+@msg	`{k}` must be {what}	`{k}` ha de ser {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un exportador declara d’1 a {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	com a màxim {MAX_UNGROUPED} paràmetres fora de grups: doneu un `group` als altres
+@msg	can't encode the input	no es pot codificar l’entrada
+@msg	expected {"dataBase64"}	s’esperava {"dataBase64"}
+@msg	expected {"objects"}	s’esperava {"objects"}
+@msg	export `{name}`: {e}	exportació del mòdul `{name}`: {e}
+@msg	extension {e} is listed twice	l’extensió {e} apareix dues vegades
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensió {e}: feu servir 1-16 lletres minúscules i dígits, sense el punt
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID no vàlid {_1}: feu servir 1-64 caràcters d’A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	nom de paràmetre no vàlid {k}
+@msg	manifest is not UTF-8	el manifest no és UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	el manifest és massa llarg (límit {MAX_MANIFEST_BYTES} bytes)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	el manifest té {_1} bytes (límit {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
+@msg	not JSON: {e}	no és JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
+@msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
+@msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
+@msg	the runtime panicked	l’entorn d’execució ha fallat
+@msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ha retornat {v}; aquest amfitrió implementa la versió {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc ha retornat 0 (sense memòria)
+@msg	vc_alloc returned a block outside memory	vc_alloc ha retornat un bloc fora de la memòria
+@msg	vc_run returned error code {packed}	vc_run ha retornat el codi d’error {packed}
+@msg	{_1} is not a file	{_1} no és un fitxer
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} té {_2} bytes (límit {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objectes (límit {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} apunta fora de la memòria
+@msg	`angle` must be a number	`angle` ha de ser un nombre
+@msg	`aspect` must be from 0.01 to 100	`aspect` ha d’estar entre 0.01 i 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` ha de ser "butt", "round" o "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` ha de ser "nonzero" o "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` ha de ser una adreça https:// de {MAX_HELP_URL} bytes com a màxim
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` ha de tenir 1-{MAX_HELP} caràcters imprimibles
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` ha de ser un id d’efecte d’1-{MAX_EFFECT_ID} bytes
+@msg	`id` must be the id of an input object	`id` ha de ser l’id d’un objecte d’entrada
+@msg	`join` must be "miter", "round" or "bevel"	`join` ha de ser "miter", "round" o "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` i `group` han de tenir 1-{MAX_LABEL} caràcters imprimibles
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` ha de ser 1-{MAX_TEXT}, i el valor predeterminat no pot ser més llarg
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` han de ser 0-{MAX_LIST}, `maxItems` com a mínim 1, i el valor predeterminat ha de tenir aquesta quantitat
+@msg	`name` must be a string	`name` ha de ser una cadena
+@msg	`opacity` must be a number	`opacity` ha de ser un nombre
+@msg	`type` must be "path" or "compound"	`type` ha de ser "path" o "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` ha de tenir 1-{MAX_UNIT} caràcters imprimibles
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` ha d’indicar d’1 a {MAX_CONDITION_VALUES} valors per a `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anomena `{other}`, que no és un paràmetre declarat abans d’aquest
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anomena com a màxim {MAX_CONDITIONS} paràmetres
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` pren els valors de `{other}`, d’una casella de selecció o d’una opció
+@msg	`visible` must be true or false	`visible` ha de ser true o false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` ha de ser un nombre de {_1} a {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` ha de ser una matriu de {MAX_ITEMS} entrades com a màxim
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	un color predeterminat ha de ser un objecte de color o una cadena hexadecimal com ara "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	un objecte de color o una cadena hexadecimal com ara "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	un degradat de forma lliure conté com a màxim {MAX_ITEMS} punts i línies
+@msg	a freeform gradient line names a point it doesn't have	una línia del degradat de forma lliure anomena un punt que el degradat no té
+@msg	a gradient needs 1-{MAX_ITEMS} stops	un degradat necessita 1-{MAX_ITEMS} parades
+@msg	a list of numbers	una llista de nombres
+@msg	a list of {min_items} to {max_items} numbers	una llista de {min_items} a {max_items} nombres
+@msg	a new object needs a `path`	un objecte nou necessita un `path`
+@msg	a number	un nombre
+@msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
+@msg	a read-only object was left out	s’ha omès un objecte de només lectura
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {"id"} sol o tal com s’ha rebut
+@msg	a string	una cadena
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un traç ha de ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	un efecte ha de ser {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
+@msg	an effect on a stroke returns only `strokes`	un efecte en un traç només retorna `strokes`
+@msg	an object must be a JSON object	un objecte ha de ser un objecte JSON
+@msg	bad range	interval no vàlid
+@msg	choices must be 1-64 non-empty, printable strings	les opcions han de ser 1-64 cadenes imprimibles no buides
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	coordenada fora de l’interval (límit ±{MAX_COORD} pt)
+@msg	default is not one of the options	el valor predeterminat no és cap de les opcions
+@msg	each piece needs a `path`	cada peça necessita un `path`
+@msg	is listed twice	apareix dues vegades
+@msg	pattern transform out of range	transformació del motiu fora de l’interval
+@msg	read-only field '{field}' changed	ha canviat el camp de només lectura '{field}'
+@msg	stops must be in order of `offset`	les parades han d’estar en ordre d’`offset`
+@msg	the document has no pattern {pattern}	el document no té el motiu {pattern}
+@msg	the document has no swatch {n}	el document no té la mostra {n}
+@msg	the output	la sortida
+@msg	the path has no anchor points	el traçat no té punts d’ancoratge
+@msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
+@msg	true or false	true o false
+@msg	a number >= {_1}	un nombre >= {_1}
+@msg	a number > {_1}	un nombre > {_1}
+@msg	a number <= {_1}	un nombre <= {_1}
+@msg	a number < {_1}	un nombre < {_1}
+@msg	a number {_1} to {_2}	un nombre de {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	un nombre >= {_1} i < {_2}
+@msg	a number > {_1} and <= {_2}	un nombre > {_1} i <= {_2}
+@msg	a number > {_1} and < {_2}	un nombre > {_1} i < {_2}
+@msg	a number ({_1})	un nombre ({_1})
+@msg	a number >= {_1} ({_2})	un nombre >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un nombre > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un nombre <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un nombre < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un nombre de {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un nombre >= {_1} i < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un nombre > {_1} i <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un nombre > {_1} i < {_2} ({_3})
+@msg	an integer	un enter
+@msg	an integer >= {_1}	un enter >= {_1}
+@msg	an integer <= {_1}	un enter <= {_1}
+@msg	an integer {_1} to {_2}	un enter de {_1} a {_2}
+@msg	one of {_1}	un de {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` ha de ser un de {_1}, no {got}
+@msg	an object id (a non-negative integer)	un identificador d’objecte (un enter no negatiu)
+@msg	a list of object ids	una llista d’identificadors d’objecte
+@msg	a color (a string, [r, g, b] or an object)	un color (una cadena, [r, g, b] o un objecte)
+@msg	[x, y] (two numbers)	[x, y] (dos nombres)
+@msg	an object	un objecte
+@msg	a list	una llista
+@msg	unknown key `{k}`; the keys here are {_1}	clau desconeguda `{k}`; les claus aquí són {_1}
+@msg	{_1} is listed twice	{_1} apareix dues vegades
+@msg	{_1} is not the id of an input object	{_1} no és l’id d’un objecte d’entrada
+@msg	{_1} is read-only	{_1} és de només lectura
+@msg	{what} must be from {lo} to {hi}	{what} ha d’estar entre {lo} i {hi}
+@msg	a color component	un component de color
+@msg	a plate	una planxa
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep
@@ -6096,6 +6669,11 @@ digits	Malayalam	Malaiàlam
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
+@msg	instruction budget	pressupost d’instruccions
+@msg	time budget	pressupost de temps
+@msg	memory budget (the selection is too large to hand over)	pressupost de memòria (la selecció és massa gran per passar-la)
+@msg	output size ({what} is {len} bytes, limit {max})	mida de la sortida ({what} fa {len} bytes, límit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	el permís del complement no es pot treure del magatzem de complements
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» demana els permisos {asked}: una persona els ha d’aprovar a l’aplicació d’escriptori, o passa `grant` en una sessió iniciada amb --allow-plugin-grants
@@ -6108,6 +6686,12 @@ digits	Malayalam	Malaiàlam
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
 @msg	command {name}: {e}	ordre {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (línia {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` ha de ser una llista d’ordres, cadascuna amb `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	l’ordre {name} ha de ser un objecte amb `id` i `label`
+@msg	missing field `{key}`	falta el camp `{key}`
+@msg	duplicate field `{key}`	el camp `{key}` està repetit
 @msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
@@ -6193,6 +6777,13 @@ theme	Appearance	Aparença
 	Area Text	Text d’àrea
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcions d’ajust al píxel
+	Pixel Snapping Options…	Opcions d’ajust al píxel…
+	Snap to Pixel While Drawing	Ajusta al píxel en dibuixar
+	Snap to Pixel While Moving	Ajusta al píxel en moure
+	Snap to Pixel While Scaling	Ajusta al píxel en escalar
+	These options take effect when View › Snap to Pixel is on.	Aquestes opcions tenen efecte quan Visualitza › Ajusta al píxel està activat.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif
@@ -6284,6 +6875,8 @@ anchor	Points:	Punts:
 	Anchor Inspector	Inspector de punts d’ancoratge
 	Add Points at Crossings	Afegeix punts als encreuaments
 	Split at Crossings	Divideix als encreuaments
+	Trim at Crossings Tool	Eina de retallar als encreuaments
+	Trim at Crossings	Retalla als encreuaments
 	Extend Path	Allarga el traçat
 	Measure & Inspect	Mesura i inspecciona
 	Set Anchor	Defineix el punt d’ancoratge
@@ -6377,9 +6970,12 @@ anchor	Points:	Punts:
 @msg	{label} must be a number	{label} ha de ser un nombre
 @msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
 	Advanced Character Formats	Formats avançats de caràcters
+	Basic Paragraph Formats	Formats bàsics de paràgraf
+	Composition	Composició
 	Horizontal Scale	Escala horitzontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} ha de ser un nombre enter de {min} a {max}
 	Character Color	Color del caràcter
 	OpenType Features	Funcions OpenType
 	Stylistic Sets	Jocs estilístics
@@ -6387,6 +6983,10 @@ anchor	Points:	Punts:
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
+@msg	{label} must be at most {max} characters	{label} ha de tenir com a màxim {max} caràcters
+@msg	{label} must be one character	{label} ha de ser un sol caràcter
+@msg	at most {max} tab stops	com a màxim {max} tabulacions
+@msg	unknown align `{other}`	alineació desconeguda `{other}`
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6557,6 +7157,12 @@ breakText	Glyphs	Glifs
 	Delete the selected brushes?	Voleu suprimir els pinzells seleccionats?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Hi ha traços que fan servir un o més d’aquests pinzells. Voleu treure els pinzells d’aquests traços i suprimir els pinzells?
 	Remove Strokes	Elimina els traços
+	Place Brush Art	Col·loca l’art del pinzell
+	Replace Brush Art	Substitueix l’art del pinzell
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
+	Apply to Strokes	Aplica als traços
+	Leave Strokes	Deixa els traços
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no té art (només en tenen els pinzells de dispersió, artístics i de motiu)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Eines d’organització
 	Arrange in Grid…	Organitza en quadrícula…
@@ -6744,13 +7350,20 @@ breakText	Glyphs	Glifs
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» obre fitxers {_1}, no `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` és un complement del tipus `{_2}`, no un importador
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` és un complement del tipus `{_2}`, no un exportador
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` és un exportador: exporteu amb document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` és un efecte dinàmic: apliqueu-lo amb effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	l’importador no ha retornat cap objecte
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un importador retorna `objects` i `warnings`, no `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el fitxer supera els {MAX_INPUT_BYTES} bytes que llegeix un importador
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un importador declara d’1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia la informació de resolució de problemes
+@msg	Copied the troubleshooting info	S’ha copiat la informació de resolució de problemes
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La darrera sessió del VectorCraft va deixar de respondre abans de tancar-se. Ajuda › Copia la informació de resolució de problemes copia els detalls per a un informe d’error
 
 # Safe Mode
 	Safe Mode…	Mode segur…
@@ -6772,6 +7385,8 @@ breakText	Glyphs	Glifs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
+	Align New Objects to Pixel Grid	Alinea els objectes nous a la quadrícula de píxels
+	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
 	Ignore All	Ignora-ho tot
@@ -6802,8 +7417,59 @@ breakText	Glyphs	Glifs
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
 
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+	Show Tool Location	Mostra la ubicació de l'eina
+	Show where this tool is	Mostra on és aquesta eina
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+	View more	Mostra’n més
+	Finish tutorial	Acaba el tutorial
+	Next Up	A continuació
+	You finished the last tutorial in this skill.	Heu acabat l’últim tutorial d’aquesta habilitat.
+	Back to skills	Torna a les habilitats
+	Open Tutorial Sample	Obre la mostra del tutorial
+	Finish Tutorial	Acaba el tutorial
+	Next Tutorial	Tutorial següent
+	Back to Skills	Torna a les habilitats
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` és l’últim tutorial de la seva habilitat
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats
 	Deferred Effects	Efectes ajornats
 @msg	no plug-in effect is deferred	no hi ha cap efecte de complement ajornat
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	S’ha obert amb {n} efecte de complement ajornat. Efecte › Actualitza els efectes ajornats l’executa.|S’ha obert amb {n} efectes de complement ajornats. Efecte › Actualitza els efectes ajornats els executa.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Eines de tall
+	Stencil Bridges…	Ponts de plantilla…
+	Stencil Bridges	Ponts de plantilla
+	Shortest Crossing	Travessia més curta
+	Direction	Direcció
+@msg	The selected art has no islands to bridge	La il·lustració seleccionada no té illes per unir
+@msg	No bridge of this width fits across the selected art	Cap pont d’aquesta amplada no cap a la il·lustració seleccionada
+@msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
+@msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa i línies de pelat…
+	Weed Box and Lines	Caixa i línies de pelat
+	Margin	Marge
+	Box	Caixa
+	Swatch	Mostra
+	Banner Hems and Grommets…	Vores i ullets de pancarta…
+	Banner Hems and Grommets	Vores i ullets de pancarta
+	Hem	Vora
+	Grommets	Ullets
+	Grommet Inset	Distància dels ullets a la vora
+	Diameter	Diàmetre

@@ -3,7 +3,11 @@
 //! shared colour visitor [`Recolor`]: fills and strokes (solid colours, gradient stops and text
 //! runs), gradient meshes, embedded images and pattern fills. Colours linked to a global swatch are
 //! unlinked when they change; Adjust Color Balance's Global mode shifts their tints instead.
+//!
+//! Convert to Indexed Color uses the same visitor for embedded images only, and stores each one as
+//! a palette PNG.
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -15,12 +19,14 @@ use vectorcraft_doc::live::lerp_color;
 use vectorcraft_doc::pattern::PatternDef;
 pub(crate) use vectorcraft_doc::recolor::map_paint;
 use vectorcraft_doc::recolor::{ColorVisitor, Reach, map_links, recolor_node};
-use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, ImageBlob, MAX_RASTER_ALLOC, Node, NodeId, NodeKind};
+use vectorcraft_render::encode::png::{PngOptions, encode_indexed};
+use vectorcraft_render::encode::quantize::{Dither, Indexed, PaletteOptions, Reduction, quantize, quantize_to};
 
 use super::edit::selected_roots;
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, check_numbers, cmd, color_value, f64_or, f64_req, has_selection, ids_param,
-    str_param, unique_name,
+    CommandSpec, EngineError, Result, Session, always, bad, check_numbers, cmd, color_value, f64_or, f64_req, has_selection, ids_param, switch_or,
+    text_param, unique_name,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -30,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "edit.colors.invert", "Invert Colors", &invert)
         ),
@@ -67,6 +73,15 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(
+            "edit.colors.toIndexed",
+            "Convert to Indexed Color…",
+            ["Edit", "Edit Colors"],
+            None,
+            "{reduction?: \"selective\" (default)|\"perceptual\"|\"adaptive\"|\"web\"|\"gray\"|\"blackWhite\" (chosen as for a PNG-8 export)|\"uniform\" (evenly spaced levels of red, green and blue: the most levels, 2 to 6, whose cube fits in `colors` with one entry left for transparency)|\"document\" (the colors of the document's swatches, at most 255), colors?: 2..256 (default 256; the most palette entries, the transparent one included; at least 9 for uniform; refused for blackWhite and document), dither?: \"diffusion\" (default)|\"pattern\"|\"noise\"|\"none\", ditherAmount?: 0..100 (default 100), ids?} store each embedded image in the selection (in groups too) as an indexed-color PNG: a palette of at most 256 RGB colors, each pixel the index of one; pixels under half opacity become one transparent entry and the others opaque, keeping their color; linked images, colorized images and the images of color glyphs in outlined type keep their pixels; each image changed becomes a new image, one undo step for all; an image that is an indexed PNG already and would show the same pixels is left as it is, and no undo step is recorded when no image changes; an image of more than 134,217,728 pixels (33,554,432 in the web app) is refused with an error and nothing changes; reduction and dither ids are read as for a PNG-8 export, ignoring case → {changed: images changed, notChanged: the locked and hidden objects Select All left out that hold an image that is not an indexed PNG yet, warning?} (as edit.colors.invert)",
+            has_selection,
+            to_indexed
+        ),
+        cmd!(
             "edit.colors.saturate",
             "Saturate…",
             ["Edit", "Edit Colors"],
@@ -89,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Front to Back",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill → {changed}",
+            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill. On a path directly in a graph series, the graph also stores the new fill, as for the other Blend commands (docs/mcp.md); no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Stack)
         ),
@@ -98,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Horizontally",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects or meshes: fills graded between the leftmost and rightmost → {changed}",
+            "{} ≥3 filled objects or meshes: fills graded between the leftmost and rightmost; no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Horizontal)
         ),
@@ -107,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Vertically",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects or meshes: fills graded between the topmost and bottommost → {changed}",
+            "{} ≥3 filled objects or meshes: fills graded between the topmost and bottommost; no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Vertical)
         ),
@@ -149,6 +164,13 @@ fn gray_level(c: Color) -> f32 {
 /// gradient stop): `(colour, link, tint)`, true when it changed them.
 pub(crate) type LinkMap<'a> = dyn Fn(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
 
+/// What a pass that remakes whole images makes of one: its new copy, `None` when it stays as it is.
+type Remake<'a> = dyn Fn(&ImageBlob) -> Option<ImageBlob> + 'a;
+
+/// The objects a pass recolors, and the locked and hidden objects the selection left out, each
+/// with whether it is hidden ([`pass_targets`]).
+type Targets = (Vec<NodeId>, Vec<(NodeId, bool)>);
+
 /// The identity colour map (a pass that only maps linked colours).
 fn same(c: Color) -> Color {
     c
@@ -166,13 +188,15 @@ pub(crate) struct Scope {
 }
 
 impl Scope {
-    pub(crate) fn of(p: &Value) -> Self {
-        Self {
-            fill: bool_or(p, "fill", true),
-            stroke: bool_or(p, "stroke", true),
-            images: bool_or(p, "includeImages", true),
-            patterns: bool_or(p, "includePatterns", true),
-        }
+    /// The scope `p` gives; each switch left out (or null) is on. A switch that is not true or false,
+    /// such as `"false"`, is an error that names `cmd`.
+    pub(crate) fn of(p: &Value, cmd: &str) -> Result<Self> {
+        Ok(Self {
+            fill: switch_or(p, "fill", true, cmd)?,
+            stroke: switch_or(p, "stroke", true, cmd)?,
+            images: switch_or(p, "includeImages", true, cmd)?,
+            patterns: switch_or(p, "includePatterns", true, cmd)?,
+        })
     }
 }
 
@@ -189,6 +213,8 @@ pub(crate) struct Recolor<'a> {
     scope: Scope,
     /// Recolored images are stored with one gray channel ([`ImageBlob::map_gray`]).
     gray_images: bool,
+    /// Makes each embedded image's new copy in place of `f` (`None`: it stays as it is).
+    remake: Option<&'a Remake<'a>>,
     /// Image key → the key of its recoloured copy (`None`: unchanged).
     images: HashMap<String, Option<String>>,
     /// Pattern name → the name of its recoloured copy (`None`: unchanged, or being recoloured).
@@ -205,6 +231,7 @@ impl<'a> Recolor<'a> {
             links: None,
             scope,
             gray_images: false,
+            remake: None,
             images: HashMap::new(),
             patterns: HashMap::new(),
             new_images: vec![],
@@ -227,7 +254,7 @@ impl<'a> Recolor<'a> {
 
     /// A pass that maps colors as this one does, with nothing recolored yet.
     fn again(&self) -> Self {
-        Self { links: self.links, gray_images: self.gray_images, ..Self::new(self.scope, self.f) }
+        Self { links: self.links, gray_images: self.gray_images, remake: self.remake, ..Self::new(self.scope, self.f) }
     }
 
     /// The entries of `objects` (ids, each with a flag) whose object this pass would change, other
@@ -326,7 +353,9 @@ impl<'a> Recolor<'a> {
         }
         let f = self.f;
         let blob = d.images.get(key)?;
-        let new = if self.gray_images {
+        let new = if let Some(remake) = self.remake {
+            remake(blob)
+        } else if self.gray_images {
             blob.map_gray(|[r, g, b]| f(Color::rgb8(r, g, b)).to_rgba8(1.0)[0])
         } else {
             blob.map_rgb(|[r, g, b]| {
@@ -414,22 +443,22 @@ impl ColorVisitor for Visit<'_, '_> {
 }
 
 pub(crate) fn recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
-    run_pass(s, p, cmd, label, Recolor::new(Scope::of(p), f))
+    run_pass(s, p, cmd, label, Recolor::new(Scope::of(p, cmd)?, f))
 }
 
 /// [`recolor`] where `f` gives gray colors, so embedded images are stored with one gray channel.
 fn recolor_gray(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
-    run_pass(s, p, cmd, label, Recolor { gray_images: true, ..Recolor::new(Scope::of(p), f) })
+    run_pass(s, p, cmd, label, Recolor { gray_images: true, ..Recolor::new(Scope::of(p, cmd)?, f) })
 }
 
 /// [`recolor`] with solid colours and gradient stops mapped through `links`, with their swatch
 /// link and tint.
 pub(crate) fn recolor_links(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color, links: &LinkMap) -> Result<Value> {
-    run_pass(s, p, cmd, label, Recolor::with_links(Scope::of(p), f, links))
+    run_pass(s, p, cmd, label, Recolor::with_links(Scope::of(p, cmd)?, f, links))
 }
 
-/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step named `label`;
-/// errors name the command `cmd`. The reply's `notChanged` counts the locked and hidden objects the
+/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step named `label`,
+/// or none when the pass changes nothing; errors name the command `cmd`. The reply's `notChanged` counts the locked and hidden objects the
 /// selection left out ([`left_out`]) that the pass would have changed.
 fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -> Result<Value> {
     let (ids, left) = match ids_param(p, "ids", cmd)? {
@@ -442,15 +471,58 @@ fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -
         }
     };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
-    let (n, not_changed) = s.edit(label, |d, _| {
+    let (n, not_changed) = edit_if_changed(s, label, |_, d| {
         let not_changed = NotChanged::of(pass.again().would_change(d, &left).into_iter().map(|(_, hidden)| hidden));
-        let n = pass.run(d, &ids);
-        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
-        Ok((n, not_changed))
+        let n = keeping_series_paint(d, &ids, |d| {
+            let n = pass.run(d, &ids);
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
+            Ok(n)
+        })?;
+        Ok(((n, not_changed), n > 0))
     })?;
     let mut out = json!({ "changed": n });
     not_changed.report(&mut out);
     Ok(out)
+}
+
+/// [`Session::edit`] for an Edit Colors pass, which may change nothing: `f` runs on a copy of the
+/// document (it gets the document as it is too) and returns its result with whether it changed the
+/// copy. Only a changed copy becomes the document, as one undo step named `label`; otherwise the
+/// undo and redo steps and the saved state stay as they were.
+pub(crate) fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&Document, &mut Document) -> Result<(T, bool)>) -> Result<T> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    // A typing session ends here as `s.edit` would end it, before the copy is taken, so that the
+    // copy holds what was typed.
+    if !s.previewing && super::typing_in_progress(s) {
+        super::settle_interaction(s)?;
+    }
+    let before = s.doc()?.doc.clone();
+    let mut doc = (*before).clone();
+    let (v, changed) = f(&before, &mut doc)?;
+    // The document is shared with `before` no longer, so `s.edit` does not copy it again.
+    drop(before);
+    if changed {
+        s.edit(label, |d, _| {
+            *d = doc;
+            Ok(())
+        })?;
+    }
+    Ok(v)
+}
+
+/// Run `recolor` on `d` (it returns how many objects it changed) over `roots`, then store on their graphs what it changed
+/// on the graph series marks among `roots` and inside them, so the marks keep their new paint when the graph is drawn
+/// again.
+pub(crate) fn keeping_series_paint(d: &mut Document, roots: &[NodeId], recolor: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
+    let marks = super::graph::series_marks_in(d, roots);
+    let before = (!marks.is_empty()).then(|| d.clone());
+    let n = recolor(d)?;
+    if let Some(before) = before.filter(|_| n > 0) {
+        super::appearance::capture_series_changes(&before, d, &marks);
+    }
+    Ok(n)
 }
 
 /// The objects a recolor of `roots` leaves out of the art the user meant to recolor, each with
@@ -532,6 +604,178 @@ impl NotChanged {
     }
 }
 
+/// The objects a pass recolors (the `ids` param's, default: the selection's) and the locked and
+/// hidden objects the selection left out ([`left_out`]), each with whether it is hidden.
+fn pass_targets(s: &Session, p: &Value, cmd: &str) -> Result<Targets> {
+    Ok(match ids_param(p, "ids", cmd)? {
+        Some(v) => (v, vec![]),
+        None => {
+            let roots = selected_roots(s)?;
+            let st = s.doc()?;
+            let left = left_out(&st.doc, st.isolation, &roots);
+            (roots, left)
+        }
+    })
+}
+
+/// Edit › Edit Colors › Convert to Indexed Color: the embedded images of the objects stored as
+/// indexed-color PNGs ([`Indexing`]). The pass runs on a copy of the document, so no undo step is
+/// recorded when no image changes.
+fn to_indexed(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.colors.toIndexed";
+    let indexing = Indexing::of(s, p)?;
+    let remake = |b: &ImageBlob| indexing.convert(b);
+    let images = Scope { fill: false, stroke: false, images: true, patterns: false };
+    let pass = Recolor { remake: Some(&remake), ..Recolor::new(images, &same) };
+    // A left-out image counts as one the pass would change when it is an image that is not an
+    // indexed PNG yet; it is not converted to find out. The empty PNG only gives it a new key.
+    let would = |b: &ImageBlob| (!b.indexed_png() && b.pixel_size().is_some()).then(|| ImageBlob::png(vec![]));
+    let (ids, left) = pass_targets(s, p, C)?;
+    let (n, not_changed) = edit_if_changed(s, "Convert to Indexed Color", |now, doc| {
+        let colorized_ok = super::paint::check_colorized(now).is_ok();
+        let not_changed = NotChanged::of(
+            Recolor { remake: Some(&would), ..Recolor::new(images, &same) }.would_change(now, &left).into_iter().map(|(_, hidden)| hidden),
+        );
+        let n = pass.run(doc, &ids);
+        if let Some((w, h)) = indexing.too_large.get() {
+            return Err(bad(C, format!("an image of {w} × {h} pixels is too large to convert (at most {} pixels)", Indexing::MAX_PIXELS)));
+        }
+        super::paint::check_colorized_kept(colorized_ok, doc).map_err(|e| bad(C, e))?;
+        Ok(((n, not_changed), n > 0))
+    })?;
+    let mut out = json!({ "changed": n });
+    not_changed.report(&mut out);
+    Ok(out)
+}
+
+/// How Convert to Indexed Color reduces an image's colors: the palette options of a PNG-8
+/// export, with transparency kept and no matte, and the fixed palette of the uniform and document
+/// reductions.
+struct Indexing {
+    options: PaletteOptions,
+    fixed: Option<Vec<[u8; 3]>>,
+    /// The size of an image [`Self::convert`] left as it is because it has more than
+    /// [`Self::MAX_PIXELS`] pixels.
+    too_large: Cell<Option<(u32, u32)>>,
+}
+
+impl Indexing {
+    /// The most pixels an image may have. Converting one holds at most about 8 bytes a pixel at
+    /// once: decoding (the decoded samples and the RGBA), quantizing (the RGBA, the colors and the
+    /// indices) and writing the PNG after the RGBA is freed (the indices, the packed and filtered
+    /// rows and the compressed data). 16 bytes a pixel keeps that within [`MAX_RASTER_ALLOC`] twice
+    /// over.
+    const MAX_PIXELS: u64 = MAX_RASTER_ALLOC / 16;
+
+    /// The reduction `p` asks for (see `edit.colors.toIndexed`); a value out of range or of the
+    /// wrong type is an error. Reduction and dither ids are read as a PNG-8 export reads them.
+    fn of(s: &Session, p: &Value) -> Result<Self> {
+        const C: &str = "edit.colors.toIndexed";
+        let reduction = text_param(p, "reduction", C)?.unwrap_or("selective");
+        let colors = match p.get("colors") {
+            None | Some(Value::Null) => None,
+            Some(v) => {
+                Some(v.as_u64().filter(|n| (2..=256).contains(n)).ok_or_else(|| bad(C, "`colors` must be a whole number from 2 to 256"))? as u16)
+            }
+        };
+        let dither = match text_param(p, "dither", C)? {
+            None => Dither::Diffusion,
+            Some(d) => Dither::from_id(d).ok_or_else(|| bad(C, format!("unknown dither `{d}` (diffusion, pattern, noise or none)")))?,
+        };
+        let dither_amount = match p.get("ditherAmount") {
+            None | Some(Value::Null) => 100,
+            Some(v) => {
+                v.as_f64().filter(|x| (0.0..=100.0).contains(x)).ok_or_else(|| bad(C, "`ditherAmount` must be a number from 0 to 100"))?.round() as u8
+            }
+        };
+        let options =
+            |r: Reduction| PaletteOptions { colors: colors.unwrap_or(256), reduction: r, dither, dither_amount, transparency: true, matte: None };
+        let refuse_colors = |name: &str| match colors {
+            Some(_) => Err(bad(C, format!("`colors` does not apply to the {name} reduction"))),
+            None => Ok(()),
+        };
+        let fixed = |palette: Vec<[u8; 3]>| Self { options: options(Reduction::Adaptive), fixed: Some(palette), too_large: Cell::new(None) };
+        Ok(match reduction.to_ascii_lowercase().as_str() {
+            "uniform" => {
+                let n = colors.unwrap_or(256);
+                // One entry is kept for transparent pixels.
+                let levels =
+                    (2..=6u16).rev().find(|l| l.pow(3) < n).ok_or_else(|| bad(C, "`colors` must be at least 9 for the uniform reduction"))?;
+                let level = |i: u16| (u32::from(i) * 255 / u32::from(levels - 1)) as u8;
+                let mut palette = Vec::with_capacity(usize::from(levels.pow(3)));
+                for r in 0..levels {
+                    for g in 0..levels {
+                        for b in 0..levels {
+                            palette.push([level(r), level(g), level(b)]);
+                        }
+                    }
+                }
+                fixed(palette)
+            }
+            "document" => {
+                refuse_colors("document")?;
+                let mut palette: Vec<[u8; 3]> = vec![];
+                for c in s.doc()?.doc.swatches_iter().filter_map(|sw| sw.paint.color()) {
+                    let [r, g, b, _] = c.to_rgba8(1.0);
+                    if !palette.contains(&[r, g, b]) {
+                        palette.push([r, g, b]);
+                    }
+                }
+                if palette.is_empty() {
+                    return Err(bad(C, "the document has no color swatches"));
+                }
+                if palette.len() > 255 {
+                    return Err(bad(C, format!("the document's swatches hold {} colors; the document reduction takes at most 255", palette.len())));
+                }
+                fixed(palette)
+            }
+            id => {
+                let r = Reduction::from_id(id).ok_or_else(|| {
+                    bad(C, format!("unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)"))
+                })?;
+                if r == Reduction::BlackWhite {
+                    refuse_colors("blackWhite")?;
+                }
+                Self { options: options(r), fixed: None, too_large: Cell::new(None) }
+            }
+        })
+    }
+
+    /// Image `b` as an indexed-color PNG; `None` when it can't be decoded, when it has more than
+    /// [`Self::MAX_PIXELS`] pixels (noted in `too_large`), or when it is an indexed PNG already and
+    /// every pixel would show as it does.
+    fn convert(&self, b: &ImageBlob) -> Option<ImageBlob> {
+        let (w, h) = b.pixel_size()?;
+        if u64::from(w) * u64::from(h) > Self::MAX_PIXELS {
+            self.too_large.set(Some((w, h)));
+            return None;
+        }
+        let (w, h, rgba) = b.rgba()?;
+        let ix = match &self.fixed {
+            Some(palette) => quantize_to(&rgba, w, h, &self.options, palette),
+            None => quantize(&rgba, w, h, &self.options),
+        };
+        if b.indexed_png() && shows_same(&ix, &rgba) {
+            return None;
+        }
+        // The PNG writer's buffers take the place of the pixels.
+        drop(rgba);
+        Some(ImageBlob::png(encode_indexed(&ix, &PngOptions::default()).ok()?))
+    }
+}
+
+/// Whether palette image `ix` shows every pixel of straight RGBA `rgba` as it is: transparent
+/// where they are transparent, and the same color where they are opaque.
+fn shows_same(ix: &Indexed, rgba: &[u8]) -> bool {
+    let px = rgba.as_chunks::<4>().0;
+    px.len() == ix.indices.len()
+        && px.iter().zip(&ix.indices).all(|(p, &i)| match (p[3], ix.transparent == Some(i)) {
+            (0, clear) => clear,
+            (255, false) => ix.palette.get(usize::from(i)).is_some_and(|c| c[..] == p[..3]),
+            _ => false,
+        })
+}
+
 fn saturate(s: &mut Session, p: &Value) -> Result<Value> {
     let i = (f64_req(p, "intensity", "edit.colors.saturate")?.clamp(-100.0, 100.0) / 100.0) as f32;
     recolor(s, p, "edit.colors.saturate", "Saturate", &move |c| {
@@ -548,8 +792,9 @@ fn saturate(s: &mut Session, p: &Value) -> Result<Value> {
 fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colors.adjustBalance";
     check_numbers(p, &["r", "g", "b", "c", "m", "y", "k", "gray", "tint"], C)?;
+    let convert = switch_or(p, "convert", false, C)?;
     let given = |keys: &[&str]| keys.iter().any(|k| p.get(*k).is_some());
-    let mode = match str_param(p, "mode") {
+    let mode = match text_param(p, "mode", C)? {
         Some(m) => m.to_ascii_lowercase(),
         None if given(&["c", "m", "y", "k"]) => "cmyk".into(),
         None if given(&["gray"]) => "gray".into(),
@@ -592,11 +837,10 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
                 (*tint, *c) = (t, base.tinted(t));
                 true
             };
-            return run_pass(s, p, C, "Adjust Colors", Recolor::links(Scope::of(p), &shift));
+            return run_pass(s, p, C, "Adjust Colors", Recolor::links(Scope::of(p, C)?, &shift));
         }
         other => return Err(bad(C, format!("unknown mode `{other}` (rgb|cmyk|gray|global)"))),
     };
-    let convert = bool_or(p, "convert", false);
     let f = move |c| {
         let out = adjust(c);
         if convert { out } else { keep_model(c, out) }
@@ -677,7 +921,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     };
     let fills = Scope { fill: true, stroke: false, images: false, patterns: false };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
-    let changed = s.edit(label, |d, _| {
+    let run = |d: &mut Document| -> Result<usize> {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
             let c = lerp_color(&first, &last, i as f32 / (n - 1) as f32).in_model(model);
@@ -696,14 +940,15 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         }
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
         Ok(changed)
-    })?;
+    };
+    let changed = edit_if_changed(s, label, |_, d| keeping_series_paint(d, &ids, run).map(|n| (n, n > 0)))?;
     Ok(json!({ "changed": changed }))
 }
 
 fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.harmony";
     let base = p.get("color").and_then(color_value).ok_or_else(|| bad(C, "missing or invalid `color`"))?;
-    let rule = str_param(p, "rule").ok_or_else(|| bad(C, "missing `rule`"))?;
+    let rule = text_param(p, "rule", C)?.ok_or_else(|| bad(C, "missing `rule`"))?;
     let rule = Harmony::parse(rule).ok_or_else(|| {
         let ids: Vec<String> = Harmony::ALL.iter().map(|h| h.id()).collect();
         bad(C, format!("unknown rule `{rule}` ({})", ids.join("|")))
@@ -713,7 +958,7 @@ fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(n) = p.get("steps").and_then(Value::as_u64) {
         opts.steps = n.min(u32::MAX as u64) as u32;
     }
-    if let Some(v) = str_param(p, "variation") {
+    if let Some(v) = text_param(p, "variation", C)? {
         opts.variation = Variation::parse(v).ok_or_else(|| bad(C, format!("unknown variation `{v}` (tintsShades|warmCool|vividMuted)")))?;
     }
     if let Some(a) = p.get("amount").and_then(Value::as_f64) {

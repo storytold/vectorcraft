@@ -365,6 +365,95 @@ fn a_file_read_apart_from_the_session_replaces_what_was_selected_when_place_star
     }
 }
 
+/// Every open document with its art, selection and undo steps, and the journal, tool and tool
+/// options: what a refused hand-off leaves as it was.
+type Snapshot = (Vec<(u64, Arc<vectorcraft_doc::Document>, Vec<NodeId>, usize)>, usize, &'static str, Value);
+
+fn snapshot(s: &Session) -> Snapshot {
+    let docs = s.documents().iter().map(|d| (d.uid, d.doc.clone(), d.selection.objects.clone(), d.history.undo.len())).collect();
+    (docs, s.journal.len(), s.tool_id(), s.tool_options())
+}
+
+/// A file read apart from the session is placed only in the document Place started in: with
+/// another document active, Replace included when that document holds the same object under the
+/// same id, or after the document closed, nothing changes in any document; with the document
+/// active again, the file is placed in it.
+#[test]
+fn a_file_read_apart_from_the_session_is_placed_only_in_the_document_it_was_read_for() {
+    let blue = file("blue.png", &png(8, 8, [0, 0, 255, 255], None));
+    let not_active = "the document it was prepared for is no longer active";
+    for replace in [false, true] {
+        let p = with(blue.clone(), json!({"replace": replace}));
+        let mut s = session();
+        let square = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+        let a = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        let read = s.prepare_place(&p).unwrap().read().unwrap();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let b = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        assert_eq!(a, b, "the other document holds an object with the same id");
+        assert!(node(&s, &b) == s.documents()[0].doc.node(NodeId(a.as_u64().unwrap())).unwrap().clone(), "and the same content");
+        let before = snapshot(&s);
+        let err = s.place_read(read).unwrap_err();
+        assert!(err.to_string().contains(not_active), "replace {replace}: {err}");
+        assert!(snapshot(&s) == before, "replace {replace}: nothing placed, selected or journaled in either document");
+        // Active again, the document Place started in takes the file.
+        let read = {
+            s.execute("document.activate", &json!({"index": 0})).unwrap();
+            s.prepare_place(&p).unwrap().read().unwrap()
+        };
+        s.execute("document.activate", &json!({"index": 1})).unwrap();
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        let r = s.place_read(read).unwrap();
+        assert_eq!(s.active_index(), Some(0));
+        assert!(s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).is_some(), "replace {replace}: placed in the first document");
+        let others = s.documents()[1].doc.layers.last().unwrap().children().unwrap().len();
+        assert_eq!(others, 1, "replace {replace}: the other document keeps its one object");
+    }
+    // The document Place started in closed: refused in the document left open, and with none left.
+    let mut s = session();
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "nothing placed in the document left open");
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.close", &json!({})).unwrap();
+    let journal = s.journal.len();
+    assert!(s.place_read(read).is_err() && s.journal.len() == journal, "no document left: refused");
+}
+
+/// Files read for the place cursor apart from the session load it only in the document they were
+/// read for: with another document active, or after that document closed, its tool and queue stay
+/// as they were; with the document active again, the cursor is loaded.
+#[test]
+fn files_read_for_the_place_cursor_apart_from_the_session_load_it_only_in_their_document() {
+    let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "link": false});
+    let not_active = "the document it was prepared for is no longer active";
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before && s.tool_id() == "selection", "the other document's tool and queue stay");
+    let read = {
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        s.prepare_place_queue(&p).unwrap().read().unwrap()
+    };
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(s.place_queue_read(read).unwrap()["count"], 1);
+    assert_eq!(s.tool_id(), "place");
+    // The document they were read for closed.
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "the document left open keeps its tool");
+}
+
 /// A linked image keeps the preview its file was read with ([`cmd::place::PlaceJob::read`] makes
 /// it), so placing the read file does not decode the image again; an embedded image has none.
 #[test]
@@ -662,6 +751,101 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
     assert!(linked, "still linked to the swatch it brought");
 }
 
+/// The symbol and pattern art placed art brings takes ids of the document's own: the file's ids
+/// already name other objects there, and the Links panel names linked art in symbols by its id.
+#[test]
+fn placed_art_brings_its_symbols_and_patterns_with_ids_of_the_documents_own() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    // The document's objects take the same ids the file's do.
+    let mut s = session();
+    for x in [0, 20, 40, 60] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 5, "height": 5})).unwrap();
+    }
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.symbols.iter().any(|x| x.name == "Star") && doc.pattern("Dots").is_some());
+    let mut ids = vec![];
+    doc.visit_stored(|n, _| ids.push(n.id.0));
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+}
+
+/// Placing the same file again shares the symbols and patterns the first placement brought: their
+/// art differs from the file's only in its ids, so no `Star 2` or `Dots 2` joins the document.
+#[test]
+fn placing_the_same_art_again_shares_its_symbols_and_patterns() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    let counts = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        (doc.symbols.len(), doc.patterns.len())
+    };
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let once = counts(&s);
+    for _ in 0..2 {
+        place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    }
+    assert_eq!(counts(&s), once);
+    let doc = &s.doc().unwrap().doc;
+    assert!(!doc.symbols.iter().any(|x| x.name == "Star 2") && doc.pattern("Dots 2").is_none());
+}
+
+/// A symbol whose art matches the document's own but uses a pattern the document defines
+/// differently is not shared: it comes in under a free name, using the pattern it brings.
+#[test]
+fn placed_art_does_not_share_a_symbol_whose_pattern_moves() {
+    let mut src = session();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star", "ids": [tile.0]})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    // The document's "Dots" changes; its "Star" still matches the file's.
+    let st = s.doc_mut().unwrap();
+    let d = Arc::make_mut(&mut st.doc);
+    let dots = d.pattern_mut("Dots").unwrap();
+    dots.tile = Rect::new(0.0, 0.0, 50.0, 50.0);
+    let r = place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let mut symbol = None;
+    node(&s, &r["ids"][0]).walk(&mut |n| {
+        if let NodeKind::SymbolInstance { symbol: name, .. } = &n.kind {
+            symbol = Some(name.clone());
+        }
+    });
+    assert_eq!(symbol.as_deref(), Some("Star 2"));
+    let doc = &s.doc().unwrap().doc;
+    let star2 = doc.symbols.iter().find(|x| x.name == "Star 2").unwrap();
+    let mut fills = vec![];
+    star2.art.walk(&mut |n| {
+        fills.extend(n.appearance.items.iter().filter_map(|i| match i {
+            AppearanceItem::Fill(f) => match &f.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            },
+            _ => None,
+        }))
+    });
+    assert_eq!(fills, ["Dots 2"]);
+}
+
 #[test]
 fn placed_art_brings_its_brushes_renaming_on_conflict() {
     // The file: a path with its own brush, and one with a brush the defaults hold.
@@ -952,6 +1136,51 @@ fn bad_place_params_are_errors() {
     assert!(s.execute("file.place.queue", &json!({"files": [{"name": "notes.txt", "dataBase64": ""}]})).is_err());
     assert_eq!(s.tool_id(), "selection", "a failed queue leaves the tool alone");
     assert!(top_children(&s).is_empty());
+}
+
+#[test]
+fn place_params_of_the_wrong_type_are_refused_and_null_keeps_the_default() {
+    let mut s = session();
+    let ok = png(2, 2, [0; 4], None);
+    let with = |extra: Value| {
+        let mut p = file("x.png", &ok);
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    let queue = |extra: Value| {
+        let mut p = json!({ "files": [file("x.png", &ok)] });
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    for (cmd, p, msg) in [
+        ("file.place", with(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place", with(json!({"replace": 1})), "`replace` must be true or false"),
+        ("file.place", with(json!({"template": "true"})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place.queue", queue(json!({"template": 1})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+        ("file.place.info", with(json!({"link": "no"})), "`link` must be true or false"),
+        ("file.place.info", with(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+    ] {
+        let e = match s.execute(cmd, &p) {
+            Ok(r) => panic!("{cmd} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{cmd}: {e}");
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the tool stays");
+        assert!(top_children(&s).is_empty(), "{cmd}: nothing placed");
+    }
+    let placed = s.execute("file.place", &with(json!({"link": null, "replace": null, "template": null}))).unwrap();
+    assert_eq!(placed["ids"].as_array().unwrap().len(), 1);
+    assert_eq!(top_children(&s).len(), 1, "placed on the current layer, not a template layer");
+    let info = s.execute("file.place.info", &with(json!({"link": null, "thumbnail": null}))).unwrap();
+    assert!(info.get("thumbnailBase64").is_none(), "{info}");
+    let r = s.execute("file.place.queue", &queue(json!({"link": null, "template": null, "thumbnail": null}))).unwrap();
+    assert_eq!(r["count"], 1, "{r}");
 }
 
 /// An SVG placed with `crop: "crop"` given is framed and clipped by its viewBox, as a PDF by its

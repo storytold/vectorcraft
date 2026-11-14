@@ -5,7 +5,8 @@
 //!   winding and to the start points that keep them from twisting, or to the anchors the Blend
 //!   tool clicked.
 //! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
-//!   opacity, stroke weight, dashes, miter limit and width profiles interpolate; what can't
+//!   opacity, stroke weight, dashes, miter limit, width profiles and the pen pressure, tilt,
+//!   bearing and rotation that brushes read interpolate; what can't
 //!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
 //! - **Groups** pair their children in stacking order; the children one group has more of grow
 //!   out of the other group's centre. Compound paths stay compound paths.
@@ -22,7 +23,7 @@ use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveDeriv};
 use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
-use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
+use crate::appearance::{AngleProfile, Appearance, AppearanceItem, Dash, PressureProfile, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use crate::node::{Node, NodeId, NodeKind};
 use crate::text::TextObject;
@@ -152,6 +153,11 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
             }
         })
         .collect();
+    // Two gradients that repeat (or reflect) step their count from one to the other; a spread
+    // that differs switches halfway, as the method does.
+    if a.gradient.is_spread() && a.gradient.spread == b.gradient.spread {
+        out.gradient.repeats = lerp_f32(a.gradient.repeat_count() as f32, b.gradient.repeat_count() as f32, t).round() as u32;
+    }
     out.angle = a.angle + (b.angle - a.angle) * t as f64;
     out.swatch = None;
     if let (Some(ga), Some(gb)) = (a.geom, b.geom) {
@@ -230,7 +236,8 @@ fn lcm(a: usize, b: usize) -> usize {
     a.checked_div(x).map_or(0, |q| q * b)
 }
 
-/// Interpolate width profiles (none is uniform) at every position either has a width point.
+/// Interpolate width profiles (none is uniform) at every position either has a width point,
+/// keeping their discontinuous points (a position where either steps gives two points).
 fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> Option<WidthProfile> {
     if x.is_none() && y.is_none() {
         return None;
@@ -239,20 +246,135 @@ fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> O
     let (x, y) = (x.unwrap_or(&uniform), y.unwrap_or(&uniform));
     let mut at: Vec<f64> = x.points.iter().chain(&y.points).map(|p| p.0).filter(|p| p.is_finite()).collect();
     at.sort_by(f64::total_cmp);
-    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
-    let points = at
-        .into_iter()
-        .map(|p| {
-            let ((l1, r1), (l2, r2)) = (x.at(p), y.at(p));
-            (p, lerp_f64(l1, l2, t), lerp_f64(r1, r2, t))
-        })
-        .collect();
+    // Within the distance `around` reads a discontinuous point at, so a point near one keeps it.
+    at.dedup_by(|a, b| (*a - *b).abs() <= 1e-7);
+    // Each profile is a smooth curve through its own points: samples between the positions keep
+    // both curves' shapes where the other profile's points and steps change the tangents. Two
+    // profiles with points at the same positions need none (so a preset on both keys stays it).
+    let same_positions = x.points.len() == y.points.len() && x.points.iter().zip(&y.points).all(|(p, q)| (p.0 - q.0).abs() <= 1e-7);
+    let per_span = if same_positions { 1 } else { (4096 / at.len().max(1)).clamp(1, 8) };
+    let mut points = Vec::with_capacity(at.len() * per_span + 2);
+    let mix = |p: f64, (l1, r1): (f64, f64), (l2, r2): (f64, f64)| (p, lerp_f64(l1, l2, t), lerp_f64(r1, r2, t));
+    for (k, &p) in at.iter().enumerate() {
+        let ((xb, xa), (yb, ya)) = (x.around(p), y.around(p));
+        points.push(mix(p, xb, yb));
+        // A discontinuous point ends the curve on each side even where both widths match.
+        if steps_at(x, p) || steps_at(y, p) {
+            points.push(mix(p, xa, ya));
+        }
+        if let Some(&q) = at.get(k + 1) {
+            for j in 1..per_span {
+                let f = p + (q - p) * j as f64 / per_span as f64;
+                points.push(mix(f, x.at(f), y.at(f)));
+            }
+        }
+    }
     Some(WidthProfile { points })
 }
 
-/// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale and width
-/// profile into `o` (a copy of the nearer stroke, so caps, joins, alignment, arrowheads and
-/// brushes switch halfway).
+/// Whether width profile `w` has a discontinuous point at `p` (two points there, within `1e-7`,
+/// as [`WidthProfile::around`] reads them).
+fn steps_at(w: &WidthProfile, p: f64) -> bool {
+    let i = w.points.partition_point(|q| q.0 < p - 1e-7);
+    w.points.get(i..).unwrap_or_default().iter().take_while(|q| q.0 <= p + 1e-7).count() > 1
+}
+
+/// The positions along the stroke where either of two pen recordings has a sample, in order.
+fn sample_positions(x: Option<&[(f64, f64)]>, y: Option<&[(f64, f64)]>) -> Vec<f64> {
+    let mut at: Vec<f64> = x.unwrap_or_default().iter().chain(y.unwrap_or_default()).map(|p| p.0).filter(|p| p.is_finite()).collect();
+    at.sort_by(f64::total_cmp);
+    // Within the distance `step_after` reads a step at, so a sample near a step keeps the step.
+    at.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
+    if at.is_empty() {
+        at = vec![0.0, 1.0];
+    }
+    at
+}
+
+/// The value pen recording `p` steps to at position `f`, where two or more of its samples share
+/// that position (reading at `f` gives the first of them); None where it doesn't step.
+fn step_after(p: Option<&[(f64, f64)]>, f: f64) -> Option<f64> {
+    let p = p?;
+    let i = p.partition_point(|q| q.0 < f - 1e-9);
+    let j = p.partition_point(|q| q.0 <= f + 1e-9).checked_sub(1)?;
+    (j > i && (p.get(i)?.0 - f).abs() <= 1e-9).then(|| p.get(j).map(|q| q.1)).flatten()
+}
+
+/// Two pen recordings read at every position either has a sample, as (position, x's value, y's
+/// value): `read_x` and `read_y` read them, and `clean` makes a stepped sample's value one they
+/// would read. A position where either steps gives two, before and after the step.
+fn paired_samples(
+    x: Option<&[(f64, f64)]>,
+    y: Option<&[(f64, f64)]>,
+    read_x: impl Fn(f64) -> f64,
+    read_y: impl Fn(f64) -> f64,
+    clean: impl Fn(f64) -> f64,
+) -> Vec<(f64, f64, f64)> {
+    let mut out = Vec::new();
+    for f in sample_positions(x, y) {
+        let (a, b) = (read_x(f), read_y(f));
+        out.push((f, a, b));
+        let (sa, sb) = (step_after(x, f), step_after(y, f));
+        if sa.is_some() || sb.is_some() {
+            out.push((f, sa.map_or(a, &clean), sb.map_or(b, &clean)));
+        }
+    }
+    out
+}
+
+/// Interpolate pen pressure or tilt recordings at every position either has a sample, keeping
+/// their steps. A stroke without one reads as [`PressureProfile::MID`], as brushes read it; None
+/// when neither has one.
+fn lerp_pressure(x: Option<&PressureProfile>, y: Option<&PressureProfile>, t: f64) -> Option<PressureProfile> {
+    if x.is_none() && y.is_none() {
+        return None;
+    }
+    let read = |p: Option<&PressureProfile>, f: f64| p.map_or(PressureProfile::MID, |p| p.at(f));
+    let clean = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) } else { PressureProfile::MID };
+    let samples = paired_samples(x.map(|p| p.points.as_slice()), y.map(|p| p.points.as_slice()), |f| read(x, f), |f| read(y, f), clean);
+    PressureProfile::from_samples(samples.into_iter().map(|(f, a, b)| (f, lerp_f64(a, b, t))))
+}
+
+/// Interpolate pen angle recordings (bearing or barrel rotation) at every position either has a
+/// sample: the steps turn from one key's angle to the other's the shorter way round at the
+/// stroke's start, and keep the whole turns each recording makes along the stroke. A stroke
+/// without one reads as 0°, as brushes read it; None when neither has one.
+fn lerp_angle(x: Option<&AngleProfile>, y: Option<&AngleProfile>, t: f64) -> Option<AngleProfile> {
+    if x.is_none() && y.is_none() {
+        return None;
+    }
+    let read = |p: Option<&AngleProfile>, f: f64| p.map_or(0.0, |p| p.unwrapped_at(f));
+    let clean = |v: f64| if v.is_finite() { v } else { 0.0 };
+    let pairs = paired_samples(x.map(|p| p.points.as_slice()), y.map(|p| p.points.as_slice()), |f| read(x, f), |f| read(y, f), clean);
+    // Whole turns that bring the two angles within half a turn of each other at the first position.
+    let d0 = pairs.first().map_or(0.0, |&(_, a, b)| b - a);
+    let turns = vectorcraft_geom::normalize_deg(d0) - d0;
+    let value = |a: f64, b: f64| a + (b - a + turns) * t;
+    // Both curves are straight between two positions; samples are added where the steps turn
+    // through 90° or more between them, since `AngleProfile::from_samples` joins neighbours the
+    // shorter way round. A document's recordings can be long, so the added samples are limited.
+    let mut budget = 4 * PressureProfile::MAX_POINTS;
+    let mut samples = Vec::with_capacity(pairs.len());
+    let mut prev: Option<(f64, f64)> = None;
+    for (f, a, b) in pairs {
+        let v = value(a, b);
+        if let Some((pf, pv)) = prev.filter(|p| f - p.0 > 1e-9) {
+            let parts = ((v - pv).abs() / 90.0).ceil().min((budget + 1) as f64) as usize;
+            for k in 1..parts {
+                let g = pf + (f - pf) * k as f64 / parts as f64;
+                samples.push((g, value(read(x, g), read(y, g))));
+            }
+            budget -= parts.saturating_sub(1).min(budget);
+        }
+        samples.push((f, v));
+        prev = Some((f, v));
+    }
+    AngleProfile::from_samples(samples)
+}
+
+/// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale, width
+/// profile and the pen pressure, tilt, bearing and rotation its brush reads into `o` (a copy of
+/// the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
 fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     let tf = t as f32;
     o.paint = lerp_paint(&x.paint, &y.paint, tf);
@@ -262,6 +384,10 @@ fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     o.dash = lerp_dash(x.dash.as_ref(), y.dash.as_ref(), t);
     o.arrow_scale = (lerp_f64(x.arrow_scale.0, y.arrow_scale.0, t), lerp_f64(x.arrow_scale.1, y.arrow_scale.1, t));
     o.profile = lerp_profile(x.profile.as_ref(), y.profile.as_ref(), t);
+    o.pressure = lerp_pressure(x.pressure.as_ref(), y.pressure.as_ref(), t);
+    o.tilt = lerp_pressure(x.tilt.as_ref(), y.tilt.as_ref(), t);
+    o.bearing = lerp_angle(x.bearing.as_ref(), y.bearing.as_ref(), t);
+    o.rotation = lerp_angle(x.rotation.as_ref(), y.rotation.as_ref(), t);
 }
 
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
@@ -385,6 +511,161 @@ fn reverse_closed(sp: &mut SubPath) {
     sp.anchors.rotate_right(1);
 }
 
+/// How a key's subpaths were turned for its blend, so that its stroke's profiles, pen
+/// recordings and arrowheads turn with it: position `u` along the turned subpath is position
+/// `start + u` (`start - u` when `reversed`) along the key's own, wrapping round a closed one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Orient {
+    start: f64,
+    reversed: bool,
+    closed: bool,
+}
+
+impl Orient {
+    fn of(sp: &SubPath) -> Self {
+        Self { closed: sp.closed, ..Self::default() }
+    }
+
+    /// The subpath now starts at the fraction `f` of its length.
+    fn rotate(&mut self, f: f64) {
+        self.start += if self.reversed { -f } else { f };
+    }
+
+    /// The subpath now runs the other way.
+    fn reverse(&mut self) {
+        self.start += if self.reversed { -1.0 } else { 1.0 };
+        self.reversed = !self.reversed;
+    }
+
+    /// As [`start_at`] turns `sp` (call it before).
+    fn start_at(&mut self, sp: &SubPath, i: usize) {
+        let n = sp.anchors.len();
+        if i >= n {
+            return;
+        }
+        if sp.closed {
+            self.rotate(arc_fraction(sp, i));
+        } else if i + 1 == n && n > 1 {
+            self.reverse();
+        }
+    }
+
+    /// Where a closed subpath now starts, as a fraction of its length; 0 for an open one.
+    fn seam(&self) -> f64 {
+        let s = if self.closed { self.start.rem_euclid(1.0) } else { 0.0 };
+        if s > 1e-9 && s < 1.0 - 1e-9 { s } else { 0.0 }
+    }
+
+    fn is_identity(&self) -> bool {
+        !self.reversed && self.seam() == 0.0
+    }
+
+    /// Whether two subpaths were turned alike, so one stroke along both turns the same way.
+    fn same_turn(&self, o: &Self) -> bool {
+        self.reversed == o.reversed && (self.seam() - o.seam()).abs() < 1e-9
+    }
+}
+
+/// How far along `sp` its anchor `i` sits, as a fraction of its length.
+fn arc_fraction(sp: &SubPath, i: usize) -> f64 {
+    let pos = sp.anchor_arc_positions();
+    match (pos.get(i), pos.last()) {
+        (Some(&at), Some(&total)) if total.is_finite() && total > 1e-12 => (at / total).clamp(0.0, 1.0),
+        _ => 0.0,
+    }
+}
+
+/// Samples (position, value) along a key's subpath, read along the subpath turned as `o` says.
+/// A closed subpath starting elsewhere starts the samples there too: the ones before it move
+/// past the seam (`wrap` applied), which keeps any step the seam makes, and a value between
+/// samples is read with `at`. A reversed subpath then reads them backwards (`flip` applied).
+fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wrap: impl Fn(V) -> V, flip: impl Fn(V) -> V) -> Vec<(f64, V)> {
+    let s = o.seam();
+    let mut out = points.to_vec();
+    if s > 0.0
+        && let (Some(&(_, first)), Some(&(_, last))) = (points.first(), points.last())
+    {
+        let i = points.partition_point(|q| q.0 < s - 1e-9);
+        let j = points.partition_point(|q| q.0 <= s + 1e-9).max(i);
+        let (before, after) = match points.get(i..j) {
+            Some([p, .., q]) => (p.1, q.1),
+            Some([p]) => (p.1, p.1),
+            _ => (at(s), at(s)),
+        };
+        out = Vec::with_capacity(points.len() + 4);
+        out.push((0.0, after));
+        out.extend(points.get(j..).unwrap_or_default().iter().map(|&(t, v)| (t - s, v)));
+        out.push((1.0 - s, last));
+        out.push((1.0 - s, wrap(first)));
+        out.extend(points.get(..i).unwrap_or_default().iter().map(|&(t, v)| (t + 1.0 - s, wrap(v))));
+        out.push((1.0, wrap(before)));
+    }
+    if o.reversed {
+        out = out.into_iter().rev().map(|(t, v)| (1.0 - t, flip(v))).collect();
+    }
+    out
+}
+
+/// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
+/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
+/// arrowheads.
+fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    let same = |v: f64| v;
+    if let Some(p) = &mut s.profile {
+        let mut pts: Vec<(f64, (f64, f64))> = p.points.iter().map(|&(t, l, r)| (t, (l, r))).collect();
+        // A width profile is a smooth curve through its points: where the new start splits a span,
+        // samples of that span keep its curve once its ends become ends of the profile.
+        let seam = o.seam();
+        let i = p.points.partition_point(|q| q.0 < seam);
+        if seam > 0.0
+            && let (Some(a), Some(b)) = (i.checked_sub(1).and_then(|j| p.points.get(j)), p.points.get(i))
+            && seam - a.0 > 1e-9
+            && b.0 - seam > 1e-9
+        {
+            const SAMPLES: usize = 32;
+            let (a, b) = (a.0, b.0);
+            let extra: Vec<(f64, (f64, f64))> =
+                (1..SAMPLES).map(|k| a + (b - a) * k as f64 / SAMPLES as f64).filter(|f| (f - seam).abs() > 1e-9).map(|f| (f, p.at(f))).collect();
+            pts.splice(i..i, extra);
+        }
+        let out = reoriented(&pts, o, |f| p.at(f), |v| v, |(l, r)| (r, l));
+        p.points = out.into_iter().map(|(t, (l, r))| (t, l, r)).collect();
+    }
+    for p in [&mut s.pressure, &mut s.tilt].into_iter().flatten() {
+        let out = reoriented(&p.points, o, |f| p.at(f), same, same);
+        p.points = out;
+    }
+    for p in [&mut s.bearing, &mut s.rotation].into_iter().flatten() {
+        // The samples moved past the seam carry the whole turns the recording makes along the
+        // stroke, so the angle does not jump by them there.
+        let turns = match (p.points.first(), p.points.last()) {
+            (Some(a), Some(b)) if (b.1 - a.1).is_finite() => ((b.1 - a.1) / 360.0).round() * 360.0,
+            _ => 0.0,
+        };
+        let out = reoriented(&p.points, o, |f| p.unwrapped_at(f), |v| v + turns, same);
+        p.points = out;
+    }
+    if o.reversed && !o.closed {
+        std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+        s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+    }
+}
+
+/// `n` with every stroke read along its subpaths turned as `o` says.
+fn reorient_strokes(n: &mut Node, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    for it in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = it {
+            reorient_stroke(s, o);
+        }
+    }
+}
+
 /// Anchor positions of a subpath relative to its box, scaled to unit size.
 fn normalised(sp: &SubPath) -> Vec<Vec2> {
     let pts = sp.anchors.iter().map(|a| a.p);
@@ -422,6 +703,8 @@ fn best_rotation(a: &SubPath, b: &SubPath) -> usize {
 pub struct PathPair {
     a: Vec<SubPath>,
     b: Vec<SubPath>,
+    /// How each path's subpaths were turned, where all of them turned alike (else unturned).
+    orient: (Orient, Orient),
 }
 
 impl PathPair {
@@ -433,6 +716,7 @@ impl PathPair {
         let cb = b.bounds().map(|r| r.center()).unwrap_or_default();
         let degenerate = |like: &SubPath, c: Point| SubPath::new(vec![Anchor::corner(c); like.anchors.len().max(1)], like.closed);
         let (mut va, mut vb) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        let mut orient = (Orient::default(), Orient::default());
         for i in 0..n {
             let (mut sa, mut sb) = match (a.subpaths.get(i), b.subpaths.get(i)) {
                 (Some(x), Some(y)) => (x.clone(), y.clone()),
@@ -440,17 +724,21 @@ impl PathPair {
                 (None, Some(y)) => (degenerate(y, ca), y.clone()),
                 (None, None) => continue,
             };
+            let (mut oa, mut ob) = (Orient::of(&sa), Orient::of(&sb));
             let explicit = i == 0 && (starts.0.is_some() || starts.1.is_some());
             if explicit {
                 if let Some(s) = starts.0 {
+                    oa.start_at(&sa, s);
                     start_at(&mut sa, s);
                 }
                 if let Some(s) = starts.1 {
+                    ob.start_at(&sb, s);
                     start_at(&mut sb, s);
                 }
             }
             let closed = sa.closed && sb.closed && sa.anchors.len() > 2 && sb.anchors.len() > 2;
             if closed && (sa.area() * sb.area()) < 0.0 {
+                ob.reverse();
                 reverse_closed(&mut sb);
             }
             let m = sa.anchors.len().max(sb.anchors.len());
@@ -458,12 +746,26 @@ impl PathPair {
             grow(&mut sb, m);
             if closed && !explicit {
                 let r = best_rotation(&sa, &sb);
+                if r != 0 {
+                    ob.rotate(arc_fraction(&sb, r));
+                }
                 sb.anchors.rotate_left(r);
+            }
+            // One stroke runs along every subpath of a key, each reading it by its own length, so
+            // it turns only when all of the key's subpaths turned alike.
+            if i == 0 {
+                orient = (oa, ob);
+            }
+            if i < a.subpaths.len() && !orient.0.same_turn(&oa) {
+                orient.0 = Orient::default();
+            }
+            if i < b.subpaths.len() && !orient.1.same_turn(&ob) {
+                orient.1 = Orient::default();
             }
             va.push(sa);
             vb.push(sb);
         }
-        Self { a: va, b: vb }
+        Self { a: va, b: vb, orient }
     }
 
     /// The path at `t` (0 = `a`, 1 = `b`).
@@ -578,7 +880,12 @@ impl Lerp {
                 _ => Shape::Other,
             },
         };
-        Self { a: a.clone(), b: b.clone(), shape }
+        let (mut a, mut b) = (a.clone(), b.clone());
+        if let Shape::Path { pair, .. } = &shape {
+            reorient_strokes(&mut a, pair.orient.0);
+            reorient_strokes(&mut b, pair.orient.1);
+        }
+        Self { a, b, shape }
     }
 
     /// The object at `t` (0 = `a`, 1 = `b`), with id 0.
@@ -898,6 +1205,13 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 // Spine
 // =====================================================================================
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Spine::new`] has run on this thread, for tests that count how often a path
+    /// is flattened.
+    pub(crate) static SPINES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
 /// arc length at each of its anchors.
 pub struct Spine {
@@ -916,6 +1230,8 @@ impl Spine {
     /// arc lengths, and the arc length at each anchor. `None` when `path` has no subpath, or when
     /// the first one flattens to fewer than two points (so it has no length to walk).
     pub fn new(path: &PathData) -> Option<Self> {
+        #[cfg(test)]
+        SPINES_BUILT.with(|n| n.set(n.get() + 1));
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();
         let mut cum: Vec<f64> = Vec::new();
@@ -1019,25 +1335,37 @@ impl Spine {
         let s = if s.is_finite() { s.clamp(0.0, self.length()) } else { 0.0 };
         let sp = &self.subpath;
         let n = sp.segment_count();
-        let mut start = 0.0;
-        for i in 0..n {
-            let c = sp.segment(i);
-            let end = self.anchor_length(i + 1).unwrap_or(self.length());
-            if s <= end || i + 1 == n {
-                let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
-                let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
-                let e = c.eval(t);
-                let tv = c.deriv().eval(t).to_vec2();
-                // Where a handle sits on its anchor the derivative vanishes there: take the
-                // direction between points a little before and after instead.
-                let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
-                return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
-            }
-            start = end;
+        if n == 0 {
+            return (self.pts.first().copied().unwrap_or_default(), 0.0);
         }
-        // Only a spine without segments gets here: the loop returns at the last one.
-        (self.pts.first().copied().unwrap_or_default(), 0.0)
+        let i = segment_at(&self.anchors, n, s, || {});
+        let c = sp.segment(i);
+        let start = if i == 0 { 0.0 } else { self.anchor_length(i).unwrap_or(0.0) };
+        let end = self.anchor_length(i + 1).unwrap_or(self.length());
+        let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+        let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
+        let e = c.eval(t);
+        let tv = c.deriv().eval(t).to_vec2();
+        // Where a handle sits on its anchor the derivative vanishes there: take the
+        // direction between points a little before and after instead.
+        let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
+        (Point::new(e.x, e.y), tv.y.atan2(tv.x))
     }
+}
+
+/// The segment of a spine with `n` segments (`n > 0`) that holds arc length `s`: the first one whose
+/// end is at or past `s`, or the last one when none is. `anchors` holds the arc length at each
+/// anchor, so segment `i` ends at `anchors[i + 1]`, and the last segment of a closed spine, which has
+/// no entry for its end, ends at the spine's length. The lengths never decrease (each is a sum of
+/// distances that are not negative, at most `+inf` and never NaN), so a binary search finds the
+/// segment in about `log2(n)` comparisons. `probe` is called once for each comparison.
+fn segment_at(anchors: &[f64], n: usize, s: f64, mut probe: impl FnMut()) -> usize {
+    let ends = anchors.get(1..n.min(anchors.len())).unwrap_or_default();
+    ends.partition_point(|&end| {
+        probe();
+        end < s
+    })
+    .min(n.saturating_sub(1))
 }
 
 /// The anchor of the first subpath each key sits on, when they are all valid for `n` anchors.
@@ -1051,17 +1379,59 @@ fn pinned(spec: &BlendSpec, keys: usize, n: usize) -> Option<Vec<usize>> {
 /// - a pinned spine (`key_anchors`): the stored spine's first subpath with each key's anchor (and
 ///   its handles) moved onto the key's centre, so moving a key moves its end of the spine;
 /// - a spine from Replace Spine: its first subpath, `None` for the anchors (the keys spread
-///   evenly along it by arc length).
+///   evenly along it by arc length) while the keys sit there; once one is moved off, pinned as
+///   above at the anchors where they were spread.
+///
+/// `None` for a blend made without a spine ([`BlendSpec::no_spine`]).
 pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
+    if spec.no_spine {
+        return None;
+    }
+    layout_spine(keys, spec)
+}
+
+/// The line the steps of a blend of `keys` are placed along: [`blend_spine`]'s path for a blend
+/// with a spine, and the straight lines between the key centers, in key order, for a blend made
+/// without one ([`BlendSpec::no_spine`]). For a blend without a spine the line places the steps
+/// only; it is not a spine and is not drawn as one. `None` with fewer than two keys.
+pub fn blend_layout_line(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<PathData> {
+    layout_spine(keys, spec).map(|(path, _)| path)
+}
+
+/// The spine `spec` stores, unless the blend was made without one.
+fn stored_spine(spec: &BlendSpec) -> Option<&PathData> {
+    spec.spine.as_ref().filter(|_| !spec.no_spine)
+}
+
+/// [`blend_spine`] for placing the steps: a blend made without a spine still places them on the
+/// straight lines between its key centers.
+fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
     if keys.len() < 2 {
         return None;
     }
-    let Some(stored) = &spec.spine else {
+    let Some(stored) = stored_spine(spec) else {
         let centers: Vec<Point> = keys.iter().map(|k| center_of(k)).collect();
         return Some((PathData::single(SubPath::polyline(&centers, false)), Some((0..keys.len()).collect())));
     };
     let mut first = stored.subpaths.first()?.clone();
-    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else { return Some((PathData::single(first), None)) };
+    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else {
+        let mut path = PathData::single(first);
+        // A key moved off where Replace Spine spread it takes its point of the spine along, as
+        // on a pinned spine; otherwise the steps would put it back on the spine (#6809).
+        if Spine::new(&path).is_none_or(|sp| keys_spread_along(keys, &sp)) {
+            return Some((path, None));
+        }
+        let Some(mut ka) = spread_anchors(&mut path, keys.len()) else { return Some((path, None)) };
+        let mut first = path.subpaths.into_iter().next()?;
+        open_at_start(&mut first, &mut ka);
+        for (k, &ai) in keys.iter().zip(&ka) {
+            if let Some(a) = first.anchors.get_mut(ai) {
+                let d = center_of(k) - a.p;
+                a.translate(d);
+            }
+        }
+        return Some((PathData::single(first), Some(ka)));
+    };
     for (k, &ai) in keys.iter().zip(&ka) {
         let c = center_of(k);
         if let Some(a) = first.anchors.get_mut(ai) {
@@ -1075,43 +1445,248 @@ pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Op
 /// [`blend_spine`] with every key on an anchor: a spine from Replace Spine gets anchors where its
 /// keys sit (by arc length), so editing it keeps them in place.
 pub fn pin_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Vec<usize>)> {
-    let (mut path, anchors) = blend_spine(keys, spec)?;
-    if let Some(a) = anchors {
-        return Some((path, a));
+    // A spine from Replace Spine is pinned as stored, even with a key moved off it (where
+    // [`blend_spine`] moves that key's point along): the layout is the same.
+    if keys.len() >= 2
+        && let Some(first) = stored_spine(spec).and_then(|s| s.subpaths.first())
+        && pinned(spec, keys.len(), first.anchors.len()).is_none()
+    {
+        let mut path = PathData::single(first.clone());
+        let mut out = spread_anchors(&mut path, keys.len())?;
+        // A closed spine's end keys get points of their own, so that once pinned each still
+        // moves only its own end.
+        let mut sp = path.subpaths.into_iter().next()?;
+        open_at_start(&mut sp, &mut out);
+        return Some((PathData::single(sp), out));
     }
-    let k = keys.len();
-    let total = Spine::new(&path)?.length();
-    let closed = path.subpaths.first().is_some_and(|s| s.closed);
-    let mut out = vec![0usize];
-    for i in 1..k.saturating_sub(1) {
-        let s = total * i as f64 / (k - 1) as f64;
-        out.push(anchor_at_length(&mut path, s)?);
-    }
-    let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
-    out.push(last);
-    Some((path, out))
+    let (path, anchors) = blend_spine(keys, spec)?;
+    Some((path, anchors?))
 }
 
-/// The anchor of the first subpath at arc length `s`: an existing one within a hundredth of a
-/// point, else a new one splitting the segment there.
-fn anchor_at_length(path: &mut PathData, s: f64) -> Option<usize> {
-    let spine = Spine::new(path)?;
+/// Do `keys` sit where a spine from Replace Spine spreads them: evenly along `spine` by arc length
+/// (within a hundredth of a point, as [`SpreadLengths::anchor_at_length`] matches anchors)?
+fn keys_spread_along(keys: &[Arc<Node>], spine: &Spine) -> bool {
+    let k = keys.len();
+    keys.iter().enumerate().all(|(i, key)| {
+        let f = if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 };
+        center_of(key).distance(spine.at(f).0) < 0.01
+    })
+}
+
+/// Open closed spine `sp` at its first anchor when the last key sits there with the first (as
+/// [`spread_anchors`] puts them): a copy of that anchor at the end takes the closing segment and
+/// the last key, so the two end keys move their ends of the spine apart.
+fn open_at_start(sp: &mut SubPath, ka: &mut [usize]) {
+    let Some(&start) = sp.anchors.first() else { return };
+    if !sp.closed || ka.len() < 2 {
+        return;
+    }
+    if let Some(last) = ka.last_mut().filter(|a| **a == 0) {
+        *last = sp.anchors.len();
+        sp.anchors.push(start);
+        sp.closed = false;
+    }
+}
+
+/// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
+/// on, splitting segments where none is. `None`, leaving `path` as it was, when the subpath has no
+/// length to spread along, when its length is not finite (a path so large its length overflows),
+/// or when an arc length it would split at is not finite.
+fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
+    spread_anchors_with(path, k, |_| {})
+}
+
+/// [`spread_anchors`], calling `work` for each step of work it does.
+fn spread_anchors_with(path: &mut PathData, k: usize, mut work: impl FnMut(SpreadWork)) -> Option<Vec<usize>> {
     let sp = path.subpaths.first_mut()?;
-    let n = sp.segment_count();
-    let seg = (0..n).rev().find(|i| spine.anchor_length(*i).is_some_and(|l| l <= s)).unwrap_or(0);
-    let from = spine.anchor_length(seg).unwrap_or(0.0);
-    let to = spine.anchor_length(seg + 1).unwrap_or(spine.length());
-    if s - from < 0.01 {
-        return Some(seg);
+    let lengths = SpreadLengths::new(sp, &mut work);
+    let total = lengths.total().filter(|t| t.is_finite())?;
+    let targets = (1..k.saturating_sub(1)).map(|i| total * i as f64 / (k - 1) as f64);
+    let mut out = vec![0usize];
+    out.extend(anchors_at_lengths(sp, lengths, targets, &mut work)?);
+    out.push(if sp.closed { 0 } else { sp.anchors.len().saturating_sub(1) });
+    Some(out)
+}
+
+/// The anchors of `sp` at each arc length in `targets`, in order, splitting segments where none is
+/// (see [`SpreadLengths::anchor_at_length`]); `lengths` measures `sp`. The splits are made on a copy
+/// of `sp`, which replaces it only when every target has its anchor: `None` leaves `sp` as it was.
+fn anchors_at_lengths(
+    sp: &mut SubPath,
+    mut lengths: SpreadLengths,
+    targets: impl IntoIterator<Item = f64>,
+    work: &mut impl FnMut(SpreadWork),
+) -> Option<Vec<usize>> {
+    let mut split = sp.clone();
+    let mut out = Vec::new();
+    for s in targets {
+        out.push(lengths.anchor_at_length(&mut split, s, work)?);
     }
-    if to - s < 0.01 {
-        return Some((seg + 1) % sp.anchors.len().max(1));
+    *sp = split;
+    Some(out)
+}
+
+/// A step of the work [`spread_anchors_with`] does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SpreadWork {
+    /// Flattening every segment of the subpath.
+    WholePath,
+    /// Flattening one segment after a split.
+    Segment,
+    /// Adding one segment's flattened points to the arc lengths.
+    Measure,
+    /// Comparing an anchor's arc length with the one looked for.
+    Compare,
+}
+
+/// Where the measurement of a subpath's flattened points stands at the start of a segment: the last
+/// point kept, the arc length there (0 before any point), and how many points were kept.
+#[derive(Clone, Copy)]
+struct Measured {
+    last: Option<Point>,
+    len: f64,
+    kept: usize,
+}
+
+impl Measured {
+    const START: Self = Self { last: None, len: 0.0, kept: 0 };
+
+    /// The measurement after `pts`, keeping each point more than 1e-9 from the last one kept, as
+    /// [`Spine::new`] does.
+    fn then(mut self, pts: &[Point]) -> Self {
+        for &p in pts {
+            if self.last.is_none_or(|q| q.distance(p) > 1e-9) {
+                self.len = match self.last {
+                    Some(q) => self.len + q.distance(p),
+                    None => 0.0,
+                };
+                self.last = Some(p);
+                self.kept += 1;
+            }
+        }
+        self
     }
-    let c = sp.segment(seg);
-    // The flattened length and the curve's own differ slightly: scale into the curve's.
-    let arc = c.arclen(1e-4).max(1e-12);
-    let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
-    Some(sp.insert_anchor(seg, t))
+}
+
+/// The arc lengths of a subpath's anchors, as [`Spine::new`] measures them, kept up to date while
+/// [`spread_anchors`] splits its segments. Each segment is flattened once, and again only when it
+/// is split. A split leaves the arc lengths of the anchors before it as they are; those after it
+/// are measured again, in order from the split, only as far as the next arc length looked for, so
+/// the sums are the same as [`Spine::new`]'s on the split subpath.
+struct SpreadLengths {
+    /// The finite points the segments flatten to, each segment's in one run.
+    pts: Vec<Point>,
+    /// Where each segment's run is in `pts`. A split segment's halves get runs at the end, and its
+    /// old run is not used again.
+    flat: Vec<std::ops::Range<usize>>,
+    /// The measurement at the start of each segment, up to the first one not measured since the
+    /// last split; after the last segment too once every segment is measured.
+    marks: Vec<Measured>,
+}
+
+impl SpreadLengths {
+    /// Flatten and measure every segment of `sp`.
+    fn new(sp: &SubPath, work: &mut impl FnMut(SpreadWork)) -> Self {
+        work(SpreadWork::WholePath);
+        let n = sp.segment_count();
+        let mut lengths = Self { pts: Vec::new(), flat: Vec::with_capacity(n), marks: Vec::with_capacity(n + 1) };
+        for i in 0..n {
+            let run = lengths.flatten(sp, i);
+            lengths.flat.push(run);
+        }
+        lengths.marks.push(Measured::START);
+        lengths.measure_to(f64::INFINITY, work);
+        lengths
+    }
+
+    /// Flatten segment `i` of `sp` as [`Spine::new`] does, adding its finite points to `pts`, and
+    /// return where they are.
+    fn flatten(&mut self, sp: &SubPath, i: usize) -> std::ops::Range<usize> {
+        let start = self.pts.len();
+        let c = sp.segment(i);
+        let mut bp = BezPath::new();
+        bp.move_to(c.p0);
+        if sp.segment_is_line(i) {
+            bp.line_to(c.p3);
+        } else {
+            bp.curve_to(c.p1, c.p2, c.p3);
+        }
+        vectorcraft_geom::kurbo::flatten(bp.iter(), 0.1, |el| {
+            if let vectorcraft_geom::PathEl::MoveTo(p) | vectorcraft_geom::PathEl::LineTo(p) = el
+                && p.x.is_finite()
+                && p.y.is_finite()
+            {
+                self.pts.push(p);
+            }
+        });
+        start..self.pts.len()
+    }
+
+    /// The subpath's flattened length, `None` when it flattens to fewer than two points.
+    fn total(&self) -> Option<f64> {
+        self.marks.last().filter(|m| self.marks.len() > self.flat.len() && m.kept >= 2).map(|m| m.len)
+    }
+
+    /// Measure the segments that are not measured, from the first, until one starts past `s` (with
+    /// two points kept before it) or every one is measured.
+    fn measure_to(&mut self, s: f64, work: &mut impl FnMut(SpreadWork)) {
+        while let Some(run) = self.flat.get(self.marks.len() - 1) {
+            let Some(&m) = self.marks.last() else { return };
+            if self.marks.len() >= 2 && m.kept >= 2 && m.len > s {
+                return;
+            }
+            work(SpreadWork::Measure);
+            self.marks.push(m.then(self.pts.get(run.clone()).unwrap_or_default()));
+        }
+    }
+
+    /// The anchor of `sp` at arc length `s`: an existing one within a hundredth of a point, else a
+    /// new one splitting the segment there. The segment is the last one starting at or before `s`
+    /// (the first one when none does), found by a binary search. `None`, leaving `sp` as it was,
+    /// when `s` or the arc length at the end of the segment is not finite, or when `sp` flattens
+    /// to fewer than two points.
+    fn anchor_at_length(&mut self, sp: &mut SubPath, s: f64, work: &mut impl FnMut(SpreadWork)) -> Option<usize> {
+        if !s.is_finite() {
+            return None;
+        }
+        self.measure_to(s, work);
+        let n = self.flat.len();
+        if self.marks.last().is_none_or(|m| m.kept < 2) {
+            return None;
+        }
+        let starts = &self.marks[..self.marks.len().min(n)];
+        let seg = starts
+            .partition_point(|m| {
+                work(SpreadWork::Compare);
+                m.len <= s
+            })
+            .saturating_sub(1);
+        let from = self.marks.get(seg)?.len;
+        let to = self.marks.get(seg + 1)?.len;
+        if s - from < 0.01 {
+            return Some(seg);
+        }
+        if to - s < 0.01 {
+            return Some((seg + 1) % sp.anchors.len().max(1));
+        }
+        if !from.is_finite() || !to.is_finite() {
+            return None;
+        }
+        let c = sp.segment(seg);
+        // The flattened length and the curve's own differ slightly: scale into the curve's.
+        let arc = c.arclen(1e-4).max(1e-12);
+        let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
+        if !t.is_finite() {
+            return None;
+        }
+        let at = sp.insert_anchor(seg, t);
+        work(SpreadWork::Segment);
+        work(SpreadWork::Segment);
+        let halves = [self.flatten(sp, seg), self.flatten(sp, seg + 1)];
+        self.flat.splice(seg..=seg, halves);
+        self.marks.truncate(seg + 1);
+        Some(at)
+    }
 }
 
 /// Where a blend's keys and steps go along its spine (see [`blend_spine`]).
@@ -1127,10 +1702,10 @@ impl Rail {
     /// `None` when nothing moves: no stored spine and the steps keep the page's orientation.
     fn new(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<Self> {
         let rotate = spec.orientation == BlendOrientation::AlignToPath;
-        if spec.spine.is_none() && !rotate {
+        if stored_spine(spec).is_none() && !rotate {
             return None;
         }
-        let (path, anchors) = blend_spine(keys, spec)?;
+        let (path, anchors) = layout_spine(keys, spec)?;
         let spine = Spine::new(&path)?;
         let total = spine.length();
         let k = keys.len();
@@ -1192,10 +1767,10 @@ impl Rail {
 /// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
 /// moves.
 pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
-    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+    if stored_spine(spec).is_none() && spec.orientation != BlendOrientation::AlignToPath {
         return None;
     }
-    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let spine = layout_spine(keys, spec)?.0.bounds()?;
     let radius = keys
         .iter()
         .filter_map(|k| {
@@ -1404,7 +1979,9 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
         for j in 1..=n {
             // Even position of the step, then where the easing puts its shape and its colours.
             let u = j as f64 / (n + 1) as f64;
-            let (t, tc) = (if rail.is_some() { spec.ease.apply(u) } else { u }, spec.color_position(u));
+            // Easing needs a spine: a blend made without one keeps its steps evenly spaced.
+            let eased = rail.is_some() && spec.eases_along_spine();
+            let (t, tc) = (if eased { spec.ease.apply(u) } else { u }, spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
                 r.place(&mut s, i, t);
@@ -1418,6 +1995,7 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::appearance::Arrowhead;
     use vectorcraft_geom::{Rect, shapes};
 
     #[test]
@@ -1453,6 +2031,28 @@ mod tests {
         let pinned = BlendSpec { spine: Some(path), key_anchors: vec![0, 1, 2], ..Default::default() };
         let (moved, _) = blend_spine(&[key(0.0), key(100.0), key(300.0)], &pinned).unwrap();
         assert_eq!(moved.subpaths[0].anchors[2].p, Point::new(305.0, 5.0));
+    }
+
+    #[test]
+    fn a_blend_without_a_spine_has_a_layout_line_through_its_key_centers() {
+        let at =
+            |x: f64, y: f64| Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(x - 5.0, y - 5.0, x + 5.0, y + 5.0)), Appearance::default()));
+        let line_of = |path: &PathData| path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect::<Vec<_>>();
+        // A stored spine is ignored once the blend is made without one.
+        let stored = PathData::single(SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(300.0, 50.0)], false));
+        let spec = BlendSpec { no_spine: true, spine: Some(stored), ..Default::default() };
+        for keys in [vec![at(10.0, 20.0), at(110.0, 20.0)], vec![at(10.0, 20.0), at(110.0, 20.0), at(110.0, 220.0), at(-40.0, 0.0)]] {
+            assert!(blend_spine(&keys, &spec).is_none(), "still no spine");
+            let line = blend_layout_line(&keys, &spec).unwrap();
+            assert_eq!(line.subpaths.len(), 1);
+            assert!(!line.subpaths[0].closed);
+            let centers: Vec<Point> = keys.iter().map(|k| center_of(k)).collect();
+            assert_eq!(line_of(&line), centers, "in key order");
+        }
+        // With a spine, the layout line is the spine.
+        let keys = vec![key(0.0), key(100.0), key(300.0)];
+        assert_eq!(blend_layout_line(&keys, &BlendSpec::default()), blend_spine(&keys, &BlendSpec::default()).map(|(p, _)| p));
+        assert!(blend_layout_line(&keys[..1], &spec).is_none(), "one key");
     }
 
     #[test]
@@ -1504,6 +2104,220 @@ mod tests {
         assert!((angle - std::f64::consts::FRAC_PI_4).abs() < 0.05, "faces the in handle at (50, 50): {angle}");
         let (_, end) = sp.at_length(sp.length());
         assert!(end.is_finite(), "{end}");
+    }
+
+    /// [`Spine::at_length`] by walking the segments from the first, as a reference for the search.
+    fn walked_at_length(sp: &Spine, s: f64) -> (Point, f64) {
+        let s = if s.is_finite() { s.clamp(0.0, sp.length()) } else { 0.0 };
+        let n = sp.subpath.segment_count();
+        let mut start = 0.0;
+        for i in 0..n {
+            let c = sp.subpath.segment(i);
+            let end = sp.anchor_length(i + 1).unwrap_or(sp.length());
+            if s <= end || i + 1 == n {
+                let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+                let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
+                let e = c.eval(t);
+                let tv = c.deriv().eval(t).to_vec2();
+                let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
+                return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
+            }
+            start = end;
+        }
+        panic!("a spine without segments")
+    }
+
+    /// The search picks the same segment as walking them in order, so points and tangents stay the
+    /// same: on open and closed spines, one segment, curves, and zero-length segments whose anchors
+    /// share an arc length; at every anchor, between anchors, at both ends, past them, and for
+    /// values that are not finite.
+    #[test]
+    fn spine_lookup_matches_walking_the_segments() {
+        let p = Point::new;
+        let bow = SubPath::new(
+            vec![Anchor::smooth(p(0.0, 0.0), p(50.0, 50.0)), Anchor::smooth(p(100.0, 0.0), p(150.0, -50.0)), Anchor::corner(p(200.0, 0.0))],
+            false,
+        );
+        let spines = [
+            SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(30.0, 5.0), p(30.0, 5.0)], false),
+            SubPath::polyline(&[p(0.0, 0.0), p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0)], true),
+            SubPath::polyline(&[p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0), p(0.0, 0.0)], true),
+            SubPath::polyline(&[p(0.0, 0.0), p(25.0, 25.0)], false),
+            SubPath::polyline(&[p(0.0, 0.0), p(25.0, 25.0)], true),
+            bow.clone(),
+            SubPath { closed: true, ..bow },
+        ];
+        for sub in spines {
+            let sp = Spine::new(&PathData::single(sub)).unwrap();
+            let len = sp.length();
+            let mut lengths = vec![0.0, len, -1.0, len + 1.0, -len, f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MAX, f64::MIN];
+            lengths.extend(sp.anchors.iter().flat_map(|&a| [a, a - 1e-9, a + 1e-9]));
+            lengths.extend((0..=400).map(|k| len * k as f64 / 400.0));
+            for s in lengths {
+                assert_eq!(sp.at_length(s), walked_at_length(&sp, s), "s = {s} on {:?}", sp.anchors);
+            }
+        }
+    }
+
+    /// Finding the segment for an arc length on a spine of thousands of segments takes a few
+    /// comparisons, not one for each segment before it.
+    #[test]
+    fn spine_lookup_compares_a_few_segment_ends() {
+        let pts: Vec<Point> = (0..=4096).map(|i| Point::new(i as f64, if i % 2 == 0 { 0.0 } else { 1.0 })).collect();
+        let sp = Spine::new(&PathData::single(SubPath::polyline(&pts, false))).unwrap();
+        let n = sp.subpath.segment_count();
+        assert_eq!(n, 4096);
+        for s in [sp.length() - 0.5, sp.length(), sp.length() / 2.0, 0.25] {
+            let mut compared = 0;
+            let i = segment_at(&sp.anchors, n, s, || compared += 1);
+            assert!(compared <= 13, "{compared} comparisons at {s}");
+            assert_eq!(sp.at_length(s), walked_at_length(&sp, s));
+            assert!(sp.anchors[i] <= s && (i + 1 == n || s <= sp.anchors[i + 1]), "segment {i} at {s}");
+        }
+    }
+
+    /// [`spread_anchors`] by measuring the whole spine again for each key and walking its segments
+    /// from the last, as a reference for the measurement kept up to date between keys.
+    fn rebuilt_spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
+        let total = Spine::new(path)?.length();
+        let closed = path.subpaths.first().is_some_and(|s| s.closed);
+        let mut out = vec![0usize];
+        for i in 1..k.saturating_sub(1) {
+            let s = total * i as f64 / (k - 1) as f64;
+            let spine = Spine::new(path)?;
+            let sp = path.subpaths.first_mut()?;
+            let n = sp.segment_count();
+            let seg = (0..n).rev().find(|i| spine.anchor_length(*i).is_some_and(|l| l <= s)).unwrap_or(0);
+            let from = spine.anchor_length(seg).unwrap_or(0.0);
+            let to = spine.anchor_length(seg + 1).unwrap_or(spine.length());
+            out.push(if s - from < 0.01 {
+                seg
+            } else if to - s < 0.01 {
+                (seg + 1) % sp.anchors.len().max(1)
+            } else {
+                let c = sp.segment(seg);
+                let arc = c.arclen(1e-4).max(1e-12);
+                let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
+                sp.insert_anchor(seg, t)
+            });
+        }
+        let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
+        out.push(last);
+        Some(out)
+    }
+
+    /// Spreading keys along a spine measured once and kept up to date gives the same anchors and
+    /// the same spine as measuring it again for each key: on open and closed polylines and curves,
+    /// zero-length segments, keys exactly on anchors, keys within, at and just past a hundredth of
+    /// a point from an anchor, a closed curve whose keys go round past its first anchor, many keys
+    /// in one segment, and paths with no segment. The closed spines open as [`pin_spine`] opens
+    /// them.
+    #[test]
+    fn spreading_keys_matches_measuring_the_spine_for_each_key() {
+        let p = Point::new;
+        let bow = SubPath::new(
+            vec![Anchor::smooth(p(0.0, 0.0), p(50.0, 50.0)), Anchor::smooth(p(100.0, 0.0), p(150.0, -50.0)), Anchor::corner(p(200.0, 0.0))],
+            false,
+        );
+        let mut spines = vec![
+            PathData::default(),
+            PathData::single(SubPath::default()),
+            PathData::single(SubPath::polyline(&[p(5.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(5.0, 5.0), p(5.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 0.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 0.0)], true)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(20.0, 0.0), p(30.0, 0.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(30.0, 5.0), p(30.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0)], true)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0), p(0.0, 0.0)], true)),
+            PathData::single(bow.clone()),
+            PathData::single(SubPath { closed: true, ..bow }),
+            shapes::ellipse(Rect::new(0.0, 0.0, 120.0, 80.0)),
+        ];
+        // An anchor near where the middle of three keys goes, 10 along a spine 20 long.
+        for d in [0.0, 0.005, 0.0099, 0.01, 0.0101, 0.02] {
+            for x in [10.0 - d, 10.0 + d] {
+                spines.push(PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(x, 0.0), p(20.0, 0.0)], false)));
+            }
+        }
+        let mut compared = 0;
+        for spine in &spines {
+            for k in (0..=12).chain([17, 50, 200]) {
+                let (mut a, mut b) = (spine.clone(), spine.clone());
+                let (ka, kb) = (spread_anchors(&mut a, k), rebuilt_spread_anchors(&mut b, k));
+                assert_eq!(ka, kb, "{k} keys on {spine:?}");
+                assert_eq!(a, b, "{k} keys on {spine:?}");
+                if let (Some(mut ka), Some(mut kb)) = (ka, kb) {
+                    let (mut sa, mut sb) = (a.subpaths[0].clone(), b.subpaths[0].clone());
+                    open_at_start(&mut sa, &mut ka);
+                    open_at_start(&mut sb, &mut kb);
+                    assert_eq!((sa, ka), (sb, kb), "{k} keys on {spine:?}, opened");
+                    compared += 1;
+                }
+            }
+        }
+        assert!(compared > 200, "{compared} spreads compared");
+    }
+
+    /// Spreading 1,000 keys along a spine of 4,096 segments flattens the spine once and then only
+    /// the two halves of each split segment, finds each key's segment in a few comparisons, and
+    /// measures about as many segments as the spine ends up with, not the whole spine per key.
+    #[test]
+    fn spreading_keys_measures_the_spine_once() {
+        let pts: Vec<Point> = (0..=4096).map(|i| Point::new(i as f64, if i % 2 == 0 { 0.0 } else { 1.0 })).collect();
+        let mut path = PathData::single(SubPath::polyline(&pts, false));
+        let (mut whole, mut segments, mut measured, mut compared) = (0, 0, 0, 0);
+        let ka = spread_anchors_with(&mut path, 1000, |w| match w {
+            SpreadWork::WholePath => whole += 1,
+            SpreadWork::Segment => segments += 1,
+            SpreadWork::Measure => measured += 1,
+            SpreadWork::Compare => compared += 1,
+        })
+        .unwrap();
+        assert_eq!(ka.len(), 1000);
+        let n = path.subpaths[0].segment_count();
+        assert!(n > 4096 + 900, "{n} segments");
+        assert_eq!(whole, 1);
+        assert!(segments <= 2 * 998, "{segments} segments flattened");
+        assert!(compared <= 998 * 14, "{compared} comparisons");
+        assert!(measured <= 4096 + n + 3 * 1000, "{measured} segments measured for {n}");
+        let mut reference = PathData::single(SubPath::polyline(&pts, false));
+        assert_eq!(rebuilt_spread_anchors(&mut reference, 1000), Some(ka));
+        assert_eq!(reference, path);
+    }
+
+    /// A spine so large that its length overflows spreads no keys, and is left as it was, rather
+    /// than getting an anchor split at a parameter that is not a number. Two keys, which split
+    /// nothing, get no anchors either.
+    #[test]
+    fn spreading_keys_along_a_spine_whose_length_overflows_changes_nothing() {
+        let p = Point::new;
+        for closed in [false, true] {
+            for k in [2, 3, 5] {
+                let spine = PathData::single(SubPath::polyline(&[p(-1e308, 0.0), p(0.0, 0.0), p(1e308, 0.0)], closed));
+                let mut path = spine.clone();
+                assert_eq!(spread_anchors(&mut path, k), None, "closed {closed}, {k} keys");
+                assert_eq!(path, spine);
+                assert!(path.subpaths[0].anchors.iter().all(|a| a.p.x.is_finite() && a.h_in.x.is_finite() && a.h_out.x.is_finite()));
+            }
+        }
+    }
+
+    /// When a later arc length has no anchor (here one that is not finite, as when a spine's length
+    /// overflows only after earlier splits), the splits already made are dropped with it.
+    #[test]
+    fn a_failed_anchor_keeps_none_of_the_earlier_splits() {
+        let sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false);
+        for bad in [f64::NAN, f64::INFINITY] {
+            let mut split = sp.clone();
+            let lengths = SpreadLengths::new(&split, &mut |_| {});
+            assert_eq!(anchors_at_lengths(&mut split, lengths, [25.0, 50.0, bad], &mut |_| {}), None);
+            assert_eq!(split, sp);
+        }
+        let mut split = sp.clone();
+        let lengths = SpreadLengths::new(&split, &mut |_| {});
+        assert_eq!(anchors_at_lengths(&mut split, lengths, [25.0, 50.0], &mut |_| {}), Some(vec![1, 2]));
+        assert_eq!(split.anchors.len(), 4);
     }
 
     #[test]
@@ -1579,6 +2393,25 @@ mod tests {
         assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
     }
 
+    /// A blend between two gradients that repeat steps the count; one between a gradient that
+    /// pads and one that repeats switches halfway, as the method does.
+    #[test]
+    fn blend_between_repeating_gradients_steps_the_count() {
+        use vectorcraft_color::GradientSpread;
+        let spread = |spread, repeats| Paint::Gradient(Box::new(GradientPaint::new(Gradient { spread, repeats, ..Gradient::default() })));
+        let at = |a: &Paint, b: &Paint, t: f32| match lerp_paint(a, b, t) {
+            Paint::Gradient(g) => (g.gradient.spread, g.gradient.repeat_count()),
+            p => panic!("a gradient, not {p:?}"),
+        };
+        let (two, twenty) = (spread(GradientSpread::Repeat, 2), spread(GradientSpread::Repeat, 20));
+        assert_eq!(at(&two, &twenty, 0.25), (GradientSpread::Repeat, 7));
+        assert_eq!(at(&two, &twenty, 0.5), (GradientSpread::Repeat, 11));
+        assert_eq!(at(&two, &twenty, 1.0), (GradientSpread::Repeat, 20));
+        let pad = spread(GradientSpread::Pad, 1);
+        assert_eq!(at(&pad, &twenty, 0.25), (GradientSpread::Pad, 1));
+        assert_eq!(at(&pad, &twenty, 0.75), (GradientSpread::Repeat, 20));
+    }
+
     #[test]
     fn blend_between_tints_of_one_swatch_keeps_the_link() {
         let tinted = |tint: f32| Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint), swatch: Some("Spot".into()), tint };
@@ -1652,6 +2485,146 @@ mod tests {
         let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
         assert_eq!(p.at(0.0), (0.5, 0.5));
         assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn pen_pressure_tilt_and_angles_interpolate_for_brushes() {
+        let stroked = |pressure: Option<f64>, tilt: Option<f64>, bearing: Option<f64>| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                s.brush = Some("Pressure Round".into());
+                s.pressure = pressure.map(|p| PressureProfile { points: vec![(0.0, p), (1.0, p)] });
+                s.tilt = tilt.map(|p| PressureProfile { points: vec![(0.0, p), (1.0, p)] });
+                s.bearing = bearing.map(|a| AngleProfile { points: vec![(0.0, a), (1.0, a)] });
+            }
+            ap
+        };
+        let at = |ap: &Appearance, f: f64| {
+            let s = ap.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+            let read = |p: Option<&PressureProfile>| p.map_or(PressureProfile::MID, |p| p.at(f));
+            (read(s.pressure.as_ref()), read(s.tilt.as_ref()), s.bearing.as_ref().map_or(0.0, |p| p.at(f)))
+        };
+        let (light, heavy) = (stroked(Some(0.0), Some(0.2), Some(170.0)), stroked(Some(1.0), Some(0.6), Some(-170.0)));
+        let (p, tilt, bearing) = at(&lerp_appearance(&light, &heavy, 0.25), 0.5);
+        assert!((p - 0.25).abs() < 1e-9 && (tilt - 0.3).abs() < 1e-9, "a quarter of the way: {p} {tilt}");
+        assert!((bearing - 175.0).abs() < 1e-9, "the angle turns the shorter way round, through 180°: {bearing}");
+        assert!((at(&lerp_appearance(&light, &heavy, 0.5), 0.5).2.abs() - 180.0).abs() < 1e-9);
+        // A stroke drawn without a recording reads as half pressure, half tilt and 0°.
+        let plain = stroked(None, None, None);
+        let (p, tilt, bearing) = at(&lerp_appearance(&heavy, &plain, 0.5), 0.0);
+        assert!((p - 0.75).abs() < 1e-9 && (tilt - 0.55).abs() < 1e-9 && (bearing + 85.0).abs() < 1e-9, "{p} {tilt} {bearing}");
+        // Profiles that vary along the stroke interpolate at each position.
+        let mut ramp = stroked(None, None, None);
+        if let Some(s) = ramp.stroke_mut() {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+        }
+        let mid = lerp_appearance(&ramp, &heavy, 0.5);
+        assert!((at(&mid, 0.0).0 - 0.5).abs() < 1e-9 && (at(&mid, 0.5).0 - 0.75).abs() < 1e-9, "{:?}", mid.stroke().map(|s| &s.pressure));
+        // A step in a recording (two samples at one position) stays a step.
+        let mut stepped = stroked(None, None, None);
+        if let Some(s) = stepped.stroke_mut() {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (1.0, 1.0)] });
+        }
+        let mid = lerp_appearance(&stepped, &stepped, 0.5);
+        assert!(at(&mid, 0.25).0.abs() < 1e-9 && (at(&mid, 0.75).0 - 1.0).abs() < 1e-9, "{:?}", mid.stroke().map(|s| &s.pressure));
+        // A whole turn recorded along a stroke stays a whole turn in the steps.
+        let mut turning = stroked(None, None, None);
+        if let Some(s) = turning.stroke_mut() {
+            s.rotation = Some(AngleProfile { points: vec![(0.0, 0.0), (1.0, 360.0)] });
+        }
+        let rot = |ap: &Appearance, f: f64| ap.stroke().and_then(|s| s.rotation.as_ref()).map_or(0.0, |p| p.at(f));
+        let same = lerp_appearance(&turning, &turning, 0.5);
+        assert!((rot(&same, 0.25) - 90.0).abs() < 1e-9 && (rot(&same, 0.5).abs() - 180.0).abs() < 1e-9, "{:?}", same.stroke().map(|s| &s.rotation));
+        let half = lerp_appearance(&turning, &plain, 0.5);
+        assert!((rot(&half, 0.5) - 90.0).abs() < 1e-9 && (rot(&half, 1.0).abs() - 180.0).abs() < 1e-9, "{:?}", half.stroke().map(|s| &s.rotation));
+        // Neither key has a recording: the steps have none either.
+        let none = lerp_appearance(&plain, &plain, 0.5);
+        let s = none.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        assert!(s.pressure.is_none() && s.tilt.is_none() && s.bearing.is_none() && s.rotation.is_none());
+    }
+
+    #[test]
+    fn a_point_near_the_other_keys_step_keeps_the_step() {
+        let flat = PressureProfile { points: vec![(0.0, 0.0), (0.4999995, 0.0), (1.0, 0.0)] };
+        let stepped = PressureProfile { points: vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (1.0, 1.0)] };
+        let p = lerp_pressure(Some(&flat), Some(&stepped), 1.0).unwrap_or_default();
+        assert!((p.at(0.75) - 1.0).abs() < 1e-9, "{p:?}");
+        let narrow = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.4999995, 1.0, 1.0), (1.0, 1.0, 1.0)] };
+        let stepped = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0)] };
+        let w = lerp_profile(Some(&narrow), Some(&stepped), 1.0).unwrap_or_default();
+        assert!(w.at(0.75).0.abs() < 1e-9, "{w:?}");
+        // The other key's step doesn't reshape a smooth profile's curve.
+        let early = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.25, 0.5, 0.5), (1.0, 0.5, 0.5)] };
+        let w = lerp_profile(Some(&WidthProfile::lens()), Some(&early), 0.0).unwrap_or_default();
+        for u in [0.1, 0.125, 0.2, 0.3, 0.4] {
+            let (got, want) = (w.at(u).0, WidthProfile::lens().at(u).0);
+            assert!((got - want).abs() < 5e-3, "at {u}: {got} for {want}: {w:?}");
+        }
+        let lens = WidthProfile::lens();
+        assert_eq!(lerp_profile(Some(&lens), Some(&lens), 0.5).and_then(|p| p.preset_id()), Some("lens"));
+    }
+
+    #[test]
+    fn stroke_profiles_turn_with_a_key_path_started_elsewhere() {
+        let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                edit(s);
+            }
+            Node::path(NodeId(1), path, ap)
+        };
+        let stroke = |n: &Node| n.appearance.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        let pressure = |s: &StrokeLayer, f: f64| s.pressure.as_ref().map_or(PressureProfile::MID, |p| p.at(f));
+        // An open key clicked at its last anchor runs the other way, and so do its pressure, its
+        // width profile (whose sides swap) and its arrowheads.
+        let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
+        let light = keyed(line(0.0), &|s| s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 0.0)] }));
+        let ramp = keyed(line(100.0), &|s| {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 1.0), (1.0, 0.0)] });
+            s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 0.0), (1.0, 0.0, 0.0)] });
+            s.start_arrow = Some(Arrowhead::Triangle);
+            s.arrow_scale = (200.0, 100.0);
+        });
+        let blend = Lerp::new(&light, &ramp, (None, Some(1)));
+        let s = stroke(&blend.at(0.25));
+        assert!(pressure(&s, 0.0).abs() < 1e-9 && (pressure(&s, 1.0) - 0.25).abs() < 1e-9, "{:?}", s.pressure);
+        let s = stroke(&blend.at(1.0));
+        assert_eq!(s.profile.as_ref().map(|p| p.at(1.0)), Some((0.0, 1.0)), "{:?}", s.profile);
+        assert_eq!((s.start_arrow, s.end_arrow, s.arrow_scale), (None, Some(Arrowhead::Triangle), (100.0, 200.0)));
+        // A key whose other subpaths keep their direction keeps its one stroke as it is.
+        let two = |x: f64| {
+            let sub = |y: f64| SubPath::polyline(&[Point::new(x, y), Point::new(x + 10.0, y)], false);
+            PathData::new(vec![sub(0.0), sub(20.0)])
+        };
+        let ramps = keyed(two(100.0), &|s| s.pressure = Some(PressureProfile { points: vec![(0.0, 1.0), (1.0, 0.0)] }));
+        let s = stroke(&Lerp::new(&keyed(two(0.0), &|_| {}), &ramps, (None, Some(1))).at(1.0));
+        assert!((pressure(&s, 0.0) - 1.0).abs() < 1e-9, "{:?}", s.pressure);
+        // A closed key started half way round starts its recordings there too, keeping the step
+        // where its own start was and the whole turn its rotation makes.
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0));
+        let plain = keyed(square(0.0), &|_| {});
+        let turning = keyed(square(100.0), &|s| {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+            s.rotation = Some(AngleProfile { points: vec![(0.0, 0.0), (1.0, 360.0)] });
+            s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] });
+        });
+        let blend = Lerp::new(&plain, &turning, (Some(0), Some(2)));
+        let s = stroke(&blend.at(1.0));
+        assert!((pressure(&s, 0.25) - 0.75).abs() < 1e-9 && (pressure(&s, 0.75) - 0.25).abs() < 1e-9, "{:?}", s.pressure);
+        let width = s.profile.as_ref().map_or((1.0, 1.0), |p| p.at(0.75));
+        assert!((width.0 - 0.75).abs() < 1e-6 && (width.1 - 0.75).abs() < 1e-6, "the width steps where the key started: {:?}", s.profile);
+        // A width curve split by the new start keeps its shape.
+        let lensed = keyed(square(100.0), &|s| s.profile = Some(WidthProfile::lens()));
+        let s = stroke(&Lerp::new(&plain, &lensed, (Some(0), Some(1))).at(1.0));
+        for u in [0.05, 0.125, 0.2, 0.6, 0.7, 0.74, 0.76, 0.8, 0.875, 0.95] {
+            let (got, want) = (s.profile.as_ref().map_or(1.0, |p| p.at(u).0), WidthProfile::lens().at((u + 0.25) % 1.0).0);
+            assert!((got - want).abs() < 2e-3, "at {u}: {got} for {want}: {:?}", s.profile);
+        }
+        let rot = |t: f64, f: f64| stroke(&blend.at(t)).rotation.as_ref().map_or(0.0, |p| p.unwrapped_at(f));
+        assert!((vectorcraft_geom::normalize_deg(rot(1.0, 0.25)) + 90.0).abs() < 1e-6, "{:?}", s.rotation);
+        assert!((rot(0.5, 0.499) - rot(0.5, 0.501)).abs() < 1.0, "no jump where the key started: {:?}", stroke(&blend.at(0.5)).rotation);
     }
 
     #[test]

@@ -64,11 +64,18 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
-/// works the same way (#5532). (Cancel rolls a preview back whichever dialog started it.)
+/// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
+/// Cutting Tools › Weed Box and Lines and Banner Hems and Grommets. (Cancel rolls a preview back
+/// whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
-        "type.pathOptions" | crate::addons::typetools::RELEASE => true,
+        "type.pathOptions"
+        | crate::addons::typetools::RELEASE
+        | crate::addons::image::REMOVE_BACKGROUND
+        | crate::addons::image::COLOR_MASK
+        | crate::addons::cutting::WEED
+        | crate::addons::cutting::BANNER => true,
         _ => false,
     }
 }
@@ -86,6 +93,19 @@ fn call(d: &Dialog) -> (String, Value) {
     {
         o.remove("rowGutter");
     }
+    // Weed Box and Lines: a Spacing of 0, or none, leaves the Count in use; any other Spacing is
+    // sent instead of the Count, so the command refuses one below 0.
+    if d.str("__command") == crate::addons::cutting::WEED
+        && let Some(o) = params.as_object_mut()
+    {
+        let zero = |s: &Value| match s {
+            Value::Null => true,
+            Value::String(t) => vectorcraft_doc::Unit::Points.parse(t).or_else(|| t.trim().parse().ok()) == Some(0.0),
+            v => v.as_f64() == Some(0.0),
+        };
+        let by_count = o.get("spacing").is_none_or(zero);
+        o.remove(if by_count { "spacing" } else { "count" });
+    }
     (d.str("__command"), params)
 }
 
@@ -101,11 +121,24 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "graph.create" => &["width", "height"],
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
+        crate::addons::cutting::WEED => &["margin", "spacing", "gap", "weight"],
+        crate::addons::cutting::BANNER => &["hem", "spacing", "grommetInset", "diameter", "weight"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin", "lineGap"],
         "type.pathOptions" => &["spacing"],
         "object.pathfinder.trap" => &["thickness"],
+        crate::addons::cutting::BRIDGES => &["width"],
+        "object.textWrap.options" => &["offset"],
         _ => &[],
+    }
+}
+
+/// The range (points) of a distance parameter of the commands this dialog edits, where the
+/// command has one: the field refuses a distance typed outside it.
+pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    match (command, key) {
+        ("object.textWrap.options", "offset") => Some(vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE),
+        _ => None,
     }
 }
 
@@ -113,10 +146,18 @@ fn lengths(command: &str) -> &'static [&'static str] {
 /// names isn't it (the rest follow, by name).
 fn order(command: &str) -> &'static [&'static str] {
     match command {
+        crate::addons::cutting::WEED => &["margin", "box", "direction", "count", "spacing", "gap", "weight", "swatch"],
+        crate::addons::cutting::BANNER => {
+            &["hem", "top", "right", "bottom", "left", "grommets", "spacing", "grommetInset", "diameter", "weight", "swatch"]
+        }
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
         crate::addons::typetools::RELEASE => &["mode", "keepOriginal"],
+        crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK => {
+            &["background", "colors", "contiguous", "match", "tolerance", "softness"]
+        }
+        crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         _ => &[],
     }
 }
@@ -127,15 +168,19 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
         (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
+        (crate::addons::cutting::BRIDGES, "direction") => Some(crate::addons::cutting::BRIDGE_DIRECTIONS),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
+        (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
         ("graph.setType", "type") => Some(GRAPH_KINDS.as_slice()),
         ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
         ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),
         ("graph.setType", "pieLegend") => Some(PIE_LEGEND),
         ("graph.setType", "piePosition") => Some(PIE_POSITION),
         ("graph.setType", "pieSort") => Some(PIE_SORT),
+        (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "background") => Some(crate::addons::image::BACKGROUNDS),
+        (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
     }
 }
@@ -156,8 +201,8 @@ const RASTERIZE_CMYK: form::Choices = &[("CMYK", "cmyk"), ("Grayscale", "graysca
 /// Type on a Path Options › Align to Path.
 const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
 
-/// Area Type Options › Fit.
-const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText")];
+/// Area Type Options › Fit (Block is Dynamic Text's, as `type.dynamicText` sets it).
+const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
 const FIRST_BASELINE: form::Choices =
@@ -469,5 +514,169 @@ mod tests {
         frame(&mut app);
         assert_eq!(crate::panels::pattern_options::repeat_fields(&app).unwrap()["instances"], 4);
         assert!(!app.session.in_interaction());
+    }
+
+    /// Text Wrap Options › Offset is a distance, and its range is the one `object.textWrap.options`
+    /// keeps an Offset to.
+    #[test]
+    fn text_wrap_offset_is_a_distance_within_the_commands_range() {
+        assert!(lengths("object.textWrap.options").contains(&"offset"));
+        assert!(!lengths("object.textWrap.options").contains(&"invert"));
+        let range = length_range("object.textWrap.options", "offset").expect("a range");
+        assert_eq!(range, vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE);
+        assert_eq!(length_range("object.textWrap.options", "invert"), None);
+        assert_eq!(length_range("text.areaOptions", "inset"), None);
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        s.execute("select.all", &json!({})).unwrap();
+        s.execute("object.textWrap.make", &json!({})).unwrap();
+        for (sent, end) in [(5000.0, *range.end()), (-5000.0, *range.start())] {
+            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": sent })).unwrap()["offset"], json!(end));
+        }
+    }
+
+    /// Replaces the text of the dialog's Offset field with `text`, leaving the field focused.
+    fn type_offset(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str) {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        h.get_by_role_and_label(Role::TextInput, "Offset:").focus();
+        h.run_steps(2);
+        h.key_press_modifiers(all, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, "Offset:").type_text(text);
+        h.run_steps(2);
+    }
+
+    /// Replaces the text of the dialog's Offset field with `text` and presses Enter.
+    fn enter_offset(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str) {
+        type_offset(h, text);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+    }
+
+    /// Text Wrap Options › Offset reads a bare number in the document's units and a typed unit as
+    /// typed, and OK sends points. A distance typed outside the command's range, or text that
+    /// doesn't read, is refused: the dialog stays open and the Offset isn't changed.
+    #[test]
+    fn text_wrap_offset_field_takes_document_units_and_refuses_values_outside_its_range() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("object.textWrap.make", json!({})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        let offset = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>| {
+            h.state_mut().session.execute("object.textWrap.options", &json!({})).unwrap()["offset"].as_f64().unwrap()
+        };
+        // The ends as the field shows them in millimeters (352.7778 mm is 1000.00006 pt) read
+        // back as the ends.
+        let ends = [("-1000 pt", -1000.0), ("352.7778", 1000.0), ("-352.7778", -1000.0), ("1000 pt", 1000.0)];
+        for (text, want) in [("10", 10.0 * 72.0 / 25.4), ("-12 pt", -12.0)].into_iter().chain(ends) {
+            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+            h.run_steps(3);
+            enter_offset(&mut h, text);
+            assert!(h.state().ui.dialog.is_none(), "{text}: OK applied it");
+            assert!((offset(&mut h) - want).abs() < 1e-9, "{text}: {} pt", offset(&mut h));
+        }
+        for text in ["1000.5 pt", "-2000", "abc"] {
+            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+            h.run_steps(3);
+            enter_offset(&mut h, text);
+            let d = h.state().ui.dialog.as_ref().unwrap_or_else(|| panic!("{text}: the dialog stays open"));
+            assert_eq!(d.fields.get("offset"), Some(&json!(1000.0)), "{text}: the field keeps its value");
+            crate::dialogs::cancel(h.state_mut());
+            assert_eq!(offset(&mut h), 1000.0, "{text}: the Offset is unchanged");
+        }
+        // A click on OK with a value outside the range still in the field is refused too.
+        crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+        h.run_steps(3);
+        type_offset(&mut h, "2000 pt");
+        click_ok(&mut h);
+        assert!(h.state().ui.dialog.is_some(), "OK leaves the dialog open");
+        assert_eq!(offset(&mut h), 1000.0, "the Offset is unchanged");
+        // After it, a value inside the range committed with Tab and OK pressed from the keyboard
+        // apply.
+        type_offset(&mut h, "-7 pt");
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        {
+            use egui_kittest::kittest::Queryable;
+            h.get_by_label("OK").focus();
+        }
+        h.run_steps(2);
+        h.key_press(egui::Key::Space);
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none(), "OK from the keyboard applied it");
+        assert_eq!(offset(&mut h), -7.0);
+        // One inside it applies.
+        crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+        h.run_steps(3);
+        type_offset(&mut h, "-5 pt");
+        click_ok(&mut h);
+        assert!(h.state().ui.dialog.is_none(), "OK applied it");
+        assert_eq!(offset(&mut h), -5.0);
+    }
+
+    /// In a document in picas, Text Wrap Options › Offset reads a bare number as the other length
+    /// fields in picas do: in points with Preferences › Units › Numbers Without Units Are Points on
+    /// (the default), in picas with it off. A typed unit is read as typed either way.
+    #[test]
+    fn text_wrap_offset_in_picas_follows_numbers_without_units_are_points() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("document.setUnits", json!({"units": "picas"})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("object.textWrap.make", json!({})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        let apply = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str| {
+            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+            h.run_steps(3);
+            enter_offset(h, text);
+            assert!(h.state().ui.dialog.is_none(), "{text}: OK applied it");
+            h.state_mut().session.execute("object.textWrap.options", &json!({})).unwrap()["offset"].as_f64().unwrap()
+        };
+        assert_eq!(apply(&mut h, "10"), 10.0, "on by default: a bare number is in points");
+        assert_eq!(apply(&mut h, "2p6"), 30.0, "picas and points as typed");
+        assert_eq!(apply(&mut h, "-1in"), -72.0, "a typed unit wins");
+        crate::widgets::set_bare_numbers_are_points(&h.ctx, false);
+        assert_eq!(apply(&mut h, "10"), 120.0, "off: a bare number is in picas");
+        assert_eq!(apply(&mut h, "-12 pt"), -12.0, "a typed unit wins");
+    }
+
+    /// Clicks the dialog's OK button with the pointer, the press and the release in frames of
+    /// their own.
+    fn click_ok(h: &mut egui_kittest::Harness<'_, VectorcraftApp>) {
+        use egui_kittest::kittest::Queryable;
+        let ok = h.get_by_label("OK").rect().center();
+        let (button, modifiers) = (egui::PointerButton::Primary, egui::Modifiers::default());
+        h.event(egui::Event::PointerMoved(ok));
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos: ok, button, pressed: true, modifiers });
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos: ok, button, pressed: false, modifiers });
+        h.run_steps(3);
     }
 }

@@ -56,6 +56,190 @@ fn export_pdf_writes_the_compatibility_header_and_the_range() {
     assert!(b64(&v).starts_with(b"%PDF-1.6"));
 }
 
+/// `useArtboards: false` writes one page, the bounds of the visible art, as `document.export`
+/// does, whatever artboards are chosen. Art longer than 200 in keeps its size with
+/// `longPagesInPoints`. A document with no visible art and a value that isn't a boolean are
+/// refused.
+#[test]
+fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
+    let mut s = session(3);
+    let page = |bytes: &[u8]| {
+        let d = vectorcraft_pdf::import(bytes).unwrap();
+        (d.artboards.len(), d.artboards[0].rect.size())
+    };
+    let through_export = page(&b64(&s.execute("document.export", &as_export(&json!({"useArtboards": false}))).unwrap()));
+    assert!(through_export.0 == 1 && through_export.1.width < 50.0 && through_export.1.height < 40.0, "{through_export:?}");
+    for p in [
+        json!({"useArtboards": false}),
+        json!({"useArtboards": false, "range": "2"}),
+        json!({"useArtboards": false, "artboards": [0, 1]}),
+        json!({"useArtboards": false, "artboard": 2}),
+    ] {
+        assert_eq!(page(&b64(&export(&mut s, p.clone()))), through_export, "{p}");
+    }
+    assert_eq!(pages(&b64(&export(&mut s, json!({"useArtboards": true})))), 3);
+    assert_eq!(pages(&b64(&export(&mut s, json!({"useArtboards": null})))), 3);
+
+    // A 10 m drawing on a small artboard: its page is 10 m long, in points.
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 200, "width": 28_346.46, "height": 100})).unwrap();
+    let v = export(&mut s, json!({"useArtboards": false, "longPagesInPoints": true}));
+    let pdf = b64(&v);
+    let (n, size) = page(&pdf);
+    assert!(n == 1 && size.width > 28_346.0 && size.width < 28_350.0, "{size:?}");
+    assert!(!String::from_utf8_lossy(&pdf).contains("/UserUnit"));
+    assert!(warnings(&v).iter().any(|w| w.contains("written without a UserUnit, in points")), "{v}");
+    // The Summary's export in memory writes the same page.
+    let mut long = |p: Value| warnings(&s.execute("document.pdfSettings", &p).unwrap()).iter().any(|w| w.contains("longer than PDF's page limit"));
+    assert!(long(json!({"includeDocument": true, "useArtboards": false})));
+    assert!(!long(json!({"includeDocument": true})), "the artboards are small");
+    let e = s.execute("document.pdfSettings", &json!({"useArtboards": "no"})).unwrap_err();
+    assert!(matches!(e, crate::EngineError::BadParams { .. }), "without includeDocument too: {e}");
+
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    for p in [json!({"useArtboards": false}), json!({"useArtboards": "no"})] {
+        let e = s.execute("document.exportPdf", &p).unwrap_err();
+        assert!(matches!(e, crate::EngineError::BadParams { .. }), "{p}: {e}");
+    }
+}
+
+/// In a PDF without a standard, the warning for a page longer than 14,400 pt written with a
+/// `UserUnit` above 1 names "Write pages longer than 200 in at full size in points": at PDF 1.5
+/// (written as 1.6) and later, through `document.exportPdf`, `document.export`, a page of the
+/// art's bounds and the Summary's export, with one such warning per page. PDF/A files and `.ai`
+/// saves keep the warning without the option's name. Pages written in points (the option on, PDF
+/// 1.4, PDF/X, a page too narrow for a `UserUnit` above 1) and a page too long and narrow for
+/// 14,400 units have other warnings, which don't name it.
+#[test]
+fn a_page_with_a_user_unit_names_the_option_that_writes_it_in_points() {
+    use super::pdf::LONG_PAGES_IN_POINTS;
+    const SMALLER: &str = "so apps that ignore UserUnit show it that many times smaller";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20_000, "height": 1_000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 19_000, "height": 500})).unwrap();
+    let warnings = |v: &Value| -> Vec<String> {
+        v["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str()).filter(|w| w.contains("UserUnit")).map(str::to_string).collect()
+    };
+    let named = |v: &Value| warnings(v).iter().any(|w| w.contains(LONG_PAGES_IN_POINTS));
+    for p in [
+        json!({"longPagesInPoints": false}),
+        json!({"longPagesInPoints": false, "compatibility": "1.5"}),
+        json!({"longPagesInPoints": false, "compatibility": "2.0"}),
+        json!({"longPagesInPoints": false, "useArtboards": false}),
+    ] {
+        let mut q = p.clone();
+        q["includeDocument"] = json!(true);
+        for v in [export(&mut s, p.clone()), s.execute("document.export", &as_export(&p)).unwrap(), s.execute("document.pdfSettings", &q).unwrap()] {
+            let page: Vec<String> = warnings(&v).into_iter().filter(|w| w.starts_with("the page of artboard")).collect();
+            assert_eq!(page.len(), 1, "{p}: {v}");
+            assert!(page[0].ends_with(&format!("{SMALLER}{LONG_PAGES_IN_POINTS}")), "{p}: {page:?}");
+            assert_eq!(warnings(&v).iter().filter(|w| w.contains("apps that ignore UserUnit")).count(), 1, "{p}: {v}");
+        }
+    }
+    for p in [
+        json!({"longPagesInPoints": true}),
+        json!({"longPagesInPoints": false, "compatibility": "1.4"}),
+        json!({"longPagesInPoints": false, "preset": "PDF/X-4:2010"}),
+    ] {
+        assert!(!named(&export(&mut s, p.clone())), "{p}");
+    }
+    for p in
+        [json!({"longPagesInPoints": false, "standard": "pdfA2b"}), json!({"longPagesInPoints": false, "standard": "pdfA2b", "compatibility": "1.4"})]
+    {
+        let v = export(&mut s, p.clone());
+        assert!(warnings(&v).iter().any(|w| w.ends_with(SMALLER)) && !named(&v), "{p}: {v}");
+    }
+    let ai = s.execute("document.export", &json!({"format": "ai", "longPagesInPoints": false})).unwrap();
+    assert!(warnings(&ai).iter().any(|w| w.ends_with(SMALLER)) && !named(&ai), "{ai}");
+    // The art's bounds are within 14,400 pt.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 500, "height": 500})).unwrap();
+    assert!(!named(&export(&mut s, json!({"longPagesInPoints": false, "useArtboards": false}))));
+    // A page 3 pt high keeps a UserUnit of 1, so it is written in points either way; a page
+    // 85,040 × 17 pt gets a UserUnit above 1 that leaves its long side past 14,400 units.
+    for (w, h) in [(20_000, 3), (85_040, 17)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": w, "height": h})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 100, "y": 0, "width": w - 1_000, "height": h})).unwrap();
+        let v = export(&mut s, json!({"longPagesInPoints": false}));
+        assert!(!named(&v), "{w} × {h}: {v}");
+    }
+}
+
+/// A PDF of the art's bounds carries no Preserve Editing data, through `document.exportPdf`,
+/// `document.export` and the Summary's export in memory, and says so in a warning: reopened, its
+/// editing data would replace the document's artboards with the one around the art. A PDF of the
+/// artboards keeps the data, and it reopens with every artboard. With Preserve Editing off, there
+/// is no warning.
+#[test]
+fn a_pdf_of_the_arts_bounds_carries_no_editing_data() {
+    let mut s = session(3);
+    let left_out = |v: &Value| warnings(v).iter().any(|w| w == super::pdf::EDITING_NEEDS_THE_ARTBOARDS);
+    let art = json!({"useArtboards": false});
+    for v in [export(&mut s, art.clone()), s.execute("document.export", &as_export(&art)).unwrap()] {
+        let pdf = b64(&v);
+        assert!(vectorcraft_pdf::editing(&pdf).is_none(), "{:?}", warnings(&v));
+        assert!(left_out(&v), "{:?}", warnings(&v));
+        assert_eq!(pages(&pdf), 1);
+    }
+    let summary = s.execute("document.pdfSettings", &json!({"includeDocument": true, "useArtboards": false})).unwrap();
+    assert!(left_out(&summary), "{summary}");
+    let quiet = export(&mut s, json!({"useArtboards": false, "preserveEditing": false}));
+    assert!(!left_out(&quiet), "{:?}", warnings(&quiet));
+
+    for v in [export(&mut s, json!({})), export(&mut s, json!({"useArtboards": true}))] {
+        let editing = vectorcraft_pdf::editing(&b64(&v)).expect("editing data");
+        let reopened = vectorcraft_format::load(&editing.data).unwrap();
+        assert_eq!(reopened.artboards.len(), 3);
+        assert!(!left_out(&v), "{:?}", warnings(&v));
+    }
+}
+
+/// While an opacity mask is edited, a PDF of the art's bounds measures the art without the
+/// editing layer, as `document.export` does: a mask shape drawn past the masked object doesn't
+/// widen the page.
+#[test]
+fn a_pdf_of_the_art_leaves_out_the_mask_editing_layer() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let obj = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap()["id"].clone();
+    let mask = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"color": "#ffffff", "ids": [mask]})).unwrap();
+    s.execute("select.set", &json!({"ids": [obj, mask]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("transparency.editOpacityMask", &json!({})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 250, "y": 250, "width": 40, "height": 40})).unwrap();
+    assert!(s.doc().unwrap().doc.mask_edit.is_some());
+    let width = |bytes: &[u8]| vectorcraft_pdf::import(bytes).unwrap().artboards[0].rect.width();
+    let through_export = width(&b64(&s.execute("document.export", &as_export(&json!({"useArtboards": false}))).unwrap()));
+    assert!(through_export < 250.0, "{through_export}");
+    assert_eq!(width(&b64(&export(&mut s, json!({"useArtboards": false})))), through_export);
+}
+
+/// While an opacity mask is edited, a PDF of the artboards leaves out the editing layer too, as
+/// `document.export` does: from the drawn page and from the Preserve Editing data.
+#[test]
+fn a_pdf_of_the_artboards_leaves_out_the_mask_editing_layer() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let obj = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap()["id"].clone();
+    let mask = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"color": "#ffffff", "ids": [mask]})).unwrap();
+    s.execute("select.set", &json!({"ids": [obj, mask]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("transparency.editOpacityMask", &json!({})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 250, "y": 250, "width": 40, "height": 40})).unwrap();
+    assert!(s.doc().unwrap().doc.mask_edit.is_some());
+    let nodes = |bytes: &[u8]| vectorcraft_pdf::import(bytes).unwrap().node_count();
+    let plain = json!({"preserveEditing": false});
+    let through_export = nodes(&b64(&s.execute("document.export", &as_export(&plain)).unwrap()));
+    assert_eq!(nodes(&b64(&export(&mut s, plain))), through_export, "the drawn page");
+    let layers = |v: &Value| vectorcraft_format::load(&vectorcraft_pdf::editing(&b64(v)).unwrap().data).unwrap().layers;
+    let through_export = layers(&s.execute("document.export", &as_export(&json!({}))).unwrap());
+    assert_eq!(layers(&export(&mut s, json!({}))), through_export, "the Preserve Editing data");
+}
+
 #[test]
 fn bad_options_are_refused() {
     let mut s = session(2);

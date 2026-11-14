@@ -945,6 +945,34 @@ fn library_defaults_store_and_find() {
     assert_eq!(unique_name(&lib, "Arrow"), "Arrow 2");
 }
 
+/// A stored library that repeats a name reads with the first brush of that name as stored and each
+/// later one numbered, past every name the library already has; strokes of the name keep drawing
+/// the first brush.
+#[test]
+fn repeated_brush_names_are_numbered_when_read() {
+    let mut d = Document::new(100.0, 100.0);
+    let named = |name: &str, size: f64| Brush { name: name.into(), ..calli(0.0, 100.0, size) };
+    store(&mut d, &[named("Nib", 1.0), named("Nib 2", 2.0), named("Nib", 3.0), named("Other", 4.0), named("Nib", 5.0), named("Nib 2", 6.0)]);
+    let lib = library(&d);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Nib", "Nib 2", "Nib 3", "Other", "Nib 4", "Nib 2 2"]);
+    let size = |b: &Brush| if let BrushKind::Calligraphic(c) = &b.kind { c.size } else { 0.0 };
+    assert_eq!(lib.iter().map(size).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    assert_eq!(find(&d, "Nib").map(|b| size(&b)), Some(1.0));
+    assert_eq!(find(&d, "Nib 3").map(|b| size(&b)), Some(3.0));
+    // Reading again gives the same names, and the numbered library stored again reads as stored.
+    assert_eq!(library(&d), lib);
+    store(&mut d, &lib);
+    assert_eq!(library(&d), lib);
+    // Many brushes of one name take the numbers in order, past the numbered names the file has.
+    let many: Vec<Brush> = (0..5000).map(|i| named(if i == 1 { "Nib 3" } else { "Nib" }, 1.0)).collect();
+    store(&mut d, &many);
+    let names: Vec<String> = library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names[..5], ["Nib", "Nib 3", "Nib 2", "Nib 4", "Nib 5"]);
+    assert_eq!(names.last().map(String::as_str), Some("Nib 5000"));
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
+}
+
 #[test]
 fn brushes_serde_round_trip() {
     let lib = defaults().to_vec();
@@ -1007,6 +1035,26 @@ fn half_width(nodes: &[Node], x0: f64, x1: f64) -> f64 {
 
 fn pressed(points: Vec<(f64, f64)>) -> StrokeLayer {
     StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) }
+}
+
+/// A nib that follows the pen is sampled between the vertices of the flattened path too. Along a
+/// curve those samples sit on the curve, and the outline keeps its distance from it.
+#[test]
+fn pen_driven_nib_outline_follows_the_curve_between_vertices() {
+    // The top half of a circle of radius 50; a round nib 20 pt across, the same at any pressure.
+    let (r, half) = (50.0, 10.0);
+    let c = Point::new(r, r);
+    let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+    let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &pressure_calli(20.0, 0.0), &half_circle, &pressed(vec![(0.0, 0.5), (1.0, 0.5)]));
+    let mut pts = vec![];
+    for n in &out {
+        all_points(n, &mut pts);
+    }
+    // Away from the round caps at the two ends, every outline point is `half` from the curve.
+    let middle = pts.iter().filter(|p| ((p.y - c.y).atan2(p.x - c.x).abs() - std::f64::consts::FRAC_PI_2).abs() <= 1.2);
+    let worst = middle.map(|p| ((p.distance(c) - (r + half)).abs()).min((p.distance(c) - (r - half)).abs())).fold(0.0, f64::max);
+    assert!(worst < 0.05, "an outline point strays {worst:.4} pt from the nib's reach");
 }
 
 /// #852: with Size on Pressure the nib goes from size − variation at the lightest pressure to
@@ -1371,6 +1419,62 @@ fn art_brush_width_follows_the_pressure() {
     assert!(plain.get("width_mode").is_none() && plain.get("width_max").is_none(), "{plain}");
 }
 
+/// Art Brush Options: Width on Tilt goes from Width with the pen lying flat to the second width
+/// upright, and on Bearing or Rotation from Width at −180° to the second width at 180°, along the
+/// stroke as the pen recorded it; each mode reads only its own input.
+#[test]
+fn art_brush_width_follows_tilt_bearing_and_rotation() {
+    let brush = |mode: Variation| {
+        let mut b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.width_mode, a.width_max) = (50.0, Some(mode), Some(300.0));
+        }
+        b
+    };
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    // Tilt, upright at the start (300 %: 6 pt either side of 4 pt art) to flat at the end (50 %: 1 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = draw(&brush(Variation::Tilt), &upright_to_flat);
+    assert!(near(half_width(&out, 0.0, 1.0), 6.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 1.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    assert!(near(half_width(&out, 49.0, 51.0), 3.5, 0.15), "{}", half_width(&out, 49.0, 51.0));
+    // Bearing and Rotation: half way at 0°, a quarter of the way at −90°, three quarters at 90°.
+    for (mode, angle, half) in [
+        (Variation::Bearing, 0.0, 3.5),
+        (Variation::Bearing, -90.0, 2.25),
+        (Variation::Bearing, 90.0, 4.75),
+        (Variation::Rotation, -90.0, 2.25),
+        (Variation::Rotation, 90.0, 4.75),
+    ] {
+        let st = if mode == Variation::Bearing { posed(Some(0.5), Some(angle), None) } else { posed(None, None, Some(angle)) };
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 2.0 * half, 1e-6), "{mode:?} {angle}: {h}");
+    }
+    // Each mode reads its own input: without it (the pressure, or another of the pen's values
+    // recorded instead), the art is half way between the two widths.
+    let others = [
+        (Variation::Tilt, posed(None, Some(90.0), Some(90.0))),
+        (Variation::Tilt, pressed(vec![(0.0, 0.0), (1.0, 1.0)])),
+        (Variation::Bearing, posed(Some(0.0), None, Some(90.0))),
+        (Variation::Rotation, posed(Some(0.0), Some(90.0), None)),
+        (Variation::Pressure, posed(Some(0.0), Some(90.0), Some(90.0))),
+    ];
+    for (mode, st) in others {
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 7.0, 1e-6), "{mode:?}: {h}");
+    }
+    // The pen's modes are kept when a definition is read, and Random is read as Fixed.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "t", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "tilt", "width_max": 300.0},
+        {"name": "b", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "bearing", "width_max": 300.0},
+        {"name": "r", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "rotation", "width_max": 300.0},
+        {"name": "x", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "random", "width_max": 300.0},
+    ]));
+    let modes: Vec<_> = lib.iter().map(|b| if let BrushKind::Art(a) = &b.kind { a.width_mode } else { None }).collect();
+    assert_eq!(modes, [Some(Variation::Tilt), Some(Variation::Bearing), Some(Variation::Rotation), None]);
+}
+
 /// Definitions from files and commands are kept within their ranges.
 #[test]
 fn sanitize_keeps_values_within_their_ranges() {
@@ -1600,6 +1704,35 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// A straight-sided art brush on a smooth curve draws smooth edges: they do not turn at the smooth
+/// anchors the fit puts along them.
+#[test]
+fn art_brush_edges_stay_smooth_along_a_curve() {
+    for &(r, w, h, sw) in &[(100.0, 100.0, 10.0, 1.0), (300.0, 100.0, 10.0, 2.0), (30.0, 100.0, 10.0, 1.0), (2000.0, 100.0, 10.0, 1.0)] {
+        // The top half of a circle, as one open path of two curves.
+        let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+        let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(w, h), ArtScale::Stretch), &half_circle, &stroke(sw));
+        let NodeKind::Path { path, .. } = &out[0].kind else { panic!("an art brush on a path draws a path") };
+
+        // The turn at each smooth anchor of the edges: the angle between the incoming and the
+        // outgoing direction. Real corners (the ends of the art) turn by far more than 60°.
+        let mut kink = 0.0f64;
+        for sp in &path.subpaths {
+            for (k, a) in sp.anchors.iter().enumerate().skip(1).take(sp.anchors.len().saturating_sub(2)) {
+                let h_in = if a.h_in != a.p { a.h_in } else { sp.anchors[k - 1].p };
+                let h_out = if a.h_out != a.p { a.h_out } else { sp.anchors[k + 1].p };
+                let (u, v) = (a.p - h_in, h_out - a.p);
+                if u.hypot() < 1e-9 || v.hypot() < 1e-9 || u.dot(v) < 0.5 * u.hypot() * v.hypot() {
+                    continue;
+                }
+                kink = kink.max(u.cross(v).atan2(u.dot(v)).abs().to_degrees());
+            }
+        }
+        assert!(kink < 0.5, "r={r} art={w}x{h} weight {sw}: an edge turns by {kink:.3}° at a smooth anchor");
+    }
 }
 
 /// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).
