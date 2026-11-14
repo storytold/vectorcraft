@@ -1001,6 +1001,26 @@ fn leading_term_agrees_within_each_catalog() {
     assert!(bad.is_empty(), "rows that name leading differently from the Leading field:\n{}", bad.join("\n"));
 }
 
+/// A plain row whose English ends with a number, such as "Saved View 10", has that number in its
+/// translation as a number of its own, so the rows of a numbered list do not swap or repeat names.
+/// Messages are left out: "index must be ≥ 0" can be translated as "index must not be negative".
+#[test]
+fn numbered_rows_keep_their_number() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.into_iter().filter(|(ctx, _, _)| ctx.is_empty()) {
+            let Some((_, n)) = src.rsplit_once(' ').filter(|(_, n)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())) else {
+                continue;
+            };
+            if !tr.split(|c: char| !c.is_ascii_digit()).any(|run| run == n) {
+                bad.push(format!("{}: {src:?} → {tr:?}", l.code));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "numbered rows without their number:\n{}", bad.join("\n"));
+}
+
 /// No translated word mixes Latin, Cyrillic and Greek letters, such as a Latin "A" typed in place
 /// of a Cyrillic "А". A word written in one script, such as "PDF" or "X" in a Russian row, is
 /// allowed.

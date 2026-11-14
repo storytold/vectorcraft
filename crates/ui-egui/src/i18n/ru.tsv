@@ -299,7 +299,7 @@ font-technology	Variable	Вариативные
 	Background Contents	Содержимое фона
 	Background:	Фон:
 	Backspace	Backspace
-	Bar Graph Tool	Инструмент «Гистограмма»
+	Bar Graph Tool	Инструмент «Линейчатая диаграмма»
 	Baseline	Базовая линия
 	Baseline Shift	Смещение базовой линии
 	Basic Latin	Основная латиница
@@ -1914,7 +1914,7 @@ file-filter	Templates	Шаблоны
 	Line Cut	Разрезание линий
 	Line Cut Tool	Инструмент «Разрезание линий»
 	Line Endings:	Окончания линий:
-	Line Graph Tool	Инструмент «Линейчатая диаграмма»
+	Line Graph Tool	Инструмент «График»
 	Line Segment	Отрезок
 	Line Segment Tool	Инструмент «Отрезок»
 	Line Segment Tool Options	Параметры инструмента «Отрезок»
@@ -3547,7 +3547,7 @@ digits	Malayalam	Малаялам
 	Spread:	Разворот:
 	Square	Квадрат
 	Squeeze…	Сжатие…
-	Stacked Bar Graph Tool	Инструмент «Гистограмма с накоплением»
+	Stacked Bar Graph Tool	Инструмент «Линейчатая диаграмма с накоплением»
 	Stacked Column Graph Tool	Инструмент «Гистограмма с накоплением»
 	Stair Step	Ступенчатый
 	Standard Ligatures	Стандартные лигатуры
@@ -4067,7 +4067,7 @@ digits	Malayalam	Малаялам
 	Zoom In	Увеличить
 	Zoom Out	Уменьшить
 	Zoom to Selection	Масштаб по выделению
-	Zoom Tool	Инструмент «Масштаб»
+	Zoom Tool	Инструмент «Лупа»
 	Zoom with Mouse Wheel	Масштабировать колесом мыши
 	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручивать по горизонтали колесом с Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
