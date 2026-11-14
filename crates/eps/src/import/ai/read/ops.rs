@@ -1,12 +1,9 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{
-    BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG,
-    line_width,
-};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG, line_width};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap,
-    HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, HashMap, HashSet,
+    Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -69,6 +66,7 @@ impl<'a> Reader<'a> {
     /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
     fn layer_end(&mut self) -> Result<(), String> {
         if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
+            self.graph_plain();
             self.graph = None;
             self.warn(GRAPH_UNENDED);
         }
@@ -158,7 +156,7 @@ impl<'a> Reader<'a> {
         let mesh_ended = std::mem::take(&mut self.mesh_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
-        if self.graph_record(w, hidden) {
+        if self.graph_record(w, &vals, hidden, (group_ended, mesh_ended)) {
             return Ok(());
         }
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
@@ -428,33 +426,6 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// A graph's records (version 7 specification §17 and appendix A): `%_Gs` starts the graph on
-    /// a layer, `GS` ends it, and its data and settings (the operators in [`GRAPH_OPS`], and any
-    /// operator on a `%_` line between `Gt` and `GT`) are left out with their operands. Its drawn
-    /// art, and anything else, is read as usual. `true` when `w` was one of them.
-    fn graph_record(&mut self, w: &str, hidden: bool) -> bool {
-        let Some(g) = self.graph.as_mut() else {
-            // Outside a graph, its operators stay ones the reader doesn't know.
-            if w == "Gs" && hidden && !self.frames.is_empty() {
-                self.graph = Some(Graph { settings: false, frames: self.frames.len() });
-                self.warn(GRAPH_PLAIN);
-                return true;
-            }
-            return false;
-        };
-        match w {
-            // A graph doesn't start inside another: the one being read goes on.
-            "Gs" => self.warn(GRAPH_UNENDED),
-            "GS" => self.graph = None,
-            "Gt" => g.settings = true,
-            "GT" => g.settings = false,
-            _ if GRAPH_OPS.contains(&w) => {}
-            _ if hidden && g.settings => {}
-            _ => return false,
-        }
-        true
-    }
-
     /// `… Lb`: a layer's options, `visible preview unlocked printing dimmed`, then the colour index
     /// and its RGB. The colour index is at 5 with fewer than ten operands, 6 with ten to twelve
     /// (`masks` before it) and 7 with thirteen or more (one more flag before it). Four places after
@@ -588,9 +559,9 @@ impl<'a> Reader<'a> {
             return;
         }
         self.image_tail = false;
-        // An object's tags (`XT`) follow it one after another, and an image's follow the `XH` that
-        // ends its data.
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH") {
+        // An object's tags (`XT`, and a graph's `Go`) follow it one after another, and an image's
+        // follow the `XH` that ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go") {
             return;
         }
         self.after_object = false;

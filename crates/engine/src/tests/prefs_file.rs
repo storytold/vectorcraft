@@ -12,7 +12,7 @@ fn is_bad_params(r: Result<Value>) -> bool {
 }
 
 /// Folder preferences, which a preferences file leaves out.
-const FOLDERS: [&str; 4] = ["fontsFolder", "pluginsFolder", "recoveryFolder", "templatesFolder"];
+const FOLDERS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
 
 /// A preferences file holding `prefs`, as `prefs.export` writes one.
 fn file(prefs: Value) -> String {
@@ -46,7 +46,9 @@ fn in_file(s: &Session) -> Value {
 fn exported_preferences_import_unchanged() {
     let mut s = changed();
     s.prefs.fonts_folder = "/fonts/here".into();
+    s.prefs.scratch_primary = "/scratch/here".into();
     let r = s.execute("prefs.export", &json!({})).unwrap();
+    assert!(!r["data"].as_str().unwrap().contains("/scratch/here"), "a scratch disk folder is not written");
     let text = r["data"].as_str().unwrap().to_string();
     let written: Value = serde_json::from_str(&text).unwrap();
     assert_eq!((written["format"].as_str(), written["version"].as_u64()), (Some(PREFS_FORMAT), Some(1)));
@@ -71,6 +73,7 @@ fn exported_preferences_import_unchanged() {
     assert_eq!(t.doc().unwrap().doc.units, Unit::Millimeters, "the document's units stay as they are");
     assert_eq!(t.doc().unwrap().history.undo.len(), undo, "no undo step");
     assert_eq!(t.prefs.fonts_folder, "", "folders are not carried over");
+    assert_eq!(t.prefs.scratch_primary, "Startup", "nor is a scratch disk");
 
     // Through a file, too.
     let path = std::env::temp_dir().join(format!("vc-prefs-{}.json", std::process::id())).to_string_lossy().to_string();
@@ -96,6 +99,10 @@ fn a_hand_written_file_sets_what_it_names_and_leaves_the_rest() {
     assert_eq!(s.prefs.keyboard_increment, 3.0);
     assert_eq!(s.prefs.guide_color, "#abcdef");
     assert_eq!(s.prefs.history_states, 77, "a preference the file leaves out keeps its value");
+    // A scratch disk choice names no folder, and is read.
+    let choices = file(json!({"scratchPrimary": "None", "scratchSecondary": "Startup"}));
+    assert_eq!(s.execute("prefs.import", &json!({"data": choices})).unwrap(), json!({"imported": 2}));
+    assert_eq!((s.prefs.scratch_primary.as_str(), s.prefs.scratch_secondary.as_str()), ("None", "Startup"));
 }
 
 #[test]
@@ -119,6 +126,8 @@ fn a_bad_preferences_file_is_refused_and_nothing_changes() {
         (json!({"data": file(json!({"uiAccent": "blue", "historyStates": 5000}))}), "`historyStates` must be a whole number between 5 and 1000"),
         (json!({"data": file(json!({"uiAccent": "blue", "eyedropper": 5}))}), "`eyedropper` must be an object"),
         (json!({"data": file(json!({"uiAccent": "blue", "fontsFolder": "/fonts"}))}), "`fontsFolder` names a folder"),
+        (json!({"data": file(json!({"uiAccent": "blue", "scratchPrimary": "/scratch"}))}), "`scratchPrimary` names a folder"),
+        (json!({"data": file(json!({"uiAccent": "blue", "scratchSecondary": " scratch "}))}), "`scratchSecondary` names a folder"),
         (json!({"data": too_large}), "larger than 1 MB"),
         (json!({"data": 5}), "`data` must be a string"),
         (json!({"path": "/a.json", "data": file(json!({"uiAccent": "blue"}))}), "give `path` or `data`"),
