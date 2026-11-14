@@ -201,6 +201,9 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         {
             return bake_leaf(d, n);
         }
+        if let Some(m) = clip_group_with_type_clip(d, n) {
+            return Some(m);
+        }
         let mut m = n.clone();
         let baked: Vec<Arc<Node>> = ch.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
         if let Some(ch) = m.children_mut() {
@@ -209,6 +212,62 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(m);
     }
     bake_leaf(d, n)
+}
+
+/// Clip group or clipping layer `n` whose clipping path is type with geometry effects (its own, its
+/// fills' or strokes', or a perspective), baked as the canvas draws it: the type becomes a
+/// clipping path of the region the canvas clips to ([`crate::clip_outline`]), its fills (with their
+/// effects baked) paint behind the clipped art inside the clip, and its strokes paint over it
+/// outside the clip, in a group that `n` becomes with its clip group inside ([`Node::clip_paint`]).
+/// The other members are baked as usual. `None` for other objects and when the type has nothing to
+/// clip by.
+fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
+    let (first, rest) = n.children()?.split_first()?;
+    if !n.clips()
+        || !matches!(first.kind, NodeKind::Text(_))
+        || !(has_geometry(&first.appearance.effects) || first.projection().is_some() || has_item_geometry(first))
+    {
+        return None;
+    }
+    let (bp, rule) = crate::clip_outline(first)?;
+    let mut clip = Node::path(first.id, PathData::from_bezpath(&bp), Appearance::default());
+    if let NodeKind::Path { rule: r, clipping, .. } = &mut clip.kind {
+        (*r, *clipping) = (rule, true);
+    }
+    clip.name = first.name.clone();
+    clip.visible = first.visible;
+    let paint = first.clip_paint();
+    // The type's fills and strokes as art: baked with the type's id, as the renderer draws them,
+    // then given ids of their own.
+    let mut seen = std::collections::HashSet::from([n.id, first.id]);
+    let mut art = |d: &mut Document, part: Option<Node>| {
+        part.map(|p| {
+            let mut a = bake_node(d, &p).unwrap_or(p);
+            fresh_ids(d, &mut a, &mut seen);
+            Arc::new(a)
+        })
+    };
+    let fill = art(d, paint.fill);
+    let stroke = art(d, paint.stroke);
+    let members: Vec<Arc<Node>> =
+        std::iter::once(Arc::new(clip)).chain(fill).chain(rest.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()))).collect();
+    let mut m = n.clone();
+    let Some(stroke) = stroke else {
+        if let Some(ch) = m.children_mut() {
+            *ch = members;
+        }
+        return Some(m);
+    };
+    // `n` keeps its id, name and transparency, and holds the clip group and the strokes over it.
+    let inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    match &mut m.kind {
+        NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
+            *children = vec![Arc::new(inner), stroke];
+            *clip = false;
+        }
+        _ => return None,
+    }
+    Some(m)
 }
 
 /// `m`, art evaluated from an object, with its children baked and then given ids of their own (the
