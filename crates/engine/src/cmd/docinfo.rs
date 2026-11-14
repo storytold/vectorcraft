@@ -174,9 +174,10 @@ fn font_use(used: &super::fonts::UsedFont, uses: usize) -> (Value, (String, Stri
     (json!({ "font": label, "type": kind, "uses": uses }), (label, format!("{name}; {count}")))
 }
 
-/// Counts text object `t` once for each font its runs are set in.
+/// Counts text object `t` once for each font its runs are drawn in, a composite font's parts in
+/// place of its name ([`super::fonts::run_fonts`]).
 fn count_fonts(fonts: &mut BTreeMap<super::fonts::UsedFont, usize>, t: &vectorcraft_doc::TextObject) {
-    let own: BTreeSet<super::fonts::UsedFont> = t.runs.iter().map(|r| super::fonts::font_of(&r.style)).collect();
+    let own: BTreeSet<super::fonts::UsedFont> = t.runs.iter().flat_map(super::fonts::run_fonts).collect();
     for font in own {
         *fonts.entry(font).or_default() += 1;
     }
@@ -1013,6 +1014,31 @@ mod tests {
         s.execute("select.none", &json!({})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
         assert_eq!((i["fontUses"].clone(), i["sections"][0]["rows"].clone()), (json!([]), json!([])));
+    }
+
+    /// Type set in a composite font counts as a use of the fonts of the parts its characters fall
+    /// in, as Find Font lists them, not of the composite font's name.
+    #[test]
+    fn info_fonts_count_the_parts_of_a_composite_font() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let font = json!({"name": "DI Uses Composite", "parts": {
+            "kanji": {"font": "Source Sans 3"},
+            "roman": {"font": "JetBrains Mono"},
+            "numerals": {"font": "Inter"},
+        }});
+        s.execute("type.compositeFonts.set", &json!({"fonts": [font]})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab1", "font": "DI Uses Composite"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "12", "font": "DI Uses Composite"})).unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "JetBrains Mono Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 2},
+                {"font": "JetBrains Mono Regular", "type": "truetype", "uses": 1},
+            ])
+        );
     }
 
     /// Document Info › Objects gives the paths' total length in the document's units (#1958): an

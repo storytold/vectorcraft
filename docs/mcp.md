@@ -7472,8 +7472,9 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
-its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `fontUses` (`[{font, type, uses}]`: each font of `fonts`, in order, as the fonts
+its symbols and pattern swatches included, type in a composite font giving the fonts of the parts its characters fall
+in, which the fonts and fontDetails categories list; with `selectionOnly`, the fonts of the selected type),
+`fontUses` (`[{font, type, uses}]`: each font of `fonts`, in order, as the fonts
 category's rows give it, such as `TrueType; 2 uses`: `type` is `truetype` or `opentype` by the outlines of the face
 the type is drawn in (`glyf`, or `CFF` or `CFF2`), `unknown` for a font not installed in the family and style it
 names; `uses` is the number of text objects set in the font, each counted once however many of its runs use it, the
