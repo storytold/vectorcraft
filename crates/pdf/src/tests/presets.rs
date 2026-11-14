@@ -22,3 +22,15 @@ fn built_in_presets() {
     assert_eq!(builtin_preset("default").unwrap().name, DEFAULT_PRESET);
     assert!(builtin_preset("Nope").is_none());
 }
+
+#[test]
+fn high_quality_print_keeps_the_document_bleed() {
+    let mut doc = vectorcraft_doc::Document::new(612.0, 792.0);
+    let mm3 = 3.0 * 72.0 / 25.4;
+    doc.setup.bleed = [mm3; 4];
+    for name in ["High Quality Print", "Press Quality"] {
+        let p = builtin_preset(name).unwrap();
+        assert!(p.settings.bleed.use_document, "{name}");
+        assert_eq!(p.settings.bleed_of(&doc), [mm3; 4], "{name}");
+    }
+}
