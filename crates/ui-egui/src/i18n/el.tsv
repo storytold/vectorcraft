@@ -862,6 +862,9 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	Click to replace	Κλικ για αντικατάσταση
+	Show all alternates in the Glyphs panel	Εμφάνιση όλων των εναλλακτικών στον πίνακα Γλύφοι
+	Show Character Alternates	Εμφάνιση εναλλακτικών χαρακτήρα
 	Select one character with the Type tool first.	Επιλέξτε πρώτα έναν χαρακτήρα με το εργαλείο κειμένου.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	Ο γλύφος {glyph} ανήκει στη γραμματοσειρά {font}, όχι σε αυτήν του επιλεγμένου κειμένου ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	Ο γλύφος {glyph} ανήκει στο {base} (U+{base_code}) {place}· η επιλογή σας είναι {sel} (U+{code}).
@@ -6639,7 +6642,7 @@ axis	Y Axis	Άξονας Y
 @plural	Result: {n}|Results: {n}	Αποτέλεσμα: {n}|Αποτελέσματα: {n}
 @msg	select one object	επιλέξτε ένα αντικείμενο
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
 @msg	Global Edit is off	Η καθολική επεξεργασία δεν είναι ενεργή
 @msg	only an object of the Global Edit other than the one it started from can be left out	μπορεί να εξαιρεθεί μόνο ένα αντικείμενο της καθολικής επεξεργασίας εκτός από εκείνο με το οποίο ξεκίνησε
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
@@ -7433,6 +7436,9 @@ breakText	Glyphs	Γλύφοι
 	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
 	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
 	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Show Learn Tab	Εμφάνιση καρτέλας της Εκμάθησης
+	Show Skill	Εμφάνιση δεξιότητας
+	Back One Level	Ένα επίπεδο πίσω
 	Back to Skills	Πίσω στις δεξιότητες
 @msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
