@@ -1273,7 +1273,12 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     for (id, p) in calls {
         assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
         assert_eq!(history(&s), before, "{id} {p}");
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+        // The journal adds the frame a scale acted in, so a replay acts in the same one.
+        let mut recorded = p;
+        if id == "object.scale" {
+            recorded["basis"] = json!("box");
+        }
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded));
     }
     assert_eq!(
         s.doc().unwrap().last_transform,

@@ -267,7 +267,7 @@ tools, never checked side by side) isn't captured row by row.
 | Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | |
 | Rotated objects keep a rotated bounding box and their angle; Reset Bounding Box | done | |
 | Vector Halftone Preview keeps the selection box and hides selection marks on the temporary dots | done | #6369; Preview off and Cancel restore the original marks. |
-| Free Transform, Scale and Reflect along a rotated box | missing | |
+| Free Transform, Scale and Reflect along a rotated box | done | The Scale and Reflect tools, dialogs and commands and the Transform and Properties panels' flips act along the turned box until Reset Bounding Box; `basis: "page"` keeps the page's axes |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |
 | Transform tools: click sets the reference point (snaps to anchors/centres), Alt-click opens the dialog, Alt-release copies | done | with anchors selected with Direct Selection, the tools, the dialogs and Move transform those anchors alone, about the centre of their box by default (#1408; the default point and whole-object copies are our choices) |
 | Move, Rotate, Scale, Reflect and Shear dialogs: live Preview; Up/Down step angles and percentages by 1, Shift by 10 | done | #1412; Preview starts off (our choice: the public documentation gives no default), Move's as it was last confirmed; OK is one undo step and Transform Again repeats it |

@@ -406,7 +406,7 @@ fn a_batch_step_records_what_it_took_from_the_preferences() {
     ]);
     s.execute("command.batch", &json!({ "commands": steps })).unwrap();
     let p = &s.journal.last().unwrap().1;
-    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false}));
+    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false, "basis": "box"}));
     // Replayed with other preferences, the scale still scales the stroke.
     let r = replayed(&s);
     assert!(!r.prefs.scale_strokes);

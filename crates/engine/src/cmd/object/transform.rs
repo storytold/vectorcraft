@@ -1,7 +1,7 @@
 use super::align::choice;
 use super::{
-    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, Point, Result, Scaling, Session, Value, Vec2, bad, bool_or,
-    check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
+    Affine, Arc, Document, EngineError, LastTransform, Node, NodeId, NodeKind, OrientedBox, Point, Rect, Result, Scaling, Session, Value, Vec2, bad,
+    bool_or, check_numbers, check_switches, duplicate_in, effects, f64_or, f64_req, ids_param, json, matrix_param, ok, outermost, point_param,
     selected_roots_to_transform,
 };
 
@@ -358,24 +358,47 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p, true)
+    let frame = basis_frame(s, p, "object.scale", &ids)?;
+    apply_transform(s, "Scale", ids, about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), p, true)
+}
+
+/// The frame that `object.scale` and a named `object.reflect` act in, from the `basis` param:
+/// `"box"` (the default) is the bounding box of `ids`, turned with rotated objects until Reset
+/// Bounding Box ([`Document::bbox_angle`]); `"page"` is the page's axes. Anchors selected with
+/// Direct Selection (with no copy and Transform Objects on) transform along the page's axes, as
+/// their own box does. The basis joins the journal entry, so a replay acts in the same frame.
+fn basis_frame(s: &mut Session, p: &Value, cmd: &str, ids: &[NodeId]) -> Result<OrientedBox> {
+    let page = choice(p, cmd, "basis", &["box", "page"])? == Some("page");
+    let st = s.doc()?;
+    let anchors = !bool_or(p, "copy", false)
+        && transforms_objects(p)
+        && effects::preview::anchor_bounds_with(&st.selection, &st.doc, s.bounds_measure()).is_some();
+    let angle = if page || anchors { 0.0 } else { st.doc.bbox_angle(ids) };
+    s.note_journal("basis", json!(if page { "page" } else { "box" }));
+    Ok(OrientedBox { angle, rect: Rect::ZERO })
 }
 
 pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.reflect")?;
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let m = match p.get("axis") {
-        Some(Value::String(a)) if a == "horizontal" => Affine::scale_non_uniform(1.0, -1.0),
-        Some(Value::Number(n)) => {
-            let t = -n.as_f64().unwrap_or(90.0).to_radians();
-            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
-        }
-        None | Some(Value::Null) => Affine::scale_non_uniform(-1.0, 1.0),
-        Some(Value::String(a)) if a == "vertical" => Affine::scale_non_uniform(-1.0, 1.0),
+    // A named axis is the bounding box's own (see [`basis_frame`]); an angle is a line on the page.
+    let named = match p.get("axis") {
+        Some(Value::String(a)) if a == "horizontal" => Some(Affine::scale_non_uniform(1.0, -1.0)),
+        Some(Value::Number(_)) => None,
+        None | Some(Value::Null) => Some(Affine::scale_non_uniform(-1.0, 1.0)),
+        Some(Value::String(a)) if a == "vertical" => Some(Affine::scale_non_uniform(-1.0, 1.0)),
         Some(v) => {
             let given = v.as_str().map_or_else(|| v.to_string(), str::to_string);
             return Err(bad("object.reflect", format!("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{given}`")));
+        }
+    };
+    let m = match named {
+        Some(m) => basis_frame(s, p, "object.reflect", &ids)?.conjugate(m),
+        None => {
+            choice(p, "object.reflect", "basis", &["box", "page"])?;
+            let t = -p.get("axis").and_then(Value::as_f64).unwrap_or(90.0).to_radians();
+            Affine::rotate(t) * Affine::scale_non_uniform(1.0, -1.0) * Affine::rotate(-t)
         }
     };
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
