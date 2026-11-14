@@ -487,21 +487,3 @@ fn the_linux_desktop_entry_opens_every_readable_format() {
         }
     }
 }
-
-/// On Linux and the BSDs, quitting hides the main window before eframe drops the app, whose
-/// clipboard handles may take up to `CLIPBOARD_PROBE_STOP_WAIT` to let go.
-#[cfg(not(any(target_os = "macos", windows)))]
-#[test]
-fn quitting_hides_the_window_before_the_clipboards_let_go() {
-    struct Window(std::cell::Cell<u32>);
-    impl QuittingWindow for Window {
-        fn hide(&self) {
-            self.0.set(self.0.get() + 1);
-        }
-    }
-    let window = Window(std::cell::Cell::new(0));
-    hide_before_teardown(Some(&window));
-    assert_eq!(window.0.get(), 1, "the window was not hidden");
-    // Without a window (none was made), there is nothing to hide.
-    hide_before_teardown::<Window>(None);
-}

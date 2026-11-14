@@ -60,6 +60,8 @@ mod portal_request;
 mod portal_save;
 mod prefs_dir;
 mod printing;
+#[cfg(not(any(target_os = "macos", windows)))]
+mod quit_windows;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -90,8 +92,6 @@ mod titlebar;
 use app::bring_window_forward;
 use app::native_input_hook;
 use app::open_or_hold;
-#[cfg(all(test, not(any(target_os = "macos", windows))))]
-use app::{QuittingWindow, hide_before_teardown};
 use host_services::services;
 #[cfg(all(test, feature = "wgpu"))]
 use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
@@ -122,7 +122,7 @@ struct App {
     /// Keeps the custom title bar's window borderless (Windows, #1758).
     window_frame: Option<window_frame::WindowFrameFn>,
     /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
-    /// and to hide the window on quit before the clipboard handles let go (`app::hide_before_teardown`).
+    /// and to take the window off screen on quit before the clipboard handles let go (`quit_windows`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
     /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
     pending_maximize: bool,
@@ -410,6 +410,10 @@ fn main() -> std::process::ExitCode {
         }));
         options
     };
+    // Quitting takes the X11 windows of floating panels and documents off screen with the main
+    // window, so eframe's windows are recorded as it makes and drops them (`quit_windows`).
+    #[cfg(target_os = "linux")]
+    let options = eframe::NativeOptions { viewport_hooks: Some(std::sync::Arc::new(quit_windows::Hooks)), ..options };
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
