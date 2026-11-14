@@ -822,26 +822,35 @@ fn previews_follow_the_swatches_images_and_pattern_options_their_art_uses() {
     }
 }
 
-/// Of two brushes with one name, both rows preview and drag the first, the one `brush.get` gives
-/// and a stroke that names it draws with.
+/// Of two brushes with one name, the row of that name previews and drags the first, the one
+/// `brush.get` gives and a stroke that names it draws with. Reading the library numbers the second
+/// ("Twin 2"), so it gets a row of its own.
 #[test]
 fn rows_of_two_brushes_with_one_name_show_the_first() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let mut twins: Vec<Brush> = Vec::new();
     app.session
         .edit("Brushes", |d, _| {
             let mut lib = vectorcraft_brush::library(d);
             let kinds: Vec<_> = ["Charcoal", "Dots"].iter().map(|n| lib.iter().find(|b| b.name == *n).unwrap().kind.clone()).collect();
-            lib.extend(kinds.into_iter().map(|kind| Brush { name: "Twin".into(), kind }));
+            twins = kinds.into_iter().map(|kind| Brush { name: "Twin".into(), kind }).collect();
+            lib.extend(twins.iter().cloned());
             vectorcraft_brush::store(d, &lib);
             Ok(())
         })
         .unwrap();
-    let twins: Vec<String> = brushes(&mut app).0.into_iter().filter(|b| b.0 == "Twin").map(|b| b.1).collect();
-    assert_eq!(twins, ["art", "scatter"], "the panel lists both");
+    let rows: Vec<(String, String)> = brushes(&mut app).0.into_iter().filter(|b| b.0.starts_with("Twin")).map(|b| (b.0, b.1)).collect();
+    assert_eq!(rows, [("Twin".to_string(), "art".to_string()), ("Twin 2".to_string(), "scatter".to_string())], "the panel lists both");
     let got = app.run("brush.get", json!({"name": "Twin"})).unwrap();
     let memo = document_brushes(app.session.active().unwrap());
     let shown = by_name(&memo)["Twin"];
     assert_eq!(shown.ty, "art");
     assert_eq!(shown.def, got, "the row shows and drags what brush.get gives");
+    // Rows of one name that reach the panel unnumbered still show the first.
+    let st = app.session.active().unwrap();
+    let raw: Vec<Shown> = twins.iter().map(|b| Shown::of(&st.doc, b)).collect();
+    let shown = by_name(&raw)["Twin"];
+    assert_eq!(shown.ty, "art");
+    assert_eq!(shown.def, got, "the first of two rows of one name is the one shown");
 }
