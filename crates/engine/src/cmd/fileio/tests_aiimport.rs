@@ -424,8 +424,8 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
              /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
         )
     };
-    // Styles of one paint (`/SimpleStyle`): a red 2 pt stroke and no fill, and a gradient fill,
-    // which isn't read, so it is left out rather than listed with no paint.
+    // Styles of one paint (`/SimpleStyle`): a red 2 pt stroke and no fill, and a fill with a gradient
+    // the file doesn't define, which is left out rather than listed with no paint.
     let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
     let styles = format!(
         "%AI9_BeginArtStyles\n{}{}{}{}{}%AI9_EndArtStyles\n\
@@ -463,6 +463,64 @@ fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
     let doc = &s.doc().unwrap().doc;
     let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
     assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3), ("Red outline", 4)], "{r}");
+}
+
+/// A `.ai` graphic style library's styles that paint with one of the file's gradients by name (a
+/// fill style's, and the fill or stroke of a style of one paint) load with that gradient at the
+/// style's angle, fitted to the bounds of each object the style is applied to; one naming a gradient
+/// the file doesn't define is left out.
+#[test]
+fn graphic_styles_in_a_ai_library_that_paint_with_a_named_gradient_load_with_it() {
+    let gradient =
+        "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let band = "/KnownStyle :\n(Sky band) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n\
+         0 Bb\n2 (Sky) 0 0 45 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let one_paint = |name: &str, paint: &str| format!("/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n{paint}/Paint ;\n/Def ;\n");
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{band}{}{}{}%AI9_EndArtStyles\n\
+         %AI9_BeginArtStyleList\n(Sky band)\n(Sky fill)\n(Sky outline)\n(Dusk fill)\n%AI9_EndArtStyleList\n",
+        one_paint("Sky fill", "0 O\n0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n"),
+        one_paint("Sky outline", "0 R\n0 J 0 j 2 w 10 M []0 d\n1 Bb\n2 (Sky) 0 0 90 100 1 0 0 1 0 0 1 Bg\n0 BB\n1 0 Xd\n"),
+        one_paint("Dusk fill", "0 O\n0 Bb\n2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n")
+    );
+    // A palette with the gradient's swatch, so the document opened from the file shows its gradient.
+    let palette = INKS_PALETTE.replace("0 0 Pb\n", "0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n");
+    let data = ai::editing_data(200.0, 100.0, &format!("{gradient}{palette}{styles}"));
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "skies.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    let library = r["library"].clone();
+    let lib = s.execute("graphicStyle.library", &json!({"library": library})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Sky band", "Sky fill", "Sky outline"], "{lib}");
+    // The file's gradient, as the document opened from it has its swatch.
+    open(&mut s, "skies.ai", &file, json!({})).unwrap();
+    let sky = match s.doc().unwrap().doc.swatch("Sky").map(|w| w.paint.clone()) {
+        Some(vectorcraft_color::Paint::Gradient(g)) => g.gradient,
+        other => panic!("{other:?}"),
+    };
+    // Applied to a small and a large rectangle, each gradient is fitted to the rectangle it paints.
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    for (style, (x, size)) in [("Sky band", (10, 20)), ("Sky fill", (40, 200)), ("Sky outline", (10, 120))] {
+        let rect = json!({"x": x, "y": x, "width": size, "height": size / 2});
+        let id = NodeId(s.execute("shape.rectangle", &rect).unwrap()["id"].as_u64().unwrap());
+        let r = s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": [style], "apply": true, "ids": [id.0]})).unwrap();
+        assert_eq!(r["added"], json!([style]), "{r}");
+        let look = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        let (paint, angle, stroked) = match style {
+            "Sky outline" => (look.stroke().map(|st| &st.paint), 90.0, true),
+            "Sky band" => (look.fill().map(|f| &f.paint), 45.0, false),
+            _ => (look.fill().map(|f| &f.paint), 0.0, false),
+        };
+        let Some(vectorcraft_color::Paint::Gradient(g)) = paint else { panic!("{style}: {look:?}") };
+        assert_eq!((&g.gradient, g.geom, g.angle), (&sky, None, angle), "{style}");
+        assert_eq!(look.stroke().is_some(), stroked, "{style}: {look:?}");
+        if stroked {
+            assert!(look.fill().is_none() && look.stroke().is_some_and(|st| st.width == 2.0), "{look:?}");
+        }
+    }
 }
 
 /// A `.ai` symbol library (symbols and their list, no layers) opens with its symbols, and Other

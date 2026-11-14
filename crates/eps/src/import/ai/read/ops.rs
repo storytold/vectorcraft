@@ -1323,9 +1323,11 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
-/// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+/// this reads, paints with a pattern, or paints with a gradient that names no swatch of `gradients`.
 /// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
-pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
+/// A style keeps only its gradients' names and angles, so each one's gradient, by VectorCraft's own
+/// rule, is fitted to the bounds of whatever object the style is applied to, at its angle.
+pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle, gradients: &HashMap<String, Gradient>) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
@@ -1341,14 +1343,29 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
             StyleItem::Stroke { brush: Some(_), .. } => return None,
             StyleItem::Stroke { .. } => stroke_layer(item)?,
-            StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
+            StyleItem::Gradient { name, angle } => AppearanceItem::Fill(FillLayer::new(named_gradient(name.as_deref()?, *angle, gradients)?)),
+            StyleItem::Pattern { .. } => return None,
         };
+        // A one-paint style's gradient stroke names its swatch (`style::OnePaint::items`).
+        if let AppearanceItem::Stroke(s) = &mut layer
+            && let Paint::Gradient(g) = &s.paint
+        {
+            s.paint = named_gradient(g.swatch.as_deref()?, g.angle, gradients)?;
+        }
         if let Some(look) = st.looks.get(n) {
             with_look(&mut layer, look);
         }
         items.push(layer);
     }
     Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
+}
+
+/// The gradient of `gradients` named `name` at `angle` degrees, fitted to the bounds of the object it
+/// paints (`None` when there is no such gradient).
+fn named_gradient(name: &str, angle: f64, gradients: &HashMap<String, Gradient>) -> Option<Paint> {
+    let mut g = vectorcraft_color::gradient::GradientPaint::new(gradients.get(name)?.clone());
+    g.angle = angle;
+    Some(Paint::Gradient(Box::new(g)))
 }
 
 /// What the reader makes of art style `name` in `section` (the text between `%AI9_BeginArtStyles`
@@ -1400,7 +1417,9 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
             _ => None,
         })
         .collect();
-    let mut appearance = appearance_from_art_style(&st)?;
+    // No gradient is taken by name: on an object, one that isn't its own is placed where its drawn
+    // look has it.
+    let mut appearance = appearance_from_art_style(&st, &HashMap::new())?;
     for (item, brush) in appearance.items.iter_mut().zip(brushes) {
         if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
             s.brush = Some(brush);
