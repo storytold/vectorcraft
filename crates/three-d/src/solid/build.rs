@@ -6,8 +6,8 @@ use super::rings::{
     solid_rings_traced,
 };
 use super::{
-    Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View, eye_distance,
-    perspective_scale,
+    Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
+    eye_distance, perspective_scale,
 };
 use crate::shadow::Projection;
 
@@ -129,6 +129,14 @@ impl Builder<'_> {
         } else {
             (V3(-n.0, -n.1, -n.2), false)
         };
+        // A face whose corners lie off one plane (a piece of a twisted wall bent into a saddle) has
+        // no plane to measure its depth on. Nor has a face with a corner at or past the eye: the
+        // projection holds that corner just in front of the eye, so the drawing no longer matches
+        // the plane's projection there.
+        let offset = n.dot(centre);
+        let held = self.camera.eye.is_some_and(|e| contours.iter().flatten().any(|v| e - v.2 < e * 1e-3));
+        let flat = !held && contours.iter().flatten().all(|v| (n.dot(*v) - offset).abs() <= 1e-3);
+        let plane = flat.then_some(DepthPlane { normal: [n.0, n.1, n.2], offset, center: self.camera.origin, eye: self.camera.eye });
         #[cfg(test)]
         let view = contours.clone();
         let contours: Vec<Vec<Point>> = contours.iter().map(|c| c.iter().map(|v| self.camera.project(*v)).collect()).collect();
@@ -156,6 +164,7 @@ impl Builder<'_> {
             side: false,
             away: behind,
             end: None,
+            plane,
             #[cfg(test)]
             view,
         });
@@ -505,8 +514,9 @@ fn steps(o: &Extrude) -> Vec<Step> {
     } else {
         out.push(Step { inset: 0.0, t: 0.0, face: 1.0 });
     }
-    // Twist and taper bend the walls: cut them into slices.
-    let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+    // A twist bends the walls: cut them into slices. A taper alone keeps each wall flat (its edge
+    // only scales toward the center as it goes back), so it needs none.
+    let slices = if o.twist != 0.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
     let back_height = if bevel.is_some_and(|b| b.both_sides) { height } else { 0.0 };
     let (t0, t1) = (height / d, 1.0 - back_height / d);
     for k in 0..=slices {

@@ -678,12 +678,22 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
 /// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
-/// commit applies it; when it fails, the interaction is canceled.
+/// commit applies it; when it fails, the interaction is canceled. The applied preview's warning
+/// goes to the running command's result or the tool's status messages, as the tool's own commit
+/// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
     match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
-        Some((cmd, p)) if s.preview(&cmd, &p).is_err() => s.cancel_interaction()?,
-        _ => s.commit_interaction()?,
+        Some((cmd, p)) => match s.preview(&cmd, &p) {
+            Ok(v) => {
+                if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                    s.note_settled_warning(w);
+                }
+                s.commit_interaction()?
+            }
+            Err(_) => s.cancel_interaction()?,
+        },
+        None => s.commit_interaction()?,
     }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
@@ -1090,7 +1100,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
                     // Picked anchors leave the path with their connections, as Clear removes them.
-                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flat_map(|refs| super::path::subpath_refs(refs, si)).collect();
                     subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }

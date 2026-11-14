@@ -33,6 +33,7 @@ pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::{auto_simplify_level, can_outline_stroke};
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
+pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use cmd::{EyedropperOptions, PathfinderOptions};
 pub use journal::Journal;
@@ -286,6 +287,9 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// The warnings of the previews that settling an interaction applied, while a top-level command
+    /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
+    settled_warnings: Option<Vec<String>>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// The images Remove Background decoded during the interaction's preview steps, emptied when

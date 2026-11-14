@@ -121,6 +121,24 @@ pub(crate) fn naming_in_message(msg: &str, path: &str, name: &str) -> String {
     out
 }
 
+/// The error for an SVG of a document that links a JavaScript file outside the read roots.
+pub(crate) const SCRIPT_OUTSIDE: &str = "a linked JavaScript file is outside the read roots";
+
+/// `cmd` may write `st`'s document in format `format` (a format id): any format but SVG and SVGZ,
+/// and those too unless read roots are in force and the document links a JavaScript file outside
+/// them (`svg_scripts`, a relative path taken from the document's folder; a URL is not checked),
+/// which the file's `<script>` element would name. The error names no file or folder.
+pub fn check_linked_scripts(cmd: &str, format: &str, st: &crate::DocState) -> Result<()> {
+    if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
+        return Ok(());
+    }
+    let doc_path = st.path.as_deref();
+    if st.doc.svg_scripts.iter().any(|f| crate::cmd::links::script_hidden(f, doc_path)) {
+        return Err(bad(cmd, SCRIPT_OUTSIDE));
+    }
+    Ok(())
+}
+
 /// `path` checked for writing against the automation roots in force.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn may_write(path: &str) -> Result<()> {

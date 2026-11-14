@@ -194,6 +194,27 @@ impl ImageBlob {
             .collect();
         Some((w, h, cover))
     }
+
+    /// The pixels as straight RGBA, row by row from the top, with the width and the height;
+    /// `None` when the image can't be decoded within [`MAX_RASTER_ALLOC`].
+    pub fn rgba(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (w, h) = img.dimensions();
+        Some((w, h, img.into_raw()))
+    }
+
+    /// The width and height in pixels the image's file says it has; `None` for data that isn't an
+    /// image the decoder reads. Reads only its header.
+    pub fn pixel_size(&self) -> Option<(u32, u32)> {
+        image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions().ok()
+    }
+
+    /// Whether the image's file is a PNG that stores palette indices (an indexed-color image).
+    /// Reads only its header.
+    pub fn indexed_png(&self) -> bool {
+        // The signature, then the IHDR chunk: length, type, width, height, bit depth, color type.
+        self.bytes.starts_with(b"\x89PNG\r\n\x1a\n") && self.bytes.get(12..16) == Some(b"IHDR".as_slice()) && self.bytes.get(25) == Some(&3)
+    }
 }
 
 impl ImageBlob {
@@ -264,6 +285,20 @@ impl ImageBlob {
             }
         }
         Some(out)
+    }
+
+    /// Whether any pixel of the image is less than fully opaque. `false` when the image can't be
+    /// decoded. The last image decoded is kept, as for [`Self::sample`].
+    pub fn has_transparency(&self) -> bool {
+        self.decoded().is_some_and(|img| img.pixels().any(|p| p.0[3] < 255))
+    }
+
+    /// The alpha of each pixel, row by row from the top: the width, the height and one byte a
+    /// pixel. `None` when the image can't be decoded. The last image decoded is kept, as for
+    /// [`Self::sample`].
+    pub fn alpha(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = self.decoded()?;
+        Some((img.width(), img.height(), img.pixels().map(|p| p.0[3]).collect()))
     }
 
     /// The decoded pixels (the last image decoded is kept for the next sample).
