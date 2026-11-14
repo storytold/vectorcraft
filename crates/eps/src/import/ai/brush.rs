@@ -277,7 +277,8 @@ pub(super) fn bending_art(drafts: &[BrushDraft], art: &HashMap<String, Node>) ->
 
 /// Does the brush `draft` draw as `settings`, the settings a path's art style gives it? A path whose
 /// settings differ (Options of Selected Object) keeps its drawn look: a stroke names a brush, and
-/// has no settings of its own. An Art brush's settings that don't draw ([`drawn`]) may differ.
+/// has no settings of its own. An Art brush's settings that don't draw ([`drawn`]) may differ, and
+/// the path's own settings must be ones the brush would open with ([`art_options`], [`opens_live`]).
 /// `bending`: [`bending_art`].
 pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashMap<String, f64>) -> bool {
     let close = |a: f64, b: f64| (a - b).abs() <= 1e-3 * a.abs().max(b.abs()).max(1.0);
@@ -290,7 +291,9 @@ pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashM
                 && d.modes() == c.modes()
         }
         (DraftKind::Art { settings: Some(d), art: name, .. }, PathBrush::Art(s)) => {
-            drawn(d).iter().zip(drawn(s)).all(|(a, b)| close(*a, b)) && bending.get(name).is_some_and(|length| opens_live(d, *length))
+            drawn(d).iter().zip(drawn(s)).all(|(a, b)| close(*a, b))
+                && art_options(s).is_some()
+                && bending.get(name).is_some_and(|length| opens_live(d, *length) && opens_live(s, *length))
         }
         _ => false,
     }

@@ -10601,7 +10601,8 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
         ("its own width", good.clone(), style_with("Scaling", "2")),
         ("a width on the pen", good.clone(), style_with("ScaleYDependsOn", "2")),
         ("spacing", good.clone(), style_with("Spacing", "1")),
-        ("flipped", good.clone(), style_with("UpsideDown", "1")),
+        ("a spacing close to the brush's 0", good.clone(), style_with("Spacing", "0.0005")),
+        ("flipped",good.clone(), style_with("UpsideDown", "1")),
         ("flipped the other way", good.clone(), style_with("Counterclockwise", "1")),
         ("another adjustment", good.clone(), style_with("Adjustment", "2")),
         ("no fold adjustment", good.clone(), style_with("FoldAdjustment", "0")),
@@ -10639,13 +10640,16 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
         ("both: guides that leave no art between them", &[(10, "1"), (11, "30"), (12, "10")]),
         ("both: a guide past the start", &[(10, "1"), (11, "-5"), (12, "10")]),
     ];
-    let cases: Vec<(&str, String, String)> = cases
+    let mut cases: Vec<(&str, String, String)> = cases
         .into_iter()
         .chain(own.iter().map(|(why, changes)| {
             let (def, style) = ribbon_with(changes);
             (*why, def, style)
         }))
         .collect();
+    // The brush's guides leave art between them, and the path's, close to them, leave none.
+    let (def, style) = ribbon_with(&[(10, "1"), (11, "20"), (12, "19.99")]);
+    cases.push(("path guides close to the brush's that leave no art between them", def, style.replace("19.99 /", "20 /")));
     let mut wrong = vec![];
     for (why, def, style) in cases {
         let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
