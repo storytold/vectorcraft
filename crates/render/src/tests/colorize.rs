@@ -289,6 +289,35 @@ fn separations_preview_keeps_a_reduced_dcs_plates_coverage() {
     assert!(p[..3].iter().all(|v| (100..=160).contains(v)), "half the ink, got {p:?}");
 }
 
+/// A gradient stop linked to a spot ink that prints process plates with it shows them on those
+/// plates, and its tint on the spot plate.
+#[test]
+fn separations_preview_shows_a_spot_gradient_stops_process_plates() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let mut d = Document::new_with_mode(20.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.swatches.push(vectorcraft_color::Swatch {
+        name: "Gold".into(),
+        paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)),
+        global: true,
+        spot: true,
+    });
+    let stop = |offset| {
+        let mut s = GradientStop::new(offset, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+        (s.swatch, s.tint, s.plates) = (Some("Gold".into()), 0.5, Some([0.25, 0.0, 0.4, 0.0]));
+        s
+    };
+    let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![stop(0.0), stop(1.0)]))));
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    let square = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(g, Paint::None, 0.0));
+    d.insert(Some(layer), 0, square).unwrap();
+    let gray = |plate: &str| Renderer::new().render(&d, 20, 20, Affine::IDENTITY, &separations(&[plate])).pixel(10, 10)[0];
+    let near = |v: u8, ink: f32| (f32::from(v) - 255.0 * (1.0 - ink)).abs() <= 3.0;
+    for (plate, ink) in [("Cyan", 0.25), ("Magenta", 0.0), ("Yellow", 0.4), ("Black", 0.0), ("Gold", 0.5)] {
+        let v = gray(plate);
+        assert!(near(v, ink), "{plate}: {ink} of the ink, got {v}");
+    }
+}
+
 /// Separations Preview showing `plates`, as the canvas draws it.
 fn separations(plates: &[&str]) -> RenderOptions {
     let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };
