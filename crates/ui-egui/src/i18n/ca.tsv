@@ -7479,3 +7479,9 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits tecnològics
+	Circuit Trace	Pista de circuit
+	Bus Lines	Línies de bus
+	Terminal Nodes	Nodes terminals

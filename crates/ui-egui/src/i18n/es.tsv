@@ -7442,3 +7442,9 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Pista de circuito
+	Bus Lines	Líneas de bus
+	Terminal Nodes	Nodos terminales

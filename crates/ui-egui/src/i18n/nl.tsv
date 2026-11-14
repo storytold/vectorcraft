@@ -7525,3 +7525,9 @@ breakText	Glyphs	Glyphs
 	Grommets	Zeilringen
 	Grommet Inset	Afstand van zeilringen tot de rand
 	Diameter	Diameter
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische schakelingen
+	Circuit Trace	Printspoor
+	Bus Lines	Buslijnen
+	Terminal Nodes	Aansluitpunten

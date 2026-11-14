@@ -7454,3 +7454,9 @@ breakText	Glyphs	Glifler
 	Grommets	Kuşgözleri
 	Grommet Inset	Kuşgözlerinin kenara uzaklığı
 	Diameter	Çap
+
+# Original procedural circuit brushes.
+	Tech Circuit	Teknik devreler
+	Circuit Trace	Devre izi
+	Bus Lines	Veriyolu hatları
+	Terminal Nodes	Bağlantı düğümleri

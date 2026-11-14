@@ -6901,3 +6901,9 @@ breakText	Glyphs	Glyffer
 	Grommets	Maljer
 	Grommet Inset	Maljernes afstand fra kanten
 	Diameter	Diameter
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniske kredsløb
+	Circuit Trace	Kredsløbsbane
+	Bus Lines	Buslinjer
+	Terminal Nodes	Terminalpunkter

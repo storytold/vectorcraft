@@ -7612,3 +7612,9 @@ font-script	Japanese	იაპონური
 	Grommets	ლუვერები
 	Grommet Inset	ლუვერების დაშორება კიდიდან
 	Diameter	დიამეტრი
+
+# Original procedural circuit brushes.
+	Tech Circuit	ტექნიკური სქემები
+	Circuit Trace	სქემის გამტარი
+	Bus Lines	სალტის ხაზები
+	Terminal Nodes	ტერმინალური კვანძები

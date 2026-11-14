@@ -9311,3 +9311,9 @@ breakText	Glyphs	Glyfy
 @msg	turn on at least one side	zapněte alespoň jednu stranu
 @msg	with no hem and no grommets there is nothing to mark	bez lemu a bez průchodek není co označit
 @msg	{saving} failed: {e}	{saving} se nezdařilo: {e}
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technické obvody
+	Circuit Trace	Vodivá cesta
+	Bus Lines	Sběrnicové linky
+	Terminal Nodes	Koncové uzly

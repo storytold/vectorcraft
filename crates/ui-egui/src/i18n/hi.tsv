@@ -8889,3 +8889,9 @@ theme	Appearance	अपीयरेंस
 	Grommets	आईलेट
 	Grommet Inset	किनारे से आईलेट की दूरी
 	Diameter	व्यास
+
+# Original procedural circuit brushes.
+	Tech Circuit	टेक सर्किट
+	Circuit Trace	सर्किट पथ
+	Bus Lines	बस रेखाएँ
+	Terminal Nodes	टर्मिनल नोड

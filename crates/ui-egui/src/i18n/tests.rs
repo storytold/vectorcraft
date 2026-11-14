@@ -389,7 +389,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 43, "{names:?}");
+    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();

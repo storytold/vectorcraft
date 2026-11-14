@@ -9383,3 +9383,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Trilha de circuito
+	Bus Lines	Linhas de barramento
+	Terminal Nodes	Nós terminais

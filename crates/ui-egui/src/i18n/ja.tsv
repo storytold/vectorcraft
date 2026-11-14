@@ -7194,3 +7194,9 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード

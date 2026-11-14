@@ -6901,3 +6901,9 @@ breakText	Glyphs	Glif
 	Grommets	Mata ayam
 	Grommet Inset	Jarak mata ayam dari tepi
 	Diameter	Diameter
+
+# Original procedural circuit brushes.
+	Tech Circuit	Sirkuit teknologi
+	Circuit Trace	Jalur sirkuit
+	Bus Lines	Jalur bus
+	Terminal Nodes	Simpul terminal

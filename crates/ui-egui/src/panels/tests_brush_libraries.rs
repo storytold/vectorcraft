@@ -200,7 +200,8 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("scatter-shapes"),
             json!("game-trails"),
             json!("energy-beams"),
-            json!("dry-media")
+            json!("dry-media"),
+            json!("tech-circuit")
         ]
     );
     let dry = entries.iter().find(|e| under(e) && e.params["library"] == "dry-media").map(|e| e.label.as_str());
@@ -224,6 +225,12 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let undo = undo_len(&app);
     click(&mut app, &ctx, "Chalk Grain", Modifiers::NONE, 1.0);
     assert!(has(&app, "Chalk Grain") && !has(&app, "Wax Crayon"));
+    assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Tech Circuit"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("tech-circuit"), Some(3)));
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Circuit Trace", Modifiers::NONE, 2.0);
+    assert!(has(&app, "Circuit Trace") && !has(&app, "Bus Lines"));
     assert_eq!(undo_len(&app), undo + 1);
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
