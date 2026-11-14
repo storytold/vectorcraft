@@ -371,6 +371,10 @@ pub struct Face {
     /// For a face of the swept side (not an end cap): where its corners lie on the side surface,
     /// for a graphic mapped onto it.
     pub surface: Option<SurfaceCell>,
+    /// The face's plane in view space and the projection it was drawn with, for its depth at a
+    /// point of the drawing ([`DepthPlane::depth_at`]). `None` when its corners lie more than
+    /// 0.001 pt off one plane or a corner is at or past the eye.
+    pub plane: Option<DepthPlane>,
 }
 
 /// Where a face of Revolve's swept side lies on the side surface, unrolled flat: x runs around the
@@ -638,6 +642,14 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
         normal = V3(-normal.0, -normal.1, -normal.2);
     }
     let flat_brightness = brightness(&o, normal, light);
+    // As for an extruded face: no plane when a corner lies off it, or when the projection holds a
+    // corner just in front of the eye, so the drawing no longer matches the plane's projection.
+    let centre = vertices.iter().fold(V3::default(), |s, v| V3(s.0 + v.0, s.1 + v.1, s.2 + v.2));
+    let centre = V3(centre.0 / vertices.len() as f64, centre.1 / vertices.len() as f64, centre.2 / vertices.len() as f64);
+    let offset = normal.dot(centre);
+    let held = eye.is_some_and(|e| vertices.iter().any(|v| e - v.2 < e * 1e-3));
+    let flat = !held && vertices.iter().all(|v| (normal.dot(*v) - offset).abs() <= 1e-3);
+    let plane = flat.then_some(DepthPlane { normal: [normal.0, normal.1, normal.2], offset, center: origin, eye });
     let points: Vec<_> = vertices
         .iter()
         .map(|v| {
@@ -707,6 +719,7 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
         cap: false,
         visibility_pieces: None,
         surface: None,
+        plane,
     }))
 }
 
