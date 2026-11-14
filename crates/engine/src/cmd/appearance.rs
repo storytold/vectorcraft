@@ -36,7 +36,7 @@ use super::paint::paint_from;
 use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
 use super::{
     CommandSpec, NodeId, Result, Session, bad, check_numbers, check_switches, cmd, has_doc, has_selection, ids_param, index, leaf_targets,
-    object_param, ok, paint_targets, str_param, switch_or, targets,
+    object_param, ok, paint_targets, str_param, switch_or, targets, u64_req,
 };
 use crate::EngineError;
 
@@ -657,9 +657,9 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     Ok(ids.get(item.anchor(s, &ids)).and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 
-/// The whole number of 0 or more that `key` holds, read with [`index`].
+/// The whole number of 0 or more that `key` holds, read with [`u64_req`] and [`index`].
 pub(crate) fn index_param(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    u64_req(p, key, cmd).map(index)
 }
 
 fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
