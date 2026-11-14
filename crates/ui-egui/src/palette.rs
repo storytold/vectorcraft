@@ -379,14 +379,15 @@ mod tests {
         )
     }
 
-    /// A pick of a "…" command whose menu bar item gives params opens that item's dialog, and Smooth
-    /// opens its slider; nothing changes until the dialog is confirmed.
+    /// A pick of a "…" command whose menu bar item gives params opens that item's dialog, Smart
+    /// Punctuation opens its dialog and Smooth opens its slider; nothing changes until the dialog
+    /// is confirmed.
     #[test]
     fn a_pick_opens_the_dialog_its_menu_item_opens() {
         let expected = [
             ("object.path.cleanUp", "command"),
             ("object.mesh.create", "command"),
-            ("type.smartPunctuation", "command"),
+            ("type.smartPunctuation", crate::dialogs::smart_punctuation::KIND),
             ("edit.findReplace", "command"),
             ("object.path.smooth", crate::dialogs::smooth_slider::KIND),
         ];

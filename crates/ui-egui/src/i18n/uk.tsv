@@ -906,6 +906,9 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Click to replace	Клацніть для заміни
+	Show all alternates in the Glyphs panel	Показати всі альтернативи на панелі «Гліфи»
+	Show Character Alternates	Показувати альтернативи символу
 	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
@@ -1353,6 +1356,7 @@ file-filter	Templates	Шаблони
 	Format	Формат
 	Format Options	Параметри формату
 	Format Settings	Параметри формату
+	Format Settings…	Параметри формату…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробові ширини
@@ -1714,6 +1718,7 @@ file-filter	Templates	Шаблони
 	Images:	Зображення:
 	Import Keyboard Shortcuts…	Імпортувати сполучення клавіш…
 	Import PDF	Імпортувати PDF
+	Import PDF pages as links	Імпортувати сторінки PDF як зв’язки
 	Import PDF Presets	Імпортувати набори PDF
 	Import Perspective Grid Presets	Імпортувати набори сітки перспективи
 	Import Print Presets	Імпортувати набори друку
@@ -2700,6 +2705,7 @@ mark-style	Japanese	Японський
 	Proportional Metrics	Пропорційні метрики
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
+	Tsume	Цуме
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -3478,6 +3484,18 @@ effect	Points	Точки
 	Smart Guides (View → Smart Guides)	Розумні напрямні (Перегляд → Розумні напрямні)
 	Smart Guides (⌘U)	Розумні напрямні (⌘U)
 	Smart Punctuation…	Розумна пунктуація…
+	Smart Punctuation	Розумна пунктуація
+	ff, fi, ffi Ligatures	Лігатури ff, fi, ffi
+	ff, fl, ffl Ligatures	Лігатури ff, fl, ffl
+	Smart Quotes	Розумні лапки
+	Smart Spaces	Розумні пробіли
+	En, Em Dashes	Середні й довгі тире
+	Ellipses	Трикрапки
+	Expert Fractions	Експертні дроби
+	Replace In	Замінити в
+	Selected Text Only	Тільки виділений текст
+	Entire Document	Увесь документ
+	Report Results	Звіт про результати
 	Smooth	Згладити
 	Corner	Кут
 	Relative	Відносно
@@ -3508,7 +3526,8 @@ effect	Points	Точки
 	Solid	Суцільний
 	Sort by Kind	Сортувати за типом
 	Sort by Name	Сортувати за назвою
-	Sort by Status	Сортувати за:
+	Sort by Size	Сортувати за розміром
+	Sort by Status	Сортувати за станом
 	Source code on GitHub	Вихідний код GitHub
 	Source Sans 3	Source Sans 3
 	Space After Paragraph	Інтервал після абзацу
@@ -4780,6 +4799,7 @@ axis	Both	Обидві
 @msg	no action set to save	немає набору дій для збереження
 @msg	the action set file can't be read in full	файл набору дій неможливо прочитати повністю
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Завантажено «{name}»: {n} крок із невідомою командою збережено: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроки з невідомими командами збережено; перший: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроків із невідомими командами збережено; перший: «{action}», крок {step}, `{command}`
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: довідник був би більшим за {MAX_BYTES} байтів
@@ -5021,6 +5041,7 @@ axis	Both	Обидві
 @msg	tool shortcuts must be a single key (optionally with Shift)	поєднання інструментів має бути однією клавішею (необов’язково з Shift)
 @msg	truncated	усічено
 @msg	unknown command `{0}`	невідома команда `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	крок {step} дії «{action}» виконує невідому команду `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	невідома команда `{0}`; можливо, ви мали на увазі `{1}`?
 @msg	unknown effect `{id}`	невідомий ефект `{id}`
 @msg	unknown format	невідомий формат
@@ -5999,8 +6020,8 @@ axis	Y Axis	Вісь Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль експорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	поза групами може бути не більше {MAX_UNGROUPED} параметрів: задайте решті `group`
 @msg	can't encode the input	не вдається закодувати вхідні дані
-@msg	expected {"dataBase64"}	очікувалося {"dataBase64"}
-@msg	expected {"objects"}	очікувалося {"objects"}
+@msg	expected {{"dataBase64": "…"}}	очікувалося {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	очікувалося {{"objects": [...]}}
 @msg	export `{name}`: {e}	експорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	розширення {e} вказано двічі
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	розширення {e}: використовуйте 1-16 малих літер і цифр, без крапки
@@ -6064,11 +6085,11 @@ axis	Y Axis	Вісь Y
 @msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {"id"} або в тому вигляді, у якому його передано
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обведення має мати вигляд {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ефект має мати вигляд {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
 @msg	an effect on a stroke returns only `strokes`	ефект на обведенні повертає лише `strokes`
 @msg	an object must be a JSON object	об’єкт має бути об’єктом JSON
@@ -6277,7 +6298,7 @@ axis	Y Axis	Вісь Y
 @plural	Result: {n}|Results: {n}	Результат: {n}|Результати: {n}|Результати: {n}
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
 @msg	Global Edit is off	Глобальне редагування вимкнено
 @msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
@@ -6995,6 +7016,122 @@ breakText	Glyphs	Гліфи
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
+# Messages of the image encoders, color profiles, swatch exchange files and color books, 3D and Revolve, path operations, DXF import, the script engine and parameter checks.
+@msg	3D effects require finite coordinates within 100 million points	3D-ефектам потрібні скінченні координати в межах 100 мільйонів пунктів
+@msg	3D effects require one to ten lights	3D-ефектам потрібно від одного до десяти джерел світла
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Глибина BMP {_1}: 1, 4, 8, 16, 24 або 32 біти на піксель
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Не вдалося закодувати BMP: {width} × {height} пікселів не вміщується у формат або не відповідає буферу пікселів
+@msg	GIF encoding failed: the palette image is malformed	Не вдалося закодувати GIF: зображення з палітрою має неправильну структуру
+@msg	GIF encoding failed: {e}	Не вдалося закодувати GIF: {e}
+@msg	JPEG colour profile: {e}	Профіль кольору JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Не вдалося закодувати JPEG: буфер пікселів не відповідає розміру зображення
+@msg	JPEG encoding failed: {e}	Не вдалося закодувати JPEG: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Не вдалося закодувати PNG: буфер пікселів не відповідає розміру зображення
+@msg	PNG encoding failed: the palette image is malformed	Не вдалося закодувати PNG: зображення з палітрою має неправильну структуру
+@msg	PNG encoding failed: {e}	Не вдалося закодувати PNG: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Не вдалося закодувати PNG: {width} × {height} пікселів не є допустимим розміром зображення
+@msg	PSD colour profile: {e}	Профіль кольору PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати PSD: буфер пікселів не відповідає розміру зображення
+@msg	Revolve profile contains invalid coordinates	Обертання: профіль містить неприпустимі координати
+@msg	Revolve profile is too complex	Обертання: профіль надто складний
+@msg	Revolve projection is not finite	Обертання: проєкція не скінченна
+@msg	Revolve requires finite profile coordinates within 100 million points	Обертання: потрібні скінченні координати профілю в межах 100 мільйонів пунктів
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Обертання: поверхня надто складна; зменште «Сегменти» або спростіть профіль
+@msg	Revolve surface is too complex; simplify the profile	Обертання: поверхня надто складна; спростіть профіль
+@msg	Revolve visibility cannot split the projected boundary	Обертання: обчислення видимості не може розділити спроєктовану межу
+@msg	Revolve visibility creates too many fragments	Обертання: обчислення видимості створює забагато фрагментів
+@msg	Revolve visibility creates too many vector anchors	Обертання: обчислення видимості створює забагато векторних опорних точок
+@msg	Revolve visibility exceeds its geometry work limit	Обертання: обчислення видимості перевищує межу геометричних обчислень
+@msg	Revolve visibility exceeds its spatial index limit	Обертання: обчислення видимості перевищує межу просторового індексу
+@msg	Revolve visibility has too many boundary crossings	Обертання: обчислення видимості має забагато перетинів меж
+@msg	Revolve visibility has too many input anchors	Обертання: обчислення видимості має забагато вхідних опорних точок
+@msg	Revolve visibility requires convex cap sectors	Обертання: обчисленню видимості потрібні опуклі сектори кришки
+@msg	Revolve visibility requires finite projected faces	Обертання: обчисленню видимості потрібні скінченні спроєктовані грані
+@msg	SVG options: {e}	Параметри SVG: {e}
+@msg	Save for Web settings: {e}	Параметри «Зберегти для Інтернету»: {e}
+@msg	TIFF colour profile: {e}	Профіль кольору TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати TIFF: буфер пікселів не відповідає розміру зображення
+@msg	TIFF encoding failed: {e}	Не вдалося закодувати TIFF: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Глибина Targa {_1}: 16, 24 або 32 біти на піксель
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати Targa: буфер пікселів не відповідає розміру зображення
+@msg	The 3D projection is not finite	3D-проєкція не скінченна
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-тінь надто складна; вимкніть «Тіні» або спростіть ілюстрацію
+@msg	The shape contains invalid coordinates	Фігура містить неприпустимі координати
+@msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
+@msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList
+@msg	a line can't run from a point to itself	лінія не може йти з точки в ту саму точку
+@msg	a line needs at least two points	лінії потрібні щонайменше дві точки
+@msg	a number cannot be read	не вдалося прочитати число
+@msg	a swatch exchange block is too long	блок файлу обміну зразками задовгий
+@msg	a swatch exchange name is too long	назва у файлі обміну зразками задовга
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	розмір зображення {sw} × {sh} не можна змінити на {width} × {height} пікселів
+@msg	a {width} × {height} image is too large	зображення {width} × {height} завелике
+@msg	a {width} × {height} image: {e}	зображення {width} × {height}: {e}
+@msg	an image could not be written: {e}	не вдалося записати зображення: {e}
+@msg	an image that couldn't be read was left out	зображення, яке не вдалося прочитати, пропущено
+@msg	can't open “{name}”: {e}	не вдалося відкрити «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	не вдається вирівняти записи архіву zip до {align} байтів
+@msg	cannot open the automation {kind} root `{_1}`: {e}	не вдається відкрити кореневу папку автоматизації ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	не вдалося прочитати профіль: {0}
+@msg	color book version {version} isn't supported (only 1)	версія книги кольорів {version} не підтримується (лише 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	книги кольорів у колірному просторі {other} не підтримуються (лише RGB, CMYK і Lab)
+@msg	file name too long to zip: {_1}	назва файлу задовга для архіву zip: {_1}
+@msg	file name too long to zip: {name}	назва файлу задовга для архіву zip: {name}
+@msg	freeform line {i}: {e}	довільна лінія {i}: {e}
+@msg	freeform point {i}: {e}	довільна точка {i}: {e}
+@msg	give `{key}` or `{other}`, not both	укажіть `{key}` або `{other}`, але не обидва
+@msg	grayscale profiles can't be working spaces yet	профілі відтінків сірого поки що не можуть бути робочими просторами
+@msg	input contains NaN or infinite coordinates	вхідні дані містять координати NaN або нескінченні координати
+@msg	input path could not be closed	не вдалося замкнути вхідний контур
+@msg	invalid ICC profile: {0}	неприпустимий профіль ICC: {0}
+@msg	invalid scale {scale}	неприпустимий масштаб {scale}
+@msg	its localized names take more than {_1} KB	його локалізовані назви займають понад {_1} КБ
+@msg	its objects are nested too deep ({e})	його об’єкти мають завелику вкладеність ({e})
+@msg	its tag table lists the `{_1}` tag more than once	його таблиця тегів містить тег `{_1}` більше одного разу
+@msg	not a graphic style library: {e}	це не бібліотека графічних стилів: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	це не бібліотека зразків (.vcswatches або .gpl)
+@msg	not a swatch library (format `{_1}`)	це не бібліотека зразків (формат `{_1}`)
+@msg	not a swatch library: {e}	це не бібліотека зразків: {e}
+@msg	not an action set file ({e})	це не файл набору дій ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	колірний простір профілю {other} не є RGB, CMYK чи Gray
+@msg	regular expression too large	регулярний вираз завеликий
+@msg	script file is not UTF-8 text: {value}	файл скрипта не є текстом UTF-8: {value}
+@msg	stop {i}: {e}	точка переходу {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	версія файлу обміну зразками {major}.{minor} не підтримується (лише 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	книга кольорів містить понад {ASE_MAX_ENTRIES} кольорів
+@msg	the color book is cut short	книгу кольорів обрізано
+@msg	the color book's names take more than {_1} MB	назви книги кольорів займають понад {_1} МБ
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	зображення мало б розмір {w} × {h} пікселів; растровий експорт обмежено {MAX_RASTER_SIDE} пікселями на сторону та {_1} мегапікселями: зменште масштаб або роздільну здатність
+@msg	the optimised image can't be read back: {e}	оптимізоване зображення не вдається прочитати знову: {e}
+@msg	the pixel buffer doesn't match the image size	буфер пікселів не відповідає розміру зображення
+@msg	the preview: {e}	попередній перегляд: {e}
+@msg	the request may not read the New Document profiles folder	запит не має права читати папку профілів нового документа
+@msg	the shapes are too degenerate to combine	фігури занадто вироджені для об’єднання
+@msg	the shapes cross themselves and each other too often to combine	фігури надто часто перетинають самі себе й одна одну, щоб їх можна було об’єднати
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	файл обміну зразками містить понад {ASE_MAX_ENTRIES} кольорів і груп
+@msg	the swatch exchange file is cut short	файл обміну зразками обрізано
+@msg	the {_1} plate can't be read: {e}	не вдалося прочитати форму {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	цей двійковий файл DXF пошкоджено або обрізано
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як DXF і відкрийте його
+@msg	too many classes	забагато класів
+@msg	too many groups	забагато груп
+@msg	too many layers for PSD (at most 32767)	забагато шарів для PSD (не більше 32767)
+@msg	too many swatch exchange blocks	забагато блоків обміну зразками
+@msg	unknown colour profile: {0}	невідомий профіль кольору: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} збігається з назвою вбудованого профілю
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	розмір {_1} × {_2} пікселів завеликий для GIF (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{_1}: no usable transform to/from sRGB	{_1}: немає придатного перетворення в sRGB або з sRGB
+@msg	{name} is not a CMYK profile	{name} не є профілем CMYK
+@msg	{name} is not an RGB profile	{name} не є профілем RGB
+@msg	{path}: could not be read	{path}: не вдалося прочитати
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	розмір {width} × {height} пікселів завеликий для JPEG (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	розмір {width} × {height} пікселів завеликий для Targa (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	розмір {w} × {h} пікселів завеликий для PSD (не більше {MAX_SIDE} пікселів на сторону): зменште роздільну здатність
+
 # Copy Troubleshooting Info
 	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
 @msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
@@ -7074,11 +7211,20 @@ breakText	Glyphs	Гліфи
 	Open Tutorial Sample	Відкрити приклад уроку
 	Finish Tutorial	Завершити урок
 	Next Tutorial	Наступний урок
+	Show Learn Tab	Показати вкладку панелі «Навчання»
+	Show Skill	Показати навичку
+	Back One Level	На рівень назад
 	Back to Skills	Назад до навичок
 @msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
 @msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
+	Reset progress	Скинути прогрес
+	Mark Tutorial Step	Позначити крок уроку
+	Reset Learn Progress	Скинути прогрес навчання
+@msg	missing `step` (see learn.show)	відсутній `step` (див. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` має бути номером кроку від 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	урок `{id}` завершено (див. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
@@ -8481,6 +8627,7 @@ breakText	Glyphs	Гліфи
 @msg	the RTF file is too large to place as type (at most {_1} MB)	файл RTF завеликий, щоб помістити його як текст (не більше {_1} МБ)
 @msg	the SVG expands to more than {0} nested SVG images	SVG розгортається у понад {0} вкладених зображень SVG
 @msg	the SVG expands to more than {0} objects	SVG розгортається у понад {0} об’єктів
+@msg	the SVG's styles expand to more than {0} MB	стилі SVG розгортаються у понад {0} МБ
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	файл SVG більший за {MAX_IMPORT_BYTES} байтів
 @msg	the SVG has no drawable objects	SVG не містить об’єктів, які можна намалювати
 @msg	the SVGZ file unpacks to more than {_1} MB	файл SVGZ розпаковується у понад {_1} МБ
@@ -8919,3 +9066,6 @@ breakText	Glyphs	Гліфи
 @msg	turn on at least one side	увімкніть принаймні одну сторону
 @msg	with no hem and no grommets there is nothing to mark	без підгину й люверсів немає чого розмічати
 @msg	{saving} failed: {e}	{saving}: не вдалося: {e}
+	Nest Shapes…	Розкладка фігур…
+	Nest Shapes	Розкладка фігур
+	Roll	Рулон

@@ -495,7 +495,8 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
 
 /// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved
 /// before dimensions followed the colour mode have RGB dimensions in CMYK documents. A dimension
-/// that can't be redrawn keeps the art it has.
+/// that can't be redrawn keeps the art it has. The labels are measured in the document's own
+/// composite fonts, also when another document's definitions of the same names are registered.
 pub(crate) fn conform(doc: &mut Document) {
     if !doc.dimensions {
         return;
@@ -521,6 +522,10 @@ pub(crate) fn conform(doc: &mut Document) {
             }
         }
     });
+    if stale.is_empty() {
+        return;
+    }
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     for (id, d) in stale {
         // An error leaves this dimension as it was; the others are still redrawn.
         let _ = replace(doc, id, d);
