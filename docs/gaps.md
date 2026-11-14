@@ -191,7 +191,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G9 Illustrator `.ai` and EPS files from real users
 
-- **Done (#6756, 2026-11-12):** type in a static font whose PostScript name is also an installed variable font's named instance's (a static `Montserrat-Regular.ttf` beside the variable Montserrat) names that instance's design-space setting and the variable font's version in the saved `.ai`, since the app that opens the file takes the name for the instance; it no longer opens as the variable font's default instance (Thin). Test `ai_editing::tests::a_static_font_named_like_a_variable_instance_names_the_instance`. Estimate unchanged.
+- **Done (#6756, 2026-11-12):** type in a static font whose PostScript name is also an installed variable font's named instance's (a static `Montserrat-Regular.ttf` beside the variable Montserrat) writes that instance's design-space setting and the variable font's version into the saved `.ai`. The app that opens the file takes the name for the instance. Its open result is not checked in this repository. Test `ai_editing::tests::a_static_font_named_like_a_variable_instance_names_the_instance`. Estimate unchanged.
 
 - **Done (#6388, 2026-11-10):** a saved `.ai`'s text document names, for type in a variable font, where in the font's design space it is set (each axis, the named instance's or the run's own setting) and the font's version, so Montserrat Bold no longer opens as the font's default instance (Thin); two settings of one font are two fonts of the set. Test `ai_editing::tests::variable_font_instances_name_their_design_space`. The PDF part's font naming (#4548) remains with craft-libs. Estimate unchanged.
 
@@ -863,7 +863,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-12 | minor | G9: `.ai` save: type in a static font whose PostScript name is also an installed variable font's named instance's names that instance's design vector and the variable font's version, so it no longer opens at the variable font's default instance (#6756). Estimate unchanged. |
+| 2026-11-12 | minor | G9: `.ai` save: type in a static font whose PostScript name is also an installed variable font's named instance's names that instance's design vector and the variable font's version in the saved `.ai` (#6756). Estimate unchanged. |
 | 2026-11-09 | minor | G4 review (#6084): positional variants no supported feature draws can be applied as glyph choices in both Glyphs views; unlisted glyphs still respect name ownership. OpenType style options keep only a valid last on-value when enabling a set. Existing contextual/ligature lookup and unsupported-feature gaps remain; estimate unchanged. |
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
 | 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
