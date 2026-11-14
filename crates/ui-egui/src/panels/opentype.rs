@@ -203,7 +203,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("Select text to set its OpenType features."));
         return;
     };
-    let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
     let mut change = None;
     let fig = shown_figure(app);
     ui.horizontal(|ui| {
