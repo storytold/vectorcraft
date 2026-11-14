@@ -95,7 +95,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Paste without Formatting", "edit.pasteWithoutFormatting"),
                 c("Clear", "edit.clear"),
                 Sep,
-                cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
+                cp("Find and Replace…", "edit.findReplace", crate::dialogs::find_replace::menu_params()),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
                 sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), todos("Check Spelling…", "Cmd+I")]),
                 // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct

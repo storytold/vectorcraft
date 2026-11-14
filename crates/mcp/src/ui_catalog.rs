@@ -801,7 +801,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item), aligned?: bool (index and item are rows of the first selected object's stack, which OK edits in each object where it has them, as effect.setParams does)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
-    ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
+    (
+        "ui.paramDialog",
+        "Command Dialog",
+        "",
+        "{command, label?, params} open a parameter dialog for any command. For edit.findReplace it opens Find and Replace (dialog `findReplace`), which stays open: fields find, replace, matchCase, wholeWord, backwards, hiddenLayers, lockedLayers, and action, which ui.dialog.confirm runs: find (the next match, edit.findNext, shown in the dialog with its place among the matches), replace (the match found, edit.replaceMatch), replaceFind (both), replaceAll (edit.findReplace) or done (close). After each one action is find again. Replace and Replace & Find change a match that find reached with the find text and options as they are now, and find one otherwise. The dialog opens on the last search, with the fields params gives in its place, and Edit › Find Next goes on from it in the same document while the dialog is closed",
+    ),
     (
         "ui.recolorDialog",
         "Recolor Artwork…",

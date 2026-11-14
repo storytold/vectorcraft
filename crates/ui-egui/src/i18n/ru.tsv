@@ -1249,6 +1249,19 @@ font-technology	Variable	Вариативные
 	Fill: click for swatches, Shift-click for the color mixer	Заливка: щёлкните для образцов, Shift+щелчок — для смесителя цветов
 	Find	Найти
 	Find and Replace…	Найти и заменить…
+	Find and Replace	Найти и заменить
+	Find:	Найти:
+	Replace With:	Заменить на:
+	Replace & Find	Заменить и найти
+	Replace All	Заменить все
+	Match Case	Учитывать регистр
+	Find Whole Word	Найти слово целиком
+	Search Backwards	Искать назад
+	Check Hidden Layers	Проверять скрытые слои
+	Check Locked Layers	Проверять заблокированные слои
+@msg	No matches found	Совпадений не найдено
+@msg	Matches replaced: {n}	Заменено совпадений: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	в байтах {_1}..{_2} объекта {_3} нет совпадения с `find`
 	Find Font	Найти шрифт
 	Find Font…	Найти шрифт…
 	Find Next	Найти далее

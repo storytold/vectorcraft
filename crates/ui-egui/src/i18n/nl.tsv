@@ -582,6 +582,19 @@
 	Paste without Formatting	Plakken zonder opmaak
 	Clear	Wissen
 	Find and Replace…	Zoeken en vervangen…
+	Find and Replace	Zoeken en vervangen
+	Find:	Zoeken:
+	Replace With:	Vervangen door:
+	Replace & Find	Vervangen en zoeken
+	Replace All	Alles vervangen
+	Match Case	Hoofdlettergevoelig
+	Find Whole Word	Heel woord zoeken
+	Search Backwards	Achterwaarts zoeken
+	Check Hidden Layers	Verborgen lagen controleren
+	Check Locked Layers	Vergrendelde lagen controleren
+@msg	No matches found	Geen overeenkomsten gevonden
+@msg	Matches replaced: {n}	Vervangen overeenkomsten: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	geen overeenkomst van `find` bij bytes {_1}..{_2} van object {_3}
 	Find Next	Volgende zoeken
 	Spelling	Spelling
 	Auto Spell Check	Automatische spellingcontrole

@@ -1180,6 +1180,19 @@ font-technology	Variable	Μεταβλητές
 	Fill: click for swatches, Shift-click for the color mixer	Γέμισμα: κλικ για δείγματα, Shift-κλικ για τον μείκτη χρωμάτων
 	Find	Εύρεση
 	Find and Replace…	Εύρεση και αντικατάσταση…
+	Find and Replace	Εύρεση και αντικατάσταση
+	Find:	Εύρεση:
+	Replace With:	Αντικατάσταση με:
+	Replace & Find	Αντικατάσταση και εύρεση
+	Replace All	Αντικατάσταση όλων
+	Match Case	Ταίριασμα πεζών-κεφαλαίων
+	Find Whole Word	Εύρεση ολόκληρης λέξης
+	Search Backwards	Αναζήτηση προς τα πίσω
+	Check Hidden Layers	Έλεγχος κρυφών επιπέδων
+	Check Locked Layers	Έλεγχος κλειδωμένων επιπέδων
+@msg	No matches found	Δεν βρέθηκαν αντιστοιχίες
+@msg	Matches replaced: {n}	Αντιστοιχίες που αντικαταστάθηκαν: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	καμία αντιστοιχία του `find` στα byte {_1}..{_2} του αντικειμένου {_3}
 	Find Font	Εύρεση γραμματοσειράς
 	Find Font…	Εύρεση γραμματοσειράς…
 	Find Next	Εύρεση επόμενου

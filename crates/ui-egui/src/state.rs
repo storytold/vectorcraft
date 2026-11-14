@@ -582,6 +582,11 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The last Find and Replace search ([`crate::dialogs::find_replace`]): the dialog's Find and
+    /// Replace With text, its options and the place the search reached, which Edit › Find Next
+    /// goes on from while the dialog is closed. Not saved.
+    #[serde(skip)]
+    pub last_find: Option<serde_json::Value>,
     /// The notes of the last open that gave any, or of the last save or export, with the status
     /// text that names the first of them: hovering that text lists them when there are several.
     /// Not saved.
@@ -1171,6 +1176,7 @@ impl Default for UiState {
             status: String::new(),
             status_sets: 0,
             replace_font_warning: None,
+            last_find: None,
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),

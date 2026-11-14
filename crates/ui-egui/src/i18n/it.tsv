@@ -1260,6 +1260,19 @@ font-technology	Variable	Variabili
 	Fill: click for swatches, Shift-click for the color mixer	Riempimento: fai clic per i campioni, Shift+clic per il miscelatore colori
 	Find	Trova
 	Find and Replace…	Trova e sostituisci…
+	Find and Replace	Trova e sostituisci
+	Find:	Trova:
+	Replace With:	Sostituisci con:
+	Replace & Find	Sostituisci e trova
+	Replace All	Sostituisci tutto
+	Match Case	Maiuscole/minuscole
+	Find Whole Word	Trova parola intera
+	Search Backwards	Cerca all'indietro
+	Check Hidden Layers	Controlla livelli nascosti
+	Check Locked Layers	Controlla livelli bloccati
+@msg	No matches found	Nessuna corrispondenza trovata
+@msg	Matches replaced: {n}	Corrispondenze sostituite: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nessuna corrispondenza di `find` ai byte {_1}..{_2} dell'oggetto {_3}
 	Find Font	Trova font
 	Find Font…	Trova font…
 	Find Next	Trova successivo

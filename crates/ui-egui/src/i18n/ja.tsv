@@ -163,6 +163,19 @@ digits	Malayalam	マラヤーラム数字
 	Paste without Formatting	書式なしでペースト
 	Clear	消去
 	Find and Replace…	検索と置換…
+	Find and Replace	検索と置換
+	Find:	検索:
+	Replace With:	置換文字列:
+	Replace & Find	置換して検索
+	Replace All	すべて置換
+	Match Case	大文字と小文字を区別
+	Find Whole Word	単語単位で検索
+	Search Backwards	逆方向に検索
+	Check Hidden Layers	非表示レイヤーを検索
+	Check Locked Layers	ロックされたレイヤーを検索
+@msg	No matches found	一致する文字列が見つかりません
+@msg	Matches replaced: {n}	置換した一致: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	オブジェクト {_3} のバイト {_1}..{_2} に `find` の一致はありません
 	Find Next	次を検索
 	Find Objects	オブジェクトを検索
 	Compare with Image	画像と比較

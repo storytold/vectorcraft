@@ -1470,6 +1470,19 @@ digits	Malayalam	Malayalam
 	Posterization	Áp phích hóa
 	Find	Tìm
 	Find and Replace…	Tìm và thay thế…
+	Find and Replace	Tìm và thay thế
+	Find:	Tìm:
+	Replace With:	Thay thế bằng:
+	Replace & Find	Thay thế và tìm
+	Replace All	Thay thế tất cả
+	Match Case	Phân biệt chữ hoa chữ thường
+	Find Whole Word	Tìm toàn bộ từ
+	Search Backwards	Tìm ngược
+	Check Hidden Layers	Kiểm tra lớp ẩn
+	Check Locked Layers	Kiểm tra lớp bị khóa
+@msg	No matches found	Không tìm thấy kết quả khớp
+@msg	Matches replaced: {n}	Số kết quả khớp đã thay thế: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	không có kết quả khớp với `find` tại byte {_1}..{_2} của đối tượng {_3}
 	Find Font	Tìm phông
 	Find Font Files	Tìm tệp phông chữ
 	Find Fonts	Tìm phông chữ

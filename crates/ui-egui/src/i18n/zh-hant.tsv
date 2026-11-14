@@ -1226,6 +1226,19 @@ font-technology	Variable	可變
 	Fill: click for swatches, Shift-click for the color mixer	填色：按一下開啟色票，按住 Shift 按一下開啟混色器
 	Find	尋找
 	Find and Replace…	尋找與取代…
+	Find and Replace	尋找與取代
+	Find:	尋找：
+	Replace With:	取代為：
+	Replace & Find	取代並尋找
+	Replace All	全部取代
+	Match Case	大小寫須相符
+	Find Whole Word	尋找全字
+	Search Backwards	反向搜尋
+	Check Hidden Layers	檢查隱藏圖層
+	Check Locked Layers	檢查鎖定圖層
+@msg	No matches found	找不到相符項目
+@msg	Matches replaced: {n}	已取代的相符項目：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	物件 {_3} 的位元組 {_1}..{_2} 處沒有 `find` 的相符項目
 	Find Font	尋找字體
 	Find Font…	尋找字體…
 	Find Next	尋找下一個

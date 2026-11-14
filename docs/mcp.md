@@ -8688,6 +8688,52 @@ for it (each a `text.editRange {id, start, end, insert}` item labelled with its 
 All (`text.spelling.ignoreAll {word}`) and Add to Dictionary (`text.spelling.addWord {word}`); the context menu's
 entries list them with their params. A right-click on type also has Spelling › Auto Spell Check (`edit.autoSpellCheck`).
 
+## Find and Replace
+
+`edit.findNext {find, matchCase?, wholeWord?, backwards?, hiddenLayers?, lockedLayers?, from?}` finds the next match
+of `find` and selects its type object. The result is `{id, start, end, index, count, selected}`: `start` and `end`
+are byte offsets in the type object's text, the ones `text.editRange` takes, `index` is the match's place among all
+the matches (from 1) and `count` is how many there are. With no match it is `{id: null, count: 0}`. Nothing is
+recorded for undo.
+
+- The search reaches visible, unlocked type on visible, unlocked layers, off locked artboards. `hiddenLayers` adds the
+  type of hidden layers and sublayers and `lockedLayers` that of locked ones, as Check Hidden Layers and Check Locked
+  Layers do in [Find and replace text](https://helpx.adobe.com/pdf/illustrator_reference.pdf). A hidden or locked
+  object or group keeps its type out.
+- `backwards` is Search Backwards on that page: the search goes from the bottom of the stacking order to the top.
+  Without it, the search goes from the top down.
+- These rules are VectorCraft's own. Inside a type object the matches come in reading order, or from the last with
+  `backwards`. `from: {id, start, end}`, a match the command returned or the range `edit.replaceMatch` returned, is
+  where the search goes on from; past the last match it starts again at the first. Without `from` it goes on after the
+  first selected type object, and with no type selected it starts at the first match. A match on a hidden or locked
+  layer comes back with `selected: false` and the selection stays as it is. A match stays inside one style run.
+
+`edit.replaceMatch {find, replace?, matchCase?, wholeWord?, id, start, end}` replaces that one match with `replace`
+as one undo step and returns `{id, start, end, replaced}`, with `start` and `end` the replacement's bytes. Bytes that
+are no match of `find` are refused. A match that already reads as `replace` is left as it is, with no undo step and
+`replaced: false`. `edit.findReplace {find, replace?, matchCase?, wholeWord?, hiddenLayers?, lockedLayers?, ids?}`
+replaces every match in the type the search reaches (or in `ids`) as one undo step and returns `{count, replaced}`,
+with `count` the matches and `replaced` those that did not already read as `replace`; when
+nothing changes, no undo step is recorded. An empty `find` is an error in all three.
+
+```json
+{"name":"run_command","arguments":{"command":"edit.findNext","params":{"find":"colour","wholeWord":true}}}
+{"name":"run_command","arguments":{"command":"edit.replaceMatch","params":{"find":"colour","replace":"color","wholeWord":true,"id":12,"start":4,"end":10}}}
+{"name":"run_command","arguments":{"command":"edit.findNext","params":{"find":"colour","wholeWord":true,"from":{"id":12,"start":4,"end":9}}}}
+```
+
+In the app, Edit › Find and Replace… opens a dialog that stays open (kind `findReplace`), with Find and Replace With
+fields, Match Case, Find Whole Word, Search Backwards, Check Hidden Layers and Check Locked Layers, and Find, Replace,
+Replace & Find, Replace All and Done. Its fields are `find`, `replace`, `matchCase`, `wholeWord`, `backwards`,
+`hiddenLayers`, `lockedLayers` and `action`; `ui.dialog.confirm` runs the `action`: `find` (the default), `replace`,
+`replaceFind`, `replaceAll` or `done`, which closes the dialog. The dialog shows the match found in its line of text
+with its place among the matches. Replace and Replace & Find change a match that Find reached with the Find text and
+the options as they are now, and find one otherwise. Enter runs Find. Edit › Find Next goes on from the dialog's last
+search while the dialog is closed, and opens the dialog when there has been none. A place the search reached in one
+document is not used in another, nor once the Find text or an option that decides a match changes: the search then
+starts again as it does without `from`. `ui.paramDialog` opens
+the dialog on the last search, with the fields its `params` give in its place.
+
 
 ## Justification options
 

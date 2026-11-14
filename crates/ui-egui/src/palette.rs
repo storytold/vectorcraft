@@ -387,7 +387,7 @@ mod tests {
             ("object.path.cleanUp", "command"),
             ("object.mesh.create", "command"),
             ("type.smartPunctuation", "command"),
-            ("edit.findReplace", "command"),
+            ("edit.findReplace", crate::dialogs::find_replace::KIND),
             ("object.path.smooth", crate::dialogs::smooth_slider::KIND),
         ];
         for (id, kind) in expected {

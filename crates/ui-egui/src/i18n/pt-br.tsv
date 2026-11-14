@@ -1140,6 +1140,19 @@ antiAlias	Sharp	Nítido
 	Find Font…	Localizar Fonte…
 	Find Next	Localizar Próximo
 	Find and Replace…	Localizar e Substituir…
+	Find and Replace	Localizar e Substituir
+	Find:	Localizar:
+	Replace With:	Substituir por:
+	Replace & Find	Substituir e Localizar
+	Replace All	Substituir Tudo
+	Match Case	Diferenciar Maiúsculas de Minúsculas
+	Find Whole Word	Localizar Palavra Inteira
+	Search Backwards	Pesquisar para Trás
+	Check Hidden Layers	Verificar Camadas Ocultas
+	Check Locked Layers	Verificar Camadas Bloqueadas
+@msg	No matches found	Nenhuma correspondência encontrada
+@msg	Matches replaced: {n}	Correspondências substituídas: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nenhuma correspondência de `find` nos bytes {_1}..{_2} do objeto {_3}
 	First Page	Primeira Página
 	First-line Left Indent	Recuo Esquerdo da Primeira Linha
 	Fisheye…	Olho de Peixe…

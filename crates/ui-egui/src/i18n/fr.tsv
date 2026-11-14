@@ -1245,6 +1245,19 @@ font-technology	Variable	Variables
 	Fill: click for swatches, Shift-click for the color mixer	Fond : cliquez pour le nuancier, Maj+clic pour le mélangeur de couleurs
 	Find	Rechercher
 	Find and Replace…	Rechercher et remplacer…
+	Find and Replace	Rechercher et remplacer
+	Find:	Rechercher:
+	Replace With:	Remplacer par:
+	Replace & Find	Remplacer et rechercher
+	Replace All	Tout remplacer
+	Match Case	Respecter la casse
+	Find Whole Word	Rechercher le mot entier
+	Search Backwards	Rechercher vers l’arrière
+	Check Hidden Layers	Vérifier les calques masqués
+	Check Locked Layers	Vérifier les calques verrouillés
+@msg	No matches found	Aucune occurrence trouvée
+@msg	Matches replaced: {n}	Occurrences remplacées : {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	aucune occurrence de `find` aux octets {_1}..{_2} de l’objet {_3}
 	Find Font	Rechercher une police
 	Find Font…	Rechercher une police…
 	Find Next	Rechercher le suivant

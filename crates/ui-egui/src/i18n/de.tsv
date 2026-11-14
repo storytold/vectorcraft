@@ -1230,6 +1230,19 @@ font-technology	Variable	Variabel
 	Fill: click for swatches, Shift-click for the color mixer	Fläche: Klicken für Farbfelder, Shift-Klick für den Farbmischer
 	Find	Suchen
 	Find and Replace…	Suchen und ersetzen…
+	Find and Replace	Suchen und ersetzen
+	Find:	Suchen:
+	Replace With:	Ersetzen durch:
+	Replace & Find	Ersetzen und suchen
+	Replace All	Alle ersetzen
+	Match Case	Groß-/Kleinschreibung beachten
+	Find Whole Word	Ganzes Wort suchen
+	Search Backwards	Rückwärts suchen
+	Check Hidden Layers	Ausgeblendete Ebenen durchsuchen
+	Check Locked Layers	Gesperrte Ebenen durchsuchen
+@msg	No matches found	Keine Treffer gefunden
+@msg	Matches replaced: {n}	Ersetzte Treffer: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	kein Treffer für `find` bei Byte {_1}..{_2} von Objekt {_3}
 	Find Font	Schrift suchen
 	Find Font…	Schrift suchen…
 	Find Next	Weitersuchen

@@ -88,6 +88,19 @@
 	Paste without Formatting	ფორმატირების გარეშე ჩასმა
 	Clear	გასუფთავება
 	Find and Replace…	ძებნა და ჩანაცვლება…
+	Find and Replace	ძებნა და ჩანაცვლება
+	Find:	ძებნა:
+	Replace With:	ჩანაცვლება შემდეგით:
+	Replace & Find	ჩანაცვლება და ძებნა
+	Replace All	ყველას ჩანაცვლება
+	Match Case	რეგისტრის გათვალისწინება
+	Find Whole Word	მთელი სიტყვის ძებნა
+	Search Backwards	უკუმიმართულებით ძებნა
+	Check Hidden Layers	დამალული შრეების შემოწმება
+	Check Locked Layers	ჩაკეტილი შრეების შემოწმება
+@msg	No matches found	დამთხვევები ვერ მოიძებნა
+@msg	Matches replaced: {n}	ჩანაცვლებული დამთხვევები: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ობიექტ {_3}-ის {_1}..{_2} ბაიტებზე `find`-ის დამთხვევა არ არის
 	Find Next	შემდეგის ძებნა
 	Spelling	მართლწერა
 	Auto Spell Check	მართლწერის ავტომატური შემოწმება

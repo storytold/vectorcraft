@@ -165,6 +165,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "edit.duplicate",
     "edit.findNext",
     "edit.findReplace",
+    "edit.replaceMatch",
     "effect.apply",
     "effect.deferredStatus",
     "effect.duplicate",

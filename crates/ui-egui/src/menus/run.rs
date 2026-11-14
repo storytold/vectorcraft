@@ -705,6 +705,10 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            // Find and Replace has a dialog of its own, which stays open from match to match.
+            if cmd == crate::dialogs::find_replace::COMMAND {
+                return Some(crate::dialogs::find_replace::open(app, &fields));
+            }
             fields.insert("__command".into(), json!(cmd));
             fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
             app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });

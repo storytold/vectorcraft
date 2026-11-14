@@ -1204,6 +1204,19 @@ font-technology	Variable	Değişken
 	Fill: click for swatches, Shift-click for the color mixer	Doldur: renk örnekleri için tıklayın, renk karıştırıcı için Shift tuşunu basılı tutarak tıklayın
 	Find	Bul
 	Find and Replace…	Bul ve Değiştir…
+	Find and Replace	Bul ve Değiştir
+	Find:	Bul:
+	Replace With:	Şununla Değiştir:
+	Replace & Find	Değiştir ve Bul
+	Replace All	Tümünü Değiştir
+	Match Case	Büyük/Küçük Harf Eşleştir
+	Find Whole Word	Tam Sözcüğü Bul
+	Search Backwards	Geriye Doğru Ara
+	Check Hidden Layers	Gizli Katmanları Denetle
+	Check Locked Layers	Kilitli Katmanları Denetle
+@msg	No matches found	Eşleşme bulunamadı
+@msg	Matches replaced: {n}	Değiştirilen eşleşmeler: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	{_3} nesnesinin {_1}..{_2} baytlarında `find` eşleşmesi yok
 	Find Font	Yazı Tipi Bul
 	Find Font…	Yazı Tipi Bul…
 	Find Next	Sonrakini Bul

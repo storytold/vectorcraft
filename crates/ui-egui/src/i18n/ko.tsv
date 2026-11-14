@@ -156,6 +156,19 @@ digits	Malayalam	말라얄람어
 	Paste without Formatting	서식 없이 붙여넣기
 	Clear	지우기
 	Find and Replace…	찾기 및 바꾸기…
+	Find and Replace	찾기 및 바꾸기
+	Find:	찾기:
+	Replace With:	바꿀 내용:
+	Replace & Find	바꾼 후 찾기
+	Replace All	모두 바꾸기
+	Match Case	대/소문자 구분
+	Find Whole Word	단어 단위로 찾기
+	Search Backwards	역방향 검색
+	Check Hidden Layers	숨겨진 레이어 확인
+	Check Locked Layers	잠긴 레이어 확인
+@msg	No matches found	일치하는 항목이 없습니다
+@msg	Matches replaced: {n}	바꾼 일치 항목: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	개체 {_3}의 바이트 {_1}..{_2}에 `find`와 일치하는 항목이 없습니다
 	Find Next	다음 찾기
 	Find Objects	개체 찾기
 	Compare with Image	이미지와 비교

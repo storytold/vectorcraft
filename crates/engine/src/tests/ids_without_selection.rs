@@ -377,7 +377,7 @@ fn ids_cases(d: u64) -> Vec<(&'static str, &'static str, serde_json::Value, Unse
         ("addon.color.filter", "ids", json!({"effect": "addon.color.invert"}), Selected),
         ("addon.color.applyNearestSwatch", "ids", json!({}), Selected),
         ("edit.colors.overprintBlack", "ids", json!({}), Selected),
-        ("edit.findReplace", "ids", json!({"find": "A", "replace": "B"}), Gives(json!({"count": 1}))),
+        ("edit.findReplace", "ids", json!({"find": "A", "replace": "B"}), Gives(json!({"count": 1, "replaced": 1}))),
         ("layer.highlight", "ids", json!({}), Fails("missing ids")),
         ("layer.move", "ids", json!({ "target": d }), Fails("missing ids")),
         ("library.add", "ids", json!({"kind": "graphic"}), Selected),

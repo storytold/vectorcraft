@@ -1697,6 +1697,19 @@ digits	Malayalam	Malaiàlam
 	Filters	Filtres
 	Find	Cerca
 	Find and Replace…	Cerca i reemplaça…
+	Find and Replace	Cerca i reemplaça
+	Find:	Cerca:
+	Replace With:	Reemplaça per:
+	Replace & Find	Reemplaça i cerca
+	Replace All	Reemplaça-ho tot
+	Match Case	Distingeix majúscules i minúscules
+	Find Whole Word	Cerca la paraula sencera
+	Search Backwards	Cerca cap enrere
+	Check Hidden Layers	Comprova les capes ocultes
+	Check Locked Layers	Comprova les capes bloquejades
+@msg	No matches found	No s’ha trobat cap coincidència
+@msg	Matches replaced: {n}	Coincidències reemplaçades: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	no hi ha cap coincidència de `find` als bytes {_1}..{_2} de l’objecte {_3}
 	Find Font	Cerca un tipus de lletra
 	Find Font Files	Cerca fitxers de tipus de lletra
 	Find Fonts	Cerca tipus de lletra

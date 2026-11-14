@@ -1192,6 +1192,19 @@ antiAlias	Sharp	锐利
 	Fill: click for swatches, Shift-click for the color mixer	填色：单击开启色板，按住 Shift 单击开启混色器
 	Find	查找
 	Find and Replace…	查找和替换…
+	Find and Replace	查找和替换
+	Find:	查找：
+	Replace With:	替换为：
+	Replace & Find	替换并查找
+	Replace All	全部替换
+	Match Case	区分大小写
+	Find Whole Word	查找全字匹配
+	Search Backwards	反向搜索
+	Check Hidden Layers	检查隐藏图层
+	Check Locked Layers	检查锁定图层
+@msg	No matches found	未找到匹配项
+@msg	Matches replaced: {n}	已替换的匹配项：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	对象 {_3} 的字节 {_1}..{_2} 处没有 `find` 的匹配项
 	Find Font	查找字体
 	Find Font…	查找字体…
 	Find Next	查找下一个

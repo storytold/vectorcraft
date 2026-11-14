@@ -47,6 +47,7 @@ mod export_for_screens;
 pub mod eyedropper;
 pub mod file_info;
 pub mod find_links;
+pub mod find_replace;
 pub mod flare_options;
 pub mod flatten;
 pub mod flattener_presets;
@@ -387,6 +388,7 @@ registry! {
     MissingLinks: [missing_links::KIND] => missing_links::SPEC,
     MissingFonts: [missing_fonts::KIND] => missing_fonts::SPEC,
     FindLinks: [find_links::KIND] => find_links::SPEC,
+    FindReplace: [find_replace::KIND] => find_replace::SPEC,
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,

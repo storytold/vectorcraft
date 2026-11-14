@@ -1559,6 +1559,19 @@ digits	Malayalam	Malajálam
 	Film & Video	Film és videó
 	Find	Keresés
 	Find and Replace…	Keresés és csere…
+	Find and Replace	Keresés és csere
+	Find:	Keresés:
+	Replace With:	Csere erre:
+	Replace & Find	Csere és keresés
+	Replace All	Az összes cseréje
+	Match Case	Kis- és nagybetűk megkülönböztetése
+	Find Whole Word	Teljes szó keresése
+	Search Backwards	Keresés visszafelé
+	Check Hidden Layers	Rejtett rétegek ellenőrzése
+	Check Locked Layers	Zárolt rétegek ellenőrzése
+@msg	No matches found	Nincs találat
+@msg	Matches replaced: {n}	Cserélt találatok: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nincs `find` találat a(z) {_3} objektum {_1}..{_2} bájtjain
 	Find Font	Betűtípus keresése
 	Find Font Files	Betűtípusfájlok keresése
 	Find Fonts	Betűtípusok keresése

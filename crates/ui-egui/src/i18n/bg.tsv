@@ -1202,6 +1202,16 @@ font-technology	Variable	Променливи
 	Fill: click for swatches, Shift-click for the color mixer	Запълване: щракнете за образци, Shift-щракване за смесителя на цветове
 	Find	Търсене
 	Find and Replace…	Търсене и замяна…
+	Find and Replace	Търсене и замяна
+	Find:	Търсене:
+	Replace With:	Замяна с:
+	Replace & Find	Замяна и търсене
+	Replace All	Замяна на всички
+	Match Case	Съвпадение на малки и главни букви
+	Find Whole Word	Търсене на цяла дума
+	Search Backwards	Търсене назад
+	Check Hidden Layers	Проверка на скритите слоеве
+	Check Locked Layers	Проверка на заключените слоеве
 	Find Font	Търсене на шрифт
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ

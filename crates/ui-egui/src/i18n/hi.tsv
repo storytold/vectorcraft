@@ -1885,6 +1885,19 @@ antiAlias	Sharp	शार्प
 	Filters	फिल्टर
 	Find	खोजें
 	Find and Replace…	खोजें और बदलें…
+	Find and Replace	खोजें और बदलें
+	Find:	खोजें:
+	Replace With:	इससे रिप्लेस करें:
+	Replace & Find	रिप्लेस करें और खोजें
+	Replace All	सभी रिप्लेस करें
+	Match Case	केस मिलाएँ
+	Find Whole Word	पूरा शब्द खोजें
+	Search Backwards	पीछे की ओर खोजें
+	Check Hidden Layers	छिपी हुई लेयर्स जाँचें
+	Check Locked Layers	लॉक की गई लेयर्स जाँचें
+@msg	No matches found	कोई मिलान नहीं मिला
+@msg	Matches replaced: {n}	रिप्लेस किए गए मिलान: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ऑब्जेक्ट {_3} के बाइट {_1}..{_2} पर `find` का कोई मिलान नहीं है
 	Find Font	फ़ॉन्ट खोजें
 	Find Font Files	फ़ॉन्ट फ़ाइल का पता लगाएं
 	Find Font…	फ़ॉन्ट खोजें…

@@ -1215,6 +1215,19 @@ font-technology	Variable	Variabla
 	Fill: click for swatches, Shift-click for the color mixer	Fyllning: klicka för färgrutor, Shift-klicka för färgmixern
 	Find	Sök
 	Find and Replace…	Sök och ersätt…
+	Find and Replace	Sök och ersätt
+	Find:	Sök:
+	Replace With:	Ersätt med:
+	Replace & Find	Ersätt och sök
+	Replace All	Ersätt alla
+	Match Case	Matcha skiftläge
+	Find Whole Word	Sök hela ord
+	Search Backwards	Sök bakåt
+	Check Hidden Layers	Kontrollera dolda lager
+	Check Locked Layers	Kontrollera låsta lager
+@msg	No matches found	Inga träffar hittades
+@msg	Matches replaced: {n}	Ersatta träffar: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen träff för `find` vid byte {_1}..{_2} i objekt {_3}
 	Find Font	Sök typsnitt
 	Find Font…	Sök typsnitt…
 	Find Next	Sök nästa

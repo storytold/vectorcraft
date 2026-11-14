@@ -98,6 +98,19 @@
 	Paste without Formatting	Liitä ilman muotoilua
 	Clear	Tyhjennä
 	Find and Replace…	Etsi ja korvaa…
+	Find and Replace	Etsi ja korvaa
+	Find:	Etsi:
+	Replace With:	Korvaa tekstillä:
+	Replace & Find	Korvaa ja etsi
+	Replace All	Korvaa kaikki
+	Match Case	Sama kirjainkoko
+	Find Whole Word	Etsi koko sana
+	Search Backwards	Etsi taaksepäin
+	Check Hidden Layers	Tarkista piilotetut tasot
+	Check Locked Layers	Tarkista lukitut tasot
+@msg	No matches found	Osumia ei löytynyt
+@msg	Matches replaced: {n}	Korvattuja osumia: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	objektin {_3} tavuissa {_1}..{_2} ei ole haun `find` osumaa
 	Find Next	Etsi seuraava
 	Spelling	Oikeinkirjoitus
 	Auto Spell Check	Automaattinen oikeinkirjoituksen tarkistus

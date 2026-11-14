@@ -90,6 +90,19 @@
 	Paste without Formatting	Vložit bez formátování
 	Clear	Smazat
 	Find and Replace…	Najít a nahradit…
+	Find and Replace	Najít a nahradit
+	Find:	Najít:
+	Replace With:	Nahradit čím:
+	Replace & Find	Nahradit a najít
+	Replace All	Nahradit vše
+	Match Case	Rozlišovat velká a malá písmena
+	Find Whole Word	Najít celé slovo
+	Search Backwards	Hledat zpět
+	Check Hidden Layers	Prohledat skryté vrstvy
+	Check Locked Layers	Prohledat zamknuté vrstvy
+@msg	No matches found	Nenalezeny žádné shody
+@msg	Matches replaced: {n}	Nahrazeno shod: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	na bajtech {_1}..{_2} objektu {_3} není žádná shoda s `find`
 	Find Next	Najít další
 	Spelling	Pravopis
 	Auto Spell Check	Automatická kontrola pravopisu
