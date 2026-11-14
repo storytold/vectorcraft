@@ -129,7 +129,7 @@ thread_local! {
 
 /// [`SELECTOR_TESTS`] of this thread.
 #[cfg(test)]
-fn selector_tests() -> u64 {
+pub(super) fn selector_tests() -> u64 {
     SELECTOR_TESTS.get()
 }
 
