@@ -21,8 +21,12 @@ mod outline;
 mod rings;
 
 #[cfg(test)]
+pub(crate) use build::EXTRUDED;
+#[cfg(test)]
+pub(crate) use build::PLANES;
+#[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
-pub(crate) use build::{Face3, extrude_faces, plane_faces};
+pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
 pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]

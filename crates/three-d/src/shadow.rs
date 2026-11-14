@@ -11,8 +11,8 @@ use std::ops::Range;
 
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
-use crate::solid::{Face3, extrude_faces, inflate_faces, plane_faces};
-use crate::{Extrude, Inflate, MAX_SOLID_FACES, Revolve, V3, View, finite, perspective_scale};
+use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
+use crate::{Extrude, Face, Facet, Inflate, MAX_SOLID_FACES, Revolve, V3, View, finite, perspective_scale};
 
 /// Where the shadow falls.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -160,14 +160,14 @@ impl ShadowCaster {
 
     /// Add Extrude & Bevel's solid ([`crate::extrude`]).
     pub fn extrude(&mut self, path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Rotate's plane ([`crate::plane`]).
     pub fn plane(&mut self, path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = plane_faces(path, rule, bounds, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = plane_faces(path, rule, bounds, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Inflate's solids for several shapes of one object ([`crate::inflate_together`]), each
@@ -182,11 +182,11 @@ impl ShadowCaster {
         options: Inflate,
         view: View,
     ) -> Vec<Result<Range<usize>, String>> {
-        inflate_faces(shapes, bounds, options, view, true)
+        inflate_faces(shapes, bounds, options, view, Keep::Faces)
             .enumerate()
             .map(|(i, r)| {
                 let (_, faces, projection) = r?;
-                if casts.get(i).copied().unwrap_or(true) { self.add(faces, projection) } else { Ok(self.faces.len()..self.faces.len()) }
+                if casts.get(i).copied().unwrap_or(true) { self.add(faces?, projection) } else { Ok(self.faces.len()..self.faces.len()) }
             })
             .collect()
     }
@@ -197,6 +197,14 @@ impl ShadowCaster {
         crate::revolve_faces(path, rule, bounds, options, Some(&mut faces))?;
         let o = options.sanitized();
         self.add(faces, Some(crate::revolve_projection(bounds, o)))
+    }
+
+    /// Add the faces of a solid kept by the build that drew it ([`extrude_shadowed`],
+    /// [`plane_shadowed`], [`inflate_shadowed`], [`revolve_shadowed`]): the faces
+    /// [`ShadowCaster::extrude`], [`ShadowCaster::plane`], [`ShadowCaster::inflate`] or
+    /// [`ShadowCaster::revolve`] adds for that solid, or the error it gives.
+    pub fn add_solid(&mut self, solid: SolidFaces) -> Result<Range<usize>, String> {
+        self.add(solid.faces?, solid.projection)
     }
 
     /// The shadow of the faces gathered, on the page, filled with the nonzero rule: `None` when
@@ -285,6 +293,56 @@ impl ShadowCaster {
         let path = PathData::from_bezpath(&bp);
         (!path.subpaths.is_empty()).then_some(path)
     }
+}
+
+/// A solid's faces before projection, kept by the build that drew it, for its shadow
+/// ([`ShadowCaster::add_solid`]): the faces, or the error keeping them gave, and the projection the
+/// solid was drawn with.
+#[derive(Clone, Debug)]
+pub struct SolidFaces {
+    faces: Result<Vec<Face3>, String>,
+    projection: Option<Projection>,
+}
+
+/// Extrude & Bevel's solid ([`crate::extrude`]) and, from the same build, the faces
+/// [`ShadowCaster::extrude`] adds for it. An error where [`crate::extrude`] gives one.
+pub fn extrude_shadowed(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<(Vec<Facet>, SolidFaces), String> {
+    let (facets, faces, projection) = extrude_faces(path, rule, bounds, options, view, Keep::Both)?;
+    Ok((facets, SolidFaces { faces, projection }))
+}
+
+/// Rotate's plane ([`crate::plane`]) and, from the same build, the face [`ShadowCaster::plane`]
+/// adds for it. An error where [`crate::plane`] gives one.
+pub fn plane_shadowed(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<(Vec<Facet>, SolidFaces), String> {
+    let (facets, faces, projection) = plane_faces(path, rule, bounds, view, Keep::Both)?;
+    Ok((facets, SolidFaces { faces, projection }))
+}
+
+/// Inflate's solids for several shapes of one object ([`crate::inflate_each`]) and, from the same
+/// builds, the faces [`ShadowCaster::inflate`] adds for each, each solid built as the iterator
+/// reaches it. An error where [`crate::inflate_each`] gives one.
+pub fn inflate_shadowed(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<(Vec<Facet>, SolidFaces), String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Both).map(|r| r.map(|(facets, faces, projection)| (facets, SolidFaces { faces, projection })))
+}
+
+/// Revolve's surface ([`crate::revolve`]) and, from the same sweep, the faces
+/// [`ShadowCaster::revolve`] adds for it with the nonzero fill rule. An error where
+/// [`crate::revolve`] gives one.
+pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
+    let mut kept = vec![];
+    let (faces, lost) = crate::revolve_sweep(path, FillRule::NonZero, bounds, options, true, Some(&mut kept))?;
+    let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
+    Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
+}
+
+/// [`revolve_shadowed`] with the faces as facets, as [`crate::revolve_facets`] gives them.
+pub fn revolve_facets_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Facet>, SolidFaces), String> {
+    revolve_shadowed(path, bounds, options).map(|(faces, kept)| (faces.into_iter().map(Facet::of_face).collect(), kept))
 }
 
 /// Whether `area`, the signed area of a polygon with corners `points`, is within rounding of

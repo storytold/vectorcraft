@@ -185,3 +185,244 @@ fn every_effect_casts_a_shadow() {
     // The surface turns about the square's left edge, reaching 100 to either side of it.
     assert!(b.x1 > 100.0 && b.x0 < 100.0 + 1e-6, "{b:?}");
 }
+
+/// The faces `caster` gathered and the projection it keeps, every number to the bit.
+fn gathered(caster: &ShadowCaster) -> String {
+    format!("{:?} {:?}", caster.faces, caster.projection)
+}
+
+/// What a solid kept for its shadow casts ([`casts`]).
+fn cast_from(solid: SolidFaces) -> Result<(String, Option<PathData>, Option<PathData>), String> {
+    let mut caster = ShadowCaster::new();
+    caster.add_solid(solid)?;
+    Ok(casts(&caster))
+}
+
+/// The faces `caster` gathered, and the shadows they cast behind and below.
+fn casts(caster: &ShadowCaster) -> (String, Option<PathData>, Option<PathData>) {
+    let below = Shadow { position: ShadowPosition::Below, distance: 0.3, ..Shadow::default() };
+    (gathered(caster), caster.path(Shadow::default()), caster.path(below))
+}
+
+/// A star of `points` points about (100, 100), its edges curved, with a square hole.
+fn star(points: usize) -> PathData {
+    let mut b = BezPath::new();
+    for k in 0..2 * points {
+        let (s, c) = (k as f64 * std::f64::consts::PI / points as f64).sin_cos();
+        let r = if k % 2 == 0 { 90.0 } else { 45.0 };
+        let p = (100.0 + r * c, 100.0 + r * s);
+        if k == 0 { b.move_to(p) } else { b.curve_to((p.0 + 3.0, p.1), (p.0, p.1 + 3.0), p) }
+    }
+    b.close_path();
+    rect(&mut b, 90.0, 90.0, 20.0, 20.0);
+    PathData::from_bezpath(&b)
+}
+
+/// A closed rectangle from (`x`, `y`), `w` wide and `h` high.
+fn rect(b: &mut BezPath, x: f64, y: f64, w: f64, h: f64) {
+    b.move_to((x, y));
+    b.line_to((x + w, y));
+    b.line_to((x + w, y + h));
+    b.line_to((x, y + h));
+    b.close_path();
+}
+
+/// The views the solids are compared in: straight on, turned, with perspective, and with colored
+/// lights.
+fn views() -> Vec<View> {
+    let turned = View { rotation_x: -25.0, rotation_y: 35.0, rotation_z: 10.0, ..View::default() };
+    vec![front(), turned, View { perspective: 60.0, ..turned }, View { light_color: [1.0, 0.5, 0.25], ..turned }]
+}
+
+/// Extrude & Bevel built once for its facets and its shadow gives the facets [`crate::extrude`]
+/// gives and casts what [`ShadowCaster::extrude`] casts, to the bit, errors included.
+#[test]
+fn an_extruded_solid_and_its_shadow_match_the_two_built_apart() {
+    use crate::{Bevel, BevelShape};
+    let bevel = Bevel { shape: BevelShape::Rounded, width: 6.0, height: 5.0, ..Bevel::default() };
+    let options = [
+        Extrude::default(),
+        Extrude { depth: 0.0, ..Extrude::default() },
+        Extrude { cap: false, ..Extrude::default() },
+        Extrude { hidden: true, ..Extrude::default() },
+        Extrude { twist: 90.0, taper: 0.6, ..Extrude::default() },
+        Extrude { bevel: Some(bevel), ..Extrude::default() },
+        Extrude { bevel: Some(Bevel { both_sides: true, inside: true, ..bevel }), twist: 45.0, ..Extrude::default() },
+    ];
+    let path = star(7);
+    let r = path.bounds().unwrap();
+    for view in views() {
+        for o in options {
+            let (facets, faces) = extrude_shadowed(&path, FillRule::NonZero, r, o, view).unwrap();
+            let apart = crate::extrude(&path, FillRule::NonZero, r, o, view).unwrap();
+            assert_eq!(format!("{facets:?}"), format!("{apart:?}"), "{o:?} {view:?}");
+            let mut caster = ShadowCaster::new();
+            caster.extrude(&path, FillRule::NonZero, r, o, view).unwrap();
+            assert!(!caster.is_empty());
+            assert_eq!(cast_from(faces), Ok(casts(&caster)), "{o:?} {view:?}");
+        }
+    }
+    let flat = Rect::new(0.0, 0.0, f64::INFINITY, 10.0);
+    let error = crate::extrude(&path, FillRule::NonZero, flat, Extrude::default(), front()).err();
+    assert!(error.is_some());
+    assert_eq!(extrude_shadowed(&path, FillRule::NonZero, flat, Extrude::default(), front()).err(), error);
+}
+
+/// Rotate's plane built once for its facet and its shadow matches the two built apart.
+#[test]
+fn a_rotated_plane_and_its_shadow_match_the_two_built_apart() {
+    let path = star(5);
+    let r = path.bounds().unwrap();
+    for view in views() {
+        for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+            let (facets, faces) = plane_shadowed(&path, rule, r, view).unwrap();
+            assert_eq!(format!("{facets:?}"), format!("{:?}", crate::plane(&path, rule, r, view).unwrap()), "{view:?}");
+            let mut caster = ShadowCaster::new();
+            caster.plane(&path, rule, r, view).unwrap();
+            assert_eq!(cast_from(faces), Ok(casts(&caster)), "{view:?}");
+        }
+    }
+}
+
+/// Inflate's solids built once for their facets and shadows match the two built apart: several
+/// puffs under one eye, both sides, open backs, and twisted sides cut finer than room is left for.
+#[test]
+fn inflated_solids_and_their_shadows_match_the_two_built_apart() {
+    let star = star(5);
+    let box_ = square(200.0, 20.0, 60.0);
+    let ring: Vec<Point> = (0..600)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 600.0).sin_cos();
+            Point::new(100.0 + 90.0 * c, 100.0 + 90.0 * s)
+        })
+        .collect();
+    let ring = PathData::single(vectorcraft_geom::SubPath::polyline(&ring, true));
+    let sets = [vec![(&star, FillRule::NonZero), (&box_, FillRule::NonZero), (&star, FillRule::EvenOdd)], vec![(&ring, FillRule::NonZero)]];
+    let bounds = Rect::new(0.0, 0.0, 280.0, 200.0);
+    let options = [
+        Inflate::default(),
+        Inflate { depth: 30.0, both_sides: true, ..Inflate::default() },
+        Inflate { depth: 20.0, cap: false, volume: 80.0, ..Inflate::default() },
+        Inflate { depth: 40.0, twist: 360.0, taper: 0.7, both_sides: true, ..Inflate::default() },
+        // Thin and barely twisted: the star's sides want more pieces than room is left after its
+        // front and back, and the shadow, which keeps the faces turned away, has less room left.
+        Inflate { depth: 0.1, twist: 0.1, both_sides: true, ..Inflate::default() },
+    ];
+    for shapes in &sets {
+        for view in views() {
+            for o in options {
+                let built: Vec<_> = inflate_shadowed(shapes, bounds, o, view).collect();
+                let facets: Vec<_> = crate::inflate_each(shapes, bounds, o, view).collect();
+                let mut caster = ShadowCaster::new();
+                let added = caster.inflate(shapes, &vec![true; shapes.len()], bounds, o, view);
+                assert!(added.iter().all(Result::is_ok));
+                assert_eq!(built.len(), shapes.len());
+                let mut one = ShadowCaster::new();
+                for (b, f) in built.into_iter().zip(&facets) {
+                    let ((facets, faces), f) = (b.unwrap(), f.as_ref().unwrap());
+                    assert_eq!(format!("{facets:?}"), format!("{f:?}"), "{o:?} {view:?}");
+                    one.add_solid(faces).unwrap();
+                }
+                assert_eq!(casts(&one), casts(&caster), "{o:?} {view:?}");
+            }
+        }
+    }
+}
+
+/// Revolve's surface swept once for its faces and its shadow gives the faces [`crate::revolve`]
+/// gives and casts what [`ShadowCaster::revolve`] casts, to the bit: an open profile with caps,
+/// closed contours that cross (their walls cut where they do), a hole, partial sweeps, smooth and
+/// flat shading, and the cut side that graphics take.
+#[test]
+fn a_revolved_surface_and_its_shadow_match_the_two_swept_apart() {
+    let mut open = BezPath::new();
+    open.move_to((120.0, 0.0));
+    open.curve_to((160.0, 20.0), (100.0, 60.0), (140.0, 90.0));
+    open.line_to((125.0, 120.0));
+    let mut crossing = BezPath::new();
+    rect(&mut crossing, 110.0, 0.0, 60.0, 80.0);
+    rect(&mut crossing, 150.0, 40.0, 40.0, 80.0);
+    let mut holed = BezPath::new();
+    holed.move_to((110.0, 0.0));
+    holed.curve_to((200.0, 0.0), (200.0, 120.0), (110.0, 120.0));
+    holed.close_path();
+    rect(&mut holed, 130.0, 40.0, 20.0, 30.0);
+    let paths = [open, crossing, holed].map(|b| PathData::from_bezpath(&b));
+    let turned = Revolve { rotation_x: -20.0, rotation_y: 30.0, ..Revolve::default() };
+    let options = [
+        Revolve::default(),
+        turned,
+        Revolve { angle: 200.0, perspective: 40.0, ..turned },
+        Revolve { smooth_shading: false, segments: 12, ..turned },
+        Revolve { cap_ends: false, offset: 15.0, ..turned },
+        Revolve { map_surface: true, edge: crate::Edge::Right, ..turned },
+        Revolve { map_surface: true, angle: 300.0, curve_samples: Some(5), ..turned },
+    ];
+    for path in &paths {
+        let bounds = path.bounds().unwrap();
+        for o in options {
+            let (faces, kept) = revolve_shadowed(path, bounds, o).unwrap();
+            assert_eq!(format!("{faces:?}"), format!("{:?}", crate::revolve(path, bounds, o).unwrap()), "{o:?}");
+            let (facets, also) = revolve_facets_shadowed(path, bounds, o).unwrap();
+            assert_eq!(format!("{facets:?}"), format!("{:?}", crate::revolve_facets(path, bounds, o).unwrap()), "{o:?}");
+            assert_eq!(cast_from(also), cast_from(kept.clone()), "{o:?}");
+            let mut caster = ShadowCaster::new();
+            caster.revolve(path, FillRule::NonZero, bounds, o).unwrap();
+            assert!(!caster.is_empty());
+            assert_eq!(cast_from(kept), Ok(casts(&caster)), "{o:?}");
+        }
+    }
+}
+
+/// A surface whose shadow is past the limit on the profile's points (its walls cut where they
+/// cross another contour) still draws every face, and its shadow gives the error the shadow swept
+/// alone gives.
+#[test]
+fn a_surface_whose_shadow_is_too_complex_still_draws() {
+    let mut b = BezPath::new();
+    b.move_to((110.0, 0.0));
+    for i in 1..6000 {
+        b.line_to((110.0 + f64::from(i) * 0.02, if i % 2 == 0 { 0.0 } else { 10.0 }));
+    }
+    b.line_to((110.0, 20.0));
+    b.close_path();
+    rect(&mut b, 100.0, 4.0, 140.0, 2.0);
+    let path = PathData::from_bezpath(&b);
+    let bounds = path.bounds().unwrap();
+    let o = Revolve { segments: 4, smooth_shading: false, ..Revolve::default() };
+    let (faces, kept) = revolve_shadowed(&path, bounds, o).unwrap();
+    let drawn = crate::revolve(&path, bounds, o).unwrap();
+    assert!(!drawn.is_empty());
+    assert!(faces == drawn);
+    let alone = ShadowCaster::new().revolve(&path, FillRule::NonZero, bounds, o).unwrap_err();
+    assert!(alone.contains("too complex"), "{alone}");
+    assert_eq!(cast_from(kept).unwrap_err(), alone);
+}
+
+/// One build gives the facets and the faces of the shadow: each solid is built once.
+#[test]
+fn a_solid_and_its_shadow_are_built_once() {
+    let path = star(5);
+    let r = path.bounds().unwrap();
+    let count = |n: &'static std::thread::LocalKey<std::cell::Cell<usize>>| n.with(std::cell::Cell::get);
+    let start = count(&crate::solid::EXTRUDED);
+    let (facets, faces) = extrude_shadowed(&path, FillRule::NonZero, r, Extrude::default(), front()).unwrap();
+    assert!(!facets.is_empty() && cast_from(faces).is_ok_and(|c| c.1.is_some()));
+    assert_eq!(count(&crate::solid::EXTRUDED), start + 1);
+    let start = count(&crate::solid::PLANES);
+    let (facets, faces) = plane_shadowed(&path, FillRule::NonZero, r, front()).unwrap();
+    assert!(!facets.is_empty() && cast_from(faces).is_ok_and(|c| c.1.is_some()));
+    assert_eq!(count(&crate::solid::PLANES), start + 1);
+    let start = count(&crate::solid::INFLATED);
+    let box_ = square(200.0, 20.0, 60.0);
+    let shapes = [(&path, FillRule::NonZero), (&box_, FillRule::NonZero)];
+    for solid in inflate_shadowed(&shapes, Rect::new(0.0, 0.0, 280.0, 200.0), Inflate::default(), front()) {
+        let (facets, faces) = solid.unwrap();
+        assert!(!facets.is_empty() && cast_from(faces).is_ok_and(|c| c.1.is_some()));
+    }
+    assert_eq!(count(&crate::solid::INFLATED), start + 2);
+    let start = count(&crate::REVOLVED);
+    let (drawn, faces) = revolve_shadowed(&path, r, Revolve::default()).unwrap();
+    assert!(!drawn.is_empty() && cast_from(faces).is_ok_and(|c| c.1.is_some()));
+    assert_eq!(count(&crate::REVOLVED), start + 1);
+}
