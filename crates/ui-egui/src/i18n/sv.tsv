@@ -1300,6 +1300,7 @@ font-technology	Variable	Variabla
 	Format	Format
 	Format Options	Formatalternativ
 	Format Settings	Formatinställningar
+	Format Settings…	Formatinställningar…
 	Format:	Format:
 	Formats:	Format:
 	Fractional Widths	Bråkdelsbredder
@@ -8988,6 +8989,9 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+	Nest Shapes…	Packa former…
+	Nest Shapes	Packa former
+	Roll	Rulle
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter

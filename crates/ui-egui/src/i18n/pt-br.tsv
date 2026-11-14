@@ -1203,6 +1203,7 @@ antiAlias	Sharp	Nítido
 	Format	Formato
 	Format Options	Opções de Formato
 	Format Settings	Configurações de Formato
+	Format Settings…	Configurações de Formato…
 	Format:	Formato:
 	Formats:	Formatos:
 	Fractions	Frações
@@ -9514,3 +9515,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+	Nest Shapes…	Aninhar formas…
+	Nest Shapes	Aninhar formas
+	Roll	Rolo

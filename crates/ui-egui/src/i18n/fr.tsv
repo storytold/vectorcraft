@@ -1335,6 +1335,7 @@ font-technology	Variable	Variables
 	Format	Format
 	Format Options	Options de format
 	Format Settings	Paramètres de format
+	Format Settings…	Paramètres de format…
 	Format:	Format :
 	Formats:	Formats :
 	Fractional Widths	Largeurs fractionnaires
@@ -9312,6 +9313,9 @@ breakText	Glyphs	Glyphes
 	Grommets	Œillets
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
+	Nest Shapes…	Imbriquer les formes…
+	Nest Shapes	Imbriquer les formes
+	Roll	Rouleau
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Les effets 3D exigent des coordonnées finies comprises dans 100 millions de points
