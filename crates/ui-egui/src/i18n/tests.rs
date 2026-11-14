@@ -2234,6 +2234,55 @@ fn message_keys_keep_doubled_braces() {
     assert_eq!(as_template(r"it doesn't start with {\rtf"), r"it doesn't start with {\rtf");
 }
 
+/// The braces of a message that is not a format string (a plain literal or a `&str` constant) are
+/// literal, so its catalog key doubles them; a `format!` string or an `#[error(…)]` string keeps
+/// its `{{`, `}}` and placeholders.
+#[test]
+fn plain_message_keys_double_their_braces() {
+    let code = concat!(
+        "const SHAPE: &str = \"a shape is {\\\"kind\\\": …}\";\n",
+        "fn f() -> Result<()> { Err(Error::Output(\"expected {\\\"dataBase64\\\": \\\"…\\\"}\".into())) }\n",
+        "fn g() -> Result<()> { Err(SHAPE.into()) }\n",
+        "fn h() -> Result<()> { Err(bad(C, \"not an RTF file: it doesn't start with {\\\\rtf\")) }\n",
+        "fn i() -> Result<()> { Err(bad(C, format!(\"`{key}` must be {{min?, max?}}\"))) }\n",
+        "#[error(\"the file is {0} bytes, not {{size}}\")]\n",
+    );
+    let consts: std::collections::BTreeMap<String, Vec<String>> = str_consts(code).into_iter().map(|(name, value)| (name, vec![value])).collect();
+    // The engine's `error(` helper also occurs in each `#[error(` attribute.
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[("bad(", 1), ("error(", 0)], &consts).into_iter().collect();
+    let want = [
+        r#"expected {{"dataBase64": "…"}}"#,
+        r#"a shape is {{"kind": …}}"#,
+        r"not an RTF file: it doesn't start with {{\rtf",
+        "`{key}` must be {{min?, max?}}",
+        "the file is {0} bytes, not {{size}}",
+    ];
+    assert_eq!(found, want.iter().map(|s| s.to_string()).collect::<std::collections::BTreeSet<_>>(), "{found:#?}");
+    assert_eq!(as_literal_key("a {b} c}"), "a {{b}} c}}");
+}
+
+/// A catalog row for a message with literal braces translates that message and no other: it has no
+/// placeholder to take the rest of a message with the same start.
+#[test]
+fn literal_brace_rows_match_only_their_message() {
+    let c = Catalog::parse("@msg\texpected {{\"dataBase64\": \"…\"}}\terwartet: {{\"dataBase64\": \"…\"}}\n");
+    let (form, caps) = c.message(r#"expected {"dataBase64": "…"}"#).expect("matches");
+    assert!(caps.is_empty(), "{caps:?}");
+    assert_eq!(fill_once(form, &caps), r#"erwartet: {"dataBase64": "…"}"#);
+    assert!(c.message("expected value at line 1 column 1").is_none());
+    assert!(c.message(r#"expected {"dataBase64"}"#).is_none());
+    assert_eq!(exact_translation(&c, r#"expected {"dataBase64": "…"}"#).as_deref(), Some(r#"erwartet: {"dataBase64": "…"}"#));
+    // An exact message is found at any length; a template is matched only up to its limit.
+    let long = format!("{{{{{}}}}}", "x".repeat(3000));
+    let c = Catalog::parse(&format!("@msg\t{long}\tlong {{{{}}}}\n@msg\tshort {{x}}\tshort {{x}} (de)\n"));
+    let shown = format!("{{{}}}", "x".repeat(3000));
+    assert_eq!(c.message(&shown).map(|(f, _)| f), Some("long {{}}"));
+    assert_eq!(exact_translation(&c, &shown).as_deref(), Some("long {}"));
+    assert_eq!(c.message("short y").map(|(f, _)| f), Some("short {x} (de)"));
+    // In the real catalog, a serde reason after the plug-in output error stays English.
+    assert_eq!(message(de(), "plug-in output: expected value at line 1 column 1"), "Plug-in-Ausgabe: expected value at line 1 column 1");
+}
+
 /// `plugin.run` of an importer, an exporter or a live effect names the command that runs it with
 /// the JSON that picks it, and every complete-message catalog translates that error with the
 /// plug-in's id and the JSON kept.
@@ -4298,7 +4347,8 @@ const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
 const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest", "[{i}]{place}", ".{k}{place}"];
 
 /// Every status and error message literal in [`MESSAGE_CRATES`] (test modules aside), as catalog
-/// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`).
+/// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`), and
+/// the braces of a message that is not a format string are doubled.
 pub fn message_literals() -> std::collections::BTreeSet<String> {
     message_literals_in(MESSAGE_CRATES)
 }
@@ -4421,16 +4471,19 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal, a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
-/// is not a message.
+/// is not a message. A `format!` string and an `#[error(…)]` string are format strings (see
+/// [`as_template`]); in any other literal or constant every brace is literal (see
+/// [`as_literal_key`]).
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
-    let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
+    let after_markers =
+        MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| (&code[at + marker.len()..], *marker == "#[error(")));
     let in_variants = ["Error::", "Fail::"].into_iter().flat_map(|enum_end| code.match_indices(enum_end)).filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
         let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
-        if named { skip_args(args.strip_prefix('(')?, before) } else { None }
+        if named { skip_args(args.strip_prefix('(')?, before).map(|rest| (rest, false)) } else { None }
     });
     let in_map_err = code.match_indices(".map_err(").flat_map(|(at, m)| {
         let rest = code[at + m.len()..].trim_start();
@@ -4449,13 +4502,20 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
-            .filter_map(move |(at, _)| skip_args(&code[at + call.len()..], before))
+            // `format!(` given as a helper, and an `error(` helper that is an `#[error(…)]` attribute, take a format string.
+            .filter_map(move |(at, _)| {
+                skip_args(&code[at + call.len()..], before).map(|rest| (rest, call == "format!(" || code[..at].ends_with("#[")))
+            })
     });
     let mut out = vec![];
-    for rest in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_helpers) {
+    let in_map_err = in_map_err.map(|rest| (rest, false));
+    let in_handlers = in_handlers.map(|rest| (rest, false));
+    for (rest, takes_format) in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_helpers) {
         let rest = rest.trim_start();
         let rest = rest.strip_prefix('&').map_or(rest, str::trim_start);
-        let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
+        let formatted = rest.strip_prefix("format!(").map(str::trim_start);
+        let format = takes_format || formatted.is_some();
+        let rest = formatted.unwrap_or(rest);
         let lits = match rest.strip_prefix('"') {
             Some(quoted) => string_literal(quoted).into_iter().collect(),
             None => named_const(rest, consts).to_vec(),
@@ -4464,7 +4524,7 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
             let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
             let key_name = lit.len() > 1 && lit.starts_with('`') && lit.ends_with('`') && !lit.contains(' ');
             if has_word && !key_name && !NOT_MESSAGES.contains(&lit.as_str()) {
-                out.push(as_template(&lit));
+                out.push(if format { as_template(&lit) } else { as_literal_key(&lit) });
             }
         }
     }
@@ -4657,6 +4717,12 @@ fn as_template(s: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// A message that is not a format string as a catalog key: each of its braces is literal, so it is
+/// written `{{` or `}}`.
+fn as_literal_key(s: &str) -> String {
+    s.replace('{', "{{").replace('}', "}}")
 }
 
 /// Render-site labels looked up in a context fall back to the plain row and then to English, and

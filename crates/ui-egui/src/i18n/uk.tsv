@@ -2700,6 +2700,7 @@ mark-style	Japanese	Японський
 	Proportional Metrics	Пропорційні метрики
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
+	Tsume	Цуме
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -5999,8 +6000,8 @@ axis	Y Axis	Вісь Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль експорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	поза групами може бути не більше {MAX_UNGROUPED} параметрів: задайте решті `group`
 @msg	can't encode the input	не вдається закодувати вхідні дані
-@msg	expected {"dataBase64"}	очікувалося {"dataBase64"}
-@msg	expected {"objects"}	очікувалося {"objects"}
+@msg	expected {{"dataBase64": "…"}}	очікувалося {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	очікувалося {{"objects": [...]}}
 @msg	export `{name}`: {e}	експорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	розширення {e} вказано двічі
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	розширення {e}: використовуйте 1-16 малих літер і цифр, без крапки
@@ -6064,11 +6065,11 @@ axis	Y Axis	Вісь Y
 @msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {"id"} або в тому вигляді, у якому його передано
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обведення має мати вигляд {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ефект має мати вигляд {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
 @msg	an effect on a stroke returns only `strokes`	ефект на обведенні повертає лише `strokes`
 @msg	an object must be a JSON object	об’єкт має бути об’єктом JSON
