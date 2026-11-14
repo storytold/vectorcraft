@@ -285,18 +285,29 @@ struct Over<'a> {
 }
 
 impl<'a> Over<'a> {
-    /// None when the backdrop has no paper, or `view` (the document → the pixels) can't be undone.
-    fn new(t: &'a DisplayTransform, b: &Backdrop, view: Affine, zoom: f64) -> Option<Self> {
+    /// For a frame of `width` × `height` pixels. None when the backdrop has no paper, or `view`
+    /// (the document → the pixels) can't be undone. The artboards that lie wholly outside the
+    /// frame are left out, so a row looks only at the artboards in view.
+    fn new(t: &'a DisplayTransform, b: &Backdrop, view: Affine, zoom: f64, (width, height): (usize, usize)) -> Option<Self> {
         let det = view.determinant();
         if (b.everywhere.is_none() && b.artboards.is_empty()) || !det.is_finite() || det.abs() < 1e-12 {
             return None;
         }
         let paper = |srgb: [u8; 3]| Paper { srgb, shown: t.apply8(srgb) };
-        let boards = b.artboards.iter().map(|&(r, color)| Board { rect: r.abs(), origin: r.origin(), paper: paper(color) }).collect();
+        let to_doc = view.inverse();
+        // The frame in the document, a pixel wider on every side than its pixels' centers reach.
+        let frame = to_doc.transform_rect_bbox(Rect::new(-1.0, -1.0, width as f64 + 1.0, height as f64 + 1.0));
+        let in_view = |r: &Rect| r.x0 <= frame.x1 && frame.x0 <= r.x1 && r.y0 <= frame.y1 && frame.y0 <= r.y1;
+        let boards = b
+            .artboards
+            .iter()
+            .map(|&(r, color)| Board { rect: r.abs(), origin: r.origin(), paper: paper(color) })
+            .filter(|b| in_view(&b.rect))
+            .collect();
         let zoom = if zoom.is_finite() && zoom > 0.0 { zoom } else { 1.0 };
         Some(Self {
             t,
-            to_doc: view.inverse(),
+            to_doc,
             everywhere: b.everywhere.map(paper),
             boards,
             grid: b.grid.map(|([a, c], cell)| ([paper(a), paper(c)], (f64::from(cell) / zoom).max(5e-10))),
@@ -449,7 +460,9 @@ impl<'a> Over<'a> {
 pub(crate) fn convert_over(t: Option<&DisplayTransform>, pixels: &mut [u8], width: u32, view: Affine, backdrop: Option<(&Backdrop, f64)>) {
     let Some(t) = t else { return };
     let width = width as usize;
-    let over = backdrop.filter(|_| width > 0 && pixels.len().is_multiple_of(width * 4)).and_then(|(b, zoom)| Over::new(t, b, view, zoom));
+    let over = backdrop
+        .filter(|_| width > 0 && pixels.len().is_multiple_of(width * 4))
+        .and_then(|(b, zoom)| Over::new(t, b, view, zoom, (width, pixels.len() / (width * 4))));
     let Some(over) = over else { return convert(Some(t), pixels) };
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -718,8 +731,49 @@ pub(crate) mod tests {
             }
         }
         let mut one = big.clone();
-        Over::new(&t, &b, Affine::IDENTITY, 1.0).unwrap().rows(&mut one, 0, w);
+        Over::new(&t, &b, Affine::IDENTITY, 1.0, (w, h)).unwrap().rows(&mut one, 0, w);
         convert_over(Some(&t), &mut big, w as u32, Affine::IDENTITY, Some((&b, 1.0)));
         assert_eq!(big, one);
+    }
+
+    #[test]
+    fn artboards_outside_the_frame_are_not_looked_up() {
+        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let half = [128, 0, 0, 128];
+        // A row of 1,000 artboards 30 points apart, each 20 wide and 40 high.
+        let artboards: Vec<(Rect, [u8; 3])> = (0..1000u32)
+            .map(|k| {
+                let x = f64::from(k) * 30.0;
+                (Rect::new(x, 0.0, x + 20.0, 40.0), [255 - (k % 200) as u8, 240, 230])
+            })
+            .collect();
+        let b = Backdrop { everywhere: None, artboards: artboards.clone(), grid: None };
+        // A turned frame of 64 × 48 pixels over the artboards near x = 15,000.
+        let view = Affine::rotate(0.4) * Affine::translate((-15_000.0, -5.0));
+        let (w, h) = (64, 48);
+        let over = Over::new(&t, &b, view, 1.0, (w, h)).unwrap();
+        assert!((1..=4).contains(&over.boards.len()), "{} artboards kept", over.boards.len());
+        // Each pixel still uses the artboard its center is on.
+        let mut px = row(w * h, half);
+        convert_over(Some(&t), &mut px, w as u32, view, Some((&b, 1.0)));
+        let to_doc = view.inverse();
+        let mut on_paper = 0;
+        for i in 0..w * h {
+            let p = to_doc * Point::new((i % w) as f64 + 0.5, (i / w) as f64 + 0.5);
+            let mut want = half.to_vec();
+            match artboards.iter().rev().find(|(r, _)| r.contains(p)) {
+                Some(&(_, paper)) => {
+                    let one = Backdrop { everywhere: Some(paper), artboards: vec![], grid: None };
+                    convert_over(Some(&t), &mut want, 1, Affine::IDENTITY, Some((&one, 1.0)));
+                    on_paper += 1;
+                }
+                None => t.apply_premultiplied(&mut want),
+            }
+            assert_eq!(&px[i * 4..i * 4 + 4], &want[..], "pixel {i} at {p:?}");
+        }
+        assert!(on_paper > 100 && on_paper < w * h, "{on_paper} pixels on the artboards");
+        // A frame over none of the artboards keeps none, and converts as without a backdrop.
+        let away = Affine::translate((0.0, -500.0));
+        assert_eq!(Over::new(&t, &b, away, 1.0, (w, h)).map(|o| o.boards.len()), Some(0));
     }
 }
