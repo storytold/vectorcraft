@@ -1788,6 +1788,50 @@ fn an_object_a_clipping_layer_in_symbol_art_hides_is_not_picked_there() {
     assert!((b.x1 - 100.0).abs() < 1e-6, "the layer's outline is cut to the mask: {b:?}");
 }
 
+/// In a dynamic symbol's art, an object in a clipping layer whose clipping path has a live effect
+/// is picked and outlined in the region the effect gives the clipping path. In Outline view, and
+/// when the layer's Preview is off, the plain clipping path counts, as the canvas draws it.
+#[test]
+fn a_symbol_part_follows_the_region_its_clipping_layers_effects_give_it() {
+    set_clip_region(moved_clip_region);
+    let instance = |preview: bool| {
+        let mut d = Document::new(300.0, 200.0);
+        let l = d.layers[0].id;
+        let (mut mask, art) = half_clipped(&mut d);
+        mask.appearance.effects.push(test_move());
+        let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
+        if let NodeKind::Layer { children, preview: p, .. } = &mut layer.kind {
+            (*children, *p) = (vec![Arc::new(mask), Arc::new(art)], preview);
+        }
+        layer.set_clips(true);
+        let root = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+        d.symbols.push(crate::Symbol { dynamic: true, name: "Clipped".into(), art: Arc::new(root) });
+        let inst = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+        (d, inst)
+    };
+    let outline_box = |d: &Document, inst: NodeId, outline: bool| {
+        let o = symbol_part_outline_in_view(d, d.node(inst).unwrap(), &[0, 1], outline).unwrap();
+        vectorcraft_geom::kurbo::Shape::bounding_box(&o)
+    };
+    let opt = HitOptions::default();
+    let (d, inst) = instance(true);
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 50.0), opt), Some(vec![0, 1]), "in the moved region");
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), None, "where the clipping path was");
+    let b = outline_box(&d, inst, false);
+    assert!((b.x0 - 100.0).abs() < 1e-6 && (b.x1 - 200.0).abs() < 1e-6, "the outline is cut to the moved region: {b:?}");
+    let b = outline_box(&d, inst, true);
+    assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "in Outline view, to the plain clipping path: {b:?}");
+    // With the layer's Preview off, the art's top edge counts within the plain clipping path.
+    let (d, inst) = instance(false);
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 0.5), opt), Some(vec![0, 1]), "on the edge the canvas draws");
+    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 0.5), opt), None, "past the plain clipping path");
+    let b = outline_box(&d, inst, false);
+    assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "Preview off: the plain clipping path: {b:?}");
+}
+
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than
 /// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
 /// canvas draws nothing of it. At the art's natural size the same art is picked.

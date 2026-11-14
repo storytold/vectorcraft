@@ -55,7 +55,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline_in_view};
 use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection, symbol_overrides};
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
@@ -1029,7 +1029,7 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     if let Some(sp) = &cx.selection.symbol_part
-                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline(cx.doc, n, &sp.path))
+                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline_in_view(cx.doc, n, &sp.path, cx.outline))
                     {
                         out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
                     }

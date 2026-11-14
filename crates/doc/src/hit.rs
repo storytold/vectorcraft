@@ -1202,7 +1202,9 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 /// group's original shapes, which the canvas does not draw, and guide paths with
 /// [`HitOptions::skip_guides`]. Nothing is picked in art that placing through the symbol's 9-slice
 /// guides could make more than [`crate::MAX_SYMBOL_NODES`] objects of, which the canvas does not
-/// draw. `None` when `inst` is not a symbol instance or no editable object of its art is under `p`.
+/// draw. Art in a layer of the symbol whose Preview is off is tested in outline
+/// ([`HitOptions::outline`]), as the canvas draws it. `None` when `inst` is not a symbol instance or
+/// no editable object of its art is under `p`.
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
     struct Find<'a> {
         doc: &'a Document,
@@ -1212,35 +1214,34 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
         symbols: &'a SymbolBoxes<'a>,
     }
     impl Find<'_> {
-        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>) -> bool {
-            self.art.place(n, self.doc, whole).is_some_and(|n| hit_any(&n, self.p, self.opt, self.symbols).is_some())
+        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> bool {
+            self.art.place(n, self.doc, whole).is_some_and(|n| hit_any(&n, self.p, opt, self.symbols).is_some())
         }
         fn skips_guide(&self, n: &Node) -> bool {
             self.opt.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
         }
-        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>) -> bool {
+        /// `outline`: the view is in Outline, or a layer around `n` has Preview off.
+        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> bool {
             if !n.visible || n.locked || n.is_template() || self.skips_guide(n) {
                 return false;
             }
-            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole) };
+            let outline = outline || previews_off(n);
+            let opt = HitOptions { outline, ..self.opt };
+            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
             if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
-                return self.hit(n, whole);
+                return self.hit(n, whole, opt);
             }
             let whole = self.art.whole(n, self.doc, whole);
             if n.clips()
                 && let Some(first) = children.first()
             {
                 let Some(clip) = self.art.place_unclipped(first, self.doc, whole) else { return false };
-                if self.opt.clip_outlines
-                    && first.visible
-                    && !first.locked
-                    && !self.skips_guide(first)
-                    && clip_outline(&clip, self.p, self.opt).is_some()
+                if self.opt.clip_outlines && first.visible && !first.locked && !self.skips_guide(first) && clip_outline(&clip, self.p, opt).is_some()
                 {
                     path.push(0);
                     return true;
                 }
-                if !clip_contains(&clip, self.p, self.opt.outline) {
+                if !clip_contains(&clip, self.p, outline) {
                     return false;
                 }
             }
@@ -1251,7 +1252,7 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
                 }
                 let Ok(i) = u32::try_from(i) else { continue };
                 path.push(i);
-                if self.find(c, path, whole) {
+                if self.find(c, path, whole, outline) {
                     return true;
                 }
                 path.pop();
@@ -1262,7 +1263,7 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
     let art = InstanceArt::of(doc, inst)?;
     let symbols = doc.symbol_boxes();
     let mut path = vec![];
-    Find { doc, art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None).then_some(path)
+    Find { doc, art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None, opt.outline).then_some(path)
 }
 
 /// The outlines of the object at `path` in symbol instance `inst`'s art (see [`symbol_part_at`]),
@@ -1271,9 +1272,17 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
 /// group per cell) they are cut to the bounds of the group's clip path, which is not outlined. An
 /// object inside a clip group or a clipping layer of the art, other than its clipping path, is cut
 /// to the bounds of that clipping path as well, which contain the region where [`symbol_part_at`]
-/// picks it.
+/// picks it: the bounds of the region its live geometry effects give it ([`clip_region`]) when it
+/// has any.
 /// `None` for art past the 9-slice object limit that [`symbol_part_at`] applies.
 pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<BezPath> {
+    symbol_part_outline_in_view(doc, inst, path, false)
+}
+
+/// [`symbol_part_outline`] in the view the canvas shows: with `outline` (Outline view), and below a
+/// layer of the art whose Preview is off, the outlines are cut to the bounds of the plain clipping
+/// paths, without their live effects, as the clicks of [`HitOptions::outline`] count them.
+pub fn symbol_part_outline_in_view(doc: &Document, inst: &Node, path: &[u32], mut outline: bool) -> Option<BezPath> {
     let art = InstanceArt::of(doc, inst)?;
     let part = crate::symbol_overrides::part(&art.art, path)?;
     let mut out = BezPath::new();
@@ -1283,10 +1292,11 @@ pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<
     for &i in path {
         let children = n.children()?;
         whole = art.whole(n, doc, whole);
+        outline = outline || previews_off(n);
         if i != 0
             && n.clips()
             && let Some(first) = children.first()
-            && let Some(clip) = art.place_unclipped(first, doc, whole)?.geometric_bounds()
+            && let Some(clip) = clip_limit(&art.place_unclipped(first, doc, whole)?, outline)
         {
             match meet(Some(clip), limit) {
                 Some(r) => limit = Some(r),
@@ -1295,12 +1305,24 @@ pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<
         }
         n = children.get(usize::try_from(i).ok()?)?;
     }
-    outline_within(&art.place(part, doc, whole)?, limit, &mut out);
+    outline_within(&art.place(part, doc, whole)?, limit, outline, &mut out);
     Some(out)
 }
 
-/// [`symbol_part_outline`] for placed object `n`, cut to `limit` when there is one.
-fn outline_within(n: &Node, limit: Option<Rect>, out: &mut BezPath) {
+/// The box that the art clipped by `clip` is drawn in: the bounds of the region the live geometry
+/// effects of `clip` give it ([`clip_region`]), or the bounds of `clip` when it has no such effects
+/// and with `outline`, where the canvas draws no effects.
+fn clip_limit(clip: &Node, outline: bool) -> Option<Rect> {
+    use vectorcraft_geom::kurbo::Shape;
+    let region = if outline { None } else { clip_region(clip) };
+    match region.as_deref() {
+        Some(Some((bp, _))) if !bp.elements().is_empty() => Some(bp.bounding_box()),
+        _ => clip.geometric_bounds(),
+    }
+}
+
+/// [`symbol_part_outline_in_view`] for placed object `n`, cut to `limit` when there is one.
+fn outline_within(n: &Node, limit: Option<Rect>, outline: bool, out: &mut BezPath) {
     use vectorcraft_geom::kurbo::Shape;
     if let Some(pd) = n.path_data() {
         match limit {
@@ -1314,20 +1336,21 @@ fn outline_within(n: &Node, limit: Option<Rect>, out: &mut BezPath) {
         out.extend(b.to_path(0.1));
     }
     let Some(children) = n.children() else { return };
+    let outline = outline || previews_off(n);
     if n.clips()
         && let Some((first, rest)) = children.split_first()
     {
-        let inner = match first.geometric_bounds() {
+        let inner = match clip_limit(first, outline) {
             Some(c) => match meet(Some(c), limit) {
                 Some(r) => Some(r),
                 None => return,
             },
             None => limit,
         };
-        rest.iter().for_each(|c| outline_within(c, inner, out));
+        rest.iter().for_each(|c| outline_within(c, inner, outline, out));
         return;
     }
-    children.iter().for_each(|c| outline_within(c, limit, out));
+    children.iter().for_each(|c| outline_within(c, limit, outline, out));
 }
 
 /// The overlap of `a` and `b` (`a` alone without `b`), `None` when they do not overlap.
