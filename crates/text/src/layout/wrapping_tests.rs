@@ -745,6 +745,24 @@ fn a_tabbed_line_stepping_back_ends_at_a_final_soft_hyphen_without_a_hyphen() {
     assert_eq!(ended, (len, false));
 }
 
+/// A tab to a default or left stop does not read the text after it, which only right, center and
+/// decimal stops align: the first tab of a long paragraph does not read the paragraph to its end.
+#[test]
+fn a_tab_to_a_default_or_left_stop_reads_no_text_after_it() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let (_, glyphs) = stepping_back_tabbed_line(2000);
+    let read = std::cell::Cell::new(0usize);
+    let rest = || glyphs[2..].iter().inspect(|_| read.set(read.get() + 1));
+    let left = [TabStop { position: 100.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    assert_eq!(tab_advance(&[], 0.0, 1.0, rest()).0, 35.0);
+    assert_eq!(tab_advance(&left, 0.0, 1.0, rest()).0, 99.0);
+    assert_eq!(read.get(), 0, "read {} glyphs after the tab", read.get());
+    // A right stop reads up to the next tab and aligns that text on the stop.
+    let right = [TabStop { position: 100.0, align: TabAlign::Right, leader: String::new(), align_on: '.' }];
+    let short = synthetic_glyphs(&[(0, 1, 2.0, 'b'), (1, 1, 3.0, 'b'), (2, 1, 0.0, '\t'), (3, 1, 7.0, 'b')]);
+    assert_eq!(tab_advance(&right, 0.0, 1.0, short.iter()).0, 94.0);
+}
+
 /// A long tabbed line with a glyph that steps back ends at the latest break that fits as drawn, even
 /// where a later break than one that does not fit fits again.
 #[test]

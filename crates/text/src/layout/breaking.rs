@@ -214,18 +214,30 @@ pub(super) fn tab_advance<'t, 'g>(
 ) -> (f64, &'t str) {
     use vectorcraft_doc::TabAlign;
     let rel = x - origin;
-    let seg: Vec<&SGlyph> = rest.into_iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
-    let width: f64 = seg.iter().map(|g| g.adv).sum();
-    let target = |pos: f64, align: TabAlign, on: char| match align {
-        TabAlign::Left => pos,
-        TabAlign::Right => pos - width,
-        TabAlign::Center => pos - width / 2.0,
-        TabAlign::Decimal => pos - seg.iter().take_while(|g| g.ch != on).map(|g| g.adv).sum::<f64>(),
-    };
-    let explicit = tabs.iter().find_map(|t| {
-        let at = target(t.position, t.align, t.align_on);
-        (at > rel + 1e-6).then_some((at, t.leader.as_str()))
-    });
+    // The text after the tab is read only when a right, center or decimal stop is reached, since
+    // only those align it. A tab to a default or left stop reads none of it.
+    let mut rest = Some(rest);
+    let mut seg: Vec<&SGlyph> = Vec::new();
+    let mut width = 0.0;
+    let mut explicit = None;
+    for t in tabs {
+        if t.align != TabAlign::Left
+            && let Some(r) = rest.take()
+        {
+            seg = r.into_iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
+            width = seg.iter().map(|g| g.adv).sum();
+        }
+        let at = match t.align {
+            TabAlign::Left => t.position,
+            TabAlign::Right => t.position - width,
+            TabAlign::Center => t.position - width / 2.0,
+            TabAlign::Decimal => t.position - seg.iter().take_while(|g| g.ch != t.align_on).map(|g| g.adv).sum::<f64>(),
+        };
+        if at > rel + 1e-6 {
+            explicit = Some((at, t.leader.as_str()));
+            break;
+        }
+    }
     let (at, leader) = explicit.unwrap_or_else(|| {
         let last = tabs.iter().map(|t| t.position).fold(0.0, f64::max).max(0.0);
         let base = rel.max(last);
