@@ -5814,6 +5814,7 @@ lighting	Light	光源
 	Cove	凹圆
 	Depth	深度
 	Front	正面
+	Side	侧面
 	Isometric Bottom	等角底部
 	Isometric Left	等角左侧
 	Isometric Right	等角右侧
@@ -5889,7 +5890,7 @@ lighting	Light	光源
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每个条目必须是对象
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的条目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每个条目都需要 `symbol`，即符号的名称
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上

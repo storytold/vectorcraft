@@ -5545,6 +5545,7 @@ lighting	Light	Свет
 	Cove	Выкружка
 	Depth	Глубина
 	Front	Спереди
+	Side	Сбоку
 	Isometric Bottom	Изометрия снизу
 	Isometric Left	Изометрия слева
 	Isometric Right	Изометрия справа
@@ -5620,7 +5621,7 @@ lighting	Light	Свет
 @msg	each of `{GRAPHICS}` must be an object	каждый элемент `{GRAPHICS}` должен быть объектом
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	элементы `{GRAPHICS}` принимают symbol, face, x, y, scale и rotation, а не `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	каждому элементу `{GRAPHICS}` нужен `symbol`, имя символа
-@msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` должен быть front или back
+@msg	`{GRAPHICS}` face must be front, back or side	face в `{GRAPHICS}` должен быть front, back или side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»

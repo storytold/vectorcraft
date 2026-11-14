@@ -28,7 +28,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Map Graphic",
             [],
             None,
-            "{symbol: name of a document symbol, face?: front|back (front; Plane has only a front; the back reads left to right as seen from behind; on Revolve the front is its swept side, which is the only face), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on Revolve from the middle of the side unrolled flat, x around the axis and y along the profile), scale?: % (1..10000; default 100, or less so the graphic fits inside the object, on Revolve inside the half of the side seen from the front), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it (on Revolve wrapped around the side, and drawn only where its outside faces the viewer); every object's 3D effect must be Extrude & Bevel (on a solid cap), Rotate (the Plane type) or Revolve; one undo step → {ids, graphic}",
+            "{symbol: name of a document symbol, face?: front|back|side (front; Plane has only a front; the back reads left to right as seen from behind; side is Extrude & Bevel's walls and bevels; on Revolve the front is its swept side, which is the only face), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on a side from the middle of the side unrolled flat: on Extrude & Bevel x along the outline, clockwise from its top, and y from the front toward the back; on Revolve x around the axis and y along the profile), scale?: % (1..10000; default 100, or less so the graphic fits inside the object, on Extrude & Bevel's side inside the side unrolled about x = 0, short of its cut, on Revolve inside the half of the side seen from the front), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it (on a side wrapped around it, and drawn only where its outside faces the viewer); every object's 3D effect must be Extrude & Bevel (on a solid cap, or on the side, hollow or not), Rotate (the Plane type) or Revolve; one undo step → {ids, graphic}",
             has_doc,
             map_graphic
         ),
@@ -113,22 +113,32 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
         if !effects::takes_graphics(&effect.id) {
             return Err(bad(C, format!("object {}: {}", id.0, effects::GRAPHICS_NOT_TAKEN)));
         }
-        // A hollow Extrude & Bevel keeps the graphics it has, to show when Cap is turned on again,
-        // but has no cap to show a new one on.
+        // A hollow Extrude & Bevel keeps the graphics it has on its caps, to show when Cap is turned
+        // on again, but has no cap to show a new one on. Its side takes graphics.
         let merged = effects::merged_params(&effect.id, &effect.params);
         let extrude = (effect.id == effects::EXTRUDE).then(|| effects::extrude_options(&merged));
-        if extrude.is_some_and(|o| o.depth > 0.0 && !o.cap) {
+        let side = base.face == effects::PlanarFace::Side;
+        if !side && extrude.is_some_and(|o| o.depth > 0.0 && !o.cap) {
             return Err(bad(C, format!("object {}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic", id.0)));
         }
         // With a depth of 0 the art is a plane, which has only a front.
-        if base.face == effects::PlanarFace::Back && extrude.is_some_and(|o| o.depth <= 0.0) {
+        if base.face != effects::PlanarFace::Front && extrude.is_some_and(|o| o.depth <= 0.0) {
             return Err(bad(C, format!("object {}: with a depth of 0 the object has one face: map its graphics onto the front", id.0)));
         }
         let mut graphic = base.clone();
         if p.get("scale").is_none()
-            && let (Some(frame), Some(art)) = (effects::graphic_frame_at(Some(d), n, item, index), effects::graphic_bounds(d, &graphic.symbol))
+            && let Some(art) = effects::graphic_bounds(d, &graphic.symbol)
         {
-            graphic.scale = frame.fitting_scale(art);
+            // A graphic on the side starts fitting inside the side unrolled about x = 0, short of
+            // its cut; one on a cap inside the object's bounds.
+            let fit = if side {
+                effects::graphic_side_size(Some(d), n, item, index).map(|(w, h)| effects::graphic_fitting_scale(w, h, art))
+            } else {
+                effects::graphic_frame_at(Some(d), n, item, index).map(|frame| frame.fitting_scale(art))
+            };
+            if let Some(fit) = fit {
+                graphic.scale = fit;
+            }
         }
         let params = effects::with_graphic(&effects::merged_params(&effect.id, &effect.params), &graphic);
         effects::validate_three_d_at_in(Some(d), n, &effect.id, &params, (item, index)).map_err(|e| bad(C, e))?;

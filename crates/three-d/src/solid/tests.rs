@@ -438,9 +438,11 @@ fn malformed_and_degenerate_input_is_bounded() {
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
         hidden: false,
+        map_surface: true,
     };
     let f = extrude(&p, FillRule::EvenOdd, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));
+    assert!(f.iter().filter_map(|f| f.surface.as_ref()).flat_map(|c| c.uv.iter()).all(|q| q.x.is_finite() && q.y.is_finite()));
     assert!(
         inflate(
             &p,

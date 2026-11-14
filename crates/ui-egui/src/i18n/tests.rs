@@ -2474,9 +2474,9 @@ fn three_d_refusals_translate_with_their_values() {
             vec!["0", "100"],
         ),
         (
-            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"graphics": [{"symbol": "S", "face": "side"}]}))),
-            "must be front or back",
-            vec!["`graphics`", "front", "back"],
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"graphics": [{"symbol": "S", "face": "top"}]}))),
+            "must be front, back or side",
+            vec!["`graphics`", "front", "back", "side"],
         ),
         (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
         (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
@@ -4072,7 +4072,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("`dither` applies to gradient fills (stroke: false)", &["stroke"]),
     ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
     ("`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`", &["symbol", "face", "x", "y", "scale", "rotation"]),
-    ("`{GRAPHICS}` face must be front or back", &["face", "front", "back"]),
+    ("`{GRAPHICS}` face must be front, back or side", &["face", "front", "back", "side"]),
 ];
 
 /// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as

@@ -5521,6 +5521,7 @@ lighting	Light	광원
 	Cove	오목
 	Depth	깊이
 	Front	앞면
+	Side	옆면
 	Isometric Bottom	등각 밑면
 	Isometric Left	등각 왼쪽
 	Isometric Right	등각 오른쪽
@@ -5596,7 +5597,7 @@ lighting	Light	광원
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`의 각 항목은 개체여야 합니다
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 항목에는 symbol, face, x, y, scale, rotation만 사용할 수 있으며 `{k}`은(는) 사용할 수 없습니다
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`의 각 항목에는 심볼 이름인 `symbol`이 필요합니다
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`의 face는 front, back 또는 side여야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다

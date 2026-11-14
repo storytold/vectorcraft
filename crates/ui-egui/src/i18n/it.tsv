@@ -5560,6 +5560,7 @@ lighting	Light	Luce
 	Cove	Guscio
 	Depth	Profondità
 	Front	Fronte
+	Side	Lato
 	Isometric Bottom	Isometrica sotto
 	Isometric Left	Isometrica sinistra
 	Isometric Right	Isometrica destra
@@ -5635,7 +5636,7 @@ lighting	Light	Luce
 @msg	each of `{GRAPHICS}` must be an object	ogni voce di `{GRAPHICS}` deve essere un oggetto
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	le voci di `{GRAPHICS}` accettano symbol, face, x, y, scale e rotation, non `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	ogni voce di `{GRAPHICS}` richiede `symbol`, il nome di un simbolo
-@msg	`{GRAPHICS}` face must be front or back	face di `{GRAPHICS}` deve essere front o back
+@msg	`{GRAPHICS}` face must be front, back or side	face di `{GRAPHICS}` deve essere front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} di `{GRAPHICS}` deve essere un numero da {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione e Rivoluzione

@@ -5312,6 +5312,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Both sides	Και οι δύο πλευρές
 	Cove	Κοίλη ακμή
 	Front	Μπροστά
+	Side	Πλάι
 	Isometric Bottom	Ισομετρική κάτω όψη
 	Isometric Left	Ισομετρική αριστερή όψη
 	Isometric Right	Ισομετρική δεξιά όψη
@@ -5378,7 +5379,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	each of `{GRAPHICS}` must be an object	κάθε στοιχείο του `{GRAPHICS}` πρέπει να είναι αντικείμενο
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	οι καταχωρίσεις του `{GRAPHICS}` δέχονται symbol, face, x, y, scale και rotation, όχι `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	κάθε στοιχείο του `{GRAPHICS}` χρειάζεται `symbol`, το όνομα ενός συμβόλου
-@msg	`{GRAPHICS}` face must be front or back	το face του `{GRAPHICS}` πρέπει να είναι front ή back
+@msg	`{GRAPHICS}` face must be front, back or side	το face του `{GRAPHICS}` πρέπει να είναι front, back ή side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα

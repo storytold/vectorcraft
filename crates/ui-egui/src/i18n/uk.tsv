@@ -5540,6 +5540,7 @@ lighting	Light	Світло
 	Cove	Викружка
 	Depth	Глибина
 	Front	Спереду
+	Side	Збоку
 	Isometric Bottom	Ізометрія знизу
 	Isometric Left	Ізометрія ліворуч
 	Isometric Right	Ізометрія праворуч
@@ -5615,7 +5616,7 @@ lighting	Light	Світло
 @msg	each of `{GRAPHICS}` must be an object	кожен елемент `{GRAPHICS}` має бути об’єктом
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	елементи `{GRAPHICS}` приймають symbol, face, x, y, scale і rotation, а не `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	кожному елементу `{GRAPHICS}` потрібен `symbol`, назва символу
-@msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
+@msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»

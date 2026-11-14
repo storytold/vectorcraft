@@ -7701,6 +7701,7 @@ mark-style	Japanese	Japans
 	Cove	Cove
 	Depth	Diepte
 	Front	Voorkant
+	Side	Zijkant
 	Isometric Bottom	Isometrisch onder
 	Isometric Left	Isometrisch links
 	Isometric Right	Isometrisch rechts
@@ -7776,7 +7777,7 @@ mark-style	Japanese	Japans
 @msg	each of `{GRAPHICS}` must be an object	elk item van `{GRAPHICS}` moet een object zijn
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	items van `{GRAPHICS}` nemen symbol, face, x, y, scale en rotation aan, niet `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	elk item van `{GRAPHICS}` heeft `symbol` nodig, de naam van een symbool
-@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` moet front of back zijn
+@msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` moet front, back of side zijn
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak

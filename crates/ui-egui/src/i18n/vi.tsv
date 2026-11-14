@@ -1587,6 +1587,7 @@ file-filter	Templates	Mẫu
 	Frequencies and angles are the output device's to apply.	Tần số và góc do thiết bị đầu ra quyết định.
 	Frequency	Tần số
 	Front	Trước
+	Side	Bên cạnh
 	Frosted	Sương mờ
 	Full Document	Toàn bộ tài liệu
 	Full Screen Mode	Chế độ toàn màn hình
@@ -5401,7 +5402,7 @@ theme	Appearance	Giao diện
 @msg	each of `{GRAPHICS}` must be an object	mỗi mục của `{GRAPHICS}` phải là một đối tượng
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	các mục của `{GRAPHICS}` nhận symbol, face, x, y, scale và rotation, không nhận `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	mỗi mục của `{GRAPHICS}` cần `symbol`, tên của một ký hiệu
-@msg	`{GRAPHICS}` face must be front or back	face của `{GRAPHICS}` phải là front hoặc back
+@msg	`{GRAPHICS}` face must be front, back or side	face của `{GRAPHICS}` phải là front, back hoặc side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn

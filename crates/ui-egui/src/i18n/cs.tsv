@@ -5944,6 +5944,7 @@ mark-style	Japanese	Japonské
 	Cove	Žlábek
 	Depth	Hloubka
 	Front	Zepředu
+	Side	Z boku
 	Isometric Bottom	Izometricky zdola
 	Isometric Left	Izometricky zleva
 	Isometric Right	Izometricky zprava
@@ -6019,7 +6020,7 @@ mark-style	Japanese	Japonské
 @msg	each of `{GRAPHICS}` must be an object	každá položka `{GRAPHICS}` musí být objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	položky `{GRAPHICS}` přijímají symbol, face, x, y, scale a rotation, ne `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	každá položka `{GRAPHICS}` potřebuje `symbol`, název symbolu
-@msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
+@msg	`{GRAPHICS}` face must be front, back or side	face v `{GRAPHICS}` musí být front, back nebo side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso

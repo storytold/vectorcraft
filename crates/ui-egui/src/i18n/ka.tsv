@@ -5226,6 +5226,7 @@ font-technology	Variable	ცვლადი
 	Cove	ღარი
 	Depth	სიღრმე
 	Front	წინიდან
+	Side	გვერდიდან
 	Isometric Bottom	იზომეტრია ქვემოდან
 	Isometric Left	იზომეტრია მარცხნიდან
 	Isometric Right	იზომეტრია მარჯვნიდან
@@ -5301,7 +5302,7 @@ font-technology	Variable	ცვლადი
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`-ის თითოეული ჩანაწერი უნდა იყოს ობიექტი
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-ის ჩანაწერები იღებს symbol, face, x, y, scale და rotation მნიშვნელობებს და არა `{k}`-ს
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`-ის თითოეულ ჩანაწერს სჭირდება `symbol`, სიმბოლოს სახელი
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“

@@ -136,6 +136,47 @@ fn map_graphic_refuses_what_cannot_take_it_and_changes_nothing() {
 }
 
 #[test]
+fn map_graphic_puts_a_graphic_on_the_side_of_an_extrude() {
+    let (mut s, id) = setup("threeD.extrude");
+    // A hollow Extrude & Bevel takes a graphic on its side.
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": {"cap": false}})).unwrap();
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "side", "y": 4.0, "ids": [id.0]})).unwrap();
+    assert_eq!(graphics(&s, id), json!([{"symbol": "Mark", "face": "side", "x": 0.0, "y": 4.0, "scale": 100.0, "rotation": 0.0}]));
+    // A plane, and a depth of 0, have no side.
+    let (mut s, plane) = setup("threeD.rotate");
+    let history = undo_len(&s);
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "side", "ids": [plane.0]})).unwrap_err().to_string();
+    assert!(e.contains("one face"), "{e}");
+    assert_eq!(undo_len(&s), history);
+    let (mut s, flat) = setup("threeD.extrude");
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": {"depth": 0.0}})).unwrap();
+    let history = undo_len(&s);
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "side", "ids": [flat.0]})).unwrap_err().to_string();
+    assert!(e.contains("one face"), "{e}");
+    assert_eq!(undo_len(&s), history);
+    // A graphic taller than the side starts scaled to fit it: the side of the 100 × 100 square is
+    // about 300 pt wide short of its cut and 10 pt deep here, and the graphic with its stroke is
+    // 11 × 21.
+    let (mut s, id) = setup("threeD.extrude");
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": {"depth": 10.0}})).unwrap();
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "side", "ids": [id.0]})).unwrap();
+    let scale = graphics(&s, id)[0]["scale"].as_f64().unwrap();
+    assert!((scale - 1000.0 / 21.0).abs() < 1e-9, "{scale}");
+    // A graphic wider than the side is kept short of the cut, at a bottom corner of the square: the
+    // part about x = 0 is three quarters of the outline.
+    let (mut s, id) = setup("threeD.extrude");
+    let wide = s.execute("path.create", &json!({"d":"M0 380L400 380L400 390L0 390Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Wide", "ids": [wide]})).unwrap();
+    s.execute("threeD.mapGraphic", &json!({"symbol": "Wide", "face": "side", "ids": [id.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let (span, _) = vectorcraft_render::effects::graphic_side_size(Some(d), d.node(id).unwrap(), None, 0).unwrap();
+    let art = vectorcraft_render::effects::graphic_bounds(d, "Wide").unwrap();
+    assert!((span - 300.0).abs() < 1e-6 || (span - 303.0).abs() < 1e-6, "{span}");
+    let scale = graphics(&s, id)[0]["scale"].as_f64().unwrap();
+    assert!((scale - 100.0 * span / art.width()).abs() < 1e-9, "{scale}");
+}
+
+#[test]
 fn set_params_edits_graphics_and_checks_them() {
     let (mut s, id) = setup("threeD.extrude");
     s.execute("threeD.mapGraphic", &json!({"symbol": "Mark"})).unwrap();

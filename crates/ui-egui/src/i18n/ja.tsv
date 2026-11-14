@@ -5602,6 +5602,7 @@ lighting	Light	ライト
 	Cove	凹面
 	Depth	奥行き
 	Front	正面
+	Side	側面
 	Isometric Bottom	等角図（底面）
 	Isometric Left	等角図（左）
 	Isometric Right	等角図（右）
@@ -5677,7 +5678,7 @@ lighting	Light	ライト
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` の各項目はオブジェクトにしてください
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` の項目に指定できるのは symbol、face、x、y、scale、rotation で、`{k}` は指定できません
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` の各項目にはシンボルの名前 `symbol` が必要です
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` の face には front、back、side のいずれかを指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます

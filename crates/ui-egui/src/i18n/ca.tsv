@@ -1813,6 +1813,7 @@ digits	Malayalam	Malaiàlam
 	from the format's public description	de la descripció pública del format
 	from your earlier imports	de les importacions anteriors
 	Front	Davant
+	Side	Lateral
 	Frosted	Glaçat
 	Full Document	Document complet
 	Full Justify	Justificació completa
@@ -6196,7 +6197,7 @@ digits	Malayalam	Malaiàlam
 @msg	each of `{GRAPHICS}` must be an object	cada element de `{GRAPHICS}` ha de ser un objecte
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les entrades de `{GRAPHICS}` admeten symbol, face, x, y, scale i rotation, no `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada element de `{GRAPHICS}` necessita `symbol`, el nom d’un símbol
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució

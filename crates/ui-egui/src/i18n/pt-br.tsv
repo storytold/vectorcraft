@@ -5893,6 +5893,7 @@ mark-style	Japanese	Japonesas
 	Cove	Côncavo
 	Depth	Profundidade
 	Front	Frente
+	Side	Lateral
 	Isometric Bottom	Isométrico Inferior
 	Isometric Left	Isométrico Esquerdo
 	Isometric Right	Isométrico Direito
@@ -5968,7 +5969,7 @@ mark-style	Japanese	Japonesas
 @msg	each of `{GRAPHICS}` must be an object	cada item de `{GRAPHICS}` deve ser um objeto
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	as entradas de `{GRAPHICS}` aceitam symbol, face, x, y, scale e rotation, não `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada item de `{GRAPHICS}` precisa de `symbol`, o nome de um símbolo
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` deve ser front ou back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` deve ser front, back ou side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver

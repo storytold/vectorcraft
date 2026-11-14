@@ -2010,6 +2010,7 @@ antiAlias	Sharp	शार्प
 	from your earlier imports	अपने पहले आयात से
 	From:	से:
 	Front	सामने
+	Side	बगल
 	Frosted	फ़्रॉस्टेड
 	Full Document	पूरा डॉक्यूमेंट
 	Full Justify	फुल जस्टिफ़ाई
@@ -8026,7 +8027,7 @@ antiAlias	Sharp	शार्प
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` की हर प्रविष्टि एक ऑब्जेक्ट होनी चाहिए
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` की प्रविष्टियाँ symbol, face, x, y, scale और rotation लेती हैं, `{k}` नहीं
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` की हर प्रविष्टि को `symbol` चाहिए, यानी किसी सिंबल का नाम
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` का face, front, back या side होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं

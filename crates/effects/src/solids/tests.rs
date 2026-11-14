@@ -774,6 +774,7 @@ fn a_stroke_face_through_a_fill_wall_is_cut_where_their_depths_meet() {
         side: true,
         away: false,
         end: None,
+        surface: None,
         plane: Some(DepthPlane { normal, offset, center: Point::ZERO, eye: None }),
     };
     let wall = facet(0.0, [0.0, 0.0, 1.0], 0.0);

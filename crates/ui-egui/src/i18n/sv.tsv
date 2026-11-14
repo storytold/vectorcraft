@@ -5411,6 +5411,7 @@ lighting	Light	Ljus
 	Cove	Hålkäl
 	Depth	Djup
 	Front	Framifrån
+	Side	Från sidan
 	Isometric Bottom	Isometrisk underifrån
 	Isometric Left	Isometrisk vänster
 	Isometric Right	Isometrisk höger
@@ -5486,7 +5487,7 @@ lighting	Light	Ljus
 @msg	each of `{GRAPHICS}` must be an object	varje post i `{GRAPHICS}` måste vara ett objekt
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	posterna i `{GRAPHICS}` tar symbol, face, x, y, scale och rotation, inte `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	varje post i `{GRAPHICS}` behöver `symbol`, namnet på en symbol
-@msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
+@msg	`{GRAPHICS}` face must be front, back or side	face i `{GRAPHICS}` måste vara front, back eller side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel

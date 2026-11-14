@@ -28,7 +28,7 @@ pub use graphics::{
 };
 pub use graphics::{
     MAX_OFFSET as GRAPHIC_MAX_OFFSET, NOT_TAKEN as GRAPHICS_NOT_TAKEN, SCALE_RANGE as GRAPHIC_SCALE_RANGE, appearance_graphic_symbols,
-    rename_appearance_graphic_symbol,
+    fitting as graphic_fitting_scale, rename_appearance_graphic_symbol,
 };
 
 pub(crate) mod shadow;
@@ -82,11 +82,14 @@ pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
         }
     }
     // A plane has only a front, and Revolve's graphics go on its side, named the front, so graphics
-    // on the back cap are dropped.
+    // on the back cap and on Extrude & Bevel's side are dropped.
     if (to == ROTATE || to == crate::REVOLVE)
         && let Some(Value::Array(list)) = out.get_mut(GRAPHICS)
     {
-        list.retain(|g| g.get("face").and_then(Value::as_str) != Some(PlanarFace::Back.id()));
+        list.retain(|g| {
+            let face = g.get("face").and_then(Value::as_str);
+            face != Some(PlanarFace::Back.id()) && face != Some(PlanarFace::Side.id())
+        });
     }
     Value::Object(out)
 }
@@ -160,6 +163,7 @@ pub fn extrude_options(p: &Value) -> Extrude {
             both_sides: flag(p, "bevelBothSides", false),
         }),
         hidden: false,
+        map_surface: false,
     }
 }
 
@@ -236,6 +240,44 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
     }
 }
 
+/// [`facets`] of Extrude & Bevel with parameters `p`, with the pieces of the side of its longest
+/// contour carrying where they lie on it unrolled ([`Facet::surface`]), for its side's graphics.
+fn side_facets(path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
+    #[cfg(test)]
+    SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+    vectorcraft_three_d::extrude(path, rule, bounds, Extrude { map_surface: true, ..extrude_options(p) }, view_options(p))
+}
+
+/// The part of `parts` ([`solid_parts`]) whose solid takes the graphics on Extrude & Bevel's side,
+/// with parameters `p` and built about `bounds`: the first of those with the longest outline
+/// ([`vectorcraft_three_d::extrude_side_size`]). `None` when the effect `id` is not Extrude & Bevel
+/// or has no graphic on its side, or when no part has a side.
+fn side_carrier(id: &str, p: &Value, parts: &[Part<'_>], bounds: Rect) -> Option<usize> {
+    if id != EXTRUDE || !mapped_graphics(p).iter().any(|g| g.face == PlanarFace::Side) {
+        return None;
+    }
+    let options = extrude_options(p);
+    parts
+        .iter()
+        .enumerate()
+        .filter_map(|(k, (_, _, area, rule, _, _))| vectorcraft_three_d::extrude_side_size(area, *rule, bounds, options).map(|(w, ..)| (k, w)))
+        .fold(None, |best: Option<(usize, f64)>, (k, w)| if best.is_some_and(|(_, top)| top >= w) { best } else { Some((k, w)) })
+        .map(|(k, _)| k)
+}
+
+/// The size of Extrude & Bevel's side unrolled for the graphics on it: the side of the part of
+/// `shapes` that [`side_carrier`] picks, with parameters `p`, as wide as the part of it about x = 0
+/// that does not reach its cut and as tall as the length across its bevels and walls.
+fn side_size(p: &Value, shapes: &[Profile]) -> Option<(f64, f64)> {
+    let (parts, bounds) = solid_parts(shapes, union_bounds(shapes)?);
+    let options = extrude_options(p);
+    parts
+        .iter()
+        .filter_map(|(_, _, area, rule, _, _)| vectorcraft_three_d::extrude_side_size(area, *rule, bounds, options))
+        .fold(None, |best: Option<(f64, f64, f64)>, size| if best.is_some_and(|top| top.0 >= size.0) { best } else { Some(size) })
+        .map(|(_, height, span)| (span, height))
+}
+
 /// Check solid `id`'s parameter values `p` alone: the part of [`validate_solid`] that does not
 /// need the object.
 fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
@@ -298,6 +340,7 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         check_profiles(id, p, &shapes, b)?;
         check_solids(id, p, &shapes)?;
+        check_side_graphics(doc, n, id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
     let (path, rule) = object_profile(n, label)?;
@@ -316,7 +359,32 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
     check_profiles(id, p, &shapes, b)?;
     check_solids(id, p, &shapes)?;
+    check_side_graphics(doc, n, id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
+}
+
+/// An error when the graphics on the side of Extrude & Bevel `id` with parameters `p`, with the
+/// symbols of `doc`, are past their limits on the side of the solid of `shapes` that takes them
+/// ([`side_carrier`]): their art, or the parts they draw on its pieces
+/// ([`graphics::surface_parts`]), or when the object `n`'s surfaces can't be built at all. They are
+/// built as the art builds them ([`surfaces_with`]), so its pieces are the ones the art draws, cuts
+/// included. Without `doc` nothing is drawn, and nothing is checked.
+fn check_side_graphics(doc: Option<&Document>, n: &Node, id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
+    let Some(doc) = doc else { return Ok(()) };
+    let Some(b) = union_bounds(shapes) else { return Ok(()) };
+    let (parts, bounds) = solid_parts(shapes, b);
+    if side_carrier(id, p, &parts, bounds).is_none() {
+        return Ok(());
+    }
+    graphics::validate_surface_symbols(doc, p, PlanarFace::Side)?;
+    let fx = Effect { id: id.into(), params: p.clone(), visible: true };
+    let mut dropped = false;
+    // Art that can't be built draws the source path, without the side's graphics.
+    let built = surfaces_with(Some(doc), n, &fx, shapes, &mut dropped);
+    if dropped || built.is_none() {
+        return Err("The graphics are too complex: simplify the symbols' art".into());
+    }
+    Ok(())
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the profiles of `shapes` about `b`
@@ -606,6 +674,30 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
     group
 }
 
+/// `surface`, a plain group of one face for each facet ([`surface`]), with each face followed by
+/// the parts of the side's graphics that `parts` holds for its facet ([`graphics::surface_parts`]):
+/// a face with parts becomes a group of the face and its parts, so nearer faces drawn after it
+/// cover them too. `surface` is returned as it is when no facet has a part or it is not such a group.
+fn with_side_parts(id: NodeId, mut surface: Node, parts: Vec<Vec<Arc<Node>>>) -> Node {
+    if parts.iter().all(Vec::is_empty) {
+        return surface;
+    }
+    let NodeKind::Group { children, clip: false } = &mut surface.kind else { return surface };
+    if children.len() != parts.len() {
+        return surface;
+    }
+    for (child, extra) in children.iter_mut().zip(parts) {
+        if extra.is_empty() {
+            continue;
+        }
+        let mut list = Vec::with_capacity(extra.len() + 1);
+        list.push(child.clone());
+        list.extend(extra);
+        *child = Arc::new(Node::group(id, list));
+    }
+    surface
+}
+
 /// The width of the stroke of a facet's own paint that closes the seams between `face` and its
 /// neighbors. No wider than the facet is thick: seen at a grazing angle a facet can be thinner than
 /// the stroke, and its stroke would then paint over its neighbors.
@@ -712,6 +804,20 @@ fn built_solids<'a>(
     bounds: Rect,
     limit: usize,
 ) -> impl Iterator<Item = Result<Option<Vec<Facet>>, String>> + 'a {
+    built_solids_with_side(id, p, parts, bounds, limit, None)
+}
+
+/// [`built_solids`], building the solid of part `side`, when there is one, with the pieces of its
+/// side carrying where they lie on it unrolled, for the graphics on Extrude & Bevel's side
+/// ([`side_carrier`]).
+fn built_solids_with_side<'a>(
+    id: &'a str,
+    p: &'a Value,
+    parts: &'a [Part<'a>],
+    bounds: Rect,
+    limit: usize,
+    side: Option<usize>,
+) -> impl Iterator<Item = Result<Option<Vec<Facet>>, String>> + 'a {
     // Inflate's eye is placed for every puff together, as far away as the highest needs.
     let mut inflated = (id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
@@ -719,7 +825,7 @@ fn built_solids<'a>(
     });
     let mut kept = 0usize;
     let mut ended = false;
-    parts.iter().map_while(move |(item, _, area, rule, _, _)| {
+    parts.iter().enumerate().map_while(move |(k, (item, _, area, rule, _, _))| {
         if ended {
             return None;
         }
@@ -731,6 +837,7 @@ fn built_solids<'a>(
                 SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
                 each.next().unwrap_or_else(|| Ok(vec![]))
             }
+            None if side == Some(k) => side_facets(area, *rule, bounds, p),
             None => facets(id, area, *rule, bounds, p),
         };
         let result = match built {
@@ -983,6 +1090,8 @@ fn cut(s: &Facet, c: &[Point], wall: &Facet, outline: &[Point], turn: f64) -> Op
         f.depth = s.depth_at(mid).unwrap_or(s.depth);
         f.contours = vec![points];
         f.outline = s.outline.as_ref().and_then(|o| clip_to_side(o, c, &values, sign));
+        // A piece keeps where the whole face lies on the side: the parts of the side's graphics
+        // drawn on it are cut to its own outline ([`graphics::SurfaceFace::curved`]).
         Some(f)
     };
     Some((piece(1.0)?, piece(-1.0)?))
@@ -1581,6 +1690,12 @@ fn seen_ends(f: &[Facet]) -> impl Iterator<Item = &Facet> {
 /// [`art_for`] without the shadow: the solids' surfaces, with the graphics mapped onto their planar
 /// faces drawn right after the last of the solids' surfaces that holds that face.
 fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
+    surfaces_with(doc, n, fx, shapes, &mut false)
+}
+
+/// [`surfaces_for`], setting `side_dropped` when the graphics on Extrude & Bevel's side are past
+/// their limits on the pieces drawn, and the solid that takes them draws without them.
+fn surfaces_with(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile], side_dropped: &mut bool) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let classic = fx.id == CLASSIC_EXTRUDE || fx.id == CLASSIC_ROTATE;
@@ -1619,16 +1734,21 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
         return Some(if masks { masked(n.id, out) } else { out.into_iter().map(|(_, s)| s).collect() });
     }
     let (parts, bounds) = solid_parts(shapes, b);
+    // The graphics on Extrude & Bevel's side go once, on the side of the solid with the longest
+    // outline, whose pieces are built carrying where they lie on it.
+    let carrier = if graphics_on { side_carrier(&fx.id, &p, &parts, bounds) } else { None };
     let mut solids = vec![];
-    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES)) {
+    let built = built_solids_with_side(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES, carrier);
+    for (k, ((item, opacity, _, _, scopes, member), f)) in parts.iter().zip(built).enumerate() {
         let item: &AppearanceItem = item;
         match f {
             Ok(Some(f)) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => {
                 return None;
             }
             Ok(Some(f)) => solids.push((item, *opacity, *scopes, f, *member)),
-            // A stroke's outline past the limits is left out; the fill's solid still draws.
-            Ok(None) => {}
+            // A stroke's outline past the limits is left out; the fill's solid still draws, and
+            // the side's graphics on that outline are not drawn.
+            Ok(None) => *side_dropped |= carrier == Some(k),
             // A loaded file or a shape edited past the limits (its own, or those of the object's
             // solids together) keeps drawing its source path instead of failing the frame;
             // commands validate the same evaluator and report its errors.
@@ -1712,6 +1832,9 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
     // ([`in_one_order`], [`underlaid_surface`]).
     let seals: Vec<bool> = solids.iter().map(|(.., f, _)| underlaid(f, colored)).collect();
     let seal = |range: std::ops::Range<usize>| seals.get(range).is_some_and(|s| s.iter().any(|s| *s));
+    let side_graphics = carrier.map(|_| mapped_graphics(&p)).unwrap_or_default();
+    // The paint copies of the side's graphics, apart from those of the surfaces, as on Revolve.
+    let mut graphic_copies = 0usize;
     let surfaces: Vec<BuiltSurface> = solids
         .into_iter()
         .map(|(item, member, scopes, f, shape)| {
@@ -1719,10 +1842,22 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
             let depths: Vec<Placed> = f.iter().map(|f| Placed::of(f, shape, paints)).collect();
             let ends = f.iter().map(|f| f.end.filter(|_| !f.away)).collect();
             let (paint, opacity, blend) = paint_of(item, member);
+            // The carrier's pieces draw the parts of the side's graphics that fall on them; past
+            // the graphics' limits the solid draws without them.
+            let parts = if side_graphics.is_empty() || !f.iter().any(|f| f.surface.is_some()) {
+                vec![]
+            } else {
+                let shade = |f: &Facet, c: vectorcraft_doc::color::Color| Paint::solid(crate::lighting::shade(c, f.illumination));
+                let parts = graphics::surface_parts(doc, n.id, (&side_graphics, PlanarFace::Side), &f, &shade, &mut graphic_copies);
+                *side_dropped |= parts.is_none();
+                parts.unwrap_or_default()
+            };
+            let drawn = parts.iter().any(|p| !p.is_empty());
             let art = if classic {
                 classic::surface(n, f, &paint, opacity, blend, &p)
             } else {
-                surface(n, f, &paint, opacity, blend, colored, split && shared.get(shape).copied().unwrap_or(false))
+                let faces = drawn || (split && shared.get(shape).copied().unwrap_or(false));
+                with_side_parts(n.id, surface(n, f, &paint, opacity, blend, colored, faces), parts)
             };
             (depths, art, scopes, ends)
         })
@@ -2045,8 +2180,18 @@ pub fn graphics_reshaped_after(n: &Node, item: Option<usize>, index: usize) -> b
 /// Finds a 3D effect in a list of effects, with its index there.
 type Pick<'p> = dyn for<'e> Fn(&'e [Effect]) -> Option<(usize, &'e Effect)> + 'p;
 
-/// [`graphic_frame`] of the 3D effect `pick` finds in the effects of `n` or its `item`.
-fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'_>) -> Option<graphics::GraphicFrame> {
+/// The size of the side unrolled of the Extrude & Bevel at `index` of the effects of `n` (on the
+/// object itself with `item` `None`, else on its fill or stroke `item`), that a new graphic on it
+/// fits: on the side of its solid with the longest outline, as wide as the part about x = 0 that
+/// does not reach the side's cut, and as tall as the length across its bevels and walls. `None` when that effect is not a visible Extrude & Bevel with a
+/// depth, or its art can't be built.
+pub fn graphic_side_size(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<(f64, f64)> {
+    let (fx, shapes) = frame_shapes(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && e.id == EXTRUDE).map(|e| (index, e)))?;
+    side_size(&crate::merged_params(&fx.id, &fx.params), &shapes)
+}
+
+/// The 3D effect `pick` finds in the effects of `n` or its `item`, and the shapes it builds from.
+fn frame_shapes(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'_>) -> Option<(Effect, Vec<Profile>)> {
     let n = &*resolve(doc, n, "").ok()?;
     let (fx, shapes) = if is_container(n) {
         let (index, fx) = pick(&n.appearance.effects).filter(|_| item.is_none())?;
@@ -2070,6 +2215,12 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
             }
         }
     };
+    Some((fx.clone(), shapes))
+}
+
+/// [`graphic_frame`] of the 3D effect `pick` finds in the effects of `n` or its `item`.
+fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'_>) -> Option<graphics::GraphicFrame> {
+    let (fx, shapes) = frame_shapes(doc, n, item, pick)?;
     if !takes_graphics(&fx.id) {
         return None;
     }
@@ -2095,10 +2246,19 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
         let plane = vectorcraft_three_d::plane_face_map(b, view);
         return Some(graphics::GraphicFrame::new(b, plane, None));
     }
-    let (_, bounds) = solid_parts(&shapes, b);
+    let (parts, bounds) = solid_parts(&shapes, b);
     let options = extrude_options(&p);
     let map = |face| vectorcraft_three_d::extrude_face_map(bounds, options, view, face);
-    Some(graphics::GraphicFrame::new(bounds, map(PlanarFace::Front), map(PlanarFace::Back)))
+    let frame = graphics::GraphicFrame::new(bounds, map(PlanarFace::Front), map(PlanarFace::Back));
+    // With graphics on the side, the part of it the viewer sees places their handles.
+    let side = side_carrier(&fx.id, &p, &parts, bounds)
+        .and_then(|k| parts.get(k))
+        .and_then(|(_, _, area, rule, _, _)| side_facets(area, *rule, bounds, &p).ok())
+        .map(|facets| graphics::SideFrame::of(&facets));
+    Some(match side {
+        Some(side) => frame.with_side(side),
+        None => frame,
+    })
 }
 
 /// The bounds of the art symbol `name` of `doc` draws as a graphic, in the symbol's coordinates.

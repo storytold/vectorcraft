@@ -5927,6 +5927,7 @@ imageTrace	Outline	Körvonal
 	Cove	Homorú
 	Depth	Mélység
 	Front	Elölről
+	Side	Oldalról
 	Isometric Bottom	Izometrikus alsó
 	Isometric Left	Izometrikus bal
 	Isometric Right	Izometrikus jobb
@@ -6002,7 +6003,7 @@ imageTrace	Outline	Körvonal
 @msg	each of `{GRAPHICS}` must be an object	a `{GRAPHICS}` minden elemének objektumnak kell lennie
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	a `{GRAPHICS}` elemei symbol, face, x, y, scale és rotation értéket fogadnak, nem `{k}` értéket
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	a `{GRAPHICS}` minden eleméhez kell `symbol`, egy szimbólum neve
-@msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
+@msg	`{GRAPHICS}` face must be front, back or side	a `{GRAPHICS}` face értéke front, back vagy side lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
