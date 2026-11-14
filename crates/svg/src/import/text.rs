@@ -40,7 +40,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, ParaDirection, ParaStyle, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
-use vectorcraft_text::{FontDb, TextLayout};
+use vectorcraft_text::{FontDb, PositionedGlyph, TextLayout, spacing_scale};
 
 use super::css::{Styles, XNode};
 use super::{DEFAULT_FONT_SIZE, PT_PER_IN, href, vector_effect};
@@ -1435,7 +1435,12 @@ impl Ctx {
             obj.xf = Affine::IDENTITY;
         } else {
             let origin = Point::new(x[0].unwrap_or(0.0) + dx[0], y[0].unwrap_or(0.0) + dy[0]);
-            let (justify, left, starts) = lines(&mut cells, &x, &y, &dx, &dy, &anchor_of, &pin, origin.x, &mut breaks);
+            let (justify, left, starts, unplaced) = lines(&mut cells, &x, &y, &dx, &dy, &anchor_of, &pin, origin.x, &mut breaks);
+            if unplaced > 0 {
+                warnings.push(format!(
+                    "{label}: {unplaced} absolutely placed character(s) between characters of the other direction keep their place in the line"
+                ));
+            }
             obj.para.justify = justify;
             obj.xf = Affine::translate((finite(left), finite(origin.y)));
             // Lines anchored differently or at different x (paragraphs aligned or indented
@@ -1568,7 +1573,8 @@ fn leading_tolerance(spacing: f64) -> f64 {
 /// character, alignment (as for [`justify_of`]) and anchor x. `anchor_of` gives where the chunk
 /// starting at a character sits on its anchor, and `pin` sets the paragraph directions of the
 /// text ([`pin_direction`]). When characters are placed on their own, every line is left-aligned
-/// and its anchor x is its left edge.
+/// and its anchor x is its left edge. Also returns how many absolutely placed characters kerning
+/// cannot put on their x.
 #[allow(clippy::too_many_arguments)]
 fn lines(
     cells: &mut [Cell],
@@ -1580,7 +1586,7 @@ fn lines(
     pin: &dyn Fn(&mut TextObject),
     x0: f64,
     breaks: &mut Vec<Break>,
-) -> (Justify, f64, Vec<(usize, f64, f64)>) {
+) -> (Justify, f64, Vec<(usize, f64, f64)>, usize) {
     let n = cells.len();
     let y0 = y[0].unwrap_or(0.0) + dy[0];
     let (mut base, mut cur) = (y0, y0);
@@ -1623,7 +1629,7 @@ fn lines(
     }
     if targets.is_empty() {
         let starts = lines.iter().map(|&(s, lx)| (s, anchor_of(s), lx)).collect();
-        return (justify_of(anchor_of(0)), x0, starts);
+        return (justify_of(anchor_of(0)), x0, starts, 0);
     }
     // Absolutely placed characters: lay the text out left-aligned and kern each one onto its x.
     // SVG anchors every absolutely placed chunk on its own, so a chunk not anchored at its left
@@ -1633,59 +1639,122 @@ fn lines(
     // Chunk starts in order: line starts and absolutely placed characters.
     let mut starts: Vec<usize> = lines.iter().map(|l| l.0).chain(targets.iter().map(|t| t.0)).collect();
     starts.sort_unstable();
-    // The left and right edges of the chunk starting at character `s`, from each character's pen and end.
-    let edges = |s: usize, pens: &[Option<f64>], ends: &[Option<f64>]| {
+    // The left and right edges of the chunk starting at character `s`, and the character drawn at its left.
+    let edges = |s: usize, pens: &[Option<Pen>]| {
         let e = starts.get(starts.partition_point(|&c| c <= s)).copied().unwrap_or(n);
-        let left = (s..e).filter_map(|j| pens[j]).fold(f64::INFINITY, f64::min);
-        let right = (s..e).filter_map(|j| ends[j]).fold(f64::NEG_INFINITY, f64::max);
-        (left.is_finite() && right.is_finite()).then_some((left, right))
+        let (mut left, mut right, mut at) = (f64::INFINITY, f64::NEG_INFINITY, s);
+        for (j, p) in pens.iter().enumerate().take(e).skip(s) {
+            let Some(p) = p else { continue };
+            if p.start < left {
+                (left, at) = (p.start, j);
+            }
+            right = right.max(p.end);
+        }
+        (left.is_finite() && right.is_finite()).then_some((left, right, at))
     };
     let mut line_left: Vec<f64> = lines.iter().map(|l| l.1).collect();
+    // Where each line's first chunk's left edge goes.
+    let mut first_left: Vec<f64> = vec![];
     // Where each absolutely placed character's pen goes, from the left edge of its line's first chunk.
     let mut wants: Vec<(usize, f64)> = vec![];
+    // Absolutely placed characters drawn right next to a placed neighbor with no kerning between
+    // them (a left-to-right character between right-to-left ones): they stay where the layout puts them.
+    let mut unplaced = 0;
     // Kerning changes shaping (pair kerning is off for manually kerned characters): repeat until
     // every character sits on its x.
     for round in 0..4 {
         let (runs, bytes) = assemble(cells, breaks);
         let mut text = with_runs(runs.0);
         pin(&mut text);
-        let (pens, ends) = pens(&measure(&text), &bytes);
+        let pens = pens(&measure(&text), &bytes, cells);
         // The edges of each line's first chunk, found once a round.
-        let first: Vec<Option<(f64, f64)>> = lines.iter().map(|&(s, _)| edges(s, &pens, &ends)).collect();
+        let first: Vec<Option<(f64, f64, usize)>> = lines.iter().map(|&(s, _)| edges(s, &pens)).collect();
         if round == 0 {
             // The chunks as they lie before any is moved: each one's left edge on its anchor.
-            let left_at = |s: usize, x: f64, chunk: Option<(f64, f64)>| chunk.map_or(x, |(left, right)| x - anchor_of(s) * (right - left));
-            let first_left: Vec<f64> = lines.iter().zip(&first).map(|(&(s, lx), &chunk)| left_at(s, lx, chunk)).collect();
+            let left_at = |s: usize, x: f64, chunk: Option<(f64, f64, usize)>| chunk.map_or(x, |(left, right, _)| x - anchor_of(s) * (right - left));
+            first_left = lines.iter().zip(&first).map(|(&(s, lx), &chunk)| left_at(s, lx, chunk)).collect();
             wants = targets
                 .iter()
                 .map(|&(i, x)| {
-                    let chunk = edges(i, &pens, &ends);
+                    let chunk = edges(i, &pens);
                     // The pen of a right-to-left chunk's first character is right of the chunk's left edge.
-                    let pen = pens[i].zip(chunk).map_or(0.0, |(p, (left, _))| p - left);
+                    let pen = pens[i].zip(chunk).map_or(0.0, |(p, (left, ..))| p.start - left);
                     (i, left_at(i, x, chunk) + pen - first_left[line_of(i)])
                 })
                 .collect();
-            // A line's layout starts at the line's left edge, and its first chunk's left edge is `left` from there.
-            line_left = first_left.iter().zip(&first).map(|(&x, chunk)| x - chunk.map_or(0.0, |(left, _)| left)).collect();
         }
-        let (mut line, mut moved, mut worst) = (usize::MAX, 0.0, 0.0f64);
-        for &(i, want) in &wants {
-            let l = line_of(i);
-            if l != line {
-                (line, moved) = (l, 0.0);
+        // A line's layout starts at the line's left edge, and its first chunk's left edge is `left`
+        // from there (right-to-left kerning can move that chunk).
+        line_left = first_left.iter().zip(&first).map(|(&x, chunk)| x - chunk.map_or(0.0, |(left, ..)| left)).collect();
+        // Kerning a character widens its advance to the right: the glyphs drawn right of it move
+        // right, and so does a right-to-left glyph's own left edge (its kerning is at its left). In
+        // drawing order the kerning before an absolutely placed character is a cut after the
+        // character before it (before that character when it runs right to left), and what is drawn
+        // after the cut moves. Places in drawing order are doubled (from 2) to put cuts between them.
+        // Each gap between two placed characters drawn one after the other takes the kerning of one
+        // cut in it, so placing a character moves none placed before it. Kerning is drawn at the
+        // character's horizontal scale, so each correction is divided by it.
+        let mut worst = 0.0f64;
+        let mut from = 0;
+        unplaced = 0;
+        while from < wants.len() {
+            let l = line_of(wants[from].0);
+            let to = from + wants[from..].partition_point(|&(i, _)| line_of(i) == l);
+            let on_line = &wants[from..to];
+            from = to;
+            let Some((p0, _, at)) = first[l] else { continue };
+            let Some(home) = pens[at].map(|p| 2 * p.rank + 2) else { continue };
+            // A character drawn as part of the glyph before it (a mark) is kerned where that glyph is.
+            // The kerning stays on the character just before the placed one: a mark whose kerning
+            // differs from its base's is drawn as a glyph of its own, and kerning the base would put
+            // the space between the base and its mark.
+            // Each search stops at the nearest earlier character with a glyph, at the latest the
+            // placed character before it, so the searches of a line read each character once.
+            let mut cuts: Vec<(usize, usize)> = on_line
+                .iter()
+                .filter(|&&(i, _)| pens[i].is_some())
+                .filter_map(|&(i, _)| (lines[l].0..i).rev().find_map(|j| pens[j]).map(|k| (2 * k.rank + if k.rtl { 1 } else { 3 }, i - 1)))
+                .collect();
+            cuts.sort_unstable();
+            let mut points: Vec<(usize, f64, f64)> =
+                on_line.iter().filter_map(|&(i, want)| pens[i].map(|p| (2 * p.rank + 2, p.start, want))).collect();
+            points.sort_by_key(|p| p.0);
+            // The character kerned at the first cut between places `a` and `b`.
+            let cut = |a: usize, b: usize| cuts.get(cuts.partition_point(|c| c.0 <= a)).filter(|c| c.0 < b).map(|c| c.1);
+            let split = points.partition_point(|p| p.0 < home);
+            // Drawn right of the line's first chunk: kerning moves the character away from it.
+            let (mut prev, mut moved) = (home, 0.0);
+            for &(place, start, want) in &points[split..] {
+                if let Some(k) = cut(prev, place) {
+                    let d = want - (start - p0 + moved);
+                    cells[k].kern += d / spacing_scale(&cells[k].style, false);
+                    moved += d;
+                    worst = worst.max(d.abs());
+                } else {
+                    unplaced += 1;
+                }
+                prev = place;
             }
-            let (Some(p), Some((p0, _))) = (pens[i], first[l]) else { continue };
-            let d = want - (p - p0 + moved);
-            cells[i - 1].kern += d;
-            moved += d;
-            worst = worst.max(d.abs());
+            // Drawn left of it: kerning moves the chunk (and what lies between) away from the character.
+            (prev, moved) = (home, 0.0);
+            for &(place, start, want) in points[..split].iter().rev() {
+                if let Some(k) = cut(place, prev) {
+                    let d = start - p0 - moved - want;
+                    cells[k].kern += d / spacing_scale(&cells[k].style, false);
+                    moved += d;
+                    worst = worst.max(d.abs());
+                } else {
+                    unplaced += 1;
+                }
+                prev = place;
+            }
         }
         if worst < 0.01 {
             break;
         }
     }
     let starts = lines.iter().zip(&line_left).map(|(&(s, _), &lx)| (s, 0.0, lx)).collect();
-    (Justify::Left, line_left[0], starts)
+    (Justify::Left, line_left[0], starts, unplaced)
 }
 
 /// Centred and right-aligned lines of point type `obj` where a reader draws them. `text-anchor`
@@ -1794,13 +1863,40 @@ fn advance(t: &TextObject) -> f64 {
     measure(t).glyphs.iter().map(|g| g.advance).sum()
 }
 
-/// Pen x (start) and end x of the glyph that starts at each character's byte offset.
-fn pens(lay: &TextLayout, bytes: &[usize]) -> (Vec<Option<f64>>, Vec<Option<f64>>) {
-    let mut at: HashMap<usize, (f64, f64)> = HashMap::with_capacity(lay.glyphs.len());
-    for g in &lay.glyphs {
-        at.entry(g.byte).or_insert((g.origin.x, g.origin.x + g.advance));
+/// Where the glyph that starts a character is drawn on a line of point type.
+#[derive(Clone, Copy)]
+struct Pen {
+    /// Its left edge. Manual kerning on a right-to-left glyph is at its left, and the glyph is
+    /// drawn right of it: its left edge is past that kerning.
+    start: f64,
+    /// The right edge of its advance.
+    end: f64,
+    /// Its place in the order its line is drawn in, from the left.
+    rank: usize,
+    rtl: bool,
+}
+
+/// The [`Pen`] of the glyph that starts at each character's byte offset (`bytes`, parallel to `cells`).
+fn pens(lay: &TextLayout, bytes: &[usize], cells: &[Cell]) -> Vec<Option<Pen>> {
+    // A line's glyphs are laid out in the order they are drawn.
+    let mut at: HashMap<usize, (usize, &PositionedGlyph)> = HashMap::with_capacity(lay.glyphs.len());
+    for (rank, g) in lay.glyphs.iter().enumerate() {
+        at.entry(g.byte).or_insert((rank, g));
     }
-    bytes.iter().map(|b| at.get(b).map_or((None, None), |&(s, e)| (Some(s), Some(e)))).unzip()
+    bytes
+        .iter()
+        .zip(cells)
+        .map(|(b, c)| {
+            let &(rank, g) = at.get(b)?;
+            let mut start = g.origin.x;
+            if g.rtl {
+                let st = c.final_style();
+                let kern = st.kerning.unwrap_or(0.0) / 1000.0 * st.size * spacing_scale(&st, false);
+                start += finite(kern);
+            }
+            Some(Pen { start, end: g.origin.x + g.advance, rank, rtl: g.rtl })
+        })
+        .collect()
 }
 
 type Key = (Option<usize>, Option<usize>);
