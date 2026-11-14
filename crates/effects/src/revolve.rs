@@ -8,6 +8,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, N
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
+use crate::solids::wireframe::WireFace;
 use crate::solids::{
     Profile, Scope, is_container, members, object_profile, past_effect, profile, reshape_members, resolve_for, solid_paints, union_bounds,
 };
@@ -662,11 +663,18 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
 /// instances, blends and clipping groups already resolved), in document coordinates: with the
 /// effect on the object, the surface in its top visible fill (else its stroke); with it on fills and strokes, one surface for each of
 /// them, reshaped by the geometry effects after each one's Revolve; on a group or layer, one for
-/// each member, about one shared axis. The swatches and patterns named by a live-effect plug-in
-/// after a fill's or stroke's Revolve are looked up in `doc`.
-pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, String> {
-    let faces = |path: &PathData, b: Rect, options: Revolve| -> Result<Vec<PathData>, String> {
-        Ok(vectorcraft_three_d::revolve(path, b, options)?.iter().map(vectorcraft_three_d::Face::path).collect())
+/// each member, about one shared axis. With the effect on the object, group or layer, also the
+/// shadow drawn behind them. The swatches and patterns named by a live-effect plug-in after a fill's
+/// or stroke's Revolve are looked up in `doc`. Each face carries the width of the stroke the canvas
+/// draws around it ([`surface`]).
+pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<crate::solids::wireframe::FacesAndShadow, String> {
+    let faces = |path: &PathData, b: Rect, fx: &Effect, options: Revolve| -> Result<Vec<WireFace>, String> {
+        if fx.id == CLASSIC_REVOLVE {
+            let p = merged_params(&fx.id, &fx.params);
+            let facets = vectorcraft_three_d::revolve_facets(path, b, options)?;
+            return Ok(facets.iter().map(|f| WireFace { path: f.path(), stroke: crate::solids::classic::stroke_width(f, &p) }).collect());
+        }
+        Ok(vectorcraft_three_d::revolve(path, b, options)?.iter().map(|f| WireFace { path: f.path(), stroke: SEAM_WIDTH }).collect())
     };
     if is_container(n) {
         let index = n
@@ -675,27 +683,28 @@ pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec
             .iter()
             .position(|e| e.visible && is_revolve(&e.id))
             .ok_or("a 3D effect on a group's fill or stroke draws nothing")?;
-        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok((vec![], vec![])) };
         let mut shapes = members(n, "Revolve")?;
         reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
         let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
         let options = shared_options(&shapes, fx_options(fx))?;
         let mut out = vec![];
         for s in shapes.iter().filter(|s| surface_item(&s.items).is_some()) {
-            out.extend(faces(&s.path, b, options)?);
+            out.extend(faces(&s.path, b, fx, options)?);
         }
-        return Ok(out);
+        return Ok((out, group_shadow(n.id, fx, &shapes, b, options)?));
     }
     let (path, _) = object_profile(n, "Revolve")?;
     let ctx = GeomContext::of(n);
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
-        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok((vec![], vec![])) };
         let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
-        if surface_item(&solid_paints(n)).is_none() {
-            return Err("the revolved object has no fill or stroke".into());
-        }
+        let paints = solid_paints(n);
+        let item = surface_item(&paints).ok_or("the revolved object has no fill or stroke")?;
         let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
-        return faces(&path, b, fx_options(fx));
+        let surface = faces(&path, b, fx, fx_options(fx))?;
+        let shadow = shadow_of(n.id, fx, &path, item, b, fx_options(fx))?;
+        return Ok((surface, shadow.into_iter().map(Arc::new).collect()));
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
     let mut out = vec![];
@@ -705,11 +714,11 @@ pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec
         {
             let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
             let b = p.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
-            let surface = faces(&p, b, fx_options(fx))?;
+            let surface = faces(&p, b, fx, fx_options(fx))?;
             out.extend(crate::solids::wireframe::reshaped(surface, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
         }
     }
-    Ok(out)
+    Ok((out, vec![]))
 }
 
 /// [`revolve_meshes`] of group or layer `n`: one mesh for each member, about one shared axis.

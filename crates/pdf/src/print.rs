@@ -183,11 +183,14 @@ pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
 /// only the layers that print, overprints in composite output as [`PrintAdvanced::overprints`]
 /// says.
 pub fn printed_document<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, Document> {
-    let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
-    let d = doc.to_mut();
-    keep_layers(&mut d.layers, set.print_layers);
-    composite_overprints(d, set);
-    doc
+    // The layers that do not print are left out first, so the art placed for symbols is only
+    // the art that prints; the layers kept are shown.
+    let mut kept = doc.clone();
+    keep_layers(&mut kept.layers, set.print_layers);
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true };
+    let mut d = vectorcraft_effects::bake_document_placing_symbols(&kept, true, layers).unwrap_or(kept);
+    composite_overprints(&mut d, set);
+    Cow::Owned(d)
 }
 
 /// Overprinting fills and strokes in composite output: discarded (they knock out) or simulated
