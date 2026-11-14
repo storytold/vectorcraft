@@ -6,8 +6,8 @@ use vectorcraft_doc::Scaling;
 use vectorcraft_geom::{Rect, Vec2};
 
 use super::object::choice;
-use super::panelcmds::{artboard_index, artboards_art, locked_and_hidden, named_or_selected, note_artboards};
-use super::{Affine, CommandSpec, NodeId, Result, Session, bad, check_switches, cmd, has_doc, switch_or};
+use super::panelcmds::{artboard_at, artboards_art, locked_and_hidden, named_or_selected, note_artboards, on_board};
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, check_switches, cmd, has_doc, index, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -63,13 +63,7 @@ fn boards(s: &mut Session, p: &Value, cmd: &str) -> Result<Boards> {
     check_switches(p, &["patterns"], cmd)?;
     let to_artboard = choice(p, cmd, "to", &["selection", "artboard"])? == Some("artboard");
     let indices = named_or_selected(s, p, cmd)?;
-    let given = |key: &str| -> Result<Option<usize>> {
-        match p.get(key).filter(|v| !v.is_null()) {
-            Some(v) => artboard_index(&s.doc()?.doc, &json!({ "index": v }), cmd).map(Some),
-            None => Ok(None),
-        }
-    };
-    let (named, recorded) = (given("artboard")?, given("activeArtboard")?);
+    let (named, recorded) = (artboard_at(&s.doc()?.doc, p, "artboard", cmd)?, artboard_at(&s.doc()?.doc, p, "activeArtboard", cmd)?);
     let move_art = switch_or(p, "moveArt", s.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true), cmd)?;
     let locked_art = locked_and_hidden(s, p, move_art, cmd)?;
     note_artboards(s, p, &indices);
@@ -78,8 +72,8 @@ fn boards(s: &mut Session, p: &Value, cmd: &str) -> Result<Boards> {
         (false, _) => None,
         (true, Some(i)) => Some(i),
         (true, None) => {
-            let active = s.tool_options_of("artboard")["active"].clone();
-            Some(artboard_index(&s.doc()?.doc, &json!({ "index": active }), cmd)?)
+            let active = s.tool_options_of("artboard")["active"].as_u64().map(index);
+            Some(active.map_or_else(|| Err(EngineError::Other("no such artboard".into())), |i| on_board(&s.doc()?.doc, i))?)
         }
     };
     if let Some(i) = reference.filter(|_| named.is_none()) {
