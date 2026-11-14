@@ -445,7 +445,8 @@ fn push_painted(doc: Option<&Document>, c: &Node, out: &mut Vec<(BezPath, FillRu
 /// its active fill and stroke ([`has_item_geometry`]): the paths of the art [`reshape`] makes of it,
 /// each with its own geometry effects and those of each fill and stroke applied
 /// ([`crate::bake_type_appearance`], [`push_painted`]), the paths that the own fills and strokes of
-/// the groups and layers in the art paint ([`crate::evaluate_container`]), and the instances in that
+/// the groups and layers in the art paint ([`crate::evaluate_container`]), the shapes that the own
+/// fills and strokes of the images in the art paint ([`image_paint`]), and the instances in that
 /// art that took those effects, in turn. Hidden objects, clipping paths, guides and the members of
 /// clip groups add nothing, and neither does an instance more than
 /// [`vectorcraft_doc::depth::MAX_DEPTH`] deep or whose symbol's art would take the objects measured
@@ -477,6 +478,7 @@ fn painted_in(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, 
             None => push_painted(doc, n, out),
         },
         NodeKind::Path { .. } => {}
+        NodeKind::Image(_) => out.extend(image_paint(doc, n)),
         NodeKind::SymbolInstance { .. } => instance_paint(doc, n, depth + 1, budget, out),
         _ if n.clips() => {}
         _ => {

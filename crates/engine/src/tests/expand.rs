@@ -387,6 +387,34 @@ fn a_fill_effect_reshapes_the_fill_of_a_group_in_the_art() {
     assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
 }
 
+/// An image in the symbol's art whose fill Convert to Shape gives a shape: the instance's fill
+/// effect grows what that fill paints, and a click there selects the instance.
+#[test]
+fn a_click_on_the_grown_fill_of_an_image_in_the_art_selects_the_instance() {
+    let mut s = session();
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    // The frame runs from 85 to 115; the fill's shape is 9 pt larger on each side.
+    let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [im.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#0000ff", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Image"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 70.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    assert!(near(render(&s).pixel(70, 100), BLUE), "the image's fill grows by the offset: {:?}", render(&s).pixel(70, 100));
+    assert_eq!(hit_at(&s, 70.0, opt), Some(id), "a click on the image's grown fill");
+    assert_eq!(hit_at(&s, 60.0, opt), None, "a click past the grown fill");
+}
+
 /// Of several fills, only the topmost one's effects reach the art, and only while it is visible.
 #[test]
 fn only_the_topmost_visible_instance_fill_reshapes_the_art() {
