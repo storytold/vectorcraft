@@ -1827,6 +1827,7 @@ antiAlias	Sharp	날카롭게
 	Format	형식
 	Format Options	형식 옵션
 	Format Settings	형식 설정
+	Format Settings…	형식 설정…
 	Format:	형식:
 	Formats:	형식:
 	Fractions	분수
@@ -7117,6 +7118,9 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+	Nest Shapes…	도형 네스팅…
+	Nest Shapes	도형 네스팅
+	Roll	롤
 
 # Messages of the 3D effects, image export, color profiles, swatch exchange files, color books, DXF import,
 # path operations, libraries, scripts and zip files.

@@ -1292,6 +1292,7 @@ file-filter	Templates	模板
 	Format	格式
 	Format Options	格式选项
 	Format Settings	格式设置
+	Format Settings…	格式设置…
 	Format:	格式：
 	Formats:	格式：
 	Fractional Widths	比例宽度
@@ -9176,6 +9177,9 @@ breakText	Glyphs	字形
 @msg	{what} can't be intertwined	{what} 不能交织
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小
+	Nest Shapes…	形状排料…
+	Nest Shapes	形状排料
+	Roll	卷材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要 1 亿点以内的有限坐标

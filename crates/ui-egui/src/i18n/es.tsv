@@ -1341,6 +1341,7 @@ font-technology	Variable	Variables
 	Format	Formato
 	Format Options	Opciones de formato
 	Format Settings	Ajustes de formato
+	Format Settings…	Ajustes de formato…
 	Format:	Formato:
 	Formats:	Formatos:
 	Fractional Widths	Anchuras fraccionarias
@@ -7586,3 +7587,6 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+	Nest Shapes…	Anidar formas…
+	Nest Shapes	Anidar formas
+	Roll	Rollo

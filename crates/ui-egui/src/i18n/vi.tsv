@@ -1576,6 +1576,7 @@ file-filter	Templates	Mẫu
 	Format	Định dạng
 	Format Options	Tùy chọn định dạng
 	Format Settings	Cài đặt định dạng
+	Format Settings…	Cài đặt định dạng…
 	Format:	Định dạng:
 	Formats:	Các định dạng:
 	Fractional Widths	Chiều rộng phân số
@@ -7137,6 +7138,9 @@ breakText	Glyphs	Glyph
 	Grommets	Khoen
 	Grommet Inset	Khoảng cách từ mép đến khoen
 	Diameter	Đường kính
+	Nest Shapes…	Xếp hình tiết kiệm vật liệu…
+	Nest Shapes	Xếp hình tiết kiệm vật liệu
+	Roll	Cuộn
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Hiệu ứng 3D yêu cầu tọa độ hữu hạn trong phạm vi 100 triệu điểm

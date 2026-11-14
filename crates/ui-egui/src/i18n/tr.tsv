@@ -1293,6 +1293,7 @@ font-technology	Variable	Değişken
 	Format	Biçim
 	Format Options	Biçim Seçenekleri
 	Format Settings	Biçim Ayarları
+	Format Settings…	Biçim Ayarları…
 	Format:	Biçim:
 	Formats:	Formatlar:
 	Fractional Widths	Kesirli Genişlikler
@@ -7599,3 +7600,6 @@ breakText	Glyphs	Glifler
 	Grommets	Kuşgözleri
 	Grommet Inset	Kuşgözlerinin kenara uzaklığı
 	Diameter	Çap
+	Nest Shapes…	Şekilleri yerleştir…
+	Nest Shapes	Şekilleri yerleştir
+	Roll	Rulo
