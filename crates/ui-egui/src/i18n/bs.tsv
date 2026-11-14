@@ -103,6 +103,8 @@
 	Blend Vertically	Stopi okomito
 	Convert to CMYK	Pretvori u CMYK
 	Convert to Grayscale	Pretvori u nijanse sive
+	Convert to Indexed Color	Pretvori u indeksirane boje
+	Convert to Indexed Color…	Pretvori u indeksirane boje…
 	Convert to RGB	Pretvori u RGB
 	Invert Colors	Obrni boje
 	Overprint Black…	Pretisak crne…
@@ -1605,6 +1607,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
 	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Postavke za Warichu…
+	Warichu Settings	Postavke za Warichu
+	Lines:	Redovi:
+	Line Gap:	Razmak između redova:
 	Composite Fonts…	Kompozitni fontovi…
 	Composite Fonts	Kompozitni fontovi
 	Export Composite Fonts	Izvezi kompozitne fontove
@@ -3349,6 +3356,29 @@ theme	Appearance	Izgled
 	Bristle Brush	Četkica s čekinjama
 	Pattern Brush	Četkica uzorka
 	missing from the Brushes panel	nedostaje u panelu Četkice
+	built in	ugrađen
+	embedding not allowed	ugrađivanje nije dozvoljeno
+	embedding for editing	ugrađivanje za uređivanje
+	embedding for preview and print	ugrađivanje za pregled i štampu
+	embedding allowed	ugrađivanje dozvoljeno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
+	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
+	missing	nedostaje
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearni gradijent
+	Radial gradient	Radijalni gradijent
+	Conic gradient	Konusni gradijent
+	Diamond gradient	Rombni gradijent
+	Freeform gradient	Gradijent slobodnog oblika
+@plural	{n} instance|{n} instances	{n} instanca|{n} instance|{n} instanci
+@plural	{n} row|{n} rows	{n} red|{n} reda|{n} redova
+@plural	{n} column|{n} columns	{n} kolona|{n} kolone|{n} kolona
 	Select art to make a scatter, art or pattern brush.	Odaberite crtež da napravite raspršenu, umjetničku četkicu ili četkicu uzorka.
 	Brush Art	Crtež četkice
 	New Symbol	Novi simbol
@@ -3833,6 +3863,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…
@@ -4501,8 +4536,15 @@ imageTrace	Outline	Obris
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nije moguće postaviti {name}: dokument na koji je ispušten je zatvoren
 @msg	Couldn't place {name}: the document it was placed in was closed	Nije moguće postaviti {name}: dokument u koji je postavljen je zatvoren
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nije moguće postaviti {name}: dokument na koji je ispušten je vraćen na sačuvano
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nije moguće postaviti {name}: dokument u koji je postavljen je vraćen na sačuvano
+@msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte
 @msg	Create from Guides: the document has no artboard	Kreiraj iz vodilica: dokument nema radnu ploču
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Kreiraj iz vodilica: vodilice prave više od {MAX_PIECES} isječaka
@@ -5153,6 +5195,7 @@ imageTrace	Outline	Obris
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otvoreno s {n} bilješkom: {first}|{notice}. Otvoreno s {n} bilješke: {first}|{notice}. Otvoreno s {n} bilješki: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
@@ -5223,6 +5266,8 @@ imageTrace	Outline	Obris
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ugrađena slika od {_1} × {_2} piksela smanjena je na {_3} × {_4} piksela kako bi se zadržali slojevi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	the Line Breaking setting of legacy type was left out	postavka prijeloma redova teksta u starom formatu je izostavljena
+@msg	the Japanese layout rules of legacy type were left out	japanska pravila rasporeda teksta u starom formatu su izostavljena
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
@@ -5854,6 +5899,7 @@ mark-style	Japanese	Japanski
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
 @msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	akcija „{_1}” postavlja postavku foldera {_2}; izbrišite taj korak da biste sačuvali skup
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -6356,6 +6402,8 @@ anchor	Points:	Tačke:
 	Anchor Inspector	Pregled sidara
 	Add Points at Crossings	Dodaj tačke na presjecima
 	Split at Crossings	Razdvoji na presjecima
+	Trim at Crossings Tool	Alat obreži na presjecima
+	Trim at Crossings	Obreži na presjecima
 	Extend Path	Produži putanju
 	Measure & Inspect	Mjeri i pregledaj
 	Set Anchor	Postavi sidro
@@ -6887,3 +6935,9 @@ shape	Open	Otvoren
 	Box	Okvir
 	Swatch	Uzorak boje
 	Direction	Smjer
+	Banner Hems and Grommets…	Porubi i ušice za baner…
+	Banner Hems and Grommets	Porubi i ušice za baner
+	Hem	Porub
+	Grommets	Ušice
+	Grommet Inset	Udaljenost ušica od ruba
+	Diameter	Prečnik

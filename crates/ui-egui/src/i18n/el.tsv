@@ -588,6 +588,8 @@ font-technology	Variable	Μεταβλητές
 	Convert to Artboards	Μετατροπή σε πίνακες σχεδίασης
 	Convert to CMYK	Μετατροπή σε CMYK
 	Convert to Grayscale	Μετατροπή σε κλίμακα του γκρι
+	Convert to Indexed Color	Μετατροπή σε χρώματα με ευρετήριο
+	Convert to Indexed Color…	Μετατροπή σε χρώματα με ευρετήριο…
 	Convert To Outlines	Μετατροπή σε περιγράμματα
 	Convert To Point Type	Μετατροπή σε κείμενο σημείου
 	Convert to RGB	Μετατροπή σε RGB
@@ -1825,6 +1827,29 @@ font-technology	Variable	Μεταβλητές
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
 	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
+	built in	ενσωματωμένη
+	embedding not allowed	η ενσωμάτωση δεν επιτρέπεται
+	embedding for editing	ενσωμάτωση για επεξεργασία
+	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
+	embedding allowed	η ενσωμάτωση επιτρέπεται
+	{file}; {embedding}	{file}· {embedding}
+	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
+	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
+	missing	λείπει
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Γραμμικό ντεγκραντέ
+	Radial gradient	Ακτινικό ντεγκραντέ
+	Conic gradient	Κωνικό ντεγκραντέ
+	Diamond gradient	Ρομβοειδές ντεγκραντέ
+	Freeform gradient	Ντεγκραντέ ελεύθερης μορφής
+@plural	{n} instance|{n} instances	{n} παρουσία|{n} παρουσίες
+@plural	{n} row|{n} rows	{n} γραμμή|{n} γραμμές
+@plural	{n} column|{n} columns	{n} στήλη|{n} στήλες
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -2447,8 +2472,15 @@ axis	Both	Και τα δύο
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο έκλεισε
 @msg	Couldn't place {name}: the document it was placed in was closed	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο έκλεισε
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο αποθέσατε το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't place {name}: the document it was placed in was reverted	Δεν ήταν δυνατή η τοποθέτηση του {name}: το έγγραφο στο οποίο τοποθετούνταν το αρχείο επανήλθε στην αποθηκευμένη έκδοση
+@msg	Couldn't paste: the document it was pasted in was reverted	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση επανήλθε στην αποθηκευμένη έκδοση
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
 @msg	Create from Guides: the document has no artboard	Δημιουργία από οδηγούς: το έγγραφο δεν έχει πίνακα σχεδίασης
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Δημιουργία από οδηγούς: οι οδηγοί σχηματίζουν περισσότερες από {MAX_PIECES} τομές
@@ -2458,6 +2490,7 @@ axis	Both	Και τα δύο
 @msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
+@msg	select a path	επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
@@ -2534,6 +2567,9 @@ axis	Both	Και τα δύο
 @msg	`{keep}` is not a side of this axis	Το `{keep}` δεν είναι πλευρά αυτού του άξονα
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	Το `{key}` πρέπει να είναι `auto` ή κωδικός γλώσσας όπως `en` ή `zh-hant`
 @msg	`{key}` must be a #rrggbb color	Το `{key}` πρέπει να είναι χρώμα #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
+@msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
+@msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
@@ -3463,6 +3499,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rating:	Αξιολόγηση:
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
+	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
+	Canvas display profile:	Προφίλ οθόνης καμβά:
+	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
+	No usable display profile was found: the canvas is drawn in sRGB.	Δεν βρέθηκε κατάλληλο προφίλ οθόνης: ο καμβάς σχεδιάζεται σε sRGB.
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
 	Rearrange	Αναδιάταξη
 	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
@@ -4135,6 +4176,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ρυθμίσεις Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ρυθμίσεις Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ρυθμίσεις Warichu…
+	Warichu Settings	Ρυθμίσεις Warichu
+	Lines:	Γραμμές:
+	Line Gap:	Απόσταση γραμμών:
 	Composite Fonts…	Σύνθετες γραμματοσειρές…
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
@@ -4569,6 +4615,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
 @msg	invalid PDF setting: {0}	μη έγκυρη ρύθμιση PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη: ενεργοποιήστε την «Εγγραφή σελίδων μεγαλύτερων από 200 in σε πλήρες μέγεθος, σε στιγμές»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	το PDF 1.4 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να μείνει εντός του ορίου σελίδας του PDF/A-2, 14.400 μονάδων: το αρχείο γράφεται ως PDF 1.6
@@ -5002,6 +5049,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Άνοιξε με {n} σημείωση: {first}|Άνοιξε με {n} σημειώσεις: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Άνοιξε με {n} σημείωση: {first}|{notice}. Άνοιξε με {n} σημειώσεις: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Αποθηκεύτηκε το {path} με {n} σημείωση: {first}|Αποθηκεύτηκε το {path} με {n} σημειώσεις: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ενσωματώθηκε {n} εικόνα· λείπουν {missing}: επανασυνδέστε τις πρώτα|Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
 @msgplural	Embedded {n} image|Embedded {n} images	Ενσωματώθηκε {n} εικόνα|Ενσωματώθηκαν {n} εικόνες
@@ -5081,6 +5129,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	μια ενσωματωμένη εικόνα {_1} × {_2} pixel μειώθηκε σε {_3} × {_4} pixel για να διατηρηθούν τα επίπεδα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	the Line Breaking setting of legacy type was left out	η ρύθμιση αλλαγής γραμμής του κειμένου παλιάς μορφής παραλείφθηκε
+@msg	the Japanese layout rules of legacy type were left out	οι ιαπωνικοί κανόνες διάταξης του κειμένου παλιάς μορφής παραλείφθηκαν
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
@@ -6131,6 +6181,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -6833,6 +6884,8 @@ anchor	Points:	Σημεία:
 	Anchor Inspector	Επιθεωρητής σημείων αγκύρωσης
 	Add Points at Crossings	Προσθήκη σημείων στις διασταυρώσεις
 	Split at Crossings	Διαχωρισμός στις διασταυρώσεις
+	Trim at Crossings Tool	Εργαλείο περικοπής στις διασταυρώσεις
+	Trim at Crossings	Περικοπή στις διασταυρώσεις
 	Extend Path	Επέκταση διαδρομής
 	Measure & Inspect	Μέτρηση και επιθεώρηση
 	Set Anchor	Ορισμός σημείου αγκύρωσης
@@ -7412,3 +7465,9 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
+	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
+	Hem	Στρίφωμα
+	Grommets	Τρουκς
+	Grommet Inset	Απόσταση τρουκς από την άκρη
+	Diameter	Διάμετρος

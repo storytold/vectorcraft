@@ -60,6 +60,7 @@ pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
 pub mod import_pdf;
+pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
 pub mod layer_options;
@@ -142,6 +143,7 @@ pub mod trace_presets;
 pub(crate) mod transform;
 pub mod transform_each;
 pub mod variables;
+pub mod warichu;
 mod warp_effect;
 pub mod width_point;
 
@@ -347,6 +349,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
@@ -365,6 +368,7 @@ registry! {
     Justification: [justification::KIND] => justification::SPEC,
     BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    WarichuSettings: [warichu::KIND] => warichu::SPEC,
     CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
@@ -783,6 +787,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_clicked = false;
     let mut ok_enabled = true;
     let mut cancel = false;
     let mut reset = false;
@@ -843,7 +848,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                 && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
-                ok = true;
+                ok_clicked = true;
             }
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
@@ -878,6 +883,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    // A field that refused its text when the press on OK took its focus keeps the dialog open, as
+    // Enter does. Only a pointer click has such a press; the keyboard and screen readers press OK
+    // in one frame.
+    let press = egui::Id::unique("dialog-press-pass");
+    let (pressed, released) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_released()));
+    if pressed {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|m| m.insert_temp(press, pass));
+    }
+    let (pressed_at, refused_at) = ctx.data(|m| (m.get_temp::<u64>(press), m.get_temp::<u64>(widgets::dialog_reject_pass())));
+    let refused_during_click = released && matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    if ok_clicked && !rejected && !refused_during_click {
+        ok = true;
+    }
     if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }

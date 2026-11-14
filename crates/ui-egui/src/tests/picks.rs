@@ -863,6 +863,28 @@ fn save_changes_answers_for_its_own_document() {
     assert_eq!((d.kind.as_str(), &d.fields["uid"]), (crate::unsaved::KIND, &json!(uids[2])));
 }
 
+/// Closing a modified background tab whose Save opens a Save dialog: once the dialog answers,
+/// the document closes and the document that was in front before the question is in front again.
+#[test]
+fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
+    let (mut app, shown, written) = with_dialogs(false);
+    // A clean and in front, B modified and untitled, C clean.
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.session.set_active(0);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    app.run("file.close", json!({"index": 1})).unwrap();
+    assert!(crate::dialogs::confirm(&mut app).is_err());
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/b.vectorcraft"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/b.vectorcraft"], "{}", app.ui.status);
+    assert_eq!(app.session.documents().iter().map(|d| d.uid).collect::<Vec<_>>(), [uids[0], uids[2]]);
+    assert_eq!(app.session.active().map(|d| d.uid), Some(uids[0]), "A is in front again");
+}
+
 /// A dialog asked for while another is open is refused, and the status bar says so rather than
 /// "cancelled".
 #[test]

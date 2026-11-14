@@ -242,10 +242,18 @@ impl Session {
     /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
     /// after a switch or a close brought it there. Its type set in a composite font that differs
     /// from the one of that name before (added, changed or removed) is measured again, and type not
-    /// measured yet (in a document replaced while in the back) is measured now.
+    /// measured yet is measured now. Type that [`Session::replace_document`] measured in the
+    /// document's own composite fonts while it was in the back is not measured again when the
+    /// document is unchanged since.
     fn sync_front_composite_fonts(&mut self) {
-        let changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
+        let mut changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
         let Some(index) = self.active else { return };
+        if let Some(st) = self.docs.get_mut(index)
+            && let Some((doc, own)) = st.measured_in_own.take()
+            && std::ptr::eq(doc.as_ptr(), Arc::as_ptr(&st.doc))
+        {
+            changed.retain(|n| !own.contains(n));
+        }
         self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() || sets_in_any(t, &changed));
     }
 
@@ -271,6 +279,9 @@ impl Session {
         for tree in text_trees_mut(doc) {
             each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+        // The symbols' type is measured now: the inline graphics showing those symbols take their
+        // art's measured size, a symbol's type before the type that shows that symbol inline.
+        doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -288,12 +299,9 @@ impl Session {
                 each_text_where(tree, &mut stale, &mut cmd::typecmd::refresh_bounds_for_first_frame);
             }
             // Inline graphics take their size from their symbols' art, whose type may just have
-            // been measured again: the text holding one whose size changed is measured again too.
-            if !doc.resolve_inline_art().is_empty() {
-                for tree in text_trees_mut(doc) {
-                    each_text_where(tree, &mut |t| t.cached_bounds.is_none(), &mut cmd::typecmd::refresh_bounds_for_first_frame);
-                }
-            }
+            // been measured again: the text holding one whose size changed is measured again too,
+            // a symbol's type before the type that shows that symbol inline.
+            doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
         });
     }
 
@@ -348,14 +356,10 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
-        // In the back, type set in a font named like a composite font is measured when the document
-        // comes to the front and its own composite fonts are registered, not in the front
-        // document's.
-        let mut back_names = None;
-        if self.active == Some(index) {
-            // Pending tool work (typing, a drag) belongs to the content being thrown away.
-            self.reset_tool_for_doc_switch();
-        } else {
+        // In the back, type set in a font named like a composite font is measured again below, in
+        // the document's own composite fonts, not in the front document's.
+        let back = self.active != Some(index);
+        if back {
             let mut names = cmd::compositefonts::names_in_use(self);
             names.extend(doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
             for tree in text_trees_mut(&mut doc) {
@@ -364,13 +368,17 @@ impl Session {
                     t.cached_baselines.clear();
                 });
             }
-            back_names = Some(names);
+        } else {
+            // Pending tool work (typing, a drag) belongs to the content being thrown away.
+            self.reset_tool_for_doc_switch();
         }
         let old = &self.docs[index];
         let mut st = DocState::new(doc, old.path.clone());
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        // Work started for the content being thrown away is dropped when it finishes.
+        st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
@@ -395,14 +403,34 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
-        match back_names {
-            Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
-            None => {
-                self.sync_opened_composite_fonts(index);
-                self.sync_front_profiles();
-            }
+        if back {
+            self.measure_back_document(index);
+        } else {
+            self.sync_opened_composite_fonts(index);
+            self.sync_front_profiles();
         }
         true
+    }
+
+    /// Measure the type not measured yet in open document `index`, which is in the back, in its own
+    /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
+    /// document comes to the front. The front document stays the one whose composite fonts are
+    /// registered. The names of the document's composite fonts its type was measured in are kept,
+    /// so its coming to the front does not measure that type again.
+    fn measure_back_document(&mut self, index: usize) {
+        let Some(st) = self.docs.get(index) else { return };
+        let fonts = st.doc.composite_fonts.clone();
+        let db = vectorcraft_text::FontDb::global();
+        let lent = db.lend_composite_fonts(&fonts);
+        // A name another loan holds with a different definition is not lent: type set in it is
+        // measured again when the document comes to the front.
+        let own: HashSet<String> =
+            fonts.iter().filter(|f| db.composite_font(&f.name).is_some_and(|have| *have == **f)).map(|f| f.name.to_lowercase()).collect();
+        self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none());
+        drop(lent);
+        if let Some(st) = self.docs.get_mut(index) {
+            st.measured_in_own = Some((Arc::downgrade(&st.doc), own));
+        }
     }
 
     /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one

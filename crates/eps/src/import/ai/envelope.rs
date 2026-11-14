@@ -32,7 +32,7 @@ use std::sync::Arc;
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_doc::live::{
     EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
-    envelope_stroke_margin,
+    envelope_content_boxes_with, envelope_stroke_margin,
 };
 use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
@@ -150,23 +150,31 @@ fn half_stroked_box(content: &[Arc<Node>]) -> Option<Rect> {
     fn grown(r: Rect, by: f64) -> Rect {
         if by.is_finite() && by > 0.0 { r.inflate(by, by) } else { r }
     }
-    fn walk(n: &Arc<Node>, acc: Option<Rect>) -> Option<Rect> {
+    /// `n`'s box, with type that draws nothing given its laid-out box only with `blank`.
+    fn walk(n: &Arc<Node>, acc: Option<Rect>, blank: bool) -> Option<Rect> {
         let one = std::slice::from_ref(n);
         match &n.kind {
             NodeKind::Text(t) => {
-                let Some((_, ink)) = envelope_content_boxes(one, Affine::IDENTITY) else { return acc };
+                let Some((_, ink)) = envelope_content_boxes_with(one, Affine::IDENTITY, blank) else { return acc };
                 // The characters' own strokes as the type's bounds with strokes measure them (they
                 // have no miter allowance there), and the strokes of its appearance along a side.
                 vectorcraft_geom::union_opt(acc, Some(grown(ink, t.char_stroke_outset().max(along(&n.appearance)))))
             }
             NodeKind::Group { children, clip: false } => {
-                let members = children.iter().fold(None, |acc, c| walk(c, acc));
+                let members = children.iter().fold(None, |acc, c| walk(c, acc, blank));
                 vectorcraft_geom::union_opt(acc, members.map(|b| grown(b, along(&n.appearance))))
             }
-            _ => vectorcraft_geom::union_opt(acc, envelope_content_boxes(one, Affine::IDENTITY).map(|(stroked, _)| stroked)),
+            _ => vectorcraft_geom::union_opt(acc, envelope_content_boxes_with(one, Affine::IDENTITY, blank).map(|(stroked, _)| stroked)),
         }
     }
-    content.iter().fold(None, |acc, c| walk(c, acc))
+    let blank = blank_type_box(content);
+    content.iter().fold(None, |acc, c| walk(c, acc, blank))
+}
+
+/// Do the contents of an envelope give type that draws nothing its laid-out box: has nothing else
+/// in `content` a box ([`envelope_content_boxes_with`])?
+fn blank_type_box(content: &[Arc<Node>]) -> bool {
+    envelope_content_boxes_with(content, Affine::IDENTITY, false).is_none()
 }
 
 /// Envelope `kind` mapping from its contents' glyphs grown by as far as their strokes paint along a
@@ -216,19 +224,24 @@ fn painted_outlines(outlines: &Node) -> Option<Rect> {
 /// their members grown by as far as their own strokes paint along a side, other objects by their
 /// bounds with strokes. `None` when nothing in it has bounds.
 fn painted_box(content: &[Arc<Node>]) -> Option<Rect> {
-    fn walk(n: &Arc<Node>, acc: Option<Rect>) -> Option<Rect> {
+    /// `n`'s box, with type that draws nothing given its laid-out box only with `blank`.
+    fn walk(n: &Arc<Node>, acc: Option<Rect>, blank: bool) -> Option<Rect> {
         match &n.kind {
             NodeKind::Text(_) => vectorcraft_geom::union_opt(acc, vectorcraft_effects::outline_text(n).as_ref().and_then(painted_outlines)),
             NodeKind::Group { children, clip: false } => {
                 let along = n.appearance.painted_strokes().map(|s| s.side_reach(true)).fold(0.0, f64::max);
-                let members = children.iter().fold(None, |acc, c| walk(c, acc));
+                let members = children.iter().fold(None, |acc, c| walk(c, acc, blank));
                 let grown = |r: Rect| if along.is_finite() && along > 0.0 { r.inflate(along, along) } else { r };
                 vectorcraft_geom::union_opt(acc, members.map(grown))
             }
-            _ => vectorcraft_geom::union_opt(acc, envelope_content_boxes(std::slice::from_ref(n), Affine::IDENTITY).map(|(stroked, _)| stroked)),
+            _ => vectorcraft_geom::union_opt(
+                acc,
+                envelope_content_boxes_with(std::slice::from_ref(n), Affine::IDENTITY, blank).map(|(stroked, _)| stroked),
+            ),
         }
     }
-    content.iter().fold(None, |acc, c| walk(c, acc))
+    let blank = blank_type_box(content);
+    content.iter().fold(None, |acc, c| walk(c, acc, blank))
 }
 
 /// The bounds margin of `painted`, the box of what contents with geometric box `plain` paint, a side
@@ -1057,6 +1070,7 @@ mod tests {
     /// miter join may at a corner.
     #[test]
     fn stroked_type_is_tried_mapped_from_its_glyphs_grown_by_half_its_stroke() {
+        vectorcraft_text::register_envelope_ink();
         let mut text = type_node(1, CharStyle::default());
         let mut appearance = (*text.appearance).clone();
         appearance.items.push(AppearanceItem::Stroke(mitred()));
@@ -1072,6 +1086,7 @@ mod tests {
     /// turned and stretched as well as upright.
     #[test]
     fn type_with_a_character_stroke_is_tried_mapped_from_its_bounds_with_strokes() {
+        vectorcraft_text::register_envelope_ink();
         let style = CharStyle { stroke: Paint::solid(Color::BLACK), stroke_width: 4.0, ..CharStyle::default() };
         for xf in [
             Affine::IDENTITY,
@@ -1091,6 +1106,7 @@ mod tests {
     /// A stroke on a group's own appearance round type grows the box by half its weight too.
     #[test]
     fn a_stroke_on_a_group_of_type_grows_the_box_by_half_its_weight() {
+        vectorcraft_text::register_envelope_ink();
         let mut group = Node::new(NodeId(2), NodeKind::Group { children: vec![Arc::new(type_node(1, CharStyle::default()))], clip: false });
         let mut appearance = (*group.appearance).clone();
         appearance.items.push(AppearanceItem::Stroke(mitred()));
@@ -1271,6 +1287,39 @@ mod tests {
         let piece = Node::path(NodeId(1), PathData::from_bezpath(&bp), appearance);
         let outlines = Node::group(NodeId(2), vec![Arc::new(piece)]);
         assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
+    }
+
+    /// Type that draws nothing adds no box next to other content in the boxes the import tries an
+    /// envelope with Distort Appearance mapped from, loose and in a group, as it adds none to the
+    /// contents' geometric box: a rectangle with a round 4 point stroke beside type of only spaces
+    /// gives the rectangle's bounds with strokes.
+    #[test]
+    fn type_that_draws_nothing_adds_no_box_to_the_stroked_boxes() {
+        use kurbo::Shape;
+        vectorcraft_text::register_envelope_ink();
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let square = Arc::new(Node::path(NodeId(1), PathData::from_bezpath(&Rect::new(10.0, 10.0, 110.0, 60.0).to_path(0.1)), appearance));
+        let blank = Node::new(
+            NodeId(2),
+            NodeKind::Text(Box::new(TextObject::point(Point::new(400.0, 450.0), "   ", CharStyle { size: 96.0, ..CharStyle::default() }))),
+        );
+        let laid = blank.geometric_bounds().unwrap();
+        assert!(laid.x1 > 110.0 && laid.y1 > 60.0, "the laid-out box {laid:?} reaches past the rectangle");
+        let want = Rect::new(8.0, 8.0, 112.0, 62.0);
+        let blank = Arc::new(blank);
+        for content in [vec![square.clone(), blank.clone()], vec![Arc::new(Node::group(NodeId(3), vec![square.clone(), blank.clone()]))]] {
+            let (_, plain) = envelope_content_boxes(&content, Affine::IDENTITY).unwrap();
+            assert!(close(plain, Rect::new(10.0, 10.0, 110.0, 60.0), 1e-6), "{plain:?}");
+            let half = half_stroked_box(&content).unwrap();
+            assert!(close(half, want, 1e-6), "{half:?}");
+            let painted = painted_box(&content).unwrap();
+            assert!(close(painted, want, 1e-6), "{painted:?}");
+        }
+        // With nothing else in the envelope, the type keeps its laid-out box.
+        assert_eq!(half_stroked_box(&[blank]), Some(laid));
     }
 
     /// A side of what contents paint within a ten-thousandth of a point of their geometric box's is

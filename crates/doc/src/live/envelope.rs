@@ -149,20 +149,31 @@ impl EnvelopeOptions {
 /// its glyph outlines (see [`envelope_content_bounds`]). Strokes scale with the frame as
 /// [`Node::transform`] scales them.
 pub fn envelope_content_boxes(content: &[Arc<Node>], frame: Affine) -> Option<(Rect, Rect)> {
+    envelope_content_boxes_with(content, frame, false).or_else(|| envelope_content_boxes_with(content, frame, true))
+}
+
+/// [`envelope_content_boxes`] with type that draws nothing given its laid-out box when
+/// `blank_type_box` is set and no box when it is not. A caller that measures the members of an
+/// envelope's contents one at a time passes `true` only when the whole contents have no box with
+/// `false`, so each member is measured as the whole contents measure it.
+pub fn envelope_content_boxes_with(content: &[Arc<Node>], frame: Affine, blank_type_box: bool) -> Option<(Rect, Rect)> {
     let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
     let to_frame = frame.inverse();
-    let (stroked, plain) = content.iter().fold((None, None), |(stroked, plain), c| {
-        (vectorcraft_geom::union_opt(stroked, content_box(c, true, to_frame)), vectorcraft_geom::union_opt(plain, content_box(c, false, to_frame)))
-    });
-    Some((stroked?, plain?))
+    Some((content_set_box(content, true, to_frame, blank_type_box)?, content_set_box(content, false, to_frame, blank_type_box)?))
 }
 
 /// The geometric bounds an envelope around `content` on the page axes maps from: type, alone or
 /// in groups and layers, is measured by its glyph outlines, underlines and strikethroughs instead
 /// of its laid-out box. Type keeps its laid-out box while nothing is registered with
-/// [`set_type_ink`], and when it draws nothing.
+/// [`set_type_ink`]. Type that draws nothing adds no box while other content has one; when
+/// nothing else has a box, it keeps its laid-out box.
 pub fn envelope_content_bounds(content: &[Arc<Node>]) -> Option<Rect> {
-    content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, false, Affine::IDENTITY)))
+    content_set_box(content, false, Affine::IDENTITY, false).or_else(|| content_set_box(content, false, Affine::IDENTITY, true))
+}
+
+/// The union of the boxes [`content_box`] gives each of `content`.
+fn content_set_box(content: &[Arc<Node>], stroked: bool, to: Affine, blank_type_box: bool) -> Option<Rect> {
+    content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, stroked, to, blank_type_box)))
 }
 
 /// The box of type's glyph outlines, underlines and strikethroughs with its text space mapped by
@@ -367,15 +378,16 @@ fn find_type(n: &Node, typed: &mut std::collections::HashSet<usize>) -> bool {
 /// or with `stroked` its visual bounds (strokes scaled by `to` as [`Node::transform`] scales them),
 /// with type measured by its glyph outlines ([`type_ink`]) instead of its laid-out box, in groups
 /// and layers too. Type is laid out as it is on the page, and its outlines are then taken into
-/// those axes. A character's strokes reach as far past its glyphs as past the laid-out box.
-fn content_box(n: &Arc<Node>, stroked: bool, to: Affine) -> Option<Rect> {
+/// those axes. A character's strokes reach as far past its glyphs as past the laid-out box. Type
+/// that draws nothing has its laid-out box with `blank_type_box`, and no box without it.
+fn content_box(n: &Arc<Node>, stroked: bool, to: Affine, blank_type_box: bool) -> Option<Rect> {
     let mut typed = std::collections::HashSet::new();
     find_type(n, &mut typed);
-    content_box_in(n, stroked, to, &typed)
+    content_box_in(n, stroked, to, &typed, blank_type_box)
 }
 
 /// [`content_box`], with the addresses of the objects in `n` that hold type ([`find_type`]).
-fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collections::HashSet<usize>) -> Option<Rect> {
+fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collections::HashSet<usize>, blank_type_box: bool) -> Option<Rect> {
     // `n` in the axes of `to`.
     let moved = || {
         if to == Affine::IDENTITY {
@@ -395,10 +407,13 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
             let ink = match n.projection() {
                 None => type_ink(n, t, to * t.xf, None),
                 Some(h) => type_ink(n, t, t.xf, Some((h, to))),
-            }
-            .flatten();
+            };
             let m = moved();
-            let Some(ink) = ink else { return own(&m) };
+            let ink = match ink {
+                Some(Some(ink)) => ink,
+                Some(None) if !blank_type_box => return None,
+                _ => return own(&m),
+            };
             if !stroked {
                 return Some(ink);
             }
@@ -413,7 +428,13 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
         NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
             // A clipping path that paints strokes over the clip edge, as in `Node::visual_bounds`.
             let clip = children.first()?;
-            content_box_in(clip, stroked && matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)), to, typed)
+            content_box_in(
+                clip,
+                stroked && matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)),
+                to,
+                typed,
+                blank_type_box,
+            )
         }
         NodeKind::Layer { .. } | NodeKind::Group { .. } => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
@@ -424,9 +445,11 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
                 let mut own_strokes = Node::new(n.id, NodeKind::Group { children: Vec::new(), clip: false });
                 own_strokes.appearance = n.appearance.clone();
                 own_strokes.transform(to, true);
-                own_strokes.visual_of_members(members.map(|c| content_box_in(c, true, to, typed)))
+                own_strokes.visual_of_members(members.map(|c| content_box_in(c, true, to, typed, blank_type_box)))
             } else {
-                members.filter(|c| c.visible || !layer).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box_in(c, false, to, typed)))
+                members
+                    .filter(|c| c.visible || !layer)
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box_in(c, false, to, typed, blank_type_box)))
             }
         }
         _ => own(&moved()),
@@ -649,7 +672,7 @@ impl<'a> EnvelopeMap<'a> {
     pub fn new(content: &[Arc<Node>], kind: &'a EnvelopeKind, frame: Affine, options: EnvelopeOptions) -> Option<Self> {
         let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
         let to_frame = frame.inverse();
-        let src = content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, false, to_frame)))?;
+        let src = content_set_box(content, false, to_frame, false).or_else(|| content_set_box(content, false, to_frame, true))?;
         let src = options.source_box(src);
         Some(Self { src, frame, to_frame, surface: surface_of(kind, src, frame) })
     }
@@ -835,14 +858,14 @@ mod tests {
         let to = Affine::scale(2.0);
         let mut moved = (*group).clone();
         moved.transform(to, true);
-        let want = moved.visual_of_members(std::iter::once(content_box(&text, true, to)));
+        let want = moved.visual_of_members(std::iter::once(content_box(&text, true, to, true)));
         assert!(want.is_some());
-        assert_eq!(content_box(&group, true, to), want);
+        assert_eq!(content_box(&group, true, to, true), want);
         let mut nested = group;
         for i in 0..300 {
             nested = Arc::new(Node::group(NodeId(10 + i), vec![nested]));
         }
-        assert!(content_box(&nested, false, Affine::IDENTITY).is_some());
+        assert!(content_box(&nested, false, Affine::IDENTITY, true).is_some());
     }
 
     /// A warp envelope of `style` at `bend` with map `version` around a 200×100 rectangle at
