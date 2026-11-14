@@ -32,6 +32,16 @@ fn outline(n: &Node, out: &mut PathData) {
     }
 }
 
+/// The outline area type wraps around for wrap object `n`, in document coordinates, as
+/// [`resolve_wrap`] makes it: a path's subpaths that are closed or have more than two anchors, those
+/// of the shown members of a group or compound path, a clip group's clipping object's, and the
+/// bounds of other art. Empty when `n` has none.
+pub fn wrap_outline(n: &Node) -> PathData {
+    let mut pd = PathData::default();
+    outline(n, &mut pd);
+    pd
+}
+
 enum Item<'a> {
     Wrap(&'a Node),
     Text(&'a Node),
