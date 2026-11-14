@@ -8280,6 +8280,7 @@ antiAlias	Sharp	शार्प
 @msg	the subpath is closed or too short to close	सबपैथ बंद है या बंद करने के लिए बहुत कम है
 @msg	the SVG expands to more than {0} nested SVG images	SVG {0} नेस्टेड SVG इमेज से अधिक का विस्तार करता है
 @msg	the SVG expands to more than {0} objects	SVG {0} ऑब्जेक्ट्स से अधिक का विस्तार करता है
+@msg	the SVG's styles expand to more than {0} MB	SVG की शैलियाँ {0} MB से अधिक तक विस्तारित होती हैं
 @msg	the SVG has no drawable objects	SVG में कोई आकर्षक ऑब्जेक्ट नहीं है
 @msg	the SVG's elements are nested more than {0} deep	SVG के तत्वों को {0} से अधिक गहरा घोंसला दिया जाता है
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ फ़ाइल ने {_1} MB से अधिक के लिए अनपैक किया

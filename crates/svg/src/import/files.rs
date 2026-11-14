@@ -21,7 +21,7 @@ use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
 use vectorcraft_doc::links::missing_placeholder;
 
-use super::{Edits, depth, href};
+use super::{Edits, budget, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
 
 /// Most nested SVG images an imported SVG may decode (#3564).
@@ -74,6 +74,12 @@ pub(in crate::import) struct Files {
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
+    /// The bytes of style values usvg copies into the elements of the SVG and of the SVG images
+    /// read so far ([`budget`]).
+    styles: AtomicU64,
+    /// Why an SVG image refused the whole SVG: what usvg would make of it is past [`budget`]'s
+    /// limits. The first one.
+    refused: Mutex<Option<SvgError>>,
 }
 
 /// Encoded image bytes, shared.
@@ -479,6 +485,17 @@ impl Files {
         notes
     }
 
+    /// The SVG holding the images copies `bytes` of style values ([`budget::check`]): its images
+    /// copy at most what is left.
+    pub(in crate::import) fn copied_styles(&self, bytes: u64) {
+        self.styles.store(bytes, Ordering::Relaxed);
+    }
+
+    /// The error of the first SVG image past [`budget`]'s limits, which refuses the SVG holding it.
+    pub(in crate::import) fn refused(&self) -> Option<SvgError> {
+        self.refused.lock().ok().and_then(|r| r.clone())
+    }
+
     fn note_text(&self, svg: &str) {
         if svg.contains("<text") {
             self.text.store(true, Ordering::Relaxed);
@@ -559,6 +576,10 @@ impl Files {
 
     /// [`Files::svg`]'s image once it is counted.
     fn svg_tree(&self, text: &str, file: Option<Arc<SvgFile>>, opts: &usvg::Options) -> Option<ImageKind> {
+        // The SVG holding it is refused already: no more images are read.
+        if self.refused().is_some() {
+            return None;
+        }
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
@@ -569,6 +590,19 @@ impl Files {
         let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
+        // What usvg would make of it, measured as the SVG holding it is (`import`), its copied
+        // styles counted with theirs while usvg reads it, and kept only when it decodes: past the
+        // limits, the whole SVG is refused.
+        let spent = self.styles.load(Ordering::Relaxed);
+        match budget::check(&xml, budget::MAX_COPIED_STYLES.saturating_sub(spent)) {
+            Ok(bytes) => self.styles.store(spent.saturating_add(bytes), Ordering::Relaxed),
+            Err(e) => {
+                if let Ok(mut refused) = self.refused.lock() {
+                    refused.get_or_insert(e);
+                }
+                return None;
+            }
+        }
         self.depth.store(used + height, Ordering::Relaxed);
         let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
         // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
@@ -592,7 +626,11 @@ impl Files {
             w.pop();
         }
         self.depth.store(used, Ordering::Relaxed);
-        let tree = tree.ok()?;
+        let Ok(tree) = tree else {
+            // Left out: neither it nor the images inside it count.
+            self.styles.store(spent, Ordering::Relaxed);
+            return None;
+        };
         self.note_text(text);
         Some(ImageKind::SVG(tree))
     }

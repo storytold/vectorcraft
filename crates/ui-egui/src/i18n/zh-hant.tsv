@@ -8773,6 +8773,7 @@ breakText	Glyphs	字符
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 檔案過大，無法置入為文字 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展開後超過 {0} 個巢狀 SVG 影像
 @msg	the SVG expands to more than {0} objects	SVG 展開後超過 {0} 個物件
+@msg	the SVG's styles expand to more than {0} MB	SVG 的樣式展開後超過 {0} MB
 @msg	the SVG has no drawable objects	SVG 中沒有可繪製的物件
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 檔案解壓縮後超過 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文件的屬性超過 {MAX_PAGES} 頁，數量過多而無法置入

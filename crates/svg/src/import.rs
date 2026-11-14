@@ -43,6 +43,7 @@ pub(super) use prepass::Edits;
 use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 
+mod budget;
 mod css;
 mod css_transform;
 mod depth;
@@ -154,7 +155,13 @@ pub(crate) fn import_finding(
     let mut warnings = found.warnings;
     let text_xml = found.text_source.as_deref().map(parse).transpose()?;
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
+    // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
+    let styles = match &src {
+        Cow::Borrowed(_) => budget::check(&xml, budget::MAX_COPIED_STYLES)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::MAX_COPIED_STYLES)?,
+    };
     let files = found.files;
+    files.copied_styles(styles);
     let tree = {
         let opt = usvg::Options {
             dpi: units.dpi as f32,
@@ -164,6 +171,9 @@ pub(crate) fn import_finding(
         };
         usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?
     };
+    if let Some(err) = files.refused() {
+        return Err(err);
+    }
     let size = tree.size();
     let k = units.k;
     let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);

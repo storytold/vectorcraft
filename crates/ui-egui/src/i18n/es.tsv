@@ -4846,6 +4846,7 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	el resultado excedería el lienzo (coordenadas fuera de rango)
 @msg	objects can't be nested more than 32 deep	los objetos no pueden anidarse a más de 32 niveles
 @msg	the SVG's elements are nested more than {0} deep	los elementos del SVG están anidados a más de {0} niveles
+@msg	the SVG's styles expand to more than {0} MB	los estilos del SVG se expanden a más de {0} MB
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale debe ser un número de {_1} a {_2}, no {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale debe ser un número de {_1} a {_2}, no {s}
 @msg	select (or target) objects whose appearance isn't basic	selecciona (o apunta a) objetos cuya apariencia no sea básica
