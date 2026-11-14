@@ -2192,6 +2192,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Pincel de cerdas
 	Pattern Brush	Pincel de motivo
 	missing from the Brushes panel	falta en el panel Pinceles
+	built in	integrada
+	embedding not allowed	incrustación no permitida
+	embedding for editing	incrustación para edición
+	embedding for preview and print	incrustación para vista previa e impresión
+	embedding allowed	incrustación permitida
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	sustituida: se muestra con {family} {style} ({detail})
+	missing: shown in {family} {style}	falta: se muestra con {family} {style}
+	missing	falta
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradado lineal
+	Radial gradient	Degradado radial
+	Conic gradient	Degradado cónico
+	Diamond gradient	Degradado de rombo
+	Freeform gradient	Degradado libre
+@plural	{n} instance|{n} instances	{n} instancia|{n} instancias
+@plural	{n} row|{n} rows	{n} fila|{n} filas
+@plural	{n} column|{n} columns	{n} columna|{n} columnas
 	Select art to make a scatter, art or pattern brush.	Selecciona una ilustración para crear un pincel de dispersión, de arte o de motivo.
 	Brush Art	Ilustración del pincel
 	New Calligraphic Brush	Nuevo pincel caligráfico
@@ -4371,6 +4394,7 @@ axis	Both	Ambos
 @msg	Plug-ins can't be loaded from {path}: {e}	No se pueden cargar plugins desde {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
+@msg	select a path	selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
@@ -5130,6 +5154,8 @@ axis	Both	Ambos
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imagen incrustada de {_1} × {_2} píxeles se redujo a {_3} × {_4} píxeles para conservar las capas
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	se omitió el ajuste de salto de línea del texto en formato antiguo
+@msg	the Japanese layout rules of legacy type were left out	se omitieron las reglas de composición japonesa del texto en formato antiguo
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el texto que cambia de dirección de escritura dentro de un objeto de texto se abre en la dirección de su primer carácter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
@@ -6120,6 +6146,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
 @msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	la acción “{_1}” establece la preferencia de carpeta {_2}; elimine ese paso para guardar el conjunto
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra

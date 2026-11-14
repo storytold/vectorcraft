@@ -2131,6 +2131,29 @@ font-technology	Variable	Variabla
 	Bristle Brush	Borstpensel
 	Pattern Brush	Mönsterpensel
 	missing from the Brushes panel	saknas i panelen Penslar
+	built in	inbyggt
+	embedding not allowed	inbäddning inte tillåten
+	embedding for editing	inbäddning för redigering
+	embedding for preview and print	inbäddning för förhandsvisning och utskrift
+	embedding allowed	inbäddning tillåten
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersatt: visas med {family} {style} ({detail})
+	missing: shown in {family} {style}	saknas: visas med {family} {style}
+	missing	saknas
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linjär gradient
+	Radial gradient	Radiell gradient
+	Conic gradient	Konisk gradient
+	Diamond gradient	Rombgradient
+	Freeform gradient	Fri gradient
+@plural	{n} instance|{n} instances	{n} instans|{n} instanser
+@plural	{n} row|{n} rows	{n} rad|{n} rader
+@plural	{n} column|{n} columns	{n} kolumn|{n} kolumner
 	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
@@ -5024,6 +5047,8 @@ axis	Both	Båda
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	en inbäddad bild på {_1} × {_2} pixlar förminskades till {_3} × {_4} pixlar för att behålla lagren
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
 @msg	linked type areas past VectorCraft's limits were left out	länkade textområden utöver VectorCrafts gränser utelämnades
+@msg	the Line Breaking setting of legacy type was left out	inställningen för radbrytning i text i det gamla formatet utelämnades
+@msg	the Japanese layout rules of legacy type were left out	de japanska layoutreglerna för text i det gamla formatet utelämnades
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text som byter skrivriktning inuti ett textobjekt öppnas i riktningen för sitt första tecken
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	text som används som mask i länkade områden, ombruten text eller en sammansatt bana beskär inte
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	länkade bilder utan förhandsgranskning i filen visar en platshållare tills deras filer hittas: länka om dem i panelen Länkar
@@ -6131,6 +6156,7 @@ theme	Appearance	Utseende
 @msg	no such color	färgen finns inte
 @msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
 @msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	åtgärden ”{_1}” anger mappinställningen {_2}; ta bort det steget för att spara uppsättningen
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen

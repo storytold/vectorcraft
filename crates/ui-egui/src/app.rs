@@ -134,6 +134,7 @@ impl VectorcraftApp {
             hover_doc: None,
             titlebar_from_env: false,
             custom_titlebar: false,
+            caption_layout: Default::default(),
             desktop_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,

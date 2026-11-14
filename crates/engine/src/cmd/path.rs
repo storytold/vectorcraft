@@ -314,6 +314,15 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
+    // A handle already there, on an anchor already of the kind it would get, changes nothing and
+    // records no undo step.
+    if let Some(a) = anchor_of(s, id, si, ai)? {
+        let mut b = a;
+        b.set_handle(out, pos, independent);
+        if b == a {
+            return ok();
+        }
+    }
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
@@ -330,6 +339,12 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let si = usize_opt(p, "subpath", "path.moveAnchor")?.unwrap_or(0);
     let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad("path.moveAnchor", "missing anchor"))?;
     let pos = Point::new(f64_req(p, "x", "path.moveAnchor")?, f64_req(p, "y", "path.moveAnchor")?);
+    // An anchor already at (x, y) changes nothing and records no undo step.
+    if let Some(a) = anchor_of(s, id, si, ai)?
+        && a.transform(vectorcraft_geom::Affine::translate(pos - a.p)) == a
+    {
+        return ok();
+    }
     s.edit("Move", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
@@ -343,6 +358,16 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Anchor `ai` of subpath `si` of path `id` in the active document, when `id` is a path that has it.
+/// Busy while a script runs, as [`Session::edit`] is.
+fn anchor_of(s: &Session, id: NodeId, si: usize, ai: usize) -> Result<Option<Anchor>> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let d = &s.doc()?.doc;
+    Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).and_then(|sp| sp.anchors.get(ai)).copied())
 }
 
 fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
