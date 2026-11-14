@@ -3087,6 +3087,144 @@ fn live_paint_bucket_tool_fills_face() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![f.id]);
 }
 
+/// `tool.setOption` refuses an invalid value for the Live Paint tools, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a color that is not an RGB color (an alpha part included), a width that is not a number
+/// and an option the tool does not have. Nothing is set, also from the valid values sent with it,
+/// and the saved settings stay as they were.
+#[test]
+fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    let widths = [json!("wide"), json!(null), json!(true)];
+    let switches = [json!("true"), json!(null), json!(1)];
+    for (tool, keys) in
+        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
+    {
+        let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
+        bad.extend(colors.iter().map(|v| ("color", v.clone())));
+        bad.extend(widths.iter().map(|v| ("width", v.clone())));
+        bad.push(("colour", json!("#00ff00")));
+        for active in [false, true] {
+            let mut s = session();
+            if active {
+                s.select_tool(tool, ViewInfo::default()).unwrap();
+            }
+            let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+            for (key, v) in &bad {
+                let mut values = serde_json::Map::new();
+                values.insert("width".into(), json!(9));
+                values.insert(key.to_string(), v.clone());
+                for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                    let e = s.set_tool_option_cmd(&p).unwrap_err();
+                    assert!(e.contains(&format!("`{key}`")), "{tool} {p}: {e}");
+                    assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{tool} {p}");
+                }
+            }
+            // A `key` left without a `value` is an invalid value too.
+            assert!(s.set_tool_option_cmd(&json!({"tool": tool, "key": "color"})).is_err());
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+            assert_eq!(s.tool_options_of(tool), options, "{tool}");
+        }
+    }
+}
+
+/// The Live Paint tools' options take each color form they took before, and a width out of range
+/// is clamped to 1–20 rather than refused; the values are saved with the preferences.
+#[test]
+fn live_paint_tool_options_take_rgb_colors_and_clamp_the_width() {
+    let mut s = session();
+    for tool in ["livePaintBucket", "livePaintSelection"] {
+        for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "color", "value": color})).unwrap();
+            assert_eq!(o["color"], hex, "{tool} {color}");
+        }
+        for (width, set) in [(100.0, 20.0), (0.0, 1.0), (-3.0, 1.0), (7.5, 7.5)] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"width": width}})).unwrap();
+            assert_eq!(o["width"], set, "{tool} {width}");
+        }
+        assert_eq!(s.prefs.tool_settings[tool]["width"], 7.5);
+        assert_eq!(s.prefs.tool_settings[tool]["color"], "#ffffff");
+    }
+    let o = s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"paintFills": false, "highlight": false}})).unwrap();
+    assert_eq!((&o["paintFills"], &o["highlight"]), (&json!(false), &json!(false)));
+}
+
+/// Saved Live Paint settings that hold an invalid value still load: the tool keeps its default for
+/// that option and takes the valid ones.
+#[test]
+fn live_paint_tools_load_saved_settings_with_invalid_values() {
+    let mut s = session();
+    let saved = json!({"paintFills": "yes", "highlight": false, "width": "wide", "color": "nope", "paintStrokes": true});
+    s.prefs.tool_settings.insert("livePaintBucket".into(), saved.as_object().unwrap().clone());
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let o = s.tool_options_of("livePaintBucket");
+    assert_eq!(
+        (&o["paintFills"], &o["paintStrokes"], &o["highlight"], &o["width"], &o["color"]),
+        (&json!(true), &json!(true), &json!(false), &json!(4.0), &json!("#ff2a2a"))
+    );
+}
+
+/// `tool.setOption` refuses an invalid value for the Shape Builder, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a `pickColorFrom` or `selection` that is not one of its names, a `gapLength` that is not
+/// a number, a `highlightColor` that is not an RGB color (an alpha part included) and an option the
+/// tool does not have. Nothing is set, also from the valid values sent with it, and the saved
+/// settings stay as they were.
+#[test]
+fn shape_builder_tool_options_refuse_invalid_values_and_change_nothing() {
+    let tool = "shapeBuilder";
+    let switches = ["openFilledAsClosed", "cursorSwatchPreview", "highlightFill", "gapDetection", "clickStrokeSplitsPath", "highlightStroke"];
+    let mut bad: Vec<(&str, Value)> = switches.iter().flat_map(|k| [json!("true"), json!(null), json!(1)].map(move |v| (*k, v))).collect();
+    bad.extend([json!("Swatches"), json!(true), json!(null), json!("")].map(|v| ("pickColorFrom", v)));
+    bad.extend([json!("straight"), json!(1), json!(null)].map(|v| ("selection", v)));
+    bad.extend([json!("wide"), json!(null), json!(true)].map(|v| ("gapLength", v)));
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    bad.extend(colors.map(|v| ("highlightColor", v)));
+    bad.push(("color", json!("#00ff00")));
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+        }
+        let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+        for (key, v) in &bad {
+            let mut values = serde_json::Map::new();
+            values.insert("gapLength".into(), json!(9));
+            values.insert(key.to_string(), v.clone());
+            for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                let e = s.set_tool_option_cmd(&p).unwrap_err();
+                assert!(e.contains(&format!("`{key}`")), "{p}: {e}");
+                assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{p}");
+            }
+        }
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options_of(tool), options);
+    }
+}
+
+/// The Shape Builder's options take each value they took before: the names of `pickColorFrom` and
+/// `selection`, each RGB color form, and a gap length out of range clamped rather than refused.
+#[test]
+fn shape_builder_tool_options_take_valid_values_and_clamp_the_gap() {
+    let mut s = session();
+    let tool = "shapeBuilder";
+    for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "highlightColor", "value": color})).unwrap();
+        assert_eq!(o["highlightColor"], hex, "{color}");
+    }
+    for (gap, set) in [(1000.0, vectorcraft_tools::builder::SHAPE_BUILDER_MAX_GAP), (-3.0, 0.0), (7.5, 7.5)] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"gapLength": gap}})).unwrap();
+        assert_eq!(o["gapLength"], set, "{gap}");
+    }
+    let o = s
+        .set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches", "selection": "straightLine", "gapDetection": true}}))
+        .unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"], &o["gapDetection"]), (&json!("swatches"), &json!("straightLine"), &json!(true)));
+    let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "artwork", "selection": "freeform"}})).unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"]), (&json!("artwork"), &json!("freeform")));
+    assert_eq!(s.prefs.tool_settings[tool]["gapLength"], 7.5);
+}
+
 #[test]
 fn live_paint_bucket_alt_sample_paints_next_face_without_changing_selection() {
     let mut s = session();
@@ -4134,7 +4272,10 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         sorted.sort();
         assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
         let n = node(&s, g);
-        assert_eq!(names(&n), order, "{method}");
+        // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
+        // group of the field's color, above the black one.
+        let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
+        assert_eq!(names(&n), want, "{method}");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
         let groups = n.children().unwrap();
@@ -4148,8 +4289,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), 3, "{method}");
-        for (sub, name) in subs.iter().zip(&order) {
+        assert_eq!(subs.len(), want.len(), "{method}");
+        for (sub, name) in subs.iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");
