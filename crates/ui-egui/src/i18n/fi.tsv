@@ -1576,6 +1576,7 @@ lighting	Light	Valo
 	Proportional Metrics	Suhteelliset metriikat
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
+	Tsume	Tsume
 	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
@@ -6461,8 +6462,8 @@ axis	Y Axis	Y-akseli
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	vientilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ryhmien ulkopuolella saa olla enintään {MAX_UNGROUPED} parametria: anna muille `group`
 @msg	can't encode the input	syötettä ei voi koodata
-@msg	expected {"dataBase64"}	odotettiin {"dataBase64"}
-@msg	expected {"objects"}	odotettiin {"objects"}
+@msg	expected {{"dataBase64": "…"}}	odotettiin {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	odotettiin {{"objects": [...]}}
 @msg	export `{name}`: {e}	moduulin vienti `{name}`: {e}
 @msg	extension {e} is listed twice	tunniste {e} on luettelossa kahdesti
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	tunniste {e}: käytä 1-16 pientä kirjainta ja numeroa ilman pistettä
@@ -6526,11 +6527,11 @@ axis	Y Axis	Y-akseli
 @msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {"id"}-muotona tai sellaisena kuin se annettiin
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
 @msg	a string	merkkijono
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	viivalla on vain `paint`, `width`, `join`, `cap` ja `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	viivan on oltava muotoa {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	tehosteen on oltava muotoa {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	viivan on oltava muotoa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	tehosteen on oltava muotoa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	täytön tehoste palauttaa vain kentän `fills`
 @msg	an effect on a stroke returns only `strokes`	viivan tehoste palauttaa vain kentän `strokes`
 @msg	an object must be a JSON object	objektin on oltava JSON-objekti
