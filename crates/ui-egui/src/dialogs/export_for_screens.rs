@@ -156,7 +156,8 @@ pub fn open(app: &mut VectorcraftApp) {
     // `folders: "format"`, any other sorting a folder per scale.
     let folders = get("folders").and_then(Value::as_str);
     let subfolders = match folders {
-        Some("none") => false,
+        // An export reads empty folders as none.
+        Some("none" | "") => false,
         Some(_) => true,
         None => flag("subfolders", saved.is_empty() || preset.is_some()),
     };
@@ -1093,14 +1094,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog, mut menu: Option<Format
         widgets::dim_label(ui, tl!("Formats:"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::icon_button(ui, "settings", tl!("Format Settings"), false, 24.0).clicked() {
-                // Preserve row spellings; format settings use canonical IDs.
-                let first = rows
-                    .first()
-                    .and_then(|r| r["format"].as_str())
-                    .and_then(fileio::format)
-                    .map(|f| f.id)
-                    .filter(|f| SETTINGS.iter().any(|(id, _)| id == f));
-                d.fields.insert("__settings".into(), json!(first.unwrap_or("png")));
+                d.fields.insert("__settings".into(), json!(settings_format(&rows)));
             }
             if let Some(menu) = menu.as_mut() {
                 menu(ui, d);
@@ -1208,6 +1202,17 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog, mut menu: Option<Format
         d.fields.insert("formats".into(), json!(rows));
         d.fields.insert("preset".into(), json!(""));
     }
+}
+
+/// The format Format Settings opens on for format rows `rows`: the first row's format when it has
+/// settings of its own, else PNG. Row spellings (`jpeg`, `tif`) give the canonical id.
+pub(crate) fn settings_format(rows: &[Value]) -> &'static str {
+    rows.first()
+        .and_then(|r| r["format"].as_str())
+        .and_then(fileio::format)
+        .map(|f| f.id)
+        .filter(|f| SETTINGS.iter().any(|(id, _)| id == f))
+        .unwrap_or("png")
 }
 
 /// Format Settings: the options of format `id` that apply to every row of it, then Done.

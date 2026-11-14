@@ -160,7 +160,7 @@ pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
     export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
-    saved_rows as screen_saved_rows,
+    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
