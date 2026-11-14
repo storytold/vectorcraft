@@ -907,6 +907,8 @@ impl Tool for LivePaintSelectionTool {
                     (false, false) => vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))],
                 }
             }
+            // The third click's press and release already selected what a click selects.
+            PointerKind::TripleClick => vec![],
         }
     }
 

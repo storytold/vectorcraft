@@ -2507,6 +2507,22 @@ fn live_paint_selection_double_click_selects_connected_faces_or_edges() {
 }
 
 #[test]
+fn live_paint_selection_triple_click_adds_nothing_to_its_clicks() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, ..], _) = live_strip(&mut d);
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintSelectionTool::default();
+    // The third click's press and release select the face under the pointer, as a click does.
+    assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 25.0, 25.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [a.0] }))]);
+    for m in [Mods::default(), Mods { alt: true, ..Default::default() }, Mods { shift: true, ..Default::default() }] {
+        assert!(t.pointer(&cx, &ev(PointerKind::TripleClick, 25.0, 25.0).with_mods(m)).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::TripleClick, 25.0, 1.0).with_mods(m)).is_empty());
+    }
+}
+
+#[test]
 fn live_paint_selection_double_click_skips_locked_groups_and_art_outside_isolation() {
     let mut d = Document::new(500.0, 500.0);
     let (g, _, _) = live_strip(&mut d);
