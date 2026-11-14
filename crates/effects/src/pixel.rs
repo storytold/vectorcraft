@@ -155,8 +155,9 @@ pub enum PixelFx {
     /// `texture_coverage` (0..40) says.
     Underpainting { brush_size: f64, texture_coverage: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
     /// Artistic › Rough Pastels: diagonal pastel strokes `length` (0..40) long, bristle detail
-    /// (1..20), then a [`Texture`] surface scaled by `scaling` (0.5..2), in relief as strong as
-    /// `relief` (0..50) and lit from `light`; `invert` turns the surface's heights over.
+    /// (1..20), then a [`Texture`] surface (a loaded one included) scaled by `scaling` (0.5..2), in
+    /// relief as strong as `relief` (0..50) and lit from `light`; `invert` turns the surface's
+    /// heights over.
     RoughPastels { length: f64, detail: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
     /// Blur › Radial Blur around the object's centre: along arcs (spin, an arc of `amount`°) or
     /// along rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
@@ -381,7 +382,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "artistic.roughPastels" => PixelFx::RoughPastels {
             length: num(p, "strokeLength", 6.0).clamp(0.0, 40.0),
             detail: num(p, "strokeDetail", 10.0).clamp(1.0, 20.0),
-            texture: Texture::parse(text(p, "texture", "canvas")),
+            texture: Texture::parse_with(text(p, "texture", "canvas"), p.get(TEXTURE_IMAGE).and_then(Value::as_str)),
             scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
             relief: num(p, "relief", 4.0).clamp(0.0, 50.0),
             light: Light::parse(text(p, "lightDirection", "top")),

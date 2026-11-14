@@ -7215,6 +7215,14 @@ is mixed with middle gray by its alpha.
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"distort.glass","params":{"distortion":10,"textureImage":{"path":"/tmp/texture.png"}}}}}
 ```
 
+Texturizer (`texture.texturizer`) and Rough Pastels (`artistic.roughPastels`) take `params.textureImage` the same
+way, as the surface that Scaling, Relief, Light Direction and Invert act on. With `texture: "loaded"` and no stored
+texture they draw Canvas.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"artistic.roughPastels","params":{"relief":12,"textureImage":{"path":"/tmp/texture.png"}}}}}
+```
+
 ## Linked images
 
 A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,
