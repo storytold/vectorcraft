@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
+use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
 
@@ -101,12 +101,33 @@ impl<'a> Separator<'a> {
         inks(self.doc, &self.cms, c, link, color.intent).on_plate(plate)
     }
 
-    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked.
+    /// [`Self::ink`] of a colour that prints process plates `plates` with its spot tint
+    /// ([`stop_inks`]): the spot plate prints the tint and the process plates print `plates`. With
+    /// spots as process, each process plate prints `plates` layered with the spot tint's process
+    /// equivalent, as a separated image's plates layer ([`vectorcraft_doc::separated::Separated::coverage_as`]).
+    fn stop_ink(&self, plate: &str, c: &Color, link: Link, plates: StopPlates) -> f32 {
+        let own = stop_inks(self.doc, &self.cms, c, link, plates, self.set.color.intent);
+        let (Some(_), Some((name, tint))) = (plates, own.spot.as_ref()) else {
+            return self.ink(plate, c, link);
+        };
+        if !self.set.output.spots_to_process {
+            return own.on_plate(plate);
+        }
+        let Some(i) = cms::PROCESS_PLATES.iter().position(|p| *p == plate) else {
+            return 0.0;
+        };
+        let spot = spot_color(self.doc, name).map_or(0.0, |s| self.ink(plate, &s.tinted(*tint), None));
+        1.0 - (1.0 - own.cmyk[i]) * (1.0 - spot)
+    }
+
+    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked and
+    /// without process plates.
     pub fn node(&self, plate: &str, n: &mut Node) {
-        visit_node_colors(n, &mut |c, swatch, tint| {
-            *c = Color::Gray { k: self.ink(plate, c, swatch.as_deref().map(|s| (s, *tint))) };
+        visit_node_colors(n, &mut |c, swatch, tint, plates| {
+            *c = Color::Gray { k: self.stop_ink(plate, c, swatch.as_deref().map(|s| (s, *tint)), *plates) };
             *swatch = None;
             *tint = 1.0;
+            *plates = None;
         });
     }
 

@@ -153,13 +153,13 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
     KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
     import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
-    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
+    saved_options as screen_saved_options, saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
@@ -946,6 +946,8 @@ mod tests;
 mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_export_selection;
 #[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]
