@@ -261,7 +261,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.convertListToText",
         "Convert to Text",
         "",
-        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs (or of those the Type tool's selection touches) become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
+        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs, in every frame of a threaded story (or of those the Type tool's selection touches), become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
     ),
     (
         "align.horizontalLeft",

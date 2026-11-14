@@ -467,6 +467,10 @@ pub struct Symbols {
     /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
     /// them to a document read from the layers.
     pub swatches: Vec<Swatch>,
+    /// The data's declared large canvas scale (1 when it declares none), not applied to the art.
+    pub canvas_scale: f64,
+    /// [`Structure::symbols_own_size`].
+    pub own_size: bool,
 }
 
 /// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
@@ -529,7 +533,7 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
         .chain(art_names(symbols.iter().map(|(s, _)| &*s.art)))
         .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
-    Some(Symbols { symbols, images, swatches })
+    Some(Symbols { symbols, images, swatches, canvas_scale: r.canvas_scale, own_size: r.symbols_own_size })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -1194,6 +1198,11 @@ impl<'a> Reader<'a> {
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
+        // A Large Canvas copy's symbols are at its art's scale too ([`Self::ensure_space`]), except
+        // in data VectorCraft wrote.
+        if let Some(s) = self.large_canvas.filter(|s| *s != 1.0 && !self.symbols_own_size) {
+            crate::import::scale_symbols(&mut doc, s);
+        }
         // The active artboard, when it is not the first (the default).
         let active = self.active_board.filter(|i| *i > 0 && *i < self.artboards.len());
         let boards: Vec<AiArtboard> = if self.artboards.is_empty() {
@@ -1374,6 +1383,7 @@ impl<'a> Reader<'a> {
             styles_read,
             text_patterns,
             canvas_scale: self.canvas_scale,
+            symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,
             bindings,
             bindings_skipped,
