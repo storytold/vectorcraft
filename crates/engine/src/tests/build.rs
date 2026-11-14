@@ -3018,6 +3018,76 @@ fn live_paint_expand_keeps_the_faces_and_edges_that_draw() {
     assert_eq!(rows(&n, lower_stroke), rows(&before, lower_stroke));
 }
 
+/// `livePaint.info` lists every fill and stroke row of each face and edge, bottom first, and says
+/// which rows draw by Expand's rule, while `fill`, `stroke` and `width` stay the top rows.
+#[test]
+fn live_paint_info_lists_every_appearance_row() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = || Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let green = || Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let faded = |mut i: AppearanceItem, o: f32| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = o,
+            AppearanceItem::Stroke(st) => st.opacity = o,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    // A drawn lower fill and a half-opaque stroke under an unpainted top fill.
+    let lower = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), faded(stroke(blue(), 2.0), 0.5), fill(Paint::None)], 1.0);
+    let quiet = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red())), faded(fill(red()), 0.0)], 1.0);
+    let bare = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![], 1.0);
+    // Two strokes with a fill between them.
+    let two = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 4.0), fill(green()), stroke(blue(), 2.0)], 1.0);
+    let thin = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let hidden_edge = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![stroke(red(), 2.0)], 1.0);
+    s.edit("t", |d, _| {
+        d.node_mut(hidden_edge).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let parts = [lower, quiet, bare, two, thin, clear_edge, hidden_edge];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    let part = |key: &str, id: NodeId| info[key].as_array().unwrap().iter().find(|p| p["id"] == id.0).unwrap().clone();
+    let fill_row = |i: usize, p: Paint, o: f64, v: bool, drawn: bool| json!({"index": i, "kind": "fill", "paint": p.label(), "opacity": o, "visible": v, "drawn": drawn});
+    let stroke_row = |i: usize, p: Paint, o: f64, v: bool, w: f64, drawn: bool| json!({"index": i, "kind": "stroke", "paint": p.label(), "opacity": o, "visible": v, "width": w, "drawn": drawn});
+
+    let f = part("faces", lower);
+    assert_eq!(f["fill"], json!(Paint::None.label()), "fill stays the top fill");
+    assert!(f["bounds"].is_array());
+    assert_eq!(
+        f["appearance"],
+        json!([fill_row(0, red(), 1.0, true, true), stroke_row(1, blue(), 0.5, true, 2.0, true), fill_row(2, Paint::None, 1.0, true, false)])
+    );
+    assert_eq!(part("faces", quiet)["appearance"], json!([fill_row(0, red(), 1.0, false, false), fill_row(1, red(), 0.0, true, false)]));
+    assert_eq!(part("faces", bare)["appearance"], json!([]));
+
+    let e = part("edges", two);
+    assert_eq!((e["stroke"].clone(), e["width"].clone()), (json!(blue().label()), json!(2.0)), "stroke and width stay the top stroke's");
+    assert_eq!(
+        e["appearance"],
+        json!([stroke_row(0, red(), 1.0, true, 4.0, true), fill_row(1, green(), 1.0, true, true), stroke_row(2, blue(), 1.0, true, 2.0, true)])
+    );
+    assert_eq!(part("edges", thin)["appearance"], json!([stroke_row(0, red(), 1.0, true, 0.0, false)]));
+    for id in [clear_edge, hidden_edge] {
+        assert_eq!(part("edges", id)["appearance"], json!([stroke_row(0, red(), 1.0, true, 2.0, false)]), "a part that is not shown draws no row");
+    }
+}
+
 /// Merge carries a face's whole appearance when one of its rows draws, and carries nothing from a
 /// face that draws nothing.
 #[test]

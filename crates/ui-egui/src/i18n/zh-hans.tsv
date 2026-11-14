@@ -846,6 +846,9 @@ antiAlias	Sharp	锐利
 	The selected character's font is not available.	所选字符的字体不可用。
 	No alternates for the selected character.	所选字符没有替代字。
 	Double-click to replace	双击以替换
+	Click to replace	单击以替换
+	Show all alternates in the Glyphs panel	在“字形”面板中显示所有替代字
+	Show Character Alternates	显示字符的替代字
 	Select one character with the Type tool first.	请先用文字工具选择一个字符。
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所选文本所用字体（{text_font}）的字形。
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 属于 {base}（U+{base_code}）{place}；您选择的是 {sel}（U+{code}）。
@@ -1289,6 +1292,7 @@ file-filter	Templates	模板
 	Format	格式
 	Format Options	格式选项
 	Format Settings	格式设置
+	Format Settings…	格式设置…
 	Format:	格式：
 	Formats:	格式：
 	Fractional Widths	比例宽度
@@ -6514,7 +6518,7 @@ axis	Y Axis	Y 轴
 @plural	Result: {n}|Results: {n}	结果：{n}
 @msg	select one object	请选择一个对象
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（镜像的副本不会匹配）；请更改全局编辑选项后重试
 @msg	Global Edit is off	全局编辑未开启
 @msg	only an object of the Global Edit other than the one it started from can be left out	只能从全局编辑中排除起始对象以外的对象
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
@@ -7307,6 +7311,9 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	打开教程示例
 	Finish Tutorial	完成教程
 	Next Tutorial	下一个教程
+	Show Learn Tab	显示学习选项卡
+	Show Skill	显示技能
+	Back One Level	返回上一级
 	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
@@ -9161,6 +9168,9 @@ breakText	Glyphs	字形
 @msg	{what} can't be intertwined	{what} 不能交织
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小
+	Nest Shapes…	形状排料…
+	Nest Shapes	形状排料
+	Roll	卷材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要 1 亿点以内的有限坐标
