@@ -107,17 +107,16 @@ impl Panes {
         }
         let current = self.shown.get(&slot).is_some_and(|(k, _)| *k == key) || self.pending.get(&slot) == Some(&key);
         if !current {
+            // The document draws through its own assigned profiles, not the front document's, on
+            // the worker too.
+            let cms = vectorcraft_engine::cmd::colormgmt::doc_cms(&doc);
             let mut queued = false;
             if let Some(worker) = &self.worker {
-                let (job_doc, job_opts, job_display) = (doc.clone(), opts.clone(), display.clone());
+                let (job_doc, job_opts, job_display, job_cms) = (doc.clone(), opts.clone(), display.clone(), cms.clone());
                 queued = worker.submit(
                     slot,
                     (slot, key.clone()),
-                    Box::new(move |r| {
-                        let mut img = r.render(&job_doc, w, h, view, &job_opts);
-                        crate::display_profile::convert(job_display.as_deref(), &mut img.pixels);
-                        Some(img)
-                    }),
+                    Box::new(move |r| Some(render_pane(r, (&job_doc, w, h, view, &job_opts), job_display.as_deref(), job_cms))),
                 );
                 if queued {
                     self.pending.insert(slot, key.clone());
@@ -126,8 +125,8 @@ impl Panes {
                 }
             }
             if !queued {
-                let mut img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
-                crate::display_profile::convert(display.as_deref(), &mut img.pixels);
+                let r = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
+                let img = render_pane(r, (&doc, w, h, view, &opts), display.as_deref(), cms);
                 self.upload(ctx, slot, key, &img);
             }
         }
@@ -144,6 +143,19 @@ impl Panes {
             textured_quad(painter, tex.id(), &q, (1.0, 1.0));
         }
     }
+}
+
+/// Render `doc` (`w` × `h` pixels through `view`, with `opts`) through the color settings `cms`,
+/// then convert it into the display profile `display`.
+fn render_pane(
+    r: &mut vectorcraft_render::Renderer,
+    (doc, w, h, view, opts): (&vectorcraft_doc::Document, u32, u32, Affine, &vectorcraft_render::RenderOptions),
+    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+    cms: Arc<vectorcraft_color::cms::Cms>,
+) -> vectorcraft_render::Rendered {
+    let mut img = vectorcraft_color::cms::with_active(cms, || r.render(doc, w, h, view, opts));
+    crate::display_profile::convert(display, &mut img.pixels);
+    img
 }
 
 /// The grid of `n` panes in `area`, filled row by row: as many columns as the square root of `n`
@@ -294,8 +306,16 @@ fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, rect: egui::Rect, ui_
 /// art, grid, artboards, guides and selected objects, and its rulers and the room of the canvas's
 /// scroll bars, so the document stays where it is when the pane becomes the canvas. True when a
 /// press in the pane asks for its window to become the current one. A floating window draws its
-/// view with this too ([`crate::doc_windows`]).
+/// view with this too ([`crate::doc_windows`]). The document's colors, its paper and transparency
+/// grid included, draw through its own assigned profiles, not the front document's.
 pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> bool {
+    let Some(st) = app.session.documents().get(w.0) else { return false };
+    let cms = vectorcraft_engine::cmd::colormgmt::doc_cms(&st.doc);
+    vectorcraft_color::cms::with_active(cms, || draw_pane(app, ui, w, cell))
+}
+
+/// [`pane`], drawn through the color settings in place.
+fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> bool {
     let t = Tokens::get(ui.ctx());
     let ppp = ui.ctx().pixels_per_point();
     let (full, rect) = view_rects(app, cell, ppp);
