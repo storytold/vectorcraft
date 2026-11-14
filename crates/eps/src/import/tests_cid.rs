@@ -677,6 +677,10 @@ fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
         "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <09092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
         // A byte that starts no row-and-cell code is a code of its own, also before a tab: three.
         "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <21092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
+        // In the Johab code space each ASCII byte is a one-byte code and a Hangul code takes two
+        // bytes: three codes, across and down.
+        "/Ryumin-Light-KSC-Johab-H findfont 20 scalefont setfont <41428441> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
+        "/Ryumin-Light-KSC-Johab-V findfont 20 scalefont setfont 10 100 moveto <41428441> show currentpoint 40 sub abs 0.01 lt exch 10 sub abs 0.01 lt and",
     ] {
         let r = super::tests::read(&format!("{cond} {{ 0 0 10 10 rectfill }} if"));
         assert!(all(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Path { .. })), "{cond}");
