@@ -5323,6 +5323,7 @@ axis	Both	Ambos
 	VectorCraft Title Bar on Every Desktop	Barra de título de VectorCraft en todos los escritorios
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mientras está definida, la variable de entorno VECTORCRAFT_TITLEBAR elige la barra de título.
 	System Title Bar takes precedence over this option while it is on.	Mientras está activada, Barra de título del sistema tiene prioridad sobre esta opción.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Mientras Barra de título de VectorCraft en todos los escritorios está desactivada, este escritorio dibuja la barra de título de la ventana tanto si esta opción está activada como si no.
 	Value Axis	Eje de valores
 	On Left Side	En el lado izquierdo
 	On Right Side	En el lado derecho
@@ -6146,6 +6147,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
 @msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	la acción “{_1}” establece la preferencia de carpeta {_2}; elimine ese paso para guardar el conjunto
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -6542,6 +6544,8 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Playback Options…	Opciones de reproducción…
+	Button Mode	Modo de botones
+	No actions.	No hay acciones.
 	Insert Stop…	Insertar parada…
 	Insert Stop	Insertar parada
 	Record Stop	Grabar parada

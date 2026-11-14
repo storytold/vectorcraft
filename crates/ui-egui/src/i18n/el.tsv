@@ -5234,6 +5234,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Όσο η Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας είναι ανενεργή, αυτή η επιφάνεια εργασίας σχεδιάζει τη γραμμή τίτλου του παραθύρου, είτε αυτή η επιλογή είναι ενεργή είτε όχι.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά
@@ -6155,6 +6156,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -6551,6 +6553,8 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Button Mode	Λειτουργία κουμπιών
+	No actions.	Δεν υπάρχουν ενέργειες.
 	Insert Stop…	Εισαγωγή διακοπής…
 	Insert Stop	Εισαγωγή διακοπής
 	Record Stop	Καταγραφή διακοπής

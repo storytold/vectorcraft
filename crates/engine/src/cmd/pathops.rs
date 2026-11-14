@@ -962,7 +962,7 @@ pub(crate) fn ordered_map<T: Sync, R: Send>(
 // ---------- Outline Stroke ----------
 
 /// Can Outline Stroke turn `st` into filled art?
-fn outlinable(st: &StrokeLayer) -> bool {
+pub(crate) fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
 }
 

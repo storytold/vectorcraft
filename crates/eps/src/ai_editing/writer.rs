@@ -56,6 +56,7 @@ pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose cli
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str = "blends, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
@@ -205,6 +206,9 @@ pub(super) struct Writer<'a> {
     mask_level: Option<(u32, u32)>,
     /// The image just written was written as a placed file.
     placed: bool,
+    /// The image being written is the copy of a styled object on the layers, on `%_` lines: linked,
+    /// it is written as a placed file there ([`Self::styled_object`]).
+    styled_copy: bool,
     /// The type just written was written as type, not as its outlines.
     typed: bool,
     /// The objects bound to variables so far, in the order they are written: each one's id, its XML
@@ -298,6 +302,7 @@ impl<'a> Writer<'a> {
             hidden: 0,
             mask_level: None,
             placed: false,
+            styled_copy: false,
             typed: false,
             bound: vec![],
             texts: texts::TextDoc::default(),
@@ -621,6 +626,9 @@ impl<'a> Writer<'a> {
         }
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
+        }
+        if n.extras().graph.is_some() && !self.in_look {
+            self.warn(GRAPHS);
         }
         // On the layers or in an opacity mask's art, outside art cut to a clipping object: with its
         // art style, when it has one.
