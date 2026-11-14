@@ -604,6 +604,7 @@ pub(crate) mod testutil {
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
         }
@@ -673,7 +674,10 @@ mod cursor_tests {
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        assert_eq!(Cursor::PencilNew.precise(), Cursor::Crosshair);
+        // Its badged cursors too: Use Precise Cursors shows the plain crosshair.
+        for c in [Cursor::PencilNew, Cursor::PencilClose, Cursor::PencilStraight, Cursor::PencilContinue, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        }
         assert_eq!(Cursor::PencilNew.stand_in(), None);
         assert_eq!(Cursor::Pencil.precise(), Cursor::Crosshair);
         assert_eq!(Cursor::Pencil.stand_in(), Some(Cursor::Crosshair));
