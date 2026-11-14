@@ -94,7 +94,8 @@ impl Samples {
 impl Writer<'_> {
     /// Image object `im` of transparency `xy`: embedded, a raster ([`Self::raster`]); linked, a
     /// placed file with a preview ([`Self::placed_file`]), except in a part of the data written on
-    /// `%_` lines and in a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
+    /// `%_` lines (other than a styled object's copy on the layers, [`Self::styled_object`]) and in
+    /// a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
     /// cut to a clipping path, the image is in a clipping group of that path.
     pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) {
         let doc = self.doc;
@@ -125,7 +126,7 @@ impl Writer<'_> {
         let fit =
             Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(samples.width), f64::from(im.height.max(1)) / f64::from(samples.height));
         match &im.link {
-            Some(link) if self.hidden == 0 && !self.in_symbol => {
+            Some(link) if (self.hidden == 0 || self.styled_copy) && !self.in_symbol => {
                 // Cut to a region, the placed file is in a clipping group.
                 self.placed = cut.is_none();
                 self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf);
