@@ -1042,6 +1042,57 @@ fn saving_a_document_refreshes_its_placed_copies_inside_symbols_and_patterns() {
     assert_eq!(hashes, [hash.clone(), hash], "the symbol's, then the pattern's");
 }
 
+/// Saving a document reads it again for its placed copy in the art of a stored brush of another
+/// open document, the only place that document shows it.
+#[test]
+fn saving_a_document_refreshes_its_placed_copy_in_a_stored_brush() {
+    let dir = Folder::new("placed-refresh-brush");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Logos", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let parent = s.active_index().unwrap();
+    s.execute("document.open", &json!({"path": src})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#1414e6"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let hash = Some(vectorcraft_doc::links::hash_bytes(&std::fs::read(&src).unwrap()));
+    let doc = &s.documents()[parent];
+    assert_eq!(doc.history.undo.last().unwrap().label, "Update Links");
+    let brush = vectorcraft_brush::find(&doc.doc, "Logos").unwrap();
+    let mut hashes = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let NodeKind::PlacedDocument(p) = &n.kind {
+            hashes.push(p.link.hash.clone());
+        }
+    });
+    assert_eq!(hashes, [hash]);
+}
+
+/// A placed document kept only in a stored brush's art, whose file is gone and of which the
+/// document holds only the preview, is output as its preview with the warning that says so.
+#[test]
+fn a_placed_document_in_a_stored_brush_without_its_file_is_output_as_its_preview() {
+    let dir = Folder::new("placed-brush-preview");
+    let src = dir.file("logo.vectorcraft");
+    // Content of its own: files read are cached by content, and this one is removed.
+    source(&src, 100.0, 50.0, RED, 3);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Logos", "ids": [id.0]})).unwrap();
+    // The copy in the layers has the save keep only the preview.
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&src).unwrap();
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"].as_array().map(Vec::len), Some(1), "{r}");
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    assert!(svg["warnings"].to_string().contains("1 placed document output as its preview"), "{svg}");
+}
+
 #[test]
 fn link_info_gives_the_artboards_size_not_pixels() {
     let dir = Folder::new("placed-info");

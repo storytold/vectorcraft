@@ -962,8 +962,10 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         (None, [id]) => *id,
         _ => return Err(bad(C, "select one image or pass id")),
     };
-    // An image in opacity-mask art or a definition's art is found by its id too (`links.list`).
-    let n = st.doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
+    // An image in opacity-mask art, a definition's art or a stored brush's art is found by its id
+    // too (`links.list`).
+    let doc = super::links::with_brush_art(&st.doc);
+    let n = doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
     // Effective resolution: 72 pt per inch over the points one pixel spans along each axis.
     let [a, b, c, d, ..] = im.xf.as_coeffs();
