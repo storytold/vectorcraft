@@ -99,7 +99,7 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Spanish | `es` | full | 100% |
 | Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
 | Gujarati | `gu` | 4,673 contributor-reviewed catalog rows; 11 corrections applied to the 387 additions | menus and dialogs; status/error messages partial |
-| Tamil | `ta` | catalog complete under the translation tests; AI-assisted, native review pending | menus and dialogs; status/error messages partial (523 in the untranslated report) |
+| Tamil | `ta` | catalog complete under the translation tests; AI-assisted, native review pending | menus and dialogs; status/error messages partial (127 in the untranslated report, as for German and Italian) |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
