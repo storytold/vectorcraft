@@ -2728,6 +2728,18 @@ file-filter	Templates	範本
 @msg	the HEIC or HEIF file can't be read	無法讀取 HEIC 或 HEIF 檔案
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	無法開啟 CDR {version} 繪圖：VectorCraft 讀取的版本為 1 到 27
+@msg	this CDR drawing can't be read ({why})	無法讀取此 CDR 繪圖 ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CDR 文字、點陣圖、漸變、輪廓圖、筆刷筆觸和其他物件
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	已略過 CDR 的漸層、圖樣、材質和 PostScript 填色
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft 無法讀取的 CDR 色彩模式中的顏色已以黑色開啟
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	繪圖僅以編號儲存的 CDR 色彩庫顏色已以黑色特別色開啟
+@msg	CDR outline arrowheads were left out	已略過 CDR 外框線的箭頭
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	未套用 CDR 封套，其中的形狀保留原有外框
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	未套用 CDR 透鏡和物件透明度，相關物件顯示為不透明
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略過繪圖中巢狀過深或超出讀入限制的部分
+@msg	damaged parts of the drawing were left out	已略過繪圖中損壞的部分
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CDR 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
 @msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})

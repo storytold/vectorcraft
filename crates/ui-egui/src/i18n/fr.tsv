@@ -5259,6 +5259,18 @@ axis	Both	Les deux
 @msg	the HEIC or HEIF file can't be read	le fichier HEIC ou HEIF ne peut pas être lu
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	le fichier HEIC ou HEIF contient un type d'image qui ne peut pas être lu
 @msg	HEIC and HEIF images can't be opened in this build	les images HEIC et HEIF ne peuvent pas être ouvertes dans cette version
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	impossible d’ouvrir les dessins de CDR {version} : VectorCraft lit les versions 1 à 27
+@msg	this CDR drawing can't be read ({why})	impossible de lire ce dessin CDR ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	les textes, bitmaps, dégradés de formes, contours progressifs, traits de pinceau et autres objets CDR que VectorCraft ne lit pas encore ont été ignorés
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	les remplissages dégradés, à motif, de texture et PostScript de CDR ont été ignorés
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	les couleurs des modèles colorimétriques CDR que VectorCraft ne lit pas ont été ouvertes en noir
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	les couleurs de bibliothèque CDR que le dessin enregistre uniquement par numéro ont été ouvertes comme tons directs noirs
+@msg	CDR outline arrowheads were left out	les pointes de flèche des contours CDR ont été ignorées
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	les enveloppes CDR n’ont pas été appliquées, et les formes qu’elles contiennent gardent leurs contours
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	les lentilles et la transparence d’objet CDR n’ont pas été appliquées, et les objets qui les portent s’affichent opaques
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	les parties du dessin trop profondément imbriquées ou au-delà des limites d’importation ont été ignorées
+@msg	damaged parts of the drawing were left out	les parties endommagées du dessin ont été ignorées
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pages CDR de plus de 163 830 pt ont été ouvertes à cette longueur, et l’illustration proche de leurs bords se trouve hors du plan de travail
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
 @msg	zipped 1-bit PSD image data with prediction can't be read	les données d'image PSD 1 bit compressées en ZIP avec prédiction ne peuvent pas être lues
 @msg	the PSD file's layer data uses an unknown compression ({m})	les données de calque du fichier PSD utilisent une compression inconnue ({m})

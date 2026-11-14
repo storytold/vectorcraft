@@ -5291,6 +5291,18 @@ axis	Both	Оба
 @msg	the HEIC or HEIF file can't be read	не удается прочитать файл HEIC или HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
 @msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	не удается открыть рисунки CDR {version}: VectorCraft читает версии с 1 по 27
+@msg	this CDR drawing can't be read ({why})	не удается прочитать этот рисунок CDR ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текст, растровые изображения, перетекания, контуры, мазки кисти и другие объекты CDR, которые VectorCraft пока не читает, были пропущены
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	градиентные, узорные, текстурные и PostScript-заливки CDR были пропущены
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	цвета в цветовых моделях CDR, которые VectorCraft не читает, открыты как черные
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	библиотечные цвета CDR, которые рисунок хранит только по номеру, открыты как черные плашечные цвета
+@msg	CDR outline arrowheads were left out	наконечники стрелок абрисов CDR были пропущены
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	оболочки CDR не были применены, и фигуры под ними сохраняют свои контуры
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	линзы и прозрачность объектов CDR не были применены, и объекты, к которым они относятся, отображаются непрозрачными
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	части рисунка со слишком глубокой вложенностью или за пределами ограничений импорта были пропущены
+@msg	damaged parts of the drawing were left out	поврежденные части рисунка были пропущены
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	страницы CDR длиннее 163 830 pt открыты с этой длиной, и графика у их краев находится за пределами монтажной области
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
 @msg	zipped 1-bit PSD image data with prediction can't be read	1-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
 @msg	the PSD file's layer data uses an unknown compression ({m})	данные слоёв файла PSD используют неизвестное сжатие ({m})

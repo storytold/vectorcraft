@@ -4966,6 +4966,18 @@ axis	Both	Her İkisi
 @msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
 @msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} çizimleri açılamıyor: VectorCraft 1 ile 27 arasındaki sürümleri okur
+@msg	this CDR drawing can't be read ({why})	bu CDR çizimi okunamıyor ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft'ın henüz okumadığı CDR metinleri, bit eşlemleri, karışımları, konturları, fırça darbeleri ve diğer nesneleri dışarıda bırakıldı
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR geçişli, desenli, dokulu ve PostScript dolguları dışarıda bırakıldı
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft'ın okumadığı CDR renk modellerindeki renkler siyah olarak açıldı
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	çizimin yalnızca numarayla sakladığı CDR kitaplık renkleri siyah nokta renkleri olarak açıldı
+@msg	CDR outline arrowheads were left out	CDR anahatlarının ok uçları dışarıda bırakıldı
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR zarfları uygulanmadı ve altlarındaki şekiller anahatlarını korur
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR mercekleri ve nesne saydamlığı uygulanmadı ve bulundukları nesneler opak görünür
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	çizimin fazla derin iç içe geçmiş veya içe aktarma sınırlarının ötesindeki kısımları dışarıda bırakıldı
+@msg	damaged parts of the drawing were left out	çizimin hasarlı kısımları dışarıda bırakıldı
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163.830 pt'den uzun CDR sayfaları bu uzunlukta açıldı ve kenarlarına yakın çizimler çalışma yüzeyinin dışında kalıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 1-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 1 bit PSD görüntü verileri okunamıyor
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD dosyasının katman verileri bilinmeyen bir sıkıştırma kullanıyor ({m})

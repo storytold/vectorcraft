@@ -1,0 +1,22 @@
+[package]
+name = "vectorcraft-cdr"
+description = "Bounded reader for .cdr drawings of versions 1 to 27: WL records, RIFF index, compressed lists, ZIP packages, shapes, fills, outlines, pages and layers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Synthetic-file builders for tests and fuzz seeds; not a .cdr writer.
+synth = []
+
+[dependencies]
+crc32fast = { workspace = true }
+flate2 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+vectorcraft-cdr = { path = ".", features = ["synth"] }
