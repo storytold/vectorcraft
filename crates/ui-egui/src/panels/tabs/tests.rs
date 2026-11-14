@@ -642,6 +642,43 @@ fn text_of(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::TextObject {
     }
 }
 
+/// With the Selection tool, tab stops set in the panel go to every paragraph of every frame of a
+/// selected threaded story, its locked and hidden frames included.
+#[test]
+fn selection_tool_tab_stops_reach_every_frame_of_the_story() {
+    let (mut app, frames) = split_story_app();
+    app.run("select.set", json!({"ids": [frames[1]]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [frames[2]]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [frames[0]]})).unwrap();
+    let stop = TabStop { position: 36.0, align: Default::default(), leader: String::new(), align_on: '.' };
+    assert!(apply(&mut app, std::slice::from_ref(&stop)));
+    for id in frames {
+        let t = text_of(&app, id);
+        assert!((0..t.paragraph_count()).all(|i| t.para_at(i).tabs == [stop.clone()]), "frame {id} takes the stop");
+    }
+}
+
+/// With the Selection tool, Clear All Tabs is on when only another frame of the selected story has
+/// tab stops, and clears them there.
+#[test]
+fn clear_all_tabs_is_on_when_another_frame_of_the_story_has_stops() {
+    let (mut app, [a, b, c]) = split_story_app();
+    app.run("text.tabs.set", json!({"ids": [c], "stops": [{"position": 36}]})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty(), "the selected frame has no stops");
+    assert!(story_has_tabs(&app));
+    super::super::paragraph::run_on_paragraphs(&mut app, "text.tabs.clear", json!({})).unwrap();
+    for id in [a, b, c] {
+        let t = text_of(&app, id);
+        assert!((0..t.paragraph_count()).all(|i| t.para_at(i).tabs.is_empty()), "frame {id} has no stops");
+    }
+    assert!(!story_has_tabs(&app));
+}
+
 /// Each paragraph of the story of `frames` by its first word, with its left indent and first-line
 /// position, counted once; each piece of a paragraph split between frames has the same values.
 fn story_paragraphs(app: &VectorcraftApp, frames: &[u64]) -> Vec<(String, f64, f64)> {
