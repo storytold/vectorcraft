@@ -2741,6 +2741,8 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
+        assert_eq!(shown("text.convertListToText"), Some(("Type".into(), "Convert to Text".into(), false)));
+        assert_eq!(shown("type.convertListToText"), Some(("Type › Bullets and Numbering".into(), "Convert to Text".into(), false)));
         for id in ["file.exportInBackground", "file.openInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
