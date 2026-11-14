@@ -622,26 +622,26 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
 /// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
 /// the panel menu has it on, and the separator after them while a control follows. Short of room,
 /// the bar leaves out Global Edit Options first, then Recolor Artwork, then the Style link with its
-/// chip, then the Opacity link with its field; each shows only while the bar has room for all of it
-/// and `reserve` after it ([`transform_reserve`]).
+/// chip. The Opacity link with its field and the Style link with its chip each show only while the
+/// bar has room for all of it and `reserve` after it ([`transform_reserve`]), so the narrower Style
+/// part can show without the Opacity part.
 fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool, reserve: f32) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
     let mut drawn = false;
     if opacity_on {
         let text = egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline();
-        if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), OPACITY_FIELD_WIDTH]) + reserve {
-            return;
+        if ui.available_width() >= row_width(ui, &[widgets::text_width(ui, text.clone()), OPACITY_FIELD_WIDTH]) + reserve {
+            // A click opens the Transparency panel; a drag scrubs the field (#4088).
+            if crate::scrub::link_label(ui, text).clicked() {
+                app.ui.open_panel = Some("transparency".into());
+            }
+            if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, OPACITY_FIELD_WIDTH)
+                && selected
+            {
+                app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
+            }
+            drawn = true;
         }
-        // A click opens the Transparency panel; a drag scrubs the field (#4088).
-        if crate::scrub::link_label(ui, text).clicked() {
-            app.ui.open_panel = Some("transparency".into());
-        }
-        if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, OPACITY_FIELD_WIDTH)
-            && selected
-        {
-            app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
-        }
-        drawn = true;
     }
     let text = egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline();
     if style_on && ui.available_width() >= GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) + reserve {

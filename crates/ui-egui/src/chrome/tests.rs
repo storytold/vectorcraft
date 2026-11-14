@@ -3103,6 +3103,33 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     assert!(faults.is_empty(), "a control drawn past the bar's room: {faults:#?}");
 }
 
+/// With Opacity and Graphic Style on, a bar too narrow for the Opacity link and its field still
+/// shows the narrower Style link and its chip when it has room for them.
+#[test]
+fn a_narrow_control_bar_shows_the_style_link_without_the_opacity_field() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.run("window.control.options", json!({"group": "fillStroke", "visible": false})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    let (mut both, mut style_only) = (false, false);
+    for w in (150..=900).step_by(2) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+        control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let nodes = control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let (opacity, style) = (shows(&nodes, "Opacity:"), shows(&nodes, "Style:"));
+        both |= opacity && style;
+        style_only |= style && !opacity;
+    }
+    assert!(both, "a wide bar shows the Opacity and Style links");
+    assert!(style_only, "some width has room for the Style link and its chip but not the Opacity link and its field");
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]
