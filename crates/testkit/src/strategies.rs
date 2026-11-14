@@ -626,7 +626,9 @@ mod tests {
 
     /// The strings the sweeps send keep the meaning the command gives their key, at every depth: an
     /// export's folder grouping and a web link stay as sent, also inside a `command.batch` step and
-    /// a recorded step, and a real file or folder key there goes to the temp location.
+    /// a recorded step, and a real file or folder key there goes to the temp location. A key that names
+    /// part of the document in a recorded step's command stays, and the same key in a command that
+    /// doesn't take it as a param names a file.
     #[test]
     fn nested_locations_keep_command_meaning() {
         let spec = |id: &str| command_specs().iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no command {id}"));
@@ -649,10 +651,14 @@ mod tests {
                 {"command": "object.path.simplify", "params": {"wholePaths": "junk"}},
             ])
         );
-        let recorded = json!([["object.setLiveShape", {"path": "junk"}], ["document.compare", {"diffPath": "junk"}]]);
+        let recorded = json!([
+            ["text.createInPath", {"path": "junk"}],
+            ["object.setLiveShape", {"path": "junk"}],
+            ["document.compare", {"diffPath": "junk"}],
+        ]);
         assert_eq!(
             safe_value("steps", &recorded, safe),
-            json!([["object.setLiveShape", {"path": "junk"}], ["document.compare", {"diffPath": safe}]])
+            json!([["text.createInPath", {"path": "junk"}], ["object.setLiveShape", {"path": safe}], ["document.compare", {"diffPath": safe}]])
         );
         assert_eq!(safe_value("url", &json!("https://example.com/a"), safe), json!("https://example.com/a"));
         assert_eq!(safe_value("destinationFolder", &json!("junk"), safe), json!("/tmp/sweep/out.bin-folder"));
