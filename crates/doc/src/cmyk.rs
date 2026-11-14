@@ -515,9 +515,10 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// all, as RGBA pixels: CMYK with an alpha channel (5 samples), each colour converted by `rgb` (ink
 /// amounts 0..1 → sRGB 0..1; the inks can't be kept with the transparency, so they show as RGB),
 /// and grayscale with extra samples, of which the first is the alpha when the file says so (other
-/// channels are left out). Associated (premultiplied) alpha is divided back out. The samples may be
-/// stored together or one plane per channel. `None` for other images and ones larger than
-/// [`MAX_CMYK_PIXELS`].
+/// channels are left out). Associated (premultiplied) alpha is divided back out, and a pixel with
+/// no associated alpha has no color. 16-bit samples are converted at 16 bits, and only the result
+/// is rounded to 8 bits. The samples may be stored together or one plane per channel. `None` for
+/// other images and ones larger than [`MAX_CMYK_PIXELS`].
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
     use tiff::tags::Tag;
     let (kind, mut d) = tiff(bytes)?;
@@ -535,20 +536,33 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
         _ => return None,
     };
     let n = usize::try_from(pixels(w, h)?).ok()?;
-    let data = read_samples(&mut d, n, samples)?;
-    let mut out = Vec::with_capacity(n * 4);
-    for p in data.chunks_exact(samples) {
-        let opacity = if alpha { p.get(colour).copied().unwrap_or(u8::MAX) } else { u8::MAX };
-        let a = f32::from(opacity) / 255.0;
-        let level = |v: u8| {
-            let v = f32::from(v) / 255.0;
-            if extra == Some(1) && a > 0.0 { (v / a).min(1.0) } else { v }
+    let data = read_samples_at_depth(&mut d, n, samples)?;
+    // Sample `i` of the image, 0..1.
+    let level_at = |i: usize| match &data {
+        Samples::Eight(v) => v.get(i).map(|&s| f32::from(s) / 255.0),
+        Samples::Sixteen(v) => v.get(i).map(|&s| f32::from(s) / 65535.0),
+    };
+    // Sample `i` of the image as 8 bits, a 16-bit sample rounded to the nearest.
+    let byte_at = |i: usize| match &data {
+        Samples::Eight(v) => v.get(i).copied(),
+        Samples::Sixteen(v) => v.get(i).map(|&s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)),
+    };
+    let mut out = Vec::with_capacity(n.checked_mul(4)?);
+    for first in (0..n).map(|p| p * samples) {
+        let (opacity, a) = if alpha { (byte_at(first + colour).unwrap_or(u8::MAX), level_at(first + colour).unwrap_or(1.0)) } else { (u8::MAX, 1.0) };
+        let level = |s: usize| {
+            let v = level_at(first + s).unwrap_or(0.0);
+            match extra {
+                Some(1) if a > 0.0 => (v / a).min(1.0),
+                // No associated alpha: the color is zero (TIFF 6.0, Associated Alpha Handling).
+                Some(1) if alpha => 0.0,
+                _ => v,
+            }
         };
-        let [r, g, b] = match *p {
-            [c, m, y, k, ..] if colour == 4 => rgb([level(c), level(m), level(y), level(k)]),
-            [v, ..] if photometric == Some(0) => [1.0 - level(v); 3],
-            [v, ..] => [level(v); 3],
-            [] => continue,
+        let [r, g, b] = match colour {
+            4 => rgb([level(0), level(1), level(2), level(3)]),
+            _ if photometric == Some(0) => [1.0 - level(0); 3],
+            _ => [level(0); 3],
         };
         out.extend([r, g, b].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
         out.push(opacity);
@@ -765,6 +779,85 @@ mod tests {
         assert_eq!(gray(1), [255, 255, 255, 255, 64, 64, 64, 204, 0, 0, 0, 0], "associated alpha, divided back out");
         assert_eq!(gray(2), [255, 255, 255, 255, 51, 51, 51, 204, 0, 0, 0, 0], "unassociated alpha");
         assert_eq!(gray(0), [255, 255, 255, 255, 51, 51, 51, 255, 0, 0, 0, 255], "a channel that isn't alpha: opaque");
+    }
+
+    /// Five 16-bit samples a pixel: the four inks and one extra sample, which the file's
+    /// `ExtraSamples` names.
+    struct Cmyka16;
+    impl tiff::encoder::colortype::ColorType for Cmyka16 {
+        type Inner = u16;
+        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::CMYK;
+        const BITS_PER_SAMPLE: &'static [u16] = &[16; 5];
+        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 5];
+        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
+            result.extend_from_slice(row);
+        }
+    }
+
+    /// Two 16-bit samples a pixel: gray and one extra sample.
+    struct GrayExtra16;
+    impl tiff::encoder::colortype::ColorType for GrayExtra16 {
+        type Inner = u16;
+        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::BlackIsZero;
+        const BITS_PER_SAMPLE: &'static [u16] = &[16, 16];
+        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 2];
+        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
+            result.extend_from_slice(row);
+        }
+    }
+
+    /// A one-row TIFF of `C`'s pixels `data`, with the ExtraSamples value `extra`.
+    fn extra_tiff<C: tiff::encoder::colortype::ColorType<Inner = u16>>(extra: u16, data: &[u16]) -> Vec<u8> {
+        let samples = C::BITS_PER_SAMPLE.len();
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
+        let mut img = enc.new_image::<C>(u32::try_from(data.len() / samples).unwrap(), 1).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[extra][..]).unwrap();
+        img.write_data(data).unwrap();
+        file.into_inner()
+    }
+
+    /// 16-bit CMYK with alpha converts its 16-bit inks and alpha, and rounds only the result to 8
+    /// bits; the high byte of each sample alone would give other pixels.
+    #[test]
+    fn a_16_bit_cmyk_tiff_with_alpha_converts_at_16_bits() {
+        let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
+        let read = |extra: u16, data: &[u16]| extra_samples_tiff_rgba(&extra_tiff::<Cmyka16>(extra, data), naive).expect("CMYKA reads").into_raw();
+        // Unassociated: 129 of cyan, opaque; no ink at an alpha of 129; no ink at an alpha of 386.
+        let straight = [129, 0, 0, 0, 65535, 0, 0, 0, 0, 129, 0, 0, 0, 0, 386];
+        assert_eq!(read(2, &straight), [254, 255, 255, 255, 255, 255, 255, 1, 255, 255, 255, 2]);
+        // Associated: cyan 128 at an alpha of 256 (half cyan); K 255 at an alpha of 511 (about half K).
+        let premultiplied = [128, 0, 0, 0, 256, 0, 0, 0, 255, 511];
+        assert_eq!(read(1, &premultiplied), [128, 255, 255, 1, 128, 128, 128, 2], "divided by the 16-bit alpha");
+    }
+
+    /// 16-bit gray with alpha converts at 16 bits as well.
+    #[test]
+    fn a_16_bit_grayscale_tiff_with_alpha_converts_at_16_bits() {
+        let read = |extra: u16| {
+            // A gray of 129, opaque, then 128 at an alpha of 256.
+            let bytes = extra_tiff::<GrayExtra16>(extra, &[129, 65535, 128, 256]);
+            extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).expect("gray with alpha reads").into_raw()
+        };
+        assert_eq!(read(2), [1, 1, 1, 255, 0, 0, 0, 1], "unassociated");
+        assert_eq!(read(1), [1, 1, 1, 255, 128, 128, 128, 1], "associated, divided by the 16-bit alpha");
+    }
+
+    /// With associated alpha, a pixel whose alpha is zero has no color (TIFF 6.0, Associated
+    /// Alpha Handling), whatever its color samples hold.
+    #[test]
+    fn a_pixel_with_no_associated_alpha_has_no_color() {
+        use tiff::encoder::{TiffEncoder, colortype::CMYKA8};
+        let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = TiffEncoder::new(&mut file).unwrap();
+        let mut img = enc.new_image::<CMYKA8>(1, 1).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[1u16][..]).unwrap();
+        img.write_data(&[255, 0, 0, 0, 0]).unwrap();
+        let cmyk = extra_samples_tiff_rgba(&file.into_inner(), naive).expect("CMYKA reads");
+        assert_eq!(cmyk.into_raw(), [255, 255, 255, 0], "no ink");
+        let gray = extra_samples_tiff_rgba(&extra_tiff::<GrayExtra16>(1, &[50_000, 0]), |_| [0.0; 3]).expect("gray reads");
+        assert_eq!(gray.into_raw(), [0, 0, 0, 0], "a gray of zero");
     }
 
     /// A header claiming more tiles than can be counted: (2^32 − 1)² pixels in tiles of one pixel,

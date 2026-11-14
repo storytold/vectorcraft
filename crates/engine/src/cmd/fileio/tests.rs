@@ -186,6 +186,22 @@ fn planar_tiffs_read_as_their_chunky_versions() {
     }
 }
 
+/// A 16-bit CMYK TIFF with alpha places with its alpha rounded from 16 bits, planar as chunky.
+#[test]
+fn a_16_bit_cmyk_tiff_with_alpha_places_at_16_bits() {
+    let none = vec![0u16; 6];
+    let cyan = vec![129u16, 0, 300, 0, 128, 65535];
+    let alpha = vec![65535u16, 129, 386, 0, 256, 65535];
+    for extra in [1u16, 2] {
+        let channels = [cyan.clone(), none.clone(), none.clone(), none.clone(), alpha.clone()];
+        let chunky = kept(&format!("extra samples {extra}, chunky"), &hand_tiff(5, 16, &[extra], false, &channels));
+        let planar = kept(&format!("extra samples {extra}, planar"), &hand_tiff(5, 16, &[extra], true, &channels));
+        assert_eq!(planar, chunky, "extra samples {extra}: planar reads as chunky");
+        let alphas: Vec<u8> = chunky.1.iter().skip(3).step_by(4).copied().collect();
+        assert_eq!(alphas, [255, 1, 2, 0, 1, 255], "extra samples {extra}: the alpha, rounded from 16 bits");
+    }
+}
+
 /// A planar TIFF whose header claims more strips than the decoder can count (here 2^31 + 1 rows
 /// a strip each, times 5 planes) is refused as too large to draw, without a panic.
 #[test]
