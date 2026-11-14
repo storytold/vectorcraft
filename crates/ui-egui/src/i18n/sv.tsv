@@ -8931,6 +8931,46 @@ digits	Hindi	Hindi
 	Margin	Marginal
 	Box	Ram
 	Swatch	Färgruta
+	Concept to Vector	Koncept till vektor
+	Concept to Vector…	Koncept till vektor…
+	Cancel Concept to Vector Job	Avbryt jobbet Koncept till vektor
+	Cancel Concept to Vector	Avbryt Koncept till vektor
+	Concept to Vector Providers	Leverantörer för Koncept till vektor
+	Concept to Vector Results	Resultat för Koncept till vektor
+	Generate Concept to Vector Styles	Skapa stilar för Koncept till vektor
+	Insert Concept to Vector Styles	Infoga stilar för Koncept till vektor
+	Offline Image Trace styles, made on this computer	Offlinestilar för bildkalkering, skapade på den här datorn
+	Offline styles do not use prompts	Offlinestilar använder inga prompter
+	Styles	Stilar
+	Ink Lines	Tuschlinjer
+	Flat Color	Platt färg
+	Detailed Color	Detaljerad färg
+	Gray Tones	Gråtoner
+	Generate	Skapa
+	Insert Selected	Infoga markerade
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Koncept till vektor stoppades: dess tråd slutade utan resultat (rapportera felet)
+@msg	`detail` must be a whole number from 0 to 100	`detail` måste vara ett heltal från 0 till 100
+@msg	`job` must be a job number from conceptVector.generate	`job` måste vara ett jobbnummer från conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` måste ange 1 till 8 olika stil-id:n för `{pid}` (se conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` måste ange olika stil-id:n för jobb {job}
+@msg	a provider with the id `{id}` is registered already	En leverantör med id `{id}` är redan registrerad
+@msg	job {job} has no results to insert: it was canceled	Jobb {job} har inga resultat att infoga: det avbröts
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Jobb {job} gäller inte längre: dess dokument, bild eller bildens placering har ändrats; skapa det igen
+@msg	missing `provider` (see conceptVector.providers)	`provider` saknas (se conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Det finns inget jobb {job} för Koncept till vektor: det skapades aldrig eller har tagits bort (se conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Det finns ingen leverantör `{name}` för Koncept till vektor (se conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Markera en bild eller ett bildkalkeringsobjekt som inte har expanderats
+@msg	the image is locked or hidden	Bilden är låst eller dold
+@msg	the provider stopped with an internal error: {0}	Leverantören stoppades av ett internt fel: {0}
+@msg	the provider's results do not match the request or are malformed	Leverantörens resultat stämmer inte med begäran eller är felaktiga
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Resultaten skulle ha fler än {0} ankarpunkter: sänk Detalj eller välj färre stilar
+@msg	there is no room for the results to the right of the image	Det finns ingen plats för resultaten till höger om bilden
+@msg	the image is on a layer with a clipping mask, which would hide the results	Bilden ligger på ett lager med urklippsmask, som skulle dölja resultaten
+@msg	the image is on a layer with an opacity mask, which would hide the results	Bilden ligger på ett lager med opacitetsmask, som skulle dölja resultaten
+@msg	the image is on a layer with effects of its own, which would apply to the results	Bilden ligger på ett lager med egna effekter, som också skulle tillämpas på resultaten
+@msg	`output` must be "vector"	`output` måste vara "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tar ingen prompt och skapar bara vektorgrafik
+@msg	Making the Concept to Vector styles	Skapar stilar för Koncept till vektor
 	Duplicate Effects	Duplicera effekter
 	Remove Effects	Ta bort effekter
 	Add art with Add as Single Graphic, or drop art here.	Lägg till grafik med Lägg till som enkel grafik, eller släpp grafik här.

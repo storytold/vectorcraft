@@ -7474,6 +7474,46 @@ breakText	Glyphs	Glifs
 	Margin	Marge
 	Box	Caixa
 	Swatch	Mostra
+	Concept to Vector	Concepte a vector
+	Concept to Vector…	Concepte a vector…
+	Cancel Concept to Vector Job	Cancel·la la tasca de Concepte a vector
+	Cancel Concept to Vector	Cancel·la Concepte a vector
+	Concept to Vector Providers	Proveïdors de Concepte a vector
+	Concept to Vector Results	Resultats de Concepte a vector
+	Generate Concept to Vector Styles	Genera els estils de Concepte a vector
+	Insert Concept to Vector Styles	Insereix els estils de Concepte a vector
+	Offline Image Trace styles, made on this computer	Estils de traçat d’imatge fora de línia, fets en aquest ordinador
+	Offline styles do not use prompts	Els estils fora de línia no fan servir indicacions
+	Styles	Estils
+	Ink Lines	Línies de tinta
+	Flat Color	Color pla
+	Detailed Color	Color detallat
+	Gray Tones	Tons de gris
+	Generate	Genera
+	Insert Selected	Insereix la selecció
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Concepte a vector s’ha aturat: el seu fil ha acabat sense resultats (informeu d’aquest error)
+@msg	`detail` must be a whole number from 0 to 100	`detail` ha de ser un nombre enter de 0 a 100
+@msg	`job` must be a job number from conceptVector.generate	`job` ha de ser un número de tasca de conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` ha de llistar d’1 a 8 identificadors d’estil diferents de `{pid}` (vegeu conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` ha de llistar identificadors d’estil diferents de la tasca {job}
+@msg	a provider with the id `{id}` is registered already	Ja hi ha registrat un proveïdor amb l’identificador `{id}`
+@msg	job {job} has no results to insert: it was canceled	La tasca {job} no té resultats per inserir: s’ha cancel·lat
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	La tasca {job} ja no és vàlida: ha canviat el document, la imatge o la col·locació de la imatge; torneu-la a generar
+@msg	missing `provider` (see conceptVector.providers)	Falta `provider` (vegeu conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	No hi ha cap tasca de Concepte a vector {job}: no s’ha creat mai o s’ha descartat (vegeu conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	No hi ha cap proveïdor de Concepte a vector `{name}` (vegeu conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Seleccioneu una imatge o un objecte de traçat d’imatge sense expandir
+@msg	the image is locked or hidden	La imatge està bloquejada o oculta
+@msg	the provider stopped with an internal error: {0}	El proveïdor s’ha aturat amb un error intern: {0}
+@msg	the provider's results do not match the request or are malformed	Els resultats del proveïdor no coincideixen amb la sol·licitud o estan mal formats
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Els resultats tindrien més de {0} punts d’ancoratge: reduïu Detall o trieu menys estils
+@msg	there is no room for the results to the right of the image	No hi ha espai per als resultats a la dreta de la imatge
+@msg	the image is on a layer with a clipping mask, which would hide the results	La imatge és en una capa amb una màscara de retall, que amagaria els resultats
+@msg	the image is on a layer with an opacity mask, which would hide the results	La imatge és en una capa amb una màscara d’opacitat, que amagaria els resultats
+@msg	the image is on a layer with effects of its own, which would apply to the results	La imatge és en una capa amb efectes propis, que s’aplicarien també als resultats
+@msg	`output` must be "vector"	`output` ha de ser "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` no admet indicacions i només fa art vectorial
+@msg	Making the Concept to Vector styles	S’estan fent els estils de Concepte a vector
 	Banner Hems and Grommets…	Vores i ullets de pancarta…
 	Banner Hems and Grommets	Vores i ullets de pancarta
 	Hem	Vora

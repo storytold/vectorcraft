@@ -113,6 +113,7 @@ impl Session {
             place_queue_roots: None,
             image_hand_off: None,
             trace_hand_off: None,
+            concept: Default::default(),
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,
@@ -449,6 +450,10 @@ impl Session {
         // Closed (saved or discarded): nothing left to recover.
         let uid = self.docs[index].uid;
         cmd::recovery::forget(self, uid);
+        // In a batch, the jobs are dropped when the batch ends without an error.
+        if self.batch_stash.is_none() {
+            self.forget_concept_jobs(uid);
+        }
         let old = self.docs.remove(index);
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);

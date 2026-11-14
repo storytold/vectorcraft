@@ -193,6 +193,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Image Trace"), "image", TASK_BAR_IMAGE_TRACE, none()));
             items.push((tl!("Crop Image"), "dc-pf-crop", "ui.cropImage", none()));
             items.push((tl!("Remove Background"), "eraser", crate::addons::image::REMOVE_BACKGROUND, none()));
+            items.push((tl!("Concept to Vector"), "sparkles", crate::panels::concept_vector::OPEN, none()));
         }
         // Direct-selected anchors take the place of a path's Offset Path and Simplify. For them the bar
         // offers Remove, Connect, Cut and Convert to corner or smooth, as the reference app does
@@ -222,6 +223,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             }
         } else if is_trace {
             items.push((tl!("Expand"), "maximize-2", "imageTrace.expand", none()));
+            items.push((tl!("Concept to Vector"), "sparkles", crate::panels::concept_vector::OPEN, none()));
         } else if is_clip_group {
             items.push((tl!("Edit Clipping Path"), "dc-direct", "object.clippingMask.editMask", none()));
             items.push((tl!("Release Clipping Mask"), "ungroup", "object.clippingMask.release", none()));

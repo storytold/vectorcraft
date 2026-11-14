@@ -8884,6 +8884,46 @@ theme	Appearance	अपीयरेंस
 	Margin	मार्जिन
 	Box	बॉक्स
 	Swatch	स्वॉच
+	Concept to Vector	कॉन्सेप्ट से वेक्टर
+	Concept to Vector…	कॉन्सेप्ट से वेक्टर…
+	Cancel Concept to Vector Job	कॉन्सेप्ट से वेक्टर जॉब रद्द करें
+	Cancel Concept to Vector	कॉन्सेप्ट से वेक्टर रद्द करें
+	Concept to Vector Providers	कॉन्सेप्ट से वेक्टर प्रदाता
+	Concept to Vector Results	कॉन्सेप्ट से वेक्टर परिणाम
+	Generate Concept to Vector Styles	कॉन्सेप्ट से वेक्टर स्टाइल बनाएँ
+	Insert Concept to Vector Styles	कॉन्सेप्ट से वेक्टर स्टाइल डालें
+	Offline Image Trace styles, made on this computer	ऑफ़लाइन इमेज ट्रेस स्टाइल, इसी कंप्यूटर पर बनाई जाती हैं
+	Offline styles do not use prompts	ऑफ़लाइन स्टाइल प्रॉम्प्ट का उपयोग नहीं करतीं
+	Styles	स्टाइल
+	Ink Lines	स्याही रेखाएँ
+	Flat Color	सपाट रंग
+	Detailed Color	विस्तृत रंग
+	Gray Tones	ग्रे टोन
+	Generate	बनाएँ
+	Insert Selected	चुने हुए डालें
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	कॉन्सेप्ट से वेक्टर रुक गया: उसका थ्रेड बिना परिणाम के समाप्त हुआ (कृपया इस बग की रिपोर्ट करें)
+@msg	`detail` must be a whole number from 0 to 100	`detail` 0 से 100 तक पूरी संख्या होना चाहिए
+@msg	`job` must be a job number from conceptVector.generate	`job` conceptVector.generate से मिला जॉब नंबर होना चाहिए
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` में `{pid}` की 1 से 8 अलग-अलग स्टाइल ID होनी चाहिए (conceptVector.providers देखें)
+@msg	`variations` must list different style ids of job {job}	`variations` में जॉब {job} की अलग-अलग स्टाइल ID होनी चाहिए
+@msg	a provider with the id `{id}` is registered already	ID `{id}` वाला प्रदाता पहले से पंजीकृत है
+@msg	job {job} has no results to insert: it was canceled	जॉब {job} में डालने के लिए कोई परिणाम नहीं है: इसे रद्द किया गया था
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	जॉब {job} अब लागू नहीं होता: उसका दस्तावेज़, इमेज या इमेज का स्थान बदल गया, इसलिए फिर से बनाएँ
+@msg	missing `provider` (see conceptVector.providers)	`provider` नहीं दिया गया (conceptVector.providers देखें)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	कॉन्सेप्ट से वेक्टर जॉब {job} नहीं है: यह कभी नहीं बना या हटा दिया गया (conceptVector.results देखें)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	कॉन्सेप्ट से वेक्टर प्रदाता `{name}` नहीं है (conceptVector.providers देखें)
+@msg	select one image or an unexpanded Image Trace object	एक इमेज या एक बिना एक्सपैंड किया इमेज ट्रेस ऑब्जेक्ट चुनें
+@msg	the image is locked or hidden	इमेज लॉक या छिपी हुई है
+@msg	the provider stopped with an internal error: {0}	प्रदाता एक आंतरिक त्रुटि के साथ रुक गया: {0}
+@msg	the provider's results do not match the request or are malformed	प्रदाता के परिणाम अनुरोध से मेल नहीं खाते या गलत बने हैं
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	परिणामों में {0} से अधिक एंकर पॉइंट होंगे: डिटेल कम करें या कम स्टाइल चुनें
+@msg	there is no room for the results to the right of the image	इमेज के दाईं ओर परिणामों के लिए जगह नहीं है
+@msg	the image is on a layer with a clipping mask, which would hide the results	इमेज क्लिपिंग मास्क वाली लेयर पर है, जो परिणामों को छिपा देगा
+@msg	the image is on a layer with an opacity mask, which would hide the results	इमेज opacity मास्क वाली लेयर पर है, जो परिणामों को छिपा देगा
+@msg	the image is on a layer with effects of its own, which would apply to the results	इमेज अपने इफ़ेक्ट वाली लेयर पर है, जो परिणामों पर भी लागू हो जाएँगे
+@msg	`output` must be "vector"	`output` "vector" होना चाहिए
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` प्रॉम्प्ट नहीं लेता और केवल वेक्टर आर्ट बनाता है
+@msg	Making the Concept to Vector styles	कॉन्सेप्ट से वेक्टर स्टाइल बनाई जा रही हैं
 	Banner Hems and Grommets…	बैनर हेम और आईलेट…
 	Banner Hems and Grommets	बैनर हेम और आईलेट
 	Hem	हेम

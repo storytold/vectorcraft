@@ -7446,6 +7446,46 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+	Concept to Vector	Από ιδέα σε διάνυσμα
+	Concept to Vector…	Από ιδέα σε διάνυσμα…
+	Cancel Concept to Vector Job	Ακύρωση εργασίας «Από ιδέα σε διάνυσμα»
+	Cancel Concept to Vector	Ακύρωση «Από ιδέα σε διάνυσμα»
+	Concept to Vector Providers	Πάροχοι «Από ιδέα σε διάνυσμα»
+	Concept to Vector Results	Αποτελέσματα «Από ιδέα σε διάνυσμα»
+	Generate Concept to Vector Styles	Δημιουργία στυλ «Από ιδέα σε διάνυσμα»
+	Insert Concept to Vector Styles	Εισαγωγή στυλ «Από ιδέα σε διάνυσμα»
+	Offline Image Trace styles, made on this computer	Στυλ ανίχνευσης περιγραμμάτων εικόνας εκτός σύνδεσης, που δημιουργούνται σε αυτόν τον υπολογιστή
+	Offline styles do not use prompts	Τα στυλ εκτός σύνδεσης δεν χρησιμοποιούν προτροπές
+	Styles	Στυλ
+	Ink Lines	Γραμμές μελανιού
+	Flat Color	Επίπεδο χρώμα
+	Detailed Color	Λεπτομερές χρώμα
+	Gray Tones	Τόνοι του γκρι
+	Generate	Δημιουργία
+	Insert Selected	Εισαγωγή επιλεγμένων
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Το «Από ιδέα σε διάνυσμα» σταμάτησε: το νήμα του τελείωσε χωρίς αποτελέσματα (αναφέρετε αυτό το σφάλμα)
+@msg	`detail` must be a whole number from 0 to 100	Το `detail` πρέπει να είναι ακέραιος από 0 έως 100
+@msg	`job` must be a job number from conceptVector.generate	Το `job` πρέπει να είναι αριθμός εργασίας από το conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	Το `styles` πρέπει να περιέχει 1 έως 8 διαφορετικά αναγνωριστικά στυλ του `{pid}` (δείτε το conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	Το `variations` πρέπει να περιέχει διαφορετικά αναγνωριστικά στυλ της εργασίας {job}
+@msg	a provider with the id `{id}` is registered already	Ένας πάροχος με αναγνωριστικό `{id}` είναι ήδη καταχωρισμένος
+@msg	job {job} has no results to insert: it was canceled	Η εργασία {job} δεν έχει αποτελέσματα για εισαγωγή: ακυρώθηκε
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Η εργασία {job} δεν ισχύει πια: άλλαξε το έγγραφο, η εικόνα ή η θέση της εικόνας· δημιουργήστε την ξανά
+@msg	missing `provider` (see conceptVector.providers)	Λείπει το `provider` (δείτε το conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Δεν υπάρχει εργασία «Από ιδέα σε διάνυσμα» {job}: δεν δημιουργήθηκε ποτέ ή απορρίφθηκε (δείτε το conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Δεν υπάρχει πάροχος «Από ιδέα σε διάνυσμα» `{name}` (δείτε το conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Επιλέξτε μία εικόνα ή ένα μη αναπτυγμένο αντικείμενο ανίχνευσης περιγραμμάτων εικόνας
+@msg	the image is locked or hidden	Η εικόνα είναι κλειδωμένη ή κρυφή
+@msg	the provider stopped with an internal error: {0}	Ο πάροχος σταμάτησε με εσωτερικό σφάλμα: {0}
+@msg	the provider's results do not match the request or are malformed	Τα αποτελέσματα του παρόχου δεν ταιριάζουν με το αίτημα ή είναι κακοσχηματισμένα
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Τα αποτελέσματα θα είχαν περισσότερα από {0} σημεία αγκύρωσης: μειώστε τη Λεπτομέρεια ή επιλέξτε λιγότερα στυλ
+@msg	there is no room for the results to the right of the image	Δεν υπάρχει χώρος για τα αποτελέσματα δεξιά από την εικόνα
+@msg	the image is on a layer with a clipping mask, which would hide the results	Η εικόνα βρίσκεται σε επίπεδο με μάσκα αποκοπής, η οποία θα έκρυβε τα αποτελέσματα
+@msg	the image is on a layer with an opacity mask, which would hide the results	Η εικόνα βρίσκεται σε επίπεδο με μάσκα αδιαφάνειας, η οποία θα έκρυβε τα αποτελέσματα
+@msg	the image is on a layer with effects of its own, which would apply to the results	Η εικόνα βρίσκεται σε επίπεδο με δικά του εφέ, τα οποία θα εφαρμόζονταν και στα αποτελέσματα
+@msg	`output` must be "vector"	Το `output` πρέπει να είναι "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	Το `{pid}` δεν δέχεται προτροπή και δημιουργεί μόνο διανυσματικά γραφικά
+@msg	Making the Concept to Vector styles	Δημιουργία των στυλ «Από ιδέα σε διάνυσμα»
 	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
 	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
 	Hem	Στρίφωμα

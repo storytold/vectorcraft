@@ -16,6 +16,7 @@ pub mod color;
 pub mod color_guide;
 pub mod color_themes;
 pub mod color_wheel;
+pub mod concept_vector;
 pub mod css_properties;
 pub mod doc_info;
 pub mod flattener_preview;
@@ -182,6 +183,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         variables::ID => variables::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
         color_wheel::ID => color_wheel::show(app, ui),
+        concept_vector::ID => concept_vector::show(app, ui),
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),

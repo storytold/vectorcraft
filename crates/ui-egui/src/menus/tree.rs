@@ -325,6 +325,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Expand", "imageTrace.expand"),
                     ],
                 ),
+                // Opens the Concept to Vector panel for the selected image or Image Trace object.
+                c("Concept to Vector…", crate::panels::concept_vector::OPEN),
                 sub(
                     "Text Wrap",
                     vec![
@@ -665,6 +667,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Color Guide", "colorGuide"),
                 panel("Color Themes", "colorThemes"),
                 panel("Color Wheel", crate::panels::color_wheel::ID),
+                panel("Concept to Vector", crate::panels::concept_vector::ID),
                 panel("CSS Properties", crate::panels::css_properties::ID),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),

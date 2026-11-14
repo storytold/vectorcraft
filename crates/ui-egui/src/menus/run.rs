@@ -697,6 +697,8 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
+        crate::panels::concept_vector::OPEN => crate::panels::concept_vector::open(app),
+        crate::panels::concept_vector::CANCEL => Ok(crate::panels::concept_vector::cancel_run(app)),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
         "ui.cropImage" => {
             app.select_tool(vectorcraft_tools::cropimage::ID);

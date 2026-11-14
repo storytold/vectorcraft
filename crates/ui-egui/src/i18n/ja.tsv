@@ -7189,6 +7189,46 @@ breakText	Glyphs	字形
 	Margin	マージン
 	Box	枠
 	Swatch	スウォッチ
+	Concept to Vector	コンセプトからベクター
+	Concept to Vector…	コンセプトからベクター…
+	Cancel Concept to Vector Job	コンセプトからベクターのジョブをキャンセル
+	Cancel Concept to Vector	コンセプトからベクターをキャンセル
+	Concept to Vector Providers	コンセプトからベクターのプロバイダー
+	Concept to Vector Results	コンセプトからベクターの結果
+	Generate Concept to Vector Styles	コンセプトからベクターのスタイルを生成
+	Insert Concept to Vector Styles	コンセプトからベクターのスタイルを挿入
+	Offline Image Trace styles, made on this computer	このコンピューターで作成するオフラインの画像トレーススタイル
+	Offline styles do not use prompts	オフラインスタイルはプロンプトを使用しません
+	Styles	スタイル
+	Ink Lines	インクの線
+	Flat Color	フラットカラー
+	Detailed Color	詳細カラー
+	Gray Tones	グレートーン
+	Generate	生成
+	Insert Selected	選択項目を挿入
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	コンセプトからベクターが停止しました: スレッドが結果なしで終了しました (このバグを報告してください)
+@msg	`detail` must be a whole number from 0 to 100	`detail` には 0 から 100 の整数を指定してください
+@msg	`job` must be a job number from conceptVector.generate	`job` には conceptVector.generate のジョブ番号を指定してください
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` には `{pid}` の異なるスタイル ID を 1 から 8 個指定してください (conceptVector.providers を参照)
+@msg	`variations` must list different style ids of job {job}	`variations` にはジョブ {job} の異なるスタイル ID を指定してください
+@msg	a provider with the id `{id}` is registered already	ID `{id}` のプロバイダーはすでに登録されています
+@msg	job {job} has no results to insert: it was canceled	ジョブ {job} には挿入する結果がありません: キャンセルされました
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	ジョブ {job} は無効になりました: ドキュメント、画像、または画像の配置が変更されたため、もう一度生成してください
+@msg	missing `provider` (see conceptVector.providers)	`provider` がありません (conceptVector.providers を参照)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	コンセプトからベクターのジョブ {job} はありません: 作成されていないか、破棄されました (conceptVector.results を参照)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	コンセプトからベクターのプロバイダー `{name}` はありません (conceptVector.providers を参照)
+@msg	select one image or an unexpanded Image Trace object	画像、または拡張されていない画像トレースオブジェクトを 1 つ選択してください
+@msg	the image is locked or hidden	画像がロックされているか、非表示です
+@msg	the provider stopped with an internal error: {0}	プロバイダーが内部エラーで停止しました: {0}
+@msg	the provider's results do not match the request or are malformed	プロバイダーの結果が要求と一致しないか、不正です
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	結果のアンカーポイントが {0} 個を超えます: ディテールを下げるか、スタイルを減らしてください
+@msg	there is no room for the results to the right of the image	画像の右側に結果を置く場所がありません
+@msg	the image is on a layer with a clipping mask, which would hide the results	画像はクリッピングマスクのあるレイヤー上にあり、結果が隠れてしまいます
+@msg	the image is on a layer with an opacity mask, which would hide the results	画像は不透明マスクのあるレイヤー上にあり、結果が隠れてしまいます
+@msg	the image is on a layer with effects of its own, which would apply to the results	画像は独自の効果を持つレイヤー上にあり、その効果が結果にも適用されてしまいます
+@msg	`output` must be "vector"	`output` には "vector" を指定してください
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` はプロンプトを受け付けず、ベクターアートのみを作成します
+@msg	Making the Concept to Vector styles	コンセプトからベクターのスタイルを作成中
 	Banner Hems and Grommets…	バナーの折り返しとハトメ…
 	Banner Hems and Grommets	バナーの折り返しとハトメ
 	Hem	折り返し

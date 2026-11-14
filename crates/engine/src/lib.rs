@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod cmd;
+pub mod concept_vector;
 pub mod file_access;
 pub mod guard;
 pub mod inspect;
@@ -250,6 +251,9 @@ pub struct Session {
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,
+    /// The Concept to Vector providers and the jobs made with them ([`cmd::conceptvector`]); not
+    /// saved.
+    pub(crate) concept: cmd::conceptvector::ConceptState,
     /// Whether a click or drag of the place cursor asks the frontend to place its file
     /// ([`UiRequest::Place`]) instead of running `file.place`: the desktop app sets it to read the
     /// file off the UI thread. False: the file is placed at once.

@@ -158,6 +158,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if is_image {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
+        actions.push((tl!("Concept to Vector"), crate::panels::concept_vector::OPEN));
         actions.push((tl!("Mask"), "object.maskImage"));
         // Remove Background at once with its defaults, as the reference app's Quick Actions do
         // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).

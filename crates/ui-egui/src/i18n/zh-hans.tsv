@@ -7332,6 +7332,46 @@ breakText	Glyphs	字形
 	Margin	边距
 	Box	框
 	Swatch	色板
+	Concept to Vector	概念转矢量
+	Concept to Vector…	概念转矢量…
+	Cancel Concept to Vector Job	取消概念转矢量任务
+	Cancel Concept to Vector	取消概念转矢量
+	Concept to Vector Providers	概念转矢量提供程序
+	Concept to Vector Results	概念转矢量结果
+	Generate Concept to Vector Styles	生成概念转矢量样式
+	Insert Concept to Vector Styles	插入概念转矢量样式
+	Offline Image Trace styles, made on this computer	离线图像描摹样式，在此计算机上生成
+	Offline styles do not use prompts	离线样式不使用提示词
+	Styles	样式
+	Ink Lines	墨线
+	Flat Color	平涂色
+	Detailed Color	细节色彩
+	Gray Tones	灰色调
+	Generate	生成
+	Insert Selected	插入所选项
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	概念转矢量已停止：其线程未产生结果就结束了（请报告此错误）
+@msg	`detail` must be a whole number from 0 to 100	`detail` 必须是 0 到 100 之间的整数
+@msg	`job` must be a job number from conceptVector.generate	`job` 必须是 conceptVector.generate 给出的任务编号
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` 必须列出 `{pid}` 的 1 到 8 个不同样式 ID（参见 conceptVector.providers）
+@msg	`variations` must list different style ids of job {job}	`variations` 必须列出任务 {job} 的不同样式 ID
+@msg	a provider with the id `{id}` is registered already	ID 为 `{id}` 的提供程序已注册
+@msg	job {job} has no results to insert: it was canceled	任务 {job} 没有可插入的结果：它已被取消
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	任务 {job} 已失效：其文档、图像或图像位置已更改，请重新生成
+@msg	missing `provider` (see conceptVector.providers)	缺少 `provider`（参见 conceptVector.providers）
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	没有概念转矢量任务 {job}：它从未生成或已被丢弃（参见 conceptVector.results）
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	没有概念转矢量提供程序 `{name}`（参见 conceptVector.providers）
+@msg	select one image or an unexpanded Image Trace object	请选择一个图像或一个未扩展的图像描摹对象
+@msg	the image is locked or hidden	图像已锁定或隐藏
+@msg	the provider stopped with an internal error: {0}	提供程序因内部错误而停止：{0}
+@msg	the provider's results do not match the request or are malformed	提供程序的结果与请求不符或格式错误
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	结果将超过 {0} 个锚点：请降低细节或选择较少的样式
+@msg	there is no room for the results to the right of the image	图像右侧没有放置结果的空间
+@msg	the image is on a layer with a clipping mask, which would hide the results	图像位于带剪切蒙版的图层上，剪切蒙版会遮住结果
+@msg	the image is on a layer with an opacity mask, which would hide the results	图像位于带不透明度蒙版的图层上，不透明度蒙版会遮住结果
+@msg	the image is on a layer with effects of its own, which would apply to the results	图像位于带有自身效果的图层上，这些效果也会应用到结果上
+@msg	`output` must be "vector"	`output` 必须是 "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` 不接受提示词，且只生成矢量图稿
+@msg	Making the Concept to Vector styles	正在生成概念转矢量样式
 	Banner Hems and Grommets…	横幅折边和扣眼…
 	Banner Hems and Grommets	横幅折边和扣眼
 	Hem	折边

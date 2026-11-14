@@ -7566,6 +7566,46 @@ swatch	Yellow Green	Verde-amarelado
 	Margin	Margem
 	Box	Caixa
 	Swatch	Amostra
+	Concept to Vector	Conceito para vetor
+	Concept to Vector…	Conceito para vetor…
+	Cancel Concept to Vector Job	Cancelar tarefa de Conceito para vetor
+	Cancel Concept to Vector	Cancelar Conceito para vetor
+	Concept to Vector Providers	Provedores de Conceito para vetor
+	Concept to Vector Results	Resultados de Conceito para vetor
+	Generate Concept to Vector Styles	Gerar estilos de Conceito para vetor
+	Insert Concept to Vector Styles	Inserir estilos de Conceito para vetor
+	Offline Image Trace styles, made on this computer	Estilos de Rastreamento de Imagem offline, feitos neste computador
+	Offline styles do not use prompts	Estilos offline não usam prompts
+	Styles	Estilos
+	Ink Lines	Linhas de tinta
+	Flat Color	Cor chapada
+	Detailed Color	Cor detalhada
+	Gray Tones	Tons de cinza
+	Generate	Gerar
+	Insert Selected	Inserir selecionados
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Conceito para vetor parou: seu thread terminou sem resultados (relate este bug)
+@msg	`detail` must be a whole number from 0 to 100	`detail` deve ser um número inteiro de 0 a 100
+@msg	`job` must be a job number from conceptVector.generate	`job` deve ser um número de tarefa de conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` deve listar de 1 a 8 IDs de estilo diferentes de `{pid}` (consulte conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` deve listar IDs de estilo diferentes da tarefa {job}
+@msg	a provider with the id `{id}` is registered already	Já existe um provedor registrado com o ID `{id}`
+@msg	job {job} has no results to insert: it was canceled	A tarefa {job} não tem resultados para inserir: ela foi cancelada
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	A tarefa {job} não se aplica mais: o documento, a imagem ou o posicionamento da imagem mudou; gere novamente
+@msg	missing `provider` (see conceptVector.providers)	`provider` ausente (consulte conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nenhuma tarefa de Conceito para vetor {job}: ela nunca foi criada ou foi descartada (consulte conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nenhum provedor de Conceito para vetor `{name}` (consulte conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Selecione uma imagem ou um objeto de Rastreamento de Imagem não expandido
+@msg	the image is locked or hidden	A imagem está bloqueada ou oculta
+@msg	the provider stopped with an internal error: {0}	O provedor parou com um erro interno: {0}
+@msg	the provider's results do not match the request or are malformed	Os resultados do provedor não correspondem à solicitação ou estão malformados
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Os resultados teriam mais de {0} pontos de ancoragem: reduza Detalhe ou escolha menos estilos
+@msg	there is no room for the results to the right of the image	Não há espaço para os resultados à direita da imagem
+@msg	the image is on a layer with a clipping mask, which would hide the results	A imagem está em uma camada com máscara de corte, que ocultaria os resultados
+@msg	the image is on a layer with an opacity mask, which would hide the results	A imagem está em uma camada com máscara de opacidade, que ocultaria os resultados
+@msg	the image is on a layer with effects of its own, which would apply to the results	A imagem está em uma camada com efeitos próprios, que seriam aplicados também aos resultados
+@msg	`output` must be "vector"	`output` deve ser "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` não aceita prompt e cria apenas arte vetorial
+@msg	Making the Concept to Vector styles	Criando os estilos de Conceito para vetor
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' e 'arguments' não podem ser usados em funções em modo estrito
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Um perfil aceita um único efeito Revolver. Edite as opções do efeito existente.
 @msg	Add Points at Crossings: a path went missing	Adicionar Pontos nos Cruzamentos: um caminho deixou de existir

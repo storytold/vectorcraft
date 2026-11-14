@@ -10256,12 +10256,12 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
     let ctx = egui::Context::default();
-    let click_first = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![]);
-        frame(app, &ctx, vec![]);
-        let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Left to right: the frame's margin, the handle and its spacing, then the first button.
-        let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.center().y);
+    // Clicks the button labeled `label`, which must be the bar's first. In this 800 pt window an
+    // image's four actions take two rows, so the button is found by its label, not by its place.
+    let click_first = |app: &mut VectorcraftApp, label: &str| {
+        let labels = task_bar_labels(app, &ctx);
+        assert_eq!(labels.first().map(|(t, _)| t.as_str()), Some(label), "{labels:?}");
+        let at = labels[0].1.center();
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
         frame(app, &ctx, vec![button(true)]);
@@ -10272,11 +10272,11 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
         st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().unwrap()
     };
     assert!(matches!(first(&app).kind, NodeKind::Image(_)));
-    click_first(&mut app);
+    click_first(&mut app, "Image Trace");
     assert_eq!(first(&app).name.as_deref(), Some("Image Trace"), "the image was traced");
     assert_eq!(app.ui.open_panel, None, "the Image Trace panel is left as it was");
 
-    click_first(&mut app);
+    click_first(&mut app, "Expand");
     let expanded = first(&app);
     assert_ne!(expanded.name.as_deref(), Some("Image Trace"), "the trace was expanded");
     let mut images = 0;
@@ -10309,6 +10309,31 @@ fn the_task_bar_removes_a_selected_images_background() {
     let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
     let px = image::load_from_memory(&st.doc.images[&im.key].bytes).unwrap().to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
+}
+
+/// For one selected image the Contextual Task Bar offers Concept to Vector, which opens its panel;
+/// a rectangle gets no such item.
+#[test]
+fn the_task_bar_opens_concept_to_vector_for_a_selected_image() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255; 4] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let labels = task_bar_labels(&mut app, &ctx);
+    let at = labels.iter().find(|(t, _)| t == "Concept to Vector").map(|(_, r)| r.center()).expect("Concept to Vector is offered");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    assert!(crate::panel_docking::showing(&app.ui, crate::panels::concept_vector::ID), "{}", app.ui.status);
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    let labels = task_bar_labels(&mut app, &ctx);
+    assert!(!labels.is_empty() && !labels.iter().any(|(t, _)| t == "Concept to Vector"), "{labels:?}");
 }
 
 /// The labels the Contextual Task Bar draws in a headless frame (after one to lay it out), with

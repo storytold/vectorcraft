@@ -17,6 +17,7 @@ pub mod colormgmt;
 pub mod colortheme;
 pub mod compositefonts;
 mod compoundshape;
+pub mod conceptvector;
 pub(crate) mod create;
 mod css;
 mod cut;
@@ -347,6 +348,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(panelcmds::specs());
         v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
+        v.extend(conceptvector::specs());
         v.extend(shaper::specs());
         v.extend(brushsym::specs());
         v.extend(patterncmds::specs());

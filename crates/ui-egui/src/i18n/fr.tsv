@@ -7488,6 +7488,46 @@ breakText	Glyphs	Glyphes
 	Margin	Marge
 	Box	Cadre
 	Swatch	Nuance
+	Concept to Vector	Du concept au vecteur
+	Concept to Vector…	Du concept au vecteur…
+	Cancel Concept to Vector Job	Annuler la tâche Du concept au vecteur
+	Cancel Concept to Vector	Annuler Du concept au vecteur
+	Concept to Vector Providers	Fournisseurs Du concept au vecteur
+	Concept to Vector Results	Résultats Du concept au vecteur
+	Generate Concept to Vector Styles	Générer les styles Du concept au vecteur
+	Insert Concept to Vector Styles	Insérer les styles Du concept au vecteur
+	Offline Image Trace styles, made on this computer	Styles de vectorisation de l’image hors ligne, créés sur cet ordinateur
+	Offline styles do not use prompts	Les styles hors ligne n’utilisent pas d’invite
+	Styles	Styles
+	Ink Lines	Traits d’encre
+	Flat Color	Couleur en aplat
+	Detailed Color	Couleur détaillée
+	Gray Tones	Tons de gris
+	Generate	Générer
+	Insert Selected	Insérer la sélection
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Du concept au vecteur s’est arrêté : son thread s’est terminé sans résultat (veuillez signaler ce bogue)
+@msg	`detail` must be a whole number from 0 to 100	`detail` doit être un nombre entier compris entre 0 et 100
+@msg	`job` must be a job number from conceptVector.generate	`job` doit être un numéro de tâche de conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` doit lister de 1 à 8 identifiants de style différents de `{pid}` (voir conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` doit lister des identifiants de style différents de la tâche {job}
+@msg	a provider with the id `{id}` is registered already	Un fournisseur avec l’identifiant `{id}` est déjà enregistré
+@msg	job {job} has no results to insert: it was canceled	La tâche {job} n’a aucun résultat à insérer : elle a été annulée
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	La tâche {job} ne s’applique plus : son document, son image ou le placement de l’image a changé ; générez-la à nouveau
+@msg	missing `provider` (see conceptVector.providers)	`provider` manquant (voir conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Aucune tâche Du concept au vecteur {job} : elle n’a jamais été créée ou a été supprimée (voir conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Aucun fournisseur Du concept au vecteur `{name}` (voir conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Sélectionnez une image ou un objet de vectorisation de l’image non décomposé
+@msg	the image is locked or hidden	L’image est verrouillée ou masquée
+@msg	the provider stopped with an internal error: {0}	Le fournisseur s’est arrêté sur une erreur interne : {0}
+@msg	the provider's results do not match the request or are malformed	Les résultats du fournisseur ne correspondent pas à la demande ou sont mal formés
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Les résultats auraient plus de {0} points d’ancrage : réduisez Détail ou choisissez moins de styles
+@msg	there is no room for the results to the right of the image	Il n’y a pas de place pour les résultats à droite de l’image
+@msg	the image is on a layer with a clipping mask, which would hide the results	L’image est sur un calque avec un masque d’écrêtage, qui masquerait les résultats
+@msg	the image is on a layer with an opacity mask, which would hide the results	L’image est sur un calque avec un masque d’opacité, qui masquerait les résultats
+@msg	the image is on a layer with effects of its own, which would apply to the results	L’image est sur un calque avec ses propres effets, qui s’appliqueraient aussi aux résultats
+@msg	`output` must be "vector"	`output` doit être "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` n’accepte pas d’invite et ne crée que des illustrations vectorielles
+@msg	Making the Concept to Vector styles	Création des styles Du concept au vecteur
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' et 'arguments' ne peuvent pas être utilisés sur les fonctions en mode strict
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Un profil accepte un seul effet Révolution. Modifiez plutôt les options de l’effet existant.
 @msg	Add Points at Crossings: a path went missing	Ajouter des points aux intersections : un tracé a disparu

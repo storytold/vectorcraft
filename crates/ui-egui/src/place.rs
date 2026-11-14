@@ -605,6 +605,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     for (label, cmd, w) in [
         (tl!("Mask"), "object.maskImage", 52.0),
         (tl!("Crop Image"), "ui.cropImage", 84.0),
+        (tl!("Concept to Vector"), crate::panels::concept_vector::OPEN, 120.0),
         (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND, 128.0),
     ] {
         if widgets::flat_button(ui, label, w).clicked() {

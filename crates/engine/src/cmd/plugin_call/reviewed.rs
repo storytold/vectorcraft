@@ -695,11 +695,17 @@ pub(super) const ALLOWED: &[&str] = &[
 
 /// Commands a plug-in may not call although no rule refuses them, in order: they change the
 /// preferences, a tool's options, a drag's state or the font names the whole app knows, run
-/// plug-ins again, or read a file and report where it is on disk.
+/// plug-ins again, read a file and report where it is on disk, or hand an image to a Concept to
+/// Vector provider and its results.
 pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
     "addon.pen.nextSegment",
+    "conceptVector.cancel",
+    "conceptVector.generate",
+    "conceptVector.insert",
+    "conceptVector.providers",
+    "conceptVector.results",
     "effect.refreshDeferred",
     "graphicStyle.setOptions",
     "object.blend.createSpine",
