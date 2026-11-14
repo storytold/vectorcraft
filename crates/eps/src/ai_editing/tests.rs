@@ -7682,6 +7682,74 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     }
 }
 
+/// A link to a graphic style with Transform or Free Distort is kept where the reader reads the
+/// effect. On a compound path of a square and a guide: Transform with the guide inside the square,
+/// moving only, or with Transform Objects off (Transform Patterns on or off), and Free Distort. On a
+/// group holding such a compound path: Transform with the guide inside. Transform that scales where
+/// the guide reaches past the square is written without the link and warns.
+#[test]
+fn a_link_to_a_transform_or_free_distort_style_with_a_guide_is_kept_where_the_reader_reads_it() {
+    // A compound path of a filled square and a guide from `a` to `b`, with appearance `ap`.
+    fn guided(doc: &mut Document, ap: Appearance, a: (f64, f64), b: (f64, f64)) -> Node {
+        let square = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), Appearance::default());
+        let path = shapes::rectangle(Rect::new(a.0, a.1, b.0, b.1));
+        let guide = Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(square), Arc::new(guide)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    }
+    // A document with that compound path (in a group when `grouped`) with effect `e`, linked to a
+    // graphic style of that appearance.
+    let make = |e: vectorcraft_doc::Effect, grouped: bool, a: (f64, f64), b: (f64, f64)| {
+        let mut doc = Document::new(200.0, 100.0);
+        let filled = Appearance::basic(black_fill(), Paint::None, 0.0);
+        let ap = Appearance { effects: vec![e], ..if grouped { Appearance::default() } else { filled.clone() } };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Moved", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = if grouped {
+            let member = guided(&mut doc, filled, a, b);
+            let mut n = Node::group(doc.alloc_id(), vec![Arc::new(member)]);
+            n.appearance = ap.into();
+            n
+        } else {
+            guided(&mut doc, ap, a, b)
+        };
+        n.extras_mut().graphic_style = Some(9);
+        put(&mut doc, n);
+        doc
+    };
+    let scale = || fx("distort.transform", serde_json::json!({"copies": 0, "scaleH": 50.0, "scaleV": 50.0}));
+    let moved = || fx("distort.transform", serde_json::json!({"copies": 0, "moveH": 5.0}));
+    let in_place = || fx("distort.transform", serde_json::json!({"copies": 0, "scaleH": 50.0, "objects": false, "patterns": false}));
+    let patterns_only = || fx("distort.transform", serde_json::json!({"copies": 0, "scaleH": 50.0, "objects": false, "patterns": true}));
+    let slant = || fx("distort.freeDistort", serde_json::json!({"corners": [[0.2, 0.0], [1.2, 0.0], [1.0, 1.0], [0.0, 1.0]]}));
+    let (inside, past) = (((20.0, 20.0), (30.0, 30.0)), ((20.0, 20.0), (90.0, 30.0)));
+    for (what, doc, id, kept) in [
+        ("a compound path scaled, its guide inside", make(scale(), false, inside.0, inside.1), "distort.transform", true),
+        ("a compound path moved, its guide past", make(moved(), false, past.0, past.1), "distort.transform", true),
+        ("a compound path scaled with Transform Objects off, its guide past", make(in_place(), false, past.0, past.1), "distort.transform", true),
+        (
+            "a compound path scaled with Transform Objects off and Transform Patterns on, its guide past",
+            make(patterns_only(), false, past.0, past.1),
+            "distort.transform",
+            true,
+        ),
+        ("a compound path distorted, its guide past", make(slant(), false, past.0, past.1), "distort.freeDistort", true),
+        ("a group scaled, its guide inside", make(scale(), true, inside.0, inside.1), "distort.transform", true),
+        ("a compound path scaled, its guide past", make(scale(), false, past.0, past.1), "distort.transform", false),
+        ("a group scaled, its guide past", make(scale(), true, past.0, past.1), "distort.transform", false),
+    ] {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), !kept, "{what}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        let style = n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str());
+        assert_eq!(style, kept.then_some("Moved"), "{what}: {n:?}");
+        assert_eq!(n.appearance.effects.iter().any(|e| e.id == id), kept, "{what}: {n:?}");
+    }
+}
+
 /// Twist and Transform on an object that isn't linked to a graphic style are not written as a style
 /// of its own: the object reads back without live effects.
 #[test]
