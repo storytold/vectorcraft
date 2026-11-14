@@ -257,6 +257,27 @@ fn shadows_under_a_groups_or_an_objects_transform_expand_appearance_as_the_canva
     }
 }
 
+/// Each copy of a Transform effect draws the drop shadow listed before the effect under itself,
+/// scaled with it, and Expand Appearance keeps those shadows: the square (20..40) has its shadow
+/// 20 pt to its right, and its copy scaled 200 % and moved 80 pt down (10..50 across, 90..130
+/// down) has its own 40 pt to its right.
+#[test]
+fn each_copys_shadow_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}}));
+    let before = render(&s);
+    assert_eq!(before.pixel(70, 110), [0, 255, 0, 255], "the copy's shadow");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
 /// A group's Transform effect runs after its member's own Offset Path in Expand Appearance as on
 /// the canvas: the 100 pt square offset to 120 pt and scaled by half expands 60 pt wide.
 #[test]

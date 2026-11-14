@@ -1034,14 +1034,39 @@ fn in_place_pastes_put_a_copy_on_each_artboard_named() {
         // `artboard` wins over `artboards`.
         let ids = ids_of(&s.execute(cmd, &json!({"artboard": 2, "artboards": [0, 3]})).unwrap());
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 5.0), "{cmd}");
-        // A list that is empty, names an artboard the document lacks or names one twice, or isn't a
-        // list: an error, and nothing pasted.
-        let before = doc(&s).clone();
-        for bad in [json!([]), json!([0, 4]), json!([1, 1]), json!([0, -1]), json!(2), json!("0,1")] {
-            assert!(s.execute(cmd, &json!({"artboards": bad})).is_err(), "{cmd} with artboards {bad}");
+        // A list that is empty, names an artboard the document lacks or names one twice, holds a
+        // value that is not a whole number, or isn't a list, and an `artboard` that is not a whole
+        // number or not an artboard: an error naming the fault, and nothing pasted. Both keys are
+        // checked when both are given.
+        let (before, undo) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+        let (not_list, missing, not_whole) = (
+            "`artboards` must be a list of artboard indices",
+            "`artboards` names an artboard the document does not have",
+            "`artboards` must contain whole numbers",
+        );
+        let cases = [
+            (json!({"artboards": []}), not_list),
+            (json!({"artboards": 2}), not_list),
+            (json!({"artboards": "0,1"}), not_list),
+            (json!({"artboards": [0, 4]}), missing),
+            (json!({"artboards": [1, 1]}), "`artboards` names an artboard twice"),
+            (json!({"artboards": [0, -1]}), not_whole),
+            (json!({"artboards": [0, 1.5]}), not_whole),
+            (json!({"artboards": [4, "1"]}), not_whole),
+            (json!({"artboard": 1, "artboards": [7]}), missing),
+            (json!({"artboard": 1, "artboards": ["1"]}), not_whole),
+            (json!({"artboard": 4}), "`artboard` must be the index of an artboard of the document"),
+            (json!({"artboard": -1}), "`artboard` must be a whole number"),
+            (json!({"artboard": 1.5}), "`artboard` must be a whole number"),
+            (json!({"artboard": "1"}), "`artboard` must be a whole number"),
+            (json!({"artboard": null}), "`artboard` must be a whole number"),
+            (json!({"artboard": "1", "artboards": [9]}), "`artboard` must be a whole number"),
+        ];
+        for (p, want) in cases {
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            assert_eq!(e, format!("invalid parameters for `{cmd}`: {want}"), "{cmd} {p}");
         }
-        assert!(s.execute(cmd, &json!({"artboard": 1, "artboards": [7]})).is_err(), "{cmd}: a bad list with `artboard`");
-        assert_eq!(doc(&s), &before, "{cmd}");
+        assert_eq!((doc(&s), s.doc().unwrap().history.undo.len()), (&before, undo), "{cmd}");
     }
 }
 

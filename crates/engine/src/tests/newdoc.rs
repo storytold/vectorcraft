@@ -683,6 +683,9 @@ fn the_new_document_links_from_the_profile_file() {
 /// is a warning.
 #[test]
 fn a_profile_brings_the_color_profile_its_file_carries() {
+    if !super::in_own_process("tests::newdoc::a_profile_brings_the_color_profile_its_file_carries") {
+        return;
+    }
     use vectorcraft_color::cms;
     let (mut s, dir) = with_profiles("icc");
     let builtin = cms::profiles().into_iter().find(|p| p.kind == cms::ProfileKind::Rgb && p.builtin && p.name != cms::SRGB).unwrap();

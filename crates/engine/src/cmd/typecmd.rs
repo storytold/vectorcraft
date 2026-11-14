@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Vertical",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads; no undo step when every object is already vertical → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, true)
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads; no undo step when every object is already horizontal → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered; no undo step when every object already has the setting → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "System Layout",
             [],
             None,
-            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting → {on}",
+            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting. No undo step when the document and every text object already have the setting → {on}",
             has_doc,
             system_layout
         ),
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fractional Widths",
             [],
             None,
-            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters → {on, ids}",
+            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters. No undo step when every object already has the setting → {on, ids}",
             has_selection,
             fractional_widths
         ),
@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Text",
             [],
             None,
-            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style); no undo step when no object changes (each already has the text in one style, every paragraph with the first one's attributes, and no ruby) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
             has_doc,
             set_text
         ),
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Area",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step; no undo step when no frame changes (dx and dy both 0)",
             has_doc,
             reshape_area
         ),
@@ -113,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Path",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path)",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path); no undo step when the path does not change (dx and dy both 0)",
             has_doc,
             reshape_path
         ),
@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Type Path Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path)",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
             has_doc,
             set_path_handle
         ),
@@ -131,7 +131,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fit Headline",
             ["Type"],
             None,
-            "{ids?|id?} track the first line of area type so it fills the frame width → {tracking}",
+            "{ids?|id?} track the first line of area type so it fills the frame width; no undo step when the first line already has that tracking → {tracking}",
             has_selection,
             fit_headline
         ),
@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -149,7 +149,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ruby…",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
+            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead; no undo step when the ruby does not change (the same reading and options again, or `remove` where there is none) → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
             has_selection,
             ruby
         ),
@@ -157,24 +157,30 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
-/// every frame of their threads, in one undo step.
+/// every frame of their threads, in one undo step (none when nothing changes).
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
-    s.edit("Text Orientation", |d, _| {
+    // When every object already has the orientation, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Text Orientation", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.vertical = vertical;
-            refresh_bounds(t);
+            if t.vertical != vertical {
+                t.vertical = vertical;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object and every frame of their threads, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step
+/// (none when nothing changes).
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -182,29 +188,38 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
-    s.edit("Optical Margin Alignment", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Optical Margin Alignment", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.optical_margin = on;
-            refresh_bounds(t);
+            if t.optical_margin != on {
+                t.optical_margin = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Character panel menu › System Layout: set `on` (without it, the opposite of the document's
-/// setting) on the document and every text object, in one undo step. Off is the default.
+/// setting) on the document and every text object, in one undo step (none when nothing changes).
+/// Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
     let on = switch_or(p, "on", !current, "type.systemLayout")?;
-    s.edit("System Layout", |d, _| {
+    // When the document and every text object already have the setting, the document and its undo
+    // history stay as they are.
+    super::colorcmds::edit_if_changed(s, "System Layout", |_, d| {
+        let mut changed = d.setup.system_layout != on;
         d.setup.system_layout = on;
         let mut ids = vec![];
         d.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
+            if matches!(&n.kind, NodeKind::Text(t) if t.system_layout != on) {
                 ids.push(n.id);
             }
         });
@@ -214,15 +229,16 @@ fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
             };
             t.system_layout = on;
             refresh_bounds(t);
+            changed = true;
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({ "on": on }))
 }
 
 /// Character panel menu › Fractional Widths: set `on` (without it, the opposite of the first
 /// object's setting) on every selected text object and every frame of their threads, in one undo
-/// step. On is the default.
+/// step (none when nothing changes). On is the default.
 fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Fractional Widths")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -230,22 +246,27 @@ fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
-    s.edit("Fractional Widths", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Fractional Widths", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.fractional_widths = on;
-            refresh_bounds(t);
+            if t.fractional_widths != on {
+                t.fractional_widths = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Ruby: set or remove the ruby (furigana) over a byte range of the selected type in one
-/// undo step. Without `start`/`end` the range is all the text; a new reading replaces the ruby
-/// over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
+/// undo step (none when nothing changes). Without `start`/`end` the range is all the text; a new
+/// reading replaces the ruby over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
 fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.ruby";
     let ids = text_targets(s, p, C)?;
@@ -272,7 +293,8 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let overhang = switch_or(p, "overhang", true, C)?;
     let mut first: Option<Value> = None;
-    s.edit("Ruby", |d, _| {
+    // The same reading again, or a removal where there is no ruby, is no undo step.
+    edit_if_nodes_changed(s, "Ruby", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
@@ -299,7 +321,7 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
                 first = Some(serde_json::to_value(&t.ruby).unwrap_or(Value::Null));
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>(), "ruby": first.unwrap_or(Value::Null)}))
 }
@@ -737,6 +759,19 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
+/// [`Session::edit`] for a type command that may set what the type already has: `f` runs on a
+/// copy of the document, and it becomes an undo step only when one of the objects `ids` differs
+/// afterwards or `f` returns true for a change of its own elsewhere (a graph's kept label styles).
+/// When nothing changed, the document, its undo and redo steps and its saved state stay as they
+/// were. Only the objects are compared, not the whole document, whose embedded images can be large.
+fn edit_if_nodes_changed<T>(s: &mut Session, label: &str, ids: &[NodeId], f: impl FnOnce(&mut Document) -> Result<(T, bool)>) -> Result<T> {
+    super::colorcmds::edit_if_changed(s, label, |before, d| {
+        let (v, other) = f(d)?;
+        let changed = other || ids.iter().any(|id| before.node(*id) != d.node(*id));
+        Ok((v, changed))
+    })
+}
+
 pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let ids = targets(s, p)?;
     let t = text_ids(&s.doc()?.doc, &ids);
@@ -831,7 +866,8 @@ pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: i
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
     let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
-    s.edit("Typing", |d, _| {
+    // The text the type already has is no undo step.
+    edit_if_nodes_changed(s, "Typing", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let style = t.first_style();
@@ -842,7 +878,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
             t.ruby.clear();
             refresh_bounds(t);
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
@@ -915,7 +951,8 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
     // The fonts the styled characters are set in, for the warning.
     let mut set = std::collections::BTreeSet::new();
-    s.edit("Character", |d, _| {
+    // Attributes the characters already have are no undo step.
+    edit_if_nodes_changed(s, "Character", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let size = size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, C)).transpose()?;
@@ -990,8 +1027,9 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again (sizes as given,
         // not in a scaled label's own units).
+        let mut labels_changed = false;
         if range.is_none() {
-            super::graph::capture_label_styles(d, &ids, &|st| {
+            labels_changed = super::graph::capture_label_styles(d, &ids, &|st| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
@@ -1034,7 +1072,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             });
         }
-        Ok(())
+        Ok(((), labels_changed))
     })?;
     let mut out = with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
     if let Some(w) = super::fonts::set_font_warning(set) {
@@ -1332,14 +1370,16 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
         items.push((id, refs));
     }
     let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
-    s.edit("Reshape Type Area", |doc, _| {
+    // Anchors moved by no distance are no undo step.
+    let ids: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Reshape Type Area", &ids, |doc| {
         for (id, refs) in &items {
             let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(*id)) };
             if !reshape_area_with(t, |t| t.move_area_anchors(refs, d)) {
                 return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     ok()
 }
@@ -1359,7 +1399,8 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
         return Err(bad(C, "not type on a path outside perspective"));
     }
-    s.edit("Reshape Type Path", |doc, _| {
+    // Anchors moved by no distance are no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
         let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
         let before = t.kind.clone();
         let within = |t: &TextObject| {
@@ -1370,7 +1411,7 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }
         refresh_bounds(t);
-        Ok(())
+        Ok(((), false))
     })?;
     ok()
 }
@@ -1388,7 +1429,8 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
         return Err(bad(C, "not type on a path outside perspective"));
     }
-    s.edit("Reshape Type Path", |doc, _| {
+    // A handle moved to where it is is no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
         let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
         let before = t.kind.clone();
         let within = |t: &TextObject| {
@@ -1399,7 +1441,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }
         refresh_bounds(t);
-        Ok(())
+        Ok(((), false))
     })?;
     ok()
 }
@@ -1410,6 +1452,8 @@ mod block;
 pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
+#[cfg(test)]
+mod noop_tests;
 
 /// Width of the first line and of the space it can fill, with `tracking` on the first paragraph.
 /// The third value is where the first line ends in the plain text.
@@ -1451,7 +1495,9 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
         plans.push((*id, (lo * 10.0).floor() / 10.0));
     }
     let first = plans.first().map(|p| p.1).ok_or_else(|| bad(C, "select area type whose first line can fit its frame"))?;
-    s.edit("Fit Headline", |d, _| {
+    // A headline that already has its fitted tracking is no undo step.
+    let fitted: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Fit Headline", &fitted, |d| {
         for (id, tr) in &plans {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                 let end = t.plain_text().find('\n').unwrap_or(usize::MAX).min(vectorcraft_text::edit::runs_len(&t.runs));
@@ -1459,7 +1505,7 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
                 refresh_bounds(t);
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({ "tracking": first }))
 }
