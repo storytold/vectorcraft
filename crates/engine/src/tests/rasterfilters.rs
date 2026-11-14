@@ -5,6 +5,7 @@
 //! as images of the effected object.
 
 use serde_json::{Value, json};
+use vectorcraft_color::cms;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::Rect;
 use vectorcraft_render::{Rendered, Renderer};
@@ -173,16 +174,22 @@ fn each_effect_changes_the_canvas_and_draws_the_same_twice() {
         EFFECTS.into_iter().chain(ARTISTIC).chain(BRUSH_STROKES).chain(DISTORT).chain(PIXELATE).chain(SKETCH).chain(TEXTURE).chain(VIDEO)
     {
         let (mut s, g) = striped();
+        // Every color drawn goes through the process-wide color settings. A test that changes them
+        // runs in a process of its own (`crate::tests::in_own_process`).
+        let colors = cms::active();
+        assert_eq!(cms::active_settings(), cms::ColorSettings::default(), "{id}: another test left the color settings changed");
         let plain = render(&s);
         let params: Value = serde_json::from_str(params).unwrap();
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();
         let a = render(&s);
-        assert!(mean_diff(&plain, &a) > 0.0005, "{id} shows: {}", mean_diff(&plain, &a));
-        assert_eq!(a.pixels, render(&s).pixels, "{id} is deterministic");
+        let again = render(&s);
         // The multithreaded pipeline draws the same.
         let mut mt = Renderer::new();
         mt.threads = 4;
         let b = mt.render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true);
+        assert!(std::sync::Arc::ptr_eq(&colors, &cms::active()), "{id}: another test changed the color settings while this one drew");
+        assert!(mean_diff(&plain, &a) > 0.0005, "{id} shows: {}", mean_diff(&plain, &a));
+        assert_eq!(a.pixels, again.pixels, "{id} is deterministic");
         assert!(mean_diff(&a, &b) < 0.002, "{id}: multithreaded differs by {}", mean_diff(&a, &b));
     }
 }
