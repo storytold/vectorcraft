@@ -239,19 +239,29 @@ fn inks(c: &Color) -> [f32; 4] {
     let key = c.key();
     let cms = cms::active();
     SEPARATED.with(|s| {
-        let (owner, seen) = &mut *s.borrow_mut();
+        let kept = &mut *s.borrow_mut();
+        let i = match kept.iter().position(|(owner, _)| Arc::ptr_eq(owner, &cms)) {
+            Some(i) => i,
+            None => {
+                if kept.len() >= KEPT_TABLES {
+                    kept.remove(0);
+                }
+                kept.push((cms.clone(), HashMap::new()));
+                kept.len() - 1
+            }
+        };
+        let seen = &mut kept[i].1;
         // Large enough for the many colours of gradient meshes and blends, which otherwise cleared
         // it over and over and separated every colour through the profile again.
-        if !owner.as_ref().is_some_and(|o| Arc::ptr_eq(o, &cms)) || seen.len() >= 1 << 16 {
+        if seen.len() >= 1 << 16 {
             seen.clear();
-            *owner = Some(cms.clone());
         }
         *seen.entry(key).or_insert_with(|| cms.to_cmyk(c, cms.settings().intent))
     })
 }
 
-/// Separated colours, for the colour settings they were separated with.
-type Separated = (Option<Arc<Cms>>, HashMap<[u32; 5], [f32; 4]>);
+/// Separated colours, for each of the colour settings they were separated with, the newest last.
+type Separated = Vec<(Arc<Cms>, HashMap<[u32; 5], [f32; 4]>)>;
 
 thread_local! {
     static SEPARATED: RefCell<Separated> = RefCell::default();
@@ -276,31 +286,37 @@ impl InkLut {
     }
 }
 
-/// A table built for the colour settings it was built with, and its generation (see [`cached`]).
-type Cached<T> = Mutex<Option<(Arc<Cms>, Arc<T>, u64)>>;
+/// Tables built for the colour settings they were built with, and their generations, the newest
+/// last (see [`cached`]).
+type Cached<T> = Mutex<Vec<(Arc<Cms>, Arc<T>, u64)>>;
+
+/// How many tables each [`Cached`] keeps: documents drawn side by side through their own profiles
+/// don't make them again and again.
+const KEPT_TABLES: usize = 4;
 
 /// The last table generation handed out: images made with a table are cached under its
 /// generation (see [`crate::images`]), and none is ever reused.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-static DISPLAY: Cached<InkLut> = Mutex::new(None);
+static DISPLAY: Cached<InkLut> = Mutex::new(Vec::new());
 /// Screen colours → [`Ink::Cmy`] and [`Ink::K`] values (placed images).
-static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(None);
+static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(Vec::new());
 
-/// The table in `slot` for the active colour settings, built by `build` when they changed, and
-/// its generation.
+/// The table in `slot` for the active colour settings, built by `build` when none is kept for
+/// them, and its generation.
 fn cached<T>(slot: &Cached<T>, build: impl FnOnce(&Cms) -> T) -> (Arc<T>, u64) {
     let cms = cms::active();
     let mut s = slot.lock().unwrap_or_else(|e| e.into_inner());
-    match &*s {
-        Some((owner, t, g)) if Arc::ptr_eq(owner, &cms) => (t.clone(), *g),
-        _ => {
-            let t = Arc::new(build(&cms));
-            let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-            *s = Some((cms, t.clone(), g));
-            (t, g)
-        }
+    if let Some((_, t, g)) = s.iter().find(|(owner, _, _)| Arc::ptr_eq(owner, &cms)) {
+        return (t.clone(), *g);
     }
+    let t = Arc::new(build(&cms));
+    let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    if s.len() >= KEPT_TABLES {
+        s.remove(0);
+    }
+    s.push((cms, t.clone(), g));
+    (t, g)
 }
 
 /// [`compose`] puts at least this many pixels in each band but the last.
@@ -583,6 +599,18 @@ mod tests {
         let (_, warm) = ink_image(&key, &pm, Ink::Display.darkened(0.25), None, false);
         assert_eq!(p25.data(), warm.data());
         assert_eq!(pm.data()[0].r, 204, "source pixels remain unchanged");
+    }
+
+    #[test]
+    fn tables_of_two_color_settings_are_kept_side_by_side() {
+        // Two documents drawn in turn through their own settings each keep their tables.
+        let settings = || Arc::new(Cms::new(&cms::ColorSettings::default()).unwrap());
+        let (a, b) = (settings(), settings());
+        let tables = |c: &Arc<Cms>| cms::with_active(c.clone(), || (display_lut().1, separation().1));
+        let (first_a, first_b) = (tables(&a), tables(&b));
+        assert_ne!(first_a, first_b, "each settings get their own tables");
+        assert_eq!(tables(&a), first_a, "the first settings' tables are not made again");
+        assert_eq!(tables(&b), first_b, "the second settings' tables are not made again");
     }
 
     #[test]

@@ -149,6 +149,34 @@ fn loading_an_assigned_profile_again_keeps_it_in_use() {
     assert_eq!(cms::working_settings(), working);
 }
 
+/// A document behind the front one draws through its own assigned profile: loading that profile's
+/// file again or removing it redraws the document, and the front document stays as it was.
+#[test]
+fn loading_or_removing_a_back_documents_profile_redraws_it() {
+    const NAME: &str = "Back RGB P";
+    let _g = settings();
+    let dir = fresh_dir("back-assigned");
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("back.icc");
+    std::fs::write(&path, icc_named(NAME)).unwrap();
+    let mut s = session();
+    let load = |s: &mut Session| assert_eq!(exec(s, "color.loadProfile", json!({"path": path.to_str().unwrap()}))["name"], NAME);
+    load(&mut s);
+    exec(&mut s, "edit.assignProfile", json!({"rgb": NAME}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let revisions = |s: &Session| s.documents().iter().map(|d| d.revision).collect::<Vec<_>>();
+    let before = revisions(&s);
+    load(&mut s);
+    let loaded = revisions(&s);
+    assert!(loaded[0] > before[0], "the back document assigned the profile redraws after a load");
+    assert_eq!(loaded[1], before[1], "the front document does not use it");
+    exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    let removed = revisions(&s);
+    assert!(removed[0] > loaded[0], "the back document assigned the profile redraws after a removal");
+    assert_eq!(removed[1], loaded[1], "the front document does not use it");
+}
+
 /// A batch that assigns a profile and then changes the color mode, as Document Setup's OK does,
 /// converts the colors through the profile it assigns.
 #[test]
