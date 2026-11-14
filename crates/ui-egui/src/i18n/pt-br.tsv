@@ -7549,6 +7549,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	No bridge of this width fits across the selected art	Nenhuma ponte desta largura cabe na arte selecionada
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` deve estar entre -180 e 180 graus
+@msg	`roundness` must be from 1 to 100%	`roundness` deve estar entre 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa e Linhas de Descasque…
 	Weed Box and Lines	Caixa e Linhas de Descasque

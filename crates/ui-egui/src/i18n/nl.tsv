@@ -526,6 +526,8 @@
 @msg	No bridge of this width fits across the selected art	Geen brug van deze breedte past over de geselecteerde illustratie
 @msg	Some islands could not be joined to the area around the art	Sommige eilanden konden niet worden verbonden met het gebied rond de illustratie
 @msg	`width` must be from {lo} to {hi} pt	`width` moet van {lo} tot {hi} pt zijn
+@msg	`angle` must be from -180 to 180 degrees	`angle` moet van -180 tot 180 graden zijn
+@msg	`roundness` must be from 1 to 100%	`roundness` moet van 1 tot 100% zijn
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` moet een geheel getal van 1 tot {MAX_BRIDGES_PER_ISLAND} zijn
 
 	File	Bestand

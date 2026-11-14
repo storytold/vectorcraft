@@ -2280,6 +2280,36 @@ fn three_d_refusals_are_translated_in_every_complete_catalog() {
     assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`) and the Scissors' (`path.split`
+/// `t`) show in every complete-message language with the key and the range numbers as given; the
+/// error the command returns stays English.
+#[test]
+fn eraser_and_scissors_range_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    let refusals = [
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "angle": 200}), "`angle`", ["-180", "180"]),
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "roundness": 0}), "`roundness`", ["1", "100"]),
+        ("path.split", json!({"id": id, "segment": 0, "t": 1.5}), "`t`", ["0", "1"]),
+    ];
+    for (cmd, p, key, numbers) in &refusals {
+        let e = s.execute(cmd, p).unwrap_err().to_string();
+        assert!(e.starts_with(&format!("invalid parameters for `{cmd}`: ")) && e.contains(key) && e.contains(" must be from "), "{e}");
+        assert_eq!(message(Lang::EN, &e), e);
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be from ") && shown.contains(&format!("`{cmd}`")) && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(
+        message(de(), &s.execute("path.eraseRegion", &json!({"points": [[10, 10], [60, 10]], "roundness": 101})).unwrap_err().to_string()),
+        "ungültige Parameter für `path.eraseRegion`: `roundness` muss zwischen 1 und 100 % liegen"
+    );
+}
+
 /// A 3D effect's refusal shows in the interface language whole, with the effect's translated
 /// name, and with its numbers, the parameter keys it names and a symbol's name as given; the
 /// error the command returns stays English.

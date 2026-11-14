@@ -7565,6 +7565,8 @@ shape	Open	Открытый
 @msg	No bridge of this width fits across the selected art	Мостик такой ширины не помещается поперёк выделенной графики
 @msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
 @msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` должно быть от -180 до 180 градусов
+@msg	`roundness` must be from 1 to 100%	`roundness` должно быть от 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка и линии выборки…
 	Weed Box and Lines	Рамка и линии выборки

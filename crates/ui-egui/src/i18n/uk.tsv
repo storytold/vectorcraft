@@ -7086,6 +7086,8 @@ breakText	Glyphs	Гліфи
 @msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` має бути від -180 до 180 градусів
+@msg	`roundness` must be from 1 to 100%	`roundness` має бути від 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка й лінії вибірки…
 	Weed Box and Lines	Рамка й лінії вибірки

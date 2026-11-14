@@ -7072,6 +7072,8 @@ breakText	Glyphs	Glyphen
 @msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`angle` must be from -180 to 180 degrees	`angle` muss zwischen -180 und 180 Grad liegen
+@msg	`roundness` must be from 1 to 100%	`roundness` muss zwischen 1 und 100 % liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
 	Weed Box and Lines…	Entgitterrahmen und -linien…
 	Weed Box and Lines	Entgitterrahmen und -linien

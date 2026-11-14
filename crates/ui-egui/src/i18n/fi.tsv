@@ -7511,6 +7511,8 @@ breakText	Glyphs	Merkit
 @msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle`-arvon on oltava -180–180 astetta
+@msg	`roundness` must be from 1 to 100%	`roundness`-arvon on oltava 1–100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Karsintakehys ja -viivat…
 	Weed Box and Lines	Karsintakehys ja -viivat

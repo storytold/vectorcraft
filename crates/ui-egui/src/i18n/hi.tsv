@@ -8868,6 +8868,8 @@ theme	Appearance	अपीयरेंस
 @msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
 	Weed Box and Lines	वीड बॉक्स और लाइनें

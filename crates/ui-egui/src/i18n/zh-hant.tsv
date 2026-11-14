@@ -7122,6 +7122,8 @@ breakText	Glyphs	字符
 @msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必須介於 -180 到 180 度之間
+@msg	`roundness` must be from 1 to 100%	`roundness` 必須介於 1 到 100% 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
 	Weed Box and Lines…	除廢框與除廢線…
 	Weed Box and Lines	除廢框與除廢線
