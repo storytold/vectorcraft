@@ -2852,6 +2852,72 @@ fn f(text: &str, n: usize) -> Result<u32, String> {
     assert!(message_literals_in(&["effects"]).contains("the SVG filter isn't valid XML: {e}"));
 }
 
+/// The scan reads the message a `.map_err` closure gives with `return`, also from inside an `if`
+/// branch or a `let` statement but not from a closure inside it, the last expression after a block
+/// statement with no `;`, and the values a `let` statement gives a local that the closure returns,
+/// and not those of a local the closure only passes elsewhere or writes into a format string, by
+/// name or as a `format!` argument.
+#[test]
+fn message_scan_reads_returns_and_tails_and_skips_locals() {
+    let code = r#"
+fn f(text: &str) -> Result<u32, String> {
+    let a = read(text).map_err(|_| {
+        return "the file cannot be read".to_string();
+    })?;
+    let b = read(text).map_err(|e| {
+        if e.is_io() {
+            return format!("the disk failed: {e}");
+        }
+        e.to_string()
+    })?;
+    let c = read(text).map_err(|e| {
+        if e.is_io() { cleanup(); }
+        format!("the file is cut short: {e}")
+    })?;
+    let d = read(text).map_err(|e| {
+        if e.is_io() { cleanup(); }
+        let level = if e.is_io() { "warning" } else { "error" };
+        log_failure(level, &e);
+        format!("the file is not a library: {e}")
+    })?;
+    let g = read(text).map_err(|e| {
+        let kind = match e.kind() {
+            Kind::Gone => return GONE.into(),
+            _ => { "some other kind" }
+        };
+        format!("the {kind} file is wrong")
+    })?;
+    let h = read(text).map_err(|e| {
+        let name = e.name().unwrap_or_else(|| return "unnamed source");
+        let note = e.note().map(move |n| { return "noted source" });
+        format!("the source {name} is gone")
+    })?;
+    let k = read(text).map_err(|e| {
+        let why = if e.is_deep() { format!("its objects are nested too deep ({e})") } else { e.to_string() };
+        FormatError::NotVectorcraft(why)
+    })?;
+    let m = read(text).map_err(|e| {
+        let level = if e.is_io() { "warning" } else { "error" };
+        format!("the file failed with a {}", level)
+    })?;
+    Ok(a)
+}
+"#;
+    let consts = [("GONE", "the file is gone")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = [
+        "the file cannot be read",
+        "the disk failed: {e}",
+        "the file is cut short: {e}",
+        "the file is not a library: {e}",
+        "the file is gone",
+        "the {kind} file is wrong",
+        "the source {name} is gone",
+        "its objects are nested too deep ({e})",
+        "the file failed with a {_1}",
+    ];
+    assert_eq!(source_messages(code, &[], &consts), want);
+}
+
 /// The scan reads the messages of an error handler that a `.map_err(name)` names: a closure bound
 /// to that name, up to its `;`, and a function of that name, each of its statements.
 #[test]
@@ -4464,27 +4530,72 @@ fn statement(code: &str) -> &str {
 
 /// Where each value a closure can return starts, `body` being the text after its parameters: the
 /// body itself, each block or `if`/`else` branch in it (`{ ACB_CUT_SHORT.into() }`, not the
-/// `{` of a `json!({…})` value), each `match` arm (`=>`) and each statement after a `;` (the
-/// last expression of a block or a function body), up to the bracket that closes the call the
-/// closure is given to or the function.
+/// `{` of a `json!({…})` value), each `match` arm (`=>`), each statement after a `;` or after a
+/// block statement's `}` (the last expression of a block or a function body) and the value of
+/// each `return`, up to the bracket that closes the call the closure is given to or the function.
+/// The blocks, arms and statements inside a `let` statement give a local its value, so they count
+/// only when the local's name is used, outside a string literal and a `format!`, in a value the closure returns
+/// (`let why = if … { format!("…") } else { … }; Error(why)`), and not when the local only goes
+/// elsewhere (`let level = if … { "warning" } else { "error" }; log(level);`). A `return` counts
+/// wherever it is, except inside a closure the body holds (`unwrap_or_else(|| return …)`).
 fn closure_returns(body: &str) -> Vec<&str> {
-    let mut out = vec![body];
-    let (mut depth, mut chars) = (0usize, body.char_indices());
+    let ident = |c: char| c.is_alphanumeric() || c == '_';
+    // The name a `let` statement starting at `at` binds (empty for a pattern), if it is one.
+    let let_at = |at: usize| {
+        let rest = body[at..].trim_start().strip_prefix("let").filter(|r| r.starts_with(char::is_whitespace))?.trim_start();
+        let rest = rest.strip_prefix("mut ").map_or(rest, str::trim_start);
+        Some(&rest[..rest.find(|c: char| !ident(c)).unwrap_or(rest.len())])
+    };
+    // Each place a value starts, with the `let` whose local it gives a value to, if any, and
+    // whether a `return` gives it.
+    let mut found: Vec<(&str, Option<&str>, bool)> = vec![(body, None, false)];
+    // For each open bracket, the `quiet` and `in_let` of the text around it: `quiet` names the
+    // `let` that a value inside the bracket belongs to, `in_let` the `let` the statement is.
+    let mut outer = vec![];
+    let (mut quiet, mut in_let, mut chars) = (None, let_at(0), body.char_indices());
+    // Where the innermost closure in the body that a `return` would leave ends.
+    let mut inner_closure_end = 0;
     while let Some((at, c)) = chars.next() {
         match c {
-            '(' | '[' => depth += 1,
-            '{' => {
-                depth += 1;
-                if !body[..at].trim_end().ends_with('(') {
-                    out.push(&body[at + 1..]);
+            '|' if at >= inner_closure_end => {
+                let before = body[..at].trim_end();
+                let after_operator = before.ends_with(['(', ',', '=']) && !["==", "!=", "<=", ">="].iter().any(|op| before.ends_with(op));
+                let opens = after_operator || (before.ends_with("move") && !before[..before.len() - 4].ends_with(ident));
+                let params_end = if body[at + 1..].starts_with('|') { Some(at + 1) } else { body[at + 1..].find('|').map(|end| at + 1 + end) };
+                if let Some(params_end) = params_end.filter(|_| opens) {
+                    inner_closure_end = params_end + 1 + statement(&body[params_end + 1..]).len();
                 }
             }
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => depth = d,
-                None => break,
-            },
-            ';' => out.push(&body[at + 1..]),
-            '=' if body[at + 1..].starts_with('>') => out.push(&body[at + 2..]),
+            '(' | '[' | '{' => {
+                outer.push((quiet, in_let));
+                if c == '{' && !body[..at].trim_end().ends_with('(') {
+                    found.push((&body[at + 1..], quiet.or(in_let), false));
+                }
+                quiet = quiet.or(in_let);
+                in_let = if c == '{' { let_at(at + 1) } else { None };
+            }
+            ')' | ']' | '}' => {
+                let Some(around) = outer.pop() else { break };
+                (quiet, in_let) = around;
+                if c == '}' {
+                    found.push((&body[at + 1..], quiet.or(in_let), false));
+                    if in_let.is_none() {
+                        in_let = let_at(at + 1);
+                    }
+                }
+            }
+            ';' => {
+                found.push((&body[at + 1..], quiet, false));
+                in_let = let_at(at + 1);
+            }
+            '=' if body[at + 1..].starts_with('>') => found.push((&body[at + 2..], quiet.or(in_let), false)),
+            'r' if at >= inner_closure_end
+                && body[at..].starts_with("return")
+                && !body[..at].ends_with(ident)
+                && !body[at + "return".len()..].starts_with(ident) =>
+            {
+                found.push((&body[at + "return".len()..], None, true));
+            }
             '"' => loop {
                 match chars.next() {
                     Some((_, '\\')) => {
@@ -4495,6 +4606,69 @@ fn closure_returns(body: &str) -> Vec<&str> {
                 }
             },
             _ => {}
+        }
+    }
+    // The values the closure returns: each `return`, and each expression that ends its block
+    // rather than a `;` (a block's start, which spans the whole block, aside).
+    let returned: Vec<String> = found
+        .iter()
+        .filter(|&&(start, held, by_return)| {
+            let tail = !start.trim_start().starts_with('{') && !start[statement(start).len()..].starts_with(';');
+            held.is_none() && (by_return || tail)
+        })
+        .map(|(start, ..)| without_format_args(&without_strings(statement(start))))
+        .collect();
+    let used = |name: &str| !name.is_empty() && returned.iter().any(|value| holds_ascii_word(value, name));
+    found.into_iter().filter(|&(_, held, _)| held.is_none_or(used)).map(|(start, ..)| start).collect()
+}
+
+/// `code`, its string literals already emptied, with the arguments of each `format!(…)` removed:
+/// a value written into a format string is part of a message, not one of its own.
+fn without_format_args(code: &str) -> String {
+    let (mut out, mut rest) = (String::new(), code);
+    while let Some(at) = rest.find("format!(") {
+        out.push_str(&rest[..at + "format!(".len()]);
+        rest = &rest[at + "format!(".len()..];
+        let mut depth = 0usize;
+        let end = rest.char_indices().find_map(|(i, c)| match c {
+            '(' | '[' | '{' => {
+                depth += 1;
+                None
+            }
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => {
+                    depth = d;
+                    None
+                }
+                None => Some(i),
+            },
+            _ => None,
+        });
+        rest = &rest[end.unwrap_or(rest.len())..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `code` with the text of its string literals removed, the quotes kept.
+fn without_strings(code: &str) -> String {
+    let (mut out, mut chars) = (String::new(), code.chars());
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '"' {
+            loop {
+                match chars.next() {
+                    Some('\\') => {
+                        chars.next();
+                    }
+                    Some('"') => {
+                        out.push('"');
+                        break;
+                    }
+                    Some(_) => {}
+                    None => break,
+                }
+            }
         }
     }
     out
