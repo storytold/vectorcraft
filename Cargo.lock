@@ -979,6 +979,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-codepage"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
+
+[[package]]
 name = "craft-docpath"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
@@ -986,12 +991,19 @@ source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7
 [[package]]
 name = "craft-dxf"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=119415f46f601e20b9bc6b1b4d6979ceda86d88e#119415f46f601e20b9bc6b1b4d6979ceda86d88e"
+source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
 dependencies = [
+ "craft-codepage",
  "encoding_rs",
+ "kurbo 0.13.1",
  "log",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "craft-eps"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
 
 [[package]]
 name = "craft-fonts-build"
@@ -6548,6 +6560,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.24.1"
 dependencies = [
+ "craft-eps",
  "craft-pdf",
  "encoding_rs",
  "fax",

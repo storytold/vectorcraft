@@ -180,54 +180,7 @@ pub(crate) fn clip_op(rule: FillRule) -> &'static str {
 
 /// `bytes` in ASCII85 with its `~>` end, in lines of about [`LINE`] characters, none starting
 /// with `%` (DSC readers would take it for a comment).
-pub(crate) fn ascii85(bytes: &[u8]) -> String {
-    let mut raw = String::with_capacity(bytes.len() * 5 / 4 + 8);
-    let (chunks, rest) = bytes.as_chunks::<4>();
-    for c in chunks {
-        let v = u32::from_be_bytes(*c);
-        if v == 0 {
-            raw.push('z');
-        } else {
-            push85(&mut raw, v, 5);
-        }
-    }
-    if !rest.is_empty() {
-        let mut c = [0u8; 4];
-        for (d, s) in c.iter_mut().zip(rest) {
-            *d = *s;
-        }
-        push85(&mut raw, u32::from_be_bytes(c), rest.len() + 1);
-    }
-    raw.push_str("~>");
-    let mut out = String::with_capacity(raw.len() + raw.len() / LINE + 2);
-    if raw.starts_with('%') {
-        // Whitespace is ignored by readers, and keeps the first line from starting with `%`.
-        out.push(' ');
-    }
-    let mut col = 0;
-    for ch in raw.chars() {
-        if col >= LINE && ch != '%' {
-            out.push('\n');
-            col = 0;
-        }
-        out.push(ch);
-        col += 1;
-    }
-    out.push('\n');
-    out
-}
-
-/// The first `n` base-85 digits of `v`.
-fn push85(s: &mut String, mut v: u32, n: usize) {
-    let mut d = [0u8; 5];
-    for slot in d.iter_mut().rev() {
-        *slot = (v % 85) as u8 + b'!';
-        v /= 85;
-    }
-    for b in d.iter().take(n) {
-        s.push(char::from(*b));
-    }
-}
+pub(crate) use craft_eps::ascii85::encode as ascii85;
 
 /// Most bytes [`ascii85_decode`] makes: what one filter or data section may hold.
 pub(crate) const MAX_ASCII85: usize = 1 << 28;
@@ -241,47 +194,7 @@ pub(crate) fn ascii85_decode(text: &str) -> Option<Vec<u8>> {
 /// [`ascii85_decode`] of at most `max` bytes: `z` is four bytes for one, so the length of the
 /// text doesn't bound what it becomes (#1715).
 pub(crate) fn ascii85_decode_within(text: &str, max: usize) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity((text.len() / 5 * 4).min(max));
-    let mut group = [0u8; 5];
-    let mut n = 0;
-    let mut chars = text.bytes().filter(|b| !b.is_ascii_whitespace()).peekable();
-    while let Some(b) = chars.next() {
-        if out.len() > max {
-            return None;
-        }
-        match b {
-            b'~' => {
-                if chars.next() != Some(b'>') {
-                    return None;
-                }
-                if n == 1 {
-                    return None;
-                }
-                if n > 1 {
-                    let padded: Vec<u8> = group.iter().take(n).copied().chain(std::iter::repeat(b'u')).take(5).collect();
-                    let v = value85(&padded)?;
-                    out.extend(v.to_be_bytes().iter().take(n - 1));
-                }
-                return (out.len() <= max).then_some(out);
-            }
-            b'z' if n == 0 => out.extend([0; 4]),
-            b'!'..=b'u' => {
-                *group.get_mut(n)? = b;
-                n += 1;
-                if n == 5 {
-                    out.extend(value85(&group)?.to_be_bytes());
-                    n = 0;
-                }
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-/// The value of five base-85 digits; `None` past `u32::MAX`.
-fn value85(digits: &[u8]) -> Option<u32> {
-    digits.iter().try_fold(0u32, |acc, d| acc.checked_mul(85)?.checked_add(u32::from(d.checked_sub(b'!')?)))
+    craft_eps::ascii85::decode(text.as_bytes(), max)
 }
 
 /// Run-length encoding (PackBits: what PostScript's `RunLengthDecode` reads), shared with TIFF.
