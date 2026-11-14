@@ -131,6 +131,15 @@ fn a_compound_paths_member_keeps_its_effect() {
     let live = clip_outline(&moved).unwrap();
     assert_eq!(live, clip_outline(&baked_clip(&d)).unwrap(), "the canvas clips by the outline the export writes");
     assert_ne!(live, clip_outline(&ring(vec![])).unwrap(), "the hole moves");
+    // With a Transform of the compound path's own moving the whole ring 10 pt down after it.
+    let mut both = moved.clone();
+    both.appearance.effects.push(fx("distort.transform", json!({"moveV": 10})));
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, clip_group(1, both.clone())).unwrap();
+    let live = clip_outline(&both).unwrap();
+    assert_eq!(live, clip_outline(&baked_clip(&d)).unwrap(), "the canvas clips by the outline the export writes");
+    assert_ne!(live.0.bounding_box(), clip_outline(&moved).unwrap().0.bounding_box(), "the ring moves down");
 }
 
 #[test]
@@ -294,6 +303,83 @@ fn a_fills_geometry_effect_shapes_the_clip_as_an_export_does() {
     let compound =
         Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(member), Arc::new(other)], rule: vectorcraft_geom::FillRule::NonZero });
     assert_eq!(bounds(&compound), Rect::new(0.0, 0.0, 150.0, 150.0));
+}
+
+#[test]
+fn a_fills_geometry_effect_shapes_the_clip_before_the_effects_around_it() {
+    // Offset Path 10 on the fill of an unpainted clipping path, in a group that its Transform
+    // scales to 50 %: the region is the grown square at half size, 60 pt across, as it is when the
+    // clipping path is the member of a group that clips by its members.
+    let clip_with = |fill: Paint| {
+        let mut clip = clipping_path(3, vec![]);
+        clip.appearance = Appearance::basic(fill, Paint::None, 0.0).into();
+        for item in &mut clip.appearance.items {
+            if let vectorcraft_doc::AppearanceItem::Fill(f) = item {
+                f.effects.push(fx("path.offsetPath", json!({"offset": 10})));
+            }
+        }
+        clip
+    };
+    let scaled = |clip: Node| {
+        let mut outer = Node::group(NodeId(1), vec![Arc::new(clip_group(2, clip))]);
+        outer.appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 50})));
+        outer
+    };
+    fn first_clip(n: &Node) -> Option<Arc<Node>> {
+        match &n.kind {
+            NodeKind::Group { children, clip: true } => children.first().cloned(),
+            _ => n.children()?.iter().find_map(|c| first_clip(c)),
+        }
+    }
+    let clip_of = |n: &Node| clip_outline(&first_clip(n).unwrap()).unwrap().0.bounding_box();
+    let close = |r: Rect| (r.width() - 60.0).abs() < 0.5 && (r.height() - 60.0).abs() < 0.5;
+    let nested = clip_of(&crate::evaluate_container(None, &scaled(Node::group(NodeId(4), vec![Arc::new(clip_with(Paint::None))]))).unwrap());
+    assert!(close(nested), "nested: {nested:?}");
+    let outer = scaled(clip_with(Paint::None));
+    let canvas = clip_of(&crate::evaluate_container(None, &outer).unwrap());
+    assert!(close(canvas), "canvas: {canvas:?}");
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, outer).unwrap();
+    let baked = bake_document(&d).unwrap();
+    let exported = baked.layers.iter().find_map(|l| first_clip(l)).map(|c| clip_outline(&c).unwrap().0.bounding_box()).unwrap();
+    assert!(close(exported), "exported: {exported:?}");
+    // A clipping path that paints its fill keeps it, a path with the fill's effect live.
+    let painted = first_clip(&crate::evaluate_container(None, &scaled(clip_with(Paint::solid(Color::BLACK)))).unwrap()).unwrap();
+    assert!(painted.clip_paint().fill.is_some(), "{painted:?}");
+}
+
+#[test]
+fn a_baked_clipping_path_gives_its_pieces_ids_of_their_own() {
+    // An unpainted clipping path whose fill and stroke have Transform effects, in a clip group
+    // without effects: the export bakes it into a piece for each, every object with its own id.
+    let mut d = Document::new(400.0, 400.0);
+    let (group, path) = (d.alloc_id(), d.alloc_id());
+    let mut clip = clipping_path(path.0, vec![]);
+    clip.appearance = Appearance::basic(Paint::None, Paint::None, 1.0).into();
+    for item in &mut clip.appearance.items {
+        match item {
+            vectorcraft_doc::AppearanceItem::Fill(f) => f.effects.push(fx("distort.transform", json!({"moveH": 60}))),
+            vectorcraft_doc::AppearanceItem::Stroke(s) => s.effects.push(fx("distort.transform", json!({"moveV": 60}))),
+        }
+    }
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, clip_group(group.0, clip)).unwrap();
+    let baked = bake_document(&d).unwrap();
+    let clip = baked_clip(&d);
+    assert_eq!(clip.children().map(|c| c.len()), Some(2), "{clip:?}");
+    fn ids(n: &Node, out: &mut Vec<NodeId>) {
+        out.push(n.id);
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let mut all = vec![];
+    for l in &baked.layers {
+        ids(l, &mut all);
+    }
+    let unique: std::collections::HashSet<_> = all.iter().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
 #[test]

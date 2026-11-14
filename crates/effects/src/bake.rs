@@ -39,7 +39,7 @@ pub(crate) fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] 
     }
 }
 
-fn clear_item_effects(item: &mut AppearanceItem) {
+pub(crate) fn clear_item_effects(item: &mut AppearanceItem) {
     match item {
         AppearanceItem::Fill(f) => f.effects = crate::raster::without_geometry(&f.effects),
         AppearanceItem::Stroke(s) => s.effects = crate::raster::without_geometry(&s.effects),
@@ -202,7 +202,22 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return bake_leaf(d, n);
         }
         let mut m = n.clone();
-        let baked: Vec<Arc<Node>> = ch.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
+        // A clipping path takes the geometry effects in it as the canvas clips by it, those of a
+        // compound path's paths before the compound path's own ([`crate::clip::with_clip_effects_applied`]);
+        // the pieces it is made of then get ids of their own.
+        let clip = usize::from(n.clips());
+        let baked: Vec<Arc<Node>> = ch
+            .iter()
+            .enumerate()
+            .map(|(i, c)| match (i < clip).then(|| crate::clip::with_clip_effects_applied(c)).flatten() {
+                Some(a) => {
+                    let mut a = bake_node(d, &a).unwrap_or(a);
+                    fresh_ids(d, &mut a, &mut std::collections::HashSet::new());
+                    Arc::new(a)
+                }
+                None => bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()),
+            })
+            .collect();
         if let Some(ch) = m.children_mut() {
             *ch = baked;
         }

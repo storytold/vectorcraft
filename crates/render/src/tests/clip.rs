@@ -132,6 +132,43 @@ fn a_view_of_only_the_moved_clip_draws_the_clipped_art() {
 }
 
 #[test]
+fn a_view_of_only_the_moved_clip_draws_a_clip_group_with_its_own_appearance() {
+    // As above, with the Transform effect on the clipping path itself or on its fill, and the clip
+    // group with an effect of its own: a Drop Shadow, or a Transform that moves nothing.
+    let moved = || vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 50}), visible: true };
+    let shadow = vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 0, "y": 6, "blur": 0, "opacity": 100}),
+        visible: true,
+    };
+    let still = vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveV": 0}), visible: true };
+    for on_fill in [false, true] {
+        for own in [shadow.clone(), still.clone()] {
+            let mut d = Document::new(100.0, 100.0);
+            let mut clip = Node::path(d.alloc_id(), rect(Rect::new(0.0, 0.0, 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+            match clip.appearance.items.iter_mut().find_map(|i| match i {
+                vectorcraft_doc::AppearanceItem::Fill(f) if on_fill => Some(f),
+                _ => None,
+            }) {
+                Some(f) => f.effects.push(moved()),
+                None => clip.appearance.effects.push(moved()),
+            }
+            let art =
+                Node::path(d.alloc_id(), rect(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+            let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(art)], clip: true });
+            g.appearance.effects.push(own.clone());
+            let l = d.layers[0].id;
+            d.insert(Some(l), 0, g).unwrap();
+            let what = format!("effect on the fill: {on_fill}, group effect {}", own.id);
+            let whole = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+            assert_eq!(whole.pixel(80, 50), BLACK, "the whole canvas ({what})");
+            let r = Renderer::new().render(&d, 40, 100, Affine::translate((-60.0, 0.0)), &RenderOptions::default());
+            assert_eq!(r.pixel(20, 50), BLACK, "x 80, inside the moved clip ({what})");
+        }
+    }
+}
+
+#[test]
 fn clip_regions_are_cached_per_clipping_path() {
     let mut d = Document::new(100.0, 100.0);
     let clip = path(&mut d, rect(Rect::new(0.0, 0.0, 50.0, 100.0)), FillRule::NonZero);
