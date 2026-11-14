@@ -283,11 +283,11 @@ pub(super) fn settled_wide(mut q: Quantized, img: &Raster, own: &[bool], gray: b
 /// channels within 8 levels of each other) is therefore also continuous tone when eight colors
 /// stay more than 0.065 as far as a single color does. So is a sepia, single-hue or duotone
 /// picture whose tones follow one curve through the color cube (19 in 20 of its opaque pixels on
-/// it, see [`on_one_curve`]). Neither is when sixteen colors stay at most a fifth as far as eight
-/// do. That exception holds for flat art of up to sixteen clean levels, gray or tinted, where
-/// sixteen colors come within about a level of every pixel. On gray and tinted photos sixteen
-/// colors stay 0.18 to 0.57 as far as eight do, and on most anti-aliased or noisy gray flat art
-/// 0.24 to 0.5 as far, so the exception holds for neither.
+/// it, see [`on_one_curve`]). Neither is, however far eight colors stay, when sixteen colors stay
+/// at most a fifth as far as eight do. That exception holds for flat art of up to sixteen clean
+/// levels, gray or tinted, where sixteen colors come within about a level of every pixel. On gray
+/// and tinted photos sixteen colors stay 0.18 to 0.57 as far as eight do, and on most anti-aliased
+/// or noisy gray flat art 0.24 to 0.5 as far, so the exception holds for neither.
 pub(crate) fn continuous_tone(img: &Raster) -> bool {
     let hk = HistKey::new(img);
     let mut bins = vec![Bin::default(); 1 << 15];
@@ -318,10 +318,14 @@ pub(crate) fn continuous_tone(img: &Raster) -> bool {
         return false;
     }
     let one = unsaid(1);
-    if eight > 0.1 * one {
-        return true;
+    if eight <= 0.065 * one {
+        return false;
     }
-    eight > 0.065 * one && unsaid(16) > 0.2 * eight && (20 * neutral >= 19 * opaque || 20 * on_one_curve(img) >= 19 * opaque)
+    let one_line = || 20 * neutral >= 19 * opaque || 20 * on_one_curve(img) >= 19 * opaque;
+    if eight > 0.1 * one {
+        return !(unsaid(16) <= 0.2 * eight && one_line());
+    }
+    unsaid(16) > 0.2 * eight && one_line()
 }
 
 /// How far (levels) a pixel may lie from the tone curve of its picture and still count as on it,
