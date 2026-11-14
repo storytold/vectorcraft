@@ -53,7 +53,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Language | Code | Translated | Status |
 |---|---|---|---|
 | Traditional Chinese (Taiwan) | `zh-hant` | 8,820 rows, 3,438 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it; menus, `tl!` literals and messages were complete when counted on 2026-10-21 (80% overall) | partial |
-| Italian | `it` | 8,757 rows, 3,422 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it | full |
+| Italian | `it` | 8,924 rows, 3,560 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 54 missing messages for it, which open #7116, #7211, #7378 and #7405 translate | full |
 | Dutch | `nl` | 3,447 `@msg` and 48 `@msgplural` rows (counted 2026-11-13): in `COMPLETE_MESSAGES`, and the untranslated report lists 41 missing messages for it; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
