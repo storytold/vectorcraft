@@ -34,6 +34,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | G12: Layers panel row context menu (Options…, Duplicate, Delete, Lock Others/Show All/Hide Others/Unlock All, Locate Object, Collect for Export) with selection handling and undo tracking. Scores and estimates unchanged. |
 | 2026-11-13 | minor | PDF import: preserve Type 3 font text runs as named groups `<g>`, or as live text in `TextAs::Text` mode if `/ToUnicode` exists on non-colour fonts (`TextAs::Outlines` produces grouped outlines) (#6740); scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
@@ -214,10 +215,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   weight, where the object's brush settings are the brush's own and its angle is on the page (#372, from a
   user's file of 6D Art Pen strokes: all 455 of its brushed styles), and a Calligraphic brush's Tilt, Bearing and
   Rotation (codes 4, 5 and 6) come in as those channels instead of Random. Others keep their drawn look.
-  Paths with an Art brush open the same way when the brush stretches art of solid-filled paths along the path,
-  unflipped, at 100% in Tints, and the path has none of its own settings, variable width, effects or a swatch
-  stroke. Other Art brushes (None or another colorization, another width, Proportional, between guides, flipped,
-  art with strokes, gradients or patterns) and type with an Art brush keep the drawn look.
+  Paths with an Art brush open the same way when the brush bends art of solid-filled paths along the path, and
+  the path has none of its own settings, variable width, effects or a swatch stroke in Tints. The brush may be
+  in None or Tints, at a fixed width, stretched to the path or between guides, and flipped along or across.
+  Other Art brushes (Tints and Shades or Hue Shift, a width that follows the pen, Scale Proportionately, guides
+  that leave no art between them, a `Spacing`, `Adjustment` or `FoldAdjustment` other than 0, 1 and 1, art with
+  strokes, gradients or patterns) and type with an Art brush keep the drawn look.
 
 - **Done (2026-11-12):** Explicitly requested editing data retains a single artboard larger than a capped 14,400 pt PDF page (#6865); the default import and other size mismatches remain unchanged. Synthetic importer regression; scores unchanged.
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
@@ -501,12 +504,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** Hyphenation › Default Language is the language of new type, unless Document Setup chose one, and each
   run hyphenates in its own language (Character panel). English and eleven Indian languages have break
   points; other languages stay whole apart from the Exceptions list (#394, #4947).
+- **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus in the panels that have none, Layers row menu commands beyond Collect for
-  Export, and menus on guide and blend spine rows in the Layers panel.
+  panel per context, context menus in the panels that have none, and menus on guide and blend spine rows in the Layers panel.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 
