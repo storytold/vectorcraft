@@ -2830,6 +2830,22 @@ fn live_paint_make_starts_a_closed_edge_where_its_path_starts() {
             assert_eq!(e.appearance.items, rows, "clockwise {clockwise}, start {start}");
         }
     }
+    // A closed path that crosses itself is cut into loops, and the loop that holds the path's
+    // first anchor is still only part of the path: it keeps no brush.
+    let mut s = session();
+    let anchors = [(0.0, 0.0), (100.0, 100.0), (100.0, 0.0), (0.0, 100.0)].map(|(x, y)| json!({"x": x, "y": y}));
+    let z = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+    let row = stroke_row(Paint::solid(Color::BLACK), 2.0, |st| {
+        st.dash = Some(Dash { pattern: vec![10.0, 5.0], offset: 2.0, align_corners: false });
+        st.brush = Some("Charcoal".into());
+    });
+    set_rows(&mut s, z, vec![row]);
+    s.execute("select.set", &json!({"ids": [z.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let gn = node(&s, g);
+    let edges = vectorcraft_tools::builder::edges(&gn);
+    assert!(edges.len() > 1, "the crossing cuts the path, got {} edge", edges.len());
+    assert!(edges.iter().all(|e| e.appearance.stroke().is_some_and(|st| st.brush.is_none())), "no loop is the whole path");
 }
 
 /// When Make cuts a stroke whose only setting that depends on direction is a gradient along or

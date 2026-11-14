@@ -576,8 +576,9 @@ impl Track {
 /// ends at its end (an open subpath), and whether it runs the whole subpath. The middle of the
 /// edge's first segment places it, and its ends are taken where they lie that far along the source,
 /// so a path that passes a point twice is told apart. An edge that runs against the direction of its
-/// source is reversed first, and a closed edge is started at the anchor where its source starts
-/// (one with no anchor there does not count as running the whole subpath). `None` when the edge is
+/// source is reversed first, and a closed edge as long as its closed source is started at the anchor
+/// where its source starts (one with no anchor there, or a shorter loop cut from a source that
+/// crosses itself, does not count as running the whole subpath). `None` when the edge is
 /// not a single piece found on the source.
 fn edge_run(tracks: &[Track], edge: &mut PathData) -> Option<(f64, bool, bool, bool)> {
     use kurbo::{ParamCurve, ParamCurveArclen};
@@ -630,6 +631,7 @@ fn edge_run(tracks: &[Track], edge: &mut PathData) -> Option<(f64, bool, bool, b
     // Start it at the anchor where the source starts, so settings that follow the path begin there.
     let start = track.segs.first().map(|s| s.start())?;
     let moved = edge_closed
+        && (length - track.len()).abs() <= ON_SOURCE.max(track.len() * 1e-4)
         && edge.subpaths.first_mut().is_some_and(|sp| match sp.anchors.iter().position(|a| a.p.distance(start) <= ON_SOURCE) {
             Some(k) => {
                 sp.anchors.rotate_left(k);
