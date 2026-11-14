@@ -173,6 +173,11 @@ pub(super) fn c3(s: &'static str) -> &'static str {
 /// first two, the light gizmo on Lighting.
 fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
     let classic = vectorcraft_effects::is_classic_three_d(id);
+    // Map Art takes the place of the tabs until its Done.
+    if classic && super::three_d_classic::map_art_open(d) {
+        super::three_d_classic::map_art_controls(app, ui, d);
+        return;
+    }
     let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
     let mut tabs = vec![];
     if object {

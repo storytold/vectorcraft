@@ -1158,6 +1158,15 @@ font-technology	Variable	Değişken
 	Blend Steps	Karışım Adımları
 	Shading Color	Gölgeleme Rengi
 	Draw Hidden Faces	Gizli Yüzleri Çiz
+	Map Art…	Çizimi Eşle…
+	Map Art	Çizimi Eşle
+	First Surface	İlk Yüzey
+	Previous Surface	Önceki Yüzey
+	Next Surface	Sonraki Yüzey
+	Last Surface	Son Yüzey
+	Scale to Fit	Sığacak Şekilde Ölçekle
+	Shade Artwork	Çizimi Gölgelendir
+	Invisible Geometry	Görünmez Geometri
 	Eyedropper	Damlalık
 	Sample Color from Screen	Ekrandan Örnek Renk
 	This system has no screen color sampler	Bu sistemin ekran rengi örnekleyicisi yok

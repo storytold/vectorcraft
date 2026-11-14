@@ -1182,6 +1182,15 @@ font-technology	Variable	Variables
 	Blend Steps	Étapes de transition
 	Shading Color	Couleur d’ombrage
 	Draw Hidden Faces	Dessiner les faces cachées
+	Map Art…	Placage d’illustration…
+	Map Art	Placage d’illustration
+	First Surface	Première surface
+	Previous Surface	Surface précédente
+	Next Surface	Surface suivante
+	Last Surface	Dernière surface
+	Scale to Fit	Mettre à l’échelle pour ajuster
+	Shade Artwork	Ombrer l’illustration
+	Invisible Geometry	Géométrie invisible
 	Eyedropper	Pipette
 	Sample Color from Screen	Prélever une couleur à l’écran
 	This system has no screen color sampler	Ce système n’a pas d’outil de prélèvement de couleur à l’écran

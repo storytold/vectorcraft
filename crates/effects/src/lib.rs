@@ -99,6 +99,10 @@ pub use solids::{
     GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after,
     rename_appearance_graphic_symbol,
 };
+pub use solids::{
+    MAP_ART, MAP_ART_NOT_TAKEN, MAP_INVISIBLE, MAP_SHADE, MAX_MAP_SURFACE, MAX_MAPS, MapSurface, SurfaceKind, SurfaceMap, map_surfaces_at,
+    map_surfaces_with, surface_maps, takes_map_art, with_surface_map,
+};
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;

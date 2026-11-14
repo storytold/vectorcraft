@@ -167,6 +167,8 @@ pub fn mapped_graphics(p: &Value) -> Vec<MappedGraphic> {
 /// Revolve take graphics; a plane has only a front, and Revolve's graphics go on its side, named
 /// the front.
 pub fn validate(id: &str, p: &Value) -> Result<(), String> {
+    // Map Art's maps are checked with the graphics: an effect that takes none refuses them.
+    map_art::validate(id, p)?;
     let list = match p.get(GRAPHICS) {
         None => return Ok(()),
         Some(Value::Array(list)) => list,
@@ -197,11 +199,11 @@ pub fn validate(id: &str, p: &Value) -> Result<(), String> {
 /// graphics in `old` (the effect's parameters before an edit) already name: a graphic whose symbol
 /// was deleted may stay.
 pub fn missing_symbol(doc: &Document, p: &Value, old: Option<&Value>) -> Option<String> {
-    let kept = old.map(mapped_graphics).unwrap_or_default();
-    mapped_graphics(p)
-        .into_iter()
-        .map(|g| g.symbol)
-        .find(|name| !doc.symbols.iter().any(|s| s.name == *name) && !kept.iter().any(|g| g.symbol == *name))
+    let names = |p: &Value| -> Vec<String> {
+        mapped_graphics(p).into_iter().map(|g| g.symbol).chain(map_art::surface_maps(p).into_iter().map(|m| m.symbol)).collect()
+    };
+    let kept = old.map(names).unwrap_or_default();
+    names(p).into_iter().find(|name| !doc.symbols.iter().any(|s| s.name == *name) && !kept.contains(name))
 }
 
 /// Does the art of the symbols the graphics in `p` name fit the limits? A graphic whose symbol
@@ -210,8 +212,10 @@ pub fn missing_symbol(doc: &Document, p: &Value, old: Option<&Value>) -> Option<
 pub fn validate_symbols(doc: &Document, p: &Value) -> Result<(), String> {
     let curve = if super::view_options(p).perspective > 0.0 { PERSPECTIVE_PIECES } else { 1 };
     let mut elements = 0usize;
-    for g in mapped_graphics(p) {
-        let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
+    // The symbols Map Art places count with the graphics.
+    let names = mapped_graphics(p).into_iter().map(|g| g.symbol).chain(map_art::surface_maps(p).into_iter().map(|m| m.symbol));
+    for name in names {
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == name) else { continue };
         let pieces = pieces_of(doc, symbol)?;
         elements = elements.saturating_add(pieces.iter().map(|p| drawn_elements(&p.path, curve)).sum());
         if elements > MAX_ELEMENTS {
@@ -998,9 +1002,11 @@ pub fn appearance_graphic_symbols(appearance: &Appearance) -> Vec<String> {
     std::iter::once(&appearance.effects)
         .chain(appearance.items.iter().map(AppearanceItem::effects))
         .flatten()
-        .filter(|e| takes_graphics(&e.id))
-        .flat_map(|e| mapped_graphics(&e.params))
-        .map(|g| g.symbol)
+        .filter(|e| takes_graphics(&e.id) || map_art::takes_map_art(&e.id))
+        .flat_map(|e| {
+            let graphics = mapped_graphics(&e.params).into_iter().map(|g| g.symbol).filter(|_| takes_graphics(&e.id));
+            graphics.chain(map_art::surface_maps(&e.params).into_iter().map(|m| m.symbol).filter(|_| map_art::takes_map_art(&e.id)))
+        })
         .collect()
 }
 
@@ -1020,8 +1026,15 @@ pub fn rename_appearance_graphic_symbol(appearance: &mut Appearance, from: &str,
     let (effects, items) = (&mut appearance.effects, &mut appearance.items);
     lists.push(effects);
     lists.extend(items.iter_mut().map(AppearanceItem::effects_mut));
-    for e in lists.into_iter().flatten().filter(|e| takes_graphics(&e.id)) {
-        if let Some(Value::Array(list)) = e.params.get_mut(GRAPHICS) {
+    for e in lists.into_iter().flatten() {
+        let key = if takes_graphics(&e.id) {
+            GRAPHICS
+        } else if map_art::takes_map_art(&e.id) {
+            map_art::MAP_ART
+        } else {
+            continue;
+        };
+        if let Some(Value::Array(list)) = e.params.get_mut(key) {
             for g in list.iter_mut() {
                 if g.get("symbol").and_then(Value::as_str) == Some(from) {
                     g["symbol"] = json!(to);
@@ -1066,6 +1079,9 @@ pub fn with_graphic(p: &Value, g: &MappedGraphic) -> Value {
     out.insert(GRAPHICS.into(), Value::Array(list));
     Value::Object(out)
 }
+
+#[path = "map_art.rs"]
+pub(crate) mod map_art;
 
 #[cfg(test)]
 #[path = "tests_graphics.rs"]

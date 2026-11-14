@@ -86,6 +86,45 @@ fn button(pos: Pos2, pressed: bool) -> Event {
 }
 
 #[test]
+fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    app.run("path.create", json!({"d":"M50 50L150 50L150 150L50 150Z"})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    assert!(h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Map Art… opens Map Art");
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
+    // The Symbol menu maps the symbol onto the surface shown, the first.
+    h.click(h.rect("None").center());
+    h.click(h.rect("Mark").center());
+    let maps = |h: &Harness| vectorcraft_effects::surface_maps(&json!({"mapArt": h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned()}));
+    assert_eq!(maps(&h).iter().map(|m| (m.surface, m.symbol.as_str(), m.scale_x)).collect::<Vec<_>>(), [(1, "Mark", 100.0)]);
+    // The next surface has no map until it is given one; Scale to Fit fills the first.
+    h.click(h.rect(">").center());
+    assert_eq!(h.value("__mapSurface"), 2.0);
+    assert_eq!(maps(&h).len(), 1);
+    h.click(h.rect("<").center());
+    h.click(h.rect("Scale to Fit").center());
+    assert!(maps(&h)[0].scale_x > 100.0, "the 10-point art is scaled up to the 100-point cap: {:?}", maps(&h));
+    h.click(h.rect("Done").center());
+    assert!(!h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Done goes back to the effect's options");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let id = state.selection.objects[0];
+    let params = &state.doc.node(id).unwrap().appearance.effects[0].params;
+    assert_eq!(vectorcraft_effects::surface_maps(params).len(), 1, "{params}");
+    assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
+}
+
+#[test]
 fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     let before = h.app.session.doc().unwrap().doc.clone();

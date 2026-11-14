@@ -1128,6 +1128,15 @@ antiAlias	Sharp	锐利
 	Blend Steps	混合步骤
 	Shading Color	底纹颜色
 	Draw Hidden Faces	绘制隐藏表面
+	Map Art…	贴图…
+	Map Art	贴图
+	First Surface	第一个表面
+	Previous Surface	上一个表面
+	Next Surface	下一个表面
+	Last Surface	最后一个表面
+	Scale to Fit	缩放以适合
+	Shade Artwork	为图稿添加底纹
+	Invisible Geometry	无形几何形状
 	Eyedropper	吸管
 	Sample Color from Screen	从屏幕取样颜色
 	This system has no screen color sampler	此系统没有屏幕取色工具

@@ -112,7 +112,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
 
 /// The options Revolve (`id` [`REVOLVE`]) or Revolve (Classic) ([`CLASSIC_REVOLVE`]) with
 /// parameters `p` sweeps its surface with. A Revolve with graphics lays out its side for them.
-fn options_of(id: &str, p: &Value) -> Revolve {
+pub(crate) fn options_of(id: &str, p: &Value) -> Revolve {
     if id == CLASSIC_REVOLVE {
         classic::options(p)
     } else {
@@ -205,7 +205,7 @@ fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, op
 
 /// The member of a group whose side takes the group's graphics: the first with the longest
 /// profile among those with a fill or stroke.
-fn graphics_member(shapes: &[Profile], b: Rect, options: Revolve) -> Option<usize> {
+pub(crate) fn graphics_member(shapes: &[Profile], b: Rect, options: Revolve) -> Option<usize> {
     shapes
         .iter()
         .enumerate()
@@ -405,7 +405,22 @@ fn surface(
         let drawn =
             facets.iter().map(|f| Drawn { depth: f.depth, points: f.contours.first().cloned().unwrap_or_default(), plane: f.plane }).collect();
         let p = merged_params(&fx.id, &fx.params);
-        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, opacity, blend, &p)));
+        // Mapped art goes on the side, the surface's one numbered surface. Its paints' copies
+        // count with the graphics', and art past the limits is left out.
+        let map_art = crate::solids::graphics::map_art::MapArt::of(doc, &fx.id, &p);
+        let layout = map_art.as_ref().and_then(|_| {
+            let (width, height) = vectorcraft_three_d::revolve_surface_size(path, b, options)?;
+            let side = vectorcraft_three_d::SolidSurface { kind: vectorcraft_three_d::SurfaceKind::Side, width, height, center: None };
+            Some(crate::solids::graphics::map_art::SolidLayout { first: 0, surfaces: vec![side], ends: None })
+        });
+        let mut budget = crate::solids::graphics::map_art::MapBudget::default();
+        let mapped = map_art.as_ref().zip(layout.as_ref()).map(|(art, layout)| crate::solids::classic::Mapped {
+            art,
+            layout,
+            budget: &mut budget,
+            copies: &mut copies.graphics,
+        });
+        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, (opacity, blend), &p, mapped)));
     }
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
@@ -943,7 +958,10 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let mut opaque = true;
     // The graphics go once, on the side of the member with the longest profile. Without graphics
     // no member is measured for them.
-    let mapped = fx.id == REVOLVE && !crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params)).is_empty();
+    // Revolve (Classic)'s mapped art goes on that member's side too.
+    let p = merged_params(&fx.id, &fx.params);
+    let mapped = (fx.id == REVOLVE && !crate::solids::mapped_graphics(&p).is_empty())
+        || (fx.id == CLASSIC_REVOLVE && !crate::solids::surface_maps(&p).is_empty());
     let longest = if mapped { graphics_member(&shapes, b, options) } else { None };
     for (k, s) in shapes.iter().enumerate() {
         let Some(item) = surface_item(&s.items) else { continue };

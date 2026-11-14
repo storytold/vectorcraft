@@ -4079,6 +4079,45 @@ another shading color is refused with an error and the document is not changed.
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRotate","item":null,"params":{"rotationX":0,"rotationY":40,"rotationZ":0,"surface":"diffuse","blendSteps":64}}}}
 ```
 
+## Map Art
+
+`threeD.mapArt {surface?, symbol?, x?, y?, scaleX?, scaleY?, rotation?, fit?, clearAll?, shade?, invisible?, index?, item?, ids?|id?}`
+is the Map Art… button of the Extrude & Bevel (Classic) and Revolve (Classic) dialogs. It maps a document symbol onto
+one numbered surface of each selected object's classic 3D effect, edits that map or removes it, in one undo step
+([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185)).
+Rotate (Classic) and the other 3D effects take no map.
+
+- `surface` is a whole number from 1 to the object's surface count. Extrude & Bevel (Classic) numbers the surfaces
+  through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
+  from corner to corner of the outline, then the bevel above each wall. Revolve (Classic) has one surface, its swept
+  side. The numbering is VectorCraft's own.
+- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map. Omitted, the surface keeps
+  its map's symbol; a surface with no map then is refused.
+- `x` and `y` (points, -1000000..1000000) place the center of the art from the center of the surface laid out flat,
+  `scaleX` and `scaleY` (1..10000%) scale it from the symbol's own size, and `rotation` (-360..360 degrees) turns it
+  counterclockwise. A new map starts at 0, 0, 100%, 100% and 0°.
+- `fit` (Scale to Fit) centers the art and scales it to fill the surface.
+- `clearAll` (Clear All) removes every map first, so with `surface` only that surface's map is left.
+- `shade` (Shade Artwork) gives the mapped art the tone and highlight of its face, and `invisible` (Invisible
+  Geometry) draws only the mapped art.
+
+One of `surface`, `clearAll`, `shade` and `invisible` is required. Without `index` each object's first Extrude &
+Bevel (Classic) or Revolve (Classic) is edited, its own before its fills' and strokes'; `item` needs `index`. A surface
+past the count, an unknown symbol, a value out of range, an unknown key or an object without one of the two effects is
+refused, and nothing changes. When nothing changes, no undo step is recorded. It returns `{ids, maps}`: the objects
+changed and the first object's maps.
+
+The maps are the effects' `mapArt` (up to 64 `{surface, symbol, x, y, scaleX, scaleY, rotation}` objects),
+`mapShade` and `mapInvisible` parameters, which `effect.setParams` also edits. A map past the object's surface count
+draws nothing, as the archived reference describes; the Wireframe surface draws no mapped art. The canvas, exports and
+`effect.expandAppearance` draw the mapped art the same way, and renaming a symbol renames it in the maps. The limits
+and the shading of the mapped art are VectorCraft's own; see [three-d.md](three-d.md#map-art).
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.mapArt","params":{"surface":1,"symbol":"Label","fit":true}}}
+{"name":"run_command","arguments":{"command":"threeD.mapArt","params":{"surface":3,"symbol":null}}}
+```
+
 
 ## Edit Colors and Recolor Artwork
 

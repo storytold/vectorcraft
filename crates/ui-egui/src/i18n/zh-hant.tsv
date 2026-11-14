@@ -1161,6 +1161,15 @@ font-technology	Variable	可變
 	Blend Steps	漸變階數
 	Shading Color	網底顏色
 	Draw Hidden Faces	繪製隱藏表面
+	Map Art…	貼圖…
+	Map Art	貼圖
+	First Surface	第一個表面
+	Previous Surface	上一個表面
+	Next Surface	下一個表面
+	Last Surface	最後一個表面
+	Scale to Fit	縮放以符合
+	Shade Artwork	為圖稿加上網底
+	Invisible Geometry	隱形幾何形狀
 	Eyedropper	滴管
 	Sample Color from Screen	從螢幕取樣顏色
 	This system has no screen color sampler	此系統沒有螢幕取色工具

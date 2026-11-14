@@ -1482,6 +1482,15 @@ font-technology	Variable	Változó
 	Blend Steps	Átmenetlépések
 	Shading Color	Árnyékolás színe
 	Draw Hidden Faces	Rejtett lapok rajzolása
+	Map Art…	Grafika leképezése…
+	Map Art	Grafika leképezése
+	First Surface	Első felület
+	Previous Surface	Előző felület
+	Next Surface	Következő felület
+	Last Surface	Utolsó felület
+	Scale to Fit	Méretezés a felülethez
+	Shade Artwork	Grafika árnyékolása
+	Invisible Geometry	Láthatatlan geometria
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
 	This system has no screen color sampler	Ezen a rendszeren nincs képernyős színmintavevő

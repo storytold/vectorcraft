@@ -800,6 +800,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let revolves = revolve_gizmo::active(&d);
     if revolves {
         revolve_gizmo::show(app, ctx, &mut d);
+        three_d_classic::surface_outline(app, ctx, &d);
     }
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));

@@ -639,11 +639,19 @@ impl Relink {
                 }
             }
         }
-        // A 3D effect's mapped graphics follow their symbols' names in the document. Each name is
-        // looked up once, so renames that chain (A to B, B to C) do not apply twice.
+        // A 3D effect's mapped graphics and Map Art maps follow their symbols' names in the
+        // document. Each name is looked up once, so renames that chain (A to B, B to C) do not
+        // apply twice.
         let items = a.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
-        for e in a.effects.iter_mut().chain(items).filter(|e| vectorcraft_render::effects::takes_graphics(&e.id)) {
-            let list = e.params.get_mut(vectorcraft_render::effects::GRAPHICS).and_then(Value::as_array_mut);
+        for e in a.effects.iter_mut().chain(items) {
+            let key = if vectorcraft_render::effects::takes_graphics(&e.id) {
+                vectorcraft_render::effects::GRAPHICS
+            } else if vectorcraft_render::effects::takes_map_art(&e.id) {
+                vectorcraft_render::effects::MAP_ART
+            } else {
+                continue;
+            };
+            let list = e.params.get_mut(key).and_then(Value::as_array_mut);
             for g in list.into_iter().flatten() {
                 if let Some(Value::String(s)) = g.get_mut("symbol") {
                     self.name(Res::Symbol, s);

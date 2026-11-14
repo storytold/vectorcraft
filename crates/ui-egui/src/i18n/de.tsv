@@ -1166,6 +1166,15 @@ font-technology	Variable	Variabel
 	Blend Steps	Angleichungsstufen
 	Shading Color	Schattierungsfarbe
 	Draw Hidden Faces	Verdeckte Flächen zeichnen
+	Map Art…	Bildmaterial zuordnen…
+	Map Art	Bildmaterial zuordnen
+	First Surface	Erste Oberfläche
+	Previous Surface	Vorherige Oberfläche
+	Next Surface	Nächste Oberfläche
+	Last Surface	Letzte Oberfläche
+	Scale to Fit	Auf Oberfläche skalieren
+	Shade Artwork	Bildmaterial schattieren
+	Invisible Geometry	Unsichtbare Geometrie
 	Eyedropper	Pipette
 	Sample Color from Screen	Farbe vom Bildschirm aufnehmen
 	This system has no screen color sampler	Dieses System hat keine Farbaufnahme vom Bildschirm

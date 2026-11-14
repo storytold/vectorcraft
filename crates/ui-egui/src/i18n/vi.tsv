@@ -1367,6 +1367,15 @@ font-technology	Variable	Biến thiên
 	Blend Steps	Số bước hòa trộn
 	Shading Color	Màu tô bóng
 	Draw Hidden Faces	Vẽ các mặt ẩn
+	Map Art…	Ánh xạ tác phẩm…
+	Map Art	Ánh xạ tác phẩm
+	First Surface	Bề mặt đầu tiên
+	Previous Surface	Bề mặt trước
+	Next Surface	Bề mặt tiếp theo
+	Last Surface	Bề mặt cuối cùng
+	Scale to Fit	Co giãn cho vừa
+	Shade Artwork	Tô bóng tác phẩm
+	Invisible Geometry	Hình học vô hình
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
 	This system has no screen color sampler	Hệ thống này không có công cụ lấy mẫu màu trên màn hình

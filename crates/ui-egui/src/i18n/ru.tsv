@@ -1185,6 +1185,15 @@ font-technology	Variable	Вариативные
 	Blend Steps	Шаги перехода
 	Shading Color	Цвет затенения
 	Draw Hidden Faces	Рисовать скрытые грани
+	Map Art…	Наложение графики…
+	Map Art	Наложение графики
+	First Surface	Первая поверхность
+	Previous Surface	Предыдущая поверхность
+	Next Surface	Следующая поверхность
+	Last Surface	Последняя поверхность
+	Scale to Fit	Масштабировать по размеру
+	Shade Artwork	Затенять графику
+	Invisible Geometry	Невидимая геометрия
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
 	This system has no screen color sampler	В этой системе нет средства выбора цвета с экрана

@@ -9,6 +9,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node};
 use vectorcraft_geom::Rect;
 use vectorcraft_three_d::{Bevel, BevelShape, ClassicShading, ClassicSurface, Extrude, Facet, Light};
 
+use super::graphics::map_art::{self, MapArt, MapBudget, SolidLayout};
 use crate::util::{flag, num, text};
 
 pub const CLASSIC_EXTRUDE: &str = "threeD.classicExtrude";
@@ -51,8 +52,19 @@ pub fn classic_extrude_options(p: &Value) -> Extrude {
             ..Bevel::default()
         }),
         hidden: flag(p, "drawHiddenFaces", false) || classic_shading(p).surface == ClassicSurface::Wireframe,
+        // The numbered surfaces are laid out only for an effect that maps art onto them.
+        map_surfaces: !map_art::surface_maps(p).is_empty(),
         ..Extrude::default()
     }
+}
+
+/// The mapped art of one solid for [`surface`]: the effect's maps, the solid's place among the
+/// object's numbered surfaces, and the limits the object's mapped art shares.
+pub(crate) struct Mapped<'a, 'd> {
+    pub(crate) art: &'a MapArt<'d>,
+    pub(crate) layout: &'a SolidLayout,
+    pub(crate) budget: &'a mut MapBudget,
+    pub(crate) copies: &'a mut usize,
 }
 
 /// The color faces darken toward: black, the custom color, or none (faces keep their paint and only
@@ -102,13 +114,15 @@ const RANGES: [(&str, f64, f64, bool); 13] = [
     ("blendSteps", 1.0, 256.0, true),
 ];
 
-const FLAGS: [&str; 4] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"];
+const FLAGS: [&str; 6] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces", map_art::MAP_SHADE, map_art::MAP_INVISIBLE];
 
 /// Check Extrude & Bevel (Classic)'s parameters `p` (its defaults filled in): every key is one of
-/// its parameters, numbers are in range, flags are true or false, and `surface`, `shadingColor` and
-/// `shadingCustom` name a surface, a shading color and a #rrggbb color.
+/// its parameters, numbers are in range, flags are true or false, `surface`, `shadingColor` and
+/// `shadingCustom` name a surface, a shading color and a #rrggbb color, and `mapArt` holds valid
+/// maps.
 pub fn validate(p: &Value) -> Result<(), String> {
-    validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)
+    validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)?;
+    map_art::validate(CLASSIC_EXTRUDE, p)
 }
 
 /// Rotate (Classic)'s numeric parameters: (key, lowest, highest, whole numbers only).
@@ -202,56 +216,55 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
 /// its tone and highlight. A gradient with transparent stops is shaded opaque and then masked by
 /// its own transparency, so the shading follows the gradient's coverage.
-pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
+///
+/// With `mapped`, a face that carries mapped art is a group of the face and that art, which the
+/// surface's opacity mask covers too. Shade Artwork gives the art its face's tone and highlight,
+/// and Invisible Geometry leaves the faces out: a face is then a group of its art alone. Wireframe
+/// draws no mapped art.
+pub(crate) fn surface(
+    n: &Node,
+    facets: Vec<Facet>,
+    source: &Paint,
+    (opacity, blend): (f32, BlendMode),
+    p: &Value,
+    mapped: Option<Mapped<'_, '_>>,
+) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
     let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_paint(source) };
     let paint = &paint;
+    // The mapped art of each facet, and whether the faces themselves are left out. Art past the
+    // limits is left out, and the faces draw.
+    let (mut parts, invisible) = match mapped.filter(|_| !wire) {
+        Some(m) => {
+            let shaded_as = |f: &Facet, c: Color| {
+                let (tone, spec) = shading.tone(f.normal, &lights);
+                shaded(c, tone, spec, shade)
+            };
+            match m.art.parts(n.id, &facets, m.layout, &shaded_as, m.budget, m.copies) {
+                Some(parts) => (parts, m.art.invisible),
+                None => (vec![], false),
+            }
+        }
+        None => (vec![], false),
+    };
     let children = facets
         .into_iter()
-        .map(|face| {
+        .enumerate()
+        .map(|(k, face)| {
+            let art = parts.get_mut(k).map(std::mem::take).unwrap_or_default();
+            if !art.is_empty() || invisible {
+                let drawn = (!invisible).then(|| Arc::new(shaded_face(n, &face, paint, &shading, &lights, shade)));
+                return Arc::new(Node::group(n.id, drawn.into_iter().chain(art).collect()));
+            }
             if wire {
                 // A wire edge is drawn as a seam is: a round-joined stroke of the paint.
                 let edge = crate::lighting::seam_stroke(paint.clone(), WIRE);
                 return Arc::new(Node::path(n.id, face.path(), Appearance { items: vec![AppearanceItem::Stroke(edge)], ..Default::default() }));
             }
-            let (tone, spec) = shading.tone(face.normal, &lights);
-            // A narrow stroke of the face's own paint closes the hairline seams between faces.
-            let seam = super::seam_width(&face);
-            let items = match paint.color() {
-                // Unshaded (No Shading, no shading color, or a face in full light) with no
-                // highlight: the paint itself, its color space and swatch kept.
-                Some(_) if (tone >= 1.0 || shade.is_none()) && spec <= 0.0 => {
-                    vec![
-                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
-                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
-                    ]
-                }
-                Some(c) => {
-                    let fill = Paint::solid(shaded(c, tone, spec, shade));
-                    vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))]
-                }
-                // Gradients and patterns keep their paint, darkened by a layer of the shading color
-                // and lightened by one of white. As with the other 3D effects' pattern shadow, the
-                // layers cover the whole face, transparent pattern cells included.
-                None => {
-                    let mut items = vec![
-                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
-                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
-                    ];
-                    for (color, share) in [(shade, 1.0 - tone), (Some(Color::WHITE), spec)] {
-                        if let Some(color) = color.filter(|_| share > 0.0) {
-                            let mut layer = FillLayer::new(Paint::solid(color));
-                            layer.opacity = share as f32;
-                            items.push(AppearanceItem::Fill(layer));
-                        }
-                    }
-                    items
-                }
-            };
-            Arc::new(Node::path(n.id, face.path(), Appearance { items, ..Default::default() }))
+            Arc::new(shaded_face(n, &face, paint, &shading, &lights, shade))
         })
         .collect();
     let mut group = Node::group(n.id, children);
@@ -263,4 +276,40 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// One face of a solid in paint `paint` (opaque: [`surface`] masks a gradient's transparency),
+/// filled in the paint shaded by the face's tone and highlight under `lights`, toward shading
+/// color `shade`.
+fn shaded_face(n: &Node, face: &Facet, paint: &Paint, shading: &ClassicShading, lights: &[([f64; 3], f64)], shade: Option<Color>) -> Node {
+    let (tone, spec) = shading.tone(face.normal, lights);
+    // A narrow stroke of the face's own paint closes the hairline seams between faces.
+    let seam = super::seam_width(face);
+    let items = match paint.color() {
+        // Unshaded (No Shading, no shading color, or a face in full light) with no
+        // highlight: the paint itself, its color space and swatch kept.
+        Some(_) if (tone >= 1.0 || shade.is_none()) && spec <= 0.0 => {
+            vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam))]
+        }
+        Some(c) => {
+            let fill = Paint::solid(shaded(c, tone, spec, shade));
+            vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))]
+        }
+        // Gradients and patterns keep their paint, darkened by a layer of the shading color
+        // and lightened by one of white. As with the other 3D effects' pattern shadow, the
+        // layers cover the whole face, transparent pattern cells included.
+        None => {
+            let mut items =
+                vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam))];
+            for (color, share) in [(shade, 1.0 - tone), (Some(Color::WHITE), spec)] {
+                if let Some(color) = color.filter(|_| share > 0.0) {
+                    let mut layer = FillLayer::new(Paint::solid(color));
+                    layer.opacity = share as f32;
+                    items.push(AppearanceItem::Fill(layer));
+                }
+            }
+            items
+        }
+    };
+    Node::path(n.id, face.path(), Appearance { items, ..Default::default() })
 }
