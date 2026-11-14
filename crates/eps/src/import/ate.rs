@@ -25,6 +25,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
     CharStyle, HyphenationOptions, JustificationOptions, Justify, LineCap, LineJoin, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
     PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
@@ -489,6 +490,17 @@ struct Style {
     /// Key 35 at 1 (Standard): Standard Vertical Roman Alignment, half-width characters upright in
     /// a column. Any other value, or no key in the run, its character style or the defaults, is off.
     standard_vertical_roman: bool,
+    /// Keys 49 and 50, Insert Aki Left and Right ([`CharStyle::aki_left`]), in 1/1000 em.
+    aki_left: f64,
+    aki_right: f64,
+}
+
+/// Insert Aki Left or Right as key `v` of a character style gives it, in 1/1000 em (the unit the
+/// scripting reference gives `aki left` and `aki right`), 0 to [`MAX_AKI`]. A negative value, one
+/// that is not a finite number, or no key is 0: no space added. A key the run itself carries wins
+/// over its styles' even when it is not a number, so a bad value never shows a style's.
+fn aki(v: Option<&Val>) -> f64 {
+    v.and_then(Val::num).filter(|v| v.is_finite() && *v > 0.0).map_or(0.0, |v| v.min(MAX_AKI))
 }
 
 /// The longest font version string read from a font record: name ID 5 strings are short (`Version
@@ -852,6 +864,8 @@ impl Texts {
             caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
             tate_chu_yoko: num("35") == Some(3.0),
             standard_vertical_roman: num("35") == Some(1.0),
+            aki_left: aki(pick("49")),
+            aki_right: aki(pick("50")),
         }
     }
 }
@@ -1470,6 +1484,9 @@ fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
         small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
         tate_chu_yoko: s.tate_chu_yoko,
         standard_vertical_roman: s.standard_vertical_roman,
+        // In ems of the type's own size, so the art's scale does not apply.
+        aki_left: s.aki_left,
+        aki_right: s.aki_right,
         ..CharStyle::default()
     }
 }
@@ -1752,6 +1769,47 @@ mod tests {
             assert!(!roman(b"/0 0", other), "{}", String::from_utf8_lossy(other));
         }
         assert!(texts(b"/35 3").style(None).tate_chu_yoko && !texts(b"/35 3").style(None).standard_vertical_roman);
+    }
+
+    /// Keys 49 and 50 of a character style are Insert Aki Left and Right in 1/1000 em, each from the
+    /// run, its character style and the styles that is based on, `[Normal Character Style]`, then the
+    /// document's defaults. A run's own 0 wins over a style's value, a value past 1000 is 1000, and a
+    /// negative value, one that is not a number or no key at all is 0.
+    #[test]
+    fn a_run_keeps_its_insert_aki() {
+        let texts = |defaults: &[u8], normal: &[u8]| Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(defaults).unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![
+                read(&[&b"/0 ([Normal Character Style]) /6 << "[..], normal, b" >>"].concat()).unwrap(),
+                read(b"/0 (Base) /6 << /49 125.0 >>").unwrap(),
+                read(b"/0 (Spaced) /5 1 /6 << /50 500.0 >>").unwrap(),
+            ],
+            para_sheets: vec![],
+            frames: vec![],
+            patterns: HashMap::new(),
+        };
+        let aki = |defaults: &[u8], normal: &[u8], run: &[u8]| {
+            let s = texts(defaults, normal).style(Some(&read(run).unwrap()));
+            (s.aki_left, s.aki_right)
+        };
+        assert_eq!(aki(b"/0 0", b"", b"/6 << /49 250.0 /50 750.0 >>"), (250.0, 750.0), "the run's own");
+        assert_eq!(aki(b"/0 0", b"", b"/5 2 /6 << >>"), (125.0, 500.0), "its style's, and the style that is based on");
+        assert_eq!(aki(b"/0 0", b"", b"/5 2 /6 << /49 0.0 /50 0 >>"), (0.0, 0.0), "the run's own zero wins");
+        assert_eq!(aki(b"/49 10.0 /50 20.0", b"/49 30.0", b"/6 << >>"), (30.0, 20.0), "Normal, then the document's");
+        assert_eq!(aki(b"/49 10.0 /50 20.0", b"", b"/6 << >>"), (10.0, 20.0), "the document's");
+        assert_eq!(aki(b"/0 0", b"", b"/6 << >>"), (0.0, 0.0), "no key");
+        assert_eq!(aki(b"/0 0", b"", b"/6 << /49 1000.5 /50 1e300 >>"), (MAX_AKI, MAX_AKI), "clamped");
+        for bad in [&b"-1.0"[..], b"-250", b"(125)", b"true", b"[ 125 ]", b"1e400", b"-1e400"] {
+            let run = [&b"/5 2 /6 << /49 "[..], bad, b" /50 ", bad, b" >>"].concat();
+            assert_eq!(aki(b"/0 0", b"", &run), (0.0, 0.0), "{}", String::from_utf8_lossy(bad));
+        }
+        // In ems of the type's size: the art's scale leaves it as it is.
+        let s = texts(b"/0 0", b"").style(Some(&read(b"/6 << /49 250.0 /50 125.0 >>").unwrap()));
+        let c = char_style(&s, 10.0, Affine::IDENTITY);
+        assert_eq!((c.aki_left, c.aki_right), (250.0, 125.0));
     }
 
     /// Keys 61, 62 and 64 of a character style are its stroke's cap (0 butt, 1 round, 2
@@ -2224,6 +2282,8 @@ mod tests {
                     caps: 0,
                     tate_chu_yoko: false,
                     standard_vertical_roman: false,
+                    aki_left: 0.0,
+                    aki_right: 0.0,
                 },
             )],
             kerns: vec![],
