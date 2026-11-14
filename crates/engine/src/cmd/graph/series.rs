@@ -732,30 +732,51 @@ fn lines_of(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, NodeId, Line)> {
     out
 }
 
-/// What lines of kind `line` keep (`slot`) after line `n` shows its rows ([`label_rows`]), or with `object_only` what
-/// `slot` keeps with the line's object opacity and blend mode: `None` when that is how the graph draws them with no
-/// kept rows.
-fn line_rows_after(slot: Option<&vectorcraft_doc::LabelRows>, line: Line, n: &Node, object_only: bool) -> Option<vectorcraft_doc::LabelRows> {
+/// Which of the object rows ([`label_rows`]) a graph label or line shows its kind keeps after an edit.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Keep {
+    /// All of them.
+    All,
+    /// Only the object opacity and blend mode; the fill and stroke rows stay as the kind keeps them.
+    Object,
+    /// The fill and stroke rows; the object opacity and blend mode stay as the kind keeps them.
+    Rows,
+}
+
+/// `shown` with the parts of the rows `kept` keeps that `keep` leaves as they are.
+fn keep_rows(kept: vectorcraft_doc::LabelRows, shown: vectorcraft_doc::LabelRows, keep: Keep) -> vectorcraft_doc::LabelRows {
+    match keep {
+        Keep::All => shown,
+        Keep::Object => {
+            let mut kept = kept;
+            (kept.paint.opacity, kept.paint.blend) = (shown.paint.opacity, shown.paint.blend);
+            kept
+        }
+        Keep::Rows => {
+            let mut shown = shown;
+            (shown.paint.opacity, shown.paint.blend) = (kept.paint.opacity, kept.paint.blend);
+            shown
+        }
+    }
+}
+
+/// What lines of kind `line` keep (`slot`) after line `n` shows its rows ([`label_rows`]), of which `keep` says what is
+/// taken from the line: `None` when that is how the graph draws them with no kept rows.
+fn line_rows_after(slot: Option<&vectorcraft_doc::LabelRows>, line: Line, n: &Node, keep: Keep) -> Option<vectorcraft_doc::LabelRows> {
     let shown = label_rows(n).unwrap_or_default();
-    let rows = if object_only {
-        let mut kept = slot.cloned().unwrap_or_else(|| line.default_rows());
-        (kept.paint.opacity, kept.paint.blend) = (shown.paint.opacity, shown.paint.blend);
-        kept
-    } else {
-        shown
-    };
+    let rows = keep_rows(slot.cloned().unwrap_or_else(|| line.default_rows()), shown, keep);
     (rows != line.default_rows()).then_some(rows)
 }
 
 /// Keep the object rows ([`label_rows`]) of the graph lines among `ids` for every line of their kind (axis lines and tick
-/// marks, or a radar graph's rings), with `object_only` only their object opacity and blend mode, even when a line
-/// already showed them. Returns whether kept rows changed.
-fn store_line_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bool {
+/// marks, or a radar graph's rings), the part of them `keep` says, even when a line already showed them. Returns whether
+/// kept rows changed.
+fn store_line_rows(doc: &mut Document, ids: &[NodeId], keep: Keep) -> bool {
     let mut changed = false;
     for (id, graph, line) in lines_of(doc, ids) {
         let Some(spec) = doc.node(graph).and_then(|n| n.extras().graph.as_deref()) else { continue };
         let Some(n) = doc.node(id) else { continue };
-        let kept = line_rows_after(kept_line_rows(&spec.label_styles, line), line, n, object_only);
+        let kept = line_rows_after(kept_line_rows(&spec.label_styles, line), line, n, keep);
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let slot = line_slot(&mut spec.label_styles, line);
         changed |= *slot != kept;
@@ -768,7 +789,14 @@ fn store_line_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> boo
 /// for an edit that wrote their fill or stroke. Lines of a kind that the edit reached differently take the frontmost
 /// one's rows. Called inside the same edit, so they undo together. Returns whether kept rows changed.
 pub(crate) fn capture_line_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
-    store_line_rows(doc, ids, false)
+    store_line_rows(doc, ids, Keep::All)
+}
+
+/// [`capture_line_rows`] for an edit that wrote the fill and stroke rows of graph lines `ids` and left their object
+/// opacity and blend mode alone: those stay as the kind keeps them, also when a line still shows other ones until the
+/// graph is drawn again.
+pub(crate) fn capture_line_fill_stroke_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
+    store_line_rows(doc, ids, Keep::Rows)
 }
 
 /// Keep, for every line of their kind, the attributes of the object rows ([`label_rows`]) that an edit changed on the
@@ -821,8 +849,8 @@ fn merge_row_edits(rows: &mut vectorcraft_doc::LabelRows, old: &vectorcraft_doc:
     take(&mut rows.stroke_under, &old.stroke_under, &new.stroke_under);
 }
 
-/// Would [`store_line_rows`] with `object_only` change what a graph keeps for the lines among `ids`? Reads the document
-/// without copying it.
+/// Would [`store_line_rows`] with [`Keep::Object`] change what a graph keeps for the lines among `ids`? Reads the
+/// document without copying it.
 fn line_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
     let mut kept: Vec<(NodeId, Line, Option<vectorcraft_doc::LabelRows>)> = vec![];
     for (id, graph, line) in lines_of(doc, ids) {
@@ -831,7 +859,7 @@ fn line_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
             Some(i) => kept.swap_remove(i).2,
             None => kept_line_rows(&spec.label_styles, line).cloned(),
         };
-        kept.push((graph, line, line_rows_after(slot.as_ref(), line, n, true)));
+        kept.push((graph, line, line_rows_after(slot.as_ref(), line, n, Keep::Object)));
     }
     kept.into_iter().any(|(graph, line, rows)| {
         doc.node(graph).and_then(|n| n.extras().graph.as_deref()).is_some_and(|spec| kept_line_rows(&spec.label_styles, line) != rows.as_ref())
@@ -844,14 +872,22 @@ fn line_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
 /// looked up. The graph lines among `ids` keep their rows for every line of their kind too ([`capture_line_rows`]).
 /// Called inside the same edit, so they undo together. Returns whether kept rows changed.
 pub(crate) fn capture_label_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
-    store_label_rows(doc, ids, false)
+    store_label_rows(doc, ids, Keep::All)
 }
 
 /// Keep the object opacity and blend mode of graph labels and graph lines `ids` for every label or line of their kind, as
 /// [`capture_label_rows`] keeps them, and leave the kept fill and stroke rows as they are. Returns whether what the graph
 /// keeps changed.
 pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -> bool {
-    store_label_rows(doc, ids, true)
+    store_label_rows(doc, ids, Keep::Object)
+}
+
+/// Keep the fill and stroke rows of graph labels and graph lines `ids` for every label or line of their kind, as
+/// [`capture_label_rows`] keeps them, for an edit that left their object opacity and blend mode alone: those stay as the
+/// kind keeps them, also when a label or line still shows other ones until the graph is drawn again. Returns whether what
+/// the graph keeps changed.
+pub(crate) fn capture_label_fill_stroke_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
+    store_label_rows(doc, ids, Keep::Rows)
 }
 
 /// Would [`capture_label_object_opacity`] change what a graph keeps for labels `ids`? Reads the document without copying
@@ -865,13 +901,13 @@ pub(crate) fn label_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bo
                 Role::Category => &spec.label_styles.categories_rows,
                 Role::Legend => &spec.label_styles.legend_rows,
             };
-            *slot != kept_label_rows(slot, rows, true)
+            *slot != kept_label_rows(slot, rows, Keep::Object)
         })
 }
 
-/// [`capture_label_rows`], or with `object_only` [`capture_label_object_opacity`].
-fn store_label_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bool {
-    let mut changed = store_line_rows(doc, ids, object_only);
+/// [`capture_label_rows`], [`capture_label_object_opacity`] or [`capture_label_fill_stroke_rows`], as `keep` says.
+fn store_label_rows(doc: &mut Document, ids: &[NodeId], keep: Keep) -> bool {
+    let mut changed = store_line_rows(doc, ids, keep);
     for (graph, role, rows) in label_rows_of(doc, ids) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let slot = match role {
@@ -879,26 +915,23 @@ fn store_label_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bo
             Role::Category => &mut spec.label_styles.categories_rows,
             Role::Legend => &mut spec.label_styles.legend_rows,
         };
-        let kept = kept_label_rows(slot, rows, object_only);
+        let kept = kept_label_rows(slot, rows, keep);
         changed |= *slot != kept;
         *slot = kept;
     }
     changed
 }
 
-/// What a kind keeps after a label of it shows `rows`: those rows, or with `object_only` what `slot` keeps with the
-/// label's object opacity and blend mode.
+/// What a kind keeps (`slot`) after a label of it shows `rows`, of which `keep` says what is taken from the label.
 fn kept_label_rows(
     slot: &Option<vectorcraft_doc::LabelRows>,
     rows: Option<vectorcraft_doc::LabelRows>,
-    object_only: bool,
+    keep: Keep,
 ) -> Option<vectorcraft_doc::LabelRows> {
-    if !object_only {
+    if keep == Keep::All {
         return rows;
     }
-    let mut kept = slot.clone().unwrap_or_default();
-    let shown = rows.unwrap_or_default();
-    (kept.paint.opacity, kept.paint.blend) = (shown.paint.opacity, shown.paint.blend);
+    let kept = keep_rows(slot.clone().unwrap_or_default(), rows.unwrap_or_default(), keep);
     (kept != vectorcraft_doc::LabelRows::default()).then_some(kept)
 }
 

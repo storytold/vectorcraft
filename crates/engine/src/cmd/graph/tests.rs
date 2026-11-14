@@ -6590,6 +6590,92 @@ fn a_transparency_only_pick_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
     assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{looks:?}");
 }
 
+/// The Eyedropper Options that apply every fill and stroke attribute but not the object's transparency.
+fn every_row_attribute_without_transparency() -> serde_json::Value {
+    let fill = json!({"color": true, "transparency": true, "overprint": true});
+    let stroke =
+        json!({"color": true, "transparency": true, "overprint": true, "weight": true, "cap": true, "join": true, "miter": true, "dash": true});
+    json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false})
+}
+
+/// An Eyedropper pick of every fill and stroke attribute without the object's transparency, with or without `append`,
+/// keeps the object opacity the axis lines keep from another line, though the line it is applied to still shows 100%.
+#[test]
+fn a_pick_without_transparency_on_an_axis_line_keeps_the_opacity_its_kind_keeps() {
+    for append in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+        let lines = line_nodes(&s, id);
+        s.execute("transparency.set", &json!({"ids": [lines[0].id.0], "opacity": 40})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).2, 1.0, "append {append}: the other lines show 100% until the graph is drawn again");
+        let pick = json!({"source": rect.0, "ids": [lines[1].id.0], "apply": every_row_attribute_without_transparency(), "append": append});
+        s.execute("appearance.copyFrom", &pick).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.4).abs() < 1e-6), "append {append}: {looks:?}");
+    }
+}
+
+/// A graphic style added on top of a graph label's or axis line's appearance keeps the object opacity its kind keeps
+/// from another label or line, though the one it is added to still shows 100%.
+#[test]
+fn a_graphic_style_added_to_a_label_or_axis_line_keeps_the_opacity_its_kind_keeps() {
+    for label in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+        s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Red"})).unwrap();
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 40})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(second).unwrap().opacity, 1.0, "label {label}: 100% until the graph is drawn again");
+        s.execute("graphicStyle.apply", &json!({"name": "Red", "ids": [second.0], "add": true})).unwrap();
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, opacity) = rows_of(&looks, q);
+                assert!((opacity - 0.4).abs() < 1e-6 && rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?} {opacity}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.4).abs() < 1e-6), "{looks:?}");
+        }
+    }
+}
+
+/// An Eyedropper pick with `append` and without the object's transparency on a graph label keeps the object opacity its
+/// kind keeps from another label, though the label it is applied to still shows 100%.
+#[test]
+fn an_appended_pick_without_transparency_on_a_label_keeps_the_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [text_id(&s, id, "Axes", "Q1").0], "opacity": 40})).unwrap();
+    let q2 = text_id(&s, id, "Axes", "Q2");
+    assert_eq!(s.doc().unwrap().doc.node(q2).unwrap().opacity, 1.0, "Q2 shows 100% until the graph is drawn again");
+    let pick = json!({"source": rect.0, "ids": [q2.0], "apply": every_row_attribute_without_transparency(), "append": true});
+    s.execute("appearance.copyFrom", &pick).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    for q in ["Q1", "Q2", "Q3"] {
+        let (rows, opacity) = rows_of(&looks, q);
+        assert!((opacity - 0.4).abs() < 1e-6, "{q}: {opacity}");
+        assert!(rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?}");
+    }
+}
+
 /// An edit of some attributes on an axis line that still shows the default stroke keeps what it changes, and the stroke
 /// its kind keeps from another line stays: a cap is not kept, so it changes nothing the kind keeps.
 #[test]

@@ -874,9 +874,10 @@ kind of label: the paint, weight, opacity and blend mode of its topmost visible 
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
 label already showed them. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
-`appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
-is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
-`legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
+`appearance.copyFrom` with `append` stores the rows, and the object opacity and blend mode only when it also applies
+the object's transparency. `graphicStyle.apply` with `add` stores the rows and leaves the object opacity and blend
+mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
+gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
 last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
 `appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
@@ -896,8 +897,10 @@ store only the object opacity and blend mode. `appearance.clear`, `appearance.tr
 `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or with `append`, store a
 line's rows even when the line already showed them. The other commands, an `appearance.copyFrom` of some attributes
 included, store only what they change on a line's rows; the kind keeps its other attributes, also when the line still
-shows different ones until the graph is drawn again. Rows equal to a kind's default stroke (0.5 pt black for axis lines
-and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
+shows different ones until the graph is drawn again. An `appearance.copyFrom` that does not apply the object's
+transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as they are,
+also when the line still shows other ones. Rows equal to a kind's default stroke (0.5 pt black for axis lines and tick
+marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
 each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
 styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of
