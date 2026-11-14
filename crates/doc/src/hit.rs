@@ -98,10 +98,58 @@ pub fn set_image_paint(f: ImagePaint) {
     let _ = IMAGE_PAINT.set(f);
 }
 
+/// The shapes that [`ImagePaint`] gives for one object.
+type Painted = Vec<(BezPath, FillRule, AppearanceItem)>;
+
 /// The shapes that the image or symbol instance `n` paints with its geometry effects
-/// ([`set_image_paint`]), none while nothing is registered.
-pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(doc, n))
+/// ([`set_image_paint`]), none while nothing is registered. The shapes of a symbol instance of
+/// `doc` with an effect on a fill or stroke are kept on this thread ([`PAINT_KEPT`]) and measured
+/// again when `n`, a symbol of `doc` or its 9-slice guides or natural size, a pattern of `doc`,
+/// its swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and on every call while `n` or the document's symbols or
+/// patterns hold a placed document or the symbols hold an image ([`symbols_hold_images`]).
+pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Rc<Painted> {
+    let Some(f) = IMAGE_PAINT.get() else { return Rc::default() };
+    let row_effects = || n.appearance.items.iter().any(|i| !i.effects().is_empty());
+    let Some(d) = doc.filter(|_| matches!(n.kind, NodeKind::SymbolInstance { .. }) && row_effects()) else {
+        return Rc::new(f(doc, n));
+    };
+    let inputs = live_inputs();
+    if let Some(painted) = kept(&PAINTED, d, n, inputs) {
+        return painted;
+    }
+    #[cfg(test)]
+    PAINT_EVALUATED.with(|c| c.set(c.get() + 1));
+    let painted = Rc::new(f(doc, n));
+    if !symbols_hold_images(d) {
+        let size = painted.iter().fold(0usize, |s, (bp, _, _)| s.saturating_add(1 + bp.elements().len()));
+        keep(&PAINTED, d, n, inputs, &painted, size, PAINT_KEPT);
+    }
+    painted
+}
+
+/// Does the art of a symbol of `doc` hold an image? The shapes its fills and strokes paint can
+/// follow its pixels, which change when its file is read again, so [`image_paint`] does not keep
+/// the shapes of an instance then.
+fn symbols_hold_images(doc: &Document) -> bool {
+    let mut image = false;
+    doc.symbols.iter().for_each(|s| s.art.walk(&mut |c| image |= matches!(c.kind, NodeKind::Image(_))));
+    image
+}
+
+/// How many symbol instances' shapes [`image_paint`] keeps on each thread: every click and every
+/// hover measures each instance whose fill or stroke has a geometry effect.
+const PAINT_KEPT: usize = 64;
+
+thread_local! {
+    /// The shapes [`image_paint`] keeps, the latest first.
+    static PAINTED: RefCell<Vec<Evaluated<Painted>>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many symbol instances [`image_paint`] measured on this thread.
+    static PAINT_EVALUATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// One level of evaluation of a live object in a document, as the canvas draws it: type in an
@@ -128,21 +176,68 @@ fn live_inputs() -> u64 {
     LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
 }
 
-/// A live object evaluated by [`live_art`] on this thread: the object, its document's symbols (by
-/// name and art), patterns, swatches and color groups and the [`LiveInputs`] as they were, the art
-/// and its [`art_size`].
-struct EvaluatedLive {
+/// An object evaluated by [`live_art`] or [`image_paint`] on this thread: the object, its
+/// document's symbols (by name and art), patterns, swatches and color groups, the document data
+/// that symbols' 9-slice guides and natural sizes are kept in, and the [`LiveInputs`] as they
+/// were, the result and its size.
+struct Evaluated<T> {
     node: Node,
     symbols: Vec<(String, Arc<Node>)>,
     patterns: Vec<crate::PatternDef>,
     swatches: crate::Shared<Vec<vectorcraft_color::Swatch>>,
     swatch_groups: crate::Shared<Vec<vectorcraft_color::SwatchGroup>>,
+    unknown: crate::Shared<serde_json::Map<String, serde_json::Value>>,
     inputs: u64,
-    art: Rc<Vec<Node>>,
+    art: Rc<T>,
     size: usize,
 }
 
-impl EvaluatedLive {
+/// The evaluations kept on this thread in one store, the latest first.
+type Store<T> = std::thread::LocalKey<RefCell<Vec<Evaluated<T>>>>;
+
+/// The evaluation of `n` in `doc` with inputs `inputs` that `store` keeps, moved to the front.
+fn kept<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64) -> Option<Rc<T>> {
+    store.with_borrow_mut(|kept| {
+        let i = kept.iter().position(|e| e.is_of(doc, n, inputs))?;
+        let e = kept.remove(i);
+        let art = e.art.clone();
+        kept.insert(0, e);
+        Some(art)
+    })
+}
+
+/// Keep `art`, of size `size`, the evaluation of `n` in `doc` with inputs `inputs`, at the front
+/// of `store`, which keeps `most` evaluations whose sizes add up to [`LIVE_KEPT_SIZE`] at most.
+/// Nothing is kept when `art` alone is larger, or when `n` or the document's symbols or patterns
+/// hold a placed document ([`holds_placed`]).
+fn keep<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64, art: &Rc<T>, size: usize, most: usize) {
+    if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
+        return;
+    }
+    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
+    let e = Evaluated {
+        node: n.clone(),
+        symbols,
+        patterns: doc.patterns.clone(),
+        swatches: doc.swatches.clone(),
+        swatch_groups: doc.swatch_groups.clone(),
+        unknown: doc.unknown.clone(),
+        inputs,
+        art: art.clone(),
+        size,
+    };
+    store.with_borrow_mut(|kept| {
+        kept.insert(0, e);
+        kept.truncate(most);
+        let mut total = 0usize;
+        kept.retain(|e| {
+            total = total.saturating_add(e.size);
+            total <= LIVE_KEPT_SIZE
+        });
+    });
+}
+
+impl<T> Evaluated<T> {
     /// Is this the evaluation of `n` in `doc`, with inputs `inputs`, as they are now?
     fn is_of(&self, doc: &Document, n: &Node, inputs: u64) -> bool {
         self.inputs == inputs
@@ -152,6 +247,7 @@ impl EvaluatedLive {
             && self.patterns == doc.patterns
             && self.swatches == doc.swatches
             && self.swatch_groups == doc.swatch_groups
+            && self.unknown == doc.unknown
     }
 }
 
@@ -159,8 +255,9 @@ impl EvaluatedLive {
 /// envelope's stroke band hits it again and again, and an envelope can hold a blend.
 const LIVE_KEPT: usize = 4;
 
-/// Most [`art_size`] the evaluations [`live_art`] keeps on one thread add up to. Art larger than
-/// this is not kept.
+/// Most size the evaluations [`live_art`] keeps on one thread add up to ([`art_size`]), and the
+/// shapes [`image_paint`] keeps (each shape and its path elements). Art larger than this is not
+/// kept.
 const LIVE_KEPT_SIZE: usize = 250_000;
 
 /// The size of `art` for [`LIVE_KEPT_SIZE`]: its objects and the anchors of their paths.
@@ -185,52 +282,23 @@ fn holds_placed(doc: &Document, n: &Node) -> bool {
 
 thread_local! {
     /// The evaluations [`live_art`] keeps, the latest first.
-    static EVALUATED: RefCell<Vec<EvaluatedLive>> = const { RefCell::new(Vec::new()) };
+    static EVALUATED: RefCell<Vec<Evaluated<Vec<Node>>>> = const { RefCell::new(Vec::new()) };
 }
 
 /// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
-/// nothing is registered. The art is evaluated again when `n`, a symbol of `doc`, a pattern of
-/// `doc`, its swatches or color groups, or the [`LiveInputs`] have changed since, and on every
+/// nothing is registered. The art is evaluated again when `n`, a symbol of `doc` or its 9-slice
+/// guides or natural size, a pattern of `doc`, its swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and on every
 /// click while it or the document's symbols or patterns hold a placed document ([`holds_placed`]).
 fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
     let inputs = live_inputs();
-    let kept = EVALUATED.with_borrow_mut(|kept| {
-        let i = kept.iter().position(|e| e.is_of(doc, n, inputs))?;
-        let e = kept.remove(i);
-        let art = e.art.clone();
-        kept.insert(0, e);
-        Some(art)
-    });
-    if let Some(art) = kept {
+    if let Some(art) = kept(&EVALUATED, doc, n, inputs) {
         return art;
     }
     #[cfg(test)]
     LIVE_EVALUATED.with(|c| c.set(c.get() + 1));
     let art = Rc::new(LIVE_ART.get().map_or_else(|| crate::live::expand_live(n), |(f, _)| f(Some(doc), n)));
-    let size = art_size(&art);
-    if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
-        return art;
-    }
-    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
-    let e = EvaluatedLive {
-        node: n.clone(),
-        symbols,
-        patterns: doc.patterns.clone(),
-        swatches: doc.swatches.clone(),
-        swatch_groups: doc.swatch_groups.clone(),
-        inputs,
-        art: art.clone(),
-        size,
-    };
-    EVALUATED.with_borrow_mut(|kept| {
-        kept.insert(0, e);
-        kept.truncate(LIVE_KEPT);
-        let mut total = 0usize;
-        kept.retain(|e| {
-            total = total.saturating_add(e.size);
-            total <= LIVE_KEPT_SIZE
-        });
-    });
+    keep(&EVALUATED, doc, n, inputs, &art, art_size(&art), LIVE_KEPT);
     art
 }
 
