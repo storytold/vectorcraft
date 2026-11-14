@@ -211,7 +211,9 @@ impl Node {
 
     /// A quick box round everything the object can paint, for culling clicks: paths and compound
     /// paths grow their geometric bounds by the farthest their strokes can reach from any path
-    /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
+    /// ([`Appearance::outset`]) instead of measuring along their shape. A clip group's or a
+    /// clipping layer's box takes in the region that the live geometry effects of its clipping
+    /// path give it ([`crate::hit::set_clip_region`]). An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
     /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
@@ -260,6 +262,11 @@ impl Node {
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), crate::blend::rail_reach(children, spec, symbols))
+            }
+            // The live geometry effects of a clipping path can move or grow the region it clips to
+            // past its plain shape ([`crate::hit::set_clip_region`]).
+            NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
+                vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
             }
             _ => self.visual(symbols),
         }

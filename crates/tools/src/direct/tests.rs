@@ -2396,3 +2396,26 @@ fn type_on_a_path_shows_and_drags_its_paths_handles() {
     assert!((v["x"].as_f64().unwrap() - 400.0).abs() < 1e-9, "Shift keeps it straight above its anchor: {v}");
     assert!(handles(&ToolContext { handles_multiple: false, ..cx(&d, &s, &p) }).is_empty());
 }
+
+/// An Alt-marquee across clipped art where the clipping path's own shape, but not the region a
+/// live effect moved it to, lets it show selects the art in Outline view only, which draws the
+/// clipping path without its effects.
+#[test]
+fn outline_view_marquees_measure_clipped_art_by_the_plain_clipping_path() {
+    let (d, _, art) = doc_with_moved_clip_region();
+    let s = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Mods::default() };
+    let marquee = |outline: bool| {
+        let c = ToolContext { outline, ..cx(&d, &s, &p) };
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 440.0, 410.0).with_mods(alt));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 460.0, 430.0).with_mods(alt));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 460.0, 430.0).with_mods(alt))
+    };
+    let selects = |a: &[Action]| a.iter().any(|a| matches!(a, Action::Exec(c, v) if c == "select.set" && v["ids"] == json!([art.0])));
+    let a = marquee(true);
+    assert!(selects(&a), "outline: {a:?}");
+    let a = marquee(false);
+    assert!(!selects(&a), "preview: {a:?}");
+}

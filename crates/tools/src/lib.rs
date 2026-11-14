@@ -450,6 +450,36 @@ pub(crate) mod testutil {
         (d, g, clip, art)
     }
 
+    /// A document with the rectangle of [`doc_with_rect`] and a clip group whose clipping path,
+    /// (400, 400)–(500, 500), has a live effect that moves the region it clips to 100 pt right
+    /// (registered with [`vectorcraft_doc::hit::set_clip_region`]), over art at (420, 420)–(480, 480),
+    /// inside the clipping path's own shape and outside the moved region: the document, the clip
+    /// group and the art.
+    pub fn doc_with_moved_clip_region() -> (Document, NodeId, NodeId) {
+        fn moved(clip: &Node) -> Option<Option<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)>> {
+            let mut moves = false;
+            clip.walk(&mut |n| moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move"));
+            if !moves {
+                return None;
+            }
+            Some(vectorcraft_doc::hit::clip_regions(clip).into_iter().next().map(|(mut bp, rule)| {
+                bp.apply_affine(vectorcraft_geom::Affine::translate((100.0, 0.0)));
+                (bp, rule)
+            }))
+        }
+        vectorcraft_doc::hit::set_clip_region(moved);
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = Node::path(clip, shapes::rectangle(Rect::new(400.0, 400.0, 500.0, 500.0)), Default::default());
+        path.appearance.effects.push(vectorcraft_doc::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+        let picture = Node::path(art, shapes::rectangle(Rect::new(420.0, 420.0, 480.0, 480.0)), Appearance::default_art());
+        let group =
+            Node::new(g, vectorcraft_doc::NodeKind::Group { children: vec![std::sync::Arc::new(path), std::sync::Arc::new(picture)], clip: true });
+        d.insert(Some(l), 1, group).unwrap();
+        (d, g, art)
+    }
+
     /// A new layer of `d`, above the others, with the unpainted rectangle `mask` as its clipping
     /// mask and `art` clipped by it: the layer and the clipping mask.
     pub fn add_masked_layer(d: &mut Document, mask: Rect, art: Node) -> (NodeId, NodeId) {
