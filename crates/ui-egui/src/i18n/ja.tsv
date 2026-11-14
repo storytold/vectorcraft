@@ -5419,6 +5419,7 @@ effect	Vertical	垂直
 	VectorCraft Title Bar on Every Desktop	すべてのデスクトップで VectorCraft のタイトルバー
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	環境変数 VECTORCRAFT_TITLEBAR が設定されている間は、この変数でタイトルバーが決まります。
 	System Title Bar takes precedence over this option while it is on.	システムのタイトルバーがオンの間は、そちらがこのオプションより優先されます。
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	すべてのデスクトップで VectorCraft のタイトルバーがオフの間は、このオプションのオンとオフにかかわらず、このデスクトップがウィンドウのタイトルバーを描画します。
 	Value Axis	数値軸
 	On Left Side	左側
 	On Right Side	右側
@@ -6292,6 +6293,8 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Playback Options…	再生オプション…
+	Button Mode	ボタンモード
+	No actions.	アクションがありません。
 	Insert Stop…	停止を挿入…
 	Insert Stop	停止を挿入
 	Record Stop	停止を記録
