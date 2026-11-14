@@ -204,13 +204,14 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else).
+/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
+/// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
 fn wasm_set() -> Result<Vec<(String, String)>, String> {
     let meta = metadata()?;
-    let crates = layers::from_metadata(&meta)?;
-    let pkgs = meta["packages"].as_array().ok_or("no packages")?;
-    let versions: std::collections::HashMap<&str, &str> = pkgs.iter().filter_map(|p| Some((p["name"].as_str()?, p["version"].as_str()?))).collect();
-    Ok(crates
+    let ids: std::collections::HashMap<&str, &str> =
+        meta["packages"].as_array().into_iter().flatten().filter_map(|p| Some((p["name"].as_str()?, p["id"].as_str()?))).collect();
+    layers::from_metadata(&meta)?
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
@@ -218,10 +219,10 @@ fn wasm_set() -> Result<Vec<(String, String)>, String> {
             _ => layers::short_name(&c.name) == "web",
         })
         .map(|c| {
-            let ver = versions.get(c.name.as_str()).copied().unwrap_or_default();
-            (c.name, ver.to_string())
+            let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();
+            Ok((c.name, id))
         })
-        .collect())
+        .collect()
 }
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
@@ -230,11 +231,10 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for (pkg, ver) in &set {
-        let spec = if ver.is_empty() { pkg.clone() } else { format!("{pkg}@{ver}") };
-        c.args(["-p", &spec]);
+    for (_, id) in &set {
+        c.args(["-p", id]);
     }
-    let names: Vec<&str> = set.iter().map(|(p, _)| p.as_str()).collect();
+    let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
     run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
