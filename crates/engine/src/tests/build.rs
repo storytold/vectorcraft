@@ -3879,6 +3879,37 @@ fn live_paint_bucket_alt_shift_gradient_samples_active_stroke_only() {
 }
 
 #[test]
+fn live_paint_selection_double_click_selects_the_faces_no_stroked_edge_parts() {
+    let mut s = session();
+    let g = live(&mut s);
+    // The edge between the middle and right faces draws no stroke.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100.0, 50.0], "none": true})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintSelection", v).unwrap();
+    let gn = node(&s, g);
+    let face = |x: f64| vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().id;
+    let before = s.doc().unwrap().doc.clone();
+    let double_click = |s: &mut Session, x: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(m), v).unwrap();
+        }
+        let mut ids = s.doc().unwrap().selection.objects.clone();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut ids: Vec<NodeId>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(double_click(&mut s, 125.0, Mods::default()), sorted(vec![face(75.0), face(125.0)]));
+    // The stroked edge at x = 50 parts the left face from the others.
+    assert_eq!(double_click(&mut s, 25.0, Mods::default()), vec![face(25.0)]);
+    // Shift-double-click adds the faces reached to the selection.
+    assert_eq!(double_click(&mut s, 75.0, Mods { shift: true, ..Default::default() }), sorted(vec![face(25.0), face(75.0), face(125.0)]));
+    assert_eq!(s.doc().unwrap().doc, before, "selecting changes no paint");
+}
+
+#[test]
 fn live_paint_selection_marquee_selects_what_it_touches() {
     let mut s = session();
     let g = live(&mut s);
@@ -4413,6 +4444,41 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!(s.trace_hand_off.is_none(), "dropped");
     let bb = outline(&traced_paths(&node(&s, NodeId(moved["id"].as_u64().unwrap())))[0]).0.bounds().unwrap();
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
+}
+
+/// A trace made in one document applies only there: in another document with the same image,
+/// object and settings, the run no longer applies, and both trace commands drop the trace handed
+/// in and trace that document's own image, as one undo step.
+#[test]
+fn a_trace_run_applies_only_in_its_own_document() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut direct = session();
+        image_doc(&mut direct);
+        let want = direct.execute(command, &p).unwrap();
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let a = s.active_index().unwrap();
+        let copy = (*s.doc().unwrap().doc).clone();
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        let b = s.add_document(copy, None);
+        assert_ne!(s.documents()[a].uid, s.documents()[b].uid);
+        assert!(!run.current(&s), "{command}: another document");
+        assert!(s.set_active(a));
+        assert!(run.current(&s), "{command}: its own document");
+        assert!(s.set_active(b));
+        traced.hand_in(&mut s);
+        let got = s.execute(run.command(), run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        assert_eq!(got, want, "{command}");
+        let g = NodeId(got["id"].as_u64().unwrap());
+        assert_eq!(node(&s, g), node(&direct, g), "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
+        assert!(s.set_active(a));
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: the first document is untouched");
+    }
 }
 
 /// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
