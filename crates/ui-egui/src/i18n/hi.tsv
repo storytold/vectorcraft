@@ -6682,6 +6682,18 @@ antiAlias	Sharp	शार्प
 @msg	`name` must be the name of a script engine	`name` किसी स्क्रिप्ट इंजन का नाम होना चाहिए
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	मुख्य स्क्रिप्ट इंजन हर रन के लिए नया होता है और कभी रखा नहीं जाता, इसलिए इसे हटाया नहीं जा सकता
 @msg	there is no script engine named {name}	{name} नाम का कोई स्क्रिप्ट इंजन नहीं है
+@msg	`answers` must be a list of answers	`answers` उत्तरों की सूची होनी चाहिए
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` में {MAX_ANSWERS} से अधिक उत्तर हैं
+@msg	`answers` is larger than 1 MiB	`answers` 1 MiB से बड़ा है
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	`kind` और `value` वाला ऑब्जेक्ट होना चाहिए
+@msg	must have exactly `kind` and `value`	इसमें ठीक-ठीक `kind` और `value` होने चाहिए
+@msg	is an alert's answer, whose `value` must be "ok"	यह alert का उत्तर है, इसलिए इसका `value` "ok" होना चाहिए
+@msg	is a confirm's answer, whose `value` must be true or false	यह confirm का उत्तर है, इसलिए इसका `value` true या false होना चाहिए
+@msg	is longer than 16 KiB	16 KiB से लंबा है
+@msg	is a prompt's answer, whose `value` must be a string or null	यह prompt का उत्तर है, इसलिए इसका `value` स्ट्रिंग या null होना चाहिए
+@msg	must have `kind` alert, confirm or prompt	`kind` alert, confirm या prompt होना चाहिए
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` केवल ऐसे रन के लिए है जिसमें पूछने के लिए कोई नहीं है: ऐप में, व्यक्ति हर डायलॉग का उत्तर देता है
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	copy needs path: the file to copy into the document's folder	copy के लिए path चाहिए: डॉक्यूमेंट के फ़ोल्डर में कॉपी करने वाली फ़ाइल

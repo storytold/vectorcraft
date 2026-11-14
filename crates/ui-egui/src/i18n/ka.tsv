@@ -5589,6 +5589,18 @@ imageTrace	Outline	კონტური
 @msg	`name` must be the name of a script engine	`name` უნდა იყოს სკრიპტის ძრავის სახელი
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	მთავარი სკრიპტის ძრავა ყოველი გაშვებისთვის ახალია და არასოდეს ინახება, ამიტომ მისი მოცილება შეუძლებელია
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
+@msg	`answers` must be a list of answers	`answers` უნდა იყოს პასუხების სია
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers`-ში {MAX_ANSWERS}-ზე მეტი პასუხია
+@msg	`answers` is larger than 1 MiB	`answers` 1 MiB-ზე დიდია
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	უნდა იყოს ობიექტი `kind`-ითა და `value`-ით
+@msg	must have exactly `kind` and `value`	უნდა ჰქონდეს ზუსტად `kind` და `value`
+@msg	is an alert's answer, whose `value` must be "ok"	alert-ის პასუხია, ამიტომ მისი `value` უნდა იყოს "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	confirm-ის პასუხია, ამიტომ მისი `value` უნდა იყოს true ან false
+@msg	is longer than 16 KiB	16 KiB-ზე გრძელია
+@msg	is a prompt's answer, whose `value` must be a string or null	prompt-ის პასუხია, ამიტომ მისი `value` უნდა იყოს სტრიქონი ან null
+@msg	must have `kind` alert, confirm or prompt	`kind` უნდა იყოს alert, confirm ან prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` მხოლოდ ისეთი გაშვებისთვისაა, სადაც შესაკითხი არავინაა: აპში თითოეულ დიალოგს ადამიანი პასუხობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)

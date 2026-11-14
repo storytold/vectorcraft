@@ -4358,6 +4358,18 @@ axis	Both	Les deux
 @msg	`name` must be the name of a script engine	`name` doit être le nom d'un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n'est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
+@msg	`answers` must be a list of answers	`answers` doit être une liste de réponses
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` contient plus de {MAX_ANSWERS} réponses
+@msg	`answers` is larger than 1 MiB	`answers` dépasse 1 Mio
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	doit être un objet avec `kind` et `value`
+@msg	must have exactly `kind` and `value`	doit avoir exactement `kind` et `value`
+@msg	is an alert's answer, whose `value` must be "ok"	est la réponse d'un alert, dont `value` doit être "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	est la réponse d'un confirm, dont `value` doit être true ou false
+@msg	is longer than 16 KiB	dépasse 16 Kio
+@msg	is a prompt's answer, whose `value` must be a string or null	est la réponse d'un prompt, dont `value` doit être une chaîne ou null
+@msg	must have `kind` alert, confirm or prompt	doit avoir `kind` alert, confirm ou prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé

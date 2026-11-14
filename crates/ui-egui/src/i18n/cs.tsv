@@ -4679,6 +4679,18 @@ imageTrace	Outline	Obrys
 @msg	`name` must be the name of a script engine	`name` musí být název skriptovacího jádra
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
+@msg	`answers` must be a list of answers	`answers` musí být seznam odpovědí
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` má více než {MAX_ANSWERS} odpovědí
+@msg	`answers` is larger than 1 MiB	`answers` je větší než 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	musí být objekt s `kind` a `value`
+@msg	must have exactly `kind` and `value`	musí mít právě `kind` a `value`
+@msg	is an alert's answer, whose `value` must be "ok"	je odpověď na alert, jejíž `value` musí být "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	je odpověď na confirm, jejíž `value` musí být true nebo false
+@msg	is longer than 16 KiB	je delší než 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	je odpověď na prompt, jejíž `value` musí být řetězec nebo null
+@msg	must have `kind` alert, confirm or prompt	musí mít `kind` alert, confirm nebo prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` je jen pro běh, kde se nemá koho zeptat: v aplikaci odpovídá na každý dialog uživatel
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty

@@ -4134,6 +4134,18 @@ axis	Both	Her İkisi
 @msg	`name` must be the name of a script engine	`name` bir betik motorunun adı olmalıdır
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	ana betik motoru her çalıştırmada yenidir ve hiç saklanmaz, bu yüzden bırakılamaz
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
+@msg	`answers` must be a list of answers	`answers` bir yanıt listesi olmalıdır
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` içinde {MAX_ANSWERS} taneden fazla yanıt var
+@msg	`answers` is larger than 1 MiB	`answers` 1 MiB'den büyük
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	`kind` ve `value` içeren bir nesne olmalıdır
+@msg	must have exactly `kind` and `value`	tam olarak `kind` ve `value` içermelidir
+@msg	is an alert's answer, whose `value` must be "ok"	bir alert yanıtıdır, bu yüzden `value` değeri "ok" olmalıdır
+@msg	is a confirm's answer, whose `value` must be true or false	bir confirm yanıtıdır, bu yüzden `value` değeri true veya false olmalıdır
+@msg	is longer than 16 KiB	16 KiB'den uzun
+@msg	is a prompt's answer, whose `value` must be a string or null	bir prompt yanıtıdır, bu yüzden `value` değeri bir dize veya null olmalıdır
+@msg	must have `kind` alert, confirm or prompt	`kind` değeri alert, confirm veya prompt olmalıdır
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` yalnızca sorulacak kimsenin olmadığı bir çalıştırma içindir: uygulamada her iletişim kutusunu kişi yanıtlar
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler

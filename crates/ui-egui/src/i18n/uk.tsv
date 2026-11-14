@@ -7186,8 +7186,10 @@ breakText	Glyphs	Гліфи
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` має містити індекси опорних точок (0, 1, 2…), а не {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` має містити індекси опорних точок (0, 1, 2…), а не {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` для цього діалогового вікна ({kind}) має бути одним з: {_1}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` має бути [x, y]

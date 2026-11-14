@@ -4593,6 +4593,18 @@ imageTrace	Outline	Ääriviiva
 @msg	`name` must be the name of a script engine	`name` on oltava skriptimoottorin nimi
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	pääskriptimoottori on uusi jokaisella ajolla eikä sitä koskaan säilytetä, joten sitä ei voi poistaa
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
+@msg	`answers` must be a list of answers	`answers` on oltava vastausten luettelo
+@msg	`answers` has more than {MAX_ANSWERS} answers	kohteessa `answers` on yli {MAX_ANSWERS} vastausta
+@msg	`answers` is larger than 1 MiB	`answers` on suurempi kuin 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	on oltava objekti, jossa on `kind` ja `value`
+@msg	must have exactly `kind` and `value`	siinä on oltava täsmälleen `kind` ja `value`
+@msg	is an alert's answer, whose `value` must be "ok"	on alert-vastaus, joten sen `value`-arvon on oltava "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	on confirm-vastaus, joten sen `value`-arvon on oltava true tai false
+@msg	is longer than 16 KiB	on pidempi kuin 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
+@msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia

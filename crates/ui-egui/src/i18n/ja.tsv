@@ -5183,6 +5183,18 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`name` must be the name of a script engine	`name` はスクリプトエンジンの名前にしてください
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	メインのスクリプトエンジンは実行ごとに新しく作られ、保持されないため、破棄できません
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
+@msg	`answers` must be a list of answers	`answers` は回答のリストである必要があります
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` の回答が {MAX_ANSWERS} 個を超えています
+@msg	`answers` is larger than 1 MiB	`answers` が 1 MiB を超えています
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	`kind` と `value` を持つオブジェクトである必要があります
+@msg	must have exactly `kind` and `value`	`kind` と `value` だけを持つ必要があります
+@msg	is an alert's answer, whose `value` must be "ok"	alert の回答なので、`value` は "ok" である必要があります
+@msg	is a confirm's answer, whose `value` must be true or false	confirm の回答なので、`value` は true または false である必要があります
+@msg	is longer than 16 KiB	16 KiB を超えています
+@msg	is a prompt's answer, whose `value` must be a string or null	prompt の回答なので、`value` は文字列または null である必要があります
+@msg	must have `kind` alert, confirm or prompt	`kind` は alert、confirm、prompt のいずれかである必要があります
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Exported {path}	{path} を書き出しました
