@@ -90,8 +90,16 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     assert!(text.contains("Linked") && text.contains("300 × 200 px") && text.contains("Location"), "{text}");
     // The flyout draws with every item.
     let menu = painted_text(&mut app, super::links::menu);
-    for item in ["Relink to Folder…", "Embed Image(s)", "Placement Options…", "Show Missing", "Sort by Status", "Large Thumbnails", "Show in Folder"]
-    {
+    for item in [
+        "Relink to Folder…",
+        "Embed Image(s)",
+        "Placement Options…",
+        "Show Missing",
+        "Sort by Status",
+        "Sort by Size",
+        "Large Thumbnails",
+        "Show in Folder",
+    ] {
         assert!(menu.contains(item), "{item}: {menu}");
     }
 }
@@ -189,6 +197,7 @@ fn a_nested_rows_tooltip_names_what_holds_it() {
     assert_eq!(tip(json!({"kind": "symbol", "name": "Mark"}), None), "/x/a.png\nSymbols: Mark");
     assert_eq!(tip(json!({"kind": "pattern", "name": "Dots"}), None), "/x/a.png\nPattern: Dots");
     assert_eq!(tip(json!({"kind": "graphDesign", "name": "Bar"}), None), "/x/a.png\nGraph Design: Bar");
+    assert_eq!(tip(json!({"kind": "brush", "name": "Leaf", "index": 2}), None), "/x/a.png\nBrushes: Leaf");
     assert_eq!(tip(json!({"kind": "layers", "maskOf": 7}), Some("<Ellipse>")), "/x/a.png\nOpacity Mask: <Ellipse>");
     assert_eq!(tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None), "/x/a.png\nSymbols: Mark\nOpacity Mask: 7");
     // A row in the layers says only its file.
@@ -227,6 +236,28 @@ fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
     let text: Vec<String> = frame(&mut app, vec![], 4.1).into_iter().map(|(t, _)| t).collect();
     let want = format!("Opacity Mask: {name}");
     assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
+}
+
+/// The row of an image in a stored brush's art finds its object for the thumbnail, though that art
+/// is set on the document only while a command uses it.
+#[test]
+fn a_row_in_a_stored_brushs_art_finds_its_object() {
+    let dir = Folder::new("brush-art");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let leaf = dir.file("leaf.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": leaf, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("brush.new", json!({"type": "scatter", "name": "Leaf", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({"ids": [id]})).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "leaf.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "brush", "{list}");
+    let row = row["id"].as_u64().unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.mounted_art.is_empty(), "the brush's art is not set on the document");
+    let found = super::links::stored_objects(doc, [row].into());
+    assert_eq!(found.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [row]);
+    assert!(matches!(found[0].1.kind, vectorcraft_doc::NodeKind::Image(_)), "{:?}", found[0].1.kind);
 }
 
 #[test]

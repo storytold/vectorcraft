@@ -251,6 +251,26 @@ fn double_clicking_the_tool_opens_perspective_grid_options() {
 }
 
 #[test]
+fn perspective_grid_options_hold_automatic_plane_positioning() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "perspectiveGrid"})).unwrap();
+    assert_eq!((field(&app, "anchorPoint"), field(&app, "gridlineIntersection")), (json!(true), json!(true)), "both on by default");
+    frame(&mut app);
+    set(&mut app, "gridlineIntersection", json!(false));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), None);
+    let o = app.session.prefs.perspective_widget;
+    assert!(o.anchor_point && !o.gridline_intersection && o.show);
+    // The dialog opens on what was set, and a value that is not true or false is refused.
+    app.run("tool.options", json!({"tool": "perspectiveGrid"})).unwrap();
+    assert_eq!(field(&app, "gridlineIntersection"), json!(false));
+    set(&mut app, "anchorPoint", json!("off"));
+    assert!(super::confirm(&mut app).is_err());
+    assert!(app.session.prefs.perspective_widget.anchor_point);
+}
+
+#[test]
 fn digit_keys_switch_planes_and_the_widget_follows_the_window() {
     let mut app = app();
     app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();

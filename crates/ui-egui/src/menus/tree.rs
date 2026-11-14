@@ -437,7 +437,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Sentence case", "type.changeCase", json!({"case": "sentence"})),
                     ],
                 ),
-                cp("Smart Punctuation…", "type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
+                c("Smart Punctuation…", "type.smartPunctuation"),
                 sub(
                     "Bullets and Numbering",
                     vec![
