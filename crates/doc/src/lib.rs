@@ -61,6 +61,7 @@ pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod recolor;
+pub mod resample;
 pub mod selection;
 pub mod separated;
 pub mod setup;
@@ -367,6 +368,12 @@ pub struct Document {
     /// saved.
     #[serde(skip)]
     inline_cycles: inline::InlineCycles,
+    /// Art kept elsewhere in the document's data (the art of the stored brushes, which
+    /// `vectorcraft-brush` reads from [`Self::unknown`]) while it is set here, each root with the
+    /// `owner` the Links panel names for it, so the stored-art lookups ([`StoredRoot::Mounted`])
+    /// find its objects too. Empty otherwise; never saved.
+    #[serde(skip)]
+    pub mounted_art: Vec<(Arc<Node>, serde_json::Value)>,
 }
 
 fn ppi72() -> f64 {

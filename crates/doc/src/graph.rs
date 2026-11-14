@@ -150,6 +150,10 @@ pub struct LabelStyles {
     pub categories: Option<crate::CharStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend: Option<crate::CharStyle>,
+    /// The fill of [`Self::legend`] was set on the legend labels, so it is drawn on every pie wedge with Legends in
+    /// Wedges. `false`: a black fill there is the default, and the labels on dark wedges are drawn white.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub legend_fill_set: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub values_para: Option<crate::ParaStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -181,6 +185,18 @@ pub struct LabelStyles {
 impl LabelStyles {
     fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Is the kept legend fill the legend labels' own: set on them ([`Self::legend_fill_set`]), or not black (a file
+    /// saved without the mark)? Otherwise it is the default black, which edits that map the kept paints leave as it is.
+    pub fn legend_fill_is_own(&self) -> bool {
+        self.legend.as_ref().is_some_and(|st| self.legend_fill_set || st.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK))
+    }
+
+    /// Mark a kept legend fill that is the labels' own ([`Self::legend_fill_is_own`]) as set on them, before an edit
+    /// that maps the kept paints can turn it black.
+    pub fn mark_own_legend_fill(&mut self) {
+        self.legend_fill_set = self.legend_fill_is_own();
     }
 }
 
@@ -530,6 +546,14 @@ impl GraphSpec {
     /// The type series `s` is drawn as: its own type when it combines with the graph's, else the graph's.
     pub fn series_kind(&self, s: usize) -> GraphKind {
         self.series_kinds.get(s).copied().flatten().filter(|k| k.combines_with(self.kind)).unwrap_or(self.kind)
+    }
+
+    /// Does the graph pick the fill of its legend labels itself, white on a dark wedge and black on the others: a pie
+    /// with Legends in Wedges whose legend labels keep no fill of their own ([`LabelStyles::legend_fill_is_own`])? Only
+    /// then is a black legend fill it keeps the default, which edits that map the kept paints leave as it is; other
+    /// graphs draw the kept fill as it is.
+    pub fn picks_legend_fill(&self) -> bool {
+        self.kind == GraphKind::Pie && self.legend && self.pie_legend_in_wedges && !self.label_styles.legend_fill_is_own()
     }
 
     /// The data with blank cells as `None`, every row as long as the longest (at most [`MAX_GRAPH_CATEGORIES`] rows
