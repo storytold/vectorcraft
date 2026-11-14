@@ -841,8 +841,18 @@ of the series, the legend swatch included, takes it at the same place on its own
 after the data changes or the graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series
 paints. A gradient stored from a path with no width or no height is drawn at the place in the document where it was
 stored. So is a gradient a graph stored without these flags. The graph does not store a stroke's dashes, caps, joins,
-arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
-with the paint they had.
+arrowheads, width profile or brush. On a graph label, given the label or something that holds it,
+these commands, `paint.swap` and `paint.default` store what they change for every label of its kind: the label's object
+rows, as the `appearance.*` commands store them, and the fill, stroke, stroke weight, caps, joins, miter limit, dashes
+and stroke alignment of its characters when all of its characters show them alike. A gradient on the characters is
+stored without its placement (its vector, aspect ratio, focal point and freeform points), and each label fits it to its
+own box when the graph is drawn again, so `paint.setGradientGeom` and the `paint.freeform.*` edits do not store the
+placement they set there. A stroke weight and dashes are stored as the label shows them, also on a label that was
+scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
+a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
+every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
+a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
+drawn again with their default paint.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -3289,7 +3299,13 @@ already walks Image Trace. Short agent entry points:
   action and preference. An empty folder and the scratch disk choices `Startup` and `None` save. `ui.actionSet.load {path? | data?}` reads
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
-  other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
+  other sets and the current set stay as they are. A step whose command is not a built-in command, a command of an
+  installed plug-in, a View menu step or a stop, and such a command of a `command.batch` step, loads as it is, excluded
+  or not, and `ui.actionSet.save` writes it back. The answer then also has `unknownCommands: [{action, actionIndex, step,
+  stepIndex, batchStep?, command}]`, the first 1,000 such steps (`step` and `batchStep` count from 1, `actionIndex` and
+  `stepIndex` from 0, and `batchStep` is the command's place in a `command.batch` step), and `unknownCount`, how many
+  there are; the status bar names the first and the count, with control characters replaced and long names cut at 80
+  characters. These are VectorCraft's own rules. An action set file (`.vcactions`) is JSON:
   `{"format": "vcactions", "version": 1 to 6, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
   `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
@@ -3369,8 +3385,12 @@ already walks Image Trace. Short agent entry points:
   made active, or that document was closed), the playback ends with a status and the rest do not play; a step that
   makes another document active itself does not end it. A name that no
   action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
-  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. A
-  `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
+  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. So is an
+  action with an included step whose command is not a built-in command, a command of an installed plug-in, a View menu
+  step or a stop at the time it plays, at every speed: the error names the first such step, as in step 2 of “Print”
+  runs the unknown command `example.finish`, and a command of a `command.batch` step by its place in the batch, as in
+  step 2.3. An excluded step is not checked.
+  A `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
   here and in Batch…. An action with an included stop plays up to the stop at any speed and then waits, with its
   message box open, until `ui.action.continue` or `ui.action.stop`. At Accelerated the steps between two stops are one
   undoable batch each. The result is then `{results, pending, atStop?}`, with `atStop: true` when the action already
@@ -3551,6 +3571,12 @@ already walks Image Trace. Short agent entry points:
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
   covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
+  `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
+  is above 0, and a fill or stroke row is shown, has paint and an opacity above 0 (a stroke also a weight above 0),
+  whichever row is on top. A painted lower row under an unpainted top row keeps the part; a part whose only painted
+  row is hidden is removed. `livePaint.merge` copies the fill and stroke rows, visibility, opacity and blending mode of
+  each face that draws by this rule, and of each edge, to the rebuilt parts, with their gradients kept at their fit on
+  the old outline and without the strokes' pen pressure, tilt, bearing and rotation.
   With `detect: true`, paint stops at the gaps that run
   from a loose end of a path to the nearest path, up to `size` wide (`small` 3 pt, `medium` 6 pt, `large` 12 pt, or a
   number of points up to 72); `closeGaps: true` adds an unpainted path across each of them. `color` (the Gap Preview
@@ -4340,8 +4366,8 @@ with the same extension and bytes as one there, loads as that User Defined libra
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: five generated in code (Basic Shapes, UI Frames, Map Markers,
-Inventory Icons, Skill Icons), the `.vectorcraft` files in
+Symbol libraries are read-only sets of symbols: six generated in code (Basic Shapes, UI Frames, Map Markers,
+Inventory Icons, Skill Icons, Weather Icons), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)
 and `symbol.library {library}` returns one's symbols (`name`, `size`, `registration`, `exportType`; `library` is an
@@ -5365,9 +5391,10 @@ keeps the segment's direction when the smoothed path there turns back by 90° or
 path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
 direction.
 
-In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
-path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
-the Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
+In the desktop app, Object › Path › Smooth, the canvas context menu's Smooth… (listed while the selection holds a
+path) and the Contextual Task Bar's Smooth (with a path selected whole with the Direct Selection tool) open the
+slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at the
+Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
 slider back to the Auto-Smooth level.
 
 ## Editing a path with the Curvature tool
@@ -5616,7 +5643,9 @@ one undo step.
 `object.setLiveShape` returns a parameter error, and leaves the document and its undo history as they were, for a key
 it does not take, at the top level (`` unknown parameter `path` ``) or in one of `items`
 (`` unknown parameter `items[0].corner`; did you mean `items[0].corners`? ``), for a `sides` that is not a whole number
-from 3 to 1000, such as 2.5, 2 or 1001, and for a negative `radius`. A `radius` of 0 removes the rounding.
+from 3 to 1000, such as 2.5, 2 or 1001, and for a negative `radius`. A `radius` of 0 removes the rounding. Saved
+steps (a journal or an action) replay these values without an error: a negative `radius` counts as 0, a whole `sides`
+below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` is ignored.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
@@ -6583,7 +6612,7 @@ file's composite is drawn through clips the image (a clipping group, its path un
 clipping path kept as the same area), and `file.place` answers the image's id as
 `image`, since the Links commands take the image and not the group. `links.update` and `links.relink` clip the image
 by the file's clipping path again (a plain group holding just the image becomes its clipping group, a new clipping group holds it when no group does, and it goes inside a clipping mask made in the
-document, whose path is kept), unless Placement Options clip the image, the same way for the images in symbols, graph designs, patterns and opacity masks; when the new file has no
+document, whose path is kept), the same way for the images in symbols, graph designs, patterns and opacity masks. When Placement Options also clip the image, the file's clipping group goes inside a clipping group of the placement's clip (the clipping group holding just the file's one, or a clipping group holding just the image that is not the file's, takes that clip, else a new one does), and a later update or relink changes the same two groups; when the new file has no
 clipping path, a clipping group holding just the image whose path is the old file's clipping path loses that path and
 stays as a plain group of the image, with its id, name, visibility and transparency (one whose path was given the
 even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes

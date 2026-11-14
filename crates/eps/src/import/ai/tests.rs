@@ -10304,20 +10304,86 @@ fn a_path_with_a_calligraphic_brush_comes_in_brushed() {
     let pieces = vectorcraft_brush::stroke_pieces(&r.doc, &lib[0], &a[0].path_data().unwrap().to_bezpath(), st);
     let height = pieces.iter().filter_map(|n| n.geometric_bounds()).map(|b| b.height()).fold(0.0, f64::max);
     assert!(height > 40.0 && height < 46.0, "the line's rise and about half the nib's 3 pt: {height}");
+    // A filter with the version entry an effect's filter may carry still comes in brushed.
+    let versioned = style.replace("(Brush) ,\n", "(Brush) ,\n15 /Int (Adobe Effect Expand Before Version) ,\n");
+    let a = art(&read_ok(&format!("{def}{versioned}{}", layer(&brushed_path()))).doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{a:#?}");
+}
+
+/// Samples of the pen along a path (`(…) Xt n XD`), as they follow its own lines.
+const PEN_SAMPLES: &str = "%_(00FE64FE) Xt 0 XD\n%_(00006400) Xt 1 XD\n%_(00986498) Xt 2 XD\n%_(009E649E) Xt 3 XD\n%_(007F647F) Xt 4 XD\n";
+
+/// A path with a Calligraphic brush that varies with the pen, followed by samples of the pen, comes
+/// in as its drawn look alone, with the note that says so: the samples aren't read, and the brush
+/// would draw it at the pen's middle values. Its own path doesn't come in beside the look. A brush
+/// that doesn't follow the pen draws such a path the same without the samples, so it comes in
+/// brushed.
+#[test]
+fn a_brushed_path_with_samples_of_the_pen_keeps_its_drawn_look() {
+    // GUARDS: the path came in beside its look, unpainted, and the note was missing.
+    let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
+    let style = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [2, 5, 6], 0);
+    let path = brushed_path().replace("%_n\n", &format!("%_n\n{PEN_SAMPLES}"));
+    let r = read_ok(&format!("{def}{style}{}", layer(&path)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // The samples belong to the path before them: a path after them is read as it was.
+    let after = format!("{path}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let a = art(&read_ok(&format!("{def}{style}{}", layer(&after))).doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    assert!(matches!(a[1].kind, NodeKind::Path { .. }) && a[1].appearance.fill().is_some(), "{a:#?}");
+    // Samples with no object before them in the layer mark nothing: the path after them is read.
+    let first = format!("{PEN_SAMPLES}{}", brushed_path());
+    let a = art(&read_ok(&format!("{def}{style}{}", layer(&first))).doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, brushed: {a:#?}");
+    // A brush whose modes are Fixed and Random, one whose pen modes vary by 0, and an Art brush
+    // don't follow the pen: the path comes in brushed.
+    let fixed_def = plugin_object(CALLIGRAPHIC, "Six D", &SIX_D.replace(" 2 5 6 0", " 0 1 0 0"));
+    let fixed = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [0, 1, 0], 0);
+    let even_def = plugin_object(CALLIGRAPHIC, "Six D", "1 6 6 40 40 30 30 2 5 6 0");
+    let even = brushed_style("Six D", 0.5, [(6.0, 0.0), (40.0, 0.0), (30.0, 0.0)], [2, 5, 6], 0);
+    for (why, def, style) in [("Fixed and Random", fixed_def, fixed), ("no variation", even_def, even)] {
+        let r = read_ok(&format!("{def}{style}{}", layer(&path)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{why}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{why}: the path, brushed: {a:#?}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+    let ribbon = format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", RIBBON));
+    let a = art(&read_ok(&format!("{ribbon}{}{}", art_style("Ribbon", 2.0, &STRETCHED, ""), layer(&path))).doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(a[0].appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Ribbon"), "{a:#?}");
+    // A style with no brush doesn't draw the samples: the path takes it as it would without them.
+    let square = styled_square("Blue").replace("f\n1 (Blue) XW", &format!("f\n{PEN_SAMPLES}1 (Blue) XW"));
+    let r = read_ok(&format!("{}{}", styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]), layer(&square)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path with its style: {a:#?}");
+    assert_eq!(a[0].extras().graphic_style, Some(1), "linked to its style");
 }
 
 /// A brushed path keeps its drawn look when its stroke can't be read as the brush: the object's
 /// own settings differ from the brush's (Options of Selected Object), its angle follows the path,
-/// or the file defines no brush of its name.
+/// its filter holds an entry or a variable width that isn't read, or the file defines no brush of
+/// its name.
 #[test]
 fn a_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
     let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
     let mut own = SIX_D_SETTINGS;
     own[0] = (9.0, 2.0);
+    let plain = brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 6], 0);
+    let with = |more: &str| plain.replace("(Brush) ,\n", &format!("(Brush) ,\n{more}"));
+    let widths = "/Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+                  /Array :\n1 /Real ,\n0.1 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
     let cases = [
         ("its own settings", def.clone(), brushed_style("Six D", 1.0, own, [2, 5, 6], 0)),
         ("its own modes", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 4], 0)),
         ("an angle on the path", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 6], 1)),
+        ("an entry that isn't read", def.clone(), with("1 /Real (Unread) ,\n")),
+        ("a variable width", def.clone(), with(widths)),
         ("no such brush", def, brushed_style("Other", 1.0, SIX_D_SETTINGS, [2, 5, 6], 0)),
     ];
     for (why, def, style) in cases {
