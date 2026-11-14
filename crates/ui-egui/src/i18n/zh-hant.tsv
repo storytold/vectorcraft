@@ -3776,6 +3776,7 @@ font-script	Japanese	漢字
 	Proportional Metrics	比例度量
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
+	Tsume	比例間距
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字

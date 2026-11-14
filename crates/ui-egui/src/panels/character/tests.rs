@@ -780,6 +780,41 @@ fn insert_aki_fields_show_with_the_east_asian_options() {
     assert!(left(&app).iter().all(|v| *v == 1000.0), "{:?}", left(&app));
 }
 
+/// Tsume is a field of the panel with the East Asian options only, and shows the selected
+/// characters' value, blank where they differ. A value typed past 100 sets 100.
+#[test]
+fn tsume_field_shows_with_the_east_asian_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"tsume": 37.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("→A←") && !text.contains("37.5"), "{text}");
+    app.session.prefs.show_east_asian_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("→A←") && text.contains("37.5"), "{text}");
+    // The characters differ: the field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 12, "tsume": 62.5})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("37.5") && !text.contains("62.5"), "{text}");
+    app.run("text.setFormat", json!({"tsume": 62.5})).unwrap();
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "62.5%").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("150".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let tsume = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.tsume).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(tsume(&app).iter().all(|v| *v == 100.0), "{:?}", tsume(&app));
+}
+
 /// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
 /// which shows the selected type's reference and sets the one picked (one undo step); Hide
 /// Font Height Options hides it again.
@@ -1444,6 +1479,7 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.tcy_left_right != d.tcy_left_right,
             s.aki_left != d.aki_left,
             s.aki_right != d.aki_right,
+            s.tsume != d.tsume,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
@@ -1458,16 +1494,16 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
-                "akiLeft": 250, "akiRight": 500, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "akiLeft": 250, "akiRight": 500, "tsume": 50, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 24]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 25]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 24]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 25]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);
