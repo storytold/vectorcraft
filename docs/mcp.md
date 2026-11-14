@@ -3126,7 +3126,12 @@ already walks Image Trace. Short agent entry points:
   is unused, and offers Remove Strokes or Cancel when one of them is in use.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?, newName?}`, `brush.delete {name} | {names}`,
-  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. A document or brush
+  `brush.duplicate {name, newName?} | {names}`, `brush.freehand {…path.freehand params, brush?}`,
+  `object.expandBrush {ids?}`. `brush.freehand` draws the plain path when `brush` is left out or null. It refuses a
+  `brush` that is not a string with "`brush` must be a string", a name that no brush in the document has (an empty
+  name included) with "no brush named `<name>`", and a `style` other than "pencil" or "brush"; the document does not
+  change and no undo step is recorded. The Paintbrush skips a tool brush or current brush that has been deleted and
+  paints with the other, or draws the plain path when neither is in the document. A document or brush
   library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
   numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
   brush. `brush.new`,

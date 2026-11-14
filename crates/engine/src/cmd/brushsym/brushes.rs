@@ -729,8 +729,21 @@ pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&out) }))
 }
 
+/// Paints a `path.freehand` stroke with the brush `brush` names. A `brush` left out or null draws
+/// the plain path; a `brush` that is not a string or names no brush in the document, and a `style`
+/// other than "pencil" or "brush", is an error before anything is drawn.
 pub(super) fn brush_freehand(s: &mut Session, p: &Value) -> Result<Value> {
-    let name = str_param(p, "brush").map(str::to_string).filter(|n| s.doc().is_ok_and(|st| brush::find(&st.doc, n).is_some()));
+    const C: &str = "brush.freehand";
+    let name = match crate::cmd::text_param(p, "brush", C)? {
+        None => None,
+        Some(n) if brush::find(&s.doc()?.doc, n).is_some() => Some(n.to_string()),
+        Some(n) => return Err(bad(C, format!("no brush named `{n}`"))),
+    };
+    match p.get("style") {
+        None | Some(Value::Null) => {}
+        Some(v) if matches!(v.as_str(), Some("pencil" | "brush")) => {}
+        Some(v) => return Err(bad(C, format!("`style` must be \"pencil\" or \"brush\", not {v}"))),
+    }
     let spec = find_command("path.freehand").ok_or_else(|| EngineError::UnknownCommand("path.freehand".into()))?;
     let r = crate::cmd::run_checked(s, spec, p)?;
     let (Some(name), Some(id)) = (name, id_param(&r, "id")) else { return Ok(r) };
