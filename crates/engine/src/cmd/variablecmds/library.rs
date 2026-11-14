@@ -235,9 +235,10 @@ impl Library {
 /// A variable's kind comes from its `trait` ([`trait_kind`]). In a data set, an element named after
 /// a variable gives its value, as [`library_value`] reads it. A variable or data set declared
 /// twice, a value for a variable the library doesn't declare, a value that doesn't fit its
-/// variable's kind, and a library past the caps are refused. Entities that its document type
-/// declaration defines are read as [`without_doctype`] says.
-fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
+/// variable's kind, and a library past the caps are refused. With `text_only`, only text values
+/// are read, and the values of the other kinds are passed over unread. Entities that its document
+/// type declaration defines are read as [`without_doctype`] says.
+fn parse_library(xml: &str, cmd: &str, text_only: bool) -> Result<Library> {
     let xml = without_doctype(xml, cmd)?;
     // roxmltree parses nested elements recursively.
     if crate::cmd::place::docx::nesting(&xml) > MAX_LIBRARY_NESTING {
@@ -293,6 +294,9 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
             };
             if !held.insert(var) {
                 return Err(bad(cmd, format!("data set `{name}` holds two values for `{var}`")));
+            }
+            if text_only && *kind != VariableKind::Text {
+                continue;
             }
             if let Some(value) = library_value(el, *kind, &name, cmd)? {
                 values.insert(var.to_string(), value);
@@ -522,7 +526,8 @@ pub(crate) fn svg_library(svg: &str) -> Option<Result<Library>> {
         for (name, value) in &entities {
             element = element.replace(name.as_str(), value);
         }
-        parse_library(&format!("<svg>{element}</svg>"), C)
+        // The SVG keeps only the text variables, so the values of the other kinds aren't read.
+        parse_library(&format!("<svg>{element}</svg>"), C, true)
     };
     Some(read())
 }
@@ -640,7 +645,7 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.loadLibrary";
     let bytes = library_bytes(p, C)?;
     let xml = std::str::from_utf8(bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes)).map_err(|_| bad(C, "the variable library is not UTF-8"))?;
-    let lib = parse_library(xml, C)?;
+    let lib = parse_library(xml, C, false)?;
     let vars = &s.doc()?.doc.variables;
     let kept = |v: &Variable| lib.variables.iter().any(|l| l.name == v.name && l.kind == v.kind);
     let deleted: Vec<String> = vars.variables.iter().filter(|v| !kept(v)).map(|v| v.name.clone()).collect();

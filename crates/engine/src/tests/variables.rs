@@ -3304,8 +3304,8 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     let art = "<rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>";
     let untraited = format!("{head}<variableSets><variableSet><variables><variable varName=\"A\"/></variables></variableSet></variableSets>{art}");
     let relative = format!(
-        "{head}<variableSets><variableSet><variables><variable varName=\"A\" trait=\"fileref\"/></variables>\
-         <sampleDataSets><sampleDataSet dataSetName=\"D\"><A>a.png</A></sampleDataSet></sampleDataSets></variableSet></variableSets>{art}"
+        "{head}<variableSets><variableSet><variables><variable varName=\"T\" trait=\"textcontent\"/><variable varName=\"A\" trait=\"fileref\"/></variables>\
+         <sampleDataSets><sampleDataSet dataSetName=\"D\"><T><p>kept</p></T><A>a.png</A></sampleDataSet></sampleDataSets></variableSet></variableSets>{art}"
     );
     let refs = "&ns_big;".repeat(40_000);
     let big = "x".repeat(250);
@@ -3367,12 +3367,18 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     let (o, warnings) = svg_opened(&untraited, "untraited.svg");
     assert!(warnings.contains(&json!("variables that aren't text were left out: unknown (1)")), "{warnings:?}");
     assert!(o.doc().unwrap().doc.variables.variables.is_empty());
+    // The values of the other kinds aren't read, so one that Load Variable Library would refuse
+    // leaves the text variables and their values as they open.
+    let (o, warnings) = svg_opened(&relative, "relative.svg");
+    assert!(warnings.contains(&json!("variables that aren't text were left out: fileref (1)")), "{warnings:?}");
+    let vars = &o.doc().unwrap().doc.variables;
+    assert_eq!(vars.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["T"]);
+    assert_eq!(vars.dataset("D").map(|d| d.values.clone()), Some([("T".to_string(), vectorcraft_doc::DataValue::Text("kept".into()))].into()));
 
-    for (svg, why) in [(relative, "that isn't a file's absolute path or `file:` URL"), (growing, "entities expand to more than")] {
-        let (o, warnings) = svg_opened(&svg, "broken.svg");
-        assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("variable data wasn't read") && w.contains(why))), "{warnings:?}");
-        let d = &o.doc().unwrap().doc;
-        assert!(d.variables.variables.is_empty());
-        assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
-    }
+    let (o, warnings) = svg_opened(&growing, "broken.svg");
+    let why = "entities expand to more than";
+    assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("variable data wasn't read") && w.contains(why))), "{warnings:?}");
+    let d = &o.doc().unwrap().doc;
+    assert!(d.variables.variables.is_empty());
+    assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
 }
