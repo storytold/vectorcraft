@@ -198,31 +198,32 @@ impl Library {
 /// [`without_doctype`] says.
 fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
     let xml = without_doctype(xml, cmd)?;
-    // roxmltree parses nested elements recursively.
-    if crate::cmd::place::docx::nesting(&xml) > MAX_LIBRARY_NESTING {
-        return Err(bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")));
-    }
-    let opts = roxmltree::ParsingOptions { nodes_limit: MAX_LIBRARY_NODES, ..roxmltree::ParsingOptions::default() };
-    let doc =
-        roxmltree::Document::parse_with_options(&xml, opts).map_err(|e| bad(cmd, format!("the variable library is not well-formed XML: {e}")))?;
-    let is = |n: &roxmltree::Node, name: &str| n.is_element() && n.tag_name().name() == name;
-    let Some(root) = doc.descendants().find(|n| is(n, "variableSets")) else {
+    let opts = craft_xml::Options {
+        names: craft_xml::Names::Local,
+        limits: craft_xml::Limits { max_depth: MAX_LIBRARY_NESTING, max_nodes: MAX_LIBRARY_NODES as usize, ..craft_xml::Limits::DEFAULT },
+        ..craft_xml::Options::default()
+    };
+    let doc = opts.parse(xml.as_bytes()).map_err(|e| match e {
+        craft_xml::Error::TooDeep(_) => bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")),
+        _ => bad(cmd, format!("the variable library is not well-formed XML: {e}")),
+    })?;
+    let Some(root) = std::iter::once(&doc).chain(doc.descendants()).find(|n| n.is("variableSets")) else {
         return Err(bad(cmd, "the file holds no `variableSets` element"));
     };
-    let sets: Vec<roxmltree::Node> = root.children().filter(|n| is(n, "variableSet")).collect();
+    let sets: Vec<&craft_xml::El> = root.children("variableSet").collect();
     let (mut text, mut other, mut declared, mut refs) = (Vec::new(), Vec::new(), BTreeSet::new(), Vec::new());
-    for var in sets.iter().flat_map(|s| s.children()).filter(|n| is(n, "variables")).flat_map(|v| v.children()).filter(|n| is(n, "variable")) {
-        let name = named(var.attribute("varName"), "varName", cmd)?;
+    for var in sets.iter().flat_map(|s| s.children("variables")).flat_map(|v| v.children("variable")) {
+        let name = named(var.attr("varName"), "varName", cmd)?;
         if !declared.insert(name.clone()) {
             return Err(bad(cmd, format!("variable `{name}` is declared twice")));
         }
         if declared.len() > MAX_LIBRARY_VARIABLES {
             return Err(bad(cmd, format!("the variable library declares more than {MAX_LIBRARY_VARIABLES} variables")));
         }
-        match var.attribute("trait") {
+        match var.attr("trait") {
             Some("textcontent") => {
                 // `docRef="id('…')"` names the element of the variable's bound object.
-                let element = var.attribute("docRef").and_then(|r| r.trim().strip_prefix("id('")?.strip_suffix("')")).filter(|e| !e.is_empty());
+                let element = var.attr("docRef").and_then(|r| r.trim().strip_prefix("id('")?.strip_suffix("')")).filter(|e| !e.is_empty());
                 if let Some(element) = element {
                     refs.push((name.clone(), element.to_string()));
                 }
@@ -237,10 +238,8 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
     }
     let text_names: BTreeSet<&str> = text.iter().map(String::as_str).collect();
     let (mut datasets, mut seen) = (Vec::new(), BTreeSet::new());
-    for row in
-        sets.iter().flat_map(|s| s.children()).filter(|n| is(n, "sampleDataSets")).flat_map(|d| d.children()).filter(|n| is(n, "sampleDataSet"))
-    {
-        let name = named(row.attribute("dataSetName"), "dataSetName", cmd)?;
+    for row in sets.iter().flat_map(|s| s.children("sampleDataSets")).flat_map(|d| d.children("sampleDataSet")) {
+        let name = named(row.attr("dataSetName"), "dataSetName", cmd)?;
         if !seen.insert(name.clone()) {
             return Err(bad(cmd, format!("data set `{name}` is declared twice")));
         }
@@ -248,8 +247,8 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
             return Err(bad(cmd, format!("the variable library declares more than {MAX_LIBRARY_DATASETS} data sets")));
         }
         let (mut values, mut held) = (BTreeMap::new(), BTreeSet::new());
-        for el in row.children().filter(roxmltree::Node::is_element) {
-            let var = el.tag_name().name();
+        for el in row.elements() {
+            let var = el.name.as_str();
             if !declared.contains(var) {
                 return Err(bad(cmd, format!("data set `{name}` holds a value for `{var}`, which the library doesn't declare")));
             }
@@ -259,11 +258,7 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
             if !text_names.contains(var) {
                 continue;
             }
-            let paras: Vec<String> = el
-                .children()
-                .filter(|n| is(n, "p"))
-                .map(|p| p.descendants().filter(roxmltree::Node::is_text).filter_map(|t| t.text()).collect())
-                .collect();
+            let paras: Vec<String> = el.children("p").map(craft_xml::El::deep_text).collect();
             if !paras.is_empty() {
                 values.insert(var.to_string(), DataValue::Text(paras.join("\n")));
             }

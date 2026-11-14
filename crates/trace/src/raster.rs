@@ -158,62 +158,100 @@ impl Raster {
     }
     /// Decode PNG / JPEG / WebP / GIF bytes (at most [`MAX_PIXELS`], checked before decoding).
     pub fn decode(bytes: &[u8]) -> Result<Self, TraceError> {
-        let decode_err = |e: image::ImageError| TraceError::Decode(e.to_string());
-        let reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
-        let (w, h) = reader.into_dimensions().map_err(decode_err)?;
+        if let Some(info) = craft_image_codecs::inspect_raster(bytes).map_err(|e| TraceError::Decode(e.to_string()))? {
+            if info.width == 0 || info.height == 0 {
+                return Err(TraceError::Empty);
+            }
+            if u64::from(info.width) * u64::from(info.height) > MAX_PIXELS
+                || gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS)
+            {
+                return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_PIXELS >> 20 });
+            }
+        } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
+            return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
+        }
+        let opts = craft_image_codecs::DecodeOptions {
+            limits: craft_image_codecs::Limits {
+                max_pixels: MAX_PIXELS,
+                ..craft_image_codecs::Limits::default()
+            },
+            ..craft_image_codecs::DecodeOptions::default()
+        };
+        let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| TraceError::Decode(e.to_string()))?;
+        let (w, h) = (img.width(), img.height());
         if w == 0 || h == 0 {
             return Err(TraceError::Empty);
         }
-        if u64::from(w) * u64::from(h) > MAX_PIXELS || gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
-            return Err(TraceError::TooLarge { width: w, height: h, max: MAX_PIXELS >> 20 });
-        }
-        let img = image::load_from_memory(bytes).map_err(decode_err)?.to_rgba8();
-        let (w, h) = img.dimensions();
-        Ok(Self { width: w, height: h, rgba: img.into_raw() })
+        Ok(Self { width: w, height: h, rgba: img.to_rgba8() })
     }
     /// Decode as [`Raster::decode`], but an image of more than [`MAX_PIXELS`] (up to
     /// [`MAX_SOURCE_PIXELS`]) is scaled down, aspect kept, to the largest size within
     /// [`MAX_PIXELS`] instead of being refused: a 300 ppi scan of a poster traces at slightly
     /// less than its own resolution. The caller maps the result back with `width` / `height`.
     pub fn decode_to_fit(bytes: &[u8]) -> Result<Self, TraceError> {
-        let decode_err = |e: image::ImageError| TraceError::Decode(e.to_string());
-        let reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
-        let (w, h) = reader.into_dimensions().map_err(decode_err)?;
-        if w == 0 || h == 0 {
-            return Err(TraceError::Empty);
-        }
-        let pixels = u64::from(w) * u64::from(h);
-        if pixels <= MAX_PIXELS {
-            return Self::decode(bytes);
-        }
-        if pixels > MAX_SOURCE_PIXELS {
-            return Err(TraceError::TooLarge { width: w, height: h, max: MAX_SOURCE_PIXELS >> 20 });
+        if let Some(info) = craft_image_codecs::inspect_raster(bytes).map_err(|e| TraceError::Decode(e.to_string()))? {
+            if info.width == 0 || info.height == 0 {
+                return Err(TraceError::Empty);
+            }
+            let pixels = u64::from(info.width) * u64::from(info.height);
+            if pixels <= MAX_PIXELS && !gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
+                return Self::decode(bytes);
+            }
+            if pixels > MAX_SOURCE_PIXELS {
+                return Err(TraceError::TooLarge {
+                    width: info.width,
+                    height: info.height,
+                    max: MAX_SOURCE_PIXELS >> 20,
+                });
+            }
+            if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
+                return Err(TraceError::TooLarge {
+                    width: info.width,
+                    height: info.height,
+                    max: MAX_SOURCE_PIXELS >> 20,
+                });
+            }
+        } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
+            return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_SOURCE_PIXELS >> 20 });
         }
         // Decoded within the allocation the source limit needs; the web keeps file import's 512 MB.
         // A deeper image (16 bits a channel) that needs more fails with a decode error.
-        if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
-            return Err(TraceError::TooLarge { width: w, height: h, max: MAX_SOURCE_PIXELS >> 20 });
+        let opts = craft_image_codecs::DecodeOptions {
+            limits: craft_image_codecs::Limits {
+                max_pixels: MAX_SOURCE_PIXELS,
+                max_alloc: if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 },
+                ..craft_image_codecs::Limits::default()
+            },
+            ..craft_image_codecs::DecodeOptions::default()
+        };
+        let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| TraceError::Decode(e.to_string()))?;
+        let (w, h) = (img.width(), img.height());
+        if w == 0 || h == 0 {
+            return Err(TraceError::Empty);
         }
-        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 });
-        reader.limits(limits);
-        Ok(Self::fitted(&reader.decode().map_err(decode_err)?.into_rgba8(), MAX_PIXELS))
+        let rgba = img.to_rgba8();
+        if u64::from(w) * u64::from(h) <= MAX_PIXELS {
+            return Ok(Self { width: w, height: h, rgba });
+        }
+        Ok(Self::fitted(&Self { width: w, height: h, rgba }, MAX_PIXELS))
     }
     /// `img` scaled down, aspect kept, to the largest size of at most `max` pixels.
-    pub(crate) fn fitted(img: &image::RgbaImage, max: u64) -> Self {
-        let (w, h) = img.dimensions();
-        let (nw, nh) = fit_size(w, h, max);
+    pub(crate) fn fitted(img: &Self, max: u64) -> Self {
+        let (nw, nh) = fit_size(img.width, img.height, max);
         // Box-filtered: every source pixel counts, so thin lines and anti-aliased edges survive.
-        Self { width: nw, height: nh, rgba: box_reduced(img.as_raw(), w, h, nw, nh) }
+        Self { width: nw, height: nh, rgba: box_reduced(&img.rgba, img.width, img.height, nw, nh) }
     }
     /// Encode as PNG.
     pub fn encode_png(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        if let Some(img) = image::RgbaImage::from_raw(self.width, self.height, self.rgba.clone()) {
-            let _ = img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png);
-        }
-        out
+        let Ok(img) = craft_image_codecs::Image::from_u8(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            self.rgba.clone(),
+        ) else {
+            return Vec::new();
+        };
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &Default::default()).unwrap_or_default()
     }
     /// Pixel `(x, y)`; transparent black outside the raster (or past the end of a raster whose
     /// fields were set to a size its bytes don't have).

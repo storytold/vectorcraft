@@ -1094,7 +1094,7 @@ fn scaling_down_weighs_color_by_alpha() {
     // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
     // does: each scaled pixel covers a red and a clear one.
     let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
-    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
+    let decoded = Raster::decode(&half_clear.encode_png()).unwrap();
     let fitted = Raster::fitted(&decoded, 2);
     assert_eq!((fitted.width, fitted.height), (2, 1));
     assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
@@ -2138,10 +2138,18 @@ fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
 /// `img` saved as a JPEG of `quality` and read back.
 fn through_jpeg(img: &Raster, quality: u8) -> Raster {
     let rgb: Vec<u8> = img.rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    let mut bytes = vec![];
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality)
-        .encode(&rgb, img.width, img.height, image::ExtendedColorType::Rgb8)
-        .unwrap();
+    let encoded = craft_image_codecs::Image::from_u8(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Rgb,
+        rgb,
+    )
+    .unwrap();
+    let opts = craft_image_codecs::EncodeOptions {
+        jpeg_quality: quality,
+        ..Default::default()
+    };
+    let bytes = craft_image_codecs::encode(&encoded, craft_image_codecs::Format::Jpeg, &opts).unwrap();
     Raster::decode(&bytes).unwrap()
 }
 

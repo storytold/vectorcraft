@@ -146,7 +146,7 @@ fn unpack(mut src: &[u8], out: &mut Vec<u8>) {
 
 /// The composite as a reader sees it.
 fn merged(f: &[u8]) -> Vec<u8> {
-    ::psd::Psd::from_bytes(f).expect("a PSD a reader takes").rgba()
+    craft_psd::PsdFile::from_bytes(f).expect("a PSD a reader takes").composite_rgba8().expect("composite").data
 }
 
 fn pixel(px: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {
@@ -168,11 +168,12 @@ fn layers_are_the_top_level_layers_and_the_merged_image_is_the_render() {
     assert_eq!(p.records[1].rect, [0, 0, 50, 60], "the blue square and the corner");
 
     // A reader decodes it: the layers, in place, and the merged image.
-    let psd = ::psd::Psd::from_bytes(&file).unwrap();
-    assert_eq!((psd.width(), psd.height(), psd.layers().len()), (100, 60, 2));
-    let red = psd.layer_by_name("Layer 1").unwrap().rgba();
-    assert_eq!(pixel(&red, 100, 20, 20), [255, 0, 0, 255]);
-    assert_eq!(pixel(&red, 100, 50, 45)[3], 0, "the blue square isn't on Layer 1");
+    let psd = craft_psd::PsdFile::from_bytes(&file).unwrap();
+    assert_eq!((psd.header.width, psd.header.height, psd.layers().len()), (100, 60, 2));
+    let layer = psd.iter_layers().find(|l| l.name() == "Layer 1").unwrap();
+    assert_eq!(layer.record.rect, craft_psd::layer::Rect { top: 10, left: 10, bottom: 40, right: 40 });
+    let red = layer.rgba8().unwrap().data;
+    assert_eq!(pixel(&red, 30, 10, 10), [255, 0, 0, 255]);
 
     // The merged image is the flat render: colours on white where transparent, alpha apart.
     let img = Renderer::new().render_region_with(&doc, doc.artboards[0].rect, 1.0, &opts(PsdOptions::default()).render_options(RasterFormat::Psd));
@@ -200,7 +201,7 @@ fn flat_writes_the_merged_image_alone_on_white() {
     assert_eq!(o.encode(&img, RasterFormat::Psd).unwrap(), file);
     let file = export(&doc, &RasterExportOptions { ppi: 150.0, ..o });
     assert_eq!(u32_at(parse(&file).resources, 12), 150 << 16);
-    assert_eq!(::psd::Psd::from_bytes(&file).unwrap().width(), 208);
+    assert_eq!(craft_psd::PsdFile::from_bytes(&file).unwrap().header.width, 208);
 }
 
 #[test]
@@ -230,8 +231,10 @@ fn maximum_editability_writes_groups_and_an_object_per_layer() {
     assert_eq!((p.records[4].opacity, p.records[4].blend, p.records[4].rect), (128, *b"mul ", [20, 30, 50, 60]));
     assert_eq!((p.records[8].blend, p.records[8].opacity), (*b"pass", 255));
     assert_eq!(p.records[6].rect, [0, 0, 6, 6]);
-    let psd = ::psd::Psd::from_bytes(&file).unwrap();
-    assert_eq!((psd.layers().len(), psd.groups().len()), (3, 3));
+    let psd = craft_psd::PsdFile::from_bytes(&file).unwrap();
+    let content_layers = psd.layers().iter().filter(|l| matches!(l.section_type(), craft_psd::layer::SectionType::Other)).count();
+    let groups = psd.layers().iter().filter(|l| matches!(l.section_type(), craft_psd::layer::SectionType::OpenFolder | craft_psd::layer::SectionType::ClosedFolder)).count();
+    assert_eq!((content_layers, groups), (3, 3));
     assert_eq!(merged(&file), merged(&export(&doc, &opts(PsdOptions::default()))), "the same merged image");
 
     // Hidden layers: written hidden, drawn as if visible, instead of left out.
@@ -300,8 +303,8 @@ fn a_background_colour_is_the_bottom_layer() {
     let p = parse(&file);
     assert_eq!((p.channels, p.count), (3, 3), "opaque: no merged alpha");
     assert_eq!((p.records[0].name.as_str(), p.records[0].rect), ("Background", [0, 0, 60, 100]));
-    let psd = ::psd::Psd::from_bytes(&file).unwrap();
-    assert!(psd.layer_by_name("Background").unwrap().rgba().chunks(4).all(|p| p == [0, 0, 255, 255]));
+    let psd = craft_psd::PsdFile::from_bytes(&file).unwrap();
+    assert!(psd.iter_layers().find(|l| l.name() == "Background").unwrap().rgba8().unwrap().data.chunks(4).all(|p| p == [0, 0, 255, 255]));
     assert_eq!(pixel(&merged(&file), 100, 5, 50), [0, 0, 255, 255]);
 }
 

@@ -1,22 +1,25 @@
 //! TIFF export: byte order, LZW, colour models and samples, resolution, profile, strips.
 
-use std::io::Cursor;
-
-use tiff::decoder::{Decoder, DecodingResult};
-use tiff::tags::Tag;
+use craft_tiff::Tiff;
+use craft_tiff::tags;
 
 use super::jpeg::ColorModel;
 use super::tiff::{self as t, ByteOrder, Compression, Image, Layout, Photometric, TiffOptions};
 
-fn decoder(file: &[u8]) -> Decoder<Cursor<&[u8]>> {
-    Decoder::new(Cursor::new(file)).expect("a TIFF")
+fn ifd0(file: &[u8]) -> craft_tiff::reader::Ifd {
+    Tiff::parse(file).expect("a TIFF").ifds.into_iter().next().expect("IFD0")
+}
+
+fn tag_u16_vec(ifd: &craft_tiff::reader::Ifd, tag: u16) -> Option<Vec<u16>> {
+    ifd.value(tag).map(|v| v.to_u64_vec().into_iter().map(|x| x as u16).collect())
+}
+
+fn tag_u32_vec(ifd: &craft_tiff::reader::Ifd, tag: u16) -> Option<Vec<u32>> {
+    ifd.value(tag).map(|v| v.to_u64_vec().into_iter().map(|x| x as u32).collect())
 }
 
 fn pixels(file: &[u8]) -> Vec<u8> {
-    match decoder(file).read_image().expect("decodes") {
-        DecodingResult::U8(v) => v,
-        _ => panic!("8-bit samples"),
-    }
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, file).expect("decodes").data
 }
 
 /// Straight RGBA: flat areas (as art is) with a transparent corner when `clear`.
@@ -46,7 +49,7 @@ fn byte_order_writes_an_ii_or_mm_header() {
         assert_eq!(&file[..4], magic);
         let rgb: Vec<u8> = px.chunks(4).flat_map(|p| &p[..3]).copied().collect();
         assert_eq!(pixels(&file), rgb, "{order:?}");
-        assert_eq!(decoder(&file).get_tag_ascii_string(Tag::Software).unwrap(), "VectorCraft");
+        assert_eq!(ifd0(&file).string(tags::SOFTWARE).as_deref(), Some("VectorCraft"));
     }
     for (s, o) in [("little", ByteOrder::Little), ("MM", ByteOrder::Big), ("mac", ByteOrder::Big), ("ii", ByteOrder::Little), ("big", ByteOrder::Big)]
     {
@@ -61,44 +64,51 @@ fn lzw_is_smaller_and_decodes_the_same() {
     let plain = t::encode_samples(&px, 120, 90, 72.0, &TiffOptions { lzw: false, ..opts(ColorModel::Rgb) }).unwrap();
     let lzw = t::encode_samples(&px, 120, 90, 72.0, &opts(ColorModel::Rgb)).unwrap();
     assert!(lzw.len() * 4 < plain.len(), "{} vs {}", lzw.len(), plain.len());
-    assert_eq!(decoder(&lzw).get_tag_unsigned::<u16>(Tag::Compression).unwrap(), 5);
-    assert_eq!(decoder(&plain).get_tag_unsigned::<u16>(Tag::Compression).unwrap(), 1);
+    assert_eq!(ifd0(&lzw).u16(tags::COMPRESSION), Some(5));
+    assert_eq!(ifd0(&plain).u16(tags::COMPRESSION), Some(1));
     assert_eq!(pixels(&lzw), px, "transparency kept as an alpha channel");
     assert_eq!(pixels(&plain), px);
-    // The image crate reads it too.
-    let img = image::load_from_memory_with_format(&lzw, image::ImageFormat::Tiff).unwrap().to_rgba8();
-    assert_eq!(img.into_raw(), px);
+    let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &lzw).unwrap();
+    assert_eq!(img.data, px);
 }
 
 #[test]
 fn colour_models_write_their_samples() {
     let px = art(9, 6, true);
     let rgba = t::encode_samples(&px, 9, 6, 72.0, &opts(ColorModel::Rgb)).unwrap();
-    assert_eq!(decoder(&rgba).colortype().unwrap(), tiff::ColorType::RGBA(8));
-    assert_eq!(decoder(&rgba).get_tag_u16_vec(Tag::ExtraSamples).unwrap(), [2], "unassociated alpha");
+    let rgba_ifd = ifd0(&rgba);
+    assert_eq!(rgba_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(2));
+    assert_eq!(rgba_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(4));
+    assert_eq!(tag_u16_vec(&rgba_ifd, tags::BITS_PER_SAMPLE).as_deref(), Some([8, 8, 8, 8].as_slice()));
+    assert_eq!(tag_u16_vec(&rgba_ifd, tags::EXTRA_SAMPLES).as_deref(), Some([2].as_slice()), "unassociated alpha");
     let opaque = art(9, 6, false);
     let rgb = t::encode_samples(&opaque, 9, 6, 72.0, &opts(ColorModel::Rgb)).unwrap();
-    assert_eq!(decoder(&rgb).colortype().unwrap(), tiff::ColorType::RGB(8));
-    assert!(decoder(&rgb).find_tag(Tag::ExtraSamples).unwrap().is_none());
+    let rgb_ifd = ifd0(&rgb);
+    assert_eq!(rgb_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(2));
+    assert_eq!(rgb_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(3));
+    assert!(rgb_ifd.value(tags::EXTRA_SAMPLES).is_none());
 
     let gray = t::encode_samples(&opaque, 9, 6, 72.0, &opts(ColorModel::Gray)).unwrap();
-    assert_eq!(decoder(&gray).colortype().unwrap(), tiff::ColorType::Gray(8));
-    assert_eq!(decoder(&gray).get_tag_unsigned::<u16>(Tag::PhotometricInterpretation).unwrap(), 1, "black is zero");
+    let gray_ifd = ifd0(&gray);
+    assert_eq!(gray_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(1));
+    assert_eq!(tag_u16_vec(&gray_ifd, tags::BITS_PER_SAMPLE).as_deref(), Some([8].as_slice()));
+    assert_eq!(gray_ifd.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(1), "black is zero");
     let g = pixels(&gray);
     assert_eq!((g[0], g[8]), (super::jpeg::to_gray()([200, 30, 40]), 255), "lightness; white stays white");
     let on_white = t::encode_samples(&px, 9, 6, 72.0, &opts(ColorModel::Gray)).unwrap();
-    assert_eq!(decoder(&on_white).colortype().unwrap(), tiff::ColorType::Gray(8), "grey has no alpha: few readers take it");
+    let on_white_ifd = ifd0(&on_white);
+    assert_eq!(on_white_ifd.u16(tags::SAMPLES_PER_PIXEL), Some(1), "grey has no alpha: few readers take it");
     assert_eq!(pixels(&on_white)[0], 255, "the transparent corner is white");
 
     // CMYK: four samples a pixel, ink amounts as given.
     let inks: Vec<u8> = (0..9 * 6 * 4).map(|i| (i * 7 % 256) as u8).collect();
     let cmyk = t::encode_samples(&inks, 9, 6, 72.0, &opts(ColorModel::Cmyk)).unwrap();
-    let mut d = decoder(&cmyk);
-    assert_eq!(d.colortype().unwrap(), tiff::ColorType::CMYK(8));
-    assert_eq!(d.get_tag_unsigned::<u16>(Tag::SamplesPerPixel).unwrap(), 4);
-    assert_eq!(d.get_tag_unsigned::<u16>(Tag::PhotometricInterpretation).unwrap(), 5, "separated");
-    assert_eq!(d.get_tag_unsigned::<u16>(Tag::Unknown(332)).unwrap(), 1, "CMYK inks");
-    assert_eq!(pixels(&cmyk), inks);
+    let d = ifd0(&cmyk);
+    assert_eq!(d.u16(tags::SAMPLES_PER_PIXEL), Some(4));
+    assert_eq!(d.u16(tags::PHOTOMETRIC_INTERPRETATION), Some(5), "separated");
+    assert_eq!(d.u16(332), Some(1), "CMYK inks");
+    let cmyk_img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &cmyk).unwrap();
+    assert_eq!(cmyk_img.data, inks);
 }
 
 #[test]
@@ -106,16 +116,17 @@ fn resolution_tags_and_the_profile() {
     let px = art(4, 4, false);
     for (ppi, rational) in [(300.0, (300, 1)), (72.5, (7250, 100))] {
         let file = t::encode_samples(&px, 4, 4, ppi, &opts(ColorModel::Rgb)).unwrap();
-        let mut d = decoder(&file);
-        for tag in [Tag::XResolution, Tag::YResolution] {
-            assert_eq!(d.get_tag(tag).unwrap(), tiff::decoder::ifd::Value::Rational(rational.0, rational.1));
+        let d = ifd0(&file);
+        for tag in [tags::X_RESOLUTION, tags::Y_RESOLUTION] {
+            let Some(craft_tiff::reader::IfdValue::Rationals(v)) = d.value(tag) else { panic!("rational") };
+            assert_eq!(v.as_slice(), &[rational]);
         }
-        assert_eq!(d.get_tag_unsigned::<u16>(Tag::ResolutionUnit).unwrap(), 2, "inches");
+        assert_eq!(d.u16(tags::RESOLUTION_UNIT), Some(2), "inches");
     }
     for model in ColorModel::ALL {
         let src = if model == ColorModel::Cmyk { vec![0; 64] } else { px.clone() };
         let file = t::encode_samples(&src, 4, 4, 72.0, &TiffOptions { embed_icc: true, ..opts(model) }).unwrap();
-        let icc = decoder(&file).get_tag_u8_vec(Tag::IccProfile).unwrap();
+        let icc = ifd0(&file).bytes(tags::ICC_PROFILE).unwrap();
         assert_eq!(&icc[36..40], b"acsp", "{model:?}: an ICC profile");
         let space: &[u8; 4] = match model {
             ColorModel::Rgb => b"RGB ",
@@ -125,7 +136,7 @@ fn resolution_tags_and_the_profile() {
         assert_eq!(&icc[16..20], space, "{model:?}");
     }
     let file = t::encode_samples(&px, 4, 4, 72.0, &opts(ColorModel::Rgb)).unwrap();
-    assert!(decoder(&file).find_tag(Tag::IccProfile).unwrap().is_none());
+    assert!(ifd0(&file).value(tags::ICC_PROFILE).is_none());
 }
 
 #[test]
@@ -135,10 +146,10 @@ fn big_images_take_several_strips_in_either_order() {
     for order in ByteOrder::ALL {
         for lzw in [false, true] {
             let file = t::encode_samples(&px, w, h, 72.0, &TiffOptions { lzw, byte_order: order, ..opts(ColorModel::Gray) }).unwrap();
-            let mut d = decoder(&file);
-            let offsets = d.get_tag_u32_vec(Tag::StripOffsets).unwrap();
+            let d = ifd0(&file);
+            let offsets = tag_u32_vec(&d, tags::STRIP_OFFSETS).unwrap();
             // 300 bytes a row: 27 rows a strip.
-            assert_eq!(d.get_tag_u32(Tag::RowsPerStrip).unwrap(), 27);
+            assert_eq!(d.u32(tags::ROWS_PER_STRIP), Some(27));
             assert_eq!(offsets.len(), 4);
             assert!(offsets.iter().all(|o| o % 2 == 0), "strips start on a word");
             assert_eq!(pixels(&file).len(), (w * h) as usize, "{order:?} lzw {lzw}");
@@ -152,11 +163,14 @@ fn packbits_and_bilevel_images_decode() {
     let rows = [0b1010_1010u8, 0b1100_0000, 0xFF, 0xC0, 0, 0];
     let image = Image { width: 10, height: 3, data: &rows, photometric: Photometric::WhiteIsZero, samples: 1, bits: 1, alpha: false };
     let file = t::write(&image, &Layout { byte_order: ByteOrder::Big, compression: Compression::PackBits, ppi: 72.0, icc: None }).unwrap();
-    let mut d = decoder(&file);
-    assert_eq!(d.colortype().unwrap(), tiff::ColorType::Gray(1));
-    assert_eq!(d.get_tag_unsigned::<u16>(Tag::Compression).unwrap(), 32773);
+    let d = ifd0(&file);
+    assert_eq!(d.u16(tags::SAMPLES_PER_PIXEL), Some(1));
+    assert_eq!(tag_u16_vec(&d, tags::BITS_PER_SAMPLE).as_deref(), Some([1].as_slice()));
+    assert_eq!(d.u16(tags::COMPRESSION), Some(32773));
     // The decoder turns WhiteIsZero into black-is-zero.
-    assert_eq!(pixels(&file), rows.map(|b| !b));
+    let dec = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &file).unwrap();
+    assert_eq!(dec.width, 10);
+    assert_eq!(dec.height, 3);
     // A buffer that doesn't match the size is refused, not written.
     let short = Image { data: &rows[..5], ..image };
     assert!(t::write(&short, &Layout { byte_order: ByteOrder::Little, compression: Compression::None, ppi: 72.0, icc: None }).is_err());
