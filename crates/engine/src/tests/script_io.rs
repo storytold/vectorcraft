@@ -1854,6 +1854,30 @@ fn script_files_open_under_a_withdrawn_grant_keep_their_unwritten_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A file opened for reading under a kept grant that new code withdraws gives no more of what it
+/// holds.
+#[test]
+fn script_files_open_under_a_withdrawn_grant_are_not_read() {
+    let base = folder("grantwithdrawnread");
+    let dir = base.join("picked");
+    write(&dir.join("in.txt"), b"secret");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('r')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ var a = f.readch(); eval('1'); var r = f.read(), e = f.error; f.error = ''; vc.log([a, r, e, f.eof, f.seek(0, 2), f.error, f.tell()]); }}",
+        dir.join("in.txt").to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["s", "", DENIED, true, false, DENIED, 1]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// The folder that holds the settings is kept out of every grant: a pick there gives `null` with the
 /// error, a grant written into the grants file for it is not taken, and the script cannot write the
 /// grants file through its data folder.

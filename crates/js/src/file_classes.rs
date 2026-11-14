@@ -887,7 +887,12 @@ fn seek(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
         return Err(i.throw(ErrorType::Range, "File.seek: the mode must be 0, 1 or 2"));
     }
     let Some(h) = opened(i, o)? else { return Ok(Value::Bool(false)) };
-    host(i, "seek", &[h, Value::Number(pos.floor()), Value::Number(mode)])
+    let r = host(i, "seek", &[h, Value::Number(pos.floor()), Value::Number(mode)])?;
+    // A seek the host refuses sets `error` and gives `false`.
+    if !outcome(i, o, &r)? {
+        return Ok(Value::Bool(false));
+    }
+    Ok(r)
 }
 
 fn tell(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {

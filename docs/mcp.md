@@ -2458,7 +2458,8 @@ VectorCraft writes files by these rules of its own:
   asks again. It is offered only for a script run from a file. The grant also keeps the SHA-256 of each source the
   run evaluated up to its end (a file `$.evalFile` ran, a string given to `eval` or `Function`, at most 256). A later
   run loses the grant before it evaluates a source the grant does not list, and from the start when its
-  `#targetengine` engine holds code the grant does not list, such as another script's. A kept grant stays on the
+  `#targetengine` engine holds code the grant does not list, such as another script's. A file opened under a
+  grant the run loses gives `Script file access denied` when it is read or `seek` is called after that. A kept grant stays on the
   real path that was allowed: when that path now leads elsewhere, through a link put in its place or in a folder
   above it, the grant is not used.
 - A command a script runs with `vc.run` reads and writes files only where the script's `File` and `Folder` objects

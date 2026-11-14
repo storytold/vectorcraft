@@ -420,6 +420,12 @@ impl Disk {
                 }
             }
         }
+        // Objects that hold a file the run may no longer read give none of it.
+        for o in self.open.values_mut() {
+            if o.read_from.as_deref().is_some_and(|p| !self.scope.allows(p)) {
+                o.unreadable = true;
+            }
+        }
     }
 
     /// Writes the evaluated code this run ran into the grants it kept with Always, so a later run
@@ -1391,6 +1397,9 @@ struct Open {
     /// The grant the file was opened under was withdrawn while its changes could not be written:
     /// they are written again when the run ends, and the object takes no more writes.
     withdrawn: bool,
+    /// The run may no longer read the file the object holds: `read`, `readln`, `readch` and `seek`
+    /// give [`ACCESS_DENIED`], and `eof` is true.
+    unreadable: bool,
 }
 
 impl Open {
@@ -1410,7 +1419,17 @@ impl Open {
         } else {
             (Encoding::Cp1252, 0)
         };
-        Some(Self { bytes, pos, encoding, name: encoding.name().to_string(), target: None, read_from: None, dirty: false, withdrawn: false })
+        Some(Self {
+            bytes,
+            pos,
+            encoding,
+            name: encoding.name().to_string(),
+            target: None,
+            read_from: None,
+            dirty: false,
+            withdrawn: false,
+            unreadable: false,
+        })
     }
 
     /// Writes `text` at the position, over what is there and past the end, when it takes at most
@@ -1591,6 +1610,12 @@ fn with_open(host: &Host, a: &[Data], f: impl FnOnce(&mut Open) -> Data) -> Data
         Some(file) => f(file),
         None => error(NOT_OPEN),
     }
+}
+
+/// [`with_open`] for a call that reads what the file holds: `{error}` [`ACCESS_DENIED`] when the
+/// run may no longer read it.
+fn with_readable(host: &Host, a: &[Data], f: impl FnOnce(&mut Open) -> Data) -> Data {
+    with_open(host, a, |file| if file.unreadable { error(ACCESS_DENIED) } else { f(file) })
 }
 
 /// The first two arguments as path text, refused with a `RangeError` when either is too long.
@@ -2031,20 +2056,20 @@ pub(crate) fn dialog_filters(filter: &str) -> Vec<(String, Vec<String>)> {
 
 fn read(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let max = arg_number(a, 1).filter(|n| *n >= 0.0).map(|n| n as usize);
-    Ok(with_open(host, a, |f| text_result(f.read(max))))
+    Ok(with_readable(host, a, |f| text_result(f.read(max))))
 }
 
 fn readln(host: &Host, a: &[Data]) -> Result<Data, HostError> {
-    Ok(with_open(host, a, |f| text_result(f.read_line())))
+    Ok(with_readable(host, a, |f| text_result(f.read_line())))
 }
 
 fn readch(host: &Host, a: &[Data]) -> Result<Data, HostError> {
-    Ok(with_open(host, a, |f| text_result(f.read_char())))
+    Ok(with_readable(host, a, |f| text_result(f.read_char())))
 }
 
 fn seek(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let (Some(pos), Some(mode)) = (arg_number(a, 1), arg_number(a, 2)) else { return Err(HostError::Type(BAD_SEEK.into())) };
-    Ok(with_open(host, a, |f| {
+    Ok(with_readable(host, a, |f| {
         let base = match mode as u8 {
             1 => f.pos as f64,
             2 => f.bytes.len() as f64,
@@ -2066,7 +2091,7 @@ fn tell(host: &Host, a: &[Data]) -> Result<Data, HostError> {
 }
 
 fn eof(host: &Host, a: &[Data]) -> Result<Data, HostError> {
-    Ok(Data::Bool(host.disk.borrow().open.get(&handle(a)).is_none_or(|f| f.pos >= f.bytes.len())))
+    Ok(Data::Bool(host.disk.borrow().open.get(&handle(a)).is_none_or(|f| f.unreadable || f.pos >= f.bytes.len())))
 }
 
 fn encoding(host: &Host, a: &[Data]) -> Result<Data, HostError> {
