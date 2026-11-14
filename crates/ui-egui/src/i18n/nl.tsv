@@ -5112,6 +5112,7 @@ imageTrace	Outline	Contour
 @msg	no action set to save	geen actieset om op te slaan
 @msg	the action set file can't be read in full	het actiesetbestand kan niet volledig worden gelezen
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” geladen: {n} stap is weggelaten|„{name}” geladen: {n} stappen zijn weggelaten
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}” geladen: {n} stap heeft een onbekende opdracht en is behouden: „{action}”, stap {step}, `{command}`|„{name}” geladen: {n} stappen hebben onbekende opdrachten en zijn behouden; de eerste: „{action}”, stap {step}, `{command}`
 @msg	not an action set file	geen actiesetbestand
 @msg	the action set file is larger than 8 MiB	het actiesetbestand is groter dan 8 MiB
 @msg	the action set file holds more than 1,000 actions	het actiesetbestand bevat meer dan 1.000 acties
@@ -5313,6 +5314,7 @@ imageTrace	Outline	Contour
 @msg	tool shortcuts must be a single key (optionally with Shift)	gereedschapsneltoetsen moeten uit één toets bestaan (eventueel met Shift)
 @msg	truncated	afgekapt
 @msg	unknown command `{0}`	onbekende opdracht `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	stap {step} van „{action}” voert de onbekende opdracht `{command}` uit
 @msg	unknown command `{0}`; did you mean `{1}`?	onbekende opdracht `{0}`; bedoelde je `{1}`?
 @msg	unknown effect `{id}`	onbekend effect `{id}`
 @msg	unknown format	onbekende indeling
