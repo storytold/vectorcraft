@@ -802,6 +802,9 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
         Some(p) => (settings.document_from_profile(p.doc), Some(p.file), p.warnings),
         None => (settings.document(), None, vec![]),
     };
+    if let Some(defaults) = &s.prefs.default_swatches {
+        super::swatchdefaults::apply(&mut d, defaults)?;
+    }
     d.grid = s.prefs.grid();
     d.title = match str_param(p, "name").or(str_param(p, "title")).map(str::trim).filter(|t| !t.is_empty()) {
         // New Document offers the next untitled name: taking it uses it up.

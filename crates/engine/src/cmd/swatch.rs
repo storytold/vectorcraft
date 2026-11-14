@@ -15,6 +15,24 @@ use crate::EngineError;
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
+            query "swatch.defaults.save",
+            "Use Current Swatches as Default",
+            [],
+            None,
+            "{} save the complete current palette, groups and their resources as the persistent default for regular new documents; existing documents and templates are unchanged",
+            has_doc,
+            save_defaults
+        ),
+        cmd!(
+            query "swatch.defaults.reset",
+            "Restore Factory Default Swatches",
+            [],
+            None,
+            "{} use the factory palette for future regular new documents, including customized categories; existing documents and templates are unchanged",
+            super::always,
+            reset_defaults
+        ),
+        cmd!(
             "swatch.new",
             "New Swatch",
             ["Window", "Swatches"],
@@ -1268,4 +1286,19 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
     e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
+}
+
+fn save_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    let data = super::swatchdefaults::capture(s)?;
+    let d = &s.doc()?.doc;
+    let swatches = d.swatches_iter().count();
+    let groups = d.swatch_groups.len();
+    s.prefs.default_swatches = Some(crate::SavedSwatchDefaults::Custom { data });
+    Ok(json!({ "swatches": swatches, "groups": groups }))
+}
+
+fn reset_defaults(s: &mut Session, _: &Value) -> Result<Value> {
+    let changed = !matches!(s.prefs.default_swatches, Some(crate::SavedSwatchDefaults::Factory));
+    s.prefs.default_swatches = Some(crate::SavedSwatchDefaults::Factory);
+    Ok(json!({ "reset": true, "changed": changed }))
 }

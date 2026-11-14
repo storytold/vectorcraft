@@ -85,6 +85,10 @@ impl VectorcraftApp {
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
         }
+        if matches!(id, "swatch.defaults.save" | "swatch.defaults.reset") && result.is_ok() {
+            crate::prefs_dialog::snapshot(self);
+            self.prefs_changed = true;
+        }
         placing::settle_swatch_paste(self);
         result
     }
