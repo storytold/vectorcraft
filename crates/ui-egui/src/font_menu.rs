@@ -1691,7 +1691,7 @@ pub(crate) fn end_stale_preview(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// What the font menus preview on and apply to: the Type tool's selected range while it edits
-/// text (the whole text when nothing is selected), else the selected text objects.
+/// text (the whole text when nothing is selected), else every frame of each selected story.
 pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPick) {
     let previewing = crate::panels::pstate::<bool>(ctx, PREVIEWING);
     match pick {
@@ -1791,7 +1791,11 @@ fn font_command(app: &VectorcraftApp, family: &str, style: Option<&str>) -> (&'s
             }
             ("text.setRangeStyle", p)
         }
-        None => ("text.setStyle", p),
+        None => {
+            // With the Selection tool: every frame of each selected story.
+            crate::panels::character::target_selected_stories(app, &mut p);
+            ("text.setStyle", p)
+        }
     }
 }
 
