@@ -16,6 +16,10 @@ pub(super) const CURVE_PIECES: u32 = 32;
 /// for fewer takes fewer.
 pub(super) const MIN_CURVE_PIECES: u32 = 4;
 
+/// How far an inset corner's miter reaches at most, as a multiple of the inset. [`square_corners`]
+/// cuts a corner whose miter would reach further square across instead.
+const MITER_LIMIT: f64 = 4.0;
+
 const TOO_COMPLEX_SHAPE: &str = "The shape is too complex for a 3D effect";
 /// The error a solid past its limits returns, and a 3D effect whose solids together pass
 /// [`crate::MAX_OBJECT_FACES`].
@@ -472,8 +476,10 @@ pub(super) fn left(a: Point, b: Point) -> (f64, f64) {
 }
 
 /// `ring` moved `w` points towards its filled side (negative: away from it), each corner along
-/// its bisector, its mitre limited to four times `w` so sharp corners don't shoot off. Each point
-/// stays the partner of its source point, so rings at different insets join face to face.
+/// its bisector, its miter limited to [`MITER_LIMIT`] times `w` so sharp corners don't shoot off.
+/// A point given twice (a corner [`square_corners`] cut) moves each copy along its one edge's
+/// normal. Each point stays the partner of its source point, so rings at different insets join
+/// face to face.
 pub(super) fn inset(ring: &[Point], w: f64) -> Vec<Point> {
     if w == 0.0 {
         return ring.to_vec();
@@ -486,6 +492,12 @@ pub(super) fn inset(ring: &[Point], w: f64) -> Vec<Point> {
             let next = ring[(i + 1) % n];
             let (ax, ay) = left(prev, p);
             let (bx, by) = left(p, next);
+            if ax == 0.0 && ay == 0.0 {
+                return Point::new(p.x + bx * w, p.y + by * w);
+            }
+            if bx == 0.0 && by == 0.0 {
+                return Point::new(p.x + ax * w, p.y + ay * w);
+            }
             let (mut mx, mut my) = (ax + bx, ay + by);
             let ml = mx.hypot(my);
             if ml < 1e-9 {
@@ -493,8 +505,43 @@ pub(super) fn inset(ring: &[Point], w: f64) -> Vec<Point> {
             } else {
                 (mx, my) = (mx / ml, my / ml);
             }
-            let cos = (mx * ax + my * ay).max(0.25);
+            let cos = (mx * ax + my * ay).max(1.0 / MITER_LIMIT);
             Point::new(p.x + mx * w / cos, p.y + my * w / cos)
         })
         .collect()
+}
+
+/// `ring` with each corner whose miter an inset towards `side` (positive: the filled side,
+/// negative: away from it) would reach past [`MITER_LIMIT`] given twice, joined by an edge of no
+/// length that follows no curve. [`inset`] moves the two copies apart along their own edges'
+/// normals, so the inset ring cuts the corner square, as a bevel join does, instead of running out
+/// to a point along the bisector. Corners on the other side of the turn, whose inset edges meet
+/// before the corner, keep one point.
+pub(super) fn square_corners(ring: &Ring, side: f64) -> Ring {
+    let n = ring.points.len();
+    if side == 0.0 || n < 3 || ring.spans.len() != n {
+        return ring.clone();
+    }
+    let mut out = Ring { points: Vec::with_capacity(n), spans: Vec::with_capacity(n) };
+    for (i, (&p, span)) in ring.points.iter().zip(&ring.spans).enumerate() {
+        let prev = ring.points[(i + n - 1) % n];
+        let next = ring.points[(i + 1) % n];
+        let (a, b) = (left(prev, p), left(p, next));
+        let (mx, my) = (a.0 + b.0, a.1 + b.1);
+        let ml = mx.hypot(my);
+        // The cosine of the half angle between the bisector and each edge's normal: the miter
+        // reaches 1 / cos times the inset.
+        let cos = if ml < 1e-9 { 0.0 } else { (mx * a.0 + my * a.1) / ml };
+        // Which way the outline turns at `p`: an inset towards `side` opens the corner when the
+        // turn is against it.
+        let turn = (p - prev).cross(next - p);
+        let edges = (a.0 != 0.0 || a.1 != 0.0) && (b.0 != 0.0 || b.1 != 0.0);
+        out.points.push(p);
+        if edges && cos < 1.0 / MITER_LIMIT && turn * side < 0.0 {
+            out.spans.push(None);
+            out.points.push(p);
+        }
+        out.spans.push(*span);
+    }
+    out
 }
