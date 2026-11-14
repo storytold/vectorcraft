@@ -7653,4 +7653,6 @@ breakText	Glyphs	Glyphes
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le JPEG (65535 pixels par côté au plus) : réduisez la résolution
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le Targa (65535 pixels par côté au plus) : réduisez la résolution
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF et ouvrez ce fichier
+@msg	this binary DXF file is damaged or cut short	ce fichier DXF binaire est endommagé ou tronqué
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
