@@ -205,8 +205,11 @@ fn cmd_layers() -> Result<(), String> {
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
 /// shell, and the web app (its wasm-only code is compiled by nothing else).
-fn wasm_set() -> Result<Vec<String>, String> {
-    let crates = layers::from_metadata(&metadata()?)?;
+fn wasm_set() -> Result<Vec<(String, String)>, String> {
+    let meta = metadata()?;
+    let crates = layers::from_metadata(&meta)?;
+    let pkgs = meta["packages"].as_array().ok_or("no packages")?;
+    let versions: std::collections::HashMap<&str, &str> = pkgs.iter().filter_map(|p| Some((p["name"].as_str()?, p["version"].as_str()?))).collect();
     Ok(crates
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
@@ -214,7 +217,10 @@ fn wasm_set() -> Result<Vec<String>, String> {
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
-        .map(|c| c.name)
+        .map(|c| {
+            let ver = versions.get(c.name.as_str()).copied().unwrap_or_default();
+            (c.name, ver.to_string())
+        })
         .collect())
 }
 
@@ -224,10 +230,12 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for pkg in &set {
-        c.args(["-p", pkg]);
+    for (pkg, ver) in &set {
+        let spec = if ver.is_empty() { pkg.clone() } else { format!("{pkg}@{ver}") };
+        c.args(["-p", &spec]);
     }
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+    let names: Vec<&str> = set.iter().map(|(p, _)| p.as_str()).collect();
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.
