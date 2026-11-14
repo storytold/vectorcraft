@@ -41,9 +41,9 @@ pub use live_paint::{
 };
 use live_paint::{check_live_paint_options, lp_color, lp_rgb_color};
 pub use lookup::{
-    EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, SOURCES_NAME, builder_members, drawn_outlines, edge_near, edges, face_at, faces,
-    is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap, path_contains, shape_builder_shapes, shapes_for,
-    sources, visible_edge_near, visible_face_at,
+    EDGE_NAME, FACE_NAME, Face, LIVE_PAINT_NAME, LIVE_PAINT_PREFIX, LP_JOIN_TOL, SOURCES_NAME, builder_members, connected_edges, drawn_outlines,
+    edge_near, edges, face_at, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_takes, node_outline, outline_snap,
+    path_contains, shape_builder_shapes, shapes_for, sources, visible_edge_near, visible_face_at,
 };
 pub use map::{
     BuilderMap, HATCH, HIGHLIGHT_RED, Hit, MergeGeometry, MergeInput, PreparedMerge, Rest, Touched, hatch, maps_built, merge_geometry, merge_inputs,
@@ -693,6 +693,14 @@ impl Tool for ShapeBuilderTool {
     /// Choosing another tool or another document applies the merge being computed first.
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.finish_edit(cx)
+    }
+
+    /// The pointer hovers nothing for the tool: its highlight, the stroke a click would split and
+    /// the cursor swatch preview go, and a map that arrives afterwards highlights nothing.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+        self.stroke = None;
+        self.at = None;
     }
 
     fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {

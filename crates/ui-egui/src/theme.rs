@@ -571,7 +571,10 @@ pub(crate) fn craft_font_name(f: &vectorcraft_text::CraftFont) -> String {
 fn add_craft_fonts(fonts: &mut FontDefinitions) {
     // The name of each face's copy in each family.
     let mut copies: std::collections::HashMap<(FontFamily, String), String> = std::collections::HashMap::new();
-    for f in vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva")) {
+    for f in vectorcraft_text::CRAFT_FONTS
+        .iter()
+        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr"))
+    {
         let name = craft_font_name(f);
         for (copy, data, families) in crate::ui_fonts::baseline_copies(fonts, &name, &FontData::from_static(f.bytes)) {
             for family in families {
@@ -589,6 +592,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
         stack.extend(vectorcraft_text::craft_fonts::japanese_ui_fonts(bold).into_iter().map(copy));
         stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(copy));
         stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(copy));
+        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Gujr")).map(copy));
     }
 }
 

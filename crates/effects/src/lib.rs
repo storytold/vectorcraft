@@ -68,7 +68,10 @@ pub use adjust::{
     ADJUSTMENTS, CHANNELS, ColorMap, ImageHook, adjust, adjust_in_document, color_map, curve_at, curve_points, has_adjustment, is_adjustment,
     is_channel,
 };
-pub use bake::{StrokeArt, bake_appearance, bake_document, bake_type_appearance, expand_art, expand_leaf, fresh_ids, needs_bake};
+pub use bake::{
+    StrokeArt, WrittenLayers, bake_appearance, bake_document, bake_document_placing_symbols, bake_type_appearance, expand_art, expand_leaf,
+    fresh_ids, needs_bake,
+};
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
@@ -80,8 +83,9 @@ pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, without_geometry};
 pub use reshape::{
-    SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_gradient_copies, has_item_geometry, has_painted_effects,
-    has_transform_art, has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text, reshape,
+    SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_gradient_copies, has_instance_row_raster, has_item_geometry,
+    has_painted_effects, has_transform_art, has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text,
+    reshape,
 };
 pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,

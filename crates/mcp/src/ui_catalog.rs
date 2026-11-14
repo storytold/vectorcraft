@@ -260,7 +260,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.convertListToText",
         "Convert to Text",
         "",
-        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs (or of those the Type tool's selection touches) become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
+        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs, in every frame of a threaded story (or of those the Type tool's selection touches), become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
     ),
     (
         "align.horizontalLeft",
@@ -666,7 +666,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "learn.list",
         "List Tutorials",
         "",
-        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+        "{} the Learn panel's skills in the order its Skills tab lists them, with the progress its rings, counts and check marks show: {skills: [{id, title, done: number of its tutorials finished, total: number of its tutorials, tutorials: [{id, title, steps: number of steps, finished: bool, completedSteps: [zero-based indexes of the steps marked done, every step once finished]}]}]}",
     ),
     (
         "learn.skills",
@@ -693,16 +693,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
     ),
     (
+        "learn.markStep",
+        "Mark Tutorial Step",
+        "",
+        "{tutorial: id (see learn.list), step: zero-based step number, complete?: bool} mark a step of a tutorial whose sample learn.openSample opened as done (true, omitted or null) or not done (false), as the check box before the step does; marking does not finish the tutorial; a missing, non-string or unknown id, a missing step or one the tutorial does not have, a complete that is not true or false, a tutorial whose sample was not opened, or a finished tutorial is an error and changes nothing; the preferences keep the marks; returns {tutorial, step, complete}",
+    ),
+    (
         "learn.finish",
         "Finish Tutorial",
         "",
-        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, with all its steps done, as its Finish tutorial button does; finishing it again keeps one entry, and needs no sample after a restart; a missing, non-string or unknown id, or a tutorial not finished whose sample was not opened, is an error and changes nothing; the preferences keep the tutorials finished; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
     ),
     (
         "learn.next",
         "Next Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
+    ),
+    (
+        "learn.resetProgress",
+        "Reset Learn Progress",
+        "",
+        "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
@@ -1264,7 +1276,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth, the canvas context menu's Smooth… and the Contextual Task Bar's Smooth open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",
@@ -1330,7 +1342,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.exportAs",
         "Export As…",
         "",
-        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, as document.export refuses it",
+        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; exportSelection: true writes the selection alone, cropped to it, as document.exportSelection writes it (artboard options are not used); under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, as document.export refuses it",
     ),
     (
         "ui.fileInfoDialog",
@@ -1465,7 +1477,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.action.new",
         "New Action",
         "",
-        "{set: index, name, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} add an action named name (spaces trimmed from both ends) after the last action of the Actions panel's set at set (0 is the top set) and start recording into it; Stop Playing/Recording (ui.action.stop) ends the recording. key 1 to 15 is the function key F1 to F15 that plays the action (0 or null: none), with cmd (Ctrl, Command on macOS) and shift; color is its Button Mode color (null or \"\": none), which the panel does not show. Action function keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6 cannot be used. The set becomes current and the new action is selected. The panel's Create New Action button and menu's New Action… (dialog `actionNew` with set, name, key, cmd, shift and color) run this on Record. While an action is recording, and for an index past the last set, an empty name, a key or color that is not one of these, or an action that would give the set more than 1,000 actions or an action set file larger than 8 MiB, it is an error, nothing is added and no recording starts → {set, action}",
+        "{set: index, name, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} add an action named name (spaces trimmed from both ends) after the last action of the Actions panel's set at set (0 is the top set) and start recording into it; Stop Playing/Recording (ui.action.stop) ends the recording. key 1 to 15 is the function key F1 to F15 that plays the action (0 or null: none), with cmd (Ctrl, Command on macOS) and shift; color is its Button Mode color (null or \"\": none), the color of its button in Button Mode (ui.action.buttonMode). Action function keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6 cannot be used. The set becomes current and the new action is selected. The panel's Create New Action button and menu's New Action… (dialog `actionNew` with set, name, key, cmd, shift and color) run this on Record. While an action is recording, and for an index past the last set, an empty name, a key or color that is not one of these, or an action that would give the set more than 1,000 actions or an action set file larger than 8 MiB, it is an error, nothing is added and no recording starts → {set, action}",
     ),
     (
         "ui.action.options",
@@ -1478,6 +1490,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Play Action",
         "",
         "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. An action with a stop, at any speed, plays up to the stop and waits until ui.action.continue or ui.action.stop; at Accelerated the steps between stops are one undoable batch each → {results, pending, atStop?: true when it already waits}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
+    ),
+    (
+        "ui.action.playAt",
+        "Play Action",
+        "",
+        "{set: index, action: index} play the Actions panel's action at action in set (0 is the top set) as ui.action.play plays it, and return what ui.action.play returns. A click on an action's button in Button Mode runs this. A missing index, or one that is not a whole number or is past the last set or action, is an error and nothing plays",
+    ),
+    (
+        "ui.action.buttonMode",
+        "Button Mode",
+        "",
+        "{enabled?: bool} with true, the Actions panel shows every action of every set, in set order and then action order, as a button with its name in its Action Options color (no color: an ordinary button), without set names, steps or checkmarks, and a click on a button plays its action (ui.action.playAt); with false, it shows its list again; left out or null, it switches to the other view. The panel menu's Button Mode runs this and shows a check mark while it is on. The view is kept with the UI preferences. Turning it on while an action records, or an enabled that is not true, false or null, is an error and the view stays → {enabled}",
     ),
     (
         "ui.action.playbackOptions",
