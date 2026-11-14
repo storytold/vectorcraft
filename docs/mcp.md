@@ -8965,6 +8965,27 @@ as outlines.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"tsume":50}}}
 ```
 
+## East Asian glyph forms
+
+`text.setFormat` and `text.setRangeStyle {glyphForm}` set the East Asian glyph form the characters are drawn in
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)): `"traditional"`,
+`"expert"`, `"jis04"`, `"jis90"`, `"jis78"`, `"jis83"`, `"fullWidth"`, `"halfWidth"`, `"thirdWidth"` or
+`"quarterWidth"`, which draw them with the font's OpenType feature `trad`, `expt`, `jp04`, `jp90`, `jp78`, `jp83`,
+`fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
+or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
+text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
+in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
+carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
+is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
+gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
+the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
+does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
+feature for it.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}
+```
+
 ## Composite Fonts
 
 A composite font sets each class of character in a font of its own

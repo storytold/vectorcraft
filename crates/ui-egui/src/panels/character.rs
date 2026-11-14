@@ -108,6 +108,20 @@ pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) 
     shared_styles(app, |_, _, style, _| Some(f(style)))
 }
 
+/// The fonts (family and style) of the character styles the panels act on ([`shared`]), each
+/// once, in the order the runs come.
+pub(crate) fn selected_fonts(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let fonts = std::cell::RefCell::new(Vec::<(String, String)>::new());
+    shared_styles(app, |_, _, style, _| {
+        let mut fonts = fonts.borrow_mut();
+        if !fonts.iter().any(|(family, face)| *family == style.font_family && *face == style.font_style) {
+            fonts.push((style.font_family.clone(), style.font_style.clone()));
+        }
+        Some(())
+    });
+    fonts.into_inner()
+}
+
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
 /// compensated runs. Keep raw styles available to font/paragraph controls and style definitions,
 /// even if a collapsed affine prevents editing dimensions.
