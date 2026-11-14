@@ -829,9 +829,13 @@ given), `threeD.mapGraphic`,
 do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
 `aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
 `transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
-move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
-it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
-for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+move or remove an effect, `paint.setFill`, `paint.setStroke`, `paint.invert` and `paint.complement` with an `item`,
+`stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform.*` commands
+that edit points and lines: each other object edits the row or effect equal to it, and an object without one is left
+as it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they
+do for a row no object has, and the other commands are an error. The paint, stroke and gradient commands are also an
+error when the art's row is not the kind of row they edit, and `paint.editGradient`, `paint.setGradientGeom` and the
+`paint.freeform.*` commands without `stroke` edit the kind of the art's row. `appearance.moveItem`, `effect.move` and
 `appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
 `appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
 art. To change the art, edit the design with `graph.design`.

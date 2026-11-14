@@ -580,7 +580,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(&for_default, &default_paint, &stored), None, &|_| true, model)
         .map_err(|e| bad(C, e))?;
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
-    edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
+    let of = super::appearance::reference_of(s, p, item, C)?;
+    let shown_at = super::appearance::first_edited(s, item, of, &ids);
+    // The objects returned: with a design's art, those with a row equal to the art's.
+    let edited = edit_items(s, &ids, item, of, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
@@ -616,9 +619,12 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         st.gradient_mode = m;
     }
     // The last gradient is the one the first object now shows (the defaults' without objects).
-    let shown = match ids.first() {
-        Some(id) => s.doc()?.doc.node(*id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten())),
-        None => Some(new_default.clone()),
+    let shown = match shown_at {
+        Some((id, item)) => {
+            s.doc()?.doc.node(id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten()))
+        }
+        None if ids.is_empty() => Some(new_default.clone()),
+        None => None,
     };
     if let Some(shown) = shown {
         s.remember_paint(&shown);
@@ -628,7 +634,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         s.paint.fill = new_default;
     }
-    Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+    Ok(json!({"ids": edited.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 
 /// A painted stroke on a type run without a weight gets 1 pt.
@@ -766,7 +772,9 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let targets = super::appearance::drop_design_art(&s.doc()?.doc, targets);
     let model = super::paint::new_color_model(s, &Value::Null);
-    edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
+    let of = super::appearance::reference_of(s, p, item, C)?;
+    // The objects returned: with a design's art, those with a row equal to the art's.
+    let targets = edit_items(s, &targets, item, of, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {

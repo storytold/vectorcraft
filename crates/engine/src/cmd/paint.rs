@@ -538,7 +538,14 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
-    let paint = if span { placed_across(&s.doc()?.doc, &ids, paint, p, fill) } else { paint };
+    let of = super::appearance::reference_of(s, p, item, cmd)?;
+    let paint = if span {
+        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it.
+        let spanned: Vec<NodeId> = ids.iter().zip(item.per_target_of(s, of, &ids)).filter_map(|(id, it)| it.map(|_| *id)).collect();
+        placed_across(&s.doc()?.doc, &spanned, paint, p, fill)
+    } else {
+        paint
+    };
     // The gradient mesh points picked with the Mesh tool or Direct Selection: a solid fill
     // recolours just those points of their meshes.
     let mesh_points = if fill && matches!(paint, Paint::Solid { .. }) { picked_mesh_points(s, &ids) } else { vec![] };
@@ -555,10 +562,12 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     // The type objects whose characters took the paint (no row targeted): only those change what a graph's labels keep
     // for their characters; a row edit is kept with the label's rows.
     let characters = std::cell::RefCell::new(Vec::new());
-    edit_items_then(
+    // The objects counted: with a design's art, those with a row equal to the art's.
+    let ids = edit_items_then(
         s,
         &ids,
         item,
+        of,
         cmd,
         label,
         fill,
@@ -1004,26 +1013,34 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         return Ok(json!({ "changed": changed as usize }));
     }
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
-    let (r, shown_item) = match item {
+    let (r, shown_at) = match item {
         ItemTarget::Item { index, .. } => {
-            let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
+            let targets = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
+            let of = super::appearance::reference_of(s, p, item, cmd)?;
+            // With design art first, the row shown is the one edited in the first object that has it.
+            let shown_at = match of {
+                Some(_) => super::appearance::first_edited(s, item, of, &targets).and_then(|(id, it)| match it {
+                    ItemTarget::Item { index, .. } => Some((id, Some(index))),
+                    ItemTarget::Top => None,
+                }),
+                None => ids.first().map(|id| (*id, Some(index))),
+            };
             let mut changed = 0;
-            edit_items(s, &ids, item, cmd, label, !stroke, |n, i| {
+            edit_items(s, &targets, item, of, cmd, label, !stroke, |n, i| {
                 let paint =
                     if stroke { n.appearance.stroke_at_mut(i).map(|l| &mut l.paint) } else { n.appearance.fill_at_mut(i).map(|l| &mut l.paint) };
                 changed += paint.is_some_and(|paint| super::colorcmds::map_paint(paint, f)) as usize;
                 Ok(())
             })?;
-            (json!({ "changed": changed }), Some(index))
+            (json!({ "changed": changed }), shown_at)
         }
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
+            (super::colorcmds::recolor(s, &q, cmd, label, f)?, leaf_targets(s, &ids)?.first().map(|id| (*id, None)))
         }
     };
-    let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };
-    if let Some(shown) = shown_ids.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, shown_item))) {
+    if let Some(shown) = shown_at.and_then(|(id, at)| s.doc().ok()?.doc.node(id).map(|n| proxy_paint(n, stroke, at))) {
         s.remember_paint(&shown);
     }
     Ok(r)

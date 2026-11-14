@@ -201,7 +201,9 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
         first.get_or_insert(r);
         Ok(())
     };
-    edit_items(s, &ids, item, cmd, "Gradient", !stroke, |n, index| {
+    let of = super::appearance::reference_of(s, p, item, cmd)?;
+    let shown_at = super::appearance::first_edited(s, item, of, &ids);
+    edit_items(s, &ids, item, of, cmd, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
@@ -222,7 +224,9 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
     })?;
     let r = first.ok_or_else(|| bad(cmd, NOT_FREEFORM))?;
     // The edited gradient is the last one used (`paint.lastGradient`).
-    let shown = s.doc()?.doc.node(ids[0]).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, cmd).ok().flatten()));
+    let shown = shown_at.and_then(|(id, item)| {
+        s.doc().ok()?.doc.node(id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, cmd).ok().flatten()))
+    });
     if let Some(p) = shown {
         s.remember_paint(&p);
     }

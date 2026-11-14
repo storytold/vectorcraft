@@ -14,7 +14,8 @@ use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
 use super::appearance::{
-    ItemTarget, aligned, appearance_targets, design_reference, edit_targets, index_param, item_indices, item_target, item_target_at, with_reference,
+    ItemTarget, aligned, appearance_targets, design_reference, edit_targets, index_param, item_indices, item_target, item_target_at, reference_of,
+    with_reference,
 };
 use super::expand::has_seeded;
 use super::rasterfx;
@@ -335,15 +336,6 @@ pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: us
 /// The effect index `effect.apply` gives [`effect_targets`] for the effect it appends, which names no effect the targets
 /// have.
 const APPENDED: usize = usize::MAX;
-
-/// The [`design_reference`] of an effect edit aimed at `item`: none for the Appearance panel's active row, which is a
-/// row of the first selected object's stack.
-fn reference_of(s: &Session, p: &Value, item: ItemTarget, cmd: &str) -> Result<Option<NodeId>> {
-    if matches!(item, ItemTarget::Item { explicit: false, .. }) {
-        return Ok(None);
-    }
-    design_reference(s, p, cmd)
-}
 
 #[allow(clippy::too_many_arguments)]
 fn edit_effects(
