@@ -304,11 +304,22 @@ fn options_not_applied_yet_and_document_features_warn() {
     let frame = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("paint.setStroke", &json!({"ids": [frame], "swatch": "Dots"})).unwrap();
     assert_eq!(warnings(&export(&mut s, json!({}))).len(), 0);
-    // A knockout group is approximated: its warning comes back from every PDF path.
+    // A knockout group is written as a PDF knockout group: nothing to report.
     s.execute("select.set", &json!({"ids": [frame]})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     let knockout = |w: Vec<String>| w.iter().any(|w| w.contains("knockout groups"));
+    assert!(!knockout(warnings(&export(&mut s, json!({})))));
+    // One whose soft masks would draw a brushed stroke is approximated: its warning comes back
+    // from every PDF path.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert!(knockout(warnings(&export(&mut s, json!({})))));
     assert!(knockout(warnings(&s.execute("document.export", &as_export(&json!({}))).unwrap())));
     // Other formats have none.
@@ -431,6 +442,17 @@ fn pdf_settings_summarise_changes_and_warnings() {
     // Raster effects are written as images: nothing to report.
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [g]})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
+    // A knockout group is written as a PDF knockout group: nothing to report.
+    assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    // One whose soft masks would draw a brushed stroke is approximated.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["warnings"], json!([]));
     let full = s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap();

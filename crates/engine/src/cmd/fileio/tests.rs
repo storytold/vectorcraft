@@ -748,8 +748,8 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
 }
 
 /// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
-/// values is refused before anything is written; `compress`, `version`, `preview` or `precision` beside the path of a format
-/// that doesn't read it is named in the warnings.
+/// values is refused before anything is written; a native option beside the path of a format that doesn't read it is named
+/// in the warnings.
 #[test]
 fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let d = tmp_dir("save-options");
