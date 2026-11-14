@@ -1602,6 +1602,33 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
 }
 
 #[test]
+fn transform_rejects_invalid_reflect_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40"})));
+    let before = inspect(&mut s, 3);
+    assert_eq!(before["selection"], json!([second]));
+    for reflect in [json!(42), json!("diagonal")] {
+        let rejected = call(&mut s, 4, "transform", json!({"ids": [first], "dx": 10, "reflect": reflect, "copy": true}));
+        assert_eq!(rejected["isError"], true, "{rejected}");
+        assert!(text_of(&rejected).contains("reflect must be"), "{rejected}");
+        assert_eq!(inspect(&mut s, 5), before);
+    }
+
+    let applied = call(&mut s, 6, "transform", json!({"ids": [first], "dx": 10, "reflect": "horizontal", "copy": true}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move", "reflect"]));
+    let after = inspect(&mut s, 7);
+    assert_eq!(after["objects"], before["objects"].as_u64().unwrap() + 1);
+    let selection = after["selection"].as_array().unwrap();
+    assert_eq!(selection.len(), 1);
+    assert_ne!(selection[0], first);
+    assert_ne!(selection[0], second);
+}
+
+#[test]
 fn oversized_screenshot_and_png_export_are_errors() {
     // 16383 pt at the maximum scale (16) is 262 128 px a side: an error result, not a crashed server.
     let dir = TempFolder::new("oversized-export");
